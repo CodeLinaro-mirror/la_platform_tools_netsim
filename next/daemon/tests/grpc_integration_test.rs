@@ -1,12 +1,10 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use futures::{SinkExt, StreamExt};
 use netsim_proto::{
     common::ChipKind,
-    frontend::{CreateDeviceRequest, PatchDeviceRequest},
-    frontend_grpc::FrontendServiceClient,
+    frontend::PatchDeviceRequest,
     hci_packet::hcipacket::PacketType,
-    model::{ChipCreate, DeviceCreate},
+    model::ChipCreate,
     protobuf::{EnumOrUnknown, MessageField},
 };
 
@@ -31,7 +29,7 @@ async fn test_grpc_frontend_lifecycle() {
     let mut world = World::new().await;
 
     // Spawn the daemon in a separate task
-    let daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     // Verify Version
     let version = world.when_get_version().await;
@@ -43,15 +41,13 @@ async fn test_grpc_frontend_lifecycle() {
     assert!(device_id > 0);
 
     // Then the device list contains the new device
-    let devices = world.when_list_devices().await;
-    assert!(devices.iter().any(|d| d.id == device_id && d.name == device_name), "Device missing");
+    world.then_device_list_contains(device_id, device_name).await;
 
     // When I delete the device
     world.when_delete_device(device_id).await;
 
     // Then the device list does not contain the device
-    let devices_after = world.when_list_devices().await;
-    assert!(!devices_after.iter().any(|d| d.id == device_id));
+    world.then_device_list_does_not_contain(device_id).await;
 
     // Cleanup: In a real scenario we might want to shut down gracefully,
     // but here we just let the test finish which aborts the daemon task.
@@ -70,46 +66,27 @@ async fn test_packet_streamer_lifecycle() {
     // Given a running Netsim Daemon
     let mut world = World::new().await;
 
-    // Spawn the daemon
-    let daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     // Spawn client task to interact with packet streamer
     // We need to clone world bits or just do it inline here since we own world.
-    // However, `spawn_daemon` consumed the daemon instance from world.
+    // However, `when_spawn_daemon` moved the daemon instance to background.
     // The client is created via gRPC port which we have in world.
 
-    let client = world.ensure_packet_client();
-    let (mut client_sender, mut client_receiver) =
-        client.stream_packets().expect("Failed to create stream");
+    // 1. Open stream
+    world.when_open_packet_stream().await;
 
-    // 1. Send InitialInfo
-    let mut initial_req = netsim_proto::packet_streamer::PacketRequest::new();
-    let mut chip_info = netsim_proto::startup::ChipInfo::new();
-    chip_info.name = "streamer-test-chip".to_string();
-    initial_req.set_initial_info(chip_info);
+    // 2. Send InitialInfo
+    world.when_send_packet_initial_info("streamer-test-chip").await;
 
-    client_sender
-        .send((initial_req, grpcio::WriteFlags::default()))
-        .await
-        .expect("Failed to send InitialInfo");
+    // 3. Send a Packet (HCI)
+    world.when_send_hci_packet(PacketType::COMMAND, vec![0x01, 0x02, 0x03]).await;
 
-    // 2. Send a Packet (HCI)
-    let mut packet_req = netsim_proto::packet_streamer::PacketRequest::new();
-    let mut hci_packet = netsim_proto::hci_packet::HCIPacket::new();
-    hci_packet.packet_type = PacketType::COMMAND.into();
-    hci_packet.packet = vec![0x01, 0x02, 0x03]; // Dummy packet
-    packet_req.set_hci_packet(hci_packet);
+    // 4. Close stream
+    world.when_close_packet_stream().await;
 
-    client_sender
-        .send((packet_req, grpcio::WriteFlags::default()))
-        .await
-        .expect("Failed to send Packet");
-
-    // 3. Close stream
-    client_sender.close().await.expect("Failed to close stream");
-
-    // Verify we don't get an error immediately
-    let _ = client_receiver.next().await;
+    // 5. Verify we don't get an error immediately
+    world.then_packet_stream_receives().await;
 }
 
 // Scenario: Patch Device Resolution
@@ -122,7 +99,7 @@ async fn test_packet_streamer_lifecycle() {
 #[tokio::test]
 async fn test_patch_device_resolution() {
     let mut world = World::new().await;
-    let _daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     // 1. Create Device "Resolution-Device"
     let mut beacon = ChipCreate::new();
@@ -151,10 +128,7 @@ async fn test_patch_device_resolution() {
     world.when_patch_device(&patch_req).await;
 
     // Verify position update (Name patch)
-    let devices = world.when_list_devices().await;
-    let device = devices.iter().find(|d| d.name == "Resolution-Device").expect("Device missing");
-    let pos = device.position.as_ref().unwrap();
-    assert!((pos.x - 10.0).abs() < 0.001);
+    world.then_device_position_by_name_is("Resolution-Device", 10.0, 10.0).await;
 
     // 3. Patch Device by Explicit ID
     let mut patch_req_id = PatchDeviceRequest::new();
@@ -172,10 +146,7 @@ async fn test_patch_device_resolution() {
     world.when_patch_device(&patch_req_id).await;
 
     // Verify position update (ID patch)
-    let devices_final = world.when_list_devices().await;
-    let device_id_patch = devices_final.iter().find(|d| d.id == device_id).expect("Device missing");
-    let pos_id = device_id_patch.position.as_ref().unwrap();
-    assert!((pos_id.x - 20.0).abs() < 0.001);
+    world.then_device_position_is(device_id, 20.0, 20.0).await;
 }
 
 // Scenario: Chip Update
@@ -186,7 +157,7 @@ async fn test_patch_device_resolution() {
 #[tokio::test]
 async fn test_chip_update() {
     let mut world = World::new().await;
-    let _daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     // 1. Create Device with 1 Bluetooth Beacon chip
     let mut beacon = ChipCreate::new();
@@ -214,10 +185,7 @@ async fn test_chip_update() {
     world.when_patch_device(&patch_req).await;
 
     // Verify position update reflected in device list
-    let devices = world.when_list_devices().await;
-    let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
-    let pos = device.position.as_ref().unwrap();
-    assert!((pos.x - 50.0).abs() < 0.001);
+    world.then_device_position_is(device_id, 50.0, 50.0).await;
 }
 
 // Scenario: Radio State Propagation
@@ -230,7 +198,7 @@ async fn test_chip_update() {
 async fn test_radio_state_propagation() {
     // Given a running Netsim Daemon
     let mut world = World::new().await;
-    let _daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     // When I create a device with a Bluetooth chip
     let bt_chip = World::make_bluetooth_chip("bt0", "00:11:22:33:44:55");
@@ -254,7 +222,7 @@ async fn test_radio_state_propagation() {
 #[tokio::test]
 async fn test_chip_update_resolution_by_variant() {
     let mut world = World::new().await;
-    let _daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     // 1. Create Device with multiple chips
     let bt_chip = World::make_bluetooth_chip("bt-res", "00:11:22:33:44:55");
@@ -273,140 +241,44 @@ async fn test_chip_update_resolution_by_variant() {
 #[tokio::test]
 async fn test_link_wiring_grpc() {
     let mut world = World::new().await;
-    let _daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     // 1. Create two devices with chips
-    // We need to borrow client from world.
-
-    // Helper closure to create device since create_test_device takes &Client
-    // and world.ensure_frontend_client borrows world mutably.
-    // We can just call ensure once.
-    let (_dev1, chip1) = {
-        let client = world.ensure_frontend_client();
-        create_test_device(
-            client,
+    let (_dev1, chip1) = world
+        .when_create_detailed_device(
             "device1",
             "chip1",
             ChipKind::BLUETOOTH,
             "11:11:11:11:11:11",
             true,
         )
-        .await
-    };
-    let (_dev2, chip2) = {
-        let client = world.ensure_frontend_client();
-        create_test_device(
-            client,
+        .await;
+    let (_dev2, chip2) = world
+        .when_create_detailed_device(
             "device2",
             "chip2",
             ChipKind::BLUETOOTH,
             "22:22:22:22:22:22",
             true,
         )
-        .await
-    };
-
-    let client = world.ensure_frontend_client();
+        .await;
 
     // 2. Create Link (CreateLink)
-    let mut link = netsim_proto::model::Link::new();
-    link.sender_id = chip1;
-    link.receiver_id = chip2;
-    link.rssi = -50;
-    link.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
-
-    let mut create_req = netsim_proto::frontend::CreateLinkRequest::new();
-    create_req.link = MessageField::some(link.clone());
-    let create_resp =
-        client.create_link_async(&create_req).expect("CreateLink").await.expect("RPC Create");
-    let link_id = create_resp.link.id;
+    let link_id = world.when_create_link(chip1, chip2, -50, ChipKind::BLUETOOTH).await;
     assert!(link_id > 0);
 
     // 3. Verify Link (ListLink)
-    let list_resp = client
-        .list_link_async(&netsim_proto::empty::Empty::new())
-        .expect("ListLink")
-        .await
-        .expect("RPC List");
-    assert_eq!(list_resp.links.len(), 1);
-    let l = &list_resp.links[0];
-    assert_eq!(l.id, link_id);
-    assert_eq!(l.sender_id, chip1);
-    assert_eq!(l.receiver_id, chip2);
-    assert_eq!(l.rssi, -50);
-    // Internally, BleBeacon maps to Bluetooth ChipKind, so we expect BLUETOOTH
-    // here.
-    assert_eq!(l.kind.enum_value_or_default(), ChipKind::BLUETOOTH);
+    world.then_link_matches(link_id, chip1, chip2, -50, ChipKind::BLUETOOTH).await;
 
     // 4. Update Link (PatchLink)
-    link.rssi = -70;
-    let mut patch_req = netsim_proto::frontend::PatchLinkRequest::new();
-    patch_req.id = link_id; // Must provide ID
-    patch_req.link = MessageField::some(link.clone());
-    client.patch_link_async(&patch_req).expect("PatchLink Update").await.expect("RPC Patch Update");
+    world.when_patch_link(link_id, -70, ChipKind::BLUETOOTH).await;
 
     // 5. Verify Update
-    let list_resp_2 = client
-        .list_link_async(&netsim_proto::empty::Empty::new())
-        .expect("ListLink 2")
-        .await
-        .expect("RPC List 2");
-    assert_eq!(list_resp_2.links.len(), 1);
-    assert_eq!(list_resp_2.links[0].rssi, -70);
+    world.then_link_rssi_is(link_id, -70).await;
 
     // 6. Delete Link
-    let mut delete_req = netsim_proto::frontend::DeleteLinkRequest::new();
-    delete_req.id = link_id;
-    client.delete_link_async(&delete_req).expect("DeleteLink").await.expect("RPC Delete");
+    world.when_delete_link(link_id).await;
 
     // 7. Verify Deletion
-    let list_resp_3 = client
-        .list_link_async(&netsim_proto::empty::Empty::new())
-        .expect("ListLink 3")
-        .await
-        .expect("RPC List 3");
-    assert_eq!(list_resp_3.links.len(), 0);
-}
-
-async fn create_test_device(
-    client: &FrontendServiceClient,
-    device_name: &str,
-    chip_name: &str,
-    kind: ChipKind,
-    address: &str,
-    is_beacon: bool,
-) -> (u32, u32) {
-    let mut chip = ChipCreate::new();
-    chip.name = chip_name.to_string();
-    chip.kind = EnumOrUnknown::new(kind);
-    chip.manufacturer = "Mfg".to_string();
-    chip.product_name = "Prod".to_string();
-    if is_beacon {
-        let mut ble_beacon = netsim_proto::model::chip_create::BleBeaconCreate::new();
-        ble_beacon.address = address.to_string();
-        chip.set_ble_beacon(ble_beacon);
-    }
-
-    let mut device = DeviceCreate::new();
-    device.name = device_name.to_string();
-    device.chips.push(chip);
-
-    let mut req = CreateDeviceRequest::new();
-    req.device = MessageField::some(device);
-    let resp =
-        client.create_device_async(&req).expect("CreateDevice failed").await.expect("RPC failed");
-    let device_id = resp.device.id;
-
-    // Fetch the detailed device to get the chip ID
-    let list_resp = client
-        .list_device_async(&netsim_proto::empty::Empty::new())
-        .expect("ListDevice failed")
-        .await
-        .expect("RPC failed");
-
-    let device_detail =
-        list_resp.devices.iter().find(|d| d.id == device_id).expect("Device not found");
-    let chip_id = device_detail.chips[0].id;
-
-    (device_id, chip_id)
+    world.then_link_count_is(0).await;
 }

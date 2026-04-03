@@ -26,6 +26,7 @@ use netsim_model::{
         ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
         UwbCreate, WifiCreate,
     },
+    device::Pose,
     initial_info::ChipInfo,
     set_if_some,
 };
@@ -92,8 +93,7 @@ async fn handle_new_connection(
             .as_ref()
             .map_or("Unknown Device".to_string(), |d| d.name.clone()),
         visible: true,
-        position: Default::default(),
-        orientation: Default::default(),
+        pose: Pose { position: Default::default(), orientation: Default::default() },
         builtin: false,
         device_info: chip_info.device_info.clone().map(Into::into),
     };

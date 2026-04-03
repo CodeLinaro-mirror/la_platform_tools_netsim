@@ -105,6 +105,7 @@ impl World {
                 }),
             ),
             device_id,
+            pose: Default::default(),
         };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
@@ -225,6 +226,7 @@ impl World {
                 }),
             ),
             device_id: self.device_id,
+            pose: Default::default(),
         };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
@@ -305,8 +307,13 @@ impl World {
         position: netsim_model::device::Position,
     ) {
         let id = *self.chips.get(name).expect("Chip not found");
-        let update =
-            netsim_model::chip::ChipUpdate { position: Some(position), ..Default::default() };
+        let update = netsim_model::chip::ChipUpdate {
+            pose: netsim_model::device::api::PoseUpdate {
+                position: Some(position),
+                orientation: None,
+            },
+            ..Default::default()
+        };
         self.client.0.update(id, update).await.expect("Failed to update chip");
     }
 
@@ -320,7 +327,7 @@ impl World {
         let id = *self.chips.get(name).expect("Chip not found");
         let chip =
             self.client.0.get(id).await.expect("Failed to get chip").expect("Chip should exist");
-        assert_eq!(chip.position, expected, "Chip position matches");
+        assert_eq!(chip.pose.position, expected, "Chip position matches");
     }
 
     pub async fn then_chip_exists(&self, name: &str) {
@@ -343,7 +350,7 @@ impl World {
 
     pub async fn then_chip_name_is(&self, id: ChipId, expected: &str) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
-        assert_eq!(chip.name.as_deref(), Some(expected), "Chip name match");
+        assert_eq!(chip.name, expected, "Chip name match");
     }
 
     pub async fn then_chip_address_is_generated(&self, id: ChipId) {

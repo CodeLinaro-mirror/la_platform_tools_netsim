@@ -65,7 +65,7 @@ async fn test_individual_device_reset_behavior() {
     let device2 = world.client.get(id2).await.unwrap().unwrap();
     assert!(!device2.visible, "Device 2 should STILL be invisible");
     assert_ne!(
-        device2.position,
+        device2.pose.position,
         device_api::Position::default(),
         "Device 2 position should STILL be modified"
     );
@@ -161,8 +161,8 @@ async fn test_reset_propagates_to_all_chip_actors() {
         "wifi-chip".to_string(),
         "".to_string(),
     );
-    add_chip_params.device_config.position = initial_pos.clone();
-    add_chip_params.device_config.orientation = initial_orient.clone();
+    add_chip_params.device_config.pose.position = initial_pos.clone();
+    add_chip_params.device_config.pose.orientation = initial_orient.clone();
     add_chip_params.chip_config.chip_kind_params =
         netsim_model::chip::ChipKindParams::Wifi(Default::default());
     world.client.add_chip(add_chip_params).await.unwrap();

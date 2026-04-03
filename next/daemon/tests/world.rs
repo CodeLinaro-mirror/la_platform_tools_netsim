@@ -1,10 +1,19 @@
 // Copyright 2025 The Android Open Source Project
 
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
 use daemon::netsimd::{NetsimDaemon, StartUpMode};
-use grpcio::{ChannelBuilder, EnvBuilder};
+use futures::{SinkExt, StreamExt};
+use grpcio::ChannelBuilder;
 use netsim_proto::{
+    access_point::{
+        AccessPoint, CreateAccessPointRequest, DeleteAccessPointRequest, DisconnectRequest,
+        ExecuteAccessPointRequest, GetAccessPointRequest, UpdateAccessPointRequest,
+    },
     access_point_grpc::AccessPointServiceClient,
     common::ChipKind,
     frontend::{CreateDeviceRequest, DeleteChipRequest, DeleteDeviceRequest},
@@ -14,13 +23,23 @@ use netsim_proto::{
     protobuf::{EnumOrUnknown, MessageField},
 };
 
+// Share a single gRPC Environment across all server instances within the same
+// process (namely during parallel test execution) to prevent Abseil lock
+// contention.
+static SHARED_ENV: OnceLock<Arc<grpcio::Environment>> = OnceLock::new();
+
 /// The BDD World for Daemon tests.
 pub struct World {
     pub daemon: Option<NetsimDaemon>,
-    pub frontend_client: Option<FrontendServiceClient>,
-    pub access_point_client: Option<AccessPointServiceClient>,
-    pub packet_client: Option<PacketStreamerClient>,
+    pub daemon_task: Option<tokio::task::JoinHandle<()>>,
+    pub frontend_client: FrontendServiceClient,
+    pub access_point_client: AccessPointServiceClient,
+    pub packet_client: PacketStreamerClient,
     pub capture_client: capture_actor::CaptureClient,
+    pub packet_sender:
+        Option<grpcio::ClientDuplexSender<netsim_proto::packet_streamer::PacketRequest>>,
+    pub packet_receiver:
+        Option<grpcio::ClientDuplexReceiver<netsim_proto::packet_streamer::PacketResponse>>,
 
     pub grpc_port: u16,
     _temp_dir: PathBuf,
@@ -29,6 +48,9 @@ pub struct World {
 
 impl Drop for World {
     fn drop(&mut self) {
+        if let Some(task) = self.daemon_task.take() {
+            task.abort();
+        }
         let _ = std::fs::remove_dir_all(&self._temp_dir);
     }
 }
@@ -63,52 +85,31 @@ impl World {
 
         let capture_client = daemon.capture_client().clone();
 
+        let env = SHARED_ENV.get_or_init(|| Arc::new(grpcio::Environment::new(1))).clone();
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", grpc_port));
+        let frontend_client = FrontendServiceClient::new(ch.clone());
+        let access_point_client = AccessPointServiceClient::new(ch.clone());
+        let packet_client = PacketStreamerClient::new(ch.clone());
+
         World {
             daemon: Some(daemon),
-            frontend_client: None,
-            access_point_client: None,
-            packet_client: None,
+            daemon_task: None,
+            frontend_client,
+            access_point_client,
+            packet_client,
             capture_client,
+            packet_sender: None,
+            packet_receiver: None,
             grpc_port,
             _temp_dir: temp_dir,
             _ini_guard: Some(ini_guard),
         }
     }
 
-    /// Helper to get or create frontend client
-    pub fn ensure_frontend_client(&mut self) -> &FrontendServiceClient {
-        if self.frontend_client.is_none() {
-            let env = Arc::new(EnvBuilder::new().build());
-            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
-            self.frontend_client = Some(FrontendServiceClient::new(ch));
-        }
-        self.frontend_client.as_ref().unwrap()
-    }
-
-    /// Helper to get or create Access Point client
-    pub fn ensure_access_point_client(&mut self) -> &AccessPointServiceClient {
-        if self.access_point_client.is_none() {
-            let env = Arc::new(EnvBuilder::new().build());
-            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
-            self.access_point_client = Some(AccessPointServiceClient::new(ch));
-        }
-        self.access_point_client.as_ref().unwrap()
-    }
-
-    /// Helper to get or create packet streamer client
-    pub fn ensure_packet_client(&mut self) -> &PacketStreamerClient {
-        if self.packet_client.is_none() {
-            let env = Arc::new(EnvBuilder::new().build());
-            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
-            self.packet_client = Some(PacketStreamerClient::new(ch));
-        }
-        self.packet_client.as_ref().unwrap()
-    }
-
     /// When I request the version
     pub async fn when_get_version(&mut self) -> String {
-        let client = self.ensure_frontend_client();
-        let resp = client
+        let resp = self
+            .frontend_client
             .get_version_async(&netsim_proto::empty::Empty::new())
             .expect("GetVersion failed")
             .await
@@ -118,7 +119,6 @@ impl World {
 
     /// When I create a device with name and chip
     pub async fn when_create_device(&mut self, name: &str, chip_name: &str) -> u32 {
-        let client = self.ensure_frontend_client();
         let mut create_req = CreateDeviceRequest::new();
         let mut device_create = DeviceCreate::new();
         device_create.name = name.to_string();
@@ -136,7 +136,8 @@ impl World {
         device_create.chips.push(chip_create);
         create_req.device = MessageField::some(device_create);
 
-        let resp = client
+        let resp = self
+            .frontend_client
             .create_device_async(&create_req)
             .expect("CreateDevice failed")
             .await
@@ -145,18 +146,21 @@ impl World {
     }
 
     pub async fn when_delete_device(&mut self, device_id: u32) {
-        let client = self.ensure_frontend_client();
         let mut req = DeleteDeviceRequest::new();
         req.id = device_id;
-        client.delete_device_async(&req).expect("DeleteDevice failed").await.expect("RPC failed");
+        self.frontend_client
+            .delete_device_async(&req)
+            .expect("DeleteDevice failed")
+            .await
+            .expect("RPC failed");
     }
 
     /// When I list access points
     pub async fn when_list_access_points(
         &mut self,
     ) -> Vec<netsim_proto::access_point::AccessPoint> {
-        let client = self.ensure_access_point_client();
-        let resp = client
+        let resp = self
+            .access_point_client
             .list_async(&netsim_proto::access_point::ListAccessPointsRequest::new())
             .expect("ListAccessPoints failed")
             .await
@@ -166,8 +170,8 @@ impl World {
 
     /// When I list devices
     pub async fn when_list_devices(&mut self) -> Vec<netsim_proto::model::Device> {
-        let client = self.ensure_frontend_client();
-        let resp = client
+        let resp = self
+            .frontend_client
             .list_device_async(&netsim_proto::empty::Empty::new())
             .expect("ListDevice failed")
             .await
@@ -175,12 +179,15 @@ impl World {
         resp.devices
     }
 
-    /// When I delete a chip
+    /// When I delete a chip (device)
     pub async fn when_delete_chip(&mut self, chip_id: u32) {
-        let client = self.ensure_frontend_client();
         let mut req = DeleteChipRequest::new();
         req.id = chip_id;
-        client.delete_chip_async(&req).expect("DeleteChip failed").await.expect("RPC failed");
+        self.frontend_client
+            .delete_chip_async(&req)
+            .expect("DeleteChip failed")
+            .await
+            .expect("RPC failed");
     }
 
     /// When I create a device with specific chips
@@ -189,14 +196,14 @@ impl World {
         name: &str,
         chips: Vec<ChipCreate>,
     ) -> u32 {
-        let client = self.ensure_frontend_client();
         let mut create_req = CreateDeviceRequest::new();
         let mut device_create = DeviceCreate::new();
         device_create.name = name.to_string();
         device_create.chips = chips;
         create_req.device = MessageField::some(device_create);
 
-        let resp = client
+        let resp = self
+            .frontend_client
             .create_device_async(&create_req)
             .expect("CreateDevice failed")
             .await
@@ -209,8 +216,7 @@ impl World {
         &mut self,
         patch_req: &netsim_proto::frontend::PatchDeviceRequest,
     ) {
-        let client = self.ensure_frontend_client();
-        client
+        self.frontend_client
             .patch_device_async(patch_req)
             .expect("PatchDevice failed")
             .await
@@ -220,13 +226,39 @@ impl World {
     /// Start the daemon in the background (World owns the logical flow, usually
     /// we spawn daemon in a thread or task) Note: In these tests, we often
     /// spawn the daemon task.
-    pub fn spawn_daemon(&mut self) -> tokio::task::JoinHandle<()> {
+    pub async fn when_spawn_daemon(&mut self) {
+        if self.daemon_task.is_some() {
+            panic!("Daemon already spawned");
+        }
         if let Some(daemon) = self.daemon.take() {
-            tokio::spawn(async move {
+            let task = tokio::spawn(async move {
                 let _ = daemon.run_daemon().await;
-            })
+            });
+            self.daemon_task = Some(task);
         } else {
-            panic!("Daemon already running or not initialized");
+            panic!("Daemon not initialized or already consumed");
+        }
+    }
+
+    pub async fn then_daemon_shutdown(&mut self, timeout_ms: u64) {
+        if let Some(task) = self.daemon_task.take() {
+            let result =
+                tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), task).await;
+            match result {
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => panic!("Daemon task failed: {}", e),
+                Err(_) => panic!("Daemon failed to shut down within timeout"),
+            }
+        } else {
+            panic!("No daemon spawned to shut down");
+        }
+    }
+
+    pub fn is_daemon_finished(&self) -> bool {
+        if let Some(task) = &self.daemon_task {
+            task.is_finished()
+        } else {
+            true // If no task, treat as finished (or not running)
         }
     }
 
@@ -339,5 +371,369 @@ impl World {
             "Capture expected for chip {} should be {}",
             chip_id, expected
         );
+    }
+
+    /// When I create a new Access Point
+    pub async fn when_create_access_point(
+        &mut self,
+        ssid: &str,
+        channel: u32,
+        hw_mode: &str,
+    ) -> u32 {
+        let mut ap_config = AccessPoint::new();
+        ap_config.ssid = ssid.to_string();
+        ap_config.channel = channel;
+        ap_config.hw_mode = hw_mode.to_string();
+
+        let mut create_req = CreateAccessPointRequest::new();
+        create_req.access_point = MessageField::some(ap_config);
+
+        let created_ap = self
+            .access_point_client
+            .create_async(&create_req)
+            .expect("Create AP failed")
+            .await
+            .expect("RPC failed");
+        created_ap.id
+    }
+
+    /// When I get an Access Point by ID
+    pub async fn when_get_access_point(&mut self, id: u32) -> AccessPoint {
+        let mut get_req = GetAccessPointRequest::new();
+        get_req.id = id;
+        self.access_point_client
+            .get_async(&get_req)
+            .expect("Get AP failed")
+            .await
+            .expect("RPC failed")
+    }
+
+    /// When I update an Access Point
+    pub async fn when_update_access_point(
+        &mut self,
+        id: u32,
+        ssid: Option<&str>,
+        channel: Option<u32>,
+    ) {
+        let mut update_req = UpdateAccessPointRequest::new();
+        update_req.id = id;
+        if let Some(s) = ssid {
+            update_req.ssid = Some(s.to_string());
+        }
+        if let Some(c) = channel {
+            update_req.channel = Some(c);
+        }
+        self.access_point_client
+            .update_async(&update_req)
+            .expect("Update AP failed")
+            .await
+            .expect("RPC failed");
+    }
+
+    /// When I delete an Access Point
+    pub async fn when_delete_access_point(&mut self, id: u32) {
+        let mut delete_req = DeleteAccessPointRequest::new();
+        delete_req.id = id;
+        self.access_point_client
+            .delete_async(&delete_req)
+            .expect("Delete AP failed")
+            .await
+            .expect("RPC failed");
+    }
+
+    /// When I execute disconnect on an Access Point
+    pub async fn when_execute_disconnect(&mut self, id: u32, mac_address: &str) {
+        let mut disconnect_req = DisconnectRequest::new();
+        disconnect_req.mac_address = mac_address.to_string();
+
+        let mut execute_req = ExecuteAccessPointRequest::new();
+        execute_req.id = id;
+        execute_req.set_disconnect(disconnect_req);
+
+        self.access_point_client
+            .execute_async(&execute_req)
+            .expect("Execute failed")
+            .await
+            .expect("RPC failed");
+    }
+
+    /// Then I verify the Access Point exists and matches the SSID
+    pub async fn then_access_point_exists(&mut self, id: u32, expected_ssid: &str) {
+        let ap = self.when_get_access_point(id).await;
+        assert_eq!(ap.ssid, expected_ssid);
+    }
+
+    /// Then I verify the Access Point matches the expected configuration
+    pub async fn then_access_point_matches(
+        &mut self,
+        id: u32,
+        ssid: &str,
+        channel: u32,
+        hw_mode: &str,
+    ) {
+        let ap = self.when_get_access_point(id).await;
+        assert_eq!(ap.ssid, ssid);
+        assert_eq!(ap.channel, channel);
+        assert_eq!(ap.hw_mode, hw_mode);
+    }
+
+    /// Then I verify the Access Point is not found
+    pub async fn then_access_point_not_found(&mut self, id: u32) {
+        let mut get_req = GetAccessPointRequest::new();
+        get_req.id = id;
+        let get_result = self.access_point_client.get_async(&get_req).expect("Get AP failed").await;
+        assert!(get_result.is_err(), "Get should fail for deleted AP");
+    }
+
+    /// Then I verify the Access Point is in the list
+    pub async fn then_access_point_in_list(&mut self, id: u32) {
+        let aps = self.when_list_access_points().await;
+        assert!(aps.iter().any(|ap| ap.id == id));
+    }
+
+    /// Then I verify the device list contains a device
+    pub async fn then_device_list_contains(&mut self, device_id: u32, device_name: &str) {
+        let devices = self.when_list_devices().await;
+        assert!(devices.iter().any(|d| d.id == device_id && d.name == device_name));
+    }
+
+    /// Then I verify the device list does not contain a device
+    pub async fn then_device_list_does_not_contain(&mut self, device_id: u32) {
+        let devices = self.when_list_devices().await;
+        assert!(!devices.iter().any(|d| d.id == device_id));
+    }
+    /// Then I verify the device position
+    pub async fn then_device_position_is(
+        &mut self,
+        device_id: u32,
+        expected_x: f32,
+        expected_y: f32,
+    ) {
+        let devices = self.when_list_devices().await;
+        let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+        let pos = device.position.as_ref().unwrap();
+        assert!((pos.x - expected_x).abs() < 0.001, "Expected X {}, got {}", expected_x, pos.x);
+        assert!((pos.y - expected_y).abs() < 0.001, "Expected Y {}, got {}", expected_y, pos.y);
+    }
+
+    /// Then I verify the device position by name
+    pub async fn then_device_position_by_name_is(
+        &mut self,
+        name: &str,
+        expected_x: f32,
+        expected_y: f32,
+    ) {
+        let devices = self.when_list_devices().await;
+        let device = devices.iter().find(|d| d.name == name).expect("Device missing");
+        let pos = device.position.as_ref().unwrap();
+        assert!((pos.x - expected_x).abs() < 0.001, "Expected X {}, got {}", expected_x, pos.x);
+        assert!((pos.y - expected_y).abs() < 0.001, "Expected Y {}, got {}", expected_y, pos.y);
+    }
+    /// Then I verify an Access Point matches by SSID
+    pub async fn then_access_point_matches_by_ssid(
+        &mut self,
+        ssid: &str,
+        channel: u32,
+        hw_mode: &str,
+    ) {
+        let aps = self.when_list_access_points().await;
+        let ap = aps.iter().find(|a| a.ssid == ssid).expect("AP missing");
+        assert_eq!(ap.channel, channel);
+        assert_eq!(ap.hw_mode, hw_mode);
+    }
+
+    /// Then I verify the device list contains a device by name
+    pub async fn then_device_list_contains_by_name(&mut self, name: &str) {
+        let devices = self.when_list_devices().await;
+        assert!(devices.iter().any(|d| d.name == name));
+    }
+
+    /// When I create a test device with detailed options
+    pub async fn when_create_detailed_device(
+        &mut self,
+        device_name: &str,
+        chip_name: &str,
+        kind: ChipKind,
+        address: &str,
+        is_beacon: bool,
+    ) -> (u32, u32) {
+        let mut chip = ChipCreate::new();
+        chip.name = chip_name.to_string();
+        chip.kind = EnumOrUnknown::new(kind);
+        chip.manufacturer = "Mfg".to_string();
+        chip.product_name = "Prod".to_string();
+        if is_beacon {
+            let mut ble_beacon = netsim_proto::model::chip_create::BleBeaconCreate::new();
+            ble_beacon.address = address.to_string();
+            chip.set_ble_beacon(ble_beacon);
+        }
+
+        let mut device = DeviceCreate::new();
+        device.name = device_name.to_string();
+        device.chips.push(chip);
+
+        let mut req = CreateDeviceRequest::new();
+        req.device = MessageField::some(device);
+
+        let resp = self
+            .frontend_client
+            .create_device_async(&req)
+            .expect("CreateDevice failed")
+            .await
+            .expect("RPC failed");
+        let device_id = resp.device.id;
+
+        // Fetch the detailed device to get the chip ID
+        let list_resp = self
+            .frontend_client
+            .list_device_async(&netsim_proto::empty::Empty::new())
+            .expect("ListDevice failed")
+            .await
+            .expect("RPC failed");
+
+        let device_detail =
+            list_resp.devices.iter().find(|d| d.id == device_id).expect("Device not found");
+        let chip_id = device_detail.chips[0].id;
+
+        (device_id, chip_id)
+    }
+
+    pub async fn when_create_link(
+        &mut self,
+        sender_id: u32,
+        receiver_id: u32,
+        rssi: i32,
+        kind: ChipKind,
+    ) -> u32 {
+        let mut link = netsim_proto::model::Link::new();
+        link.sender_id = sender_id;
+        link.receiver_id = receiver_id;
+        link.rssi = rssi;
+        link.kind = EnumOrUnknown::new(kind);
+
+        let mut create_req = netsim_proto::frontend::CreateLinkRequest::new();
+        create_req.link = MessageField::some(link);
+        let resp = self
+            .frontend_client
+            .create_link_async(&create_req)
+            .expect("CreateLink")
+            .await
+            .expect("RPC Create");
+        resp.link.id
+    }
+
+    pub async fn when_patch_link(&mut self, id: u32, rssi: i32, kind: ChipKind) {
+        let mut link = netsim_proto::model::Link::new();
+        link.rssi = rssi;
+        link.kind = EnumOrUnknown::new(kind);
+        let mut patch_req = netsim_proto::frontend::PatchLinkRequest::new();
+        patch_req.id = id;
+        patch_req.link = MessageField::some(link);
+        self.frontend_client
+            .patch_link_async(&patch_req)
+            .expect("PatchLink")
+            .await
+            .expect("RPC Patch");
+    }
+
+    pub async fn when_delete_link(&mut self, id: u32) {
+        let mut delete_req = netsim_proto::frontend::DeleteLinkRequest::new();
+        delete_req.id = id;
+        self.frontend_client
+            .delete_link_async(&delete_req)
+            .expect("DeleteLink")
+            .await
+            .expect("RPC Delete");
+    }
+
+    pub async fn then_link_count_is(&mut self, expected_count: usize) {
+        let list_resp = self
+            .frontend_client
+            .list_link_async(&netsim_proto::empty::Empty::new())
+            .expect("ListLink")
+            .await
+            .expect("RPC List");
+        assert_eq!(list_resp.links.len(), expected_count);
+    }
+
+    pub async fn then_link_matches(
+        &mut self,
+        id: u32,
+        sender_id: u32,
+        receiver_id: u32,
+        rssi: i32,
+        kind: ChipKind,
+    ) {
+        let list_resp = self
+            .frontend_client
+            .list_link_async(&netsim_proto::empty::Empty::new())
+            .expect("ListLink")
+            .await
+            .expect("RPC List");
+        let link = list_resp.links.iter().find(|l| l.id == id).expect("Link missing");
+        assert_eq!(link.sender_id, sender_id);
+        assert_eq!(link.receiver_id, receiver_id);
+        assert_eq!(link.rssi, rssi);
+        assert_eq!(link.kind.enum_value_or_default(), kind);
+    }
+
+    pub async fn then_link_rssi_is(&mut self, id: u32, expected_rssi: i32) {
+        let list_resp = self
+            .frontend_client
+            .list_link_async(&netsim_proto::empty::Empty::new())
+            .expect("ListLink")
+            .await
+            .expect("RPC List");
+        let link = list_resp.links.iter().find(|l| l.id == id).expect("Link missing");
+        assert_eq!(link.rssi, expected_rssi);
+    }
+
+    pub async fn when_open_packet_stream(&mut self) {
+        let (sender, receiver) =
+            self.packet_client.stream_packets().expect("Failed to create stream");
+        self.packet_sender = Some(sender);
+        self.packet_receiver = Some(receiver);
+    }
+
+    pub async fn when_send_packet_initial_info(&mut self, chip_name: &str) {
+        let sender = self.packet_sender.as_mut().expect("No packet sender");
+        let mut initial_req = netsim_proto::packet_streamer::PacketRequest::new();
+        let mut chip_info = netsim_proto::startup::ChipInfo::new();
+        chip_info.name = chip_name.to_string();
+        initial_req.set_initial_info(chip_info);
+
+        sender
+            .send((initial_req, grpcio::WriteFlags::default()))
+            .await
+            .expect("Failed to send InitialInfo");
+    }
+
+    pub async fn when_send_hci_packet(
+        &mut self,
+        packet_type: netsim_proto::hci_packet::hcipacket::PacketType,
+        data: Vec<u8>,
+    ) {
+        let sender = self.packet_sender.as_mut().expect("No packet sender");
+        let mut packet_req = netsim_proto::packet_streamer::PacketRequest::new();
+        let mut hci_packet = netsim_proto::hci_packet::HCIPacket::new();
+        hci_packet.packet_type = packet_type.into();
+        hci_packet.packet = data;
+        packet_req.set_hci_packet(hci_packet);
+
+        sender
+            .send((packet_req, grpcio::WriteFlags::default()))
+            .await
+            .expect("Failed to send HCI Packet");
+    }
+
+    pub async fn when_close_packet_stream(&mut self) {
+        if let Some(mut sender) = self.packet_sender.take() {
+            sender.close().await.expect("Failed to close stream");
+        }
+    }
+
+    pub async fn then_packet_stream_receives(&mut self) {
+        let receiver = self.packet_receiver.as_mut().expect("No packet receiver");
+        let _ = receiver.next().await;
     }
 }

@@ -73,12 +73,14 @@ impl ActorService for WifiActor {
             device_id: params.device_id,
             kind: ChipKind::WIFI,
             variant: Some(netsim_model::chip::ChipVariant::Wifi(Default::default())),
-            name: Some(params.config.name),
-            manufacturer: Some(params.config.manufacturer),
-            product_name: Some(params.config.product_name),
+            name: params.config.name,
+            manufacturer: params.config.manufacturer,
+            product_name: params.config.product_name,
+            pose: params.pose,
             ..Default::default()
         };
-        self.active_chips.insert(id, chip);
+        self.active_chips.insert(id, chip.clone());
+        self.initial_chips.insert(id, chip);
 
         // Notify Medium about new chip
         self.medium.add(id.0);
@@ -146,7 +148,7 @@ impl ActorService for WifiActor {
                     let tx_count = self.medium.get_tx_count(id.0);
                     stats.push(netsim_model::stats::NetsimRadioStats {
                         id: id.0,
-                        name: chip.name.clone().unwrap_or_default(),
+                        name: chip.name.clone(),
                         kind: netsim_model::stats::RadioKind::Wifi,
                         tx_count: tx_count as u64,
                         rx_count: rx_count as u64,
@@ -163,10 +165,15 @@ impl ActorService for WifiActor {
             }
             WifiReq::Reset { id } => {
                 self.medium.reset(id.0);
-                if let Some(chip) = self.active_chips.get_mut(&id) {
-                    chip.enabled = true;
-                }
-                Ok(WifiResponse::Ok)
+                let initial_chip = self.initial_chips.get(&id).ok_or_else(|| {
+                    WifiError::Internal(Box::from(format!("Initial chip not found: {}", id)))
+                })?;
+                let chip = self.active_chips.get_mut(&id).ok_or_else(|| {
+                    WifiError::Internal(Box::from(format!("Chip not found: {}", id)))
+                })?;
+                *chip = initial_chip.clone();
+                let chip = chip.clone();
+                Ok(WifiResponse::Chip(chip))
             }
         }
     }

@@ -43,9 +43,10 @@ impl ActorService for UwbActor {
             device_id: params.device_id,
             kind: ChipKind::UWB,
             variant: Some(ChipVariant::Uwb(Default::default())),
-            name: Some(params.config.name),
-            manufacturer: Some(params.config.manufacturer),
-            product_name: Some(params.config.product_name),
+            name: params.config.name,
+            manufacturer: params.config.manufacturer,
+            product_name: params.config.product_name,
+            pose: params.pose,
             ..Default::default()
         };
 
@@ -74,7 +75,8 @@ impl ActorService for UwbActor {
             }
         };
 
-        self.chip_states.write().unwrap().insert(handle, UwbChipState { chip });
+        self.chip_states.write().unwrap().insert(handle, UwbChipState { chip: chip.clone() });
+        self.initial_chips.insert(chip_id, chip);
         self.chip_to_handle.insert(chip_id, handle);
 
         Ok(chip_id)
@@ -137,24 +139,26 @@ impl ActorService for UwbActor {
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             UwbAction::Reset { id } => {
-                if let Some(handle) = self.chip_to_handle.get(&id) {
-                    {
-                        let mut chips = self.chip_states.write().unwrap();
-                        if let Some(state) = chips.get_mut(handle) {
-                            state.chip.enabled = true;
-                        }
-                    }
-                    let reset_cmd =
-                        uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
-                    let _ = self
-                        .pica_commands
-                        .send(PicaCommand::UciPacket(
-                            *handle,
-                            reset_cmd.encode_to_vec().expect("encoding succeeds"),
-                        ))
-                        .await;
-                }
-                Ok(UwbActionResult::Success)
+                let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
+                let initial_chip =
+                    self.initial_chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
+                let chip = {
+                    let mut chips = self.chip_states.write().unwrap();
+                    let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
+                    state.chip = initial_chip.clone();
+                    state.chip.clone()
+                };
+                let reset_cmd =
+                    uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
+                let _ = self
+                    .pica_commands
+                    .send(PicaCommand::UciPacket(
+                        *handle,
+                        reset_cmd.encode_to_vec().expect("encoding succeeds"),
+                    ))
+                    .await;
+
+                Ok(UwbActionResult::Chip(chip))
             }
             UwbAction::GetStatistics => {
                 let stats = self
@@ -164,7 +168,7 @@ impl ActorService for UwbActor {
                     .values()
                     .map(|state| netsim_model::stats::NetsimRadioStats {
                         id: state.chip.id,
-                        name: state.chip.name.clone().unwrap_or_default(),
+                        name: state.chip.name.clone(),
                         kind: netsim_model::stats::RadioKind::Uwb,
                         tx_count: 0,
                         rx_count: 0,

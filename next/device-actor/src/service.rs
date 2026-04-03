@@ -47,8 +47,7 @@ impl InternalDevice {
                 id: id.0,
                 name: params.device_config.name.clone(),
                 visible: params.device_config.visible,
-                position: params.device_config.position.clone(),
-                orientation: params.device_config.orientation.clone(),
+                pose: params.device_config.pose,
                 builtin: params.device_config.builtin,
                 chips: vec![],
                 device_info: params.device_config.device_info.clone(),
@@ -531,17 +530,17 @@ impl DeviceActor {
                 chip_kind_params,
             },
             device_id: DeviceId(entity.device.id),
+            pose: entity.device.pose,
         };
 
         chip_client.create(chip_id, chip_create_params).await?;
         entity.device.chips.push(Chip {
             id: chip_id.0,
             kind: ChipKind::from(&chip_config.chip_kind_params),
-            name: Some(chip_name),
-            manufacturer: Some(manufacturer),
-            product_name: Some(product_name),
-            position: entity.device.position.clone(),
-            orientation: entity.device.orientation.clone(),
+            name: chip_name,
+            manufacturer,
+            product_name,
+            pose: entity.device.pose,
             device_id: DeviceId(entity.device.id),
             variant: Some(ChipVariant::from(chip_kind)),
             links: vec![],
@@ -736,43 +735,29 @@ impl DeviceActor {
             let (original_pos, original_orient) = entity
                 .create_params
                 .as_ref()
-                .map(|p| (p.device_config.position.clone(), p.device_config.orientation.clone()))
+                .map(|p| (p.device_config.pose.position, p.device_config.pose.orientation))
                 .unwrap_or_default();
 
             entity.device.visible = true;
-            entity.device.position = original_pos.clone();
-            entity.device.orientation = original_orient.clone();
+            entity.device.pose.position = original_pos;
+            entity.device.pose.orientation = original_orient;
 
             for chip in entity.device.chips.iter_mut() {
-                chip.position = original_pos.clone();
-                chip.orientation = original_orient.clone();
+                chip.pose.position = original_pos;
+                chip.pose.orientation = original_orient;
 
                 if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
-                    if let Err(e) = chip_client.reset(netsim_model::ChipId(chip.id)).await {
-                        warn!(
-                            "DeviceActor: Failed to reset chip {} kind {:?}: {}",
-                            chip.id, chip.kind, e
-                        );
-                        chip_client_errors.push((chip.id, e));
-                    }
-
-                    let chip_update = ChipUpdate {
-                        position: Some(original_pos.clone()),
-                        orientation: Some(original_orient.clone()),
-                        ..Default::default()
-                    };
-                    if let Err(e) =
-                        chip_client.update(netsim_model::ChipId(chip.id), chip_update).await
-                    {
-                        warn!(
-                            "DeviceActor: Failed to update chip {} position during reset: {}",
-                            chip.id, e
-                        );
-                    }
-
-                    if let Ok(updated_chip) = chip_client.read(netsim_model::ChipId(chip.id)).await
-                    {
-                        *chip = updated_chip;
+                    match chip_client.reset(netsim_model::ChipId(chip.id)).await {
+                        Ok(updated_chip) => {
+                            *chip = updated_chip;
+                        }
+                        Err(e) => {
+                            warn!(
+                                "DeviceActor: Failed to reset chip {} kind {:?}: {}",
+                                chip.id, chip.kind, e
+                            );
+                            chip_client_errors.push((chip.id, e));
+                        }
                     }
                 }
             }
@@ -837,19 +822,7 @@ impl ActorService for DeviceActor {
         let Some(entity) = self.devices.get_mut(&id) else {
             return Err(DeviceError::DeviceNotFound(id.to_string()));
         };
-        if let Some(name) = &update.name {
-            entity.device.name = name.clone();
-        }
-        if let Some(visible) = update.visible {
-            entity.device.visible = visible;
-        }
-
-        if let Some(pos) = update.position.clone() {
-            entity.device.position = pos;
-        }
-        if let Some(orient) = update.orientation.clone() {
-            entity.device.orientation = orient;
-        }
+        update.apply(&mut entity.device);
 
         for chip in entity.device.chips.iter_mut() {
             let Some(chip_client) = self.chip_clients.get(&chip.kind) else {
@@ -858,12 +831,7 @@ impl ActorService for DeviceActor {
 
             let mut chip_update = ChipUpdate::default();
 
-            if update.position.is_some() {
-                chip_update.position = update.position.clone();
-            }
-            if update.orientation.is_some() {
-                chip_update.orientation = update.orientation.clone();
-            }
+            chip_update.pose = update.pose.clone();
 
             // Start with ID-based matching
             let mut specific_update = None;
@@ -886,8 +854,8 @@ impl ActorService for DeviceActor {
                 }
             }
 
-            if chip_update.position.is_some()
-                || chip_update.orientation.is_some()
+            if chip_update.pose.position.is_some()
+                || chip_update.pose.orientation.is_some()
                 || chip_update.variant.is_some()
             {
                 info!(
