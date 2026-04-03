@@ -40,6 +40,8 @@ impl WirelessChip for Mock {
             ProtoChipKind::WIFI => netsim_radio_stats::Kind::WIFI,
             ProtoChipKind::UWB => netsim_radio_stats::Kind::UWB,
             ProtoChipKind::BLUETOOTH_BEACON => netsim_radio_stats::Kind::BLE_BEACON,
+            ProtoChipKind::NFC => netsim_radio_stats::Kind::NFC,
+            ProtoChipKind::CELLULAR => netsim_radio_stats::Kind::UNSPECIFIED,
             _ => netsim_radio_stats::Kind::UNSPECIFIED,
         }));
         vec![stats]
