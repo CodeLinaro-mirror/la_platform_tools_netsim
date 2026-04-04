@@ -10,22 +10,18 @@ use std::{
 use bytes::Bytes;
 use device_actor::{DeviceActor, DeviceClient};
 use device_api::{
-    api::{DeviceChipCreate, DeviceCreate},
-    DeviceConfig, DeviceId,
+    DeviceChip, DeviceChipCreate, DeviceConfig, DeviceCreate, DeviceId, DeviceUpdate,
 };
 use futures::{SinkExt, StreamExt};
 use link_api::MockLinkClient;
 use netsim_model::{
-    chip::{
-        BluetoothUpdate, ChipClient, ChipUpdate, ChipVariantUpdate, MockChipClient, RadioUpdate,
-    },
-    device::Pose,
-    ChipKind,
+    BluetoothUpdate, ChipClient, ChipKind, ChipUpdate, ChipVariantUpdate, MockChipClient, Pose,
+    RadioUpdate,
 };
 
 #[derive(Clone)]
 pub struct LinkTestState {
-    pub links: Arc<std::sync::Mutex<Vec<netsim_model::link::Link>>>,
+    pub links: Arc<std::sync::Mutex<Vec<netsim_model::Link>>>,
     pub reset_called: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -42,18 +38,17 @@ impl LinkTestState {
 pub struct World {
     pub client: DeviceClient,
     _actor_task: tokio::task::JoinHandle<()>,
-    pub radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+    pub radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::NetsimRadioStats>>>,
     pub wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
-    pub last_radio_stats: Option<Vec<netsim_model::stats::NetsimRadioStats>>,
+    pub last_radio_stats: Option<Vec<netsim_model::NetsimRadioStats>>,
     pub stats_file_to_cleanup: Option<std::path::PathBuf>,
     pub current_device_id: Option<DeviceId>,
-    pub current_chip_id: Option<netsim_model::chip::ChipId>,
+    pub current_chip_id: Option<netsim_model::ChipId>,
     pub transport_tx: Option<tokio::sync::mpsc::UnboundedSender<Bytes>>,
     pub device_config: Option<DeviceConfig>,
     pub stats_path: Option<std::path::PathBuf>,
     pub link_state: LinkTestState,
-    pub mock_chips:
-        Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
+    pub mock_chips: Arc<std::sync::Mutex<HashMap<netsim_model::ChipId, netsim_model::Chip>>>,
 }
 
 impl Drop for World {
@@ -201,13 +196,11 @@ impl World {
         idle_timeout: Option<std::time::Duration>,
         stats_path: Option<std::path::PathBuf>,
         stats_interval: Option<std::time::Duration>,
-        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
         link_state: LinkTestState,
         stats_file_to_cleanup: Option<std::path::PathBuf>,
-        mock_chips: Arc<
-            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
-        >,
+        mock_chips: Arc<std::sync::Mutex<HashMap<netsim_model::ChipId, netsim_model::Chip>>>,
     ) -> Self {
         let (runner, client) = device_actor::new();
         let mut actor = DeviceActor::new(
@@ -248,11 +241,9 @@ impl World {
     }
 
     pub fn create_default_chip_clients_with_stats(
-        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
-        mock_chips: Arc<
-            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
-        >,
+        mock_chips: Arc<std::sync::Mutex<HashMap<netsim_model::ChipId, netsim_model::Chip>>>,
     ) -> HashMap<ChipKind, Box<dyn ChipClient>> {
         let mut clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         // Add default mocks for common chip kinds
@@ -271,11 +262,9 @@ impl World {
     }
 
     pub(crate) fn create_default_mock_chip(
-        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
-        mock_chips: Arc<
-            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
-        >,
+        mock_chips: Arc<std::sync::Mutex<HashMap<netsim_model::ChipId, netsim_model::Chip>>>,
         _kind: ChipKind,
     ) -> MockChipClient {
         let mut mock = MockChipClient::new();
@@ -286,11 +275,9 @@ impl World {
 
     fn setup_mock_chip_client(
         mock: &mut MockChipClient,
-        chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
-        initial_chips: Arc<
-            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
-        >,
-        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        chips: Arc<std::sync::Mutex<HashMap<netsim_model::ChipId, netsim_model::Chip>>>,
+        initial_chips: Arc<std::sync::Mutex<HashMap<netsim_model::ChipId, netsim_model::Chip>>>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
     ) {
         let chips_clone = chips.clone();
@@ -313,17 +300,17 @@ impl World {
             .returning(move |id, params| {
                 let mut chips = chips_create.lock().unwrap();
                 let mut initial_chips = initial_chips_create.lock().unwrap();
-                let chip = netsim_model::chip::Chip {
+                let chip = netsim_model::Chip {
                     id: id.0,
-                    kind: netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
+                    kind: netsim_model::ChipKind::from(&params.config.chip_kind_params),
                     name: params.config.name,
                     manufacturer: params.config.manufacturer,
                     product_name: params.config.product_name,
                     device_id: params.device_id,
                     pose: params.pose,
-                    variant: Some(netsim_model::chip::ChipVariant::from(
-                        netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
-                    )),
+                    variant: Some(netsim_model::ChipVariant::from(netsim_model::ChipKind::from(
+                        &params.config.chip_kind_params,
+                    ))),
                     enabled: true,
                     ..Default::default()
                 };
@@ -338,9 +325,10 @@ impl World {
         let chips_read = chips.clone();
         mock.expect_read().returning(move |id| {
             let chips = chips_read.lock().unwrap();
-            chips.get(&id).cloned().ok_or(netsim_model::client_error::ClientError::Chip(
-                netsim_model::chip_error::ChipError::ChipNotFound(id),
-            ))
+            chips
+                .get(&id)
+                .cloned()
+                .ok_or(netsim_model::ClientError::Chip(netsim_model::ChipError::ChipNotFound(id)))
         });
 
         let chips_update = chips.clone();
@@ -354,11 +342,8 @@ impl World {
                 if let Some(orient) = &patch.pose.orientation {
                     chip.pose.orientation = orient.clone();
                 }
-                if let Some(netsim_model::chip::ChipVariantUpdate::Bluetooth(bt_update)) =
-                    patch.variant
-                {
-                    if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant
-                    {
+                if let Some(netsim_model::ChipVariantUpdate::Bluetooth(bt_update)) = patch.variant {
+                    if let Some(netsim_model::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
                         if let Some(s) = bt_update.low_energy.state {
                             bt.low_energy.state = Some(s);
                         }
@@ -369,9 +354,7 @@ impl World {
                 }
                 Ok(chip.clone())
             } else {
-                Err(netsim_model::client_error::ClientError::Chip(
-                    netsim_model::chip_error::ChipError::ChipNotFound(id),
-                ))
+                Err(netsim_model::ClientError::Chip(netsim_model::ChipError::ChipNotFound(id)))
             }
         });
 
@@ -386,22 +369,19 @@ impl World {
         mock.expect_reset().returning(move |id| {
             let mut chips = chips_reset.lock().unwrap();
             let initial_chips = initial_chips_reset.lock().unwrap();
-            let initial_chip =
-                initial_chips.get(&id).ok_or(netsim_model::client_error::ClientError::Chip(
-                    netsim_model::chip_error::ChipError::ChipNotFound(id),
-                ))?;
+            let initial_chip = initial_chips.get(&id).ok_or(netsim_model::ClientError::Chip(
+                netsim_model::ChipError::ChipNotFound(id),
+            ))?;
             if let Some(chip) = chips.get_mut(&id) {
                 chip.pose = initial_chip.pose;
                 chip.enabled = true;
-                if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
+                if let Some(netsim_model::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
                     bt.low_energy.state = Some(true);
                     bt.classic.state = Some(true);
                 }
                 Ok(chip.clone())
             } else {
-                Err(netsim_model::client_error::ClientError::Chip(
-                    netsim_model::chip_error::ChipError::ChipNotFound(id),
-                ))
+                Err(netsim_model::ClientError::Chip(netsim_model::ChipError::ChipNotFound(id)))
             }
         });
 
@@ -427,11 +407,9 @@ impl World {
     /// Helper to create a mock that shares existing state (for clone_box of an
     /// ACTIVE client)
     fn create_shared_mock(
-        chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
-        initial_chips: Arc<
-            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
-        >,
-        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        chips: Arc<std::sync::Mutex<HashMap<netsim_model::ChipId, netsim_model::Chip>>>,
+        initial_chips: Arc<std::sync::Mutex<HashMap<netsim_model::ChipId, netsim_model::Chip>>>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
     ) -> Box<MockChipClient> {
         let mut mock = MockChipClient::new();
@@ -454,8 +432,8 @@ impl World {
         let links_create = state.links.clone();
         mock.expect_create().returning(move |params| {
             let mut links = links_create.lock().unwrap();
-            let id = netsim_model::link::LinkId(links.len() as u32);
-            links.push(netsim_model::link::Link {
+            let id = netsim_model::LinkId(links.len() as u32);
+            links.push(netsim_model::Link {
                 id,
                 sender: params.sender,
                 receiver: params.receiver,
@@ -492,7 +470,7 @@ impl World {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                chip: device_api::api::Chip::Beacon(Default::default()),
+                chip: DeviceChip::Beacon(Default::default()),
             },
         };
         self.client.create_device(params).await.unwrap()
@@ -517,7 +495,7 @@ impl World {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                chip: device_api::api::Chip::Beacon(Default::default()),
+                chip: DeviceChip::Beacon(Default::default()),
             },
         };
         self.client.create_device(params).await.unwrap()
@@ -556,9 +534,7 @@ impl World {
             "".to_string(),
         );
         params.chip_config.chip_kind_params =
-            netsim_model::chip::ChipKindParams::Wifi(netsim_model::chip::WifiCreate {
-                ..Default::default()
-            });
+            netsim_model::ChipKindParams::Wifi(netsim_model::WifiCreate { ..Default::default() });
         self.client.add_chip(params).await.unwrap()
     }
 
@@ -569,24 +545,18 @@ impl World {
             "".to_string(),
         );
         params.chip_config.chip_kind_params =
-            netsim_model::chip::ChipKindParams::Uwb(netsim_model::chip::UwbCreate {
-                ..Default::default()
-            });
+            netsim_model::ChipKindParams::Uwb(netsim_model::UwbCreate { ..Default::default() });
         self.client.add_chip(params).await.unwrap()
     }
 
     /// BDD Step: When I update the device.
-    pub async fn when_update_device(
-        &self,
-        device_id: DeviceId,
-        update: device_api::api::DeviceUpdate,
-    ) {
+    pub async fn when_update_device(&self, device_id: DeviceId, update: DeviceUpdate) {
         self.client.update(device_id, update).await.unwrap();
     }
 
     /// BDD Step: When I update the device with a specific chip update.
     pub async fn when_update_device_chip(&self, device_id: DeviceId, chip_update: ChipUpdate) {
-        let mut update = device_api::api::DeviceUpdate::default();
+        let mut update = DeviceUpdate::default();
         update.id = device_id.0;
         update.chips = Some(vec![chip_update]);
         self.when_update_device(device_id, update).await;
@@ -596,7 +566,7 @@ impl World {
     pub async fn when_notify_chip_removed(
         &self,
         device_id: DeviceId,
-        chip_id: netsim_model::chip::ChipId,
+        chip_id: netsim_model::ChipId,
     ) {
         self.client.notify_chip_removed(device_id, chip_id).await.unwrap();
     }
@@ -652,10 +622,10 @@ impl World {
     ) -> (DeviceId, tokio::sync::mpsc::UnboundedSender<Bytes>) {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
-        let boxed_stream: netsim_model::chip::PacketStream = Box::new(stream);
+        let boxed_stream: netsim_model::PacketStream = Box::new(stream);
         let sink = futures::sink::drain()
             .sink_map_err(|_| std::io::Error::from(std::io::ErrorKind::Other));
-        let boxed_sink: netsim_model::chip::PacketSink = Box::pin(sink);
+        let boxed_sink: netsim_model::PacketSink = Box::pin(sink);
 
         let mut params = Self::create_device_add_chip_params(
             device_guid.to_string(),
@@ -677,10 +647,10 @@ impl World {
     ) -> (DeviceId, tokio::sync::mpsc::UnboundedSender<Bytes>) {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
-        let boxed_stream: netsim_model::chip::PacketStream = Box::new(stream);
+        let boxed_stream: netsim_model::PacketStream = Box::new(stream);
         let sink = futures::sink::drain()
             .sink_map_err(|_| std::io::Error::from(std::io::ErrorKind::Other));
-        let boxed_sink: netsim_model::chip::PacketSink = Box::pin(sink);
+        let boxed_sink: netsim_model::PacketSink = Box::pin(sink);
 
         let mut params = Self::create_device_add_chip_params(
             device_guid.to_string(),
@@ -688,9 +658,7 @@ impl World {
             "".to_string(),
         );
         params.chip_config.chip_kind_params =
-            netsim_model::chip::ChipKindParams::Wifi(netsim_model::chip::WifiCreate {
-                ..Default::default()
-            });
+            netsim_model::ChipKindParams::Wifi(netsim_model::WifiCreate { ..Default::default() });
         params.packet_stream = Some(boxed_stream);
         params.packet_sink = Some(boxed_sink);
 
@@ -723,7 +691,7 @@ impl World {
     ) -> device_api::DeviceAddChip {
         let mut device_config =
             DeviceConfig::new("test-dev".to_string(), true, Pose::default(), false);
-        device_config.device_info = Some(netsim_model::device::DeviceInfo {
+        device_config.device_info = Some(netsim_model::DeviceInfo {
             name: "test_device".to_string(),
             ..Default::default()
         });
@@ -733,15 +701,15 @@ impl World {
             packet_stream: None,
             packet_sink: None,
             device_config,
-            chip_config: netsim_model::chip::ChipConfig {
+            chip_config: netsim_model::ChipConfig {
                 name: chip_name,
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                chip_kind_params: netsim_model::chip::ChipKindParams::Bluetooth(
-                    netsim_model::chip::BluetoothCreate {
+                chip_kind_params: netsim_model::ChipKindParams::Bluetooth(
+                    netsim_model::BluetoothCreate {
                         address: chip_address,
                         bt_properties: Default::default(),
-                        mode: netsim_model::chip::BluetoothMode::Device(Default::default()),
+                        mode: netsim_model::BluetoothMode::Device(Default::default()),
                     },
                 ),
             },
@@ -988,7 +956,7 @@ impl World {
             self.client.get(device_id).await.expect("RPC failed").expect("Device not found");
         let chip_id =
             device.chips.first().expect("Device created with transport stream has no chips").id;
-        self.current_chip_id = Some(netsim_model::chip::ChipId(chip_id));
+        self.current_chip_id = Some(netsim_model::ChipId(chip_id));
     }
 
     /// BDD Step: Given a WiFi device with a transport stream
@@ -1006,16 +974,11 @@ impl World {
             self.client.get(device_id).await.expect("RPC failed").expect("Device not found");
         let chip_id =
             device.chips.first().expect("Device created with transport stream has no chips").id;
-        self.current_chip_id = Some(netsim_model::chip::ChipId(chip_id));
+        self.current_chip_id = Some(netsim_model::ChipId(chip_id));
     }
 
     /// BDD Step: Given mock radio stats are primed for the current device
-    pub async fn given_radio_stats_primed(
-        &self,
-        kind: netsim_model::stats::RadioKind,
-        tx: u64,
-        rx: u64,
-    ) {
+    pub async fn given_radio_stats_primed(&self, kind: netsim_model::RadioKind, tx: u64, rx: u64) {
         let device_id = self.current_device_id.expect("No current device set in World");
         let device =
             self.client.get(device_id).await.expect("RPC failed").expect("Device not found");
@@ -1029,12 +992,7 @@ impl World {
         let device_id = self.current_device_id.expect("No current device set in World").0;
         // Default to Bluetooth Low Energy for generic test if not specified,
         // to avoid UNSPECIFIED in generic tests
-        self.given_radio_stats(
-            device_id,
-            netsim_model::stats::RadioKind::BluetoothLowEnergy,
-            tx,
-            rx,
-        );
+        self.given_radio_stats(device_id, netsim_model::RadioKind::BluetoothLowEnergy, tx, rx);
     }
 
     /// BDD Step: When I send packets to the transport
@@ -1072,12 +1030,12 @@ impl World {
     pub fn given_radio_stats(
         &self,
         device_id: u32,
-        kind: netsim_model::stats::RadioKind,
+        kind: netsim_model::RadioKind,
         tx: u64,
         rx: u64,
     ) {
         let mut stats_vec = self.radio_stats.lock().unwrap();
-        let mut stats = netsim_model::stats::NetsimRadioStats::default();
+        let mut stats = netsim_model::NetsimRadioStats::default();
         stats.id = device_id;
         stats.kind = kind;
         stats.tx_bytes = tx;
@@ -1114,7 +1072,7 @@ impl World {
         arch: &str,
     ) {
         let mut config = DeviceConfig::new(name.to_string(), true, Pose::default(), false);
-        config.device_info = Some(netsim_model::device::DeviceInfo {
+        config.device_info = Some(netsim_model::DeviceInfo {
             name: name.to_string(),
             kind: kind.to_string(),
             version: version.to_string(),
@@ -1136,7 +1094,7 @@ impl World {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                chip: device_api::api::Chip::Beacon(Default::default()),
+                chip: DeviceChip::Beacon(Default::default()),
             },
         };
         let id = self.client.create_device(params).await.unwrap();
@@ -1223,7 +1181,7 @@ impl World {
             .expect("Failed to list devices during given_all_devices_are_modified");
         for device in response.devices {
             let id = DeviceId(device.id);
-            let mut update = device_api::api::DeviceUpdate::default();
+            let mut update = DeviceUpdate::default();
             update.id = id.0;
             update.visible = Some(false);
             update.pose.position = Some(device_api::Position { x: 1.0, y: 1.0, z: 1.0 });
@@ -1236,7 +1194,7 @@ impl World {
 
     /// BDD Step: Given a specific device is modified
     pub async fn when_device_is_modified(&self, id: DeviceId) {
-        let mut update = device_api::api::DeviceUpdate::default();
+        let mut update = DeviceUpdate::default();
         update.id = id.0;
         update.visible = Some(false);
         update.pose.position = Some(device_api::Position { x: 1.0, y: 1.0, z: 1.0 });
@@ -1317,7 +1275,7 @@ impl World {
             .expect("Device not found during then_bluetooth_states_are");
         let chip =
             device.chips.first().expect("Device has no chips during then_bluetooth_states_are");
-        if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &chip.variant {
+        if let Some(netsim_model::ChipVariant::Bluetooth(bt)) = &chip.variant {
             assert_eq!(bt.low_energy.state, Some(le), "LE state mismatch for device {}", id.0);
             assert_eq!(
                 bt.classic.state,
@@ -1382,7 +1340,7 @@ impl World {
 
         let mock_chips = self.mock_chips.lock().unwrap();
         for device_chip in &device.chips {
-            let chip_id = netsim_model::chip::ChipId(device_chip.id);
+            let chip_id = netsim_model::ChipId(device_chip.id);
             let chip = mock_chips
                 .get(&chip_id)
                 .expect(&format!("Chip {} not found in mock_chips", chip_id.0));

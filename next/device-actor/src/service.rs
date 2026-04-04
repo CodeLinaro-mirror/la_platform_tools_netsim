@@ -12,11 +12,10 @@ use std::{
 use actor_framework::{ActorService, Context, DynContext};
 use capture_api::CaptureSender;
 use device_api::{
-    api::{DeviceCreate, DeviceUpdate},
-    DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId,
+    DeviceAction, DeviceActionResult, DeviceAddChip, DeviceCreate, DeviceId, DeviceUpdate,
 };
 use link_api::LinkClient;
-use netsim_model::chip::{
+use netsim_model::{
     Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
     PacketSink, PacketStream,
 };
@@ -40,7 +39,7 @@ pub(crate) struct InternalDevice {
     #[serde(skip)]
     pub chip_stats: HashMap<ChipId, Arc<StreamStats>>,
     #[serde(skip)]
-    pub last_known_stats: HashMap<ChipId, Vec<netsim_model::stats::NetsimRadioStats>>,
+    pub last_known_stats: HashMap<ChipId, Vec<netsim_model::NetsimRadioStats>>,
 }
 
 impl InternalDevice {
@@ -126,7 +125,7 @@ impl DeviceActor {
         self.stats_write_task = Some(task);
     }
 
-    async fn collect_radio_stats_async(&mut self) -> Vec<netsim_model::stats::NetsimRadioStats> {
+    async fn collect_radio_stats_async(&mut self) -> Vec<netsim_model::NetsimRadioStats> {
         let mut stats_futures = Vec::new();
         let mut state_futures = Vec::new();
 
@@ -166,7 +165,7 @@ impl DeviceActor {
         let stats_results = futures::future::join_all(stats_futures).await;
         let state_results = futures::future::join_all(state_futures).await;
 
-        let mut chip_stats_map: HashMap<ChipId, Vec<netsim_model::stats::NetsimRadioStats>> =
+        let mut chip_stats_map: HashMap<ChipId, Vec<netsim_model::NetsimRadioStats>> =
             HashMap::new();
         for stats in stats_results.into_iter().flatten() {
             for stat in stats {
@@ -191,7 +190,7 @@ impl DeviceActor {
                 if let Some(client_stats) =
                     chip_stats_map.get(&ChipId(chip.id)).filter(|v| !v.is_empty())
                 {
-                    let mut chip_stats: Vec<netsim_model::stats::NetsimRadioStats> = client_stats
+                    let mut chip_stats: Vec<netsim_model::NetsimRadioStats> = client_stats
                         .iter()
                         .map(|stat| {
                             let mut radio_stats = stat.clone();
@@ -227,7 +226,7 @@ impl DeviceActor {
                         let chip_state = chip_state_map.get(&ChipId(chip.id)).unwrap_or(chip);
                         Self::resolve_bluetooth_kind(chip, Some(chip_state))
                     } else {
-                        Some(netsim_model::chip::chip_kind_to_radio_kind(chip.kind))
+                        Some(netsim_model::chip_kind_to_radio_kind(chip.kind))
                     };
 
                     if let Some(kind) = radio_kind {
@@ -271,9 +270,9 @@ impl DeviceActor {
     /// Resolves the specific RadioKind for a chip, handling ambiguous cases
     /// like Bluetooth. Fetches fresh chip state if necessary to distinguish
     /// between LE and Classic.
-    async fn resolve_radio_kind(&self, chip: &Chip) -> Option<netsim_model::stats::RadioKind> {
+    async fn resolve_radio_kind(&self, chip: &Chip) -> Option<netsim_model::RadioKind> {
         if chip.kind != netsim_model::ChipKind::BLUETOOTH {
-            return Some(netsim_model::chip::chip_kind_to_radio_kind(chip.kind));
+            return Some(netsim_model::chip_kind_to_radio_kind(chip.kind));
         }
 
         // Try to get fresh chip state
@@ -293,11 +292,11 @@ impl DeviceActor {
     fn resolve_bluetooth_kind(
         chip: &Chip,
         state: Option<&Chip>,
-    ) -> Option<netsim_model::stats::RadioKind> {
+    ) -> Option<netsim_model::RadioKind> {
         let chip_state = state.unwrap_or(chip);
         match (chip_state.is_le_enabled(), chip_state.is_classic_enabled()) {
-            (true, false) => Some(netsim_model::stats::RadioKind::BluetoothLowEnergy),
-            (false, true) => Some(netsim_model::stats::RadioKind::BluetoothClassic),
+            (true, false) => Some(netsim_model::RadioKind::BluetoothLowEnergy),
+            (false, true) => Some(netsim_model::RadioKind::BluetoothClassic),
             _ => None, /* Ambiguous (Dual Mode) or Invalid -> Drop
                         * TODO: Requires HCI packet inspection to accurately distinguish traffic */
         }
@@ -405,11 +404,11 @@ impl DeviceActor {
         device_id: DeviceId,
         chip: &Chip,
         stream_stats: Option<Arc<StreamStats>>,
-        cached_stats: Option<&Vec<netsim_model::stats::NetsimRadioStats>>,
+        cached_stats: Option<&Vec<netsim_model::NetsimRadioStats>>,
     ) {
         debug!("DeviceActor: Archiving stats for device {} chip {}", device_id, chip.id);
 
-        let mut archive_stats = |mut chip_stats: Vec<netsim_model::stats::NetsimRadioStats>| {
+        let mut archive_stats = |mut chip_stats: Vec<netsim_model::NetsimRadioStats>| {
             if let Some(stream_stats) = &stream_stats {
                 crate::utils::distribute_stream_stats(&mut chip_stats, stream_stats);
             }
@@ -526,7 +525,7 @@ impl DeviceActor {
         let chip_create_params = ChipCreate {
             packet_stream,
             packet_sink,
-            config: netsim_model::chip::ChipConfig {
+            config: netsim_model::ChipConfig {
                 name: chip_name.clone(),
                 manufacturer: manufacturer.clone(),
                 product_name: product_name.clone(),

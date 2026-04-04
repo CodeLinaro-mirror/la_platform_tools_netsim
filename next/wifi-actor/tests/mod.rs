@@ -37,7 +37,7 @@ async fn test_full_lifecycle_and_messaging() {
     // We use the wifi_client directly for deletion as `world` helpers mostly expose
     // higher level given/when but correct integration path is via ChipClient
     // (which `world.wifi_client` provides).
-    use netsim_model::chip::{ChipClient, ChipId};
+    use netsim_model::{ChipClient, ChipId};
     world.wifi_client.delete(ChipId(chip1_id)).await.expect("Failed to delete chip 1");
 
     // 6. Verify Device Notification

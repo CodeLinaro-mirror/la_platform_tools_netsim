@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use modem_rs::ModemError;
-use netsim_model::chip_error::ChipError;
+use netsim_model::ChipError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CellError {

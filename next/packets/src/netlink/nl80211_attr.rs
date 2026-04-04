@@ -17,7 +17,7 @@ pub struct NlAttrHdr {
     /// Length of the attribute, including the header.
     pub nla_len: U16<LittleEndian>,
     /// Type of the attribute. The lower 14 bits are the attribute ID,
-    /// and the upper 16 bits are flags (e.g., NLA_F_NESTED).
+    /// and the upper 2 bits are flags (e.g., NLA_F_NESTED).
     pub attr_type: U16<LittleEndian>,
 }
 

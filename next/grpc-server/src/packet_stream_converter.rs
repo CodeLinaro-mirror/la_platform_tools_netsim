@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::{BufMut, Bytes, BytesMut};
-use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use netsim_proto::{
     common as proto_common,
     hci_packet::{hcipacket::PacketType, HCIPacket},
     packet_streamer::{self, PacketRequest, PacketResponse},
     startup as proto_startup,
 };
-use packet_stream::error::{PacketStreamError, Result};
+use packet_stream::{
+    error::{PacketStreamError, Result},
+    Chip, ChipInfo, ChipKind, DeviceInfo,
+};
 use protobuf::Enum;
 
 pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {

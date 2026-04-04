@@ -146,7 +146,7 @@ pub enum ClapWifiMode {
     Ax,
 }
 
-use netsim_model::ap::WifiMode as ModelWifiMode;
+use netsim_model::WifiMode as ModelWifiMode;
 
 // We define a local WifiMode enum here to derive clap::ValueEnum,
 // as the `netsim-model` crate should not depend on `clap` (UI concern).

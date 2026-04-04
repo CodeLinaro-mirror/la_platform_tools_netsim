@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
-use netsim_model::initial_info::{ChipInfo, ChipKind};
+use netsim_model::{ChipInfo, ChipKind};
 use packet_stream::{Streams, TransportType};
 use tokio::time::timeout;
 

@@ -9,10 +9,7 @@
 use std::ops::Deref;
 
 use actor_framework::ResourceClient;
-use netsim_model::{
-    chip::{ChipClient, ChipCreate, ChipId},
-    client_error::ClientError,
-};
+use netsim_model::{ChipClient, ChipCreate, ChipId, ClientError};
 
 use crate::{BluetoothAction, BluetoothActionResult, BluetoothActor};
 
@@ -39,19 +36,19 @@ impl ChipClient for BluetoothClient {
             .map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn read(&self, id: ChipId) -> Result<netsim_model::chip::Chip, ClientError> {
+    async fn read(&self, id: ChipId) -> Result<netsim_model::Chip, ClientError> {
         self.0
             .get(id)
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?
-            .ok_or(ClientError::Chip(netsim_model::chip_error::ChipError::ChipNotFound(id)))
+            .ok_or(ClientError::Chip(netsim_model::ChipError::ChipNotFound(id)))
     }
 
     async fn update(
         &self,
         id: ChipId,
-        patch: netsim_model::chip::ChipUpdate,
-    ) -> Result<netsim_model::chip::Chip, ClientError> {
+        patch: netsim_model::ChipUpdate,
+    ) -> Result<netsim_model::Chip, ClientError> {
         self.0.update(id, patch).await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
@@ -59,9 +56,7 @@ impl ChipClient for BluetoothClient {
         self.0.delete(id).await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn read_statistics(
-        &self,
-    ) -> Result<Box<[netsim_model::stats::NetsimRadioStats]>, ClientError> {
+    async fn read_statistics(&self) -> Result<Box<[netsim_model::NetsimRadioStats]>, ClientError> {
         match self.0.perform_action(None, BluetoothAction::GetStatistics).await {
             Ok(BluetoothActionResult::Statistics(stats)) => Ok(stats),
             Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
@@ -77,7 +72,7 @@ impl ChipClient for BluetoothClient {
         self.0.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn reset(&self, id: ChipId) -> Result<netsim_model::chip::Chip, ClientError> {
+    async fn reset(&self, id: ChipId) -> Result<netsim_model::Chip, ClientError> {
         match self.0.perform_action(Some(id), BluetoothAction::Reset { id }).await {
             Ok(BluetoothActionResult::Chip(chip)) => Ok(chip),
             Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),

@@ -3,7 +3,7 @@
 
 use actor_framework::ResourceClient;
 use futures::TryFutureExt;
-use netsim_model::{client_error::ClientError, device::Position};
+use netsim_model::{ClientError, Position};
 
 use crate::ap_actor::{ApActor, ApConfig, ApId, ApReq, ApState};
 
@@ -142,7 +142,7 @@ impl ApClient {
     /// Disconnects a device from an Access Point.
     pub async fn disconnect(&self, id: u32, mac_str: String) -> Result<(), ClientError> {
         let mac = mac_str.parse::<netsim_packets::MacAddr>().map_err(|e| {
-            ClientError::Chip(netsim_model::chip_error::ChipError::Internal(
+            ClientError::Chip(netsim_model::ChipError::Internal(
                 format!("Invalid MAC: {}", e).into(),
             ))
         })?;
@@ -150,10 +150,6 @@ impl ApClient {
             .perform_action(Some(ApId(id)), ApReq::Disconnect { mac })
             .await
             .map(|_| ())
-            .map_err(|e| {
-                ClientError::Chip(netsim_model::chip_error::ChipError::Internal(
-                    e.to_string().into(),
-                ))
-            })
+            .map_err(|e| ClientError::Chip(netsim_model::ChipError::Internal(e.to_string().into())))
     }
 }

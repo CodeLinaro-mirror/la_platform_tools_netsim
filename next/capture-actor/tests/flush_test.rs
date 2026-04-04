@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use netsim_model::chip::ChipKind;
+use netsim_model::ChipKind;
 
 use crate::world::World;
 

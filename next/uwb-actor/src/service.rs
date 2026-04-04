@@ -4,11 +4,7 @@
 use actor_framework::{ActorService, DynContext};
 use bytes::Bytes;
 use futures::{FutureExt, SinkExt, StreamExt};
-use netsim_model::{
-    chip::{Chip, ChipCreate, ChipUpdate, ChipVariant},
-    chip_error::ChipError,
-    ChipId, ChipKind,
-};
+use netsim_model::{Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipUpdate, ChipVariant};
 use pdl_runtime::Packet;
 use pica::{packets::uci, PicaCommand, PicaEvent};
 
@@ -168,10 +164,10 @@ impl ActorService for UwbActor {
                     .unwrap()
                     .values()
                     .map(|state| {
-                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = state.chip.id;
                         radio_stats.name = state.chip.name.clone();
-                        radio_stats.kind = netsim_model::stats::RadioKind::Uwb;
+                        radio_stats.kind = netsim_model::RadioKind::Uwb;
                         radio_stats
                     })
                     .collect();

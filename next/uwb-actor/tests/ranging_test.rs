@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::device::Position;
+use netsim_model::Position;
 use pica::packets::uci;
 
 use crate::world::World;

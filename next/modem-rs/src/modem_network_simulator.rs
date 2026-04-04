@@ -9,7 +9,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use netsim_model::cell::{ModemAction, RegistrationStatus};
+use netsim_model::{ModemAction, RegistrationStatus};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 

@@ -5,10 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
 use ap_actor::{ApClient, SharedKeyStore};
-use netsim_model::{
-    chip::{Chip, ChipId},
-    stats::NetsimRadioStats,
-};
+use netsim_model::{Chip, ChipId, NetsimRadioStats};
 use netsim_packets::Ieee80211;
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
@@ -39,7 +36,7 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiStats>),
-    Chip(netsim_model::chip::Chip),
+    Chip(netsim_model::Chip),
 }
 
 pub type SlirpPendingRequest = (

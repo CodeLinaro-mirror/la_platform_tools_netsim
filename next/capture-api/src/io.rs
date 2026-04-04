@@ -23,7 +23,7 @@ use std::{
 
 use bytes::Bytes;
 use futures::{Sink, Stream};
-use netsim_model::chip::{PacketSink, PacketStream};
+use netsim_model::{PacketSink, PacketStream};
 
 /// A wrapper around `PacketStream` that automatically captures received
 /// packets.

@@ -8,7 +8,7 @@ use std::{
 
 use actor_framework::TimerKey;
 use capture_api::CaptureSender;
-use netsim_model::{chip::ChipClient, ChipKind};
+use netsim_model::{ChipClient, ChipKind};
 
 use crate::DeviceClient;
 

@@ -9,8 +9,7 @@ use bytes::Bytes;
 use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceId};
 use netsim_model::{
-    chip::{ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, WifiCreate},
-    device::Position,
+    ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, Position, WifiCreate,
 };
 use netsim_packets::{
     ether_type, EthernetFrame, FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddr,
@@ -174,7 +173,7 @@ impl World {
             ssid: "TestAP".to_string(),
             bssid: MacAddr::from([0x02, 0x00, 0x00, 0x00, 0x00, 0x00]),
             channel: 6,
-            hw_mode: netsim_model::chip::WifiMode::G,
+            hw_mode: netsim_model::WifiMode::G,
             wpa_passphrase: None,
             beacon_interval: 100,
             country_code: None,
@@ -566,7 +565,7 @@ impl World {
     pub async fn given_chip_is_disabled(&mut self, chip_idx: usize) {
         let chip = &self.chips[chip_idx];
         let id_val = chip.id as u32;
-        use netsim_model::chip::{ChipId, ChipUpdate, ChipVariantUpdate};
+        use netsim_model::{ChipId, ChipUpdate, ChipVariantUpdate};
         let patch = ChipUpdate {
             variant: Some(ChipVariantUpdate::Wifi(Default::default())),
             enabled: Some(false),
@@ -666,7 +665,7 @@ impl World {
 
 #[derive(Clone, Debug)]
 pub struct MockGateway {
-    pub outgoing_packets: Arc<std::sync::Mutex<Vec<(netsim_model::chip::ChipId, bytes::Bytes)>>>,
+    pub outgoing_packets: Arc<std::sync::Mutex<Vec<(netsim_model::ChipId, bytes::Bytes)>>>,
 }
 
 impl MockGateway {
@@ -679,7 +678,7 @@ impl MockGateway {
 impl wifi_actor::GatewayTrait for MockGateway {
     async fn send_80211(
         &self,
-        chip_id: netsim_model::chip::ChipId,
+        chip_id: netsim_model::ChipId,
         ieee80211: &Ieee80211,
     ) -> Result<usize, wifi_actor::WifiError> {
         let bytes = ieee80211
@@ -690,13 +689,13 @@ impl wifi_actor::GatewayTrait for MockGateway {
         Ok(len)
     }
 
-    fn should_handle(&self, _chip_id: netsim_model::chip::ChipId) -> bool {
+    fn should_handle(&self, _chip_id: netsim_model::ChipId) -> bool {
         false
     }
 
     fn handle_incoming(
         &self,
-        _chip_id: netsim_model::chip::ChipId,
+        _chip_id: netsim_model::ChipId,
         _packet: bytes::Bytes,
         _medium: &mut wifi_actor::Medium,
         _shared_keys: &ap_actor::SharedKeyStore,
@@ -708,14 +707,14 @@ impl wifi_actor::GatewayTrait for MockGateway {
 
     async fn on_chip_create(
         &mut self,
-        _chip_id: netsim_model::chip::ChipId,
+        _chip_id: netsim_model::ChipId,
         _ctx: &mut actor_framework::DynContext<WifiActor>,
     ) {
     }
 
     async fn on_chip_remove(
         &mut self,
-        _chip_id: netsim_model::chip::ChipId,
+        _chip_id: netsim_model::ChipId,
         _ctx: &mut actor_framework::DynContext<WifiActor>,
     ) {
     }

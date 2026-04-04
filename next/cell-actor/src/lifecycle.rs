@@ -46,7 +46,7 @@ impl ActorLifecycle for CellActor {
 impl CellActor {
     async fn handle_packet_stream(
         &mut self,
-        id: netsim_model::chip::ChipId,
+        id: netsim_model::ChipId,
         message: Bytes,
         _ctx: &mut DynContext<Self>,
     ) {
@@ -58,7 +58,7 @@ impl CellActor {
     async fn handle_host_event(&mut self, event: HostEvent, ctx: &mut DynContext<Self>) {
         match event {
             HostEvent::SinkError(id) => {
-                let chip_id = netsim_model::chip::ChipId(id);
+                let chip_id = netsim_model::ChipId(id);
                 warn!("Sink error for chip {}, deleting.", chip_id);
                 let _ = self.handle_get(chip_id, ctx).await;
                 ctx.remove_stream(chip_id);
@@ -66,7 +66,6 @@ impl CellActor {
             }
 
             HostEvent::TimerRequest { chip_id: id, duration } => {
-                // Schedule the internal timer callback
                 ctx.run_later(
                     duration,
                     Box::new(move |actor, _ctx| {

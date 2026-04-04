@@ -14,12 +14,8 @@ use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult};
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::{
-    chip::{
-        CellCreate, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipVariant,
-        PacketSink, PacketStream,
-    },
-    chip_error::ChipError as NetsimChipError,
-    device::DeviceId,
+    CellCreate, ChipClient, ChipConfig, ChipCreate, ChipError as NetsimChipError, ChipId,
+    ChipKindParams, ChipVariant, DeviceId, PacketSink, PacketStream,
 };
 use tokio::sync::mpsc;
 
@@ -193,7 +189,7 @@ async fn test_get_chip() {
     // Test non-existent chip
     let bad_chip_id = ChipId(99);
     match harness.client.read(bad_chip_id).await {
-        Err(netsim_model::client_error::ClientError::Chip(NetsimChipError::ChipNotFound(id))) => {
+        Err(netsim_model::ClientError::Chip(NetsimChipError::ChipNotFound(id))) => {
             assert_eq!(id, bad_chip_id);
         }
         other => panic!("Expected ChipNotFound error, got {:?}", other),

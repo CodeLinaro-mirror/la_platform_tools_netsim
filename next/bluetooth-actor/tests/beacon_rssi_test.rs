@@ -6,7 +6,7 @@ use std::time::Duration;
 use bluetooth_actor::beacon_utils::{
     is_le_advertising_report, REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET,
 };
-use netsim_model::device::Position;
+use netsim_model::Position;
 use netsim_packets::{
     Enable, LeScanType, LeScanningFilterPolicy, LeSetEventMask, LeSetScanEnable,
     LeSetScanParameters, OwnAddressType, Reset, SetEventMask,
@@ -39,7 +39,7 @@ async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
 
     // Move beacon to initial position
     {
-        let mut update = netsim_model::chip::ChipUpdate::default();
+        let mut update = netsim_model::ChipUpdate::default();
         update.pose.position = Some(Position { x: 1.0, y: 0.0, z: 0.0 });
         update.id = Some(beacon_id);
         world.client.0.update(beacon_id, update).await?;
@@ -86,7 +86,7 @@ async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
     for distance in distances {
         // Move beacon
         {
-            let mut update = netsim_model::chip::ChipUpdate::default();
+            let mut update = netsim_model::ChipUpdate::default();
             update.pose.position = Some(Position { x: distance, y: 0.0, z: 0.0 });
             update.id = Some(beacon_id);
             world.client.0.update(beacon_id, update).await?;

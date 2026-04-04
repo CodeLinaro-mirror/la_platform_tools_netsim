@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use netsim_model::device::Position;
+use netsim_model::Position;
 use netsim_packets::{category, public_action, Ieee80211};
 use tracing::{debug, warn};
 use zerocopy::IntoBytes;

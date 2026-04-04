@@ -1,7 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::chip_error::ChipError;
+use netsim_model::ChipError;
 use thiserror::Error;
 
 /// Errors that can occur within the Bluetooth actor.

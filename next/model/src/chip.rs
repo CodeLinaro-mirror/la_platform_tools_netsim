@@ -232,14 +232,11 @@ pub enum ChipKindParams {
 }
 
 pub use crate::{
-    ap::{Ap, ApCreate, ApUpdate, WifiMode},
-    bluetooth::{
-        beacon::BleBeacon, BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode,
-        BluetoothUpdate, DeviceParams, ScannerParams, SnifferParams,
-    },
-    cell::{Cell, CellCreate},
-    uwb::{Uwb, UwbCreate, UwbUpdate},
-    wifi::{Wifi, WifiCreate, WifiUpdate},
+    ap::{ApCreate, WifiMode},
+    bluetooth::{beacon::BleBeacon, BeaconParams, BluetoothCreate, BluetoothMode},
+    cell::CellCreate,
+    uwb::{Uwb, UwbCreate},
+    wifi::WifiCreate,
 };
 
 impl fmt::Display for ChipId {

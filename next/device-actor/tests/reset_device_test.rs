@@ -165,7 +165,7 @@ async fn test_reset_propagates_to_all_chip_actors() {
     add_chip_params.device_config.pose.position = initial_pos.clone();
     add_chip_params.device_config.pose.orientation = initial_orient.clone();
     add_chip_params.chip_config.chip_kind_params =
-        netsim_model::chip::ChipKindParams::Wifi(Default::default());
+        netsim_model::ChipKindParams::Wifi(Default::default());
     world.client.add_chip(add_chip_params).await.unwrap();
 
     // And the device's properties are modified

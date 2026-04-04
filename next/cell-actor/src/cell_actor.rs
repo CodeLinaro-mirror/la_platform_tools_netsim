@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use device_actor::DeviceClient;
 use modem_rs::{modem_network::ModemNetworkInterface, ModemNetworkSimulator};
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 pub struct ChipState {

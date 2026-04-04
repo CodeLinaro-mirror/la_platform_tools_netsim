@@ -38,30 +38,65 @@
 //! By maintaining this structure, we ensure a stable foundation and prevent
 //! circular dependencies.
 
-/// Bluetooth related definitions.
-/// Chip configuration parameters.
-pub mod ap;
-pub mod bluetooth;
-pub mod cell;
-pub mod chip;
-/// Chip error definitions.
-pub mod chip_error;
-pub mod client_error;
-/// Device actor definitions.
-pub mod device;
-pub mod device_error;
-/// Structs for initial connection handshake.
-pub mod initial_info;
-pub mod link;
-/// Macros for the client methods.
-pub mod macros;
-/// Packet streamer definitions.
-pub mod packet_streamer;
-/// Statistics related definitions.
-pub mod stats;
-pub mod uwb;
-pub mod wifi;
+pub(crate) mod ap;
+pub(crate) mod bluetooth;
+pub(crate) mod cell;
+pub(crate) mod chip;
+pub(crate) mod chip_error;
+pub(crate) mod client_error;
+pub(crate) mod device;
+pub(crate) mod device_error;
+pub(crate) mod initial_info;
+pub(crate) mod link;
+pub(crate) mod macros;
+pub(crate) mod packet_streamer;
+pub(crate) mod stats;
+pub(crate) mod uwb;
+pub(crate) mod wifi;
 
-pub use initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
+// Explicit Facade Exports
 
-pub use crate::chip::ChipId;
+// From chip.rs
+// From ap.rs
+// From bluetooth.rs
+// From cell.rs
+#[cfg(any(test, feature = "testing"))]
+pub use crate::chip::MockChipClient;
+// From client_error.rs
+pub use crate::client_error::ClientError;
+// From device::api
+pub use crate::device::api::{
+    DeviceChip, DeviceChipCreate, DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate,
+};
+// From device.rs
+pub use crate::device::{
+    Device, DeviceAddChip, DeviceConfig, DeviceId, DeviceInfo, Orientation, Pose, Position,
+};
+// From device_error.rs
+pub use crate::device_error::DeviceError;
+// From initial_info.rs
+pub use crate::initial_info::{ChipInfo, ChipKind};
+// From link.rs
+pub use crate::link::{Link, LinkId, LinkUpdate};
+// From stats.rs
+pub use crate::stats::{NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind};
+pub use crate::{
+    ap::{Ap, ApCreate, ApUpdate, WifiMode, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID},
+    bluetooth::{
+        beacon::{
+            AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, Interval,
+            Service, TxPower,
+        },
+        BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode, BluetoothUpdate, Controller,
+        DeviceParams, ScannerParams, SnifferParams,
+    },
+    cell::{Cell, CellCreate, ModemAction, RegistrationStatus},
+    chip::{
+        chip_kind_to_proto, chip_kind_to_radio_kind, Chip, ChipClient, ChipConfig, ChipCreate,
+        ChipId, ChipKindParams, ChipRequest, ChipUpdate, ChipVariant, ChipVariantUpdate,
+        PacketSink, PacketStream, Radio, RadioChipClient, RadioUpdate,
+    },
+    chip_error::ChipError,
+    uwb::{Uwb, UwbCreate, UwbUpdate},
+    wifi::{Wifi, WifiCreate, WifiUpdate},
+};

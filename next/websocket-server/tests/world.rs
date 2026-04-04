@@ -15,10 +15,7 @@ use bytes::{Bytes, BytesMut};
 use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId};
 use futures::{SinkExt, StreamExt};
-use netsim_model::{
-    chip::{ChipKindParams, PacketSink, PacketStream},
-    ChipId,
-};
+use netsim_model::{ChipId, ChipKindParams, PacketSink, PacketStream};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,

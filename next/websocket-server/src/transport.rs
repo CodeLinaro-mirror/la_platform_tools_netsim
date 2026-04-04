@@ -12,10 +12,8 @@ use device_actor::DeviceClient;
 use device_api::DeviceId;
 use futures::StreamExt;
 use netsim_model::{
-    bluetooth::Controller,
-    chip::{
-        BluetoothCreate, BluetoothMode, ChipKindParams, DeviceParams, PacketSink, PacketStream,
-    },
+    BluetoothCreate, BluetoothMode, ChipKindParams, Controller, DeviceParams, PacketSink,
+    PacketStream,
 };
 use tokio::{sync::mpsc, task::JoinSet};
 use tracing::{info, warn};
@@ -43,7 +41,7 @@ pub(crate) async fn setup_virtual_chip(
         mode: BluetoothMode::Device(DeviceParams {}),
     };
 
-    let chip_config = netsim_model::chip::ChipConfig {
+    let chip_config = netsim_model::ChipConfig {
         name: chip_name,
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
