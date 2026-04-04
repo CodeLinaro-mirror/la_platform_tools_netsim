@@ -98,12 +98,12 @@ impl ChipClient for WifiClient {
         self.inner.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
-        match self.inner.perform_action(Some(id), crate::wifi_actor::WifiReq::Reset { id }).await {
-            Ok(crate::wifi_actor::WifiResponse::Chip(chip)) => Ok(chip),
-            Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
-            Err(e) => Err(ClientError::Send(e.to_string())),
-        }
+    async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
+        self.inner
+            .perform_action(Some(id), crate::wifi_actor::WifiReq::Reset { id })
+            .await
+            .map(|_| ())
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {

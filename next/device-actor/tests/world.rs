@@ -15,7 +15,6 @@ use netsim_model::{
     chip::{
         BluetoothUpdate, ChipClient, ChipUpdate, ChipVariantUpdate, MockChipClient, RadioUpdate,
     },
-    device::Pose,
     ChipKind,
 };
 
@@ -275,56 +274,42 @@ impl World {
         _kind: ChipKind,
     ) -> MockChipClient {
         let mut mock = MockChipClient::new();
-        let initial_chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
-        Self::setup_mock_chip_client(&mut mock, mock_chips, initial_chips, radio_stats, wifi_stats);
+        Self::setup_mock_chip_client(&mut mock, mock_chips, radio_stats, wifi_stats);
         mock
     }
 
     fn setup_mock_chip_client(
         mock: &mut MockChipClient,
         chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
-        initial_chips: Arc<
-            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
-        >,
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
     ) {
         let chips_clone = chips.clone();
         let rs_clone = radio_stats.clone();
         let ws_clone = wifi_stats.clone();
-        let initial_chips_clone = initial_chips.clone();
         mock.expect_clone_box().returning(move || {
-            Self::create_shared_mock(
-                chips_clone.clone(),
-                initial_chips_clone.clone(),
-                rs_clone.clone(),
-                ws_clone.clone(),
-            )
+            Self::create_shared_mock(chips_clone.clone(), rs_clone.clone(), ws_clone.clone())
         });
 
         let chips_create = chips.clone();
-        let initial_chips_create = initial_chips.clone();
         mock.expect_create()
             .with(mockall::predicate::always(), mockall::predicate::always())
             .returning(move |id, params| {
                 let mut chips = chips_create.lock().unwrap();
-                let mut initial_chips = initial_chips_create.lock().unwrap();
                 let chip = netsim_model::chip::Chip {
                     id: id.0,
                     kind: netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
-                    name: params.config.name,
-                    manufacturer: params.config.manufacturer,
-                    product_name: params.config.product_name,
+                    name: Some(params.config.name),
+                    manufacturer: Some(params.config.manufacturer),
+                    product_name: Some(params.config.product_name),
                     device_id: params.device_id,
-                    pose: params.pose,
                     variant: Some(netsim_model::chip::ChipVariant::from(
                         netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
                     )),
                     enabled: true,
                     ..Default::default()
                 };
-                chips.insert(id, chip.clone());
-                initial_chips.insert(id, chip);
+                chips.insert(id, chip);
                 if let Some(mut stream) = params.packet_stream {
                     tokio::spawn(async move { while stream.next().await.is_some() {} });
                 }
@@ -344,11 +329,11 @@ impl World {
             let mut chips = chips_update.lock().unwrap();
             if let Some(chip) = chips.get_mut(&id) {
                 // Apply patches (simplified)
-                if let Some(pos) = &patch.pose.position {
-                    chip.pose.position = pos.clone();
+                if let Some(pos) = patch.position {
+                    chip.position = pos;
                 }
-                if let Some(orient) = &patch.pose.orientation {
-                    chip.pose.orientation = orient.clone();
+                if let Some(orient) = patch.orientation {
+                    chip.orientation = orient;
                 }
                 if let Some(netsim_model::chip::ChipVariantUpdate::Bluetooth(bt_update)) =
                     patch.variant
@@ -378,27 +363,16 @@ impl World {
             Ok(())
         });
         let chips_reset = chips.clone();
-        let initial_chips_reset = initial_chips.clone();
         mock.expect_reset().returning(move |id| {
             let mut chips = chips_reset.lock().unwrap();
-            let initial_chips = initial_chips_reset.lock().unwrap();
-            let initial_chip =
-                initial_chips.get(&id).ok_or(netsim_model::client_error::ClientError::Chip(
-                    netsim_model::chip_error::ChipError::ChipNotFound(id),
-                ))?;
             if let Some(chip) = chips.get_mut(&id) {
-                chip.pose = initial_chip.pose;
                 chip.enabled = true;
                 if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
                     bt.low_energy.state = Some(true);
                     bt.classic.state = Some(true);
                 }
-                Ok(chip.clone())
-            } else {
-                Err(netsim_model::client_error::ClientError::Chip(
-                    netsim_model::chip_error::ChipError::ChipNotFound(id),
-                ))
             }
+            Ok(())
         });
 
         let rs = radio_stats.clone();
@@ -424,14 +398,11 @@ impl World {
     /// ACTIVE client)
     fn create_shared_mock(
         chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
-        initial_chips: Arc<
-            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
-        >,
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
     ) -> Box<MockChipClient> {
         let mut mock = MockChipClient::new();
-        Self::setup_mock_chip_client(&mut mock, chips, initial_chips, radio_stats, wifi_stats);
+        Self::setup_mock_chip_client(&mut mock, chips, radio_stats, wifi_stats);
         Box::new(mock)
     }
 
@@ -483,7 +454,13 @@ impl World {
     /// BDD Step: When I create a new device.
     pub async fn when_create_device(&self, name: &str) -> DeviceId {
         let params = DeviceCreate {
-            device_config: DeviceConfig::new(name.to_string(), true, Pose::default(), false),
+            device_config: DeviceConfig::new(
+                name.to_string(),
+                true,
+                Default::default(),
+                Default::default(),
+                false,
+            ),
             chip: DeviceChipCreate {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
@@ -503,12 +480,7 @@ impl World {
         orientation: device_api::Orientation,
     ) -> DeviceId {
         let params = DeviceCreate {
-            device_config: DeviceConfig::new(
-                name.to_string(),
-                true,
-                Pose { position, orientation },
-                false,
-            ),
+            device_config: DeviceConfig::new(name.to_string(), true, position, orientation, false),
             chip: DeviceChipCreate {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
@@ -525,23 +497,6 @@ impl World {
             chip_name.to_string(),
             "00:00:00:00:00:00".to_string(),
         );
-        self.client.add_chip(params).await.unwrap()
-    }
-
-    pub async fn when_add_chip_with_position(
-        &self,
-        device_guid: &str,
-        chip_name: &str,
-        position: device_api::Position,
-        orientation: device_api::Orientation,
-    ) -> DeviceId {
-        let mut params = Self::create_device_add_chip_params(
-            device_guid.to_string(),
-            chip_name.to_string(),
-            "00:00:00:00:00:00".to_string(),
-        );
-        params.device_config.pose.position = position;
-        params.device_config.pose.orientation = orientation;
         self.client.add_chip(params).await.unwrap()
     }
 
@@ -705,8 +660,13 @@ impl World {
         chip_name: String,
         chip_address: String,
     ) -> device_api::DeviceAddChip {
-        let mut device_config =
-            DeviceConfig::new("test-dev".to_string(), true, Pose::default(), false);
+        let mut device_config = DeviceConfig::new(
+            "test-dev".to_string(),
+            true,
+            Default::default(),
+            Default::default(),
+            false,
+        );
         device_config.device_info = Some(netsim_model::device::DeviceInfo {
             name: "test_device".to_string(),
             ..Default::default()
@@ -1090,7 +1050,13 @@ impl World {
         variant: &str,
         arch: &str,
     ) {
-        let mut config = DeviceConfig::new(name.to_string(), true, Pose::default(), false);
+        let mut config = DeviceConfig::new(
+            name.to_string(),
+            true,
+            Default::default(),
+            Default::default(),
+            false,
+        );
         config.device_info = Some(netsim_model::device::DeviceInfo {
             name: name.to_string(),
             kind: kind.to_string(),
@@ -1193,7 +1159,7 @@ impl World {
             let mut update = device_api::api::DeviceUpdate::default();
             update.id = id.0;
             update.visible = Some(false);
-            update.pose.position = Some(device_api::Position { x: 1.0, y: 1.0, z: 1.0 });
+            update.position = Some(device_api::Position { x: 1.0, y: 1.0, z: 1.0 });
             self.client
                 .update(id, update)
                 .await
@@ -1206,7 +1172,7 @@ impl World {
         let mut update = device_api::api::DeviceUpdate::default();
         update.id = id.0;
         update.visible = Some(false);
-        update.pose.position = Some(device_api::Position { x: 1.0, y: 1.0, z: 1.0 });
+        update.position = Some(device_api::Position { x: 1.0, y: 1.0, z: 1.0 });
         self.client
             .update(id, update)
             .await
@@ -1249,7 +1215,7 @@ impl World {
         for device in response.devices {
             assert!(device.visible, "Device {} should be visible after reset", device.id);
             assert_eq!(
-                device.pose.position,
+                device.position,
                 device_api::Position::default(),
                 "Device {} position mismatch",
                 device.id
@@ -1267,7 +1233,7 @@ impl World {
             .expect("Device not found during then_device_properties_are_reset");
         assert!(device.visible, "Device {} should be visible after reset", id.0);
         assert_eq!(
-            device.pose.position,
+            device.position,
             device_api::Position::default(),
             "Device {} position mismatch",
             id.0
@@ -1312,26 +1278,26 @@ impl World {
             .expect("Device not found during then_device_and_chips_position_and_orientation_match");
 
         assert_eq!(
-            device.pose.position, position,
+            device.position, position,
             "Device {} position mismatch: expected {:?}, got {:?}",
-            id.0, position, device.pose.position
+            id.0, position, device.position
         );
         assert_eq!(
-            device.pose.orientation, orientation,
+            device.orientation, orientation,
             "Device {} orientation mismatch: expected {:?}, got {:?}",
-            id.0, orientation, device.pose.orientation
+            id.0, orientation, device.orientation
         );
 
         for chip in &device.chips {
             assert_eq!(
-                chip.pose.position, position,
+                chip.position, position,
                 "Chip {} (device {}) position mismatch: expected {:?}, got {:?}",
-                chip.id, id.0, position, chip.pose.position
+                chip.id, id.0, position, chip.position
             );
             assert_eq!(
-                chip.pose.orientation, orientation,
+                chip.orientation, orientation,
                 "Chip {} (device {}) orientation mismatch: expected {:?}, got {:?}",
-                chip.id, id.0, orientation, chip.pose.orientation
+                chip.id, id.0, orientation, chip.orientation
             );
         }
     }
@@ -1355,14 +1321,14 @@ impl World {
                 .expect(&format!("Chip {} not found in mock_chips", chip_id.0));
 
             assert_eq!(
-                chip.pose.position, position,
+                chip.position, position,
                 "Chip Actor {} position mismatch: expected {:?}, got {:?}",
-                chip_id.0, position, chip.pose.position
+                chip_id.0, position, chip.position
             );
             assert_eq!(
-                chip.pose.orientation, orientation,
+                chip.orientation, orientation,
                 "Chip Actor {} orientation mismatch: expected {:?}, got {:?}",
-                chip_id.0, orientation, chip.pose.orientation
+                chip_id.0, orientation, chip.orientation
             );
         }
     }

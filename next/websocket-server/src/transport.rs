@@ -70,7 +70,8 @@ pub(crate) async fn setup_virtual_chip(
         device_config: device_api::DeviceConfig {
             name: device_name,
             visible: true,
-            pose: Default::default(),
+            position: Default::default(),
+            orientation: Default::default(),
             builtin: false,
             device_info: None,
         },

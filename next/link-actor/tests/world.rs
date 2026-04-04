@@ -52,7 +52,7 @@ impl World {
         mock.expect_create().returning(|_, _| Ok(()));
         mock.expect_delete().returning(|_| Ok(()));
         mock.expect_read_statistics().returning(|| Ok(Box::from([])));
-        mock.expect_reset().returning(|_| Ok(netsim_model::chip::Chip::default()));
+        mock.expect_reset().returning(|_| Ok(()));
         mock.expect_clone_box().returning(|| Box::new(Self::create_default_mock()));
         mock
     }

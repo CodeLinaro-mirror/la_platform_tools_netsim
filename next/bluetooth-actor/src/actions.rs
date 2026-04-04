@@ -26,6 +26,4 @@ pub enum BluetoothActionResult {
     Statistics(Box<[NetsimRadioStats]>),
     /// The action returned a count.
     Count(usize),
-    /// The action returned the updated chip state.
-    Chip(netsim_model::chip::Chip),
 }

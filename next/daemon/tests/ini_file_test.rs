@@ -61,7 +61,7 @@ fn test_ini_reader_malformed_file() {
             // Instance 2 attempts to acquire, fails lock, then fails to parse
             let ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
             let result = ini_file2.try_acquire();
-
+            println!("Malformed test result: {:?}", result);
             match result {
                 Err(e) => {
                     assert_eq!(e.kind(), io::ErrorKind::InvalidData);

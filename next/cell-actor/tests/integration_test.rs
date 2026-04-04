@@ -72,7 +72,6 @@ fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> Chi
             chip_kind_params: ChipKindParams::Cell(CellCreate::default()),
         },
         device_id: DeviceId(1),
-        pose: Default::default(),
     }
 }
 

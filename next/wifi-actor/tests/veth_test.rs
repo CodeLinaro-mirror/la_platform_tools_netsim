@@ -89,7 +89,6 @@ async fn test_udp_guest_to_host() {
         packet_stream: Some(packet_stream),
         packet_sink: Some(packet_sink),
         config,
-        pose: Default::default(),
     };
 
     // Create AP

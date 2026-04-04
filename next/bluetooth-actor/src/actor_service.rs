@@ -82,15 +82,11 @@ impl ActorService for BluetoothActor {
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
-            name,
-            manufacturer: params.config.manufacturer.clone(),
-            product_name: params.config.product_name.clone(),
+            name: Some(name),
+            manufacturer: Some(params.config.manufacturer.clone()),
+            product_name: Some(params.config.product_name.clone()),
             kind: ChipKind::BLUETOOTH,
-            pose: params.pose,
-            variant: Some(ChipVariant::Bluetooth(netsim_model::bluetooth::Bluetooth {
-                low_energy: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
-                classic: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
-            })),
+            variant: Some(ChipVariant::Bluetooth(Default::default())),
             ..Default::default()
         };
 
@@ -143,7 +139,7 @@ impl ActorService for BluetoothActor {
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
-        match &mode {
+        let mut chip_info = match &mode {
             BluetoothMode::Beacon(params) => {
                 crate::beacon::create(&self.rootcanal, chip_id, params, &chip.name)?
             }
@@ -156,9 +152,9 @@ impl ActorService for BluetoothActor {
             BluetoothMode::Sniffer(params) => {
                 crate::sniffer::create(&self.rootcanal, chip_id, params)?
             }
-        }
-        self.chips.lock().unwrap().insert(chip_id, chip.clone());
-        self.initial_chips.insert(chip_id, chip);
+        };
+        chip_info.device_id = chip.device_id;
+        self.chips.lock().unwrap().insert(id.unwrap_or(chip_id), chip);
         Ok(chip_id)
     }
 
@@ -229,19 +225,15 @@ impl ActorService for BluetoothActor {
                 info!("Resetting Bluetooth chip {id}");
                 let _ = self.rootcanal.clear_stats(id.0.into());
 
-                let chip = {
-                    let mut chips = self.chips.lock().unwrap();
-                    let initial_chip = self
-                        .initial_chips
-                        .get(&id)
-                        .ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
-                    let chip = chips
-                        .get_mut(&id)
-                        .ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
-                    *chip = initial_chip.clone();
-                    chip.clone()
-                };
-                Ok(BluetoothActionResult::Chip(chip))
+                let mut chips = self.chips.lock().unwrap();
+                if let Some(chip) = chips.get_mut(&id) {
+                    chip.enabled = true;
+                    if let Some(ChipVariant::Bluetooth(bt)) = &mut chip.variant {
+                        bt.low_energy.state = Some(true);
+                        bt.classic.state = Some(true);
+                    }
+                }
+                Ok(BluetoothActionResult::Success)
             }
             BluetoothAction::GetStatistics => {
                 let mut stats_list = Vec::new();
@@ -251,7 +243,7 @@ impl ActorService for BluetoothActor {
                         // BLE Stats
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
-                            name: chip.name.clone(),
+                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
                             kind: netsim_model::stats::RadioKind::BluetoothLowEnergy,
                             tx_count: stats.ll_packets_out_ble,
                             rx_count: stats.ll_packets_in_ble,
@@ -263,7 +255,7 @@ impl ActorService for BluetoothActor {
                         // Classic Stats
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
-                            name: chip.name.clone(),
+                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
                             kind: netsim_model::stats::RadioKind::BluetoothClassic,
                             tx_count: stats.ll_packets_out_classic,
                             rx_count: stats.ll_packets_in_classic,

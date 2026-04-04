@@ -47,7 +47,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
                 return None;
             }
 
-            let dist = ranging::distance(&src.pose.position, &dst.pose.position);
+            let dist = ranging::distance(&src.position, &dst.position);
 
             // Check for link override
             let rssi = src
@@ -80,8 +80,6 @@ pub struct BluetoothActor {
     pub(crate) rootcanal: Arc<Rootcanal>,
     /// A map of active Bluetooth chips, protected by a mutex.
     pub(crate) chips: ChipMap,
-    /// A map of initial chip states for reset purposes.
-    pub(crate) initial_chips: HashMap<ChipId, Chip>,
     /// The client for interacting with the device actor.
     pub(crate) device_client: DeviceClient,
 }
@@ -90,9 +88,8 @@ impl BluetoothActor {
     /// Creates a new BluetoothActor context.
     pub fn new(device_client: DeviceClient) -> Self {
         let chips = Arc::new(Mutex::new(HashMap::new()));
-        let initial_chips = HashMap::new();
         let rootcanal = Rootcanal::new(Box::new(RootcanalCallbacksImpl { chips: chips.clone() }));
-        Self { rootcanal, chips, initial_chips, device_client }
+        Self { rootcanal, chips, device_client }
     }
 }
 

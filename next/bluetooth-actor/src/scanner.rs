@@ -13,7 +13,7 @@
 //!   standard Bluetooth LL packets for capture.
 
 use netsim_model::{
-    chip::{ChipId, ScannerParams},
+    chip::{Chip, ChipId, ScannerParams},
     chip_error::ChipError,
 };
 use rootcanal::Rootcanal;
@@ -33,7 +33,7 @@ pub(crate) fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &ScannerParams,
-) -> Result<(), ChipError> {
+) -> Result<Chip, ChipError> {
     debug!("[{chip_id}] Setting up scanner chip");
     // Enable scanning on the new controller.
     debug!("[{chip_id}] Enabling scanning");
@@ -116,5 +116,5 @@ pub(crate) fn create(
         0x00,       // Filter Duplicates: False
     ];
     rootcanal.receive_hci(chip_id.into(), scan_enable.into()).to_chip_error()?;
-    Ok(())
+    Ok(Chip::default())
 }

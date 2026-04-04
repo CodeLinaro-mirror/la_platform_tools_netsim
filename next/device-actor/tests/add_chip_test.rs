@@ -31,7 +31,7 @@ async fn test_add_chip_creates_new_device() {
     // And the device contains the chip
     let device = world.client.get(device_id).await.unwrap().unwrap();
     assert_eq!(device.chips.len(), 1);
-    assert_eq!(device.chips[0].name, "beacon");
+    assert_eq!(device.chips[0].name, Some("beacon".to_string()));
 }
 
 // Scenario: Add chip to existing device
@@ -81,7 +81,7 @@ async fn test_add_chip_to_existing_device() {
     assert_eq!(device.chips.len(), 2);
 
     // Verify names
-    let names: Vec<String> = device.chips.iter().map(|c| c.name.clone()).collect();
+    let names: Vec<String> = device.chips.iter().filter_map(|c| c.name.clone()).collect();
     assert!(names.contains(&"beacon-1".to_string()));
     assert!(names.contains(&"beacon-2".to_string()));
 }
@@ -128,52 +128,4 @@ async fn test_concurrent_add_chip_race_condition() {
 
     // Then only one device is created (IDs must match)
     assert_eq!(id1, id2, "Device IDs should match for the same GUID even with concurrent creation");
-}
-
-// Scenario: Position propagation during Add Chip
-//   Given a running Device Actor
-//   When I add a chip with a device config containing position
-//   Then the chip creation is invoked with that position
-#[tokio::test]
-async fn test_add_chip_propagates_position() {
-    let expected_pos = netsim_model::device::Position { x: 10.0, y: 20.0, z: 30.0 };
-    let expected_orient = netsim_model::device::Orientation { yaw: 1.0, pitch: 2.0, roll: 3.0 };
-
-    let mut mock_chip_client = MockChipClient::new();
-    mock_chip_client.expect_create().times(1).returning(move |_, params| {
-        assert_eq!(
-            params.pose.position, expected_pos,
-            "Passed position should match device position"
-        );
-        assert_eq!(
-            params.pose.orientation, expected_orient,
-            "Passed orientation should match device orientation"
-        );
-        Ok(())
-    });
-    mock_chip_client.expect_read_statistics().returning(|| Ok(Box::from(Vec::new())));
-    mock_chip_client.expect_read().returning(|id| {
-        Ok(netsim_model::chip::Chip {
-            id: id.0,
-            kind: netsim_model::chip::ChipKind::BLUETOOTH,
-            ..Default::default()
-        })
-    });
-
-    let mut chip_clients = HashMap::new();
-    chip_clients.insert(
-        ChipKind::BLUETOOTH,
-        Box::new(mock_chip_client) as Box<dyn netsim_model::chip::ChipClient>,
-    );
-
-    let mut mock_link_client = link_api::MockLinkClient::new();
-    mock_link_client.expect_action().returning(|_, _| Ok(()));
-    mock_link_client.expect_create().returning(|_| Ok(link_api::LinkId(0)));
-    mock_link_client.expect_notify_chip_added().returning(|_, _| Ok(()));
-
-    let world = World::with_clients(chip_clients, mock_link_client).await;
-
-    world
-        .when_add_chip_with_position("guid-with-pos", "beacon", expected_pos, expected_orient)
-        .await;
 }

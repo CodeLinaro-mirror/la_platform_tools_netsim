@@ -120,9 +120,7 @@ impl PacketStreamer for PacketStreamerService {
                     match packet_stream_converter::bytes_to_packet_response(bytes, is_bt) {
                         Ok(packet_response) => futures::stream::iter(vec![Ok((
                             packet_response,
-                            grpcio::WriteFlags::default()
-                                .buffer_hint(false)
-                                .force_no_compress(true),
+                            grpcio::WriteFlags::default(),
                         ))]),
                         Err(err) => {
                             warn!("Error converting bytes to packet response: {err:?}");

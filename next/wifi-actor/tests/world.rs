@@ -214,7 +214,6 @@ impl World {
             packet_stream: Some(packet_stream),
             packet_sink: Some(packet_sink),
             config,
-            pose: Default::default(),
         };
 
         self.wifi_client.create(id, params).await.expect("Failed to create chip");

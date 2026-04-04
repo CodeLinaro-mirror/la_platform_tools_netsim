@@ -59,17 +59,12 @@ impl ChipClient for UwbClient {
         self.0.shutdown().err_into::<ClientError>().await
     }
 
-    async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
-        match self
-            .0
+    async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
+        self.0
             .perform_action(Some(id), crate::UwbAction::Reset { id })
             .err_into::<ClientError>()
             .await
-        {
-            Ok(crate::UwbActionResult::Chip(chip)) => Ok(chip),
-            Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
-            Err(e) => Err(e),
-        }
+            .map(|_| ())
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {
