@@ -22,7 +22,6 @@ use std::{
     str::FromStr,
 };
 
-use common::util::os_utils::get_discovery_directory;
 use tracing::{debug, warn};
 
 // --- INI File Management ---
@@ -170,12 +169,6 @@ pub struct IniFile {
 }
 
 impl IniFile {
-    /// Creates a new `IniFile` manager for the default netsim INI file.
-    pub fn new() -> io::Result<Self> {
-        let dir = get_discovery_directory();
-        Self::new_for_dir(dir)
-    }
-
     /// Creates a new `IniFile` manager for an INI file in the specified
     /// directory.
     pub fn new_for_dir(dir: PathBuf) -> io::Result<Self> {
@@ -316,11 +309,6 @@ impl IniFile {
         }
 
         Ok(config)
-    }
-
-    /// Returns a reference to the path of the INI file.
-    pub fn path(&self) -> &PathBuf {
-        &self.path
     }
 }
 

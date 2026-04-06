@@ -4,11 +4,8 @@
 use ap_actor::SaeStateMachine;
 use netsim_model::chip::WifiMode;
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::{
-        management_subtype, AuthenticationFixedFields, FrameControl, Ieee80211, MacHeader3Addr,
-        SequenceControl,
-    },
+    management_subtype, AuthenticationFixedFields, FrameControl, Ieee80211, MacAddr,
+    MacHeader3Addr, SequenceControl,
 };
 use zerocopy::{IntoBytes, U16};
 

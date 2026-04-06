@@ -117,7 +117,7 @@ async fn test_create_default_ap_has_valid_bssid() {
 
     // Then
     let ap_state = world.client.get_ap(id).await.expect("Get failed").expect("AP not found");
-    let zero_bssid = netsim_packets::ethernet::MacAddr::new([0; 6]);
+    let zero_bssid = netsim_packets::MacAddr::new([0; 6]);
     assert_ne!(
         ap_state.config.bssid, zero_bssid,
         "AP created with default config must not have an all-zero BSSID"

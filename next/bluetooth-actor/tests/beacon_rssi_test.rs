@@ -7,7 +7,10 @@ use bluetooth_actor::beacon_utils::{
     is_le_advertising_report, REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET,
 };
 use netsim_model::device::Position;
-use netsim_packets::hci;
+use netsim_packets::{
+    Enable, LeScanType, LeScanningFilterPolicy, LeSetEventMask, LeSetScanEnable,
+    LeSetScanParameters, OwnAddressType, Reset, SetEventMask,
+};
 use tokio;
 
 use crate::world::World;
@@ -43,32 +46,29 @@ async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // WHEN the scanner enables scanning
-    world.when_command_sent("scanner", hci::Reset {}).await;
-    world.when_command_sent("scanner", hci::SetEventMask { event_mask: u64::MAX.into() }).await;
+    world.when_command_sent("scanner", Reset {}).await;
+    world.when_command_sent("scanner", SetEventMask { event_mask: u64::MAX.into() }).await;
     world
-        .when_command_sent(
-            "scanner",
-            hci::LeSetEventMask { le_event_mask: (u8::MAX as u64).into() },
-        )
+        .when_command_sent("scanner", LeSetEventMask { le_event_mask: (u8::MAX as u64).into() })
         .await;
     world
         .when_command_sent(
             "scanner",
-            hci::LeSetScanParameters {
-                le_scan_type: hci::LeScanType::PASSIVE,
+            LeSetScanParameters {
+                le_scan_type: LeScanType::PASSIVE,
                 le_scan_interval: 0x0010.into(),
                 le_scan_window: 0x0010.into(),
-                own_address_type: hci::OwnAddressType::PUBLIC_DEVICE_ADDRESS,
-                scanning_filter_policy: hci::LeScanningFilterPolicy::ACCEPT_ALL,
+                own_address_type: OwnAddressType::PUBLIC_DEVICE_ADDRESS,
+                scanning_filter_policy: LeScanningFilterPolicy::ACCEPT_ALL,
             },
         )
         .await;
     world
         .when_command_sent(
             "scanner",
-            hci::LeSetScanEnable {
-                le_scan_enable: hci::Enable::ENABLED,
-                filter_duplicates: hci::Enable::DISABLED,
+            LeSetScanEnable {
+                le_scan_enable: Enable::ENABLED,
+                filter_duplicates: Enable::DISABLED,
             },
         )
         .await;

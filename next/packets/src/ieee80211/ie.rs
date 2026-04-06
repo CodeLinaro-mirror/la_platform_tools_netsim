@@ -48,17 +48,6 @@ pub mod tags {
     // (if requested) or a helper to build it.
 }
 
-/// Helper to check if a specific bit is set in Extended Capabilities
-pub fn is_ext_cap_set(body: &[u8], bit: u8) -> bool {
-    let byte_idx = (bit / 8) as usize;
-    let bit_idx = bit % 8;
-    if byte_idx < body.len() {
-        (body[byte_idx] & (1 << bit_idx)) != 0
-    } else {
-        false
-    }
-}
-
 /// Helper to set a specific bit in Extended Capabilities
 /// Resizes vec if needed.
 pub fn set_ext_cap(body: &mut Vec<u8>, bit: u8) {

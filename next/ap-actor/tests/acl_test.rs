@@ -48,10 +48,10 @@ async fn test_acl_deny_mode() {
     // Expect Auth Response with Failure (Status 1)
     let msg = world
         .recv_frame(|frame, _| {
-            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+            if frame.stype() == netsim_packets::management_subtype::BEACON {
                 return false;
             }
-            frame.stype() == netsim_packets::ieee80211::management_subtype::AUTHENTICATION
+            frame.stype() == netsim_packets::management_subtype::AUTHENTICATION
         })
         .await;
 
@@ -99,10 +99,10 @@ async fn test_acl_allow_mode_reject() {
     // Expect Auth Response with Failure
     let msg = world
         .recv_frame(|frame, _| {
-            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+            if frame.stype() == netsim_packets::management_subtype::BEACON {
                 return false;
             }
-            frame.stype() == netsim_packets::ieee80211::management_subtype::AUTHENTICATION
+            frame.stype() == netsim_packets::management_subtype::AUTHENTICATION
         })
         .await;
 
@@ -146,10 +146,10 @@ async fn test_acl_allow_mode_accept() {
     // Expect Auth Response with Failure
     let msg = world
         .recv_frame(|frame, _| {
-            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+            if frame.stype() == netsim_packets::management_subtype::BEACON {
                 return false;
             }
-            frame.stype() == netsim_packets::ieee80211::management_subtype::AUTHENTICATION
+            frame.stype() == netsim_packets::management_subtype::AUTHENTICATION
         })
         .await;
 

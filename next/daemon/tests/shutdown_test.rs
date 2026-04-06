@@ -13,7 +13,7 @@ use crate::world::World;
 #[tokio::test]
 async fn test_auto_shutdown_on_chip_removal() {
     // 1. Start Daemon with 1s timeout
-    let mut args = daemon::args::Args::default();
+    let mut args = daemon::Args::default();
     args.logtostderr = true;
     args.idle_shutdown_timeout = Some(1000);
     let mut world = World::new_with_args(args).await;
@@ -76,7 +76,7 @@ async fn test_auto_shutdown_on_chip_removal() {
 #[tokio::test]
 async fn test_daemon_stays_alive_before_timeout() {
     // 1. Start Daemon with 2s idle timeout
-    let mut args = daemon::args::Args::default();
+    let mut args = daemon::Args::default();
     args.idle_shutdown_timeout = Some(2000);
     args.logtostderr = true;
     let mut world = World::new_with_args(args).await;
@@ -122,7 +122,7 @@ async fn test_daemon_stays_alive_before_timeout() {
 #[tokio::test]
 async fn test_startup_shutdown_timeout() {
     // 1. Start Daemon with a short 2s startup timeout override
-    let mut args = daemon::args::Args::default();
+    let mut args = daemon::Args::default();
     args.startup_timeout = Some(2000);
     args.logtostderr = true;
     let mut world = World::new_with_args(args).await;

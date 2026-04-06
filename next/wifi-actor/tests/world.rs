@@ -13,8 +13,8 @@ use netsim_model::{
     device::Position,
 };
 use netsim_packets::{
-    ethernet::{ether_type, EthernetFrame, MacAddr},
-    ieee80211::{FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddress},
+    ether_type, EthernetFrame, FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddr,
+    MacAddress,
 };
 use slirp_actor::SlirpActor;
 use tokio::sync::mpsc;
@@ -42,7 +42,7 @@ pub struct World {
     pub ap_injector: mpsc::UnboundedSender<Bytes>,
     pub device_action_rx: mpsc::UnboundedReceiver<DeviceAction>,
     pub baseline_stats: Option<netsim_proto::stats::WifiStats>,
-    pub mock_clock: std::sync::Arc<wifi_actor::stats::MockClock>,
+    pub mock_clock: std::sync::Arc<wifi_actor::MockClock>,
 }
 
 #[allow(dead_code)]
@@ -51,11 +51,11 @@ impl World {
         Self::new_internal(None).await
     }
 
-    pub async fn new_with_gateway(gateway: Box<dyn wifi_actor::gateway::GatewayTrait>) -> Self {
+    pub async fn new_with_gateway(gateway: Box<dyn wifi_actor::GatewayTrait>) -> Self {
         Self::new_internal(Some(gateway)).await
     }
 
-    async fn new_internal(gateway: Option<Box<dyn wifi_actor::gateway::GatewayTrait>>) -> Self {
+    async fn new_internal(gateway: Option<Box<dyn wifi_actor::GatewayTrait>>) -> Self {
         let _ = tracing_subscriber::fmt().with_test_writer().try_init();
         // Setup dependencies
         let slirp_actor_impl = SlirpActor::new(Default::default(), None, None).await;
@@ -119,7 +119,7 @@ impl World {
             ApClient::new_with_interceptor(ap_client_base, ap_client_interceptor);
         let spying_ap_client_arc = Arc::new(spying_ap_client.clone());
 
-        let mock_clock = std::sync::Arc::new(wifi_actor::stats::MockClock::new());
+        let mock_clock = std::sync::Arc::new(wifi_actor::MockClock::new());
 
         let wifi_actor_impl = if let Some(gw) = gateway {
             WifiActor::new_with_gateway(
@@ -172,7 +172,7 @@ impl World {
     pub async fn given_an_ap(&mut self) -> u32 {
         let ap_config = ap_actor::ApConfig {
             ssid: "TestAP".to_string(),
-            bssid: netsim_packets::ethernet::MacAddr::from([0x02, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            bssid: MacAddr::from([0x02, 0x00, 0x00, 0x00, 0x00, 0x00]),
             channel: 6,
             hw_mode: netsim_model::chip::WifiMode::G,
             wpa_passphrase: None,
@@ -293,13 +293,9 @@ impl World {
 
         let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
         let bssid = MacAddress::new(src_mac);
-        let ieee80211 = netsim_packets::ieee80211::Ieee80211::from_ieee8023(
-            &Bytes::from(eth),
-            bssid,
-            netsim_packets::ieee80211::FrameDirection::FromAp,
-            100,
-        )
-        .unwrap();
+        let ieee80211 =
+            Ieee80211::from_ieee8023(&Bytes::from(eth), bssid, FrameDirection::FromAp, 100)
+                .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
 
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP packet");
@@ -311,13 +307,9 @@ impl World {
 
         let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
         let bssid = MacAddress::new(src_mac);
-        let ieee80211 = netsim_packets::ieee80211::Ieee80211::from_ieee8023(
-            &Bytes::from(eth),
-            bssid,
-            netsim_packets::ieee80211::FrameDirection::FromAp,
-            100,
-        )
-        .unwrap();
+        let ieee80211 =
+            Ieee80211::from_ieee8023(&Bytes::from(eth), bssid, FrameDirection::FromAp, 100)
+                .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
 
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP multicast packet");
@@ -363,11 +355,11 @@ impl World {
             },
         };
 
-        let ieee80211: netsim_packets::ieee80211::Ieee80211 = to_ds_frame.try_into().unwrap();
+        let ieee80211: Ieee80211 = to_ds_frame.try_into().unwrap();
 
         // Wrap the 802.11 frame in a Hwsim message.
         // For ToDS frames, the Hwsim Destination is the AP (BSSID).
-        let msg = wifi_actor::medium::utils::create_hwsim_msg_from_frame(
+        let msg = wifi_actor::create_hwsim_msg_from_frame(
             &ieee80211,
             &MacAddress::new(bssid), // Dest Hwsim (AP)
             2412,
@@ -405,7 +397,7 @@ impl World {
 
         let ieee80211: Ieee80211 = mgmt_frame.try_into().unwrap();
 
-        let msg = wifi_actor::medium::utils::create_hwsim_msg_from_frame(
+        let msg = wifi_actor::create_hwsim_msg_from_frame(
             &ieee80211,
             &MacAddress::new(bssid), // Dest Hwsim (AP)
             2412,
@@ -517,7 +509,7 @@ impl World {
 
         let ieee80211: Ieee80211 = to_ds_frame.try_into().unwrap();
 
-        let msg = wifi_actor::medium::utils::create_hwsim_msg_from_frame(
+        let msg = wifi_actor::create_hwsim_msg_from_frame(
             &ieee80211,
             &MacAddress::new(bssid), // Dest Hwsim (AP)
             2412,
@@ -684,15 +676,15 @@ impl MockGateway {
 }
 
 #[async_trait::async_trait]
-impl wifi_actor::gateway::GatewayTrait for MockGateway {
+impl wifi_actor::GatewayTrait for MockGateway {
     async fn send_80211(
         &self,
         chip_id: netsim_model::chip::ChipId,
-        ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> Result<usize, wifi_actor::error::WifiError> {
+        ieee80211: &Ieee80211,
+    ) -> Result<usize, wifi_actor::WifiError> {
         let bytes = ieee80211
             .encode_to_vec()
-            .map_err(|e| wifi_actor::error::WifiError::Frame(Box::from(e.to_string())))?;
+            .map_err(|e| wifi_actor::WifiError::Frame(Box::from(e.to_string())))?;
         let len = bytes.len();
         self.outgoing_packets.lock().unwrap().push((chip_id, bytes::Bytes::from(bytes)));
         Ok(len)
@@ -706,7 +698,7 @@ impl wifi_actor::gateway::GatewayTrait for MockGateway {
         &self,
         _chip_id: netsim_model::chip::ChipId,
         _packet: bytes::Bytes,
-        _medium: &mut wifi_actor::medium::Medium,
+        _medium: &mut wifi_actor::Medium,
         _shared_keys: &ap_actor::SharedKeyStore,
         _out_queue: &mut Vec<(u32, bytes::Bytes)>,
     ) {

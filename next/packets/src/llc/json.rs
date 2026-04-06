@@ -167,18 +167,6 @@ pub fn to_json_llc(header: &LlcHeader) -> serde_json::Value {
     serde_json::to_value(JsonLlc::from(header)).unwrap_or(serde_json::Value::Null)
 }
 
-/// Serializes an `LlcSnapHeader` to a JSON string.
-pub fn to_json_string(header: &LlcSnapHeader) -> Result<String, JsonError> {
-    let json_llc_layer = JsonLlc::from(header);
-    serde_json::to_string_pretty(&json_llc_layer).map_err(JsonError::from)
-}
-
-/// Deserializes an `LlcSnapHeader` from a JSON string.
-pub fn from_json_string(json_str: &str) -> Result<LlcSnapHeader, JsonError> {
-    let json_llc_layer: JsonLlc = serde_json::from_str(json_str)?;
-    LlcSnapHeader::try_from(&json_llc_layer)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,10 +185,12 @@ mod tests {
             ether_type::IPV4, // Using an EtherType for PID example
         );
 
-        let json_string = to_json_string(&original_header).unwrap();
+        let json_llc_layer = JsonLlc::from(&original_header);
+        let json_string = serde_json::to_string_pretty(&json_llc_layer).unwrap();
         println!("JSON: {}", json_string);
 
-        let deserialized_header = from_json_string(&json_string).unwrap();
+        let parsed_json_llc: JsonLlc = serde_json::from_str(&json_string).unwrap();
+        let deserialized_header = LlcSnapHeader::try_from(&parsed_json_llc).unwrap();
 
         assert_eq!(deserialized_header.llc.dsap, original_header.llc.dsap);
         assert_eq!(deserialized_header.llc.ssap, original_header.llc.ssap);
@@ -237,7 +227,10 @@ mod tests {
                 "llc.oui": "0x0080C", "llc.type": 2048, "llc.type.str": "IPv4"
             }
         }"#; // Invalid OUI length
-        assert!(from_json_string(json_str).is_err());
+        let json_llc_layer: Result<JsonLlc, _> = serde_json::from_str(json_str);
+        assert!(
+            json_llc_layer.is_err() || LlcSnapHeader::try_from(&json_llc_layer.unwrap()).is_err()
+        );
 
         // Test OUI format without "0x" prefix
         let json_str_no_prefix = r#"{
@@ -248,6 +241,9 @@ mod tests {
                 "llc.oui": "0080C2", "llc.type": 2048, "llc.type.str": "IPv4"
             }
         }"#;
-        assert!(from_json_string(json_str_no_prefix).is_err());
+        let json_llc_layer: Result<JsonLlc, _> = serde_json::from_str(json_str_no_prefix);
+        assert!(
+            json_llc_layer.is_err() || LlcSnapHeader::try_from(&json_llc_layer.unwrap()).is_err()
+        );
     }
 }

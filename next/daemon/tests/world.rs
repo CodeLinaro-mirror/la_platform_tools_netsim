@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use daemon::netsimd::{NetsimDaemon, StartUpMode};
+use daemon::{NetsimDaemon, StartUpMode};
 use futures::{SinkExt, StreamExt};
 use grpcio::ChannelBuilder;
 use netsim_proto::{
@@ -44,7 +44,7 @@ pub struct World {
 
     pub grpc_port: u16,
     _temp_dir: PathBuf,
-    _ini_guard: Option<daemon::ini_file::IniFileInitialized>,
+    _ini_guard: Option<daemon::IniFileInitialized>,
 }
 
 impl Drop for World {
@@ -59,13 +59,13 @@ impl Drop for World {
 impl World {
     /// Given a running Netsim Daemon
     pub async fn new() -> Self {
-        let mut args = daemon::args::Args::default();
+        let mut args = daemon::Args::default();
         args.logtostderr = true; // Disable log redirection
         args.no_shutdown = true; // Prevent tests from dying when deleting devices
         Self::new_with_args(args).await
     }
 
-    pub async fn new_with_args(mut args: daemon::args::Args) -> Self {
+    pub async fn new_with_args(mut args: daemon::Args) -> Self {
         if args.hci_port.is_none() {
             args.hci_port = Some(0); // Let the OS assign a random available
                                      // port

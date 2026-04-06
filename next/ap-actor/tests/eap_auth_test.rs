@@ -43,7 +43,7 @@ fn build_eapol_frame(
         sap::SNAP,
         control_field::UI,
         [0x00, 0x00, 0x00],
-        netsim_packets::ethernet::ether_type::EAPOL,
+        netsim_packets::ether_type::EAPOL,
     );
     frame.extend_from_slice(llc.as_bytes());
 
@@ -104,7 +104,7 @@ async fn test_eap_mock_authentication_success() {
     let msg = world
         .recv_frame(|frame, msg| {
             // EAPOL Packet (0x888E)
-            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+            if frame.stype() == netsim_packets::management_subtype::BEACON {
                 return false;
             }
             msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E
@@ -142,7 +142,7 @@ async fn test_eap_mock_authentication_success() {
     let msg2 = world
         .recv_frame(|frame, msg| {
             // EAPOL Packet (0x888E)
-            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+            if frame.stype() == netsim_packets::management_subtype::BEACON {
                 return false;
             }
             msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E

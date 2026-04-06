@@ -374,13 +374,13 @@ impl World {
 
     /// Encodes and sends an HCI command with the packet type prefix.
     pub async fn when_command_sent<
-        T: netsim_packets::hci::HciCommand + IntoBytes + Immutable + KnownLayout,
+        T: netsim_packets::HciCommand + IntoBytes + Immutable + KnownLayout,
     >(
         &mut self,
         name: &str,
         payload: T,
     ) {
-        let header = netsim_packets::hci::HciCommandHeader {
+        let header = netsim_packets::HciCommandHeader {
             op_code: T::OP_CODE,
             parameter_total_length: payload.as_bytes().len() as u8,
         };

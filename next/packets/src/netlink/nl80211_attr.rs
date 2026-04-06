@@ -58,8 +58,7 @@ impl NlAttrHdr {
     }
 }
 
-/// Represents a parsed Netlink attribute.
-#[derive(Debug, Clone)]
+#[cfg(test)]
 pub struct NlAttr<'a> {
     /// The attribute type.
     pub attr_type: u16,
@@ -67,16 +66,7 @@ pub struct NlAttr<'a> {
     pub payload: &'a [u8],
 }
 
-/// Parses a byte slice into a list of Netlink attributes.
-///
-/// # Arguments
-///
-/// * `data` - A byte slice containing the Netlink attributes.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec` of parsed `NlAttr`s, or an error message if
-/// parsing fails.
+#[cfg(test)]
 pub fn parse_attributes(mut data: &[u8]) -> Result<Vec<NlAttr<'_>>, String> {
     let mut attrs = Vec::new();
     while !data.is_empty() {

@@ -89,7 +89,7 @@ impl TryFrom<&JsonNlAttrHdr> for NlAttrHdr {
     }
 }
 
-/// Inner fields for `JsonNlAttribute`, mimicking `tshark`-like layer objects.
+#[cfg(test)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonNlAttributeFields {
     #[serde(flatten)]
@@ -98,14 +98,14 @@ pub struct JsonNlAttributeFields {
     pub payload_hex: String,
 }
 
-/// A `serde`-compatible, `tshark`-like representation of a Netlink attribute.
-/// This structure creates a top-level "nl_attr" key.
+#[cfg(test)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonNlAttribute {
     #[serde(rename = "nl_attr")]
     pub fields: JsonNlAttributeFields,
 }
 
+#[cfg(test)]
 impl JsonNlAttribute {
     /// Creates a `JsonNlAttribute` from an `NlAttrHdr` and its payload bytes.
     pub fn from_parts(hdr: &NlAttrHdr, payload: &[u8]) -> Self {
@@ -126,14 +126,13 @@ impl JsonNlAttribute {
     }
 }
 
-/// Serializes an `NlAttrHdr` and its payload to a JSON string.
+#[cfg(test)]
 pub fn to_json_string(hdr: &NlAttrHdr, payload: &[u8]) -> Result<String, JsonError> {
     let json_attr = JsonNlAttribute::from_parts(hdr, payload);
     serde_json::to_string_pretty(&json_attr).map_err(JsonError::from)
 }
 
-/// Deserializes an `NlAttrHdr` and its payload from a JSON string.
-/// Returns the header and the payload as a `Vec<u8>`.
+#[cfg(test)]
 pub fn from_json_string(json_str: &str) -> Result<(NlAttrHdr, Vec<u8>), JsonError> {
     let json_attr: JsonNlAttribute = serde_json::from_str(json_str)?;
     json_attr.try_into_parts()

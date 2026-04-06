@@ -8,7 +8,7 @@ use netsim_model::{
     chip::{ApCreate, ApUpdate as ModelApUpdate, WifiMode},
     device::Position,
 };
-use netsim_packets::ethernet::MacAddr;
+use netsim_packets::MacAddr;
 use serde::{Deserialize, Serialize};
 
 use crate::{ieee802_11::Ieee80211Manager, shared, wpa_auth};
@@ -194,7 +194,7 @@ pub enum ApReq {
         beacon_interval: std::time::Duration,
     },
     Disconnect {
-        mac: netsim_packets::ethernet::MacAddr,
+        mac: MacAddr,
     },
 }
 

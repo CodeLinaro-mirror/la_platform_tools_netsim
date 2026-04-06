@@ -22,6 +22,7 @@ pub struct SectionHeaderBlock {
 
 impl SectionHeaderBlock {
     /// Creates a new `SectionHeaderBlock`.
+    #[cfg(test)]
     pub fn new(
         block_type: u32,
         block_total_length: u32,
@@ -42,6 +43,7 @@ impl SectionHeaderBlock {
 
     /// Parses a `SectionHeaderBlock` from the beginning of the given byte
     /// slice.
+    #[cfg(test)]
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, SectionHeaderBlock>> {
         Ref::from_prefix(bytes).ok()
     }
@@ -61,6 +63,7 @@ pub struct EnhancedPacketBlock {
 
 impl EnhancedPacketBlock {
     /// Creates a new `EnhancedPacketBlock`.
+    #[cfg(test)]
     pub fn new(
         block_type: u32,
         block_total_length: u32,
@@ -83,6 +86,7 @@ impl EnhancedPacketBlock {
 
     /// Parses an `EnhancedPacketBlock` from the beginning of the given byte
     /// slice.
+    #[cfg(test)]
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, EnhancedPacketBlock>> {
         Ref::from_prefix(bytes).ok()
     }

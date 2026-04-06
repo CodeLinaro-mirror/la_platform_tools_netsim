@@ -240,6 +240,7 @@ impl TryFrom<&JsonMacHeader3Addr> for MacHeader3Addr {
 }
 
 /// Serializes a `MacHeader3Addr` to a JSON string.
+#[cfg(test)]
 pub fn to_json_string(header: &MacHeader3Addr) -> Result<String, serde_json::Error> {
     let json_header = JsonMacHeader3Addr::from(header);
     serde_json::to_string_pretty(&json_header)

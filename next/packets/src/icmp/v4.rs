@@ -38,6 +38,7 @@ impl IcmpHeader {
 
 /// Represents the header for an ICMP Echo (ping) request or reply message.
 /// This structure follows the main `IcmpHeader`.
+#[cfg(test)]
 #[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
 #[repr(C)]
 pub struct IcmpEchoHeader {

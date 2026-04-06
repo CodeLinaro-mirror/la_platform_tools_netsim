@@ -100,13 +100,13 @@ impl EapolKeyFrame {
 pub const EAPOL_VERSION: u8 = 1;
 /// EAPOL Packet Type: Key.
 pub const EAPOL_TYPE_KEY: u8 = 3;
+/// EAPOL Packet Type: EAPOL-Start (1).
+pub const EAPOL_TYPE_START: u8 = 1;
 /// Key Descriptor Type: RSN (WPA2).
 pub const EAPOL_KEY_DESC_TYPE_RSN: u8 = 2;
 
 /// EAPOL Packet Type: EAP-Packet (0).
 pub const EAPOL_TYPE_PACKET: u8 = 0;
-/// EAPOL Packet Type: EAPOL-Start (1).
-pub const EAPOL_TYPE_START: u8 = 1;
 
 /// EAP Code: Request (1).
 pub const EAP_CODE_REQUEST: u8 = 1;

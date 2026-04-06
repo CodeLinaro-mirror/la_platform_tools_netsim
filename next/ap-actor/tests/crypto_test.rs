@@ -5,7 +5,7 @@ use ap_actor::{
     ffi::{AesCcmEncrypt, AesUnwrap, AesWrap, DigestType, Hmac, RandBytes, Sha},
     SharedKeyStore,
 };
-use netsim_packets::ieee80211::{Ieee80211, MacAddress};
+use netsim_packets::{Ieee80211, MacAddress};
 
 #[test]
 fn test_rand_bytes() {

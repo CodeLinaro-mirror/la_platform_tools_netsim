@@ -28,9 +28,9 @@
 //! let action = LinkAction::NotifyChipAdded(ChipId(0), ChipKind::BLUETOOTH);
 //! ```
 
-pub mod action;
-pub mod create;
-pub mod error;
+pub(crate) mod action;
+pub(crate) mod create;
+pub(crate) mod error;
 pub use action::LinkAction;
 pub use create::LinkCreate;
 pub use error::LinkError;

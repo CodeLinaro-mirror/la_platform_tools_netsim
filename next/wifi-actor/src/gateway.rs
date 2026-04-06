@@ -4,7 +4,7 @@
 use actor_framework::DynContext;
 use ap_actor::SharedKeyStore;
 use netsim_model::ChipId;
-use netsim_packets::ieee80211::Ieee80211;
+use netsim_packets::Ieee80211;
 
 use crate::{error::WifiError, medium::Medium, wifi_actor::WifiActor};
 

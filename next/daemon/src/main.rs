@@ -3,7 +3,7 @@
 
 use std::process;
 
-use daemon::netsimd::{run, RunResult};
+use daemon::{run, RunResult};
 
 #[tokio::main]
 async fn main() {

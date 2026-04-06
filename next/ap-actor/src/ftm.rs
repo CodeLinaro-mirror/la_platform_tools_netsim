@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::{
-        action::{category, public_action, FineTimingMeasurement},
-        FrameControl, MacHeader3Addr, SequenceControl,
-    },
+    category, public_action, FineTimingMeasurement, FrameControl, MacAddr, MacHeader3Addr,
+    SequenceControl,
 };
 use zerocopy::{IntoBytes, U16};
 

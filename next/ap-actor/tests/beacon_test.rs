@@ -3,11 +3,7 @@
 
 use netsim_model::chip::WifiMode;
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::{
-        frame::{FrameControl, MacHeader3Addr, SequenceControl},
-        management_subtype,
-    },
+    management_subtype, FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl,
 };
 use tokio;
 use tracing::info;
@@ -266,7 +262,7 @@ async fn test_probe_response_ssid_mismatch() {
         if let Ok(Some(msg)) =
             tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+            if let Ok(f) = Ieee80211::decode(&msg) {
                 if f.stype() == management_subtype::BEACON {
                     continue;
                 }
@@ -322,7 +318,7 @@ async fn test_probe_response_bssid_mismatch() {
         if let Ok(Some(msg)) =
             tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+            if let Ok(f) = Ieee80211::decode(&msg) {
                 if f.stype() == management_subtype::BEACON {
                     continue;
                 }
@@ -491,7 +487,7 @@ async fn test_hidden_ssid() {
         if let Ok(Some(msg)) =
             tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+            if let Ok(f) = Ieee80211::decode(&msg) {
                 if f.stype() == management_subtype::BEACON {
                     continue;
                 }
