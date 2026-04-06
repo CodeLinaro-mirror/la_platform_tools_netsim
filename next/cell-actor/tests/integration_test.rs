@@ -1,11 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
-
-// next/cell-actor/tests/integration_test.rs
-use std::{
-    io::{Error as IoError, ErrorKind},
-    pin::Pin,
-};
+use std::{io::Error as IoError, pin::Pin};
 
 use actor_framework::{ResourceClient, ResourceRequest};
 use bytes::Bytes;
@@ -33,7 +28,7 @@ fn create_dummy_stream_sink(
     let sink: PacketSink = Pin::from(Box::new(
         sink_tx
             .with(|data: Bytes| ready(Ok(data)))
-            .sink_map_err(|e: fmpsc::SendError| IoError::new(ErrorKind::Other, e.to_string())),
+            .sink_map_err(|e: fmpsc::SendError| IoError::other(e.to_string())),
     ));
 
     (stream, sink, stream_tx, sink_rx)

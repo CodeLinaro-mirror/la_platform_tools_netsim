@@ -40,6 +40,7 @@ pub fn write_wmm_param_element(buf: &mut Vec<u8>, uapsd: bool, param_set_count: 
 
     // AC_BE (Best Effort) - ACI 0
     // AIFSN: 3, ECWmin: 4, ECWmax: 10, TXOP: 0
+    #[allow(clippy::eq_op)]
     body.push((0 << 5) | (0 << 4) | 3); // ACI=0, ACM=0, AIFSN=3
     body.push((4 << 0) | (10 << 4)); // ECWmin=4, ECWmax=10
     body.extend_from_slice(&0u16.to_le_bytes()); // TXOP Limit
