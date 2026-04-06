@@ -326,6 +326,8 @@ impl args::Command {
             ChipKind::WIFI => "WIFI".to_string(),
             ChipKind::UWB => "UWB".to_string(),
             ChipKind::BLUETOOTH_BEACON => "BLUETOOTH_BEACON".to_string(),
+            ChipKind::NFC => "NFC".to_string(),
+            ChipKind::CELLULAR => "CELLULAR".to_string(),
             _ => "UNSPECIFIED".to_string(),
         }
     }
