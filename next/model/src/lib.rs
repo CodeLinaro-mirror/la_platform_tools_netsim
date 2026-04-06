@@ -92,9 +92,9 @@ pub use crate::{
     },
     cell::{Cell, CellCreate, ModemAction, RegistrationStatus},
     chip::{
-        chip_kind_to_proto, chip_kind_to_radio_kind, Chip, ChipClient, ChipConfig, ChipCreate,
-        ChipId, ChipKindParams, ChipRequest, ChipUpdate, ChipVariant, ChipVariantUpdate,
-        PacketSink, PacketStream, Radio, RadioChipClient, RadioUpdate,
+        chip_kind_to_radio_kind, Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams,
+        ChipRequest, ChipUpdate, ChipVariant, ChipVariantUpdate, PacketSink, PacketStream, Radio,
+        RadioChipClient, RadioUpdate,
     },
     chip_error::ChipError,
     uwb::{Uwb, UwbCreate, UwbUpdate},
