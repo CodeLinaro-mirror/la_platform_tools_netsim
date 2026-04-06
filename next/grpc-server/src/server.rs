@@ -7,15 +7,18 @@ use device_actor::DeviceClient;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
+#[cfg(not(feature = "cuttlefish"))]
+use netsim_proto::access_point_grpc::create_access_point_service;
 use netsim_proto::{
-    access_point_grpc::create_access_point_service, ble_service_grpc::create_ble_service,
-    frontend_grpc::create_frontend_service, packet_streamer_grpc::create_packet_streamer,
+    ble_service_grpc::create_ble_service, frontend_grpc::create_frontend_service,
+    packet_streamer_grpc::create_packet_streamer,
 };
 use tracing::{error, info, warn};
 
+#[cfg(not(feature = "cuttlefish"))]
+use crate::access_point::AccessPointServiceImpl;
 use crate::{
-    access_point::AccessPointServiceImpl, ble_service::BleServiceImpl, frontend::FrontendClient,
-    packet_streamer::PacketStreamerService,
+    ble_service::BleServiceImpl, frontend::FrontendClient, packet_streamer::PacketStreamerService,
 };
 
 // Share a single gRPC Environment across all server instances within the same
@@ -28,20 +31,25 @@ pub fn start(
     enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: link_actor::LinkClient,
-    ap_client: ap_actor::ApClient,
+    #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
     packet_streamer_service: PacketStreamerService,
     version: String,
 ) -> Result<(Server, u16), grpcio::Error> {
     let env = SHARED_ENV.get_or_init(|| Arc::new(Environment::new(1))).clone();
     let backend_service = create_packet_streamer(packet_streamer_service);
+    #[cfg(not(feature = "cuttlefish"))]
     let access_point_service = create_access_point_service(AccessPointServiceImpl::new(ap_client));
     let ble_service = create_ble_service(BleServiceImpl::new(device_client.clone()));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
     let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
-    let mut server_builder = ServerBuilder::new(env)
-        .register_service(backend_service)
-        .register_service(access_point_service)
-        .register_service(ble_service);
+    let mut server_builder = ServerBuilder::new(env).register_service(backend_service);
+
+    #[cfg(not(feature = "cuttlefish"))]
+    {
+        server_builder = server_builder.register_service(access_point_service);
+    }
+    server_builder = server_builder.register_service(ble_service);
+
     if enable_cli_ui {
         let frontend_service = create_frontend_service(FrontendClient::new(
             device_client.clone(),
@@ -50,6 +58,7 @@ pub fn start(
         ));
         server_builder = server_builder.register_service(frontend_service);
     }
+
     let mut server = server_builder.channel_args(ch_builder.build_args()).build()?;
 
     let addr = format!("localhost:{port}");
