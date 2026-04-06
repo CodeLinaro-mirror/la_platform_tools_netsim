@@ -1,0 +1,9 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
+# Stable rustfmt configuration for Bazel tests
+# Nightly options have been removed to avoid warnings/errors with stable toolchain
+
+edition = "2021"
+use_small_heuristics = "Max"
+newline_style = "Unix"
