@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use netsim_model::chip::{ChipKind, MockChipClient};
+use netsim_model::{ChipKind, MockChipClient};
 
 use crate::world::World;
 
@@ -48,9 +48,9 @@ async fn test_add_chip_to_existing_device() {
     mock_chip_client.expect_create().times(2).returning(|_, _| Ok(()));
     mock_chip_client.expect_read_statistics().returning(|| Ok(Box::from(Vec::new())));
     mock_chip_client.expect_read().returning(|id| {
-        Ok(netsim_model::chip::Chip {
+        Ok(netsim_model::Chip {
             id: id.0,
-            kind: netsim_model::chip::ChipKind::BLUETOOTH,
+            kind: netsim_model::ChipKind::BLUETOOTH,
             ..Default::default()
         })
     });
@@ -58,7 +58,7 @@ async fn test_add_chip_to_existing_device() {
     let mut chip_clients = HashMap::new();
     chip_clients.insert(
         ChipKind::BLUETOOTH,
-        Box::new(mock_chip_client) as Box<dyn netsim_model::chip::ChipClient>,
+        Box::new(mock_chip_client) as Box<dyn netsim_model::ChipClient>,
     );
 
     let mut mock_link_client = link_api::MockLinkClient::new();
@@ -100,9 +100,9 @@ async fn test_concurrent_add_chip_race_condition() {
     mock_chip_client.expect_create().times(2).returning(|_, _| Ok(()));
     mock_chip_client.expect_read_statistics().returning(|| Ok(Box::from(Vec::new())));
     mock_chip_client.expect_read().returning(|id| {
-        Ok(netsim_model::chip::Chip {
+        Ok(netsim_model::Chip {
             id: id.0,
-            kind: netsim_model::chip::ChipKind::BLUETOOTH,
+            kind: netsim_model::ChipKind::BLUETOOTH,
             ..Default::default()
         })
     });
@@ -112,7 +112,7 @@ async fn test_concurrent_add_chip_race_condition() {
     let mut chip_clients = HashMap::new();
     chip_clients.insert(
         ChipKind::BLUETOOTH,
-        Box::new(mock_chip_client) as Box<dyn netsim_model::chip::ChipClient>,
+        Box::new(mock_chip_client) as Box<dyn netsim_model::ChipClient>,
     );
 
     let mut mock_link_client = link_api::MockLinkClient::new();
@@ -137,8 +137,8 @@ async fn test_concurrent_add_chip_race_condition() {
 //   Then the chip creation is invoked with that position
 #[tokio::test]
 async fn test_add_chip_propagates_position() {
-    let expected_pos = netsim_model::device::Position { x: 10.0, y: 20.0, z: 30.0 };
-    let expected_orient = netsim_model::device::Orientation { yaw: 1.0, pitch: 2.0, roll: 3.0 };
+    let expected_pos = netsim_model::Position { x: 10.0, y: 20.0, z: 30.0 };
+    let expected_orient = netsim_model::Orientation { yaw: 1.0, pitch: 2.0, roll: 3.0 };
 
     let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(1).returning(move |_, params| {
@@ -154,9 +154,9 @@ async fn test_add_chip_propagates_position() {
     });
     mock_chip_client.expect_read_statistics().returning(|| Ok(Box::from(Vec::new())));
     mock_chip_client.expect_read().returning(|id| {
-        Ok(netsim_model::chip::Chip {
+        Ok(netsim_model::Chip {
             id: id.0,
-            kind: netsim_model::chip::ChipKind::BLUETOOTH,
+            kind: netsim_model::ChipKind::BLUETOOTH,
             ..Default::default()
         })
     });
@@ -164,7 +164,7 @@ async fn test_add_chip_propagates_position() {
     let mut chip_clients = HashMap::new();
     chip_clients.insert(
         ChipKind::BLUETOOTH,
-        Box::new(mock_chip_client) as Box<dyn netsim_model::chip::ChipClient>,
+        Box::new(mock_chip_client) as Box<dyn netsim_model::ChipClient>,
     );
 
     let mut mock_link_client = link_api::MockLinkClient::new();

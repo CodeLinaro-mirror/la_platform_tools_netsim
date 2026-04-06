@@ -27,5 +27,5 @@ pub enum ServerError {
     #[error("Handshake failed: {0}")]
     HandshakeFailed(String),
     #[error("Device actor error: {0}")]
-    DeviceActor(#[from] netsim_model::client_error::ClientError),
+    DeviceActor(#[from] netsim_model::ClientError),
 }

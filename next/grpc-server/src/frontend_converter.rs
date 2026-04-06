@@ -2,16 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use device_api::{
-    api::{Chip, DeviceChipCreate, PoseUpdate},
-    Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition,
+    Device as ApiDevice, DeviceChipCreate, Orientation as ApiOrientation, PoseUpdate,
+    Position as ApiPosition,
 };
 use link_api::Link as ApiLink;
 use netsim_model::{
-    bluetooth::beacon::{AdvertiseData, AdvertiseSettings},
-    chip::{
-        BleBeacon, BluetoothCreate, BluetoothMode, BluetoothUpdate, ChipId,
-        ChipKind as ApiChipKind, ChipUpdate, ChipVariantUpdate, Radio, RadioUpdate,
-    },
+    AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, BluetoothCreate,
+    BluetoothMode, BluetoothUpdate, ChipId, ChipKind as ApiChipKind, ChipUpdate, ChipVariantUpdate,
+    DeviceChip, Interval, Radio, RadioUpdate, TxPower,
 };
 use netsim_proto::{
     common::ChipKind as ProtoChipKind,
@@ -50,7 +48,7 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
     }
 }
 
-pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
+pub fn to_proto_chip(c: netsim_model::Chip) -> ProtoChip {
     let mut chip = ProtoChip::new();
     chip.id = c.id;
     chip.kind = EnumOrUnknown::new(to_proto_chip_kind(c.kind));
@@ -63,20 +61,20 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
 
     if let Some(variant) = c.variant {
         match variant {
-            netsim_model::chip::ChipVariant::Bluetooth(bt_model) => {
+            netsim_model::ChipVariant::Bluetooth(bt_model) => {
                 let mut bt = netsim_proto::model::chip::Bluetooth::new();
                 bt.low_energy = MessageField::some(to_proto_radio(&bt_model.low_energy));
                 bt.classic = MessageField::some(to_proto_radio(&bt_model.classic));
                 chip.chip = Some(netsim_proto::model::chip::Chip::Bt(bt));
             }
-            netsim_model::chip::ChipVariant::Wifi(wifi) => {
+            netsim_model::ChipVariant::Wifi(wifi) => {
                 chip.chip =
                     Some(netsim_proto::model::chip::Chip::Wifi(to_proto_radio(&wifi.radio)));
             }
-            netsim_model::chip::ChipVariant::Uwb(uwb) => {
+            netsim_model::ChipVariant::Uwb(uwb) => {
                 chip.chip = Some(netsim_proto::model::chip::Chip::Uwb(to_proto_radio(&uwb.radio)));
             }
-            netsim_model::chip::ChipVariant::Cell(_) => {
+            netsim_model::ChipVariant::Cell(_) => {
                 // TODO: Add Cell support to proto if available
             }
         }
@@ -85,7 +83,7 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
     chip
 }
 
-fn to_proto_radio(r: &netsim_model::chip::Radio) -> netsim_proto::model::chip::Radio {
+fn to_proto_radio(r: &netsim_model::Radio) -> netsim_proto::model::chip::Radio {
     let mut radio = netsim_proto::model::chip::Radio::new();
     radio.state = Some(r.state.unwrap_or(true));
     radio.range = r.range;
@@ -122,7 +120,7 @@ pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
             name: c.name,
             manufacturer: c.manufacturer,
             product_name: c.product_name,
-            chip: Chip::Beacon(beacon),
+            chip: DeviceChip::Beacon(beacon),
         })
     } else if c.kind.enum_value_or_default() == ProtoChipKind::BLUETOOTH {
         let bt_create = BluetoothCreate {
@@ -134,7 +132,7 @@ pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
             name: c.name,
             manufacturer: c.manufacturer,
             product_name: c.product_name,
-            chip: Chip::Bluetooth(bt_create),
+            chip: DeviceChip::Bluetooth(bt_create),
         })
     } else {
         None
@@ -144,7 +142,6 @@ pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
 fn from_proto_advertise_settings(
     s: &netsim_proto::model::chip::ble_beacon::AdvertiseSettings,
 ) -> AdvertiseSettings {
-    use netsim_model::bluetooth::beacon::{AdvertiseMode, AdvertiseTxPower, Interval, TxPower};
     use netsim_proto::model::chip::ble_beacon::advertise_settings::{
         Interval as ProtoInterval, Tx_power as ProtoTxPower,
     };
@@ -199,10 +196,7 @@ fn from_proto_advertise_data(
         services: d
             .services
             .iter()
-            .map(|s| netsim_model::bluetooth::beacon::Service {
-                uuid: s.uuid.clone(),
-                data: s.data.clone(),
-            })
+            .map(|s| netsim_model::Service { uuid: s.uuid.clone(), data: s.data.clone() })
             .collect(),
     }
 }
@@ -254,12 +248,12 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
             }
             netsim_proto::model::chip::Chip::BleBeacon(_) => None, // TODO
             netsim_proto::model::chip::Chip::Uwb(uwb) => {
-                Some(ChipVariantUpdate::Uwb(netsim_model::uwb::UwbUpdate {
+                Some(ChipVariantUpdate::Uwb(netsim_model::UwbUpdate {
                     radio: from_proto_radio_update(Some(uwb)),
                 }))
             }
             netsim_proto::model::chip::Chip::Wifi(wifi) => {
-                Some(ChipVariantUpdate::Wifi(netsim_model::wifi::WifiUpdate {
+                Some(ChipVariantUpdate::Wifi(netsim_model::WifiUpdate {
                     radio: from_proto_radio_update(Some(wifi)),
                 }))
             }
@@ -302,8 +296,8 @@ pub fn from_proto_radio_update(r: Option<netsim_proto::model::chip::Radio>) -> R
 }
 
 pub fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
-    let sender = netsim_model::chip::ChipId(proto.sender_id);
-    let receiver = netsim_model::chip::ChipId(proto.receiver_id);
+    let sender = netsim_model::ChipId(proto.sender_id);
+    let receiver = netsim_model::ChipId(proto.receiver_id);
     let rssi = proto.rssi as i8;
 
     let kind = if proto.kind.enum_value_or_default() != ProtoChipKind::UNSPECIFIED {
@@ -320,7 +314,7 @@ pub fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
     };
 
     if let Some(kind) = kind {
-        Some(ApiLink { id: netsim_model::link::LinkId(proto.id), sender, receiver, kind, rssi })
+        Some(ApiLink { id: netsim_model::LinkId(proto.id), sender, receiver, kind, rssi })
     } else {
         None
     }

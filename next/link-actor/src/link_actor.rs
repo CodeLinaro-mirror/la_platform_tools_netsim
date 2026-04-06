@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use link_api::Link;
-use netsim_model::chip::{ChipId, ChipKind};
+use netsim_model::{ChipId, ChipKind};
 use tracing::error;
 
 /// Context for LinkActor.
@@ -22,13 +22,13 @@ pub struct LinkActor {
     pub(crate) chip_kind_map: HashMap<ChipId, ChipKind>,
     /// Map of ChipKind to ChipClient for forwarding updates
     #[allow(dead_code)]
-    pub(crate) chip_clients: HashMap<ChipKind, Box<dyn netsim_model::chip::ChipClient>>,
+    pub(crate) chip_clients: HashMap<ChipKind, Box<dyn netsim_model::ChipClient>>,
     pub(crate) links: HashMap<link_api::LinkId, Link>,
     pub(crate) next_id: u32,
 }
 
 impl LinkActor {
-    pub fn new(chip_clients: HashMap<ChipKind, Box<dyn netsim_model::chip::ChipClient>>) -> Self {
+    pub fn new(chip_clients: HashMap<ChipKind, Box<dyn netsim_model::ChipClient>>) -> Self {
         Self {
             chip_pairs: HashMap::new(),
             chip_kind_map: HashMap::new(),
@@ -54,7 +54,7 @@ impl LinkActor {
             .map(|l| (l.receiver, l.rssi as i8))
             .collect();
 
-        let update = netsim_model::chip::ChipUpdate { links: Some(links), ..Default::default() };
+        let update = netsim_model::ChipUpdate { links: Some(links), ..Default::default() };
 
         if let Err(e) = client.update(chip_id, update).await {
             error!("Failed to update links for chip {}: {:?}", chip_id, e);

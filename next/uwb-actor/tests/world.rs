@@ -6,10 +6,8 @@ use std::collections::HashMap;
 use bytes::Bytes;
 use device_actor::DeviceClient;
 use netsim_model::{
-    chip::{Chip, ChipClient, ChipCreate, ChipId, ChipKindParams, UwbCreate},
-    chip_error::ChipError,
-    client_error::ClientError,
-    device::DeviceId,
+    Chip, ChipClient, ChipCreate, ChipError, ChipId, ChipKindParams, ClientError, DeviceId,
+    UwbCreate,
 };
 use netsim_testing::mocks::{mock_sink, mock_stream};
 use pdl_runtime::Packet;
@@ -89,7 +87,7 @@ impl World {
         let params = ChipCreate {
             packet_stream: Some(stream),
             packet_sink: Some(sink),
-            config: netsim_model::chip::ChipConfig {
+            config: netsim_model::ChipConfig {
                 name: format!("uwb_chip_{id}"),
                 manufacturer: "Netsim".to_string(),
                 product_name: "TestUwb".to_string(),
@@ -195,16 +193,13 @@ impl World {
         assert_eq!(ntf.device_state, uci::DeviceState::DeviceStateReady);
     }
 
-    pub async fn given_a_chip_at(&mut self, chip_id: u32, pos: netsim_model::device::Position) {
+    pub async fn given_a_chip_at(&mut self, chip_id: u32, pos: netsim_model::Position) {
         self.given_a_chip(chip_id).await;
         self.client
             .update(
                 ChipId(chip_id),
-                netsim_model::chip::ChipUpdate {
-                    pose: netsim_model::device::api::PoseUpdate {
-                        position: Some(pos),
-                        orientation: None,
-                    },
+                netsim_model::ChipUpdate {
+                    pose: netsim_model::PoseUpdate { position: Some(pos), orientation: None },
                     ..Default::default()
                 },
             )

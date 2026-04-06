@@ -3,7 +3,7 @@
 
 // src/network_service.rs
 
-use netsim_model::cell::RegistrationStatus;
+use netsim_model::RegistrationStatus;
 
 use crate::{
     parser::Command,

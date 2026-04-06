@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use actor_framework::ResourceActor;
 use ap_actor::{ApActor, ApClient, ApConfig, SharedKeyStore};
-use netsim_model::chip::WifiMode;
+use netsim_model::WifiMode;
 use netsim_packets::{
     management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
     FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl,
@@ -97,7 +97,7 @@ impl ApWorld {
             mac_acl_mode: 0,
             mac_acl_list: vec![],
             ftm_responder_enabled: true,
-            position: netsim_model::device::Position::default(),
+            position: netsim_model::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
@@ -121,7 +121,7 @@ impl ApWorld {
             mac_acl_mode: 0,
             mac_acl_list: vec![],
             ftm_responder_enabled: true,
-            position: netsim_model::device::Position::default(),
+            position: netsim_model::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }

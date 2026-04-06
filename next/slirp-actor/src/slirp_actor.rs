@@ -4,7 +4,7 @@
 use std::fmt;
 
 use libslirp_rs::{lookup_host_dns, LibSlirp, SlirpConfig};
-use netsim_model::chip::{PacketSink, PacketStream};
+use netsim_model::{PacketSink, PacketStream};
 use tokio::sync::mpsc as tokio_mpsc;
 use tracing::{info, warn};
 

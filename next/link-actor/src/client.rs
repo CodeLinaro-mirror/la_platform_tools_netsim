@@ -11,10 +11,7 @@ use std::ops::Deref;
 
 use actor_framework::ResourceClient;
 use futures::TryFutureExt;
-use netsim_model::{
-    chip::{ChipId, ChipKind},
-    client_error::ClientError,
-};
+use netsim_model::{ChipId, ChipKind, ClientError};
 
 use crate::{LinkActor, LinkError};
 

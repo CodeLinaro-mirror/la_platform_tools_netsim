@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::chip::WifiMode;
+use netsim_model::WifiMode;
 
 use crate::world::ApWorld;
 
@@ -74,7 +74,7 @@ async fn test_create_hidden_ap() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: netsim_model::Position::default(),
     };
     world.given_a_registered_ap_with_config(config).await;
     let id = world.ap_id.expect("AP ID missing");

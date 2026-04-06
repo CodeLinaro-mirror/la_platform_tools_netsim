@@ -39,8 +39,8 @@ pub(crate) struct Pose {
     pub orientation: Quat,
 }
 
-impl From<&netsim_model::device::Pose> for Pose {
-    fn from(pose: &netsim_model::device::Pose) -> Self {
+impl From<&netsim_model::Pose> for Pose {
+    fn from(pose: &netsim_model::Pose) -> Self {
         Pose {
             // Converts x, y, z from meters to centimeters
             position: Vec3::new(
@@ -84,7 +84,7 @@ pub(crate) fn compute_range_azimuth_elevation(
 
 #[cfg(test)]
 mod tests {
-    use netsim_model::device::{Orientation, Pose, Position};
+    use netsim_model::{Orientation, Pose, Position};
 
     use super::*;
 

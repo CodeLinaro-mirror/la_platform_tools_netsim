@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::{chip::ChipId, stats::NetsimRadioStats};
+use netsim_model::{ChipId, NetsimRadioStats};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,5 +39,5 @@ pub enum UwbActionResult {
     /// The action returned statistics.
     Statistics(Box<[NetsimRadioStats]>),
     /// The action returned the updated chip state.
-    Chip(netsim_model::chip::Chip),
+    Chip(netsim_model::Chip),
 }

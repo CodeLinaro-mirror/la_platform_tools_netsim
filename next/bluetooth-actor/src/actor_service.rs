@@ -3,9 +3,8 @@
 
 use actor_framework::{ActorService, DynContext};
 use netsim_model::{
-    chip::{BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant},
-    chip_error::ChipError,
-    ChipId, ChipKind,
+    BluetoothMode, Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipKindParams, ChipUpdate,
+    ChipVariant,
 };
 use tracing::{info, warn};
 
@@ -88,9 +87,9 @@ impl ActorService for BluetoothActor {
             product_name: params.config.product_name.clone(),
             kind: ChipKind::BLUETOOTH,
             pose: params.pose,
-            variant: Some(ChipVariant::Bluetooth(netsim_model::bluetooth::Bluetooth {
-                low_energy: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
-                classic: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
+            variant: Some(ChipVariant::Bluetooth(netsim_model::Bluetooth {
+                low_energy: netsim_model::Radio { state: Some(true), ..Default::default() },
+                classic: netsim_model::Radio { state: Some(true), ..Default::default() },
             })),
             ..Default::default()
         };
@@ -250,19 +249,19 @@ impl ActorService for BluetoothActor {
                 for (id, chip) in chips.iter() {
                     if let Ok(stats) = self.rootcanal.get_stats(id.0.into()) {
                         // BLE Stats
-                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = id.0;
                         radio_stats.name = chip.name.clone();
-                        radio_stats.kind = netsim_model::stats::RadioKind::BluetoothLowEnergy;
+                        radio_stats.kind = netsim_model::RadioKind::BluetoothLowEnergy;
                         radio_stats.tx_count = stats.ll_packets_out_ble;
                         radio_stats.rx_count = stats.ll_packets_in_ble;
                         stats_list.push(radio_stats);
 
                         // Classic Stats
-                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = id.0;
                         radio_stats.name = chip.name.clone();
-                        radio_stats.kind = netsim_model::stats::RadioKind::BluetoothClassic;
+                        radio_stats.kind = netsim_model::RadioKind::BluetoothClassic;
                         radio_stats.tx_count = stats.ll_packets_out_classic;
                         radio_stats.rx_count = stats.ll_packets_in_classic;
                         stats_list.push(radio_stats);
@@ -288,10 +287,10 @@ impl ActorService for BluetoothActor {
 
 impl BluetoothActor {
     /// Asynchronously synchronize the device name to match the chip name.
-    fn sync_device_name(&self, device_id: netsim_model::device::DeviceId, name: String) {
+    fn sync_device_name(&self, device_id: netsim_model::DeviceId, name: String) {
         let dc = self.device_client.clone();
         tokio::spawn(async move {
-            let mut update = netsim_model::device::api::DeviceUpdate::default();
+            let mut update = netsim_model::DeviceUpdate::default();
             update.name = Some(name);
             if let Err(e) = dc.update(device_id, update).await {
                 warn!("Failed to sync device name for device {}: {:?}", device_id, e);

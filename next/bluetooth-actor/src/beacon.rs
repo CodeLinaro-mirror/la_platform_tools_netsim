@@ -11,10 +11,7 @@
 //! NOTE: This module is currently missing the complete setup for converting
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
-use netsim_model::{
-    chip::{BeaconParams, ChipId},
-    chip_error::ChipError,
-};
+use netsim_model::{BeaconParams, ChipError, ChipId};
 use netsim_packets::{
     Address as PacketsAddress, AdvertisingFilterPolicy, AdvertisingType, Enable, HciCommand,
     HciCommandHeader, LeSetAdvertisingData, LeSetAdvertisingEnable, LeSetAdvertisingParameters,
@@ -82,7 +79,7 @@ pub fn create(
             &if adv_data.include_device_name { Some(device_name.clone()) } else { None },
         )
     } else {
-        construct_data(&netsim_model::bluetooth::beacon::AdvertiseData::default(), &None)
+        construct_data(&netsim_model::AdvertiseData::default(), &None)
     };
 
     let mut adv_data_payload = [0u8; 31];

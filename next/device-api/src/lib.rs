@@ -71,15 +71,10 @@
 
 use std::fmt;
 
-// Re-export key data models from netsim-model for convenience.
-pub use netsim_model::device::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate};
-pub use netsim_model::device::{
-    api, Device, DeviceAddChip, DeviceConfig, DeviceId, Orientation, Position,
-};
-use netsim_model::{
-    chip::{ChipId, PacketSink, PacketStream},
-    device::api::DeviceChipCreate,
-    stats::NetsimRadioStats,
+use netsim_model::{ChipId, NetsimRadioStats, PacketSink, PacketStream};
+pub use netsim_model::{
+    Device, DeviceAddChip, DeviceChip, DeviceChipCreate, DeviceConfig, DeviceCreate, DeviceId,
+    DeviceUpdate, ListDeviceResponse, Orientation, PoseUpdate, Position,
 };
 use serde::{Deserialize, Serialize};
 

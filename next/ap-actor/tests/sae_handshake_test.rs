@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ap_actor::SaeStateMachine;
-use netsim_model::chip::WifiMode;
+use netsim_model::WifiMode;
 use netsim_packets::{
     management_subtype, AuthenticationFixedFields, FrameControl, Ieee80211, MacAddr,
     MacHeader3Addr, SequenceControl,
@@ -41,7 +41,7 @@ async fn test_sae_handshake_success() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: netsim_model::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config.clone()).await;

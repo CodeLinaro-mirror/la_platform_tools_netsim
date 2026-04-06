@@ -8,10 +8,8 @@ use device_actor::DeviceClient;
 use futures::SinkExt;
 use grpcio::{RpcContext, ServerStreamingSink, WriteFlags};
 use netsim_model::{
-    chip::{
-        BluetoothCreate, BluetoothMode, ChipConfig, ChipKindParams, ScannerParams, SnifferParams,
-    },
-    device::{DeviceAddChip, DeviceConfig, Pose, Position},
+    BluetoothCreate, BluetoothMode, ChipConfig, ChipKindParams, DeviceAddChip, DeviceConfig, Pose,
+    Position, ScannerParams, SnifferParams,
 };
 use netsim_proto::{
     ble_service::{ScanRequest, ScanResponse, SniffRequest, SniffResponse},
@@ -45,7 +43,7 @@ impl BleService for BleServiceImpl {
         ctx.spawn(async move {
             let (packet_tx, mut packet_rx) = mpsc::channel::<Bytes>(100);
 
-            let app_sink: netsim_model::chip::PacketSink =
+            let app_sink: netsim_model::PacketSink =
                 Box::pin(futures::sink::unfold(packet_tx, |tx, item: Bytes| async move {
                     tx.send(item).await.map_err(|e| {
                         std::io::Error::new(std::io::ErrorKind::BrokenPipe, e.to_string())
@@ -127,7 +125,7 @@ impl BleService for BleServiceImpl {
         ctx.spawn(async move {
             let (packet_tx, mut packet_rx) = mpsc::channel::<Bytes>(100);
 
-            let app_sink: netsim_model::chip::PacketSink =
+            let app_sink: netsim_model::PacketSink =
                 Box::pin(futures::sink::unfold(packet_tx, |tx, item: Bytes| async move {
                     tx.send(item).await.map_err(|e| {
                         std::io::Error::new(std::io::ErrorKind::BrokenPipe, e.to_string())

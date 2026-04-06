@@ -7,7 +7,7 @@ use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
-use netsim_model::{client_error::ClientError, device::Pose};
+use netsim_model::{ClientError, Pose};
 use netsim_proto::{
     empty::Empty,
     frontend::{ListDeviceResponse, ListLinkResponse},
@@ -155,7 +155,7 @@ impl FrontendClient {
                     device_info: None,
                 };
 
-                let device_create = device_api::api::DeviceCreate {
+                let device_create = device_api::DeviceCreate {
                     device_config: device_config.clone(),
                     chip: chip_config,
                 };
@@ -204,11 +204,11 @@ impl FrontendClient {
     ) -> Result<(), RpcStatus> {
         let id = req.id.unwrap_or(0);
 
-        let update = device_api::api::DeviceUpdate {
+        let update = device_api::DeviceUpdate {
             id,
             name: req.device.name.clone(),
             visible: req.device.visible,
-            pose: device_api::api::PoseUpdate {
+            pose: device_api::PoseUpdate {
                 position: req
                     .device
                     .position

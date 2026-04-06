@@ -1,7 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::device::Position;
+use netsim_model::Position;
 use netsim_packets::{
     category, public_action, FrameControl, Ieee80211, MacAddress, MacHeader3Addr, SequenceControl,
 };

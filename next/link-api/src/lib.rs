@@ -34,12 +34,8 @@ pub(crate) mod error;
 pub use action::LinkAction;
 pub use create::LinkCreate;
 pub use error::LinkError;
-use netsim_model::client_error::ClientError;
-pub use netsim_model::{
-    chip::ChipId,
-    link::{Link, LinkId, LinkUpdate},
-    ChipKind,
-};
+use netsim_model::ClientError;
+pub use netsim_model::{ChipId, ChipKind, Link, LinkId, LinkUpdate};
 
 #[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]

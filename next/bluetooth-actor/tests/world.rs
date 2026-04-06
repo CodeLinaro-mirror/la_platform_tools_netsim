@@ -8,12 +8,9 @@ use bluetooth_actor::{BluetoothActor, BluetoothClient, BluetoothError};
 use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
 use netsim_model::{
-    bluetooth::beacon::{AdvertiseSettings, AdvertiseTxPower, TxPower},
-    chip::{
-        BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId,
-        ChipKindParams, DeviceParams, PacketSink, PacketStream, ScannerParams,
-    },
-    device::DeviceId,
+    AdvertiseSettings, AdvertiseTxPower, BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode,
+    ChipConfig, ChipCreate, ChipId, ChipKindParams, DeviceId, DeviceParams, PacketSink,
+    PacketStream, ScannerParams, TxPower,
 };
 use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use netsim_testing::logger;
@@ -302,17 +299,10 @@ impl World {
         self.sinks.remove(name).expect("Sink not found for chip");
     }
 
-    pub async fn when_update_chip_position(
-        &self,
-        name: &str,
-        position: netsim_model::device::Position,
-    ) {
+    pub async fn when_update_chip_position(&self, name: &str, position: netsim_model::Position) {
         let id = *self.chips.get(name).expect("Chip not found");
-        let update = netsim_model::chip::ChipUpdate {
-            pose: netsim_model::device::api::PoseUpdate {
-                position: Some(position),
-                orientation: None,
-            },
+        let update = netsim_model::ChipUpdate {
+            pose: netsim_model::PoseUpdate { position: Some(position), orientation: None },
             ..Default::default()
         };
         self.client.0.update(id, update).await.expect("Failed to update chip");
@@ -320,11 +310,7 @@ impl World {
 
     // --- Then Steps ---
 
-    pub async fn then_chip_position_is(
-        &self,
-        name: &str,
-        expected: netsim_model::device::Position,
-    ) {
+    pub async fn then_chip_position_is(&self, name: &str, expected: netsim_model::Position) {
         let id = *self.chips.get(name).expect("Chip not found");
         let chip =
             self.client.0.get(id).await.expect("Failed to get chip").expect("Chip should exist");
@@ -356,7 +342,7 @@ impl World {
 
     pub async fn then_chip_address_is_generated(&self, id: ChipId) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
-        if let Some(netsim_model::chip::ChipVariant::Bluetooth(_)) = &chip.variant {
+        if let Some(netsim_model::ChipVariant::Bluetooth(_)) = &chip.variant {
             info!("Chip {} exists and is a Bluetooth variant.", id.0);
             // Note: Verification of the generated address via the `Chip` struct
             // is not currently supported by the model, as the

@@ -9,13 +9,9 @@
 
 use device_actor::{DeviceActor, DeviceClient};
 use device_api::{
-    api::{Chip, DeviceChipCreate, DeviceCreate},
-    DeviceActionResult, DeviceConfig, DeviceId,
+    DeviceActionResult, DeviceChip, DeviceChipCreate, DeviceConfig, DeviceCreate, DeviceId,
 };
-use netsim_model::{
-    chip::{BleBeacon, ChipId},
-    device::Pose,
-};
+use netsim_model::{BleBeacon, ChipId, Pose};
 
 // Feature: Device Client Logic
 //
@@ -42,7 +38,7 @@ async fn test_device_client_create() {
             name: "beacon".to_string(),
             manufacturer: "Netsim".to_string(),
             product_name: "NetsimBeacon".to_string(),
-            chip: Chip::Beacon(BleBeacon::default()),
+            chip: DeviceChip::Beacon(BleBeacon::default()),
         },
     };
     let id = client.create_device(params).await.unwrap();
@@ -142,15 +138,15 @@ fn create_add_chip_params(guid: &str, chip_name: &str) -> device_api::DeviceAddC
         packet_stream: None,
         packet_sink: None,
         device_config: DeviceConfig::default(),
-        chip_config: netsim_model::chip::ChipConfig {
+        chip_config: netsim_model::ChipConfig {
             name: chip_name.to_string(),
             manufacturer: "man-1".to_string(),
             product_name: "prod-1".to_string(),
-            chip_kind_params: netsim_model::chip::ChipKindParams::Bluetooth(
-                netsim_model::chip::BluetoothCreate {
+            chip_kind_params: netsim_model::ChipKindParams::Bluetooth(
+                netsim_model::BluetoothCreate {
                     address: "00:00:00:00:00:00".to_string(),
                     bt_properties: Default::default(),
-                    mode: netsim_model::chip::BluetoothMode::Device(Default::default()),
+                    mode: netsim_model::BluetoothMode::Device(Default::default()),
                 },
             ),
         },

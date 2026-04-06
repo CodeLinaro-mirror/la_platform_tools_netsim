@@ -5,7 +5,7 @@
 
 use ap_actor::{ApClient, ApConfig};
 use grpcio::{RpcContext, UnarySink};
-use netsim_model::ap::WifiMode;
+use netsim_model::WifiMode;
 use netsim_proto::{
     access_point::{
         AccessPoint, CreateAccessPointRequest, DeleteAccessPointRequest, ExecuteAccessPointRequest,
@@ -291,12 +291,10 @@ impl AccessPointService for AccessPointServiceImpl {
                 Some(
                     netsim_proto::access_point::execute_access_point_request::Action::Disconnect(d),
                 ) => client.disconnect(req.id, d.mac_address).await,
-                Some(_) => Err(netsim_model::client_error::ClientError::Send(
-                    "Unknown action specified".to_string(),
-                )),
-                None => Err(netsim_model::client_error::ClientError::Send(
-                    "No action specified".to_string(),
-                )),
+                Some(_) => {
+                    Err(netsim_model::ClientError::Send("Unknown action specified".to_string()))
+                }
+                None => Err(netsim_model::ClientError::Send("No action specified".to_string())),
             };
 
             match result {

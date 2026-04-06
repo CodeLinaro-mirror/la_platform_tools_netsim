@@ -7,7 +7,7 @@
 //! These errors cover issues arising from actor communication, invalid
 //! arguments, and other device-specific failure modes.
 
-use netsim_model::client_error::ClientError;
+use netsim_model::ClientError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

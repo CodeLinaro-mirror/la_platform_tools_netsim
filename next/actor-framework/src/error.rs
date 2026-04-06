@@ -9,7 +9,7 @@
 
 use std::error::Error;
 
-use netsim_model::client_error::ClientError;
+use netsim_model::ClientError;
 
 /// Errors that can occur within the actor framework itself.
 #[derive(Debug, thiserror::Error)]

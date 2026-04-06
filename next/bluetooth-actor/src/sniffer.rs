@@ -8,10 +8,7 @@
 //! `broadcast_to_peers` calls `on_receive_ll` for all cloned controllers.
 //! Thus, no specific HCI config is needed.
 
-use netsim_model::{
-    chip::{ChipId, SnifferParams},
-    chip_error::ChipError,
-};
+use netsim_model::{ChipError, ChipId, SnifferParams};
 use rootcanal::Rootcanal;
 use tracing::debug;
 

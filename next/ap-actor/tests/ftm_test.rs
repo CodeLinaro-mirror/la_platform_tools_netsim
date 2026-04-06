@@ -1,7 +1,7 @@
 // Copyright 2024 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::chip::WifiMode;
+use netsim_model::WifiMode;
 use netsim_packets::{category, management_subtype, public_action, Ieee80211, MacAddr};
 use zerocopy::IntoBytes;
 
@@ -35,7 +35,7 @@ async fn test_ftm_ranging_exchange() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: netsim_model::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config.clone()).await;

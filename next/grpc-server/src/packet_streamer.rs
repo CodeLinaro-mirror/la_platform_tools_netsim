@@ -3,7 +3,7 @@
 
 use bytes::Bytes;
 use futures::{pin_mut, stream::StreamExt, SinkExt, TryStreamExt};
-use netsim_model::initial_info::ChipInfo;
+use netsim_model::ChipInfo;
 use netsim_proto::{
     packet_streamer::{self, PacketRequest, PacketResponse},
     packet_streamer_grpc::PacketStreamer,
@@ -106,7 +106,7 @@ impl PacketStreamer for PacketStreamerService {
             let is_bt = chip_info
                 .chip
                 .as_ref()
-                .map_or(false, |c| c.kind == netsim_model::initial_info::ChipKind::BLUETOOTH);
+                .map_or(false, |c| c.kind == netsim_model::ChipKind::BLUETOOTH);
 
             let grpc_stream = stream.map_err(|err| grpc_error_to_packet_error(err)).and_then(
                 |packet_request| async {

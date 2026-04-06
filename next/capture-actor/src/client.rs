@@ -11,7 +11,7 @@ use capture_api::{
     CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo, CaptureSender, Direction,
 };
 use futures::TryFutureExt;
-use netsim_model::{client_error::ClientError, ChipId};
+use netsim_model::{ChipId, ClientError};
 
 use crate::CaptureActor;
 

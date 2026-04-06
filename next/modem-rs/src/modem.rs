@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use netsim_model::cell::RegistrationStatus;
+use netsim_model::RegistrationStatus;
 use tracing::error;
 
 use crate::{

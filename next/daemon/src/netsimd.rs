@@ -22,14 +22,9 @@ use futures::{SinkExt, StreamExt};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    chip::{
-        BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
-        ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
-        UwbCreate, WifiCreate,
-    },
-    device::Pose,
-    initial_info::ChipInfo,
-    set_if_some,
+    set_if_some, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipInfo,
+    ChipKind, ChipKindParams, DeviceParams, PacketSink as ApiPacketSink,
+    PacketStream as ApiPacketStream, Pose, UwbCreate, WifiCreate,
 };
 use packet_stream::{
     transport::traits::{PacketSink, PacketStream},

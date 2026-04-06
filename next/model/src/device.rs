@@ -146,7 +146,7 @@ pub mod api {
                     name: "main-ap".to_string(),
                     manufacturer: "Google".to_string(),
                     product_name: "AccessPoint".to_string(),
-                    chip: Chip::Ap(ap_create),
+                    chip: DeviceChip::Ap(ap_create),
                 },
             }
         }
@@ -157,7 +157,7 @@ pub mod api {
         pub name: String,
         pub manufacturer: String,
         pub product_name: String,
-        pub chip: Chip,
+        pub chip: DeviceChip,
     }
 
     impl DeviceChipCreate {
@@ -165,7 +165,7 @@ pub mod api {
             name: impl Into<String>,
             manufacturer: impl Into<String>,
             product_name: impl Into<String>,
-            chip: Chip,
+            chip: DeviceChip,
         ) -> DeviceChipCreate {
             DeviceChipCreate {
                 name: name.into(),
@@ -177,7 +177,7 @@ pub mod api {
     }
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-    pub enum Chip {
+    pub enum DeviceChip {
         Beacon(BleBeacon),
         Bluetooth(BluetoothCreate),
         Wifi(WifiCreate),
@@ -186,33 +186,33 @@ pub mod api {
         Ap(ApCreate),
     }
 
-    impl Default for Chip {
+    impl Default for DeviceChip {
         fn default() -> Self {
-            Chip::Beacon(BleBeacon::default())
+            DeviceChip::Beacon(BleBeacon::default())
         }
     }
 
-    impl From<crate::chip::ChipKindParams> for Chip {
+    impl From<crate::chip::ChipKindParams> for DeviceChip {
         fn from(params: crate::chip::ChipKindParams) -> Self {
             match params {
                 crate::chip::ChipKindParams::Bluetooth(bt) => match bt.mode {
                     crate::chip::BluetoothMode::Beacon(beacon_params) => {
-                        Chip::Beacon(beacon_params.ble_beacon)
+                        DeviceChip::Beacon(beacon_params.ble_beacon)
                     }
-                    _ => Chip::Bluetooth(bt),
+                    _ => DeviceChip::Bluetooth(bt),
                 },
-                crate::chip::ChipKindParams::Wifi(wifi) => Chip::Wifi(wifi),
-                crate::chip::ChipKindParams::Uwb(uwb) => Chip::Uwb(uwb),
-                crate::chip::ChipKindParams::Cell(cell) => Chip::Cell(cell),
-                crate::chip::ChipKindParams::Ap(ap) => Chip::Ap(ap),
+                crate::chip::ChipKindParams::Wifi(wifi) => DeviceChip::Wifi(wifi),
+                crate::chip::ChipKindParams::Uwb(uwb) => DeviceChip::Uwb(uwb),
+                crate::chip::ChipKindParams::Cell(cell) => DeviceChip::Cell(cell),
+                crate::chip::ChipKindParams::Ap(ap) => DeviceChip::Ap(ap),
             }
         }
     }
 
-    impl From<Chip> for crate::chip::ChipKindParams {
-        fn from(chip: Chip) -> Self {
+    impl From<DeviceChip> for crate::chip::ChipKindParams {
+        fn from(chip: DeviceChip) -> Self {
             match chip {
-                Chip::Beacon(beacon) => {
+                DeviceChip::Beacon(beacon) => {
                     crate::chip::ChipKindParams::Bluetooth(crate::chip::BluetoothCreate {
                         address: beacon.address.clone(),
                         bt_properties: Default::default(),
@@ -221,11 +221,11 @@ pub mod api {
                         )),
                     })
                 }
-                Chip::Bluetooth(bt) => crate::chip::ChipKindParams::Bluetooth(bt),
-                Chip::Wifi(wifi) => crate::chip::ChipKindParams::Wifi(wifi),
-                Chip::Uwb(uwb) => crate::chip::ChipKindParams::Uwb(uwb),
-                Chip::Cell(cell) => crate::chip::ChipKindParams::Cell(cell),
-                Chip::Ap(ap) => crate::chip::ChipKindParams::Ap(ap),
+                DeviceChip::Bluetooth(bt) => crate::chip::ChipKindParams::Bluetooth(bt),
+                DeviceChip::Wifi(wifi) => crate::chip::ChipKindParams::Wifi(wifi),
+                DeviceChip::Uwb(uwb) => crate::chip::ChipKindParams::Uwb(uwb),
+                DeviceChip::Cell(cell) => crate::chip::ChipKindParams::Cell(cell),
+                DeviceChip::Ap(ap) => crate::chip::ChipKindParams::Ap(ap),
             }
         }
     }

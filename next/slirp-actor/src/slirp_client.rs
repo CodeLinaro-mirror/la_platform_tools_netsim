@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::ResourceClient;
-use netsim_model::{
-    chip::{PacketSink, PacketStream},
-    client_error::ClientError,
-};
+use netsim_model::{ClientError, PacketSink, PacketStream};
 
 use crate::slirp_actor::{SlirpActor, SlirpReq};
 

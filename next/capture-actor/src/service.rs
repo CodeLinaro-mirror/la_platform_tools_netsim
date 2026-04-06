@@ -8,10 +8,7 @@ use std::sync::{
 
 use actor_framework::{ActorService, DynContext};
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
-use netsim_model::{
-    chip::{ChipId, ChipKind},
-    chip_error::ChipError,
-};
+use netsim_model::{ChipError, ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -112,7 +109,6 @@ impl CaptureActor {
         entity: &InternalCaptureInfo,
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
-        // Clean up resources when the entity is deleted.
         if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
             if let Err(err) = writer.flush().await {
                 warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
@@ -215,10 +211,7 @@ impl CaptureActor {
                 self.capture_dir = Some(path.clone());
                 Ok(CaptureActionResult::Success)
             }
-            CaptureAction::Create { .. } => {
-                // Handled by create
-                Ok(CaptureActionResult::Success)
-            }
+            CaptureAction::Create { .. } => Ok(CaptureActionResult::Success),
         }
     }
 }
@@ -241,10 +234,8 @@ impl ActorService for CaptureActor {
     ) -> Result<Self::Id, Self::Error> {
         let id = id.ok_or_else(|| ChipError::InvalidArguments(Box::from("chip id required")))?;
         let mut entity = InternalCaptureInfo::from_create_params(id, params)?;
-        // Initialize the entity logic (e.g. set up writers based on flags)
         self.create_entity(&mut entity, _ctx).await?;
 
-        // 3. Store the entity
         self.entities.insert(id, entity);
         Ok(id)
     }

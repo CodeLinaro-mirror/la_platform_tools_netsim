@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::DynContext;
-use netsim_model::chip::{ChipId, WifiMode};
+use netsim_model::{ChipId, WifiMode};
 use netsim_packets::{
     control_field, management_subtype, sap, tags, write_ie, write_wmm_param_element,
     AssociationResponseFixedFields, AuthenticationFixedFields, BeaconFixedFields,

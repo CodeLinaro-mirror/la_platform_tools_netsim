@@ -28,5 +28,5 @@ pub use config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimP
 pub use metrics::MetricsSnapshot;
 pub use modem::ModemEvent;
 pub use modem_network_simulator::{ModemNetworkSimulator, NetworkEvent, ScheduledEvent};
-pub use netsim_model::cell::RegistrationStatus;
+pub use netsim_model::RegistrationStatus;
 pub use types::{HostEvent, ModemError, ModemId, ModemSink, AT_ERROR, AT_OK};

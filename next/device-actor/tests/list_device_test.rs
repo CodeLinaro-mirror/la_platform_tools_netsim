@@ -85,7 +85,7 @@ async fn test_create_single_bluetooth_chip() {
     // Verify that the variant contains both BLE and Classic radios
     assert_eq!(
         chip.variant,
-        Some(netsim_model::chip::ChipVariant::Bluetooth(netsim_model::chip::Bluetooth {
+        Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
             low_energy: Default::default(),
             classic: Default::default(),
         }))

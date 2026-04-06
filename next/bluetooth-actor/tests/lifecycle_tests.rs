@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use netsim_model::chip::ChipClient;
+use netsim_model::ChipClient;
 use tokio::time::Duration;
 
 use crate::world::World;
@@ -13,11 +13,6 @@ use crate::world::World;
 //   I want to manage bluetooth chips
 //   So that I can simulate bluetooth devices behavior
 
-// Scenario: Perform HCI Reset
-//
-//   Given a bluetooth chip in device mode
-//   When an HCI reset command is sent
-//   Then the chip responds with Command Complete
 // Scenario: Perform HCI Reset
 //
 //   Given a bluetooth chip in device mode
@@ -138,13 +133,11 @@ async fn test_actor_reset_re_enables_chip() {
     let id = *world.chips.get("A").unwrap();
 
     // 2. Disable the chip
-    let update = netsim_model::chip::ChipUpdate {
-        variant: Some(netsim_model::chip::ChipVariantUpdate::Bluetooth(
-            netsim_model::chip::BluetoothUpdate {
-                low_energy: netsim_model::chip::RadioUpdate { state: Some(false) },
-                classic: netsim_model::chip::RadioUpdate { state: Some(false) },
-            },
-        )),
+    let update = netsim_model::ChipUpdate {
+        variant: Some(netsim_model::ChipVariantUpdate::Bluetooth(netsim_model::BluetoothUpdate {
+            low_energy: netsim_model::RadioUpdate { state: Some(false) },
+            classic: netsim_model::RadioUpdate { state: Some(false) },
+        })),
         ..Default::default()
     };
     world.client.update(id, update).await.unwrap();
@@ -154,7 +147,7 @@ async fn test_actor_reset_re_enables_chip() {
 
     // 4. Verify it is re-enabled!
     let chip = world.client.read(id).await.unwrap();
-    if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &chip.variant {
+    if let Some(netsim_model::ChipVariant::Bluetooth(bt)) = &chip.variant {
         assert_eq!(bt.low_energy.state, Some(true), "LE should be re-enabled");
         assert_eq!(bt.classic.state, Some(true), "Classic should be re-enabled");
     } else {
