@@ -84,9 +84,6 @@ enum SlirpCmd {
     Notify,
 }
 
-/// Alias for io::fd::RawFd on Unix or RawSocket on Windows (converted to i32)
-pub type RawFd = i32;
-
 /// HTTP Proxy callback trait
 pub trait ProxyManager: Send {
     /// Attempts to establish a connection through the proxy.
