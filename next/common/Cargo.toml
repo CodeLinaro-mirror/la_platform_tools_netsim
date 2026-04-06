@@ -11,8 +11,7 @@ crate-type = ["staticlib", "lib"]
 doctest = false
 
 [dependencies]
-chrono = { version = "0.4.19", default-features = false }
-chrono = { version = "0.4", features = ["now"] }
+chrono = { version = "0.4.19", default-features = false, features = ["now"] }
 libc = "0.2.150"
 protobuf-json-mapping = "3.2.0"
 tracing = "0.1"
