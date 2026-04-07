@@ -38,7 +38,6 @@ pub fn execute(cmd: &ApCommand, client: &AccessPointServiceClient, verbose: bool
             if let Some(bssid) = &args.bssid {
                 ap.bssid = bssid.clone();
             }
-
             if let Some(password) = &args.password {
                 ap.wpa_passphrase = password.clone();
             }

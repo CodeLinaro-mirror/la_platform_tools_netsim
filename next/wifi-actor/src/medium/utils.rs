@@ -24,9 +24,11 @@ pub fn create_encrypted_hwsim_msg(
     simulate_ap_reflection: bool,
 ) -> WifiResult<HwsimMsg> {
     let attrs = &frame.attrs;
+    let ap_bssid = key_store.get_bssid();
+
     let ieee80211_response = match simulate_ap_reflection
         && ieee80211.is_to_ap()
-        && ieee80211.get_bssid().map_or(false, |b| key_store.has_bssid(&b))
+        && Some(ieee80211.get_bssid().unwrap_or(MacAddress::new([0, 0, 0, 0, 0, 0]))) == ap_bssid
     {
         true => std::borrow::Cow::Owned(
             ieee80211

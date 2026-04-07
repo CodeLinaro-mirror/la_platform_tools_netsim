@@ -236,7 +236,6 @@ pub struct ApState {
     pub associations: std::collections::HashSet<MacAddr>,
     pub delayed_frames: std::collections::VecDeque<(std::time::Instant, bytes::Bytes)>,
     pub enabled: bool,
-    pub tx_sequence: u16,
 }
 
 impl ApActor {
@@ -271,35 +270,6 @@ impl ApState {
             associations: std::collections::HashSet::new(),
             delayed_frames: std::collections::VecDeque::new(),
             enabled: true,
-            tx_sequence: (std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .subsec_micros()
-                % 4096) as u16,
         }
-    }
-
-    pub fn clear_station_state(&mut self, sta_mac: &MacAddr) {
-        if self.associations.remove(sta_mac) {
-            tracing::info!(
-                "ApActor: Implicit deauth of {} from BSSID {}",
-                sta_mac,
-                self.config.bssid
-            );
-        }
-        if let Some(wpa) = &mut self.wpa {
-            wpa.remove_session(sta_mac);
-        }
-        self.sae_sessions.remove(sta_mac);
-        self.eap_sessions.remove(sta_mac);
-    }
-
-    /// Fetches the next monotonic sequence control for 802.11 transmissions
-    /// and advances the internal counter (wrapping at 4096).
-    /// The Fragment Number is always set to 0.
-    pub fn next_seq_control(&mut self) -> netsim_packets::SequenceControl {
-        let sc = netsim_packets::SequenceControl::new(self.tx_sequence << 4);
-        self.tx_sequence = (self.tx_sequence + 1) % 4096;
-        sc
     }
 }
