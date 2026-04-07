@@ -17,6 +17,7 @@ use netsim_model::chip::{
     Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
     PacketSink, PacketStream,
 };
+use netsim_proto::protobuf::Message;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -88,7 +89,10 @@ impl DeviceActor {
         // Convert to Proto for persistence
         let active_proto_stats = active_model_stats.into_iter().map(to_proto_stats).collect();
 
-        let combined_stats = self.stats.get_combined_stats(active_proto_stats);
+        // Collect WiFi specific stats (Global)
+        let wifi_stats = self.collect_wifi_stats_async().await;
+
+        let combined_stats = self.stats.get_combined_stats(active_proto_stats, wifi_stats);
         let path = self.stats.stats_path.clone();
 
         let previous_task = self.stats_write_task.take();
@@ -120,7 +124,6 @@ impl DeviceActor {
     }
 
     async fn collect_radio_stats_async(&mut self) -> Vec<netsim_model::stats::NetsimRadioStats> {
-        // 1. Fire off requests for Stats AND Chip State (for BT)
         let mut stats_futures = Vec::new();
         let mut state_futures = Vec::new();
 
@@ -157,11 +160,9 @@ impl DeviceActor {
             }
         }
 
-        // 2. Await all
         let stats_results = futures::future::join_all(stats_futures).await;
         let state_results = futures::future::join_all(state_futures).await;
 
-        // 3. Process Results
         let mut chip_stats_map: HashMap<ChipId, Vec<netsim_model::stats::NetsimRadioStats>> =
             HashMap::new();
         for stats in stats_results.into_iter().flatten() {
@@ -238,6 +239,30 @@ impl DeviceActor {
             }
         }
         stats_list
+    }
+
+    async fn collect_wifi_stats_async(&self) -> Option<netsim_proto::stats::WifiStats> {
+        let client = self.chip_clients.get(&netsim_model::ChipKind::WIFI)?;
+        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_global_stats()).await {
+            Ok(Ok(Some(stats_bytes))) => {
+                match netsim_proto::stats::WifiStats::parse_from_bytes(&stats_bytes) {
+                    Ok(stats) => Some(stats),
+                    Err(e) => {
+                        log::error!("DeviceActor: Failed to parse WifiStats: {}", e);
+                        None
+                    }
+                }
+            }
+            Ok(Ok(None)) => None,
+            Ok(Err(e)) => {
+                log::warn!("DeviceActor: Failed to get global stats: {}", e);
+                None
+            }
+            Err(_) => {
+                log::debug!("DeviceActor: Timeout getting global stats");
+                None
+            }
+        }
     }
 
     /// Resolves the specific RadioKind for a chip, handling ambiguous cases
@@ -402,7 +427,33 @@ impl DeviceActor {
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
     ) -> Result<ChipId, DeviceError> {
-        log::info!("DeviceActor: AddChip {} to device {}", chip_config.name, entity.device.name);
+        let chip_name = if chip_config.name.is_empty() {
+            entity.device.name.clone()
+        } else {
+            chip_config.name.clone()
+        };
+        let manufacturer = if chip_config.manufacturer.is_empty() {
+            entity
+                .device
+                .device_info
+                .as_ref()
+                .map(|info| info.kind.clone())
+                .unwrap_or("Unknown".to_string())
+        } else {
+            chip_config.manufacturer.clone()
+        };
+        let product_name = if chip_config.product_name.is_empty() {
+            entity.device.name.clone()
+        } else {
+            chip_config.product_name.clone()
+        };
+        log::info!(
+            "DeviceActor: AddChip {} ({}, {}) to device {}",
+            chip_name,
+            manufacturer,
+            product_name,
+            entity.device.name
+        );
 
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
         let chip_kind_params = chip_config.chip_kind_params.clone();
@@ -427,28 +478,27 @@ impl DeviceActor {
         })?;
 
         let chip_create_params = ChipCreate {
-            id: chip_id,
             packet_stream,
             packet_sink,
             config: netsim_model::chip::ChipConfig {
-                name: chip_config.name.clone(),
-                manufacturer: chip_config.manufacturer.clone(),
-                product_name: chip_config.product_name.clone(),
+                name: chip_name.clone(),
+                manufacturer: manufacturer.clone(),
+                product_name: product_name.clone(),
                 chip_kind_params,
             },
             device_id: DeviceId(entity.device.id),
         };
 
         chip_client
-            .create(chip_create_params)
+            .create(chip_id, chip_create_params)
             .await
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
         entity.device.chips.push(Chip {
             id: chip_id.0,
             kind: ChipKind::from(&chip_config.chip_kind_params),
-            name: Some(chip_config.name),
-            manufacturer: Some(chip_config.manufacturer),
-            product_name: Some(chip_config.product_name),
+            name: Some(chip_name),
+            manufacturer: Some(manufacturer),
+            product_name: Some(product_name),
             position: entity.device.position.clone(),
             orientation: entity.device.orientation.clone(),
             device_id: DeviceId(entity.device.id),
@@ -620,6 +670,63 @@ impl DeviceActor {
             ctx.shutdown();
         }
     }
+
+    async fn perform_reset(&mut self, id: Option<DeviceId>) -> Result<(), DeviceError> {
+        let device_ids: Vec<DeviceId> = if let Some(id) = id {
+            if !self.devices.contains_key(&id) {
+                return Err(DeviceError::DeviceNotFound(id.to_string()));
+            }
+            vec![id]
+        } else {
+            self.devices.keys().cloned().collect()
+        };
+
+        let mut errors = Vec::new();
+
+        for device_id in device_ids {
+            let Some(entity) = self.devices.get_mut(&device_id) else {
+                log::error!("DeviceActor: Device {} disappeared during reset", device_id);
+                continue;
+            };
+            log::info!("DeviceActor: Resetting device {}", entity.device.name);
+
+            entity.device.visible = true;
+            entity.device.position = device_api::Position::default();
+            entity.device.orientation = device_api::Orientation::default();
+
+            for chip in entity.device.chips.iter_mut() {
+                chip.position = device_api::Position::default();
+                chip.orientation = device_api::Orientation::default();
+
+                if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
+                    if let Err(e) = chip_client.reset(netsim_model::ChipId(chip.id)).await {
+                        log::warn!(
+                            "DeviceActor: Failed to reset chip {} kind {:?}: {}",
+                            chip.id,
+                            chip.kind,
+                            e
+                        );
+                        errors.push(format!("Failed to reset chip {}: {}", chip.id, e));
+                    }
+                }
+            }
+        }
+
+        if id.is_none() {
+            log::info!("DeviceActor: Resetting all links");
+            if let Err(e) = self.link_client.reset().await {
+                log::warn!("DeviceActor: Failed to reset links: {}", e);
+                errors.push(format!("Failed to reset links: {}", e));
+            }
+        }
+
+        self.save_stats_async().await;
+
+        if !errors.is_empty() {
+            return Err(DeviceError::ResetErrors(errors));
+        }
+        Ok(())
+    }
 }
 
 impl ActorService for DeviceActor {
@@ -779,7 +886,10 @@ impl ActorService for DeviceActor {
                 self.save_stats_async().await;
                 Ok(DeviceActionResult::Success)
             }
-            DeviceAction::Reset => Ok(DeviceActionResult::Success),
+            DeviceAction::Reset => {
+                self.perform_reset(id).await?;
+                Ok(DeviceActionResult::Success)
+            }
             DeviceAction::AddChipByGuid { params } => {
                 self.perform_add_chip_by_guid(params, ctx).await
             }

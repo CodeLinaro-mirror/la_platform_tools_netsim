@@ -53,6 +53,11 @@ pub fn generate_legacy_address(chip_id: u32) -> String {
     format!("00:00:00:00:{:02x}:{:02x}", (chip_id >> 8) & 0xFF, chip_id & 0xFF)
 }
 
+/// Generates a default name for a beacon from a Chip ID.
+pub fn generate_default_name(chip_id: u32) -> String {
+    format!("Beacon-{}", chip_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

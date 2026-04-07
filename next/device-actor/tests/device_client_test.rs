@@ -6,8 +6,7 @@
 //! logic, ensuring correct serialization and state management without a full
 //! actor runtime.
 
-use client::DeviceClient;
-use device_actor::DeviceActor;
+use device_actor::{DeviceActor, DeviceClient};
 use device_api::{
     api::{Chip, DeviceChipCreate, DeviceCreate},
     DeviceActionResult, DeviceConfig, DeviceId,

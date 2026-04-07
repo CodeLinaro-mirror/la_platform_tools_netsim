@@ -4,7 +4,7 @@
 
 #include <vector>
 
-#include "rust/cxx.h"
+#include "cxx.h"
 
 namespace netsim {
 namespace hostap {
@@ -34,6 +34,11 @@ bool AesCcmDecrypt(const rust::Vec<uint8_t> &key,
                    const rust::Vec<uint8_t> &cipher,
                    const rust::Vec<uint8_t> &tag,
                    rust::Vec<uint8_t> &out_plain);
+
+// PBKDF2
+rust::Vec<uint8_t> Pbkdf2HmacSha1(const rust::Vec<uint8_t> &password,
+                                  const rust::Vec<uint8_t> &salt,
+                                  uint32_t iterations, size_t key_len);
 
 // SAE / ECC P-256 Primitives
 rust::Vec<uint8_t> EcP256CalculatePwe(const rust::Vec<uint8_t> &password,

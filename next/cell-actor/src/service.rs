@@ -22,11 +22,11 @@ impl ActorService for CellActor {
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         mut params: Self::Create,
         ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = params.id;
+        let chip_id = id.ok_or_else(|| CellError::ModemError("missing chip id".into()))?;
         let device_id = params.device_id;
 
         if self.active_chips.contains_key(&chip_id) {

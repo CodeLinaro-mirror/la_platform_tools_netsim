@@ -29,7 +29,7 @@ impl ActorService for WifiActor {
         mut params: Self::Create,
         ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id = id.unwrap_or(params.id);
+        let id = id.ok_or_else(|| WifiError::Internal("missing chip id".into()))?;
         if self.active_chips.contains_key(&id) {
             return Err(WifiError::Internal(format!("Chip {} already exists", id)));
         }
@@ -160,7 +160,7 @@ impl ActorService for WifiActor {
                 Ok(WifiResponse::Statistics(stats.into_boxed_slice()))
             }
             WifiReq::GetGlobalStats => {
-                let stats = netsim_proto::stats::WifiStats::default();
+                let stats = self.medium.wifi_stats.to_proto();
                 Ok(WifiResponse::GlobalStats(Box::new(stats)))
             }
             WifiReq::Reset { id } => {

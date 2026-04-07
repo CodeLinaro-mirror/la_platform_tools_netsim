@@ -194,5 +194,92 @@ async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
     }
 }
 
+/// STEP: When (?:@adb)(?::(\S+))? connects to wifi "([^"]+)" with password
+/// "([^"]+)"
+async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, password: String) {
+    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+    w.log_step(&actor, "->", &format!("Connects to WiFi network '{}'", ssid));
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let android = w
+        .get_android_actor(&actor)
+        .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
+
+    let mut connect_cmd = android.adb_command();
+    connect_cmd
+        .arg("shell")
+        .arg("cmd")
+        .arg("wifi")
+        .arg("connect-network")
+        .arg(&ssid)
+        .arg("wpa2")
+        .arg(&password)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let status = tokio::task::spawn_blocking(move || connect_cmd.status())
+        .await
+        .expect("tokio spawn failed")
+        .expect("Failed to execute adb shell cmd wifi");
+
+    if !status.success() {
+        panic!("Failed to connect to Wi-Fi network {}", ssid);
+    }
+    // Dynamically poll for network connectivity (ping 10.0.2.2) to ensure DHCP
+    // lease is successfully negotiated with Slirp before blasting TCP data.
+    let mut connected = false;
+    for i in 0..15 {
+        let mut ping_cmd = android.adb_command();
+        ping_cmd.arg("shell").arg("ping").arg("-c").arg("1").arg("-W").arg("1").arg("10.0.2.2");
+
+        let ping_status = tokio::task::spawn_blocking(move || ping_cmd.status())
+            .await
+            .expect("tokio spawn failed")
+            .expect("Failed to execute ping");
+
+        if ping_status.success() {
+            log::info!("Wi-Fi fully connected and routed after {} seconds", i);
+            connected = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+
+    if !connected {
+        log::warn!("Timed out waiting for ping to 10.0.2.2 to succeed! Test may fail.");
+    }
+}
+
+/// STEP: When (?:@adb)(?::(\S+))? disables cellular data
+pub async fn adb_disables_cellular(w: &mut TestContext, label: String) {
+    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+
+    let android = w
+        .get_android_actor(&actor)
+        .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
+
+    log::info!("{} Disabling Cellular Data...", actor);
+    let mut svc_cmd = android.adb_command();
+    svc_cmd
+        .arg("shell")
+        .arg("svc")
+        .arg("data")
+        .arg("disable")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let status = tokio::task::spawn_blocking(move || svc_cmd.status())
+        .await
+        .expect("tokio spawn failed")
+        .expect("Failed to execute svc data disable");
+
+    if !status.success() {
+        panic!("Failed to disable cellular data on {}", actor);
+    }
+}
+
 // Include generated glue code
 include!(env!("ADB_STEPS_GLUE"));

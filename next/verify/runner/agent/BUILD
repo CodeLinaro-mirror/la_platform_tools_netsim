@@ -7,6 +7,7 @@ kt_android_library(
     name = "agent-lib",
     testonly = True,
     srcs = [
+        "src/main/java/com/android/netsim/agent/BluetoothAdvSteps.kt",
         "src/main/java/com/android/netsim/agent/LifecycleSteps.kt",
         "src/main/java/com/android/netsim/agent/NTestInstrumentation.kt",
         "src/main/java/com/android/netsim/agent/NetworkSteps.kt",
@@ -16,6 +17,7 @@ kt_android_library(
         "src/main/java/com/android/netsim/agent/UwbSessionManager.kt",
         "src/main/java/com/android/netsim/agent/UwbSteps.kt",
         "src/main/java/com/android/netsim/agent/WifiSteps.kt",
+        ":codegen_bluetooth_adv",
         ":codegen_lifecycle",
         ":codegen_network",
         ":codegen_service_discovery",
@@ -79,6 +81,14 @@ genrule(
     name = "codegen_uwb",
     srcs = ["src/main/java/com/android/netsim/agent/UwbSteps.kt"],
     outs = ["src/main/java/com/android/netsim/agent/UwbStepsLoader.kt"],
+    cmd = "$(location //next/verify/codegen:verify_codegen) $(SRCS) $@",
+    tools = ["//next/verify/codegen:verify_codegen"],
+)
+
+genrule(
+    name = "codegen_bluetooth_adv",
+    srcs = ["src/main/java/com/android/netsim/agent/BluetoothAdvSteps.kt"],
+    outs = ["src/main/java/com/android/netsim/agent/BluetoothAdvStepsLoader.kt"],
     cmd = "$(location //next/verify/codegen:verify_codegen) $(SRCS) $@",
     tools = ["//next/verify/codegen:verify_codegen"],
 )

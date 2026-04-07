@@ -87,7 +87,11 @@ impl CaptureActor {
             }
         } else {
             // Disable capture: remove the writer to close the file
-            self.writers.remove(&entity.info.chip_id);
+            if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
+                if let Err(err) = writer.flush().await {
+                    log::warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
+                }
+            }
         }
         Ok(())
     }
@@ -98,7 +102,11 @@ impl CaptureActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
         // Clean up resources when the entity is deleted.
-        self.writers.remove(&entity.info.chip_id);
+        if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
+            if let Err(err) = writer.flush().await {
+                log::warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
+            }
+        }
         Ok(())
     }
 
@@ -128,12 +136,13 @@ impl CaptureActor {
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
             ChipKind::BLUETOOTH => BluetoothH4Writer::new(&filepath).await?,
             ChipKind::UWB => UwbPcapWriter::new(&filepath).await?,
+            ChipKind::WIFI | ChipKind::AP => {
+                crate::wifi_pcap::WifiPcapWriter::new(&filepath).await?
+            }
             // Fallback
-            ChipKind::UNSPECIFIED
-            | ChipKind::WIFI
-            | ChipKind::AP
-            | ChipKind::NFC
-            | ChipKind::CELLULAR => BluetoothH4Writer::new(&filepath).await?,
+            ChipKind::UNSPECIFIED | ChipKind::NFC | ChipKind::CELLULAR => {
+                BluetoothH4Writer::new(&filepath).await?
+            }
         };
         Ok(writer)
     }
@@ -218,11 +227,11 @@ impl ActorService for CaptureActor {
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id = params.chip_id;
+        let id = id.ok_or_else(|| CaptureError::Anyhow(anyhow::anyhow!("missing chip id")))?;
         let mut entity = InternalCaptureInfo::from_create_params(id, params)?;
         // Initialize the entity logic (e.g. set up writers based on flags)
         self.create_entity(&mut entity, _ctx).await?;

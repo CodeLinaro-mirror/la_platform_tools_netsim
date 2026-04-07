@@ -11,15 +11,14 @@ doctest = false
 anyhow = "1"
 chrono = { version = "0.4.19", default-features = false }
 chrono = { version = "0.4", features = ["now"] }
-env_logger = { version = "0.10.0", default-features = false }
 libc = "0.2.150"
 log = "0.4.17"
 protobuf-json-mapping = "3.2.0"
-rand = "0.8.5"
 tracing = "0.1"
 tracing-log = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 zip = { version = "0.6.4", default-features = false }
 
 [dev-dependencies]
+rand = "0.8.5"
 regex = "1"
