@@ -7,10 +7,9 @@ use netsim_packets::{
     control_field, management_subtype, sap, tags, write_ie, write_wmm_param_element,
     AssociationResponseFixedFields, AuthenticationFixedFields, BeaconFixedFields,
     BeaconFrameHeader, FrameControl, IeIterator, Ieee80211, LlcSnapHeader, MacHeader3Addr,
-    SequenceControl,
 };
 use tracing::{debug, error, info, warn};
-use zerocopy::{IntoBytes, U16};
+use zerocopy::{FromBytes, IntoBytes, U16};
 
 use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApActor, ApError, ApState};
 
@@ -27,7 +26,7 @@ impl Ieee80211Manager {
 
     pub fn generate_beacon(
         &self,
-        ap: &ApState,
+        ap: &mut ApState,
         beacon_interval: u16,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         // Beacon Header
@@ -38,7 +37,7 @@ impl Ieee80211Manager {
             da: netsim_packets::MacAddr { bytes: [0xFF; 6] },
             sa: ap.config.bssid,
             bssid: ap.config.bssid,
-            sequence_control: SequenceControl::new(0),
+            sequence_control: ap.next_seq_control(),
         };
 
         let mut frame = header.as_bytes().to_vec();
@@ -160,7 +159,9 @@ impl Ieee80211Manager {
         }
 
         match ieee80211_frame.stype() {
-            management_subtype::AUTHENTICATION => self.handle_auth(ap, &ieee80211_frame, frame),
+            management_subtype::AUTHENTICATION => {
+                self.handle_auth(ap, &ieee80211_frame, frame, shared_keys)
+            }
             management_subtype::ASSOCIATION_REQUEST => {
                 self.handle_assoc(ap, &ieee80211_frame, shared_keys, source_id)
             }
@@ -200,7 +201,7 @@ impl Ieee80211Manager {
                 info!("ApActor: Received FTM Request from {}", src);
                 // FIXME: Parse Dialog Token from action frame body (Trigger field).
                 // For now, we assume a standard trigger and generate a fixed response sequence.
-                let frames = crate::ftm::FtmResponder::handle_ftm_request(&_ap.config, src, 1);
+                let frames = crate::ftm::FtmResponder::handle_ftm_request(_ap, src, 1);
                 return Ok(frames.into_iter().map(bytes::Bytes::from).collect());
             }
         }
@@ -213,6 +214,7 @@ impl Ieee80211Manager {
         ap: &mut ApState,
         frame: &Ieee80211,
         raw_frame: &[u8],
+        shared_keys: &SharedKeyStore,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let src = frame.get_source();
 
@@ -258,11 +260,27 @@ impl Ieee80211Manager {
         }
 
         let body = &raw_frame[24..];
-        let alg = u16::from_le_bytes([body[0], body[1]]);
-        let seq = u16::from_le_bytes([body[2], body[3]]);
-        let status = u16::from_le_bytes([body[4], body[5]]);
+        let fixed = match AuthenticationFixedFields::read_from_prefix(body) {
+            Ok((f, _)) => f,
+            Err(_) => {
+                warn!("ApActor: Auth frame fixed fields invalid");
+                return Ok(vec![]);
+            }
+        };
+        let alg = fixed.algorithm.get();
+        let seq = fixed.sequence.get();
+        let status = fixed.status.get();
 
         info!("ApActor: Received Auth from {} Alg={} Seq={} Status={}", src, alg, seq, status);
+
+        if seq == 1 {
+            // An Auth frame with Sequence 1 indicates the station is starting the
+            // connection process. We must clear any stale association and
+            // session state (e.g., from a previous connection that disconnected
+            // without sending a Deauth frame).
+            ap.clear_station_state(&src);
+            shared_keys.remove_session(&src);
+        }
 
         // SAE (Algorithm 3)
         if alg == 3 {
@@ -333,10 +351,10 @@ impl Ieee80211Manager {
             let header = MacHeader3Addr {
                 frame_control: FrameControl::new(0x00B0), // Mgmt(00), Auth(1011) -> 0x00B0
                 duration_id: U16::new(0),
-                addr1: src,                                     // DA
-                addr2: ap.config.bssid,                         // SA
-                addr3: ap.config.bssid,                         // BSSID
-                sequence_control: SequenceControl::new(0x0010), // SC (Seq 1?)
+                addr1: src,             // DA
+                addr2: ap.config.bssid, // SA
+                addr3: ap.config.bssid, // BSSID
+                sequence_control: ap.next_seq_control(),
             };
             resp.extend_from_slice(header.as_bytes());
 
@@ -357,7 +375,7 @@ impl Ieee80211Manager {
 
     fn build_auth_frame(
         &self,
-        ap: &ApState,
+        ap: &mut ApState,
         dest: netsim_packets::MacAddr,
         alg: u16,
         seq: u16,
@@ -371,7 +389,7 @@ impl Ieee80211Manager {
             addr1: dest,
             addr2: ap.config.bssid,
             addr3: ap.config.bssid,
-            sequence_control: SequenceControl::new(0),
+            sequence_control: ap.next_seq_control(),
         };
         frame.extend_from_slice(header.as_bytes());
 
@@ -387,7 +405,7 @@ impl Ieee80211Manager {
 
     pub fn build_deauth_frame(
         &self,
-        ap: &ApState,
+        ap: &mut ApState,
         dest: netsim_packets::MacAddr,
         reason_code: u16,
     ) -> Vec<u8> {
@@ -399,7 +417,7 @@ impl Ieee80211Manager {
             addr1: dest,            // DA
             addr2: ap.config.bssid, // SA
             addr3: ap.config.bssid, // BSSID
-            sequence_control: SequenceControl::new(0),
+            sequence_control: ap.next_seq_control(),
         };
         frame.extend_from_slice(header.as_bytes());
         frame.extend_from_slice(&reason_code.to_le_bytes());
@@ -408,7 +426,7 @@ impl Ieee80211Manager {
 
     fn build_assoc_resp(
         &self,
-        ap: &ApState,
+        ap: &mut ApState,
         dest: netsim_packets::MacAddr,
         status: u16,
     ) -> Vec<u8> {
@@ -419,7 +437,7 @@ impl Ieee80211Manager {
             addr1: dest,
             addr2: ap.config.bssid,
             addr3: ap.config.bssid,
-            sequence_control: SequenceControl::new(0x0010),
+            sequence_control: ap.next_seq_control(),
         };
         resp.extend_from_slice(header.as_bytes());
 
@@ -572,7 +590,7 @@ impl Ieee80211Manager {
             da: src,                // DA
             sa: ap.config.bssid,    // SA
             bssid: ap.config.bssid, // BSSID
-            sequence_control: SequenceControl::new(0),
+            sequence_control: ap.next_seq_control(),
         };
 
         let mut resp = header.as_bytes().to_vec();
@@ -619,7 +637,12 @@ impl Ieee80211Manager {
     }
 
     // Helper to wrap EAPOL in Data Frame
-    fn wrap_eapol(&self, ap: &ApState, dest: netsim_packets::MacAddr, payload: &[u8]) -> Vec<u8> {
+    fn wrap_eapol(
+        &self,
+        ap: &mut ApState,
+        dest: netsim_packets::MacAddr,
+        payload: &[u8],
+    ) -> Vec<u8> {
         let mut frame = Vec::new();
 
         // 802.11 Header
@@ -631,7 +654,7 @@ impl Ieee80211Manager {
             addr1: dest,            // DA
             addr2: ap.config.bssid, // BSSID
             addr3: ap.config.bssid, // SA
-            sequence_control: SequenceControl::new(0),
+            sequence_control: ap.next_seq_control(),
         };
         frame.extend_from_slice(header.as_bytes());
 

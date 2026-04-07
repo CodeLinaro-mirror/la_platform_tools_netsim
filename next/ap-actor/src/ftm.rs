@@ -3,11 +3,10 @@
 
 use netsim_packets::{
     category, public_action, FineTimingMeasurement, FrameControl, MacAddr, MacHeader3Addr,
-    SequenceControl,
 };
 use zerocopy::{IntoBytes, U16};
 
-use crate::ap_actor::ApConfig;
+use crate::ap_actor::ApState;
 
 /// FTM Responder Logic
 #[derive(Debug)]
@@ -32,7 +31,7 @@ impl FtmResponder {
     /// Note: In a real physical exchange, t4 would be captured upon packet
     /// arrival. Here, we pre-calculate timestamps to simulate a specific
     /// distance (RTT).
-    pub fn handle_ftm_request(config: &ApConfig, src: MacAddr, dialog_token: u8) -> Vec<Vec<u8>> {
+    pub fn handle_ftm_request(ap: &mut ApState, src: MacAddr, dialog_token: u8) -> Vec<Vec<u8>> {
         let mut responses = Vec::new();
 
         // 1. Initial FTM Frame (ASAP=1)
@@ -50,9 +49,9 @@ impl FtmResponder {
             frame_control: FrameControl::new(0x00D0), // Action
             duration_id: U16::new(0),
             addr1: src,
-            addr2: config.bssid,
-            addr3: config.bssid,
-            sequence_control: SequenceControl::new(0),
+            addr2: ap.config.bssid,
+            addr3: ap.config.bssid,
+            sequence_control: ap.next_seq_control(),
         };
 
         let mut frame_1 = Vec::new();

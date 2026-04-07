@@ -36,6 +36,7 @@ pub struct ApCreate {
     /// BSSID (MAC Address)
     #[arg(long)]
     pub bssid: Option<String>,
+
     /// WPA2 Personal Password
     #[arg(long)]
     pub password: Option<String>,
