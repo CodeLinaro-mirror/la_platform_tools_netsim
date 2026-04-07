@@ -19,24 +19,20 @@ fn log_current_time() -> String {
 pub fn init(prefix: &'static str, is_verbose: bool) {
     let _ = LogTracer::init();
 
+    let builder = tracing_subscriber::fmt().event_format(CustomFormatter { prefix });
+
     #[cfg(not(feature = "cuttlefish"))]
     {
         let log_filter = if is_verbose { "debug" } else { "info" };
         let filter =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_filter));
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .event_format(CustomFormatter { prefix })
-            .try_init();
+        let _ = builder.with_env_filter(filter).try_init();
     }
 
     #[cfg(feature = "cuttlefish")]
     {
         let level = if is_verbose { tracing::Level::DEBUG } else { tracing::Level::INFO };
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(level)
-            .event_format(CustomFormatter { prefix })
-            .try_init();
+        let _ = builder.with_max_level(level).try_init();
     }
 }
 
@@ -46,23 +42,19 @@ pub fn init(prefix: &'static str, is_verbose: bool) {
 pub fn init_for_test() {
     let _ = LogTracer::init();
 
+    let builder = tracing_subscriber::fmt()
+        .event_format(CustomFormatter { prefix: "netsim-test" })
+        .with_test_writer();
+
     #[cfg(not(feature = "cuttlefish"))]
     {
         let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .event_format(CustomFormatter { prefix: "netsim-test" })
-            .with_test_writer()
-            .try_init();
+        let _ = builder.with_env_filter(filter).try_init();
     }
 
     #[cfg(feature = "cuttlefish")]
     {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::INFO)
-            .event_format(CustomFormatter { prefix: "netsim-test" })
-            .with_test_writer()
-            .try_init();
+        let _ = builder.with_max_level(tracing::Level::INFO).try_init();
     }
 }
 
