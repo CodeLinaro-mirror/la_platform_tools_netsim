@@ -36,10 +36,8 @@ impl Default for SessionKeys {
 
 #[derive(Clone, Debug)]
 pub struct SharedKeyStore {
-    // Set of all active AP BSSIDs
-    pub bssids: Arc<RwLock<std::collections::HashSet<MacAddress>>>,
-    // Map of Station Address -> Connected BSSID
-    pub station_bssids: Arc<RwLock<HashMap<MacAddress, MacAddress>>>,
+    // Current BSSID of the AP
+    pub bssid: Arc<RwLock<Option<MacAddress>>>,
     // Map of Station Address -> SessionKeys
     pub sessions: Arc<RwLock<HashMap<MacAddress, Arc<SessionKeys>>>>,
     pub gtk: Arc<RwLock<Option<[u8; 16]>>>,
@@ -49,8 +47,7 @@ pub struct SharedKeyStore {
 impl Default for SharedKeyStore {
     fn default() -> Self {
         Self {
-            bssids: Arc::new(RwLock::new(std::collections::HashSet::new())),
-            station_bssids: Arc::new(RwLock::new(HashMap::new())),
+            bssid: Arc::new(RwLock::new(None)),
             sessions: Arc::new(RwLock::new(HashMap::new())),
             gtk: Arc::new(RwLock::new(None)),
             gtk_tx_pn: Arc::new(AtomicU64::new(1)),
@@ -63,20 +60,12 @@ impl SharedKeyStore {
         Self::default()
     }
 
-    pub fn add_bssid(&self, bssid: MacAddress) {
-        self.bssids.write().unwrap().insert(bssid);
+    pub fn set_bssid(&self, bssid: MacAddress) {
+        *self.bssid.write().unwrap() = Some(bssid);
     }
 
-    pub fn has_bssid(&self, bssid: &MacAddress) -> bool {
-        self.bssids.read().unwrap().contains(bssid)
-    }
-
-    pub fn set_station_bssid(&self, sta_addr: MacAddress, bssid: MacAddress) {
-        self.station_bssids.write().unwrap().insert(sta_addr, bssid);
-    }
-
-    pub fn get_station_bssid(&self, sta_addr: &MacAddress) -> Option<MacAddress> {
-        self.station_bssids.read().unwrap().get(sta_addr).copied()
+    pub fn get_bssid(&self) -> Option<MacAddress> {
+        *self.bssid.read().unwrap()
     }
 
     pub fn add_session(&self, sta_addr: MacAddress, tk: Vec<u8>) {

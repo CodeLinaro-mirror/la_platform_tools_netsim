@@ -74,30 +74,17 @@ impl Medium {
             plaintext_bytes,
         };
 
-        let (infra_target, stations, bssid, src_mac) = {
-            // If we have plaintext, use it for routing decisions. Otherwise use the
-            // original frame (likely Mgmt/Open).
-            let routing_frame = tx_state.get_ieee80211();
+        // If we have plaintext, use it for routing decisions. Otherwise use the
+        // original frame (likely Mgmt/Open).
+        let routing_frame = tx_state.get_ieee80211();
 
-            if routing_frame.is_mgmt() {
-                self.wifi_stats.incr_mgmt_frames_rx();
-            }
+        if routing_frame.is_mgmt() {
+            self.wifi_stats.incr_mgmt_frames_rx();
+        }
 
-            let (infra, stas) = self.determine_routes(client_id, routing_frame);
-            (infra, stas, routing_frame.get_bssid(), routing_frame.get_source())
-        };
-
+        let (infra_target, stations) = self.determine_routes(client_id, routing_frame);
         tx_state.infra_target = infra_target;
         tx_state.stations = stations;
-
-        // Remember which AP this station is sending infrastructure frames to
-        if tx_state.infra_target != InfraTarget::None {
-            if let Some(b) = bssid {
-                if !b.is_multicast() {
-                    self.key_store.set_station_bssid(src_mac, b);
-                }
-            }
-        }
 
         Ok(tx_state)
     }
@@ -119,6 +106,8 @@ impl Medium {
     /// Returns `(InfraTarget, stations)`.
     fn determine_routes(&mut self, client_id: u32, ieee80211: &Ieee80211) -> (InfraTarget, bool) {
         let dest_addr = ieee80211.get_destination();
+        let ap_bssid = self.key_store.get_bssid();
+
         let mut infra_target = InfraTarget::None;
         let mut stations = false;
 
@@ -139,9 +128,9 @@ impl Medium {
 
         // --- AP & Slirp ---
 
-        // Check BSSID match for Infrastructure frames against ALL active APs
+        // Check BSSID match for Infrastructure frames
         if let Some(bssid) = ieee80211.get_bssid() {
-            if !bssid.is_multicast() && !self.key_store.has_bssid(&bssid) {
+            if !bssid.is_multicast() && Some(bssid) != ap_bssid {
                 return (infra_target, stations);
             }
         }
@@ -167,9 +156,7 @@ impl Medium {
                         infra_target = InfraTarget::Slirp;
                     } else {
                         // If client disabled, only multicast or own-BSSID traffic?
-                        if dest_addr.is_multicast()
-                            || ieee80211.get_bssid().map_or(false, |b| self.key_store.has_bssid(&b))
-                        {
+                        if dest_addr.is_multicast() || Some(dest_addr) == ap_bssid {
                             infra_target = InfraTarget::Slirp;
                         }
                     };
@@ -178,7 +165,7 @@ impl Medium {
         } else {
             // Management or Control Frames
             let addr1 = ieee80211.get_addr1(); // Destination/RA
-            if addr1.is_multicast() || addr1.is_broadcast() || self.key_store.has_bssid(&addr1) {
+            if addr1.is_multicast() || addr1.is_broadcast() || Some(addr1) == ap_bssid {
                 infra_target = InfraTarget::Ap;
             }
         }

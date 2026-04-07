@@ -9,16 +9,13 @@ pub fn print_list_ap_response(response: &access_point::ListAccessPointsResponse,
         return;
     }
 
-    let mut aps = response.access_points.clone();
-    aps.sort_by_key(|ap| ap.id);
-
     println!(
-        "{:<2} | {:<20} | {:<17} | {:<20} | {:<4} | {:<2} | {:<9} | {:<6} | {:<7}",
-        "ID", "SSID", "BSSID", "Security", "Chan", "CC", "PHY Mode", "Hidden", "Clients"
+        "{:<4} | {:<20} | {:<17} | {:<20} | {:<7} | {:<10} | {:<9} | {:<6} | {:<7}",
+        "ID", "SSID", "BSSID", "Security", "Channel", "Country", "PHY Mode", "Hidden", "Clients"
     );
-    println!("{:-<108}", "-");
+    println!("{:-<121}", "-");
 
-    for ap in &aps {
+    for ap in &response.access_points {
         print_ap(ap);
     }
 }
@@ -41,7 +38,7 @@ pub fn print_ap(ap: &access_point::AccessPoint) {
     let clients = ap.connected_devices.len();
 
     print!(
-        "{:<2} | {:<20} | {:<17} | {:<20} | {:<4} | {:<2} | {:<9} | {:<6} | {:<7}",
+        "{:<4} | {:<20} | {:<17} | {:<20} | {:<7} | {:<10} | {:<9} | {:<6} | {:<7}",
         ap.id, ap.ssid, ap.bssid, security, ap.channel, ap.country_code, phy_mode, hidden, clients
     );
 
