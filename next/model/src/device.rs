@@ -164,17 +164,17 @@ pub mod api {
         fn from(chip: ChipCreateVariant) -> Self {
             match chip {
                 ChipCreateVariant::Beacon(beacon) => {
-                    crate::chip::ChipVariant::Bluetooth(crate::bluetooth::Bluetooth {
+                    crate::chip::ChipVariant::Bluetooth(Box::new(crate::bluetooth::Bluetooth {
                         address: beacon.address.clone(),
                         mode: crate::chip::BluetoothMode::Beacon(Box::new(
                             crate::chip::BeaconParams { ble_beacon: beacon },
                         )),
                         ..Default::default()
-                    })
+                    }))
                 }
-                ChipCreateVariant::Bluetooth(bt) => {
-                    crate::chip::ChipVariant::Bluetooth(crate::bluetooth::Bluetooth::from(bt))
-                }
+                ChipCreateVariant::Bluetooth(bt) => crate::chip::ChipVariant::Bluetooth(Box::new(
+                    crate::bluetooth::Bluetooth::from(bt),
+                )),
                 ChipCreateVariant::Wifi(wifi) => {
                     crate::chip::ChipVariant::Wifi(crate::wifi::Wifi::from(wifi))
                 }

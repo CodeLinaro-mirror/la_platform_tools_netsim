@@ -91,7 +91,6 @@ impl<T: ActorService> ResourceClient<T> {
         response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
-    #[allow(dead_code)]
     pub async fn delete(&self, id: T::Id) -> Result<(), FrameworkError<T::Error>> {
         let (respond_to, response) = oneshot::channel();
         self.sender

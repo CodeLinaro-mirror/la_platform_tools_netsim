@@ -9,7 +9,7 @@ use link_api::Link as ApiLink;
 use netsim_model::{
     AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, BluetoothCreate,
     BluetoothMode, BluetoothUpdate, ChipId, ChipKind as ApiChipKind, ChipUpdate, ChipVariantUpdate,
-    Interval, Radio, RadioUpdate, TxPower,
+    Interval, RadioUpdate, TxPower,
 };
 use netsim_proto::{
     common::ChipKind as ProtoChipKind,
@@ -275,16 +275,6 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
         variant,
         links: None, // TODO
         enabled: None,
-    }
-}
-
-#[allow(dead_code)]
-fn from_proto_radio(r: netsim_proto::model::chip::Radio) -> Radio {
-    Radio {
-        state: r.state,
-        range: r.range,
-        tx_count: r.tx_count as u64,
-        rx_count: r.rx_count as u64,
     }
 }
 

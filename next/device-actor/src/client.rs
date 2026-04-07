@@ -169,7 +169,7 @@ impl DeviceClient {
             .inner
             .perform_action(
                 None, // Global action
-                DeviceAction::AddChipByGuid { params },
+                DeviceAction::AddChipByGuid { params: Box::new(params) },
             )
             .err_into::<ClientError>()
             .await?;

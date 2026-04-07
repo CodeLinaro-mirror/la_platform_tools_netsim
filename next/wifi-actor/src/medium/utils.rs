@@ -33,9 +33,9 @@ pub fn create_encrypted_hwsim_msg(
         true => std::borrow::Cow::Owned(
             ieee80211
                 .into_from_ap()
-                .map_err(|e| WifiError::Internal(Box::from(format!("{e}"))))?
+                .map_err(|e: String| WifiError::Internal(Box::from(e)))?
                 .try_into()
-                .map_err(|e| WifiError::Internal(Box::from(format!("{e}"))))?,
+                .map_err(|e: String| WifiError::Internal(Box::from(e)))?,
         ),
         false => std::borrow::Cow::Borrowed(ieee80211),
     };
@@ -125,6 +125,7 @@ pub fn create_hwsim_msg_from_frame(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn construct_hwsim_msg(
     receiver: &[u8; 6],
     frame: &[u8],

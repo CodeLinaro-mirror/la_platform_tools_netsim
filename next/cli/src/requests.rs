@@ -398,26 +398,23 @@ impl Command {
 
         // Fetch devices to resolve name or get all chips
         let mut resolved_ids = Vec::new();
-        match client.send_grpc(&GrpcRequest::ListDevice)? {
-            GrpcResponse::ListDevice(response) => {
-                for device in response.devices {
-                    // Filter by device name if provided
-                    if let Some(dev_name) = device_name {
-                        if device.name != dev_name {
-                            continue;
-                        }
+        if let GrpcResponse::ListDevice(response) = client.send_grpc(&GrpcRequest::ListDevice)? {
+            for device in response.devices {
+                // Filter by device name if provided
+                if let Some(dev_name) = device_name {
+                    if device.name != dev_name {
+                        continue;
                     }
-
-                    resolved_ids.extend(
-                        device
-                            .chips
-                            .into_iter()
-                            .filter(|chip| chip.kind == chip_kind.into())
-                            .map(|chip| chip.id),
-                    );
                 }
+
+                resolved_ids.extend(
+                    device
+                        .chips
+                        .into_iter()
+                        .filter(|chip| chip.kind == chip_kind.into())
+                        .map(|chip| chip.id),
+                );
             }
-            _ => {}
         }
 
         Ok(resolved_ids)
@@ -431,15 +428,12 @@ impl Command {
         chip_kind: ChipKind,
     ) -> Result<Vec<model::Link>> {
         let mut matched_links = Vec::new();
-        match client.send_grpc(&GrpcRequest::ListLink)? {
-            GrpcResponse::ListLink(response) => {
-                matched_links.extend(response.links.into_iter().filter(|link| {
-                    link.kind == chip_kind.into()
-                        && sender_ids.contains(&link.sender_id)
-                        && receiver_ids.contains(&link.receiver_id)
-                }));
-            }
-            _ => {}
+        if let GrpcResponse::ListLink(response) = client.send_grpc(&GrpcRequest::ListLink)? {
+            matched_links.extend(response.links.into_iter().filter(|link| {
+                link.kind == chip_kind.into()
+                    && sender_ids.contains(&link.sender_id)
+                    && receiver_ids.contains(&link.receiver_id)
+            }));
         }
         Ok(matched_links)
     }

@@ -10,19 +10,14 @@ use zerocopy::{FromBytes, IntoBytes};
 use crate::ApError;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[allow(dead_code)]
 enum EapState {
     Idle,
     IdentityReqSent,
     Authenticated,
-    Failed,
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct EapAuthenticator {
-    bssid: MacAddr,
-    sta_addr: MacAddr,
     state: EapState,
     identifier: u8,
 }
@@ -36,7 +31,9 @@ pub enum EapOutput {
 
 impl EapAuthenticator {
     pub fn new(bssid: MacAddr, sta_addr: MacAddr) -> Self {
-        Self { bssid, sta_addr, state: EapState::Idle, identifier: 0 }
+        let _bssid = bssid;
+        let _sta_addr = sta_addr;
+        Self { state: EapState::Idle, identifier: 0 }
     }
 
     pub fn start(&mut self) -> Result<Vec<EapOutput>, ApError> {
@@ -66,26 +63,21 @@ impl EapAuthenticator {
             Err(_) => return Err(ApError::InvalidFrame),
         };
 
-        if header.code == EAP_CODE_RESPONSE {
-            match self.state {
-                EapState::IdentityReqSent => {
-                    // Expect Type Identity
-                    if !body.is_empty() && body[0] == EAP_TYPE_IDENTITY {
-                        // Accept ANY Identity -> Send Success
-                        self.state = EapState::Authenticated;
-                        self.identifier = self.identifier.wrapping_add(1);
+        if header.code == EAP_CODE_RESPONSE && self.state == EapState::IdentityReqSent {
+            // Expect Type Identity
+            if !body.is_empty() && body[0] == EAP_TYPE_IDENTITY {
+                // Accept ANY Identity -> Send Success
+                self.state = EapState::Authenticated;
+                self.identifier = self.identifier.wrapping_add(1);
 
-                        // Construct EAP-Success
-                        // Header only (Code 3, ID, Len 4)
-                        let success = EapHeader::new(EAP_CODE_SUCCESS, self.identifier, 4);
+                // Construct EAP-Success
+                // Header only (Code 3, ID, Len 4)
+                let success = EapHeader::new(EAP_CODE_SUCCESS, self.identifier, 4);
 
-                        return Ok(vec![
-                            EapOutput::Frame(self.wrap_eap(success.as_bytes().to_vec())),
-                            EapOutput::Success,
-                        ]);
-                    }
-                }
-                _ => {}
+                return Ok(vec![
+                    EapOutput::Frame(self.wrap_eap(success.as_bytes().to_vec())),
+                    EapOutput::Success,
+                ]);
             }
         }
 

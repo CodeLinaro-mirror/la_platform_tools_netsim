@@ -74,7 +74,7 @@ impl ChipClient for BluetoothClient {
 
     async fn reset(&self, id: ChipId) -> Result<netsim_model::Chip, ClientError> {
         match self.0.perform_action(Some(id), BluetoothAction::Reset { id }).await {
-            Ok(BluetoothActionResult::Chip(chip)) => Ok(chip),
+            Ok(BluetoothActionResult::Chip(chip)) => Ok(*chip),
             Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
             Err(e) => Err(ClientError::Send(e.to_string())),
         }

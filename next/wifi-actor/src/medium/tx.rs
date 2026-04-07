@@ -155,8 +155,7 @@ impl Medium {
             if self.enabled(dest.client_id)? {
                 let frame_to_send = if is_m2u_conversion {
                     let mut unicast_frame = ieee80211.clone();
-                    let target_mac =
-                        netsim_packets::MacAddress::new(dest.addr.try_into().unwrap_or([0; 6]));
+                    let target_mac = netsim_packets::MacAddress::new(dest.addr.into());
                     unicast_frame.set_destination(&target_mac);
 
                     // If WPA is active, we must successfully encrypt using the destination's PTK
@@ -235,8 +234,7 @@ impl Medium {
             if src_enabled && dst_enabled {
                 let mut target_frame = ieee80211.clone();
                 if is_m2u_conversion && dest.addr != source_addr {
-                    let target_mac =
-                        netsim_packets::MacAddress::new(dest.addr.try_into().unwrap_or([0; 6]));
+                    let target_mac = netsim_packets::MacAddress::new(dest.addr.into());
                     target_frame.set_destination(&target_mac);
                 }
 

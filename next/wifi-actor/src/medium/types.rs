@@ -32,6 +32,12 @@ pub struct Client {
     pub rx_count: u32,
 }
 
+impl Default for Client {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Client {
     pub fn new() -> Self {
         Self { enabled: true, tx_count: 0, rx_count: 0 }

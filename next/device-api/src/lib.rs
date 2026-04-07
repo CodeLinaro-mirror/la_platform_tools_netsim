@@ -85,7 +85,7 @@ pub enum DeviceAction {
     GetRadioStats,
     NotifyChipRemoved(DeviceId, ChipId),
     AddChip {
-        chip_config: DeviceChipCreate,
+        chip_config: Box<DeviceChipCreate>,
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
     },
@@ -99,7 +99,7 @@ pub enum DeviceAction {
     /// conditions when multiple sources try to initialize the same device
     /// simultaneously.
     AddChipByGuid {
-        params: DeviceAddChip,
+        params: Box<DeviceAddChip>,
     },
     /// Deletes an internal device by ID.
     DeleteDevice(DeviceId),

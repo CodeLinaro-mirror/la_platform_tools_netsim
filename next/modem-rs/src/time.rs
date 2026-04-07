@@ -38,15 +38,17 @@ pub struct MockClock {
     offset_nanos: Arc<AtomicU64>,
 }
 
-impl MockClock {
-    pub fn new() -> Self {
+impl Default for MockClock {
+    fn default() -> Self {
         Self {
             // Start the mock clock at a fixed, known time.
             base: Instant::now(),
             offset_nanos: Arc::new(AtomicU64::new(0)),
         }
     }
+}
 
+impl MockClock {
     pub fn advance(&self, duration: Duration) {
         self.offset_nanos.fetch_add(duration.as_nanos() as u64, Ordering::Relaxed);
     }

@@ -291,8 +291,8 @@ impl WpaAuthenticator {
             return false;
         }
 
-        for i in MIC_OFFSET..MIC_END {
-            frame_copy[i] = 0;
+        for b in frame_copy.iter_mut().take(MIC_END).skip(MIC_OFFSET) {
+            *b = 0;
         }
 
         let calculated = self.calc_mic_for_frame(&frame_copy);

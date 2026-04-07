@@ -62,19 +62,19 @@ pub fn start(
     let mut server = server_builder.channel_args(ch_builder.build_args()).build()?;
 
     let addr = format!("localhost:{port}");
-    let port = server.add_listening_port(&addr, ServerCredentials::insecure()).map_err(|e| {
-        match std::net::TcpListener::bind(&addr) {
-            Ok(listener) => drop(listener),
-            Err(bind_e) => {
-                if bind_e.kind() == std::io::ErrorKind::AddrInUse {
-                    warn!("Rust gRPC Address {addr} is already in use.");
-                } else {
-                    error!("Rust gRPC bind error: {bind_e:?}")
+    let port =
+        server.add_listening_port(&addr, ServerCredentials::insecure()).inspect_err(|_| {
+            match std::net::TcpListener::bind(&addr) {
+                Ok(listener) => drop(listener),
+                Err(bind_e) => {
+                    if bind_e.kind() == std::io::ErrorKind::AddrInUse {
+                        warn!("Rust gRPC Address {addr} is already in use.");
+                    } else {
+                        error!("Rust gRPC bind error: {bind_e:?}")
+                    }
                 }
             }
-        }
-        e
-    })?;
+        })?;
 
     server.start();
     info!("Rust gRPC listening on localhost:{port}");

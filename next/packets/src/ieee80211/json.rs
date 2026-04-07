@@ -42,21 +42,21 @@ pub fn to_json(packet: &Ieee80211, packet_len: usize) -> serde_json::Value {
 /// 802.11.
 #[derive(Debug)]
 pub enum JsonError {
-    SerdeJsonError(serde_json::Error),
+    SerdeJson(serde_json::Error),
     /// Indicates an error during conversion from a JSON representation to a
     /// zerocopy type.
-    HexParseError(String),
-    ConversionError(String),
+    HexParse(String),
+    Conversion(String),
 }
 
 impl fmt::Display for JsonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            JsonError::SerdeJsonError(e) => {
+            JsonError::SerdeJson(e) => {
                 write!(f, "JSON serialization/deserialization error: {}", e)
             }
-            JsonError::HexParseError(s) => write!(f, "Hex parsing error: {}", s),
-            JsonError::ConversionError(s) => write!(f, "Conversion error: {}", s),
+            JsonError::HexParse(s) => write!(f, "Hex parsing error: {}", s),
+            JsonError::Conversion(s) => write!(f, "Conversion error: {}", s),
         }
     }
 }
@@ -65,13 +65,13 @@ impl std::error::Error for JsonError {}
 
 impl From<crate::ethernet::json::JsonError> for JsonError {
     fn from(err: crate::ethernet::json::JsonError) -> Self {
-        JsonError::ConversionError(err.to_string())
+        JsonError::Conversion(err.to_string())
     }
 }
 
 impl From<serde_json::Error> for JsonError {
     fn from(err: serde_json::Error) -> Self {
-        JsonError::SerdeJsonError(err)
+        JsonError::SerdeJson(err)
     }
 }
 
@@ -126,7 +126,7 @@ impl TryFrom<JsonFrameControl> for FrameControl {
 
     fn try_from(json_fc: JsonFrameControl) -> Result<Self, Self::Error> {
         let fc_val = u16::from_str_radix(&json_fc.field_hex, 16)
-            .map_err(|_| JsonError::HexParseError(json_fc.field_hex))?;
+            .map_err(|_| JsonError::HexParse(json_fc.field_hex))?;
         Ok(FrameControl::new(fc_val))
     }
 }
@@ -158,7 +158,7 @@ impl TryFrom<JsonSequenceControl> for SequenceControl {
 
     fn try_from(json_sc: JsonSequenceControl) -> Result<Self, Self::Error> {
         let sc_val = u16::from_str_radix(&json_sc.field_hex, 16)
-            .map_err(|_| JsonError::HexParseError(json_sc.field_hex))?;
+            .map_err(|_| JsonError::HexParse(json_sc.field_hex))?;
         Ok(SequenceControl::new(sc_val))
     }
 }
@@ -226,14 +226,14 @@ impl TryFrom<&JsonMacHeader3Addr> for MacHeader3Addr {
             // `ieee80211_util` logic in reverse? No, that's hard. Let's just parse
             // ra/ta/da/sa and assign them to addr1/2/3 for now, assuming a specific
             // frame type (Beacon/Mgmt) where Addr1=RA=DA, Addr2=TA=SA, Addr3=BSSID.
-            addr1: wlan_fields.ra.parse().map_err(JsonError::ConversionError)?,
-            addr2: wlan_fields.ta.parse().map_err(JsonError::ConversionError)?,
+            addr1: wlan_fields.ra.parse().map_err(JsonError::Conversion)?,
+            addr2: wlan_fields.ta.parse().map_err(JsonError::Conversion)?,
             addr3: wlan_fields
                 .bssid
                 .as_deref()
                 .unwrap_or("00:00:00:00:00:00")
                 .parse()
-                .map_err(JsonError::ConversionError)?,
+                .map_err(JsonError::Conversion)?,
             sequence_control: wlan_fields.sequence_control.clone().try_into()?,
         })
     }

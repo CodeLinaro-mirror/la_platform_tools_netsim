@@ -9,7 +9,7 @@ use modem_rs::{
 
 #[test]
 fn test_event_loop_tick_and_duration() {
-    let clock = Arc::new(MockClock::new());
+    let clock = Arc::new(MockClock::default());
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
 
@@ -22,7 +22,7 @@ fn test_event_loop_tick_and_duration() {
     simulator.tick();
     // Consume initial registration response(s)
     let _ = modem_handler.wait_for_response();
-    while let Some(_) = modem_handler.try_get_response() {}
+    while modem_handler.try_get_response().is_some() {}
 
     // 1. Schedule an event 100ms in the future.
     let event_duration = Duration::from_millis(100);

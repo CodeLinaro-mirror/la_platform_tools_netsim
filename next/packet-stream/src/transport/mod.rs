@@ -155,7 +155,7 @@ impl CrossPlatformListener {
             }
             #[cfg(not(unix))]
             SocketType::Unix(_) => {
-                return Err(PacketStreamError::Socket(SocketError::UnsupportedPlatform(
+                Err(PacketStreamError::Socket(SocketError::UnsupportedPlatform(
                     "Unix sockets not supported on this platform".to_string(),
                 )))
             }

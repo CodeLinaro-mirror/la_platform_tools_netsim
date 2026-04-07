@@ -11,7 +11,7 @@ to provide standard targets for testing, linting, and formatting.
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
-NETSIM_CLIPPY_FLAGS = []
+NETSIM_CLIPPY_FLAGS = ["-Dwarnings"]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.
 def _netsim_rustfmt_test_impl(ctx):

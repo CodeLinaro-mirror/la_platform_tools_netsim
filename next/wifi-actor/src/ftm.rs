@@ -79,12 +79,8 @@ pub fn handle_ftm_request(
     };
 
     // Frame 1: FTM Action (Initial)
-    let mut body1 = Vec::new();
-    body1.push(category::PUBLIC);
-    body1.push(public_action::FINE_TIMING_MEASUREMENT);
-    body1.push(0); // Dialog Token
-    body1.push(0); // Follow Up Dialog Token
-                   // Zero timestamps
+    let mut body1 = vec![category::PUBLIC, public_action::FINE_TIMING_MEASUREMENT, 0, 0];
+    // Zero timestamps
     body1.extend_from_slice(&[0u8; 6]); // TOD
     body1.extend_from_slice(&[0u8; 6]); // TOA
     body1.extend_from_slice(&[0u8; 6]); // TOD Error / etc
@@ -93,12 +89,8 @@ pub fn handle_ftm_request(
     responses.push(build_action(&body1));
 
     // Frame 2: FTM Action (With Timestamps)
-    let mut body2 = Vec::new();
-    body2.push(category::PUBLIC);
-    body2.push(public_action::FINE_TIMING_MEASUREMENT);
-    body2.push(0); // Dialog Token
-    body2.push(0); // Follow Up Dialog Token
-                   // Timestamps (48-bit usually)
+    let mut body2 = vec![category::PUBLIC, public_action::FINE_TIMING_MEASUREMENT, 0, 0];
+    // Timestamps (48-bit usually)
     body2.extend_from_slice(&t1_bytes[0..6]); // TOD
     body2.extend_from_slice(&t4_bytes[0..6]); // TOA (using t4 = RTT for simplicity, implying t1=0)
     body2.extend_from_slice(&[0u8; 6]); // Error

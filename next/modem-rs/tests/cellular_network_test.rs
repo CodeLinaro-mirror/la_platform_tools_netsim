@@ -11,7 +11,7 @@ fn test_add_modem_to_manager() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    then_modem_count_is(&mut world, 1);
+    then_modem_count_is(&world, 1);
 }
 
 // Scenario: Verify Metrics
@@ -27,13 +27,13 @@ fn test_metrics_counters() {
     given_modem(&mut world, "A");
 
     // Check initial state
-    then_metrics_are(&mut world, 0, 0);
+    then_metrics_are(&world, 0, 0);
 
     // Send a command and check again
     when_at_command_sent(&mut world, "A", "AT");
-    then_metrics_are(&mut world, 1, 0);
+    then_metrics_are(&world, 1, 0);
 
     // Initiate a call and check again
     when_at_command_sent(&mut world, "A", "ATD12345;");
-    then_metrics_are(&mut world, 2, 1);
+    then_metrics_are(&world, 2, 1);
 }

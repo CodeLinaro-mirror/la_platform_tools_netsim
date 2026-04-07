@@ -8,10 +8,7 @@
 /// **Note:** This is not a general-purpose DNS response parser. It is
 /// designed to handle specific record types and response formats.
 use std::convert::TryFrom;
-#[allow(unused_imports)]
-use std::str::FromStr;
 use std::{
-    fmt,
     io::{Cursor, Read, Seek, SeekFrom},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     str,
@@ -21,7 +18,6 @@ use std::{
 
 /// Extension trait providing convenient methods for reading primitive
 /// data types used by DNS messages from a `Cursor<&[u8]>`.
-
 trait CursorExt: Read + Seek + Clone {
     fn read_u8(&mut self) -> std::io::Result<u8>;
     fn read_u16(&mut self) -> std::io::Result<u16>;
@@ -95,10 +91,6 @@ impl CursorExt for Cursor<&[u8]> {
 
 #[derive(Debug)]
 struct Message {
-    #[allow(dead_code)]
-    header: Header,
-    #[allow(dead_code)]
-    questions: Vec<Question>,
     answers: Vec<ResourceRecord>,
     // Other types not needed
     // Authority
@@ -124,17 +116,15 @@ impl Message {
             return Err(DnsError::AnswerExpected);
         }
 
-        let mut questions = Vec::with_capacity(header.question_count);
         for _i in 0..header.question_count {
-            let question = Question::split_once(cursor)?;
-            questions.push(question);
+            let _question = Question::split_once(cursor)?;
         }
         let mut answers = Vec::with_capacity(header.answer_count);
         for _i in 0..header.answer_count {
             let answer = ResourceRecord::split_once(cursor)?;
             answers.push(answer);
         }
-        Ok(Message { header, questions, answers })
+        Ok(Message { answers })
     }
 }
 
@@ -315,21 +305,14 @@ impl Header {
 /// '''
 
 #[derive(Debug)]
-struct Question {
-    #[allow(dead_code)]
-    name: String,
-    #[allow(dead_code)]
-    qtype: u16,
-    #[allow(dead_code)]
-    qclass: u16,
-}
+struct Question {}
 
 impl Question {
     fn split_once(cursor: &mut impl CursorExt) -> Result<Question> {
-        let name = Name::to_string(cursor)?;
-        let qtype = cursor.read_u16()?;
-        let qclass = cursor.read_u16()?;
-        Ok(Question { name, qtype, qclass })
+        let _name = Name::to_string(cursor)?;
+        let _qtype = cursor.read_u16()?;
+        let _qclass = cursor.read_u16()?;
+        Ok(Question {})
     }
 }
 
@@ -384,12 +367,7 @@ enum ResourceType {
 #[derive(Debug)]
 struct ResourceRecord {
     name: String,
-    #[allow(dead_code)]
-    resource_type: ResourceType,
-    #[allow(dead_code)]
-    resource_class: ResourceClass,
-    #[allow(dead_code)]
-    ttl: u32,
+
     resource_data: ResourceData,
 }
 
@@ -403,14 +381,14 @@ impl ResourceRecord {
             _ => return Err(DnsError::InvalidResourceType),
         };
         let rclass = cursor.read_u16()?;
-        let resource_class = match rclass {
+        let _resource_class = match rclass {
             x if x == ResourceClass::Internet as u16 => ResourceClass::Internet,
             _ => return Err(DnsError::InvalidResourceClass),
         };
-        let ttl = cursor.read_u32()?;
+        let _ttl = cursor.read_u32()?;
         let _ = cursor.read_u16()?;
         let resource_data = ResourceData::split_once(cursor, &resource_type)?;
-        Ok(ResourceRecord { name, resource_type, resource_class, ttl, resource_data })
+        Ok(ResourceRecord { name, resource_data })
     }
 }
 
@@ -442,47 +420,36 @@ impl ResourceData {
 
 type Result<T> = core::result::Result<T, DnsError>;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum DnsError {
+    #[error("Response expected")]
     ResponseExpected,
+    #[error("Standard query expected")]
     StandardQueryExpected,
+    #[error("Response code expected")]
     ResponseCodeExpected,
+    #[error("Answer expected")]
     AnswerExpected,
+    #[error("Pointer loop detected")]
     PointerLoop,
+    #[error("Invalid length")]
     InvalidLength,
-    Utf8Error(str::Utf8Error),
+    #[error("UTF-8 error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+    #[error("Invalid resource type")]
     InvalidResourceType,
+    #[error("Invalid resource class")]
     InvalidResourceClass,
-    AddrParseError(std::net::AddrParseError),
+    #[error("Address parse error: {0}")]
+    AddrParseError(#[from] std::net::AddrParseError),
+    #[error("Invalid opcode: {0}")]
     InvalidOpcode(u16),
+    #[error("Invalid response code: {0}")]
     InvalidResponseCode(u16),
+    #[error("Reserved bits are non-zero")]
     ReservedBitsAreNonZero,
-    IoError(std::io::Error),
-}
-
-impl std::error::Error for DnsError {}
-
-impl fmt::Display for DnsError {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(fmt, "{self:?}")
-    }
-}
-
-impl From<std::io::Error> for DnsError {
-    fn from(err: std::io::Error) -> Self {
-        DnsError::IoError(err)
-    }
-}
-impl From<str::Utf8Error> for DnsError {
-    fn from(err: str::Utf8Error) -> Self {
-        DnsError::Utf8Error(err)
-    }
-}
-
-impl From<std::net::AddrParseError> for DnsError {
-    fn from(err: std::net::AddrParseError) -> Self {
-        DnsError::AddrParseError(err)
-    }
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 // REGION NAME
@@ -502,7 +469,6 @@ impl From<std::net::AddrParseError> for DnsError {
 ///  | 1  1|                OFFSET                   |
 ///  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 /// '''
-
 enum NamePart {
     Label(String),
     Pointer(u64),
@@ -515,7 +481,6 @@ impl NamePart {
     /// Domain name labels have a maximum length of 63 octets.
     const MAX: u8 = 63;
 
-    #[allow(dead_code)]
     fn split_once(cursor: &mut impl CursorExt) -> Result<NamePart> {
         let size = cursor.read_u8()?;
         if size & PTR_MASK == PTR_MASK {
@@ -539,7 +504,6 @@ impl NamePart {
 }
 
 /// The Fully Qualitifed Domain Name from ANSWER and RR records
-
 struct Name();
 
 impl Name {
@@ -587,6 +551,8 @@ impl Name {
 
 #[cfg(test)]
 mod test_message {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]

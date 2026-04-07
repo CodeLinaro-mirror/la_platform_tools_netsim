@@ -31,15 +31,12 @@ pub struct PdpContext {
     pub gprs_req_qos: Qos,
 }
 
+#[derive(Default)]
 pub struct DataService {
     pdp_contexts: HashMap<u8, PdpContext>,
 }
 
 impl DataService {
-    pub fn new() -> Self {
-        Self { pdp_contexts: HashMap::new() }
-    }
-
     // --- Helper methods for external services ---
 
     pub fn on_update_physical_channel_configs(

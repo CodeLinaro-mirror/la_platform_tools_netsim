@@ -70,7 +70,7 @@ impl StepVisitor {
                     }
                     current_step = trimmed.to_string();
                 } else if !current_step.is_empty() {
-                    current_step.push_str(" ");
+                    current_step.push(' ');
                     current_step.push_str(c.trim());
                 }
             }

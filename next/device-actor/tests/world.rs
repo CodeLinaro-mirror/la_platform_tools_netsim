@@ -1,6 +1,13 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(
+    clippy::too_many_arguments,
+    clippy::needless_update,
+    clippy::field_reassign_with_default,
+    clippy::expect_fun_call
+)]
+
 use std::{
     collections::HashMap,
     sync::{atomic::AtomicU32, Arc},
@@ -324,10 +331,10 @@ impl World {
             if let Some(chip) = chips.get_mut(&id) {
                 // Apply patches (simplified)
                 if let Some(pos) = &patch.pose.position {
-                    chip.pose.position = pos.clone();
+                    chip.pose.position = *pos;
                 }
                 if let Some(orient) = &patch.pose.orientation {
-                    chip.pose.orientation = orient.clone();
+                    chip.pose.orientation = *orient;
                 }
                 if let Some(netsim_model::ChipVariantUpdate::Bluetooth(bt_update)) = patch.variant {
                     if let Some(netsim_model::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
@@ -696,12 +703,14 @@ impl World {
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
                 kind: netsim_model::ChipKind::BLUETOOTH,
-                variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
-                    address: chip_address,
-                    mode: netsim_model::BluetoothMode::Device(Default::default()),
-                    bt_properties: Default::default(),
-                    ..Default::default()
-                })),
+                variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(
+                    netsim_model::Bluetooth {
+                        address: chip_address,
+                        mode: netsim_model::BluetoothMode::Device(Default::default()),
+                        bt_properties: Default::default(),
+                        ..Default::default()
+                    },
+                ))),
                 ..Default::default()
             },
         }

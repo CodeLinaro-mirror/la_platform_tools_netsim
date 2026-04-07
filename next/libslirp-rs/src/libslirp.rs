@@ -128,7 +128,6 @@ struct CallbackContext {
 type PollRequest = (Vec<PollFd>, u32);
 
 /// API to LibSlirp
-
 pub struct LibSlirp {
     tx_cmds: mpsc::Sender<SlirpCmd>,
     slirp_thread_handle: Option<thread::JoinHandle<()>>,
@@ -352,10 +351,8 @@ unsafe fn callback_context_from_raw(opaque: *mut c_void) -> ManuallyDrop<Box<Cal
 struct Slirp {
     slirp: *mut libslirp_sys::Slirp,
     // These fields are held by slirp C library
-    #[allow(dead_code)]
-    configs: Box<SlirpConfigs>,
-    #[allow(dead_code)]
-    callbacks: Box<libslirp_sys::SlirpCb>,
+    _configs: Box<SlirpConfigs>,
+    _callbacks: Box<libslirp_sys::SlirpCb>,
     // Passed to API calls and then to callbacks
     callback_context: Box<CallbackContext>,
 }
@@ -400,7 +397,7 @@ impl Slirp {
             )
         };
 
-        Slirp { slirp, configs, callbacks, callback_context }
+        Slirp { slirp, _configs: configs, _callbacks: callbacks, callback_context }
     }
 
     fn handle_timer(&self, timer: Timer) {
@@ -869,7 +866,7 @@ impl CallbackContext {
         // data. To own its data, copy &'static [u8] to Vec<u8> before
         // converting to Bytes.
         let bytes = Bytes::from(c_slice.to_vec());
-        let _ = self.tx_bytes.send(bytes.clone());
+        self.tx_bytes.send(bytes.clone());
         // When HTTP Proxy is enabled, it tracks DNS packets.
         if let Some(tx_proxy) = &self.tx_proxy_bytes {
             let _ = tx_proxy.send(bytes);

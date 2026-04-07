@@ -33,7 +33,7 @@ impl PacketStreamerService {
 }
 
 fn grpc_error_to_packet_error(e: grpcio::Error) -> PacketStreamError {
-    PacketStreamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+    PacketStreamError::Io(std::io::Error::other(e.to_string()))
 }
 
 async fn handle_grpc_initial_info(
@@ -106,13 +106,12 @@ impl PacketStreamer for PacketStreamerService {
             let is_bt = chip_info
                 .chip
                 .as_ref()
-                .map_or(false, |c| c.kind == netsim_model::ChipKind::BLUETOOTH);
+                .is_some_and(|c| c.kind == netsim_model::ChipKind::BLUETOOTH);
 
-            let grpc_stream = stream.map_err(|err| grpc_error_to_packet_error(err)).and_then(
-                |packet_request| async {
+            let grpc_stream =
+                stream.map_err(grpc_error_to_packet_error).and_then(|packet_request| async {
                     packet_stream_converter::packet_request_to_bytes(packet_request)
-                },
-            );
+                });
             let (packet_stream_tx, packet_stream_rx) = mpsc::channel(100);
             let packet_stream = Box::pin(ReceiverStream::new(packet_stream_rx));
 

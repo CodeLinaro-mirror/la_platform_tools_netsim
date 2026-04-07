@@ -123,13 +123,13 @@ pub struct TestClientContext {
     pub client: ManualWebSocketClient,
     pub packet_stream: Option<PacketStream>,
     pub packet_sink: Option<PacketSink>,
-    pub add_request: DeviceAddChip,
+    pub add_request: Box<DeviceAddChip>,
     pub device_id: DeviceId,
 }
 
 pub struct TestWorld {
     port: u16,
-    add_chip_rx: mpsc::Receiver<(DeviceAddChip, DeviceId)>,
+    add_chip_rx: mpsc::Receiver<(Box<DeviceAddChip>, DeviceId)>,
     delete_chip_rx: mpsc::Receiver<DeviceId>,
     clients: Vec<TestClientContext>,
     last_handshake_error: Option<u16>,

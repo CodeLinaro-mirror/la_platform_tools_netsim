@@ -1,10 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str;
-
 use modem_rs_derive::CommandParser;
-use nom::{bytes::complete::tag, combinator::map_res, IResult};
+use nom::{bytes::complete::tag, IResult};
 
 use crate::types::Parsable;
 
@@ -12,7 +10,7 @@ use crate::types::Parsable;
 pub struct QuotedString<'a>(pub &'a [u8]);
 
 impl<'a> QuotedString<'a> {
-    pub fn to_vec(&self) -> Vec<u8> {
+    pub fn to_vec(self) -> Vec<u8> {
         self.0.to_vec()
     }
 }
@@ -30,27 +28,6 @@ impl<'a> Parsable<'a> for QuotedString<'a> {
             delimited(tag(br#"""#), take_while(|c| c != b'"'), tag(br#"""#))(input)?;
         Ok((input, QuotedString(content)))
     }
-}
-
-#[allow(dead_code)]
-fn parse_u8(input: &[u8]) -> IResult<&[u8], u8> {
-    map_res(map_res(nom::character::complete::digit1, str::from_utf8), |s: &str| s.parse::<u8>())(
-        input,
-    )
-}
-
-#[allow(dead_code)]
-fn parse_u32(input: &[u8]) -> IResult<&[u8], u32> {
-    map_res(map_res(nom::character::complete::digit1, str::from_utf8), |s: &str| s.parse::<u32>())(
-        input,
-    )
-}
-
-#[allow(dead_code)]
-fn parse_u16(input: &[u8]) -> IResult<&[u8], u16> {
-    map_res(map_res(nom::character::complete::digit1, str::from_utf8), |s: &str| s.parse::<u16>())(
-        input,
-    )
 }
 
 pub fn parse_raw_data(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -179,9 +156,9 @@ pub enum Command<'a> {
     /// Query STK ready
     #[command(tag = "AT+CUSATD?")]
     QueryStkReady,
-    /// Send STK envelope command
+    /// Send STK envelope
     #[command(tag = "AT+CUSATE=")]
-    SendStkEnvelopeCommand(QuotedString<'a>),
+    SendStkEnvelope(QuotedString<'a>),
     /// Facility lock
     #[command(tag = "AT+CLCK=")]
     SetFacilityLock(QuotedString<'a>, u8, QuotedString<'a>),

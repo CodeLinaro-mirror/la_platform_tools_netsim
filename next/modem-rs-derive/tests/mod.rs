@@ -382,7 +382,7 @@ fn test_parse_cusatd_query() {
 fn test_parse_cusate() {
     let (rem, cmd) = Command::parse(b"AT+CUSATE=\"123\"").unwrap();
     assert!(rem.is_empty());
-    assert_eq!(cmd, Command::SendStkEnvelopeCommand(QuotedString(b"123")));
+    assert_eq!(cmd, Command::SendStkEnvelope(QuotedString(b"123")));
 }
 
 #[test]

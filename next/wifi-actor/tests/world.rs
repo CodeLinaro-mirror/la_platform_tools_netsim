@@ -22,7 +22,6 @@ use zerocopy::IntoBytes;
 
 use crate::hwsim_helper::wrap_ethernet_in_hwsim;
 
-#[allow(dead_code)]
 pub struct ChipChannels {
     pub id: u32,
     pub mac: [u8; 6],
@@ -30,7 +29,6 @@ pub struct ChipChannels {
     pub sink_tx: mpsc::Sender<Bytes>,     // Input to Actor (Sink)
 }
 
-#[allow(dead_code)]
 pub struct World {
     pub wifi_client: wifi_actor::WifiClient,
     pub ap_client: ApClient,
@@ -42,7 +40,6 @@ pub struct World {
     pub mock_clock: std::sync::Arc<wifi_actor::MockClock>,
 }
 
-#[allow(dead_code)]
 impl World {
     pub async fn new() -> Self {
         Self::new_internal(None).await
@@ -460,7 +457,7 @@ impl World {
                     if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
                          if eth.len() >= expected_bytes.len() && eth.windows(expected_bytes.len()).any(|w| w == expected_bytes) {
                             // Check Destination MAC
-                            if eth.len() >= 6 && &eth[0..6] == expected_dst {
+                            if eth.len() >= 6 && eth[0..6] == expected_dst {
                                 info!("Chip {} received expected payload AND mac matches!", chip.id);
                                 return;
                             } else {
@@ -565,7 +562,7 @@ impl World {
 
     pub async fn given_chip_is_disabled(&mut self, chip_idx: usize) {
         let chip = &self.chips[chip_idx];
-        let id_val = chip.id as u32;
+        let id_val = chip.id;
         use netsim_model::{ChipId, ChipUpdate, ChipVariantUpdate};
         let patch = ChipUpdate {
             variant: Some(ChipVariantUpdate::Wifi(Default::default())),
