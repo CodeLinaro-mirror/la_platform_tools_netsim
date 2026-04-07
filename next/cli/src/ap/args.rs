@@ -39,6 +39,9 @@ pub struct ApCreate {
     /// WPA2 Personal Password
     #[arg(long)]
     pub password: Option<String>,
+    /// Wi-Fi Protocol / Hardware Mode ("a", "b", "g", "n", "ac", "ax")
+    #[arg(long)]
+    pub protocol: Option<String>,
 }
 
 #[derive(Debug, Args, PartialEq)]

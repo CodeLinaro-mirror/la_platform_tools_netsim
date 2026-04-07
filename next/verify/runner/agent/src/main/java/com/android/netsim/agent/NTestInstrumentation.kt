@@ -231,6 +231,7 @@ class NTestInstrumentation : Instrumentation() {
     val context = getContext()
 
     WifiStepsLoader.loadSteps(r, context)
+    ConnectivityStepsLoader.loadSteps(r, context)
     NetworkStepsLoader.loadSteps(r, context)
     LifecycleStepsLoader.loadSteps(r, context)
     ServiceDiscoveryLoader.loadSteps(r, context)

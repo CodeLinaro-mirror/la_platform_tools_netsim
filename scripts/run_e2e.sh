@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright 2026 The Android Open Source Project
 # A robust wrapper for testing the netsimd E2E runner.
 # This script manages the lifecycle of netsimd and android emulators, ensuring
 # proper daemon cleanup via bash traps and robust wifi network state verification
@@ -12,7 +13,8 @@ WORKSPACE_DIR="$( cd "$DIR/.." && pwd )"
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-${ANDROID_SDK_HOME:-$HOME/Android/Sdk}}}"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 
-NUM_EMULATORS=3
+# Default number of emulators. Can be overridden with -n 3 for UWB tests.
+NUM_EMULATORS=2
 TEST_FILTER=""
 DRY_RUN=false
 VERBOSE=false
