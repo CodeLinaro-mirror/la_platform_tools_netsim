@@ -534,9 +534,7 @@ async fn test_beacon_stats_persistence() {
                     address: "00:00:00:00:00:02".to_string(),
                     bt_properties: Default::default(),
                     mode: netsim_model::chip::BluetoothMode::Scanner(
-                        netsim_model::chip::ScannerParams {
-                            // No specific params for now
-                        },
+                        netsim_model::chip::ScannerParams { active: false },
                     ),
                 },
             ),

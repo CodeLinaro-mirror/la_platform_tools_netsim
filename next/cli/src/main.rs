@@ -14,7 +14,9 @@
 
 //! Command Line Interface for Netsim
 
+mod ap;
 mod args;
+mod ble;
 mod browser;
 mod display;
 mod error;
@@ -30,8 +32,11 @@ use clap::Parser;
 use common::util::{ini_file::get_server_address, netsim_logger, os_utils::get_instance};
 use file_handler::FileHandler;
 use grpcio::{ChannelBuilder, EnvBuilder};
-use log::error;
-use netsim_proto::{frontend, frontend_grpc::FrontendServiceClient};
+use netsim_proto::{
+    access_point_grpc::AccessPointServiceClient, ble_service_grpc::BleServiceClient, frontend,
+    frontend_grpc::FrontendServiceClient,
+};
+use tracing::error;
 
 use crate::{
     error::{Error, Result},
@@ -217,8 +222,25 @@ fn main() {
     };
     let channel =
         ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build())).connect(&server);
-    let client = FrontendServiceClient::new(channel);
-    if let Err(e) = perform_command(&mut args.command, client, args.verbose) {
+    let frontend_client = FrontendServiceClient::new(channel.clone());
+    let access_point_client = AccessPointServiceClient::new(channel.clone());
+    let ble_client = BleServiceClient::new(channel);
+
+    if let args::Command::Ap(ap_cmd) = &args.command {
+        if let Err(e) = crate::ap::client::execute(ap_cmd, &access_point_client, args.verbose) {
+            error!("{e}");
+        }
+        return;
+    }
+
+    if let args::Command::Ble(ble_cmd) = &args.command {
+        if let Err(e) = crate::ble::client::execute(ble_cmd, &ble_client, args.verbose) {
+            error!("{e}");
+        }
+        return;
+    }
+
+    if let Err(e) = perform_command(&mut args.command, frontend_client, args.verbose) {
         error!("{e}");
     }
 }

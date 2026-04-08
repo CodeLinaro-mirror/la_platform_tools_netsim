@@ -89,15 +89,12 @@ async fn test_ap_config_args() {
 
     let mut world = World::new_with_args(args).await;
 
-    let devices = world.when_list_devices().await;
-    let ap_device =
-        devices.iter().find(|d| d.name == "CustomAP").expect("Default AP device not found");
-    let ap_chip = ap_device.chips.first().expect("AP device has no chips");
+    let aps = world.when_list_access_points().await;
+    let ap = aps.iter().find(|a| a.ssid == "CustomAP").expect("Default AP not found");
 
-    // We don't verify specific device properties (like position) as they might
-    // change. However, finding the device confirms that netsimd started and
-    // created the AP.
-    println!("Found CustomAP with {} chips", ap_device.chips.len());
+    assert_eq!(ap.ssid, "CustomAP");
+    // Verify other properties if needed
+    println!("Found CustomAP with ID {}", ap.id);
 }
 
 // Scenario: Start daemon with --pcap

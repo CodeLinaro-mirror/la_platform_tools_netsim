@@ -1,16 +1,10 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use netsim_model::{
-    chip::{
-        Ap, Chip, ChipCreate, ChipId, ChipKind, ChipKindParams, ChipUpdate, ChipVariant,
-        ChipVariantUpdate,
-    },
-    device::DeviceId,
-};
+use tracing::{error, info, warn};
 
 use crate::{
-    ap_actor::{ApActor, ApReq, ApResponse, ApState, WIFI_STREAM_ID},
+    ap_actor::{ApActor, ApId, ApReq, ApResponse, ApState, WIFI_STREAM_ID},
     error::ApError,
 };
 
@@ -18,14 +12,14 @@ use crate::{
 const TU_INTERVAL_US: u128 = 1024;
 
 impl ActorService for ApActor {
-    type Id = ChipId;
-    type Create = ChipCreate;
-    type Update = ChipUpdate;
+    type Id = ApId;
+    type Create = crate::ap_actor::ApConfig;
+    type Update = crate::ap_actor::ApActorUpdate;
     type Action = ApReq;
     type ActionResult = ApResponse;
 
     type Error = ApError;
-    type Entity = Chip;
+    type Entity = ApState;
     type TypedStream = ();
 
     async fn handle_create(
@@ -34,23 +28,30 @@ impl ActorService for ApActor {
         params: Self::Create,
         _: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id_val = id.ok_or_else(|| ApError::Internal("missing chip id".into()))?.0;
-        if self.aps.contains_key(&id_val) {
-            return Err(ApError::ApAlreadyExists(id_val));
-        }
-
-        let config = if let ChipKindParams::Ap(ap_create) = params.config.chip_kind_params {
-            crate::ap_actor::ApConfig::try_from(ap_create)
-                .map_err(|e| ApError::Internal(Box::from(e)))?
-        } else {
-            return Err(ApError::Internal("Invalid ChipKindParams for AP".into()));
+        let id_val = match id {
+            Some(i) => {
+                if i.0 >= self.next_ap_id {
+                    self.next_ap_id = i.0 + 1;
+                }
+                i
+            }
+            None => {
+                let i = self.next_ap_id;
+                self.next_ap_id += 1;
+                ApId(i)
+            }
         };
 
-        self.shared_keys.set_bssid(config.bssid);
-        self.aps.insert(id_val, ApState::new(config));
+        if self.aps.contains_key(&id_val) {
+            return Err(ApError::ApAlreadyExists(id_val.0));
+        }
 
-        log::info!("Created AP with ID: {}", id_val);
-        Ok(ChipId(id_val))
+        let state = ApState::new(id_val, params);
+        self.shared_keys.set_bssid(state.config.bssid);
+        self.aps.insert(id_val, state);
+
+        info!("Created AP with ID: {}", id_val);
+        Ok(id_val)
     }
 
     async fn handle_get(
@@ -58,11 +59,7 @@ impl ActorService for ApActor {
         id: Self::Id,
         _: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        if let Some(state) = self.aps.get(&id.0) {
-            Ok(Some(ap_state_to_chip(id.0, state)))
-        } else {
-            Ok(None)
-        }
+        Ok(self.aps.get(&id).cloned())
     }
 
     async fn handle_update(
@@ -71,13 +68,13 @@ impl ActorService for ApActor {
         patch: Self::Update,
         _: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        let ap_state = self.aps.get_mut(&id.0).ok_or(ApError::ApNotFound(id.0))?;
+        let ap_state = self.aps.get_mut(&id).ok_or(ApError::ApNotFound(id.0))?;
 
         if let Some(pos) = patch.position {
             ap_state.config.position = pos;
         }
 
-        if let Some(ChipVariantUpdate::Ap(ap_u)) = patch.variant {
+        if let Some(ap_u) = patch.ap_update {
             if let Some(ssid) = ap_u.ssid {
                 ap_state.config.ssid = ssid;
             }
@@ -89,13 +86,13 @@ impl ActorService for ApActor {
                 let mac = match mac_str.parse::<netsim_packets::ethernet::MacAddr>() {
                     Ok(m) => m,
                     Err(_) => {
-                        log::warn!("Invalid MAC address in force_disconnect: {}", mac_str);
+                        warn!("Invalid MAC address in force_disconnect: {}", mac_str);
                         continue;
                     }
                 };
 
                 if !ap_state.associations.remove(&mac) {
-                    log::warn!("Requested force disconnect for unknown MAC: {}", mac);
+                    warn!("Requested force disconnect for unknown MAC: {}", mac);
                     continue;
                 }
 
@@ -112,7 +109,7 @@ impl ActorService for ApActor {
                     // IBSS or ESS)
                     let frame = self.manager.build_deauth_frame(ap_state, mac, 3);
                     if let Err(e) = sink.send(bytes::Bytes::from(frame)) {
-                        log::error!("Failed to send Deauth frame: {}", e);
+                        error!("Failed to send Deauth frame: {}", e);
                     }
                 }
             }
@@ -122,7 +119,7 @@ impl ActorService for ApActor {
             ap_state.enabled = enabled;
         }
 
-        Ok(ap_state_to_chip(id.0, ap_state))
+        Ok(ap_state.clone())
     }
 
     async fn handle_delete(
@@ -130,10 +127,10 @@ impl ActorService for ApActor {
         id: Self::Id,
         _: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        if self.aps.remove(&id.0).is_some() {
-            log::info!("Deleted AP with ID: {}", id.0);
+        if self.aps.remove(&id).is_some() {
+            info!("Deleted AP with ID: {}", id);
         } else {
-            log::warn!("Attempted to delete non-existent AP with ID: {}", id.0);
+            warn!("Attempted to delete non-existent AP with ID: {}", id);
         }
         Ok(())
     }
@@ -142,12 +139,12 @@ impl ActorService for ApActor {
         &mut self,
         _: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(self.aps.iter().map(|(id, state)| ap_state_to_chip(*id, state)).collect())
+        Ok(self.aps.values().cloned().collect())
     }
 
     async fn handle_action(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         action: Self::Action,
         ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
@@ -156,16 +153,13 @@ impl ActorService for ApActor {
                 if self.sink.is_some() {
                     panic!("ApActor: Register called more than once!");
                 }
-                log::info!(
-                    "Registering AP singleton stream/sink with interval: {:?}",
-                    beacon_interval
-                );
+                info!("Registering AP singleton stream/sink with interval: {:?}", beacon_interval);
                 self.sink = Some(sink);
                 // Preserve BSSID if the new store doesn't have one (Contextual Strangler fix)
                 if let Some(current_bssid) = self.shared_keys.get_bssid() {
                     if shared_keys.get_bssid().is_none() {
                         shared_keys.set_bssid(current_bssid);
-                        log::info!("ApActor: Preserved BSSID {:?} in shared_keys", current_bssid);
+                        info!("ApActor: Preserved BSSID {:?} in shared_keys", current_bssid);
                     }
                 }
                 self.shared_keys = shared_keys;
@@ -173,31 +167,38 @@ impl ActorService for ApActor {
                 let tus = (beacon_interval.as_micros() / TU_INTERVAL_US) as u16;
                 self.beacon_interval = Some(tus);
 
-                let stream_id = ChipId(WIFI_STREAM_ID);
+                let stream_id = ApId(WIFI_STREAM_ID);
                 ctx.add_stream(stream_id, stream);
 
                 ctx.set_interval(beacon_interval);
                 Ok(ApResponse::Ok)
             }
-        }
-    }
-}
+            ApReq::Disconnect { mac } => {
+                let id = id.expect("ApActor: Disconnect requires an ID");
+                let ap_state = self.aps.get_mut(&id).ok_or(ApError::ApNotFound(id.0))?;
 
-fn ap_state_to_chip(id: u32, state: &ApState) -> Chip {
-    Chip {
-        id,
-        kind: ChipKind::AP,
-        name: Some(state.config.ssid.clone()),
-        manufacturer: Some("Netsim".into()),
-        product_name: Some("AccessPoint".into()),
-        position: state.config.position.clone(),
-        orientation: Default::default(),
-        device_id: DeviceId(0),
-        variant: Some(ChipVariant::Ap(Ap {
-            config: state.config.clone().into(),
-            associations: state.associations.iter().map(ToString::to_string).collect(),
-        })),
-        links: Vec::new(),
-        enabled: true,
+                if ap_state.associations.remove(&mac) {
+                    info!("ApActor: Force disconnecting MAC {} from AP {}", mac, id);
+
+                    // Clear sessions if any
+                    if let Some(wpa) = &mut ap_state.wpa {
+                        wpa.remove_session(&mac);
+                    }
+                    ap_state.sae_sessions.remove(&mac);
+                    ap_state.eap_sessions.remove(&mac);
+
+                    // Send Deauth Frame
+                    if let Some(sink) = &self.sink {
+                        let frame = self.manager.build_deauth_frame(ap_state, mac, 3);
+                        if let Err(e) = sink.send(bytes::Bytes::from(frame)) {
+                            error!("Failed to send Deauth frame: {}", e);
+                        }
+                    }
+                } else {
+                    warn!("ApActor: Requested disconnect for unknown MAC {} on AP {}", mac, id);
+                }
+                Ok(ApResponse::Ok)
+            }
+        }
     }
 }

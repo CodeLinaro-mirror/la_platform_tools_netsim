@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
+use tracing::{debug, error};
 
 use crate::capture_actor::CaptureActor;
 
@@ -38,14 +39,14 @@ impl ActorLifecycle for CaptureActor {
             if let Err(err) = writer.write_packet(timestamp, direction, &bytes).await {
                 if !entity.has_warned_on_write {
                     entity.has_warned_on_write = true;
-                    log::error!("Packet capture write failed for chip {chip_id}: {err}. Further errors for this chip will be suppressed.");
+                    error!("Packet capture write failed for chip {chip_id}: {err}. Further errors for this chip will be suppressed.");
                 }
             }
         }
     }
 
     async fn on_typed_stream_closed(&mut self, id: usize, _ctx: &mut DynContext<Self>) {
-        log::debug!("Typed stream closed for capture: {}", id);
+        debug!("Typed stream closed for capture: {}", id);
     }
 
     async fn on_shutdown(&mut self) {

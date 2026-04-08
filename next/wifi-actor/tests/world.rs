@@ -18,6 +18,7 @@ use netsim_packets::{
 use slirp_actor::SlirpActor;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::{error, info, warn};
 use wifi_actor::WifiActor;
 use zerocopy::IntoBytes;
 
@@ -54,13 +55,13 @@ impl World {
     }
 
     async fn new_internal(gateway: Option<Box<dyn wifi_actor::gateway::GatewayTrait>>) -> Self {
-        let _ = env_logger::builder().is_test(true).try_init();
+        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
         // Setup dependencies
-        let slirp_actor_impl = SlirpActor::new(Default::default());
+        let slirp_actor_impl = SlirpActor::new(Default::default(), None, None).await;
         let (slirp_runner, slirp_client) = slirp_actor::new();
         tokio::spawn(slirp_runner.run(slirp_actor_impl));
 
-        let shared_keys = Arc::new(ap_actor::shared::SharedKeyStore::new());
+        let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
         let ap_actor_impl = ApActor::new(shared_keys.clone());
 
         let (ap_runner, ap_client_base) = ResourceActor::new(32);
@@ -185,7 +186,7 @@ impl World {
             position: Position::default(),
         };
         let id = 1001; // WifiActor test AP ID
-        self.ap_client.create_ap(id, ap_config).await.expect("Failed to create AP");
+        self.ap_client.create_ap(Some(id), ap_config).await.expect("Failed to create AP");
         // Give it a moment to initialize
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         id
@@ -425,17 +426,17 @@ impl World {
         loop {
             tokio::select! {
                 Some(bytes) = chip.stream_rx.recv() => {
-                    log::info!("Chip {} received {} bytes", chip.id, bytes.len());
+                    info!("Chip {} received {} bytes", chip.id, bytes.len());
                     if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
                         // Check if the received payload matches the expected payload.
                          if eth.len() >= expected_bytes.len() && eth.windows(expected_bytes.len()).any(|w| w == expected_bytes) {
-                            log::info!("Chip {} received expected payload!", chip.id);
+                            info!("Chip {} received expected payload!", chip.id);
                             return;
                         } else {
-                            log::warn!("Chip {} received payload mismatch", chip.id);
+                            warn!("Chip {} received payload mismatch", chip.id);
                         }
                     } else {
-                         log::error!("Chip {} received non-ethernet or invalid packet", chip.id);
+                         error!("Chip {} received non-ethernet or invalid packet", chip.id);
                     }
                 }
                 _ = &mut timeout => {
@@ -459,21 +460,21 @@ impl World {
         loop {
             tokio::select! {
                 Some(bytes) = chip.stream_rx.recv() => {
-                    log::info!("Chip {} received {} bytes", chip.id, bytes.len());
+                    info!("Chip {} received {} bytes", chip.id, bytes.len());
                     if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
                          if eth.len() >= expected_bytes.len() && eth.windows(expected_bytes.len()).any(|w| w == expected_bytes) {
                             // Check Destination MAC
                             if eth.len() >= 6 && &eth[0..6] == expected_dst {
-                                log::info!("Chip {} received expected payload AND mac matches!", chip.id);
+                                info!("Chip {} received expected payload AND mac matches!", chip.id);
                                 return;
                             } else {
-                                log::warn!("Chip {} received payload match but MAC mismatch. Got {:?}, expected {:?}", chip.id, &eth[0..6], expected_dst);
+                                warn!("Chip {} received payload match but MAC mismatch. Got {:?}, expected {:?}", chip.id, &eth[0..6], expected_dst);
                             }
                         } else {
-                            log::warn!("Chip {} received payload mismatch", chip.id);
+                            warn!("Chip {} received payload mismatch", chip.id);
                         }
                     } else {
-                         log::error!("Chip {} received non-ethernet or invalid packet", chip.id);
+                         error!("Chip {} received non-ethernet or invalid packet", chip.id);
                     }
                 }
                 _ = &mut timeout => {
@@ -591,7 +592,7 @@ impl World {
                      if packet.len() >= 6 {
                          let msg_type = u16::from_le_bytes([packet[4], packet[5]]);
                          if msg_type == 16 {
-                             log::info!("Ignored Netlink Control Packet (Type 16, len={})", packet.len());
+                             info!("Ignored Netlink Control Packet (Type 16, len={})", packet.len());
                              continue;
                          }
                      }
@@ -702,7 +703,7 @@ impl wifi_actor::gateway::GatewayTrait for MockGateway {
         _chip_id: netsim_model::chip::ChipId,
         _packet: bytes::Bytes,
         _medium: &mut wifi_actor::medium::Medium,
-        _shared_keys: &ap_actor::shared::SharedKeyStore,
+        _shared_keys: &ap_actor::SharedKeyStore,
         _out_queue: &mut Vec<(u32, bytes::Bytes)>,
     ) {
     }

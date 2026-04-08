@@ -22,7 +22,7 @@ use std::{
 };
 
 use common::util::os_utils::get_discovery_directory;
-use log::warn;
+use tracing::{debug, warn};
 
 // --- INI File Management ---
 
@@ -73,10 +73,10 @@ impl Drop for IniFileGuard {
     fn drop(&mut self) {
         // Remove the INI file and lock file as part of cleanup.
         if let Err(err) = fs::remove_file(&self.path) {
-            log::warn!("Failed to remove {}: {err}", self.path.display());
+            warn!("Failed to remove {}: {err}", self.path.display());
         }
         if let Err(err) = fs::remove_file(&self.lock_path) {
-            log::warn!("Failed to remove {}: {err}", self.lock_path.display());
+            warn!("Failed to remove {}: {err}", self.lock_path.display());
         }
     }
 }
@@ -146,22 +146,22 @@ impl IniFile {
     /// containing '=', quotes, or escape sequences. Comments start with '#'
     /// or ';'.
     fn read_shared(&self) -> io::Result<HashMap<String, String>> {
-        log::debug!("read_shared called for {}", self.path.display());
+        debug!("read_shared called for {}", self.path.display());
         let mut data = HashMap::new();
         let content = fs::read_to_string(&self.path)?;
-        log::debug!("Content: {:#?}", content);
+        debug!("Content: {:#?}", content);
         for (line_num, line) in content.lines().enumerate() {
             let trimmed = line.trim();
-            log::debug!("Line {}: '{}'", line_num + 1, trimmed);
+            debug!("Line {}: '{}'", line_num + 1, trimmed);
             if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
-                log::debug!("  Skipping comment/empty");
+                debug!("  Skipping comment/empty");
                 continue;
             }
             if let Some((key, value)) = trimmed.split_once('=') {
                 let key = key.trim();
                 let value = value.trim();
                 if key.is_empty() {
-                    log::debug!("  Error: Empty key");
+                    debug!("  Error: Empty key");
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!(
@@ -171,17 +171,17 @@ impl IniFile {
                         ),
                     ));
                 }
-                log::debug!("  Parsed: {} = {}", key, value);
+                debug!("  Parsed: {} = {}", key, value);
                 data.insert(key.to_string(), value.to_string());
             } else {
-                log::debug!("  Error: Missing =");
+                debug!("  Error: Missing =");
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("Malformed line {} in INI file: Missing '=' '{}'", line_num + 1, line),
                 ));
             }
         }
-        log::debug!("read_shared success: {:?}", data);
+        debug!("read_shared success: {:?}", data);
         Ok(data)
     }
 

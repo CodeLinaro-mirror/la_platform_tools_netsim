@@ -18,8 +18,10 @@ enum Commands {
         android_home: Option<String>,
         #[arg(long, help = "Path to the ntest-agent APK")]
         apk_path: Option<String>,
-        #[arg(long, help = "Path to netsim binary")]
+        #[arg(long, help = "Path to netsimd binary")]
         netsim_path: Option<String>,
+        #[arg(long, help = "Path to netsim CLI binary")]
+        netsim_cli_path: Option<String>,
         #[arg(long, help = "Arguments to pass to netsim")]
         netsim_args: Option<String>,
         #[arg(long, help = "Gateway IP to connect to (defaults to 10.0.2.2)")]
@@ -44,7 +46,7 @@ mod types;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
     let cli = Cli::parse();
 
     match cli.command {
@@ -52,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
             android_home,
             apk_path,
             netsim_path,
+            netsim_cli_path,
             netsim_args,
             gateway_ip,
             filter,
@@ -61,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
             orchestrator::run_android(
                 android_home,
                 netsim_path,
+                netsim_cli_path,
                 netsim_args,
                 apk_path,
                 gateway_ip,

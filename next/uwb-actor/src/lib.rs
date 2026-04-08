@@ -1,16 +1,16 @@
 // Copyright 2026 The Android Open Source Project
 
-pub mod actions;
-pub mod client;
-pub mod error;
-pub mod lifecycle;
+mod actions;
+mod client;
+mod error;
+mod lifecycle;
 mod ranging;
 mod ranging_estimator;
-pub mod service;
-pub mod uwb_actor;
+mod service;
+mod uwb_actor;
 
 pub use actions::{UwbAction, UwbActionResult};
-pub use actor_framework::ResourceActor;
+use actor_framework::ResourceActor;
 pub use client::UwbClient;
 pub use error::UwbError;
 pub use uwb_actor::UwbActor;

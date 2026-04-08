@@ -3,11 +3,11 @@
 use std::collections::HashSet;
 
 use bytes::Bytes;
-use log::debug;
 use netsim_packets::{
     ieee80211::{FrameDirection, Ieee80211},
     netlink::{hwsim_frame::HwsimFrame, HwsimMsg},
 };
+use tracing::debug;
 
 use crate::{
     error::WifiError,
@@ -226,14 +226,18 @@ impl Medium {
         let is_m2u_conversion = targets.len() > 1 || dest_addr.is_multicast();
 
         for dest in targets {
-            if dest.addr == source.addr {
+            // Drop unicast packets destined to the sender itself (invalid for hwsim)
+            // But ALLOW multicast packets to reach the sender (AP Reflection) if enabled
+            if dest.addr == source.addr
+                && (!dest_addr.is_multicast() || !self.simulate_ap_reflection)
+            {
                 continue;
             }
             let src_enabled = self.enabled(source.client_id)?;
             let dst_enabled = self.enabled(dest.client_id)?;
             if src_enabled && dst_enabled {
                 let mut target_frame = ieee80211.clone();
-                if is_m2u_conversion {
+                if is_m2u_conversion && dest.addr != source_addr {
                     let target_mac = netsim_packets::ieee80211::MacAddress::new(
                         dest.addr.try_into().unwrap_or([0; 6]),
                     );

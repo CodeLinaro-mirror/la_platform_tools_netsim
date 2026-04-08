@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
-use ap_actor::{shared::SharedKeyStore, ApClient};
-use log::debug;
+use ap_actor::{ApClient, SharedKeyStore};
 use netsim_model::{
     chip::{Chip, ChipId},
     stats::NetsimRadioStats,
@@ -11,6 +10,9 @@ use netsim_packets::ieee80211::Ieee80211;
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
+#[cfg(not(target_os = "linux"))]
+use tracing::warn;
+use tracing::{debug, trace};
 
 #[cfg(target_os = "linux")]
 use crate::tap_gateway::TapGateway;
@@ -37,7 +39,6 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiStats>),
-    Error(String),
 }
 
 pub type SlirpPendingRequest = (
@@ -80,7 +81,7 @@ impl WifiActor {
             #[cfg(not(target_os = "linux"))]
             {
                 let _ = if_name;
-                log::warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
+                warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
                 Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
             }
         } else {
@@ -152,7 +153,7 @@ impl WifiActor {
 
     // this is the input router
     pub(crate) async fn process_guest_packet(&mut self, chip_id: u32, packet: bytes::Bytes) {
-        debug!("WifiActor: Packet from Guest (Chip {}) len {}", chip_id, packet.len());
+        trace!("WifiActor: Packet from Guest (Chip {}) len {}", chip_id, packet.len());
 
         match self.medium.resolve_tx_packet(chip_id, &packet) {
             Ok(tx_state) => {
@@ -237,7 +238,7 @@ impl WifiActor {
     }
 
     pub(crate) fn process_ap_packet(&mut self, packet: bytes::Bytes) {
-        debug!("AP_PKT: len {}", packet.len());
+        trace!("AP_PKT: len {}", packet.len());
         self.medium.wifi_stats.incr_hostapd_frames_rx();
         if !packet.is_empty() {
             let res = self.medium.transmit_from_infra(&packet, &mut self.out_queue);

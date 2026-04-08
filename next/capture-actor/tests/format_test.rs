@@ -32,9 +32,9 @@ async fn test_wifi_capture() {
     let world = World::new().await;
     let chip_id = 5;
 
-    // Test both WIFI and AP to ensure service routes them correctly
-    for kind in [ChipKind::WIFI, ChipKind::AP] {
-        // Given: an enabled Wi-Fi or AP capture
+    // Test WIFI to ensure service routes it correctly
+    for kind in [ChipKind::WIFI] {
+        // Given: an enabled Wi-Fi capture
         world
             .when_create_capture(chip_id, kind, &format!("test_{:?}_device", kind), true)
             .await
