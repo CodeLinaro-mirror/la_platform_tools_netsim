@@ -1248,6 +1248,26 @@ impl World {
         }
     }
 
+    /// BDD Step: Then a specific device should exist in the list
+    pub async fn then_device_exists(&self, id: DeviceId) {
+        let response = self.client.list().await.unwrap();
+        assert!(
+            response.devices.iter().any(|d| d.id == id.0),
+            "Device {} should exist in the list",
+            id.0
+        );
+    }
+
+    /// BDD Step: Then a specific device should NOT exist in the list
+    pub async fn then_device_does_not_exist(&self, id: DeviceId) {
+        let response = self.client.list().await.unwrap();
+        assert!(
+            !response.devices.iter().any(|d| d.id == id.0),
+            "Device {} should NOT exist in the list",
+            id.0
+        );
+    }
+
     /// BDD Step: Then a specific device should be reset
     pub async fn then_device_properties_are_reset(&self, id: DeviceId) {
         let device = self
