@@ -114,6 +114,11 @@ impl FrontendClient {
     }
 
     async fn handle_list_device(client: DeviceClient) -> Result<ListDeviceResponse, RpcStatus> {
+        // Trigger stats collection to update internal cache
+        if let Err(e) = client.get_radio_stats().await {
+            tracing::warn!("Failed to get radio stats: {}", e);
+        }
+
         let response = client.list().await.map_err(|e| {
             RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,
