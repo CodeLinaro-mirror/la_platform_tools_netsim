@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use netsim_model::{chip::ChipClient, stats::NetsimRadioStats};
 
 use crate::world::World;
@@ -14,13 +17,10 @@ async fn test_read_statistics() {
     let stats = world.client.read_statistics().await.expect("Failed to read statistics");
 
     // Then: stats contain the chip with zero counts
-    let expected_stats = [NetsimRadioStats {
-        name: format!("uwb_chip_{}", chip_id),
-        id: chip_id,
-        kind: netsim_model::stats::RadioKind::Uwb,
-        tx_bytes: 0,
-        rx_bytes: 0,
-        ..Default::default()
-    }];
+    let mut expected_stat = NetsimRadioStats::default();
+    expected_stat.name = format!("uwb_chip_{}", chip_id);
+    expected_stat.id = chip_id;
+    expected_stat.kind = netsim_model::stats::RadioKind::Uwb;
+    let expected_stats = [expected_stat];
     assert_eq!(&*stats, &expected_stats[..]);
 }

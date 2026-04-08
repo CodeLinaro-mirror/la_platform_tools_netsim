@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use bytes::{BufMut, Bytes, BytesMut};
 use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use netsim_proto::{

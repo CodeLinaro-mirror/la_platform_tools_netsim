@@ -1,4 +1,5 @@
 // Copyright (C) 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Device Client
 //!
@@ -122,6 +123,7 @@ impl DeviceClient {
             _other => Err(ClientError::Recv("Unexpected action result".to_string())),
         }
     }
+
     /// Fetches the latest radio statistics from all associated chip clients.
     pub async fn get_radio_stats(
         &self,
@@ -136,7 +138,21 @@ impl DeviceClient {
             })
     }
 
-    /// Deletes a device.
+    /// Deletes a device (restricted to internal devices).
+    pub async fn delete_device(&self, id: DeviceId) -> Result<(), ClientError> {
+        debug!("Sending DeleteDevice request for device {}", id);
+        match self
+            .inner
+            .perform_action(None, DeviceAction::DeleteDevice(id))
+            .err_into::<ClientError>()
+            .await?
+        {
+            DeviceActionResult::Success => Ok(()),
+            _other => Err(ClientError::Recv("Unexpected action result".to_string())),
+        }
+    }
+
+    /// Deletes a device (unrestricted, for cleanup).
     pub async fn delete(&self, id: DeviceId) -> Result<(), ClientError> {
         debug!("Sending delete request for device {}", id);
         self.inner.delete(id).err_into::<ClientError>().await

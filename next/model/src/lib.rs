@@ -1,4 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! A shared, dependency-free crate that defines the shared data structures
 //! and command enums for the netsim control plane.

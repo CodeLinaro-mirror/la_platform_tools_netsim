@@ -1,4 +1,5 @@
 # Copyright 2023-2025 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
 #
 # Common Bazel commands for this package:
 #
@@ -45,6 +46,7 @@ DAEMON_DEPS = [
     "//next/packet-stream",
     "//next/slirp-actor",
     "//next/uwb-actor",
+    "//next/websocket-server",
     "//next/wifi-actor",
     "@clap",
     "@futures",

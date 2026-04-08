@@ -1,4 +1,5 @@
 // Copyright (C) 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the error types for the device service.
 

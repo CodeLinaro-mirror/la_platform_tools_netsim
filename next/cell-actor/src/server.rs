@@ -1,4 +1,5 @@
 // Copyright 2024-2025 The Android Open Source Project // touch
+// SPDX-License-Identifier: Apache-2.0
 
 use std::{collections::HashMap, sync::Arc};
 

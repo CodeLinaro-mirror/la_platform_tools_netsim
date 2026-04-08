@@ -1,4 +1,5 @@
 // Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::ResourceClient;
 use async_trait::async_trait;
@@ -59,12 +60,17 @@ impl ChipClient for UwbClient {
         self.0.shutdown().err_into::<ClientError>().await
     }
 
-    async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
-        self.0
+    async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
+        match self
+            .0
             .perform_action(Some(id), crate::UwbAction::Reset { id })
             .err_into::<ClientError>()
             .await
-            .map(|_| ())
+        {
+            Ok(crate::UwbActionResult::Chip(chip)) => Ok(chip),
+            Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
+            Err(e) => Err(e),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {

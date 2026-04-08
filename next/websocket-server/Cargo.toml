@@ -1,0 +1,29 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "websocket-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+bytes = "1.4"
+device-actor = { path = "../device-actor" }
+device-api = { path = "../device-api" }
+futures = "0.3.30"
+http = "0.2"
+httparse = "1.9"
+netsim-model = { path = "../model" }
+ring = "0.17.2"
+socket2 = "0.5"
+thiserror = "1.0"
+tokio = { version = "1.32.0", features = ["full"] }
+tokio-stream = "0.1"
+tracing = "0.1"
+tungstenite = { version = ">=0.19.0", default-features = false }
+
+[dev-dependencies]
+actor-framework = { path = "../actor-framework", features = ["testing"] }
+mockall = "0.13"

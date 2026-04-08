@@ -1,4 +1,5 @@
-// Copyright 2026 Google LLC
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Implementation of [RangingEstimator] for use with [pica].
 
@@ -37,8 +38,8 @@ impl RangingEstimator for UwbRangingEstimator {
             return None;
         }
 
-        let a_pose = Pose::from((&a_state.chip.position, &a_state.chip.orientation));
-        let b_pose = Pose::from((&b_state.chip.position, &b_state.chip.orientation));
+        let a_pose = Pose::from(&a_state.chip.pose);
+        let b_pose = Pose::from(&b_state.chip.pose);
 
         match compute_range_azimuth_elevation(&a_pose, &b_pose) {
             Ok((range, azimuth, elevation)) => {

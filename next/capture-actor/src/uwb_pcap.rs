@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{io, path::Path};
 
 use crate::writer::{CaptureWriter, PcapWriter, DLT_FIRA_UCI};

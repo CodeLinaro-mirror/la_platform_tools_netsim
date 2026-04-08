@@ -1,4 +1,5 @@
 // Copyright 2024-2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use modem_rs::ModemError;
 use netsim_model::chip_error::ChipError;

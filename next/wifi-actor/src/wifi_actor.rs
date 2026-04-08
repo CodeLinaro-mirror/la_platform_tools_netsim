@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
@@ -39,6 +42,7 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiStats>),
+    Chip(netsim_model::chip::Chip),
 }
 
 pub type SlirpPendingRequest = (
@@ -52,6 +56,7 @@ pub struct WifiActor {
     pub(crate) ap_client: Option<Arc<ApClient>>,
     pub(crate) medium: Medium,
     pub(crate) active_chips: HashMap<ChipId, Chip>,
+    pub(crate) initial_chips: HashMap<ChipId, Chip>,
     pub(crate) senders: HashMap<ChipId, UnboundedSender<bytes::Bytes>>,
     pub(crate) shared_keys: Arc<SharedKeyStore>,
     // Output buffer for Medium to avoid allocations
@@ -61,6 +66,7 @@ pub struct WifiActor {
     pub(crate) to_ap: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
     // Gateway for Infra packets (Tap or Slirp)
     pub(crate) gateway: Box<dyn GatewayTrait>,
+    pub(crate) forward_host_mdns: bool,
 }
 
 impl WifiActor {
@@ -71,6 +77,7 @@ impl WifiActor {
         wifi_tap: Option<String>,
         shared_keys: Arc<SharedKeyStore>,
         clock: Arc<dyn crate::stats::Clock>,
+        forward_host_mdns: bool,
     ) -> Self {
         // Fixup pending channels if we just created a SlirpGateway
         let gateway = if let Some(if_name) = wifi_tap {
@@ -88,7 +95,14 @@ impl WifiActor {
             // Default to SlirpGateway
             Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
         };
-        Self::new_with_gateway(ap_client, gateway, device_client, shared_keys, clock)
+        Self::new_with_gateway(
+            ap_client,
+            gateway,
+            device_client,
+            shared_keys,
+            clock,
+            forward_host_mdns,
+        )
     }
 
     pub fn new_with_gateway(
@@ -97,6 +111,7 @@ impl WifiActor {
         device_client: device_actor::DeviceClient,
         shared_keys: Arc<SharedKeyStore>,
         clock: Arc<dyn crate::stats::Clock>,
+        forward_host_mdns: bool,
     ) -> Self {
         let medium = Medium::new(
             shared_keys.clone(),
@@ -108,12 +123,14 @@ impl WifiActor {
             ap_client,
             medium,
             active_chips: HashMap::new(),
+            initial_chips: HashMap::new(),
             senders: HashMap::new(),
             shared_keys,
             out_queue: Vec::new(),
             device_client,
             to_ap: None,
             gateway,
+            forward_host_mdns,
         }
     }
 
@@ -198,8 +215,8 @@ impl WifiActor {
                                     ) {
                                         if let Some(responses) = crate::ftm::handle_ftm_request(
                                             &frame,
-                                            &initiator.position,
-                                            &responder.position,
+                                            &initiator.pose.position,
+                                            &responder.pose.position,
                                         ) {
                                             debug!(
                                                 "Simulated FTM Response from {} to {}",

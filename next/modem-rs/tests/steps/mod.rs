@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! BDD Step Definitions for Modem-rs Tests.
 //!
 //! This module contains free functions that implement the Given/When/Then steps

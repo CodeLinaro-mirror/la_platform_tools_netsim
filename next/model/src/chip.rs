@@ -1,4 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Chip model and management.
 //!
@@ -15,7 +16,7 @@ use tokio::sync::oneshot;
 use crate::{
     chip_error::ChipError,
     client_error::ClientError,
-    device::{DeviceId, Orientation, Position},
+    device::{api::PoseUpdate, DeviceId, Pose},
     stats::NetsimRadioStats,
 };
 
@@ -123,6 +124,8 @@ pub enum ChipRequest {
     Reset {
         /// The ID of the chip to reset.
         id: ChipId,
+        /// The channel to send the updated chip state back on.
+        respond_to: Responder<Chip>,
     },
     /// Get radio statistics for all chips.
     GetStatistics {
@@ -154,11 +157,16 @@ pub struct ChipCreate {
     pub config: ChipConfig,
     /// The ID of the device this chip belongs to.
     pub device_id: DeviceId,
+    /// The initial pose of the chip.
+    pub pose: Pose,
 }
 
 impl fmt::Debug for ChipCreate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ChipCreate").field("config", &self.config).finish_non_exhaustive()
+        f.debug_struct("ChipCreate")
+            .field("config", &self.config)
+            .field("pose", &self.pose)
+            .finish_non_exhaustive()
     }
 }
 
@@ -266,11 +274,10 @@ impl fmt::Display for ChipId {
 pub struct Chip {
     pub id: u32,
     pub kind: ChipKind,
-    pub name: Option<String>,
-    pub manufacturer: Option<String>,
-    pub product_name: Option<String>,
-    pub position: Position,
-    pub orientation: Orientation,
+    pub name: String,
+    pub manufacturer: String,
+    pub product_name: String,
+    pub pose: Pose,
     pub device_id: DeviceId,
     pub variant: Option<ChipVariant>,
     pub links: Vec<(ChipId, i8)>,
@@ -354,11 +361,42 @@ pub struct ChipUpdate {
     pub name: Option<String>,
     pub manufacturer: Option<String>,
     pub product_name: Option<String>,
-    pub position: Option<Position>,
-    pub orientation: Option<Orientation>,
+    pub pose: PoseUpdate,
     pub variant: Option<ChipVariantUpdate>,
     pub links: Option<Vec<(ChipId, i8)>>,
     pub enabled: Option<bool>,
+}
+
+impl ChipUpdate {
+    /// Replaces the fields on `Chip` with the fields on `ChipUpdate` if they
+    /// are `Some`.
+    pub fn apply(&self, chip: &mut Chip) {
+        let ChipUpdate { id, name, manufacturer, product_name, pose, variant, links, enabled } =
+            self;
+
+        if let Some(id) = id {
+            chip.id = (*id).into();
+        }
+        if let Some(name) = name {
+            chip.name = name.clone();
+        }
+        if let Some(manufacturer) = manufacturer {
+            chip.manufacturer = manufacturer.clone();
+        }
+        if let Some(product_name) = product_name {
+            chip.product_name = product_name.clone();
+        }
+        pose.apply(&mut chip.pose);
+        if let Some(enabled) = enabled {
+            chip.enabled = *enabled;
+        }
+        if let Some(links) = links {
+            chip.links = links.clone();
+        }
+        if let (Some(update_variant), Some(chip_variant)) = (variant, &mut chip.variant) {
+            update_variant.apply(chip_variant);
+        }
+    }
 }
 
 /// Generic radio chip update (Bluetooth, Wi-Fi, UWB).
@@ -389,6 +427,23 @@ impl ChipVariantUpdate {
             ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
             ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
             ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
+        }
+    }
+
+    pub fn apply(&self, variant: &mut ChipVariant) {
+        match (self, variant) {
+            (ChipVariantUpdate::Bluetooth(update), ChipVariant::Bluetooth(bt)) => {
+                update.apply(bt);
+            }
+            (ChipVariantUpdate::Wifi(update), ChipVariant::Wifi(wifi)) => {
+                update.apply(wifi);
+            }
+            (ChipVariantUpdate::Uwb(update), ChipVariant::Uwb(uwb)) => {
+                update.apply(uwb);
+            }
+            (u, v) => {
+                tracing::warn!("ChipVariantUpdate mismatch with ChipVariant: {:?} vs {:?}", u, v);
+            }
         }
     }
 }
@@ -488,12 +543,13 @@ impl ChipClient for RadioChipClient {
         Ok(())
     }
 
-    async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
+    async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
+        let (tx, rx) = oneshot::channel();
         self.sender
-            .send(ChipRequest::Reset { id })
+            .send(ChipRequest::Reset { id, respond_to: tx })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
-        Ok(())
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {
@@ -518,7 +574,7 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn read_count_for_testing(&self) -> Result<usize, ClientError>;
     async fn shutdown(&self) -> Result<(), ClientError>;
     /// Resets the state of the specified chip.
-    async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
+    async fn reset(&self, id: ChipId) -> Result<Chip, ClientError>;
     fn clone_box(&self) -> Box<dyn ChipClient>;
     async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
         Ok(None)

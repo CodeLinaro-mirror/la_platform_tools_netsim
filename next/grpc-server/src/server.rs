@@ -1,6 +1,7 @@
-// Copyright 2025 Google LLC
+// Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use device_actor::DeviceClient;
 use grpcio::{
@@ -17,6 +18,11 @@ use crate::{
     packet_streamer::PacketStreamerService,
 };
 
+// Share a single gRPC Environment across all server instances within the same
+// process (namely during parallel test execution) to prevent Abseil lock
+// contention.
+static SHARED_ENV: OnceLock<Arc<Environment>> = OnceLock::new();
+
 pub fn start(
     port: u32,
     device_client: DeviceClient,
@@ -25,7 +31,7 @@ pub fn start(
     packet_streamer_service: PacketStreamerService,
     version: String,
 ) -> Result<(Server, u16), grpcio::Error> {
-    let env = Arc::new(Environment::new(1));
+    let env = SHARED_ENV.get_or_init(|| Arc::new(Environment::new(1))).clone();
     let backend_service = create_packet_streamer(packet_streamer_service);
     let frontend_service = create_frontend_service(FrontendClient::new(
         device_client.clone(),

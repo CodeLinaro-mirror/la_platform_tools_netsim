@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! Netsim Common Types
 //!
 //! This crate contains common, low-level data structures used across Netsim

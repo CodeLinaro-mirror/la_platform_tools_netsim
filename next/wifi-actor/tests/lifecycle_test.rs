@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use device_api::DeviceAction;
 use netsim_model::chip::{ChipClient, ChipId};
 use wifi_actor::WifiClient;
@@ -117,15 +120,14 @@ async fn test_update_chip_state() {
         name: None,
         manufacturer: None,
         product_name: None,
-        position: None,
-        orientation: None,
+        pose: Default::default(),
         variant: Some(netsim_model::chip::ChipVariantUpdate::Wifi(
             netsim_model::chip::WifiUpdate {
                 radio: netsim_model::chip::RadioUpdate { state: Some(false) },
             },
         )),
         links: None,
-        enabled: None,
+        enabled: Some(false),
     };
     world.wifi_client.update(ChipId(chip_id), update.clone()).await.expect("Failed to update chip");
 
@@ -143,6 +145,7 @@ async fn test_update_chip_state() {
         Some(netsim_model::chip::ChipVariantUpdate::Wifi(netsim_model::chip::WifiUpdate {
             radio: netsim_model::chip::RadioUpdate { state: Some(true) },
         }));
+    update.enabled = Some(true);
     world.wifi_client.update(ChipId(chip_id), update).await.expect("Failed to update chip");
 
     // Then

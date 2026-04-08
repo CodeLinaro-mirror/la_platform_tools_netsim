@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! gRPC frontend client library for netsim.
 use futures_util::StreamExt;
 use netsim_proto::{frontend, frontend_grpc::FrontendServiceClient};
@@ -33,6 +36,7 @@ pub enum GrpcRequest {
     ListCapture,
     CreateDevice(frontend::CreateDeviceRequest),
     DeleteChip(frontend::DeleteChipRequest),
+    DeleteDevice(frontend::DeleteDeviceRequest),
     PatchDevice(frontend::PatchDeviceRequest),
     PatchCapture(frontend::PatchCaptureRequest),
     GetCapture(frontend::GetCaptureRequest),
@@ -51,6 +55,7 @@ pub enum GrpcResponse {
     ListCapture(frontend::ListCaptureResponse),
     CreateDevice(frontend::CreateDeviceResponse),
     DeleteChip,
+    DeleteDevice,
     PatchDevice,
     PatchCapture,
     ListLink(frontend::ListLinkResponse),
@@ -104,6 +109,10 @@ impl GrpcMethodExecutor for FrontendServiceClient {
             GrpcRequest::DeleteChip(req) => {
                 self.delete_chip(req)?;
                 Ok(GrpcResponse::DeleteChip)
+            }
+            GrpcRequest::DeleteDevice(req) => {
+                self.delete_device(req)?;
+                Ok(GrpcResponse::DeleteDevice)
             }
             GrpcRequest::PatchDevice(req) => {
                 self.patch_device(req)?;

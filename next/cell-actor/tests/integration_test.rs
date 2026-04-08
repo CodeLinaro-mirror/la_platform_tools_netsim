@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 // next/cell-actor/tests/integration_test.rs
 use std::{
     io::{Error as IoError, ErrorKind},
@@ -72,6 +75,7 @@ fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> Chi
             chip_kind_params: ChipKindParams::Cell(CellCreate::default()),
         },
         device_id: DeviceId(1),
+        pose: Default::default(),
     }
 }
 

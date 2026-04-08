@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! gRPC frontend client library for netsim.
 use crate::error::Result;
 use futures_util::StreamExt;

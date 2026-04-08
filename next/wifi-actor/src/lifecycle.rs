@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
@@ -11,6 +12,9 @@ pub const SLIRP_ID: ChipId = ChipId(u32::MAX - 1);
 
 /// Stream ID for AP downlink messages in the typed_stream map
 const AP_SUBSCRIPTION_ID: usize = 0;
+
+/// Stream ID for mDNS packets from host
+const MDNS_SUBSCRIPTION_ID: usize = 1;
 
 impl ActorLifecycle for WifiActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
@@ -38,6 +42,16 @@ impl ActorLifecycle for WifiActor {
                 error!("Failed to register with AP client: {}", e);
             }
             self.to_ap = Some(ap_uplink_tx);
+        }
+        if self.forward_host_mdns {
+            let (mdns_tx, mdns_rx) = create_channel_stream();
+            ctx.add_typed_stream(MDNS_SUBSCRIPTION_ID, mdns_rx);
+
+            tokio::spawn(async move {
+                if let Err(e) = crate::mdns_forwarder::run_mdns_forwarder(mdns_tx).await {
+                    tracing::error!("mDNS Forwarder failed: {}", e);
+                }
+            });
         }
 
         // Initialize Gateway
@@ -90,7 +104,7 @@ impl ActorLifecycle for WifiActor {
         packet: bytes::Bytes,
         _ctx: &mut DynContext<Self>,
     ) {
-        if id == AP_SUBSCRIPTION_ID {
+        if id == AP_SUBSCRIPTION_ID || id == MDNS_SUBSCRIPTION_ID {
             self.process_ap_packet(packet);
         }
     }

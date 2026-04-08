@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Bluetooth Client
 //!
@@ -76,12 +77,12 @@ impl ChipClient for BluetoothClient {
         self.0.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
-        self.0
-            .perform_action(Some(id), BluetoothAction::Reset { id })
-            .await
-            .map(|_| ())
-            .map_err(|e| ClientError::Send(e.to_string()))
+    async fn reset(&self, id: ChipId) -> Result<netsim_model::chip::Chip, ClientError> {
+        match self.0.perform_action(Some(id), BluetoothAction::Reset { id }).await {
+            Ok(BluetoothActionResult::Chip(chip)) => Ok(chip),
+            Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
+            Err(e) => Err(ClientError::Send(e.to_string())),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {

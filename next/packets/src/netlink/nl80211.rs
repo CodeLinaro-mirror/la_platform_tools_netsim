@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Defines structures for parsing `nl80211` Netlink packets, specifically for
 //! the `mac80211_hwsim` driver.

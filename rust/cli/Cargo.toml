@@ -1,6 +1,9 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
 [package]
 name = "netsim-cli"
-version = "0.3.100"
+version = "0.3.101"
 edition = "2021"
 
 [lib]

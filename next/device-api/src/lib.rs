@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Netsim Device API
 //!
 //! This crate defines the public API for the Netsim device service.
@@ -69,7 +72,7 @@
 use std::fmt;
 
 // Re-export key data models from netsim-model for convenience.
-pub use netsim_model::device::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse};
+pub use netsim_model::device::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate};
 pub use netsim_model::device::{
     api, Device, DeviceAddChip, DeviceConfig, DeviceId, Orientation, Position,
 };
@@ -103,6 +106,8 @@ pub enum DeviceAction {
     AddChipByGuid {
         params: DeviceAddChip,
     },
+    /// Deletes an internal device by ID.
+    DeleteDevice(DeviceId),
     /// Triggers a persistence of the current statistics to disk.
     /// This is primarily used internally by the actor for periodic saves
     /// and lifecycle events, but can be invoked externally if needed.
@@ -127,6 +132,9 @@ impl fmt::Debug for DeviceAction {
                 f.debug_struct("AddChipByGuid").field("params", params).finish()
             }
             DeviceAction::SaveStats => write!(f, "SaveStats"),
+            DeviceAction::DeleteDevice(device_id) => {
+                f.debug_tuple("DeleteDevice").field(device_id).finish()
+            }
         }
     }
 }

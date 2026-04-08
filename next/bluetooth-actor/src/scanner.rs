@@ -1,4 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! This module provides the functionality for creating and managing Bluetooth
 //! scanner chips.
@@ -13,7 +14,7 @@
 //!   standard Bluetooth LL packets for capture.
 
 use netsim_model::{
-    chip::{Chip, ChipId, ScannerParams},
+    chip::{ChipId, ScannerParams},
     chip_error::ChipError,
 };
 use rootcanal::Rootcanal;
@@ -33,7 +34,7 @@ pub(crate) fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &ScannerParams,
-) -> Result<Chip, ChipError> {
+) -> Result<(), ChipError> {
     debug!("[{chip_id}] Setting up scanner chip");
     // Enable scanning on the new controller.
     debug!("[{chip_id}] Enabling scanning");
@@ -116,5 +117,5 @@ pub(crate) fn create(
         0x00,       // Filter Duplicates: False
     ];
     rootcanal.receive_hci(chip_id.into(), scan_enable.into()).to_chip_error()?;
-    Ok(Chip::default())
+    Ok(())
 }

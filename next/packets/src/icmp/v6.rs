@@ -1,4 +1,5 @@
 // Copyright 2024 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Defines structures for ICMPv6 (Internet Control Message Protocol for IPv6)
 //! headers using `zerocopy`.

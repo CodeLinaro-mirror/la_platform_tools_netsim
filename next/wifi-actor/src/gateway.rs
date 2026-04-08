@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use actor_framework::DynContext;
 use ap_actor::SharedKeyStore;
 use netsim_model::ChipId;
