@@ -204,9 +204,27 @@ impl GatewayTrait for TapGateway {
             packet.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN),
         );
 
+        let dest_mac_bytes: [u8; 6] = packet[0..6].try_into().unwrap_or([0; 6]);
+        let dest_mac = netsim_packets::MacAddress::new(dest_mac_bytes);
+
+        if dest_mac.is_broadcast() || dest_mac.is_multicast() {
+            let bssids = shared_keys.bssids.read().unwrap().clone();
+            for bssid in bssids {
+                let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+                if let Some(bytes) = convert_8023_to_80211(packet.clone(), Some(bssid), seq) {
+                    let _ = medium.transmit_from_infra(&bytes, out_queue);
+                }
+            }
+            return;
+        }
+
+        let Some(bssid) = shared_keys.get_station_bssid(&dest_mac) else {
+            tracing::warn!("Dropping unicast packet to unknown station {}", dest_mac);
+            return;
+        };
+
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-        let Some(bytes) = convert_8023_to_80211(packet.clone(), shared_keys.get_bssid(), seq)
-        else {
+        let Some(bytes) = convert_8023_to_80211(packet.clone(), Some(bssid), seq) else {
             medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(Box::from(
                 "Failed to convert TAP packet to 802.11",
             )));
