@@ -67,9 +67,30 @@ async fn main() -> anyhow::Result<()> {
             dry_run,
             verbose,
         } => {
+            let resolved_android_home = match android_home
+                .or_else(|| std::env::var("ANDROID_HOME").ok())
+            {
+                Some(path) => path,
+                None => {
+                    anyhow::bail!(
+                        "ANDROID_HOME environment variable is not set. Please set it to your Android SDK path or pass it via --android-home."
+                    );
+                }
+            };
+            let p = std::path::Path::new(&resolved_android_home);
+            if !p.is_dir() {
+                anyhow::bail!("ANDROID_HOME path is not a directory: {}", resolved_android_home);
+            }
+            if !p.join("platform-tools").join("adb").exists() && !p.join("adb").exists() {
+                anyhow::bail!(
+                    "ANDROID_HOME does not point to a valid Android SDK (missing adb). Path: {}",
+                    resolved_android_home
+                );
+            }
+
             // Orchestrate Android integration tests
             orchestrator::run_android(
-                android_home,
+                Some(resolved_android_home),
                 netsim_path,
                 netsim_cli_path,
                 netsim_args,
