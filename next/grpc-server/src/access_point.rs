@@ -1,9 +1,11 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(not(feature = "cuttlefish"))]
+
 use ap_actor::{ApClient, ApConfig};
 use grpcio::{RpcContext, UnarySink};
-use netsim_model::ap::WifiMode;
+use netsim_model::WifiMode;
 use netsim_proto::{
     access_point::{
         AccessPoint, CreateAccessPointRequest, DeleteAccessPointRequest, ExecuteAccessPointRequest,
@@ -56,7 +58,7 @@ fn proto_to_ap_config(proto: AccessPoint) -> Result<ApConfig, grpcio::RpcStatus>
         config.ssid = proto.ssid;
     }
     if !proto.bssid.is_empty() {
-        if let Ok(bssid) = proto.bssid.parse::<netsim_packets::ethernet::MacAddr>() {
+        if let Ok(bssid) = proto.bssid.parse::<netsim_packets::MacAddr>() {
             if bssid.bytes == [0; 6] {
                 return Err(grpcio::RpcStatus::with_message(
                     grpcio::RpcStatusCode::INVALID_ARGUMENT,
@@ -93,7 +95,7 @@ fn proto_to_ap_config(proto: AccessPoint) -> Result<ApConfig, grpcio::RpcStatus>
     // mac_acl_mode: 0=Disable, 1=Deny, 2=Allow
     config.mac_acl_mode = proto.mac_acl_mode as u8;
     for mac_str in &proto.mac_acl_list {
-        if let Ok(mac) = mac_str.parse::<netsim_packets::ethernet::MacAddr>() {
+        if let Ok(mac) = mac_str.parse::<netsim_packets::MacAddr>() {
             config.mac_acl_list.push(mac);
         } else {
             return Err(grpcio::RpcStatus::with_message(
@@ -289,12 +291,10 @@ impl AccessPointService for AccessPointServiceImpl {
                 Some(
                     netsim_proto::access_point::execute_access_point_request::Action::Disconnect(d),
                 ) => client.disconnect(req.id, d.mac_address).await,
-                Some(_) => Err(netsim_model::client_error::ClientError::Send(
-                    "Unknown action specified".to_string(),
-                )),
-                None => Err(netsim_model::client_error::ClientError::Send(
-                    "No action specified".to_string(),
-                )),
+                Some(_) => {
+                    Err(netsim_model::ClientError::Send("Unknown action specified".to_string()))
+                }
+                None => Err(netsim_model::ClientError::Send("No action specified".to_string())),
             };
 
             match result {

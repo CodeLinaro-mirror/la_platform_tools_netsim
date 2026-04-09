@@ -1,12 +1,11 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::device::Position;
-use netsim_packets::ieee80211::{
-    action::{category, public_action},
-    Ieee80211, MacAddress,
+use netsim_model::Position;
+use netsim_packets::{
+    category, public_action, FrameControl, Ieee80211, MacAddress, MacHeader3Addr, SequenceControl,
 };
-use wifi_actor::ftm::handle_ftm_request;
+use wifi_actor::handle_ftm_request;
 use zerocopy::IntoBytes;
 
 #[test]
@@ -24,19 +23,16 @@ fn test_handle_ftm_request() {
     let da = MacAddress::from([0x02, 0x00, 0x00, 0x00, 0x00, 0x02]);
     let bssid = MacAddress::from([0x02, 0x00, 0x00, 0x00, 0x00, 0x02]);
 
-    let mut body = Vec::new();
-    body.push(category::PUBLIC);
-    body.push(public_action::FTM_REQUEST);
-    body.push(1); // Trigger = 1
+    let body = vec![category::PUBLIC, public_action::FTM_REQUEST, 1];
 
-    let fc = netsim_packets::ieee80211::FrameControl::new(0x00D0);
-    let header = netsim_packets::ieee80211::MacHeader3Addr {
+    let fc = FrameControl::new(0x00D0);
+    let header = MacHeader3Addr {
         frame_control: fc,
         duration_id: zerocopy::U16::new(0),
         addr1: da,
         addr2: sa,
         addr3: bssid,
-        sequence_control: netsim_packets::ieee80211::SequenceControl::new(0),
+        sequence_control: SequenceControl::new(0),
     };
 
     let mut frame_bytes = Vec::new();

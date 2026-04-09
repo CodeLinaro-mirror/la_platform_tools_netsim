@@ -1,0 +1,19 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+rust_library_host {
+    name: "libnetsim_next_device_api",
+    crate_name: "device_api",
+    stem: "libdevice_api",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libnetsim_next_model",
+        "libserde",
+    ],
+}

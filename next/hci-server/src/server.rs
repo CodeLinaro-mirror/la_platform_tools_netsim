@@ -5,7 +5,7 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use device_actor::DeviceClient;
 use futures::StreamExt;
-use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipKindParams, DeviceParams};
+use netsim_model::{BluetoothCreate, BluetoothMode, DeviceParams};
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
@@ -97,22 +97,29 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
     let name = format!("socket-{addr}");
     let chip_create_params = BluetoothCreate {
         address: String::new(), // Address will be automatically derived or configured
-        bt_properties: netsim_model::bluetooth::Controller::default(),
+        bt_properties: netsim_model::Controller::default(),
         mode: BluetoothMode::Device(DeviceParams {}),
     };
 
-    let chip_config = netsim_model::chip::ChipConfig {
+    let chip = netsim_model::Chip {
         name: name.clone(),
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
-        chip_kind_params: ChipKindParams::Bluetooth(chip_create_params),
+        kind: netsim_model::ChipKind::BLUETOOTH,
+        variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+            address: chip_create_params.address.clone(),
+            mode: chip_create_params.mode.clone(),
+            bt_properties: chip_create_params.bt_properties.clone(),
+            ..Default::default()
+        }))),
+        ..Default::default()
     };
 
-    let packet_stream: netsim_model::chip::PacketStream = Box::new(
+    let packet_stream: netsim_model::PacketStream = Box::new(
         tokio_stream::wrappers::ReceiverStream::new(stream_rx)
             .filter_map(|res| std::future::ready(res.ok())),
     );
-    let packet_sink: netsim_model::chip::PacketSink = Box::pin(futures::sink::unfold(
+    let packet_sink: netsim_model::PacketSink = Box::pin(futures::sink::unfold(
         sink_tx,
         |tx: tokio::sync::mpsc::Sender<bytes::Bytes>, item: bytes::Bytes| async move {
             tx.send(item).await.map_err(|_| {
@@ -127,13 +134,13 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
         packet_stream: Some(packet_stream),
         packet_sink: Some(packet_sink),
         device_config: device_api::DeviceConfig {
-            name: name,
+            name,
             visible: true,
             pose: Default::default(),
             builtin: false,
             device_info: None,
         },
-        chip_config,
+        chip,
     };
 
     // 4. Send request to add chip

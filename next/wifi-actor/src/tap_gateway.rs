@@ -97,7 +97,7 @@ impl TapInterface {
 
         // SAFETY: `fd` is a valid open file descriptor for /dev/net/tun.
         // `if_req` is a valid libc::ifreq struct on the stack.
-        unsafe { tunsetiff(fd.as_raw_fd(), &mut if_req) }
+        unsafe { tunsetiff(fd.as_raw_fd(), &if_req) }
             .map_err(|e| WifiError::Internal(Box::from(format!("Failed to TUNSETIFF: {}", e))))?;
 
         // Set non-blocking
@@ -180,7 +180,7 @@ impl GatewayTrait for TapGateway {
     async fn send_80211(
         &self,
         chip_id: ChipId,
-        ieee80211: &netsim_packets::ieee80211::Ieee80211,
+        ieee80211: &netsim_packets::Ieee80211,
     ) -> Result<usize, crate::error::WifiError> {
         self.send_80211_impl(chip_id, ieee80211).await
     }
@@ -452,7 +452,7 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
     pub async fn send_80211_impl(
         &self,
         chip_id: ChipId,
-        ieee80211: &netsim_packets::ieee80211::Ieee80211,
+        ieee80211: &netsim_packets::Ieee80211,
     ) -> Result<usize, crate::error::WifiError> {
         #[cfg(target_os = "linux")]
         {
@@ -470,7 +470,7 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
             let written = tap.write(&eth).await.map_err(|e| {
                 crate::error::WifiError::Network(Box::from(format!("TAP write failed: {}", e)))
             });
-            return written.map(|_| payload_len);
+            written.map(|_| payload_len)
         }
         #[cfg(not(target_os = "linux"))]
         {
@@ -483,10 +483,10 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
 /// Converts an 802.3 packet (from TAP) to 802.11 for the Medium.
 pub fn convert_8023_to_80211(
     packet: bytes::Bytes,
-    bssid: Option<netsim_packets::ieee80211::MacAddress>,
+    bssid: Option<netsim_packets::MacAddress>,
     seq: u16,
 ) -> Option<bytes::Bytes> {
-    use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
+    use netsim_packets::{FrameDirection, Ieee80211};
     if let Some(bssid) = bssid {
         if let Ok(ieee80211) =
             Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)

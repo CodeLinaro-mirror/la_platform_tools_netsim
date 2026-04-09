@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
-use netsim_model::initial_info::{ChipInfo, ChipKind};
+use netsim_model::{ChipInfo, ChipKind};
 use packet_stream::{Streams, TransportType};
 use tokio::time::timeout;
 
@@ -80,13 +80,13 @@ async fn test_bluetooth_hci_reset() {
 //   Then the default AP should be created with those settings
 #[tokio::test]
 async fn test_ap_config_args() {
-    let mut args = daemon::args::Args::default();
+    let mut args = daemon::Args::default();
     args.logtostderr = true;
     args.wifi.wifi_ssid = Some("CustomAP".to_string());
     args.wifi.wifi_password = Some("Secret123".to_string());
     args.wifi.wifi_channel = Some(6);
     args.wifi.wifi_beacon_interval = Some(200);
-    args.wifi.wifi_mode = Some(daemon::args::ClapWifiMode::N);
+    args.wifi.wifi_mode = Some(daemon::ClapWifiMode::N);
 
     let mut world = World::new_with_args(args).await;
 
@@ -98,7 +98,7 @@ async fn test_ap_config_args() {
 //   Then default capture state for new devices is enabled
 #[tokio::test]
 async fn test_pcap_args_enabled() {
-    let mut args = daemon::args::Args::default();
+    let mut args = daemon::Args::default();
     args.logtostderr = true;
     args.no_shutdown = true;
     args.pcap = true;
@@ -121,7 +121,7 @@ async fn test_pcap_args_enabled() {
 //   Then default capture state for new devices is disabled
 #[tokio::test]
 async fn test_pcap_args_disabled() {
-    let mut args = daemon::args::Args::default();
+    let mut args = daemon::Args::default();
     args.logtostderr = true;
     args.no_shutdown = true;
     args.pcap = false;
@@ -144,7 +144,7 @@ async fn test_pcap_args_disabled() {
 //   Then its capture state updates correctly
 #[tokio::test]
 async fn test_capture_patch_enabled_flag() {
-    let mut args = daemon::args::Args::default();
+    let mut args = daemon::Args::default();
     args.logtostderr = true;
     args.no_shutdown = true;
     args.pcap = false;

@@ -4,9 +4,8 @@
 use std::collections::BTreeMap;
 
 use common::util::time_display::TimeDisplay;
-use netsim_packets::hci::{
-    events::{parse_hci_event, HciEvent, LeMetaEvent},
-    types::{GapDataType, LeAdvertisingEventType, OwnAddressType},
+use netsim_packets::{
+    parse_hci_event, GapDataType, HciEvent, LeAdvertisingEventType, LeMetaEvent, OwnAddressType,
 };
 use netsim_proto::ble_service::{ScanResponse, SniffResponse};
 use serde::Serialize;
@@ -113,7 +112,7 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 }
             }
             GapDataType::INCOMPLETE_16BIT_UUIDS | GapDataType::COMPLETE_16BIT_UUIDS
-                if ad_data.len() % 2 == 0 =>
+                if ad_data.len().is_multiple_of(2) =>
             {
                 let mut uuids = Vec::new();
                 for chunk in ad_data.chunks(2) {
@@ -122,7 +121,7 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 uuids.join(", ")
             }
             GapDataType::INCOMPLETE_32BIT_UUIDS | GapDataType::COMPLETE_32BIT_UUIDS
-                if ad_data.len() % 4 == 0 =>
+                if ad_data.len().is_multiple_of(4) =>
             {
                 let mut uuids = Vec::new();
                 for chunk in ad_data.chunks(4) {
@@ -134,7 +133,7 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 uuids.join(", ")
             }
             GapDataType::INCOMPLETE_128BIT_UUIDS | GapDataType::COMPLETE_128BIT_UUIDS
-                if ad_data.len() % 16 == 0 =>
+                if ad_data.len().is_multiple_of(16) =>
             {
                 let mut uuids = Vec::new();
                 for chunk in ad_data.chunks(16) {

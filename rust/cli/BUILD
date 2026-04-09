@@ -13,8 +13,8 @@ rust_library(
     crate_name = "netsim_cli",
     edition = "2021",
     deps = [
+        "//proto",
         "//rust/common:netsim_common",
-        "//rust/proto-cf",
         "@clap",
         "@futures",
         "@futures-util",

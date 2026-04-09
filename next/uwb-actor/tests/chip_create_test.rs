@@ -1,10 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::{
-    chip::{ChipId, ChipKind},
-    chip_error::ChipError,
-};
+use netsim_model::{ChipError, ChipId, ChipKind};
 
 use crate::world::World;
 
@@ -31,7 +28,7 @@ async fn test_create_and_get_chip() {
     // Then
     let chip_info = world.when_get_chip(chip_id).await.unwrap();
     match chip_info.variant {
-        Some(netsim_model::chip::ChipVariant::Uwb(_)) => {
+        Some(netsim_model::ChipVariant::Uwb(_)) => {
             assert_eq!(chip_info.id, chip_id);
             assert_eq!(chip_info.kind, ChipKind::UWB);
             assert_eq!(chip_info.name, format!("uwb_chip_{}", chip_id));

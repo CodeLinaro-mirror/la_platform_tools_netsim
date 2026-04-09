@@ -2,15 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use netsim_model::device::Position;
-use netsim_packets::ieee80211::{
-    action::{
-        category,
-        public_action,
-        // FtmRequest, // In action module
-    },
-    Ieee80211,
-};
+use netsim_model::Position;
+use netsim_packets::{category, public_action, Ieee80211};
 use tracing::{debug, warn};
 use zerocopy::IntoBytes;
 
@@ -71,15 +64,14 @@ pub fn handle_ftm_request(
     let build_action = |body: &[u8]| -> Bytes {
         let mut frame = Vec::new();
         // 802.11 Header (Simplified Management Action)
-        // FC: Action (0xD0), Flags...
-        let fc = netsim_packets::ieee80211::FrameControl::new(0x00D0);
-        let header = netsim_packets::ieee80211::MacHeader3Addr {
+        let fc = netsim_packets::FrameControl::new(0x00D0);
+        let header = netsim_packets::MacHeader3Addr {
             frame_control: fc,
             duration_id: zerocopy::U16::new(0),
             addr1: dest,
             addr2: src,
             addr3: bssid,
-            sequence_control: netsim_packets::ieee80211::SequenceControl::new(0),
+            sequence_control: netsim_packets::SequenceControl::new(0),
         };
         frame.extend_from_slice(header.as_bytes());
         frame.extend_from_slice(body);
@@ -87,12 +79,8 @@ pub fn handle_ftm_request(
     };
 
     // Frame 1: FTM Action (Initial)
-    let mut body1 = Vec::new();
-    body1.push(category::PUBLIC);
-    body1.push(public_action::FINE_TIMING_MEASUREMENT);
-    body1.push(0); // Dialog Token
-    body1.push(0); // Follow Up Dialog Token
-                   // Zero timestamps
+    let mut body1 = vec![category::PUBLIC, public_action::FINE_TIMING_MEASUREMENT, 0, 0];
+    // Zero timestamps
     body1.extend_from_slice(&[0u8; 6]); // TOD
     body1.extend_from_slice(&[0u8; 6]); // TOA
     body1.extend_from_slice(&[0u8; 6]); // TOD Error / etc
@@ -101,12 +89,8 @@ pub fn handle_ftm_request(
     responses.push(build_action(&body1));
 
     // Frame 2: FTM Action (With Timestamps)
-    let mut body2 = Vec::new();
-    body2.push(category::PUBLIC);
-    body2.push(public_action::FINE_TIMING_MEASUREMENT);
-    body2.push(0); // Dialog Token
-    body2.push(0); // Follow Up Dialog Token
-                   // Timestamps (48-bit usually)
+    let mut body2 = vec![category::PUBLIC, public_action::FINE_TIMING_MEASUREMENT, 0, 0];
+    // Timestamps (48-bit usually)
     body2.extend_from_slice(&t1_bytes[0..6]); // TOD
     body2.extend_from_slice(&t4_bytes[0..6]); // TOA (using t4 = RTT for simplicity, implying t1=0)
     body2.extend_from_slice(&[0u8; 6]); // Error
@@ -120,7 +104,7 @@ fn parse_ftm_request(packet: &Ieee80211) -> Option<(u8, u8, u8)> {
     // Basic checks provided by caller, just parse body
     // Body starts at offset 24 for Mgmt frames (Header=24 bytes)
     // Check if it's Action frame
-    if packet.stype() != netsim_packets::ieee80211::management_subtype::ACTION {
+    if packet.stype() != netsim_packets::management_subtype::ACTION {
         return None;
     }
 
@@ -145,19 +129,19 @@ fn calculate_distance(p1: &Position, p2: &Position) -> f64 {
 
 // Helpers for extracting addresses directly if inherent helpers are restrictive
 trait AddrHelpers {
-    fn get_structure_addr1(&self) -> netsim_packets::ieee80211::MacAddress;
-    fn get_structure_addr2(&self) -> netsim_packets::ieee80211::MacAddress;
-    fn get_structure_addr3(&self) -> netsim_packets::ieee80211::MacAddress;
+    fn get_structure_addr1(&self) -> netsim_packets::MacAddress;
+    fn get_structure_addr2(&self) -> netsim_packets::MacAddress;
+    fn get_structure_addr3(&self) -> netsim_packets::MacAddress;
 }
 
 impl AddrHelpers for Ieee80211 {
-    fn get_structure_addr1(&self) -> netsim_packets::ieee80211::MacAddress {
+    fn get_structure_addr1(&self) -> netsim_packets::MacAddress {
         self.get_addr1()
     }
-    fn get_structure_addr2(&self) -> netsim_packets::ieee80211::MacAddress {
+    fn get_structure_addr2(&self) -> netsim_packets::MacAddress {
         self.get_addr2()
     }
-    fn get_structure_addr3(&self) -> netsim_packets::ieee80211::MacAddress {
+    fn get_structure_addr3(&self) -> netsim_packets::MacAddress {
         self.get_addr3()
     }
 }

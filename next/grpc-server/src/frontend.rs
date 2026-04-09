@@ -7,7 +7,7 @@ use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
-use netsim_model::{client_error::ClientError, device::Pose};
+use netsim_model::{ClientError, Pose};
 use netsim_proto::{
     empty::Empty,
     frontend::{ListDeviceResponse, ListLinkResponse},
@@ -21,6 +21,8 @@ use crate::frontend_converter::to_proto_device;
 pub struct FrontendClient {
     device_client: DeviceClient,
     link_client: Arc<dyn LinkClient>,
+    #[cfg(not(feature = "cuttlefish"))]
+    ap_client: ap_actor::ApClient,
     version: String,
 }
 
@@ -28,9 +30,16 @@ impl FrontendClient {
     pub fn new(
         device_client: DeviceClient,
         link_client: Arc<dyn LinkClient>,
+        #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
         version: String,
     ) -> Self {
-        Self { device_client, link_client, version }
+        Self {
+            device_client,
+            link_client,
+            #[cfg(not(feature = "cuttlefish"))]
+            ap_client,
+            version,
+        }
     }
 
     async fn handle_create_link(
@@ -155,7 +164,7 @@ impl FrontendClient {
                     device_info: None,
                 };
 
-                let device_create = device_api::api::DeviceCreate {
+                let device_create = device_api::DeviceCreate {
                     device_config: device_config.clone(),
                     chip: chip_config,
                 };
@@ -204,11 +213,11 @@ impl FrontendClient {
     ) -> Result<(), RpcStatus> {
         let id = req.id.unwrap_or(0);
 
-        let update = device_api::api::DeviceUpdate {
+        let update = device_api::DeviceUpdate {
             id,
             name: req.device.name.clone(),
             visible: req.device.visible,
-            pose: device_api::api::PoseUpdate {
+            pose: device_api::PoseUpdate {
                 position: req
                     .device
                     .position
@@ -278,13 +287,41 @@ impl FrontendClient {
         })
     }
 
-    async fn handle_reset(client: DeviceClient) -> Result<(), RpcStatus> {
+    async fn handle_reset(
+        client: DeviceClient,
+        #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
+    ) -> Result<(), RpcStatus> {
         client.reset(None).await.map_err(|e| {
             RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,
                 format!("Failed to reset devices: {}", e),
             )
-        })
+        })?;
+        #[cfg(not(feature = "cuttlefish"))]
+        {
+            let aps = ap_client.list_aps().await.map_err(|e| {
+                RpcStatus::with_message(
+                    RpcStatusCode::INTERNAL,
+                    format!("Failed to list APs: {}", e),
+                )
+            })?;
+
+            let default_ap_bssid = ap_actor::expected_default_ap_bssid();
+            for (id, state) in aps {
+                // The default AP is considered built-in.
+                // TODO(b/499058772): reset default AP back to its original state.
+                if state.config.bssid == default_ap_bssid {
+                    continue;
+                }
+                ap_client.destroy_ap(id).await.map_err(|e| {
+                    RpcStatus::with_message(
+                        RpcStatusCode::INTERNAL,
+                        format!("Failed to destroy AP {}: {}", id, e),
+                    )
+                })?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -358,8 +395,16 @@ impl FrontendService for FrontendClient {
 
     fn reset(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<Empty>) {
         let client = self.device_client.clone();
+        #[cfg(not(feature = "cuttlefish"))]
+        let ap_client = self.ap_client.clone();
         ctx.spawn(async move {
-            let res = Self::handle_reset(client).await.map(|_| Empty::new());
+            let res = Self::handle_reset(
+                client,
+                #[cfg(not(feature = "cuttlefish"))]
+                ap_client,
+            )
+            .await
+            .map(|_| Empty::new());
             reply(sink, res).await;
         });
     }

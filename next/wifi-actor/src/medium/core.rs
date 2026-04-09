@@ -4,7 +4,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use ap_actor::SharedKeyStore;
-use netsim_packets::{ieee80211::MacAddress, netlink::hwsim_frame::HwsimFrame};
+use netsim_packets::{HwsimFrame, MacAddress};
 use tracing::{info, warn};
 
 use crate::{
@@ -72,6 +72,7 @@ impl Medium {
     }
 
     pub fn reset(&mut self, client_id: u32) {
+        self.stations.retain(|_, s| s.client_id != client_id);
         if let Some(client) = self.clients.get_mut(&client_id) {
             client.enabled = true;
             client.tx_count = 0;

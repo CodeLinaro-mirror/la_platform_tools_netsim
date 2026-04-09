@@ -6,9 +6,9 @@
 //! Provides the [`DeviceClient`] struct for interacting with Device actors.
 
 use actor_framework::ActorClient;
-use device_api::{api::DeviceCreate, DeviceAction, DeviceActionResult, DeviceId};
+use device_api::{DeviceAction, DeviceActionResult, DeviceCreate, DeviceId};
 use futures::TryFutureExt;
-use netsim_model::client_error::ClientError;
+use netsim_model::ClientError;
 use tracing::debug;
 
 use crate::DeviceActor;
@@ -42,10 +42,10 @@ impl DeviceClient {
         self.inner.get(id).err_into::<ClientError>().await
     }
 
-    pub async fn list(&self) -> Result<device_api::api::ListDeviceResponse, ClientError> {
+    pub async fn list(&self) -> Result<device_api::ListDeviceResponse, ClientError> {
         debug!("Sending list devices request");
         let devices = self.inner.list().err_into::<ClientError>().await?;
-        Ok(device_api::api::ListDeviceResponse { devices })
+        Ok(device_api::ListDeviceResponse { devices })
     }
 
     /// Resolves a device ID from a name.
@@ -71,7 +71,7 @@ impl DeviceClient {
         &self,
         id: Option<u32>,
         name: Option<&str>,
-        mut update: device_api::api::DeviceUpdate,
+        mut update: device_api::DeviceUpdate,
     ) -> Result<(), ClientError> {
         let device_id = if let Some(id) = id.filter(|&v| v != 0) {
             DeviceId(id)
@@ -88,7 +88,7 @@ impl DeviceClient {
     pub async fn update(
         &self,
         id: DeviceId,
-        update: device_api::api::DeviceUpdate,
+        update: device_api::DeviceUpdate,
     ) -> Result<(), ClientError> {
         debug!("Sending update request for device {}", id);
         self.inner.update(id, update).err_into::<ClientError>().await.map(|_| ())
@@ -127,7 +127,7 @@ impl DeviceClient {
     /// Fetches the latest radio statistics from all associated chip clients.
     pub async fn get_radio_stats(
         &self,
-    ) -> Result<Vec<netsim_model::stats::NetsimRadioStats>, ClientError> {
+    ) -> Result<Vec<netsim_model::NetsimRadioStats>, ClientError> {
         self.inner
             .perform_action(None, DeviceAction::GetRadioStats)
             .err_into::<ClientError>()
@@ -163,13 +163,13 @@ impl DeviceClient {
     /// Uses `AddChipByGuid` to atomically find/create a device by GUID.
     pub async fn add_chip(
         &self,
-        params: netsim_model::device::DeviceAddChip,
+        params: netsim_model::DeviceAddChip,
     ) -> Result<DeviceId, ClientError> {
         let result = self
             .inner
             .perform_action(
                 None, // Global action
-                DeviceAction::AddChipByGuid { params },
+                DeviceAction::AddChipByGuid { params: Box::new(params) },
             )
             .err_into::<ClientError>()
             .await?;

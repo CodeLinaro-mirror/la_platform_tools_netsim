@@ -5,7 +5,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::chip::{ChipConfig, PacketSink, PacketStream};
+use crate::chip::{PacketSink, PacketStream};
 
 // DEVICE SERVICE
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
@@ -54,10 +54,7 @@ pub mod api {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        chip::{
-            ApCreate, BleBeacon, BluetoothCreate, CellCreate, ChipConfig, UwbCreate, WifiCreate,
-            WifiMode,
-        },
+        chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate},
         device::{Device, DeviceConfig, Orientation, Position},
     };
 
@@ -112,52 +109,12 @@ pub mod api {
         pub chip: DeviceChipCreate,
     }
 
-    impl DeviceCreate {
-        pub fn default_ap(ssid_override: Option<String>) -> Self {
-            let name = ssid_override.unwrap_or_else(|| crate::ap::DEFAULT_WIFI_SSID.to_string());
-
-            let ap_create = ApCreate {
-                ssid: name.clone(),
-                bssid: "02:00:00:44:55:66".to_string(),
-                channel: 6,
-                hw_mode: WifiMode::G,
-                wpa_passphrase: None,
-                beacon_interval: 100,
-                country_code: None,
-                dtim_period: 2,
-                hidden_ssid: false,
-                sae: false,
-                wmm_enabled: true,
-                enterprise_enabled: false,
-                mac_acl_mode: 0,
-                mac_acl_list: vec![],
-                ftm_responder_enabled: true,
-            };
-
-            Self {
-                device_config: DeviceConfig {
-                    name,
-                    pose: Default::default(),
-                    visible: false,
-                    builtin: true,
-                    device_info: None,
-                },
-                chip: DeviceChipCreate {
-                    name: "main-ap".to_string(),
-                    manufacturer: "Google".to_string(),
-                    product_name: "AccessPoint".to_string(),
-                    chip: Chip::Ap(ap_create),
-                },
-            }
-        }
-    }
-
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
     pub struct DeviceChipCreate {
         pub name: String,
         pub manufacturer: String,
         pub product_name: String,
-        pub chip: Chip,
+        pub chip: ChipCreateVariant,
     }
 
     impl DeviceChipCreate {
@@ -165,7 +122,7 @@ pub mod api {
             name: impl Into<String>,
             manufacturer: impl Into<String>,
             product_name: impl Into<String>,
-            chip: Chip,
+            chip: ChipCreateVariant,
         ) -> DeviceChipCreate {
             DeviceChipCreate {
                 name: name.into(),
@@ -177,77 +134,101 @@ pub mod api {
     }
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-    pub enum Chip {
+    pub enum ChipCreateVariant {
         Beacon(BleBeacon),
         Bluetooth(BluetoothCreate),
         Wifi(WifiCreate),
         Uwb(UwbCreate),
         Cell(CellCreate),
-        Ap(ApCreate),
     }
 
-    impl Default for Chip {
+    impl Default for ChipCreateVariant {
         fn default() -> Self {
-            Chip::Beacon(BleBeacon::default())
+            ChipCreateVariant::Beacon(BleBeacon::default())
         }
     }
 
-    impl From<crate::chip::ChipKindParams> for Chip {
-        fn from(params: crate::chip::ChipKindParams) -> Self {
-            match params {
-                crate::chip::ChipKindParams::Bluetooth(bt) => match bt.mode {
-                    crate::chip::BluetoothMode::Beacon(beacon_params) => {
-                        Chip::Beacon(beacon_params.ble_beacon)
-                    }
-                    _ => Chip::Bluetooth(bt),
-                },
-                crate::chip::ChipKindParams::Wifi(wifi) => Chip::Wifi(wifi),
-                crate::chip::ChipKindParams::Uwb(uwb) => Chip::Uwb(uwb),
-                crate::chip::ChipKindParams::Cell(cell) => Chip::Cell(cell),
-                crate::chip::ChipKindParams::Ap(ap) => Chip::Ap(ap),
+    impl ChipCreateVariant {
+        pub fn kind(&self) -> crate::chip::ChipKind {
+            match self {
+                ChipCreateVariant::Beacon(_) | ChipCreateVariant::Bluetooth(_) => {
+                    crate::chip::ChipKind::BLUETOOTH
+                }
+                ChipCreateVariant::Wifi(_) => crate::chip::ChipKind::WIFI,
+                ChipCreateVariant::Uwb(_) => crate::chip::ChipKind::UWB,
+                ChipCreateVariant::Cell(_) => crate::chip::ChipKind::CELLULAR,
             }
         }
     }
-
-    impl From<Chip> for crate::chip::ChipKindParams {
-        fn from(chip: Chip) -> Self {
+    impl From<ChipCreateVariant> for crate::chip::ChipVariant {
+        fn from(chip: ChipCreateVariant) -> Self {
             match chip {
-                Chip::Beacon(beacon) => {
-                    crate::chip::ChipKindParams::Bluetooth(crate::chip::BluetoothCreate {
+                ChipCreateVariant::Beacon(beacon) => {
+                    crate::chip::ChipVariant::Bluetooth(Box::new(crate::bluetooth::Bluetooth {
                         address: beacon.address.clone(),
-                        bt_properties: Default::default(),
                         mode: crate::chip::BluetoothMode::Beacon(Box::new(
                             crate::chip::BeaconParams { ble_beacon: beacon },
                         )),
-                    })
+                        ..Default::default()
+                    }))
                 }
-                Chip::Bluetooth(bt) => crate::chip::ChipKindParams::Bluetooth(bt),
-                Chip::Wifi(wifi) => crate::chip::ChipKindParams::Wifi(wifi),
-                Chip::Uwb(uwb) => crate::chip::ChipKindParams::Uwb(uwb),
-                Chip::Cell(cell) => crate::chip::ChipKindParams::Cell(cell),
-                Chip::Ap(ap) => crate::chip::ChipKindParams::Ap(ap),
+                ChipCreateVariant::Bluetooth(bt) => crate::chip::ChipVariant::Bluetooth(Box::new(
+                    crate::bluetooth::Bluetooth::from(bt),
+                )),
+                ChipCreateVariant::Wifi(wifi) => {
+                    crate::chip::ChipVariant::Wifi(crate::wifi::Wifi::from(wifi))
+                }
+                ChipCreateVariant::Uwb(_uwb) => {
+                    crate::chip::ChipVariant::Uwb(crate::uwb::Uwb { radio: Default::default() })
+                }
+                ChipCreateVariant::Cell(_cell) => {
+                    crate::chip::ChipVariant::Cell(crate::cell::Cell { state: "idle".to_string() })
+                }
             }
         }
     }
-
-    impl From<DeviceChipCreate> for ChipConfig {
+    impl From<DeviceChipCreate> for crate::chip::Chip {
         fn from(create: DeviceChipCreate) -> Self {
-            ChipConfig {
+            crate::chip::Chip {
+                id: 0,
+                kind: create.chip.kind(),
                 name: create.name,
                 manufacturer: create.manufacturer,
                 product_name: create.product_name,
-                chip_kind_params: create.chip.into(),
+                variant: Some(crate::chip::ChipVariant::from(create.chip)),
+                ..Default::default()
             }
         }
     }
 
-    impl From<ChipConfig> for DeviceChipCreate {
-        fn from(config: ChipConfig) -> Self {
+    impl From<crate::chip::Chip> for DeviceChipCreate {
+        fn from(chip: crate::chip::Chip) -> Self {
             DeviceChipCreate {
-                name: config.name,
-                manufacturer: config.manufacturer,
-                product_name: config.product_name,
-                chip: config.chip_kind_params.into(),
+                name: chip.name,
+                manufacturer: chip.manufacturer,
+                product_name: chip.product_name,
+                chip: match chip.variant {
+                    Some(crate::chip::ChipVariant::Bluetooth(bt)) => match bt.mode {
+                        crate::chip::BluetoothMode::Beacon(beacon_params) => {
+                            ChipCreateVariant::Beacon(beacon_params.ble_beacon)
+                        }
+                        _ => ChipCreateVariant::Bluetooth(crate::chip::BluetoothCreate {
+                            address: bt.address.clone(),
+                            bt_properties: bt.bt_properties.clone(),
+                            mode: bt.mode.clone(),
+                        }),
+                    },
+                    Some(crate::chip::ChipVariant::Wifi(_wifi)) => {
+                        ChipCreateVariant::Wifi(crate::chip::WifiCreate::default())
+                    }
+                    Some(crate::chip::ChipVariant::Uwb(_uwb)) => {
+                        ChipCreateVariant::Uwb(crate::chip::UwbCreate::default())
+                    }
+                    Some(crate::chip::ChipVariant::Cell(_cell)) => {
+                        ChipCreateVariant::Cell(crate::chip::CellCreate::default())
+                    }
+                    None => ChipCreateVariant::Beacon(crate::chip::BleBeacon::default()), /* Fallback */
+                },
             }
         }
     }
@@ -311,14 +292,14 @@ pub struct DeviceAddChip {
     pub packet_stream: Option<PacketStream>,
     pub packet_sink: Option<PacketSink>,
     pub device_config: DeviceConfig,
-    pub chip_config: ChipConfig,
+    pub chip: crate::chip::Chip,
 }
 impl fmt::Debug for DeviceAddChip {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DeviceAddChip")
             .field("device_guid", &self.device_guid)
             .field("device_config", &self.device_config)
-            .field("chip_config", &self.chip_config)
+            .field("chip", &self.chip)
             .finish_non_exhaustive()
     }
 }

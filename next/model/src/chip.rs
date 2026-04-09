@@ -31,16 +31,6 @@ pub fn chip_kind_to_radio_kind(kind: ChipKind) -> crate::stats::RadioKind {
         _ => RadioKind::Unspecified,
     }
 }
-pub fn chip_kind_to_proto(kind: ChipKind) -> netsim_proto::stats::netsim_radio_stats::Kind {
-    use netsim_proto::stats::netsim_radio_stats::Kind;
-    match kind {
-        ChipKind::BLUETOOTH => Kind::BLUETOOTH_LOW_ENERGY,
-        ChipKind::WIFI => Kind::WIFI,
-        ChipKind::UWB => Kind::UWB,
-        ChipKind::NFC => Kind::NFC,
-        _ => Kind::UNSPECIFIED,
-    }
-}
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Radio {
     pub state: Option<bool>,
@@ -93,7 +83,7 @@ pub enum ChipRequest {
         /// The ID of the new chip.
         id: ChipId,
         /// The parameters for the new chip.
-        params: ChipCreate,
+        params: Box<ChipCreate>,
         /// The channel to send the result.
         respond_to: Responder<()>,
     },
@@ -152,94 +142,21 @@ pub struct ChipCreate {
     pub packet_stream: Option<PacketStream>,
     /// The transport for packet output.
     pub packet_sink: Option<PacketSink>,
-    // TODO: Use Chip instead
-    /// Chip config.
-    pub config: ChipConfig,
-    /// The ID of the device this chip belongs to.
-    pub device_id: DeviceId,
-    /// The initial pose of the chip.
-    pub pose: Pose,
+    /// The standard Chip representation.
+    pub chip: Chip,
 }
 
 impl fmt::Debug for ChipCreate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ChipCreate")
-            .field("config", &self.config)
-            .field("pose", &self.pose)
-            .finish_non_exhaustive()
+        f.debug_struct("ChipCreate").field("chip", &self.chip).finish_non_exhaustive()
     }
-}
-
-// TODO: use Chip instead
-#[derive(Debug, Clone)]
-/// Chip configuration
-pub struct ChipConfig {
-    /// The name of the chip.
-    pub name: String,
-    /// The manufacturer of the chip.
-    pub manufacturer: String,
-    /// The product name of the chip.
-    pub product_name: String,
-    /// Technology-specific parameters.
-    pub chip_kind_params: ChipKindParams,
-}
-
-impl ChipConfig {
-    /// Creates a new `ChipConfig`.
-    pub fn new(
-        name: impl Into<String>,
-        manufacturer: impl Into<String>,
-        product_name: impl Into<String>,
-        chip_kind_params: ChipKindParams,
-    ) -> Self {
-        ChipConfig {
-            name: name.into(),
-            manufacturer: manufacturer.into(),
-            product_name: product_name.into(),
-            chip_kind_params,
-        }
-    }
-}
-
-impl From<&ChipKindParams> for ChipKind {
-    fn from(params: &ChipKindParams) -> Self {
-        match params {
-            ChipKindParams::Bluetooth(bt) => match bt.mode {
-                crate::bluetooth::BluetoothMode::Beacon(_) => ChipKind::BLUETOOTH,
-                _ => ChipKind::BLUETOOTH,
-            },
-            ChipKindParams::Wifi(_) => ChipKind::WIFI,
-            ChipKindParams::Uwb(_) => ChipKind::UWB,
-            ChipKindParams::Cell(_) => ChipKind::CELLULAR,
-            ChipKindParams::Ap(_) => ChipKind::WIFI,
-        }
-    }
-}
-
-/// An enum holding the parameters for a specific chip technology.
-#[derive(Debug, Clone)]
-pub enum ChipKindParams {
-    /// Bluetooth parameters.
-    Bluetooth(crate::bluetooth::BluetoothCreate),
-    /// Wi-Fi parameters.
-    Wifi(crate::wifi::WifiCreate),
-    /// UWB parameters.
-    Uwb(crate::uwb::UwbCreate),
-    /// Cellular parameters.
-    Cell(crate::cell::CellCreate),
-    /// Access Point parameters.
-    Ap(crate::ap::ApCreate),
 }
 
 pub use crate::{
-    ap::{Ap, ApCreate, ApUpdate, WifiMode},
-    bluetooth::{
-        beacon::BleBeacon, BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode,
-        BluetoothUpdate, DeviceParams, ScannerParams, SnifferParams,
-    },
-    cell::{Cell, CellCreate},
-    uwb::{Uwb, UwbCreate, UwbUpdate},
-    wifi::{Wifi, WifiCreate, WifiUpdate},
+    bluetooth::{beacon::BleBeacon, BeaconParams, BluetoothCreate, BluetoothMode},
+    cell::CellCreate,
+    uwb::{Uwb, UwbCreate},
+    wifi::WifiCreate,
 };
 
 impl fmt::Display for ChipId {
@@ -308,6 +225,42 @@ impl Chip {
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
+impl Chip {
+    pub fn new_test_uwb(name: impl Into<String>) -> Self {
+        Self {
+            kind: ChipKind::UWB,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim UWB".into(),
+            variant: Some(ChipVariant::from(ChipKind::UWB)),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_test_ble(name: impl Into<String>) -> Self {
+        Self {
+            kind: ChipKind::BLUETOOTH,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim BLE".into(),
+            variant: Some(ChipVariant::from(ChipKind::BLUETOOTH)),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_test_cell(name: impl Into<String>) -> Self {
+        Self {
+            kind: ChipKind::CELLULAR,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim Cell".into(),
+            variant: Some(ChipVariant::from(ChipKind::CELLULAR)),
+            ..Default::default()
+        }
+    }
+}
+
 fn default_enabled() -> bool {
     true
 }
@@ -325,7 +278,7 @@ fn default_enabled() -> bool {
 /// - **Cell**: Contains cellular-specific state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariant {
-    Bluetooth(crate::bluetooth::Bluetooth),
+    Bluetooth(Box<crate::bluetooth::Bluetooth>),
     Wifi(crate::wifi::Wifi),
     Uwb(crate::uwb::Uwb),
     Cell(crate::cell::Cell),
@@ -334,17 +287,20 @@ pub enum ChipVariant {
 impl From<ChipKind> for ChipVariant {
     fn from(kind: ChipKind) -> Self {
         match kind {
-            ChipKind::BLUETOOTH => ChipVariant::Bluetooth(crate::bluetooth::Bluetooth {
+            ChipKind::BLUETOOTH => ChipVariant::Bluetooth(Box::new(crate::bluetooth::Bluetooth {
                 low_energy: Default::default(),
                 classic: Default::default(),
-            }),
+                address: String::new(),
+                bt_properties: Default::default(),
+                mode: crate::chip::BluetoothMode::Device(Default::default()),
+            })),
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),
             ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell { state: "unknown".into() }),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
             // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
             // types.
-            _ => ChipVariant::Bluetooth(Default::default()),
+            _ => ChipVariant::Bluetooth(Box::default()),
         }
     }
 }
@@ -458,7 +414,7 @@ impl ChipVariantUpdate {
 /// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
 /// messages to the server over an `mpsc` channel. It abstracts away the channel
 /// and `oneshot` responder boilerplate for each command.
-
+///
 /// A generic client for interacting with any chip server actor (UWB, WiFi,
 /// Cell).
 #[derive(Clone)]
@@ -484,7 +440,7 @@ impl ChipClient for RadioChipClient {
     async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send(ChipRequest::Create { id, params, respond_to: tx })
+            .send(ChipRequest::Create { id, params: Box::new(params), respond_to: tx })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)

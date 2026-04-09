@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use netsim_packets::ieee80211::{DataSubType, Ieee80211};
+use netsim_packets::{DataSubType, Ieee80211};
 use tracing::debug;
 
 use crate::{

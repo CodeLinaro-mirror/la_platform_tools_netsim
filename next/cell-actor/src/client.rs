@@ -5,9 +5,7 @@ use actor_framework::ResourceClient;
 use async_trait::async_trait;
 use futures::TryFutureExt;
 use netsim_model::{
-    chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate},
-    client_error::ClientError,
-    stats::NetsimRadioStats,
+    Chip, ChipClient, ChipCreate, ChipId, ChipUpdate, ClientError, NetsimRadioStats,
 };
 
 use crate::CellActor;
@@ -26,7 +24,7 @@ impl ChipClient for CellClient {
             .get(id)
             .err_into::<ClientError>()
             .await?
-            .ok_or(ClientError::Chip(netsim_model::chip_error::ChipError::ChipNotFound(id)))
+            .ok_or(ClientError::Chip(netsim_model::ChipError::ChipNotFound(id)))
     }
 
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {

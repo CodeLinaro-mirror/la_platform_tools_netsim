@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::cell::ModemAction;
+use netsim_model::ModemAction;
 
 // ...
 use crate::modem_network_simulator::NetworkEvent;

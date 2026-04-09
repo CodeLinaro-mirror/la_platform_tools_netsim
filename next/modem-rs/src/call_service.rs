@@ -35,6 +35,7 @@ pub struct CallStatus {
 }
 
 // Holds all state related to the call service.
+#[derive(Default)]
 pub struct CallService {
     pub calls: Vec<CallStatus>,
     mute: bool,
@@ -42,10 +43,6 @@ pub struct CallService {
 }
 
 impl CallService {
-    pub fn new() -> Self {
-        Self { calls: Vec::new(), mute: false, emergency_mode: false }
-    }
-
     // --- Helper methods for external services ---
 
     pub fn receive_hangup(&mut self) {

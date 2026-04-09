@@ -12,10 +12,7 @@ use device_actor::DeviceClient;
 use device_api::DeviceId;
 use futures::StreamExt;
 use netsim_model::{
-    bluetooth::Controller,
-    chip::{
-        BluetoothCreate, BluetoothMode, ChipKindParams, DeviceParams, PacketSink, PacketStream,
-    },
+    BluetoothCreate, BluetoothMode, Controller, DeviceParams, PacketSink, PacketStream,
 };
 use tokio::{sync::mpsc, task::JoinSet};
 use tracing::{info, warn};
@@ -43,11 +40,18 @@ pub(crate) async fn setup_virtual_chip(
         mode: BluetoothMode::Device(DeviceParams {}),
     };
 
-    let chip_config = netsim_model::chip::ChipConfig {
+    let chip = netsim_model::Chip {
         name: chip_name,
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
-        chip_kind_params: ChipKindParams::Bluetooth(chip_create_params),
+        kind: netsim_model::ChipKind::BLUETOOTH,
+        variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+            address: chip_create_params.address.clone(),
+            mode: chip_create_params.mode.clone(),
+            bt_properties: chip_create_params.bt_properties.clone(),
+            ..Default::default()
+        }))),
+        ..Default::default()
     };
 
     let packet_stream: PacketStream = Box::new(
@@ -75,7 +79,7 @@ pub(crate) async fn setup_virtual_chip(
             builtin: false,
             device_info: None,
         },
-        chip_config,
+        chip,
     };
 
     device_client.add_chip(request).await.map_err(ServerError::DeviceActor)
@@ -100,7 +104,7 @@ pub(crate) async fn run_websocket_transport(
             // Ref: RFC 6455, Section 5.2 - Base Framing Protocol
             match websocket_reader.read() {
                 Ok(Message::Binary(data)) => {
-                    if stream_tx.blocking_send(Ok(Bytes::from(data))).is_err() {
+                    if stream_tx.blocking_send(Ok(data)).is_err() {
                         break;
                     }
                 }

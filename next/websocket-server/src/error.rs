@@ -5,7 +5,7 @@ use http::header::{HeaderName, ToStrError};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub(crate) enum ServerError {
+pub enum ServerError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("HTTP parse error: {0}")]
@@ -27,5 +27,5 @@ pub(crate) enum ServerError {
     #[error("Handshake failed: {0}")]
     HandshakeFailed(String),
     #[error("Device actor error: {0}")]
-    DeviceActor(#[from] netsim_model::client_error::ClientError),
+    DeviceActor(#[from] netsim_model::ClientError),
 }

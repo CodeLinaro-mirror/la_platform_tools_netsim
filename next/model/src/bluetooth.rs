@@ -8,10 +8,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::chip::{Radio, RadioUpdate};
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bluetooth {
     pub low_energy: Radio,
     pub classic: Radio,
+    pub address: String,
+    pub bt_properties: Controller,
+    pub mode: BluetoothMode,
+}
+
+impl Default for Bluetooth {
+    fn default() -> Self {
+        Bluetooth {
+            low_energy: Radio::default(),
+            classic: Radio::default(),
+            address: "00:00:00:00:00:00".to_string(),
+            bt_properties: Controller::default(),
+            mode: BluetoothMode::Device(DeviceParams::default()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -36,6 +51,18 @@ pub struct BluetoothCreate {
     pub bt_properties: Controller,
     /// The operational mode of the Bluetooth chip.
     pub mode: BluetoothMode,
+}
+
+impl From<BluetoothCreate> for Bluetooth {
+    fn from(create: BluetoothCreate) -> Self {
+        Bluetooth {
+            low_energy: Radio::default(),
+            classic: Radio::default(),
+            address: create.address,
+            bt_properties: create.bt_properties,
+            mode: create.mode,
+        }
+    }
 }
 
 /// An enum to differentiate between the kinds of Bluetooth chips.

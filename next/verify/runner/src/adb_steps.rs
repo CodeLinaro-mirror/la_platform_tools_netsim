@@ -119,6 +119,27 @@ impl AdbWorld {
                     continue;
                 }
 
+                // Grant special permission WRITE_SETTINGS
+                let _ = exec
+                    .adb_command()
+                    .arg("shell")
+                    .arg("appops")
+                    .arg("set")
+                    .arg("com.android.netsim.agent.v2")
+                    .arg("WRITE_SETTINGS")
+                    .arg("allow")
+                    .status();
+
+                // Enable location services
+                let _ = exec
+                    .adb_command()
+                    .arg("shell")
+                    .arg("cmd")
+                    .arg("location")
+                    .arg("set-location-enabled")
+                    .arg("true")
+                    .status();
+
                 if let Err(e) = exec.setup_feedback() {
                     println!("WARN   Failed to setup feedback on {}: {}", serial, e);
                     continue;
@@ -177,6 +198,20 @@ impl AdbWorld {
                 exec.avd_name = Some(name);
             }
         }
+
+        // Log the SDK version for better diagnostics
+        if let Ok(out) = std::process::Command::new(adb)
+            .arg("-s")
+            .arg(serial)
+            .arg("shell")
+            .arg("getprop")
+            .arg("ro.build.version.sdk")
+            .output()
+        {
+            let sdk = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            tracing::info!("Device {} has SDK version: {}", serial, sdk);
+            eprintln!("Device {} has SDK version: {}", serial, sdk);
+        }
     }
 }
 
@@ -210,6 +245,64 @@ async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
 
     for agent in new_agents {
         w.register_android_actor(agent);
+    }
+}
+
+/// STEP: When ^(?:@adb)(?::(\S+))? connects to wifi "([^"]+)"$
+async fn adb_connects_to_open_wifi(w: &mut TestContext, label: String, ssid: String) {
+    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+    w.log_step(&actor, "->", &format!("Connects to open WiFi network '{}'", ssid));
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let android = w
+        .get_android_actor(&actor)
+        .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
+
+    let mut connect_cmd = android.adb_command();
+    connect_cmd
+        .arg("shell")
+        .arg("cmd")
+        .arg("wifi")
+        .arg("connect-network")
+        .arg(&ssid)
+        .arg("open")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    let status = tokio::task::spawn_blocking(move || connect_cmd.status())
+        .await
+        .expect("tokio spawn failed")
+        .expect("Failed to execute adb shell cmd wifi");
+
+    if !status.success() {
+        panic!("Failed to connect to Wi-Fi network {}", ssid);
+    }
+
+    // Wait for Wi-Fi connection to show the SSID
+    let mut connected = false;
+    for i in 0..30 {
+        let mut cmd = android.adb_command();
+        cmd.arg("shell").arg("cmd").arg("wifi").arg("status");
+
+        let out = tokio::task::spawn_blocking(move || cmd.output())
+            .await
+            .expect("tokio spawn failed")
+            .expect("Failed to execute adb shell cmd wifi status");
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        if stdout.contains(&ssid) {
+            tracing::info!("Wi-Fi connected to {} after {} seconds", ssid, i);
+            connected = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+
+    if !connected {
+        tracing::warn!("Timed out waiting for Wi-Fi to connect to {}!", ssid);
     }
 }
 
@@ -247,20 +340,20 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
     if !status.success() {
         panic!("Failed to connect to Wi-Fi network {}", ssid);
     }
-    // Dynamically poll for network connectivity (ping 10.0.2.2) to ensure DHCP
-    // lease is successfully negotiated with Slirp before blasting TCP data.
+    // Wait for Wi-Fi connection to show the SSID
     let mut connected = false;
-    for i in 0..15 {
-        let mut ping_cmd = android.adb_command();
-        ping_cmd.arg("shell").arg("ping").arg("-c").arg("1").arg("-W").arg("1").arg("10.0.2.2");
+    for i in 0..30 {
+        let mut cmd = android.adb_command();
+        cmd.arg("shell").arg("cmd").arg("wifi").arg("status");
 
-        let ping_status = tokio::task::spawn_blocking(move || ping_cmd.status())
+        let out = tokio::task::spawn_blocking(move || cmd.output())
             .await
             .expect("tokio spawn failed")
-            .expect("Failed to execute ping");
+            .expect("Failed to execute adb shell cmd wifi status");
 
-        if ping_status.success() {
-            info!("Wi-Fi fully connected and routed after {} seconds", i);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        if stdout.contains(&ssid) {
+            info!("Wi-Fi connected to {} after {} seconds", ssid, i);
             connected = true;
             break;
         }
@@ -268,7 +361,175 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
     }
 
     if !connected {
-        warn!("Timed out waiting for ping to 10.0.2.2 to succeed! Test may fail.");
+        warn!("Timed out waiting for Wi-Fi to connect to {}!", ssid);
+    }
+}
+
+/// STEP: Then ^(?:@adb)(?::(\S+))? verifies connected wifi is "([^"]+)"$
+async fn adb_verifies_wifi_ssid(w: &mut TestContext, label: String, expected_ssid: String) {
+    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+    w.log_step(&actor, "<-", &format!("Verifies connected WiFi is '{}'", expected_ssid));
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let android = w
+        .get_android_actor(&actor)
+        .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
+
+    let mut cmd = android.adb_command();
+    cmd.arg("shell").arg("cmd").arg("wifi").arg("status");
+
+    let out = tokio::task::spawn_blocking(move || cmd.output())
+        .await
+        .expect("tokio spawn failed")
+        .expect("Failed to execute adb shell cmd wifi status");
+
+    if !out.status.success() {
+        panic!("Failed to get wifi status on {}", actor);
+    }
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    tracing::info!("wifi status output: {}", stdout);
+
+    if !stdout.contains(&expected_ssid) {
+        panic!("Expected SSID '{}' not found in wifi status: {}", expected_ssid, stdout);
+    }
+}
+
+/// STEP: When ^(?:@adb)(?::(\S+))? disconnects from wifi$
+async fn adb_disconnects_wifi(w: &mut TestContext, label: String) {
+    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+    w.log_step(&actor, "->", "Disconnects from WiFi");
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let android = w
+        .get_android_actor(&actor)
+        .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
+
+    // Disable Wi-Fi
+    let mut disable_cmd = android.adb_command();
+    disable_cmd
+        .arg("shell")
+        .arg("cmd")
+        .arg("wifi")
+        .arg("set-wifi-enabled")
+        .arg("disabled")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let status = tokio::task::spawn_blocking(move || disable_cmd.status())
+        .await
+        .expect("tokio spawn failed")
+        .expect("Failed to execute svc wifi disable");
+
+    if !status.success() {
+        panic!("Failed to disable Wi-Fi on {}", actor);
+    }
+
+    // Wait for Wi-Fi to actually turn off
+    let mut off = false;
+    for i in 0..30 {
+        let mut cmd = android.adb_command();
+        cmd.arg("shell").arg("cmd").arg("wifi").arg("status");
+
+        let out = tokio::task::spawn_blocking(move || cmd.output())
+            .await
+            .expect("tokio spawn failed")
+            .expect("Failed to execute adb shell cmd wifi status");
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        if stdout.contains("disabled") || stdout.contains("inactive") {
+            tracing::info!("Wi-Fi disabled after {} seconds", i);
+            off = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+
+    if !off {
+        tracing::warn!("Timed out waiting for Wi-Fi to turn off!");
+    }
+
+    // Enable Wi-Fi
+    let mut enable_cmd = android.adb_command();
+    enable_cmd
+        .arg("shell")
+        .arg("svc")
+        .arg("wifi")
+        .arg("enable")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let status = tokio::task::spawn_blocking(move || enable_cmd.status())
+        .await
+        .expect("tokio spawn failed")
+        .expect("Failed to execute svc wifi enable");
+
+    if !status.success() {
+        panic!("Failed to enable Wi-Fi on {}", actor);
+    }
+
+    // Wait for Wi-Fi to actually turn on and be ready
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+}
+
+/// STEP: When ^(?:@adb)(?::(\S+))? forgets network "([^"]+)"$
+async fn adb_forgets_network(w: &mut TestContext, label: String, ssid: String) {
+    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+    w.log_step(&actor, "->", &format!("Forgets network '{}'", ssid));
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let android = w
+        .get_android_actor(&actor)
+        .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
+
+    // 1. Get network list to find ID
+    let mut list_cmd = android.adb_command();
+    list_cmd.arg("shell").arg("cmd").arg("wifi").arg("list-networks");
+    let output = list_cmd.output().expect("failed to execute cmd wifi list-networks");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let mut network_id: Option<u32> = None;
+    for line in stdout.lines() {
+        if line.contains(&ssid) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if !parts.is_empty() {
+                if let Ok(parsed_id) = parts[0].parse::<u32>() {
+                    network_id = Some(parsed_id);
+                    break;
+                }
+            }
+        }
+    }
+
+    let Some(network_id) = network_id else {
+        panic!("Network with SSID '{}' not found in saved networks", ssid);
+    };
+
+    // 2. Forget network
+    let mut forget_cmd = android.adb_command();
+    forget_cmd
+        .arg("shell")
+        .arg("cmd")
+        .arg("wifi")
+        .arg("forget-network")
+        .arg(network_id.to_string());
+
+    let output = forget_cmd.output().expect("failed to execute cmd wifi forget-network");
+    if !output.status.success() {
+        panic!(
+            "Failed to forget network on {}: {}",
+            actor,
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 

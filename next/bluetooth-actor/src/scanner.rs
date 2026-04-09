@@ -13,10 +13,7 @@
 //!   expose an external API in the future to convert Rootcanal LL packets to
 //!   standard Bluetooth LL packets for capture.
 
-use netsim_model::{
-    chip::{ChipId, ScannerParams},
-    chip_error::ChipError,
-};
+use netsim_model::{ChipError, ChipId, ScannerParams};
 use rootcanal::Rootcanal;
 use tracing::debug;
 use zerocopy::{Immutable, IntoBytes, KnownLayout, Unaligned};

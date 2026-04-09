@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default)]
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
@@ -7,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use daemon::netsimd::{NetsimDaemon, StartUpMode};
+use daemon::{NetsimDaemon, StartUpMode};
 use futures::{SinkExt, StreamExt};
 use grpcio::ChannelBuilder;
 use netsim_proto::{
@@ -44,7 +45,7 @@ pub struct World {
 
     pub grpc_port: u16,
     _temp_dir: PathBuf,
-    _ini_guard: Option<daemon::ini_file::IniFileGuard>,
+    _ini_guard: Option<daemon::IniFileInitialized>,
 }
 
 impl Drop for World {
@@ -59,14 +60,17 @@ impl Drop for World {
 impl World {
     /// Given a running Netsim Daemon
     pub async fn new() -> Self {
-        let mut args = daemon::args::Args::default();
+        let mut args = daemon::Args::default();
         args.logtostderr = true; // Disable log redirection
         args.no_shutdown = true; // Prevent tests from dying when deleting devices
-        args.hci_port = Some(0); // Let the OS assign a random available port
         Self::new_with_args(args).await
     }
 
-    pub async fn new_with_args(args: daemon::args::Args) -> Self {
+    pub async fn new_with_args(mut args: daemon::Args) -> Self {
+        if args.hci_port.is_none() {
+            args.hci_port = Some(0); // Let the OS assign a random available
+                                     // port
+        }
         let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
 
@@ -116,6 +120,15 @@ impl World {
             .await
             .expect("RPC failed");
         resp.version
+    }
+
+    /// When I call reset
+    pub async fn when_reset_is_called(&mut self) {
+        self.frontend_client
+            .reset_async(&netsim_proto::empty::Empty::new())
+            .expect("Reset failed")
+            .await
+            .expect("RPC failed");
     }
 
     /// When I create a device with name and chip
@@ -248,7 +261,7 @@ impl World {
             match result {
                 Ok(Ok(_)) => {}
                 Ok(Err(e)) => panic!("Daemon task failed: {}", e),
-                Err(_) => panic!("Daemon failed to shut down within timeout"),
+                Err(e) => panic!("Daemon failed to shut down within timeout: {e}"),
             }
         } else {
             panic!("No daemon spawned to shut down");
@@ -354,7 +367,7 @@ impl World {
     /// When I patch the capture state of a chip
     pub async fn when_patch_capture(&self, chip_id: u32, enabled: bool) {
         self.capture_client
-            .patch_capture(netsim_model::chip::ChipId::from(chip_id), enabled)
+            .patch_capture(netsim_model::ChipId::from(chip_id), enabled)
             .await
             .expect("Failed to patch capture");
     }
@@ -364,7 +377,7 @@ impl World {
         let captures = self.capture_client.list_captures().await.expect("Failed to list captures");
         let capture = captures
             .iter()
-            .find(|c| c.chip_id == netsim_model::chip::ChipId::from(chip_id))
+            .find(|c| c.chip_id == netsim_model::ChipId::from(chip_id))
             .expect("Capture info missing");
 
         assert_eq!(
@@ -492,6 +505,12 @@ impl World {
         assert!(aps.iter().any(|ap| ap.id == id));
     }
 
+    /// Then I verify the Access Point is NOT in the list
+    pub async fn then_access_point_not_in_list(&mut self, id: u32) {
+        let aps = self.when_list_access_points().await;
+        assert!(!aps.iter().any(|ap| ap.id == id));
+    }
+
     /// Then I verify the device list contains a device
     pub async fn then_device_list_contains(&mut self, device_id: u32, device_name: &str) {
         let devices = self.when_list_devices().await;
@@ -530,6 +549,13 @@ impl World {
         assert!((pos.x - expected_x).abs() < 0.001, "Expected X {}, got {}", expected_x, pos.x);
         assert!((pos.y - expected_y).abs() < 0.001, "Expected Y {}, got {}", expected_y, pos.y);
     }
+
+    /// Then I verify an Access Point exists by SSID
+    pub async fn then_access_point_exists_by_ssid(&mut self, ssid: &str) {
+        let aps = self.when_list_access_points().await;
+        assert!(aps.iter().any(|a| a.ssid == ssid), "AP with SSID {} not found in list", ssid);
+    }
+
     /// Then I verify an Access Point matches by SSID
     pub async fn then_access_point_matches_by_ssid(
         &mut self,
@@ -701,6 +727,12 @@ impl World {
         let mut initial_req = netsim_proto::packet_streamer::PacketRequest::new();
         let mut chip_info = netsim_proto::startup::ChipInfo::new();
         chip_info.name = chip_name.to_string();
+
+        let mut chip = netsim_proto::startup::Chip::new();
+        chip.kind = netsim_proto::protobuf::EnumOrUnknown::new(ChipKind::BLUETOOTH); // Default to Bluetooth for streamer testing
+        chip.address = "11:22:33:44:55:66".to_string();
+        chip_info.chip = netsim_proto::protobuf::MessageField::some(chip);
+
         initial_req.set_initial_info(chip_info);
 
         sender

@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use modem_rs::{ModemId, RegistrationStatus};
-use netsim_model::{cell::ModemAction, chip::ChipId};
+use netsim_model::{ChipId, ModemAction};
 
 use crate::world::World;
 

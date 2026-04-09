@@ -11,15 +11,10 @@ use std::{future::Future, pin::Pin};
 pub type DataTable = Vec<Vec<String>>;
 
 /// Context passed to every step execution.
+#[derive(Default)]
 pub struct StepContext {
     /// Optional data table attached to the step.
     pub table: Option<DataTable>,
-}
-
-impl Default for StepContext {
-    fn default() -> Self {
-        Self { table: None }
-    }
 }
 
 /// A trait for the test world that holds state.

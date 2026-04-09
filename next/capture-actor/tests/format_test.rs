@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::chip::ChipKind;
+use netsim_model::ChipKind;
 
 use crate::world::World;
 

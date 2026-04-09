@@ -5,23 +5,6 @@ load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
-DEPS = [
-    "//next/actor-framework",
-    "//next/capture-api",
-    "//next/device-api",
-    "//next/model",
-    "//next/link-api",
-    "//next/common",
-    "//proto",
-    "@protobuf-json-mapping",
-    "@futures",
-    "@tokio",
-    "@serde",
-    "@tracing",
-    "@thiserror",
-    "@bytes",
-]
-
 netsim_rust_library(
     name = "device-actor",
     srcs = glob(["src/**/*.rs"]),
@@ -34,5 +17,20 @@ netsim_rust_library(
         "@serde_json",
         "@tokio-stream",
     ],
-    deps = DEPS,
+    deps = [
+        "//next/actor-framework",
+        "//next/capture-api",
+        "//next/common",
+        "//next/device-api",
+        "//next/link-api",
+        "//next/model",
+        "//proto",
+        "@bytes",
+        "@futures",
+        "@protobuf-json-mapping",
+        "@serde",
+        "@thiserror",
+        "@tokio",
+        "@tracing",
+    ],
 )

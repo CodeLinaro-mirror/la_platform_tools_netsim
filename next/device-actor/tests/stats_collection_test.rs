@@ -69,9 +69,9 @@ async fn test_stats_kind_mapping() {
 
     // Verify WiFi
     let wifi_stats = stats.iter().find(|s| s.id == wifi_id.0).expect("WiFi stats missing");
-    assert_eq!(wifi_stats.kind, netsim_model::stats::RadioKind::Wifi, "WiFi kind should be Wifi");
+    assert_eq!(wifi_stats.kind, netsim_model::RadioKind::Wifi, "WiFi kind should be Wifi");
 
     // Verify UWB
     let uwb_stats = stats.iter().find(|s| s.id == uwb_id.0).expect("UWB stats missing");
-    assert_eq!(uwb_stats.kind, netsim_model::stats::RadioKind::Uwb, "UWB kind should be Uwb");
+    assert_eq!(uwb_stats.kind, netsim_model::RadioKind::Uwb, "UWB kind should be Uwb");
 }

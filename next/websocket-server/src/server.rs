@@ -26,48 +26,33 @@ const TARGET_PATH: &str = "/v1/websocket/bt";
 const MAX_HTTP_BUFFER_SIZE: usize = 2048;
 const CHANNEL_CAPACITY: usize = 100;
 
-pub async fn run(websocket_port: u16, device_client: DeviceClient) {
+pub fn bind(websocket_port: u16) -> Result<tokio::net::TcpListener, ServerError> {
     let addr = SocketAddr::from((Ipv6Addr::UNSPECIFIED, websocket_port));
 
-    // Use socket2 to create an IPv6 socket and set dual-stack mode
-    let socket = match Socket::new(Domain::IPV6, Type::STREAM, Some(Protocol::TCP)) {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to create socket for WebSocket server: {e}");
-            return;
-        }
-    };
+    let socket = Socket::new(Domain::IPV6, Type::STREAM, Some(Protocol::TCP))?;
 
     if let Err(e) = socket.set_only_v6(false) {
         warn!("Failed to set IPV6_V6ONLY=0 for WebSocket server: {e}");
     }
 
-    if let Err(e) = socket.set_nonblocking(true) {
-        error!("Failed to set O_NONBLOCK for WebSocket server: {e}");
-        return;
-    }
+    socket.set_nonblocking(true)?;
 
-    // Convert to tokio::net::TcpSocket for binding and listening
     let tokio_socket = TcpSocket::from_std_stream(socket.into());
 
     if let Err(e) = tokio_socket.set_reuseaddr(true) {
         warn!("Failed to set SO_REUSEADDR for WebSocket server: {e}");
     }
 
-    if let Err(e) = tokio_socket.bind(addr) {
-        error!("Failed to bind WebSocket server to {addr}: {e}");
-        return;
-    }
+    tokio_socket.bind(addr)?;
 
-    let listener = match tokio_socket.listen(128) {
-        Ok(l) => l,
-        Err(e) => {
-            error!("Failed to listen on {addr}: {e}");
-            return;
-        }
-    };
+    let listener = tokio_socket.listen(128)?;
 
-    info!("WebSocket server is listening on: {websocket_port}");
+    Ok(listener)
+}
+
+pub async fn run(listener: tokio::net::TcpListener, device_client: DeviceClient) {
+    let port = listener.local_addr().unwrap().port();
+    info!("WebSocket server is listening on: {port}");
 
     loop {
         match listener.accept().await {

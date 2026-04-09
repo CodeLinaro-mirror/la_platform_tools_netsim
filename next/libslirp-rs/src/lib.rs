@@ -10,6 +10,11 @@
 //! (IpV4Addr, SocketAddrV4, etc.).
 //!
 //! Callbacks for libslirp send_packet are delivered on Channel.
-pub mod libslirp;
-pub mod libslirp_config;
+mod libslirp;
+mod libslirp_config;
+// Keep libslirp_sys public to bypass dead code warnings for unused
+// auto-generated FFI bindings.
 pub mod libslirp_sys;
+
+pub use libslirp::{LibSlirp, ProxyConnect, ProxyManager};
+pub use libslirp_config::{lookup_host_dns, SlirpConfig};

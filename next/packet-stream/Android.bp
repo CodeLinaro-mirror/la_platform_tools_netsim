@@ -1,0 +1,28 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+rust_library_host {
+    name: "libnetsim_next_packet_stream",
+    crate_name: "packet_stream",
+    stem: "libpacket_stream",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_types",
+        "libserde",
+        "libserde_json",
+        "libthiserror",
+        "libtokio",
+        "libtokio_util",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

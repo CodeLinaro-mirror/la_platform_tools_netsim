@@ -6,6 +6,9 @@ include("//build/bazel/toolchains:toolchain.MODULE.bazel")
 bazel_dep(name = "netsim", version = "0.0.1")
 bazel_dep(name = "rules_jvm_external", version = "6.10")
 
+# Force buildozer 8.2.1 checksum in lockfile for cloud presubmit
+bazel_dep(name = "buildozer", version = "8.2.1")
+
 custom_toolchains = use_extension("@goldfish_build//extensions:toolchain.bzl", "toolchain")
 custom_toolchains.clang(root_path = "prebuilts/clang/host")
 custom_toolchains.java(

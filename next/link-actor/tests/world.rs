@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use actor_framework::FrameworkError;
 use link_actor::{LinkActor, LinkClient};
 use link_api::{Link, LinkCreate, LinkId, LinkUpdate};
-use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
+use netsim_model::{ChipClient, ChipId, ChipKind, MockChipClient};
 
 /// The BDD World for Link Actor tests.
 ///
@@ -48,12 +48,12 @@ impl World {
     // TODO: move this to a common place for Link and Device actors
     fn create_default_mock() -> MockChipClient {
         let mut mock = MockChipClient::new();
-        mock.expect_read().returning(|_| Ok(netsim_model::chip::Chip::default()));
-        mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        mock.expect_read().returning(|_| Ok(netsim_model::Chip::default()));
+        mock.expect_update().returning(|_, _| Ok(netsim_model::Chip::default()));
         mock.expect_create().returning(|_, _| Ok(()));
         mock.expect_delete().returning(|_| Ok(()));
         mock.expect_read_statistics().returning(|| Ok(Box::from([])));
-        mock.expect_reset().returning(|_| Ok(netsim_model::chip::Chip::default()));
+        mock.expect_reset().returning(|_| Ok(netsim_model::Chip::default()));
         mock.expect_clone_box().returning(|| Box::new(Self::create_default_mock()));
         mock
     }

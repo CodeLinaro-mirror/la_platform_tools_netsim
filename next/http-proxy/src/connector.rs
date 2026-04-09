@@ -70,7 +70,7 @@ impl Connector {
         let mut stream = TcpStream::connect(self.proxy_addr).await?;
 
         // Construct the CONNECT request
-        let mut request = format!("CONNECT {} HTTP/{}\r\n", addr.to_string(), HTTP_VERSION);
+        let mut request = format!("CONNECT {} HTTP/{}\r\n", addr, HTTP_VERSION);
 
         // Authentication
         if let Some(auth_header) = self.auth_header() {

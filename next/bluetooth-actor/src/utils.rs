@@ -7,7 +7,7 @@
 //! which simplifies the mapping of `rootcanal` emulator errors to the
 //! `ChipError` type.
 
-use netsim_model::chip_error::ChipError;
+use netsim_model::ChipError;
 use rootcanal::error::Error as RadioError;
 
 /// A helper trait to simplify error conversion from `RadioError` to

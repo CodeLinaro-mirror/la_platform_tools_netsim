@@ -358,7 +358,7 @@ impl HwsimAttrSet {
                 }
                 Some(HwsimAttrEnum::TxInfo) => {
                     let data = &attributes[index + 4..index + nla_len];
-                    if data.len() % 2 == 0 {
+                    if data.len().is_multiple_of(2) {
                         let count = data.len() / 2;
                         let mut rates = Vec::with_capacity(count);
                         for i in 0..count {
@@ -372,7 +372,7 @@ impl HwsimAttrSet {
                 }
                 Some(HwsimAttrEnum::TxInfoFlags) => {
                     let data = &attributes[index + 4..index + nla_len];
-                    if data.len() % 3 == 0 {
+                    if data.len().is_multiple_of(3) {
                         let count = data.len() / 3;
                         let mut flags = Vec::with_capacity(count);
                         for i in 0..count {

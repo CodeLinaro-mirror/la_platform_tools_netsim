@@ -7,15 +7,18 @@ use device_actor::DeviceClient;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
+#[cfg(not(feature = "cuttlefish"))]
+use netsim_proto::access_point_grpc::create_access_point_service;
 use netsim_proto::{
-    access_point_grpc::create_access_point_service, ble_service_grpc::create_ble_service,
-    frontend_grpc::create_frontend_service, packet_streamer_grpc::create_packet_streamer,
+    ble_service_grpc::create_ble_service, frontend_grpc::create_frontend_service,
+    packet_streamer_grpc::create_packet_streamer,
 };
 use tracing::{error, info, warn};
 
+#[cfg(not(feature = "cuttlefish"))]
+use crate::access_point::AccessPointServiceImpl;
 use crate::{
-    access_point::AccessPointServiceImpl, ble_service::BleServiceImpl, frontend::FrontendClient,
-    packet_streamer::PacketStreamerService,
+    ble_service::BleServiceImpl, frontend::FrontendClient, packet_streamer::PacketStreamerService,
 };
 
 // Share a single gRPC Environment across all server instances within the same
@@ -25,46 +28,56 @@ static SHARED_ENV: OnceLock<Arc<Environment>> = OnceLock::new();
 
 pub fn start(
     port: u32,
+    enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: link_actor::LinkClient,
-    ap_client: ap_actor::ApClient,
+    #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
     packet_streamer_service: PacketStreamerService,
     version: String,
 ) -> Result<(Server, u16), grpcio::Error> {
     let env = SHARED_ENV.get_or_init(|| Arc::new(Environment::new(1))).clone();
     let backend_service = create_packet_streamer(packet_streamer_service);
-    let frontend_service = create_frontend_service(FrontendClient::new(
-        device_client.clone(),
-        Arc::new(link_client),
-        version,
-    ));
-    let access_point_service = create_access_point_service(AccessPointServiceImpl::new(ap_client));
+    #[cfg(not(feature = "cuttlefish"))]
+    let access_point_service =
+        create_access_point_service(AccessPointServiceImpl::new(ap_client.clone()));
     let ble_service = create_ble_service(BleServiceImpl::new(device_client.clone()));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
     let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
-    let server_builder = ServerBuilder::new(env);
-    let mut server = server_builder
-        .register_service(backend_service)
-        .register_service(frontend_service)
-        .register_service(access_point_service)
-        .register_service(ble_service)
-        .channel_args(ch_builder.build_args())
-        .build()?;
+    let mut server_builder = ServerBuilder::new(env).register_service(backend_service);
+
+    #[cfg(not(feature = "cuttlefish"))]
+    {
+        server_builder = server_builder.register_service(access_point_service);
+    }
+    server_builder = server_builder.register_service(ble_service);
+
+    if enable_cli_ui {
+        let frontend_service = create_frontend_service(FrontendClient::new(
+            device_client.clone(),
+            Arc::new(link_client),
+            #[cfg(not(feature = "cuttlefish"))]
+            ap_client,
+            version,
+        ));
+        server_builder = server_builder.register_service(frontend_service);
+    }
+
+    let mut server = server_builder.channel_args(ch_builder.build_args()).build()?;
 
     let addr = format!("localhost:{port}");
-    let port = server.add_listening_port(&addr, ServerCredentials::insecure()).map_err(|e| {
-        match std::net::TcpListener::bind(&addr) {
-            Ok(listener) => drop(listener),
-            Err(bind_e) => {
-                if bind_e.kind() == std::io::ErrorKind::AddrInUse {
-                    warn!("Rust gRPC Address {addr} is already in use.");
-                } else {
-                    error!("Rust gRPC bind error: {bind_e:?}")
+    let port =
+        server.add_listening_port(&addr, ServerCredentials::insecure()).inspect_err(|_| {
+            match std::net::TcpListener::bind(&addr) {
+                Ok(listener) => drop(listener),
+                Err(bind_e) => {
+                    if bind_e.kind() == std::io::ErrorKind::AddrInUse {
+                        warn!("Rust gRPC Address {addr} is already in use.");
+                    } else {
+                        error!("Rust gRPC bind error: {bind_e:?}")
+                    }
                 }
             }
-        }
-        e
-    })?;
+        })?;
 
     server.start();
     info!("Rust gRPC listening on localhost:{port}");

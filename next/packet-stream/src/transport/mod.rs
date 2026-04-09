@@ -111,7 +111,7 @@ impl CrossPlatformListener {
         }
 
         let addr: std::net::SocketAddr = "localhost:8080".parse().map_err(SocketError::from)?;
-        return Ok(CrossPlatformListener::Tcp(tokio::net::TcpListener::bind(addr).await?));
+        Ok(CrossPlatformListener::Tcp(tokio::net::TcpListener::bind(addr).await?))
     }
 
     async fn bind_auto() -> Result<Self> {
@@ -155,7 +155,7 @@ impl CrossPlatformListener {
             }
             #[cfg(not(unix))]
             SocketType::Unix(_) => {
-                return Err(PacketStreamError::Socket(SocketError::UnsupportedPlatform(
+                Err(PacketStreamError::Socket(SocketError::UnsupportedPlatform(
                     "Unix sockets not supported on this platform".to_string(),
                 )))
             }

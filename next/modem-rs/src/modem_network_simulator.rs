@@ -9,7 +9,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use netsim_model::cell::{ModemAction, RegistrationStatus};
+use netsim_model::{ModemAction, RegistrationStatus};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
@@ -210,11 +210,6 @@ impl ModemNetworkSimulator {
             Vec::new()
         };
         self.process_effects(effects)
-    }
-
-    #[allow(dead_code)]
-    fn get_modems(&self) -> Vec<&ModemImpl> {
-        self.modems.values().collect()
     }
 
     // Helper to find peer ID.

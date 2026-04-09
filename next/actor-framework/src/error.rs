@@ -9,7 +9,7 @@
 
 use std::error::Error;
 
-use netsim_model::client_error::ClientError;
+use netsim_model::ClientError;
 
 /// Errors that can occur within the actor framework itself.
 #[derive(Debug, thiserror::Error)]
@@ -22,8 +22,8 @@ pub enum FrameworkError<E: Error + Send + Sync> {
     ServiceError(#[source] E),
 }
 
-impl<E: 'static + Error + Send + Sync> Into<ClientError> for FrameworkError<E> {
-    fn into(self) -> ClientError {
-        ClientError::Framework(Box::new(self))
+impl<E: 'static + Error + Send + Sync> From<FrameworkError<E>> for ClientError {
+    fn from(val: FrameworkError<E>) -> Self {
+        ClientError::Framework(Box::new(val))
     }
 }

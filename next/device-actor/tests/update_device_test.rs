@@ -9,8 +9,8 @@
 
 use std::collections::HashMap;
 
-use device_api::api::DeviceUpdate;
-use netsim_model::chip::{Chip, ChipClient, ChipId, ChipKind, ChipVariantUpdate, MockChipClient};
+use device_api::DeviceUpdate;
+use netsim_model::{Chip, ChipClient, ChipId, ChipKind, ChipVariantUpdate, MockChipClient};
 
 use crate::world::World;
 

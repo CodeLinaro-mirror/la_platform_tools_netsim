@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::eapol::{
-        EapolHeader, EapolKeyFrame, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
-    },
+    EapolHeader, EapolKeyFrame, MacAddr, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
 };
 use tracing::{info, warn};
 use zerocopy::{FromBytes, IntoBytes};
@@ -294,8 +291,8 @@ impl WpaAuthenticator {
             return false;
         }
 
-        for i in MIC_OFFSET..MIC_END {
-            frame_copy[i] = 0;
+        for b in frame_copy.iter_mut().take(MIC_END).skip(MIC_OFFSET) {
+            *b = 0;
         }
 
         let calculated = self.calc_mic_for_frame(&frame_copy);

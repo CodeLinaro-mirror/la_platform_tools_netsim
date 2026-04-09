@@ -92,11 +92,11 @@ pub fn parse_hci_event(data: &[u8]) -> Option<HciEvent<'_>> {
         EventCode::COMMAND_COMPLETE => {
             let (cc_header, return_parameters) =
                 CommandCompleteHeader::read_from_prefix(payload).ok()?;
-            Some(HciEvent::CommandComplete { header: cc_header.clone(), return_parameters })
+            Some(HciEvent::CommandComplete { header: cc_header, return_parameters })
         }
         EventCode::COMMAND_STATUS => {
             let (status, _) = CommandStatus::read_from_prefix(payload).ok()?;
-            Some(HciEvent::CommandStatus(status.clone()))
+            Some(HciEvent::CommandStatus(status))
         }
         EventCode::LE_META_EVENT => {
             let (le_header, le_payload) = HciLeMetaEventHeader::read_from_prefix(payload).ok()?;

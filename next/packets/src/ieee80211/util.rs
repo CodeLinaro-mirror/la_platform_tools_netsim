@@ -3,15 +3,19 @@
 
 //! Provides utility functions for working with IEEE 802.11 frames and headers.
 
+#[cfg(test)]
 use std::fmt::Write;
 
-use crate::{
-    ethernet::MacAddr,
-    ieee80211::{data_subtype, frame_type, management_subtype, FrameControl, MacHeader3Addr},
-};
+#[cfg(test)]
+use crate::ieee80211::management_subtype;
+#[cfg(test)]
+use crate::ieee80211::FrameControl;
+use crate::{ethernet::MacAddr, ieee80211::MacHeader3Addr};
 
 /// Converts a FrameControl field to a human-readable string.
+#[cfg(test)]
 pub fn frame_control_to_string(fc: FrameControl) -> String {
+    use crate::ieee80211::frame_type;
     let mut s = String::new();
     write!(s, "FC:0x{:04X} ", fc.get()).unwrap();
     s.push_str(&frame_type_to_string(fc.frame_type()));
@@ -59,7 +63,9 @@ pub fn frame_control_to_string(fc: FrameControl) -> String {
 }
 
 /// Converts an IEEE 802.11 frame type value to a string.
+#[cfg(test)]
 pub fn frame_type_to_string(frame_type_val: u8) -> String {
+    use crate::ieee80211::frame_type;
     match frame_type_val {
         frame_type::MANAGEMENT => "Mgmt".to_string(),
         frame_type::CONTROL => "Ctrl".to_string(),
@@ -69,6 +75,7 @@ pub fn frame_type_to_string(frame_type_val: u8) -> String {
 }
 
 /// Converts an IEEE 802.11 management frame subtype value to a string.
+#[cfg(test)]
 pub fn management_subtype_to_string(subtype_val: u8) -> String {
     match subtype_val {
         management_subtype::ASSOCIATION_REQUEST => "AssocReq".to_string(),
@@ -88,7 +95,9 @@ pub fn management_subtype_to_string(subtype_val: u8) -> String {
 }
 
 /// Converts an IEEE 802.11 data frame subtype value to a string.
+#[cfg(test)]
 pub fn data_subtype_to_string(subtype_val: u8) -> String {
+    use crate::ieee80211::data_subtype;
     match subtype_val {
         data_subtype::DATA => "Data".to_string(),
         data_subtype::DATA_CF_ACK => "DataCfAck".to_string(),
@@ -103,8 +112,9 @@ pub fn data_subtype_to_string(subtype_val: u8) -> String {
     }
 }
 
-/// Checks if the frame is a Beacon frame.
+#[cfg(test)]
 pub fn is_beacon_frame(fc: FrameControl) -> bool {
+    use crate::ieee80211::frame_type;
     fc.frame_type() == frame_type::MANAGEMENT && fc.frame_subtype() == management_subtype::BEACON
 }
 
@@ -164,7 +174,9 @@ mod tests {
     use zerocopy::U16;
 
     use super::*;
-    use crate::ieee80211::{FrameControl, MacHeader3Addr, SequenceControl};
+    use crate::ieee80211::{
+        data_subtype, frame_type, FrameControl, MacHeader3Addr, SequenceControl,
+    };
 
     fn create_header(
         fc_val: u16,

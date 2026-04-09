@@ -6,13 +6,10 @@ use crate::{
     types::{ExecutionResult, HandledCommand},
 };
 
+#[derive(Default)]
 pub struct StkService {}
 
 impl StkService {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     // --- Pure command handlers ---
 
     fn handle_envelope_command(&self, command: &[u8]) -> Vec<u8> {
@@ -71,7 +68,7 @@ impl StkService {
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
             Command::QueryStkReady => self.handle_query_stk_ready(),
-            Command::SendStkEnvelopeCommand(envelope_command) => {
+            Command::SendStkEnvelope(envelope_command) => {
                 self.handle_send_stk_envelope_command(*envelope_command)
             }
             Command::SetStk(_) => self.handle_set_stk(),

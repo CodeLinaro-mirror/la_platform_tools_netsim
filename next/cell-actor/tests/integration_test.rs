@@ -1,11 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
-
-// next/cell-actor/tests/integration_test.rs
-use std::{
-    io::{Error as IoError, ErrorKind},
-    pin::Pin,
-};
+use std::{io::Error as IoError, pin::Pin};
 
 use actor_framework::{ResourceClient, ResourceRequest};
 use bytes::Bytes;
@@ -14,12 +9,8 @@ use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult};
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::{
-    chip::{
-        CellCreate, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipVariant,
-        PacketSink, PacketStream,
-    },
-    chip_error::ChipError as NetsimChipError,
-    device::DeviceId,
+    Cell, Chip, ChipClient, ChipCreate, ChipError as NetsimChipError, ChipId, ChipVariant,
+    DeviceId, PacketSink, PacketStream,
 };
 use tokio::sync::mpsc;
 
@@ -33,7 +24,7 @@ fn create_dummy_stream_sink(
     let sink: PacketSink = Pin::from(Box::new(
         sink_tx
             .with(|data: Bytes| ready(Ok(data)))
-            .sink_map_err(|e: fmpsc::SendError| IoError::new(ErrorKind::Other, e.to_string())),
+            .sink_map_err(|e: fmpsc::SendError| IoError::other(e.to_string())),
     ));
 
     (stream, sink, stream_tx, sink_rx)
@@ -65,18 +56,12 @@ impl Drop for TestHarness {
 }
 
 fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> ChipCreate {
-    ChipCreate {
-        packet_stream: Some(stream),
-        packet_sink: Some(sink),
-        config: ChipConfig {
-            name: format!("cell-{}", chip_id),
-            manufacturer: "Netsim".to_string(),
-            product_name: "CellEmulator".to_string(),
-            chip_kind_params: ChipKindParams::Cell(CellCreate::default()),
-        },
-        device_id: DeviceId(1),
-        pose: Default::default(),
-    }
+    let mut chip = Chip::new_test_cell(format!("cell-{}", chip_id));
+    chip.id = chip_id.0;
+    chip.device_id = DeviceId(1);
+    chip.variant = Some(ChipVariant::Cell(Cell { state: "idle".to_string() }));
+
+    ChipCreate { packet_stream: Some(stream), packet_sink: Some(sink), chip }
 }
 
 // T011: Test for CreateChip message
@@ -193,7 +178,7 @@ async fn test_get_chip() {
     // Test non-existent chip
     let bad_chip_id = ChipId(99);
     match harness.client.read(bad_chip_id).await {
-        Err(netsim_model::client_error::ClientError::Chip(NetsimChipError::ChipNotFound(id))) => {
+        Err(netsim_model::ClientError::Chip(NetsimChipError::ChipNotFound(id))) => {
             assert_eq!(id, bad_chip_id);
         }
         other => panic!("Expected ChipNotFound error, got {:?}", other),

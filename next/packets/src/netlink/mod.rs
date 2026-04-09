@@ -16,11 +16,14 @@ pub use frame::NlMsgHdr;
 pub use hwsim_attr_set::*;
 pub use hwsim_frame::*;
 pub use mac80211_hwsim::*;
+#[allow(unused_imports)]
 pub use nl80211::*;
 pub use nl80211_attr::*;
 pub use nl80211_attr_set::*;
+#[allow(unused_imports)]
 pub use nl80211_json::*;
 pub use nl80211_util::*;
+#[allow(unused_imports)]
 pub use stream::*;
 
 mod tests;

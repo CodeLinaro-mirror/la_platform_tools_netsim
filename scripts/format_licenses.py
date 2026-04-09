@@ -133,10 +133,16 @@ def process_file(filepath):
 
   # 3. Inject full standard block into completely header-less files
   # This fixes lifecycle_test.rs which had no header whatsoever.
-  has_copyright = re.search(
-      r"^[ \t]*(#|//|\*|/\*)[ \t]*Copyright", content, re.MULTILINE
+  # Only check the first 3 lines for existing license/copyright to avoid
+  # false positives in generated binary data, while allowing for shebangs.
+  top_lines = content.split("\n", 3)[:3]
+  has_copyright = any(
+      re.search(r"^[ \t]*(#|//|\*|/\*)[ \t]*Copyright", line)
+      for line in top_lines
   )
-  if not has_copyright and "SPDX-License-Identifier" not in content:
+  if not has_copyright and not any(
+      "SPDX-License-Identifier" in line for line in top_lines
+  ):
     basename = os.path.basename(filepath)
     ext = os.path.splitext(filepath)[1]
     if ext in [".rs", ".java", ".ts", ".cc", ".h", ".kt", ".proto"]:

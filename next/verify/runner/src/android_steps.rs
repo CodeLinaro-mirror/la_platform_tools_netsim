@@ -191,6 +191,7 @@ impl AndroidDevice {
                 .adb_command()
                 .arg("install")
                 .arg("-r")
+                .arg("-g")
                 .arg(apk)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -359,7 +360,11 @@ impl AndroidDevice {
 }
 
 impl AndroidDevice {
-    pub async fn execute_step(&mut self, step: &str) -> anyhow::Result<HashMap<String, String>> {
+    pub async fn execute_step(
+        &mut self,
+        step: &str,
+        timeout_secs: u64,
+    ) -> anyhow::Result<HashMap<String, String>> {
         {
             let mut guard = self.feedback_stream.lock().unwrap();
             let stream =
@@ -368,13 +373,12 @@ impl AndroidDevice {
             stream.flush()?;
         }
 
-        // 1. Wait for acknowledgement that the// No content replacement. Just comments.
+        // 1. Wait for acknowledgement that the step was received
         self.wait_for_pattern(&format!("{} {}", MARKER_RECEIVED, step), 5).await?;
 
-        // 2. Wait for the completion signal (with a generous 60s timeout for network
-        //    tasks)
+        // 2. Wait for the completion signal
         let complete_line =
-            self.wait_for_pattern(&format!("{} {}", MARKER_COMPLETED, step), 60).await?;
+            self.wait_for_pattern(&format!("{} {}", MARKER_COMPLETED, step), timeout_secs).await?;
 
         if complete_line.contains(RESULT_FAILURE) {
             let msg = complete_line.split(MSG_KEY).last().unwrap_or("Unknown actor-side error");
@@ -404,7 +408,8 @@ impl AndroidDevice {
         );
 
         let start = Instant::now();
-        self.execute_step(&step).await?;
+        let timeout_secs = std::cmp::max(60, (params.timeout_ms / 1000) as u64);
+        self.execute_step(&step, timeout_secs).await?;
         let duration = start.elapsed();
 
         Ok(Some(Throughput { bytes: params.payload_size, duration }))
@@ -487,16 +492,16 @@ async fn generic_execution_step(w: &mut TestContext, label: String, step: String
     if w.is_dry_run {
         return;
     }
-    generic_execution(w, actor, step).await;
+    generic_execution(w, actor, step, 60).await;
 }
 
 // Helper function
-async fn generic_execution(w: &mut TestContext, actor: String, step: String) {
+async fn generic_execution(w: &mut TestContext, actor: String, step: String, timeout_secs: u64) {
     let step = w.resolve_placeholders(&step);
     let vars = {
         let android =
             w.get_android_actor_mut(&actor).expect("Actor not found or is not an Android Agent");
-        android.execute_step(&step).await.expect("Android step execution failed")
+        android.execute_step(&step, timeout_secs).await.expect("Android step execution failed")
     };
     for (k, v) in vars {
         w.set_variable(&k, v);
@@ -530,6 +535,38 @@ async fn performance_benchmark(
     )
     .await
     .expect("Benchmark failed");
+}
+
+/// STEP: When ^Android connects to Wi-Fi SSID "([^"]+)"$
+async fn android_connects_to_wifi(w: &mut TestContext, ssid: String) {
+    let step = format!("When Android connects to Wi-Fi SSID \"{}\"", ssid);
+    generic_execution(w, "@avd:1".to_string(), step, 120).await;
+}
+
+/// STEP: When ^Android connects to Wi-Fi SSID "([^"]+)" with password
+/// "([^"]+)"$
+async fn android_connects_to_secured_wifi(w: &mut TestContext, ssid: String, password: String) {
+    let step =
+        format!("When Android connects to Wi-Fi SSID \"{}\" with password \"{}\"", ssid, password);
+    generic_execution(w, "@avd:1".to_string(), step, 120).await;
+}
+
+/// STEP: Then ^Android is connected to Wi-Fi SSID "([^"]+)"$
+async fn android_is_connected_to_wifi(w: &mut TestContext, ssid: String) {
+    let step = format!("Then Android is connected to Wi-Fi SSID \"{}\"", ssid);
+    generic_execution(w, "@avd:1".to_string(), step, 60).await;
+}
+
+/// STEP: Then ^Wi-Fi device info shows SSID "([^"]+)"$
+async fn wifi_device_info_shows_ssid(w: &mut TestContext, ssid: String) {
+    let step = format!("Then Wi-Fi device info shows SSID \"{}\"", ssid);
+    generic_execution(w, "@avd:1".to_string(), step, 60).await;
+}
+
+/// STEP: When ^Android releases Wi-Fi connection$
+async fn android_releases_wifi_connection(w: &mut TestContext) {
+    let step = "When Android releases Wi-Fi connection".to_string();
+    generic_execution(w, "@avd:1".to_string(), step, 60).await;
 }
 
 // Include generated glue code

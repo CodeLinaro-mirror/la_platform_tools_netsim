@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::{ActorService, DynContext};
-use netsim_model::{
-    chip::{BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant},
-    chip_error::ChipError,
-    ChipId, ChipKind,
-};
+use netsim_model::{BluetoothMode, Chip, ChipCreate, ChipError, ChipId, ChipUpdate, ChipVariant};
 use tracing::{info, warn};
 
 use crate::{
@@ -35,65 +31,66 @@ impl ActorService for BluetoothActor {
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = id.ok_or_else(|| BluetoothError::invalid_arg("missing chip id"))?;
 
-        let config = &params.config;
-        let create_params = match &config.chip_kind_params {
-            ChipKindParams::Bluetooth(p) => p,
-            _ => {
-                return Err(BluetoothError::invalid_arg("Expected Bluetooth network params"));
-            }
+        let variant = params
+            .chip
+            .variant
+            .as_ref()
+            .ok_or_else(|| BluetoothError::invalid_arg("Missing chip variant"))?;
+        let bluetooth = match variant {
+            ChipVariant::Bluetooth(b) => b,
+            _ => return Err(BluetoothError::invalid_arg("Expected Bluetooth variant")),
         };
 
         // Validate Scanner constraints: No PacketStream, Must have PacketSink.
-        if let BluetoothMode::Scanner(_) = &create_params.mode {
+        if let BluetoothMode::Scanner(_) = &bluetooth.mode {
             assert!(params.packet_stream.is_none(), "Scanner chip cannot have a packet stream");
             assert!(params.packet_sink.is_some(), "Scanner chip must have a packet sink");
         }
 
         // Validate Sniffer constraints: No PacketStream, Must have PacketSink.
-        if let BluetoothMode::Sniffer(_) = &create_params.mode {
+        if let BluetoothMode::Sniffer(_) = &bluetooth.mode {
             assert!(params.packet_stream.is_none(), "Sniffer chip cannot have a packet stream");
             assert!(params.packet_sink.is_some(), "Sniffer chip must have a packet sink");
         }
 
         let name =
-            if config.name.is_empty() && matches!(create_params.mode, BluetoothMode::Beacon(_)) {
+            if params.chip.name.is_empty() && matches!(bluetooth.mode, BluetoothMode::Beacon(_)) {
                 let name = crate::beacon_utils::generate_default_name(chip_id.0);
-                self.sync_device_name(params.device_id, name.clone());
+                self.sync_device_name(params.chip.device_id, name.clone());
                 name
             } else {
-                config.name.clone()
+                params.chip.name.clone()
             };
 
-        let raw_address = if create_params.address.is_empty() {
+        let raw_address = if bluetooth.address.is_empty() {
             crate::beacon_utils::generate_legacy_address(chip_id.into())
         } else {
-            create_params.address.clone()
+            bluetooth.address.clone()
         };
 
         let address: rootcanal::Address =
             raw_address.parse().map_err(|_| BluetoothError::invalid_arg("Invalid address"))?;
 
-        let mut mode = create_params.mode.clone();
+        let mut mode = bluetooth.mode.clone();
         if let BluetoothMode::Beacon(ref mut beacon_params) = mode {
             if beacon_params.ble_beacon.address.is_empty() {
                 beacon_params.ble_beacon.address = raw_address;
             }
         }
 
-        let chip = Chip {
-            id: chip_id.0,
-            device_id: params.device_id,
-            name,
-            manufacturer: params.config.manufacturer.clone(),
-            product_name: params.config.product_name.clone(),
-            kind: ChipKind::BLUETOOTH,
-            pose: params.pose,
-            variant: Some(ChipVariant::Bluetooth(netsim_model::bluetooth::Bluetooth {
-                low_energy: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
-                classic: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
-            })),
-            ..Default::default()
-        };
+        let mut chip = params.chip;
+        chip.id = chip_id.0;
+        chip.name = name;
+
+        // Ensure radio states are enabled by default for initial state
+        if let Some(netsim_model::ChipVariant::Bluetooth(ref mut bluetooth)) = chip.variant {
+            if bluetooth.low_energy.state.is_none() {
+                bluetooth.low_energy.state = Some(true);
+            }
+            if bluetooth.classic.state.is_none() {
+                bluetooth.classic.state = Some(true);
+            }
+        }
 
         // 1. Register Stream
         if let Some(stream) = params.packet_stream {
@@ -140,7 +137,7 @@ impl ActorService for BluetoothActor {
             })?;
 
         self.rootcanal
-            .new_controller(chip_id.0.into(), address, Box::new(callback), Some(&config_bytes))
+            .new_controller(chip_id.0, address, Box::new(callback), Some(&config_bytes))
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
@@ -204,7 +201,7 @@ impl ActorService for BluetoothActor {
             let device_id = chip.device_id;
 
             info!("Deleting chip {chip_id}");
-            self.rootcanal.remove_controller(chip_id.0.into()).to_chip_error()?;
+            self.rootcanal.remove_controller(chip_id.0).to_chip_error()?;
 
             // Notify DeviceService
             let dc = self.device_client.clone();
@@ -228,7 +225,7 @@ impl ActorService for BluetoothActor {
         match _action {
             BluetoothAction::Reset { id } => {
                 info!("Resetting Bluetooth chip {id}");
-                let _ = self.rootcanal.clear_stats(id.0.into());
+                let _ = self.rootcanal.clear_stats(id.0);
 
                 let chip = {
                     let mut chips = self.chips.lock().unwrap();
@@ -242,27 +239,27 @@ impl ActorService for BluetoothActor {
                     *chip = initial_chip.clone();
                     chip.clone()
                 };
-                Ok(BluetoothActionResult::Chip(chip))
+                Ok(BluetoothActionResult::Chip(Box::new(chip)))
             }
             BluetoothAction::GetStatistics => {
                 let mut stats_list = Vec::new();
                 let chips = self.chips.lock().unwrap();
                 for (id, chip) in chips.iter() {
-                    if let Ok(stats) = self.rootcanal.get_stats(id.0.into()) {
+                    if let Ok(stats) = self.rootcanal.get_stats(id.0) {
                         // BLE Stats
-                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = id.0;
                         radio_stats.name = chip.name.clone();
-                        radio_stats.kind = netsim_model::stats::RadioKind::BluetoothLowEnergy;
+                        radio_stats.kind = netsim_model::RadioKind::BluetoothLowEnergy;
                         radio_stats.tx_count = stats.ll_packets_out_ble;
                         radio_stats.rx_count = stats.ll_packets_in_ble;
                         stats_list.push(radio_stats);
 
                         // Classic Stats
-                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = id.0;
                         radio_stats.name = chip.name.clone();
-                        radio_stats.kind = netsim_model::stats::RadioKind::BluetoothClassic;
+                        radio_stats.kind = netsim_model::RadioKind::BluetoothClassic;
                         radio_stats.tx_count = stats.ll_packets_out_classic;
                         radio_stats.rx_count = stats.ll_packets_in_classic;
                         stats_list.push(radio_stats);
@@ -288,11 +285,10 @@ impl ActorService for BluetoothActor {
 
 impl BluetoothActor {
     /// Asynchronously synchronize the device name to match the chip name.
-    fn sync_device_name(&self, device_id: netsim_model::device::DeviceId, name: String) {
+    fn sync_device_name(&self, device_id: netsim_model::DeviceId, name: String) {
         let dc = self.device_client.clone();
         tokio::spawn(async move {
-            let mut update = netsim_model::device::api::DeviceUpdate::default();
-            update.name = Some(name);
+            let update = netsim_model::DeviceUpdate { name: Some(name), ..Default::default() };
             if let Err(e) = dc.update(device_id, update).await {
                 warn!("Failed to sync device name for device {}: {:?}", device_id, e);
             }

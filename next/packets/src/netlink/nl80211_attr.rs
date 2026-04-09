@@ -17,7 +17,7 @@ pub struct NlAttrHdr {
     /// Length of the attribute, including the header.
     pub nla_len: U16<LittleEndian>,
     /// Type of the attribute. The lower 14 bits are the attribute ID,
-    /// and the upper 16 bits are flags (e.g., NLA_F_NESTED).
+    /// and the upper 2 bits are flags (e.g., NLA_F_NESTED).
     pub attr_type: U16<LittleEndian>,
 }
 
@@ -58,8 +58,7 @@ impl NlAttrHdr {
     }
 }
 
-/// Represents a parsed Netlink attribute.
-#[derive(Debug, Clone)]
+#[cfg(test)]
 pub struct NlAttr<'a> {
     /// The attribute type.
     pub attr_type: u16,
@@ -67,16 +66,7 @@ pub struct NlAttr<'a> {
     pub payload: &'a [u8],
 }
 
-/// Parses a byte slice into a list of Netlink attributes.
-///
-/// # Arguments
-///
-/// * `data` - A byte slice containing the Netlink attributes.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec` of parsed `NlAttr`s, or an error message if
-/// parsing fails.
+#[cfg(test)]
 pub fn parse_attributes(mut data: &[u8]) -> Result<Vec<NlAttr<'_>>, String> {
     let mut attrs = Vec::new();
     while !data.is_empty() {

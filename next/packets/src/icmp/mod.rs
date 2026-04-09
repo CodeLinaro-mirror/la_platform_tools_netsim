@@ -7,7 +7,6 @@ pub mod v6;
 pub mod v6_json;
 
 pub use v4::*;
-pub use v6::*;
 
 #[cfg(test)]
 mod tests;

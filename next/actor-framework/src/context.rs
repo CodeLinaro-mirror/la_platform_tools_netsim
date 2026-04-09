@@ -25,6 +25,8 @@ use crate::{ActorService, BoxStream, BoxTypedStream};
 
 pub type TimerKey = delay_queue::Key;
 
+pub type TimerCallback<T> = Box<dyn FnOnce(&mut T, &mut dyn Context<T>) + Send>;
+
 /// The runtime environment for an actor, providing access to time, streams, and
 /// lifecycle.
 pub type DynContext<T> = dyn Context<T> + Send;
@@ -60,11 +62,7 @@ pub trait Context<T: ActorService>: Send + 'static {
     fn shutdown(&mut self);
 
     /// Schedule a closure to be run after a duration.
-    fn run_later(
-        &mut self,
-        duration: Duration,
-        f: Box<dyn FnOnce(&mut T, &mut dyn Context<T>) + Send>,
-    ) -> TimerKey;
+    fn run_later(&mut self, duration: Duration, f: TimerCallback<T>) -> TimerKey;
 
     /// Cancel a scheduled timer.
     fn cancel_timer(&mut self, key: TimerKey);
@@ -77,7 +75,7 @@ pub(crate) struct FrameworkContext<T: ActorService> {
     pub(crate) shutdown_tx: Option<oneshot::Sender<()>>,
     pub(crate) tasks: tokio::task::JoinSet<T::Id>,
     pub(crate) task_handles: std::collections::HashMap<T::Id, tokio::task::AbortHandle>,
-    pub(crate) timers: DelayQueue<Box<dyn FnOnce(&mut T, &mut dyn Context<T>) + Send>>,
+    pub(crate) timers: DelayQueue<TimerCallback<T>>,
 }
 
 impl<T: ActorService> FrameworkContext<T> {
@@ -130,7 +128,7 @@ impl<T: ActorService> Context<T> for FrameworkContext<T> {
     }
 
     fn spawn(&mut self, id: T::Id, task: BoxFuture<'static, T::Id>) {
-        let handle = self.tasks.spawn(async move { task.await });
+        let handle = self.tasks.spawn(task);
         self.task_handles.insert(id, handle);
     }
 
@@ -148,11 +146,7 @@ impl<T: ActorService> Context<T> for FrameworkContext<T> {
         self.task_handles.clear();
     }
 
-    fn run_later(
-        &mut self,
-        duration: Duration,
-        f: Box<dyn FnOnce(&mut T, &mut dyn Context<T>) + Send>,
-    ) -> TimerKey {
+    fn run_later(&mut self, duration: Duration, f: TimerCallback<T>) -> TimerKey {
         self.timers.insert(f, duration)
     }
 

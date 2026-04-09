@@ -12,13 +12,11 @@ use crate::{
 const DEFAULT_PUK: &str = "12345678";
 
 // Represents the state of the SIM card.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SimState {
     Ready,
     PinRequired,
     PukRequired,
-    Absent,
 }
 
 // Holds all state related to the SIM card.
@@ -93,7 +91,6 @@ impl SimService {
             SimState::Ready => "+CPIN: READY\r\n",
             SimState::PinRequired => "+CPIN: SIM PIN\r\n",
             SimState::PukRequired => "+CPIN: SIM PUK\r\n",
-            SimState::Absent => "ERROR: SIM not inserted\r\n",
         };
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response_str.to_string());
@@ -145,7 +142,6 @@ impl SimService {
                     AT_ERROR.to_vec()
                 }
             }
-            _ => AT_ERROR.to_vec(),
         };
         ExecutionResult::Handled(HandledCommand {
             responses: vec![String::from_utf8(response).unwrap_or_default()],
@@ -222,7 +218,7 @@ impl SimService {
             return ExecutionResult::Handled(HandledCommand::error());
         }
 
-        let response = format!("+CGLA: 10, \"9000\"\r\n");
+        let response = "+CGLA: 10, \"9000\"\r\n".to_string();
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)

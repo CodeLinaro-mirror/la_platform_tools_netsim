@@ -85,7 +85,7 @@ pub trait ActorService: Send + Sync + 'static {
     /// These hooks are called sequentially in the actor's run loop.
     /// Blocking logic or long-running CPU tasks here will block the entire
     /// actor. Use `ctx.spawn()` for heavy tasks.
-
+    ///
     /// Called when a create request is received.
     fn handle_create(
         &mut self,

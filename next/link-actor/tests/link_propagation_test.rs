@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
+use netsim_model::{ChipClient, ChipId, ChipKind, MockChipClient};
 
 use crate::world::World;
 
@@ -15,7 +15,7 @@ use crate::world::World;
 
 // Helper to configure common mock expectations
 fn configure_base_mock(mock: &mut MockChipClient) {
-    mock.expect_read().returning(|_| Ok(netsim_model::chip::Chip::default()));
+    mock.expect_read().returning(|_| Ok(netsim_model::Chip::default()));
 }
 
 // Scenario: Link updates are propagated to chip clients for creation and
@@ -43,7 +43,7 @@ async fn test_link_propagation() {
                 && patch.links.as_ref().unwrap().contains(&(ChipId(2), -50))
         })
         .times(1)
-        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
 
     shared_mock
         .expect_update()
@@ -52,7 +52,7 @@ async fn test_link_propagation() {
             *id == ChipId(1) && patch.links.is_some() && patch.links.as_ref().unwrap().is_empty()
         })
         .times(1)
-        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
 
     let mut clients = HashMap::new();
     clients.insert(ChipKind::BLUETOOTH, Box::new(shared_mock) as Box<dyn ChipClient>);
@@ -96,7 +96,7 @@ async fn test_update_link_propagates_patch() {
                 && patch.links.as_ref().unwrap().contains(&(ChipId(2), -50))
         })
         .times(1)
-        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
 
     // 2. Expectation for Update
     shared_mock
@@ -109,7 +109,7 @@ async fn test_update_link_propagates_patch() {
                 && patch.links.as_ref().unwrap().contains(&(ChipId(2), -70))
         })
         .times(1)
-        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
 
     let mut clients = HashMap::new();
     clients.insert(ChipKind::BLUETOOTH, Box::new(shared_mock) as Box<dyn ChipClient>);
@@ -151,7 +151,7 @@ async fn test_chip_removal_propagates_patch() {
                 && patch.links.as_ref().unwrap().contains(&(ChipId(2), -50))
         })
         .times(1)
-        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
 
     // Expectation 2: Peer (Chip 2) gets link update (Creation)
     shared_mock
@@ -163,7 +163,7 @@ async fn test_chip_removal_propagates_patch() {
                 && patch.links.as_ref().unwrap().contains(&(ChipId(1), -50))
         })
         .times(1)
-        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
 
     // Expectation 3: Peer (Chip 2) gets link removal update (When Chip 1 is
     // removed)
@@ -177,7 +177,7 @@ async fn test_chip_removal_propagates_patch() {
             }
         })
         .times(1)
-        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
 
     let mut clients = HashMap::new();
     clients.insert(ChipKind::BLUETOOTH, Box::new(shared_mock) as Box<dyn ChipClient>);

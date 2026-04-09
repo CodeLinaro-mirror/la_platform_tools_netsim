@@ -9,7 +9,6 @@ NETSIM_API_DEPS = [
     "@bytes",
     "@futures",
     "//next/types",
-    "//proto",
     "@serde",
     "@thiserror",
     "@tokio",

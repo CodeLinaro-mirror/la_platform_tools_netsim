@@ -9,7 +9,6 @@
 
 // Modules are now declared in main.rs (siblings)
 
-#[allow(unused_imports)]
 pub use std::{
     collections::{HashMap, HashSet},
     time::Duration,
@@ -104,7 +103,7 @@ impl features::World for TestContext {
             for key in keys {
                 if let Some(agent) = self.android.devices.get_mut(&key) {
                     // "resets world" is defined in LifecycleSteps.kt
-                    if let Err(e) = agent.execute_step("resets world").await {
+                    if let Err(e) = agent.execute_step("resets world", 60).await {
                         println!("WARN: Failed to reset world on {}: {}", key, e);
                     }
                 }

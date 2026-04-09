@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    net::{TcpListener, TcpStream as StdTcpStream},
+    net::TcpStream as StdTcpStream,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -15,10 +15,7 @@ use bytes::{Bytes, BytesMut};
 use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId};
 use futures::{SinkExt, StreamExt};
-use netsim_model::{
-    chip::{ChipKindParams, PacketSink, PacketStream},
-    ChipId,
-};
+use netsim_model::{ChipId, PacketSink, PacketStream};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -126,13 +123,13 @@ pub struct TestClientContext {
     pub client: ManualWebSocketClient,
     pub packet_stream: Option<PacketStream>,
     pub packet_sink: Option<PacketSink>,
-    pub add_request: DeviceAddChip,
+    pub add_request: Box<DeviceAddChip>,
     pub device_id: DeviceId,
 }
 
 pub struct TestWorld {
     port: u16,
-    add_chip_rx: mpsc::Receiver<(DeviceAddChip, DeviceId)>,
+    add_chip_rx: mpsc::Receiver<(Box<DeviceAddChip>, DeviceId)>,
     delete_chip_rx: mpsc::Receiver<DeviceId>,
     clients: Vec<TestClientContext>,
     last_handshake_error: Option<u16>,
@@ -181,12 +178,11 @@ impl TestWorld {
 
         let device_client = DeviceClient::new(Box::new(mock));
 
-        let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind");
+        let listener = websocket_server::server::bind(0).expect("Failed to bind");
         let port = listener.local_addr().unwrap().port();
-        drop(listener);
 
         tokio::spawn(async move {
-            server::run(port, device_client).await;
+            server::run(listener, device_client).await;
         });
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -260,7 +256,7 @@ impl TestWorld {
     ) {
         let req = &self.clients[client_idx].add_request;
         assert_eq!(req.device_config.name, expected_name);
-        if let ChipKindParams::Bluetooth(ref bt) = req.chip_config.chip_kind_params {
+        if let Some(netsim_model::ChipVariant::Bluetooth(ref bt)) = req.chip.variant {
             assert_eq!(bt.address, expected_address);
         } else {
             panic!("Expected Bluetooth chip params");

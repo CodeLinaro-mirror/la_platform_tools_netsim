@@ -8,7 +8,7 @@ use std::{
 
 use actor_framework::TimerKey;
 use capture_api::CaptureSender;
-use netsim_model::{chip::ChipClient, ChipKind};
+use netsim_model::{ChipClient, ChipKind};
 
 use crate::DeviceClient;
 
@@ -34,6 +34,7 @@ pub struct DeviceActor {
 }
 
 impl DeviceActor {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
         next_chip_id: Arc<AtomicU32>,

@@ -7,7 +7,7 @@ use std::{
 };
 
 use device_actor::DeviceClient;
-use netsim_model::chip::{Chip, ChipId};
+use netsim_model::{Chip, ChipId};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use tracing::warn;
 
@@ -99,7 +99,7 @@ impl BluetoothActor {
 
 #[cfg(test)]
 mod tests {
-    use netsim_model::chip::{Chip, ChipId, ChipVariant};
+    use netsim_model::{Chip, ChipId, ChipVariant};
     use rootcanal::Phy;
 
     use super::*;
@@ -157,10 +157,11 @@ mod tests {
         // And a destination chip with disabled LE radio
         let mut chip2 = Chip::default();
         chip2.id = 2;
-        chip2.variant = Some(ChipVariant::Bluetooth(netsim_model::chip::Bluetooth {
-            low_energy: netsim_model::chip::Radio { state: Some(false), ..Default::default() },
+        chip2.variant = Some(ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+            low_energy: netsim_model::Radio { state: Some(false), ..Default::default() },
             classic: Default::default(),
-        }));
+            ..Default::default()
+        })));
 
         chips.lock().unwrap().insert(chip1_id, chip1.clone());
         chips.lock().unwrap().insert(chip2_id, chip2.clone());

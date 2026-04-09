@@ -1,0 +1,25 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+rust_library_host {
+    name: "libnetsim_next_capture_api",
+    crate_name: "capture_api",
+    stem: "libcapture_api",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_model",
+        "libserde",
+        "libtokio",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

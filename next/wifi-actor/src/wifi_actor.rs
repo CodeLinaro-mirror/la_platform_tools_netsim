@@ -5,11 +5,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
 use ap_actor::{ApClient, SharedKeyStore};
-use netsim_model::{
-    chip::{Chip, ChipId},
-    stats::NetsimRadioStats,
-};
-use netsim_packets::ieee80211::Ieee80211;
+use netsim_model::{Chip, ChipId, NetsimRadioStats};
+use netsim_packets::Ieee80211;
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
@@ -26,9 +23,6 @@ use crate::{
     slirp_gateway::SlirpGateway,
 };
 
-/// ID for a Chip (Station)
-pub type ChipIdType = u32;
-
 #[derive(Debug)]
 pub enum WifiReq {
     GetStatistics,
@@ -42,7 +36,7 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiStats>),
-    Chip(netsim_model::chip::Chip),
+    Chip(netsim_model::Chip),
 }
 
 pub type SlirpPendingRequest = (
@@ -183,13 +177,11 @@ impl WifiActor {
                         debug!("ROUTING: Guest -> AP");
                         if let Some(to_ap) = &self.to_ap {
                             self.medium.wifi_stats.log_outcome(
-                                to_ap
-                                    .send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()))
-                                    .map_err(|e| {
-                                        WifiError::Hostapd(Box::from(format!(
-                                            "Failed to send to AP: {e}"
-                                        )))
-                                    }),
+                                to_ap.send(tx_state.get_ieee80211_bytes()).map_err(|e| {
+                                    WifiError::Hostapd(Box::from(format!(
+                                        "Failed to send to AP: {e}"
+                                    )))
+                                }),
                                 |stats, _| stats.incr_hostapd_frames_tx(),
                             );
                         }

@@ -128,5 +128,139 @@ async fn netsim_move(w: &mut TestContext, actor: String, x: f32, y: f32, z: f32)
     w.netsim.move_device(w, netsim_device, x, y, z).expect("moved successfully");
 }
 
+/// STEP: When ^Netsim creates Wi-Fi Access Point "([^"]+)" with protocol
+/// "([^"]+)"$
+async fn host_creates_ap(w: &mut TestContext, ssid: String, protocol: String) {
+    w.log_step("@netsim", "->", &format!("Creates AP '{}' with protocol '{}'", ssid, protocol));
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let cli_path = w.netsim.netsim_path.as_ref().expect("got netsim cli path");
+    let mut cmd = std::process::Command::new(cli_path);
+    cmd.arg("ap").arg("create").arg("--ssid").arg(&ssid).arg("--protocol").arg(&protocol);
+
+    let output = cmd.output().expect("failed to execute netsim ap create");
+    if !output.status.success() {
+        panic!("Failed to create AP: {}", String::from_utf8_lossy(&output.stderr));
+    }
+}
+
+/// STEP: When ^Netsim creates Wi-Fi Access Point "([^"]+)" with protocol
+/// "([^"]+)" and password "([^"]+)"$
+async fn host_creates_secured_ap(
+    w: &mut TestContext,
+    ssid: String,
+    protocol: String,
+    password: String,
+) {
+    w.log_step(
+        "@netsim",
+        "->",
+        &format!("Creates Secured AP '{}' with protocol '{}'", ssid, protocol),
+    );
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let cli_path = w.netsim.netsim_path.as_ref().expect("got netsim cli path");
+    let mut cmd = std::process::Command::new(cli_path);
+    cmd.arg("ap")
+        .arg("create")
+        .arg("--ssid")
+        .arg(&ssid)
+        .arg("--protocol")
+        .arg(&protocol)
+        .arg("--password")
+        .arg(&password);
+
+    let output = cmd.output().expect("failed to execute netsim ap create");
+    if !output.status.success() {
+        panic!("Failed to create Secured AP: {}", String::from_utf8_lossy(&output.stderr));
+    }
+}
+
+/// STEP: Then ^Wi-Fi Access Point "([^"]+)" in netsim has protocol "([^"]+)"$
+async fn verify_ap_protocol(w: &mut TestContext, ssid: String, protocol: String) {
+    w.log_step("@netsim", "THEN", &format!("AP '{}' has protocol '{}'", ssid, protocol));
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let cli_path = w.netsim.netsim_path.as_ref().expect("got netsim cli path");
+    let mut cmd = std::process::Command::new(cli_path);
+    cmd.arg("ap").arg("list");
+
+    let output = cmd.output().expect("failed to execute netsim ap list");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let expected_phy_mode = format!("802.11{}", protocol);
+    let mut found = false;
+
+    for line in stdout.lines() {
+        if line.contains(&ssid) {
+            let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+            if parts.len() >= 7 {
+                let phy_mode = parts[6];
+                if phy_mode == expected_phy_mode {
+                    found = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if !found {
+        panic!(
+            "AP '{}' with protocol '{}' not found in netsim ap list output:\n{}",
+            ssid, protocol, stdout
+        );
+    }
+}
+
+/// STEP: When ^Netsim removes Wi-Fi Access Point "([^"]+)"$
+async fn host_removes_ap(w: &mut TestContext, ssid: String) {
+    w.log_step("@netsim", "->", &format!("Removes AP '{}'", ssid));
+
+    if w.is_dry_run {
+        return;
+    }
+
+    let cli_path = w.netsim.netsim_path.as_ref().expect("got netsim cli path");
+
+    // 1. Get AP list to find ID
+    let mut list_cmd = std::process::Command::new(cli_path);
+    list_cmd.arg("ap").arg("list");
+    let output = list_cmd.output().expect("failed to execute netsim ap list");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let mut id: Option<u32> = None;
+    for line in stdout.lines() {
+        if line.contains(&ssid) {
+            let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+            if !parts.is_empty() {
+                if let Ok(parsed_id) = parts[0].parse::<u32>() {
+                    id = Some(parsed_id);
+                    break;
+                }
+            }
+        }
+    }
+
+    let id = id.unwrap_or_else(|| panic!("AP with SSID '{}' not found in netsim ap list", ssid));
+
+    // 2. Remove AP
+    let mut remove_cmd = std::process::Command::new(cli_path);
+    remove_cmd.arg("ap").arg("remove").arg(id.to_string());
+
+    let output = remove_cmd.output().expect("failed to execute netsim ap remove");
+    if !output.status.success() {
+        panic!("Failed to remove AP: {}", String::from_utf8_lossy(&output.stderr));
+    }
+}
+
 // Include generated glue code
 include!(env!("NETSIM_STEPS_GLUE"));

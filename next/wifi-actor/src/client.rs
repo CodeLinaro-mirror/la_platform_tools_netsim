@@ -3,10 +3,8 @@
 
 use actor_framework::ResourceClient;
 use netsim_model::{
-    chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate, ChipVariantUpdate},
-    chip_error::ChipError,
-    client_error::ClientError,
-    stats::NetsimRadioStats,
+    Chip, ChipClient, ChipCreate, ChipError, ChipId, ChipUpdate, ChipVariantUpdate, ClientError,
+    NetsimRadioStats,
 };
 use netsim_proto::protobuf::Message;
 

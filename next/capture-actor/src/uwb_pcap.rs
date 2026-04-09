@@ -10,6 +10,7 @@ pub struct UwbPcapWriter;
 
 impl UwbPcapWriter {
     /// Wraps [`PcapWriter`] with [`DLT_FIRA_UCI`] as the format.
+    #[allow(clippy::new_ret_no_self)]
     pub async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
         Ok(Box::new(PcapWriter::new(path, DLT_FIRA_UCI).await?))
     }

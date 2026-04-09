@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use netsim_packets::{
-    ieee80211::{FrameDirection, Ieee80211, MacAddress},
-    netlink::{hwsim_frame::HwsimFrame, HwsimMsg},
-};
+use netsim_packets::{FrameDirection, HwsimFrame, HwsimMsg, Ieee80211, MacAddress};
 
 /// Wraps an Ethernet II frame (as bytes) into a HwsimMsg suitable for injection
 /// into the Wifi actor.
@@ -29,13 +26,9 @@ pub fn wrap_ethernet_in_hwsim(
     let src_addr = MacAddress::new(*src_hwsim_addr);
     let dest_addr = MacAddress::new(*dest_hwsim_addr);
 
-    let msg = wifi_actor::medium::utils::create_hwsim_msg_from_frame(
-        &ieee80211,
-        &dest_addr,
-        freq,
-        Some(&src_addr),
-    )
-    .map_err(|e| format!("Failed to create HwsimMsg: {}", e))?;
+    let msg =
+        wifi_actor::create_hwsim_msg_from_frame(&ieee80211, &dest_addr, freq, Some(&src_addr))
+            .map_err(|e| format!("Failed to create HwsimMsg: {}", e))?;
 
     // 4. Encode to bytes
     msg.encode_to_vec().map_err(|e| format!("Failed to encode HwsimMsg: {}", e))
@@ -43,7 +36,6 @@ pub fn wrap_ethernet_in_hwsim(
 
 /// Unwraps a HwsimMsg (as bytes or struct) and extracts the Ethernet frame if
 /// present. Note: This assumes the payload is LLC SNAP encoded Ethernet II.
-#[allow(dead_code)]
 pub fn unwrap_hwsim_to_ethernet(packet: &[u8]) -> Result<Vec<u8>, String> {
     // 1. Parse HwsimMsg
     let hwsim_msg =

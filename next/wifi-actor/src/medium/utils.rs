@@ -3,13 +3,8 @@
 
 use ap_actor::SharedKeyStore;
 use netsim_packets::{
-    ieee80211::MacAddress,
-    netlink::{
-        hwsim_attr_set::HwsimAttrSet,
-        hwsim_frame::HwsimFrame,
-        mac80211_hwsim::{TxRate, TxRateFlag},
-        HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr,
-    },
+    HwsimAttrSet, HwsimCmd, HwsimFrame, HwsimMsg, HwsimMsgHdr, Ieee80211, MacAddress, NlMsgHdr,
+    TxRate, TxRateFlag,
 };
 
 use crate::{error::WifiError, medium::WifiResult};
@@ -23,7 +18,7 @@ const NL_AUTO_PORT: u32 = 0;
 
 pub fn create_encrypted_hwsim_msg(
     frame: &HwsimFrame,
-    ieee80211: &netsim_packets::ieee80211::Ieee80211,
+    ieee80211: &netsim_packets::Ieee80211,
     dest_hwsim_addr: &MacAddress,
     key_store: &SharedKeyStore,
     simulate_ap_reflection: bool,
@@ -38,23 +33,22 @@ pub fn create_encrypted_hwsim_msg(
         true => std::borrow::Cow::Owned(
             ieee80211
                 .into_from_ap()
-                .map_err(|e| WifiError::Internal(Box::from(format!("{e}"))))?
+                .map_err(|e: String| WifiError::Internal(Box::from(e)))?
                 .try_into()
-                .map_err(|e| WifiError::Internal(Box::from(format!("{e}"))))?,
+                .map_err(|e: String| WifiError::Internal(Box::from(e)))?,
         ),
         false => std::borrow::Cow::Borrowed(ieee80211),
     };
 
-    let ieee80211_response =
-        if let Some(encrypted_bytes) = key_store.try_encrypt(&ieee80211_response) {
-            std::borrow::Cow::Owned(
-                netsim_packets::ieee80211::Ieee80211::decode(&encrypted_bytes).map_err(|e| {
-                    WifiError::Internal(Box::from(format!("Failed to decode encrypted frame: {e}")))
-                })?,
-            )
-        } else {
-            ieee80211_response
-        };
+    let ieee80211_response = if let Some(encrypted_bytes) =
+        key_store.try_encrypt(&ieee80211_response)
+    {
+        std::borrow::Cow::Owned(netsim_packets::Ieee80211::decode(&encrypted_bytes).map_err(
+            |e| WifiError::Internal(Box::from(format!("Failed to decode encrypted frame: {e}"))),
+        )?)
+    } else {
+        ieee80211_response
+    };
     let frame_bytes = ieee80211_response.as_bytes();
 
     let hwsim_msg = construct_hwsim_msg(
@@ -110,10 +104,10 @@ pub fn parse_hwsim_frame(packet: &bytes::Bytes, client_id: u32) -> WifiResult<Hw
 }
 
 pub fn create_hwsim_msg_from_frame(
-    ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    dest_hwsim_addr: &netsim_packets::ieee80211::MacAddress,
+    ieee80211: &Ieee80211,
+    dest_hwsim_addr: &MacAddress,
     freq: u32,
-    transmitter: Option<&netsim_packets::ieee80211::MacAddress>,
+    transmitter: Option<&MacAddress>,
 ) -> WifiResult<HwsimMsg> {
     let frame_bytes = ieee80211.as_bytes();
     construct_hwsim_msg(
@@ -131,6 +125,7 @@ pub fn create_hwsim_msg_from_frame(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn construct_hwsim_msg(
     receiver: &[u8; 6],
     frame: &[u8],

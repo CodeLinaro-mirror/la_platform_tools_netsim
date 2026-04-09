@@ -1,11 +1,14 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod frontend;
+pub(crate) mod frontend;
 
-pub mod access_point;
-pub mod ble_service;
-pub mod frontend_converter;
-pub mod packet_stream_converter;
-pub mod packet_streamer;
-pub mod server;
+pub(crate) mod access_point;
+pub(crate) mod ble_service;
+pub(crate) mod frontend_converter;
+pub(crate) mod packet_stream_converter;
+pub(crate) mod packet_streamer;
+pub(crate) mod server;
+
+pub use packet_streamer::{ChannelTransportListener, PacketStreamerService};
+pub use server::start;

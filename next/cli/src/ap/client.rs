@@ -41,6 +41,9 @@ pub fn execute(cmd: &ApCommand, client: &AccessPointServiceClient, verbose: bool
             if let Some(password) = &args.password {
                 ap.wpa_passphrase = password.clone();
             }
+            if let Some(protocol) = &args.protocol {
+                ap.hw_mode = protocol.clone();
+            }
             let mut req = access_point::CreateAccessPointRequest::new();
             req.access_point = MessageField::some(ap);
 

@@ -8,12 +8,9 @@ use bluetooth_actor::{BluetoothActor, BluetoothClient, BluetoothError};
 use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
 use netsim_model::{
-    bluetooth::beacon::{AdvertiseSettings, AdvertiseTxPower, TxPower},
-    chip::{
-        BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId,
-        ChipKindParams, DeviceParams, PacketSink, PacketStream, ScannerParams,
-    },
-    device::DeviceId,
+    AdvertiseSettings, AdvertiseTxPower, BeaconParams, BleBeacon, BluetoothMode, Chip, ChipCreate,
+    ChipId, ChipUpdate, ChipVariant, DeviceId, DeviceParams, PacketSink, PacketStream,
+    ScannerParams, TxPower,
 };
 use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use netsim_testing::logger;
@@ -22,12 +19,11 @@ use tracing::{info, warn};
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 /// The BDD World for Bluetooth Actor tests.
-#[allow(dead_code)]
 pub struct World {
     /// The Bluetooth Client under test.
     pub client: BluetoothClient,
     /// The mocked or real DeviceClient for interactions.
-    pub device_client: DeviceClient,
+    pub _device_client: DeviceClient,
     /// The background task running the actor (dropped on World drop).
     pub _actor_task: JoinHandle<()>,
     /// Counter for generating unique ChipIds in tests.
@@ -42,7 +38,6 @@ pub struct World {
     pub sinks: HashMap<String, mpsc::Receiver<Vec<u8>>>,
 }
 
-#[allow(dead_code)]
 impl World {
     /// Creates a new World instance.
     pub fn new() -> Self {
@@ -63,7 +58,7 @@ impl World {
 
         World {
             client,
-            device_client: resource_client,
+            _device_client: resource_client,
             _actor_task: actor_task,
             chip_id_counter: 0,
             device_id: DeviceId(1),
@@ -92,22 +87,19 @@ impl World {
         // Use two octets for the chip ID to support up to 65535 chips.
         let address = format!("60:70:80:90:{:02X}:{:02X}", (id.0 >> 8) & 0xFF, id.0 & 0xFF);
 
-        let params = ChipCreate {
-            packet_stream,
-            packet_sink,
-            config: ChipConfig::new(
-                name,
-                "netsim",
-                name,
-                ChipKindParams::Bluetooth(BluetoothCreate {
-                    address,
-                    bt_properties: Default::default(),
-                    mode,
-                }),
-            ),
-            device_id,
-            pose: Default::default(),
-        };
+        let mut chip = Chip::new_test_ble(name);
+        chip.id = id.0;
+        chip.device_id = device_id;
+        chip.product_name = name.to_string();
+        chip.variant = Some(ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+            low_energy: Default::default(),
+            classic: Default::default(),
+            address,
+            bt_properties: Default::default(),
+            mode,
+        })));
+
+        let params = ChipCreate { packet_stream, packet_sink, chip };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
             panic!("Failed to create chip {}: {:?}", name, e);
@@ -213,22 +205,18 @@ impl World {
             ble_beacon: BleBeacon { address: "".to_string(), ..Default::default() },
         }));
 
-        let params = ChipCreate {
-            packet_stream: None,
-            packet_sink: None,
-            config: ChipConfig::new(
-                "", // Empty name triggers unique naming
-                "netsim",
-                "",
-                ChipKindParams::Bluetooth(BluetoothCreate {
-                    address: "".to_string(), // Empty address triggers generation
-                    bt_properties: Default::default(),
-                    mode,
-                }),
-            ),
-            device_id: self.device_id,
-            pose: Default::default(),
-        };
+        let mut chip = Chip::new_test_ble("");
+        chip.id = id.0;
+        chip.device_id = self.device_id;
+        chip.variant = Some(ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+            low_energy: Default::default(),
+            classic: Default::default(),
+            address: "".to_string(),
+            bt_properties: Default::default(),
+            mode,
+        })));
+
+        let params = ChipCreate { packet_stream: None, packet_sink: None, chip };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
             panic!("Failed to create default beacon: {:?}", e);
@@ -276,14 +264,6 @@ impl World {
 
     // --- When Steps ---
 
-    pub async fn when_create_chip(
-        &self,
-        id: ChipId,
-        params: ChipCreate,
-    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
-        self.client.0.create_with_id(id, params).await.map(|_| ())
-    }
-
     pub async fn when_delete_chip(
         &self,
         name: &str,
@@ -302,17 +282,10 @@ impl World {
         self.sinks.remove(name).expect("Sink not found for chip");
     }
 
-    pub async fn when_update_chip_position(
-        &self,
-        name: &str,
-        position: netsim_model::device::Position,
-    ) {
+    pub async fn when_update_chip_position(&self, name: &str, position: netsim_model::Position) {
         let id = *self.chips.get(name).expect("Chip not found");
-        let update = netsim_model::chip::ChipUpdate {
-            pose: netsim_model::device::api::PoseUpdate {
-                position: Some(position),
-                orientation: None,
-            },
+        let update = ChipUpdate {
+            pose: netsim_model::PoseUpdate { position: Some(position), orientation: None },
             ..Default::default()
         };
         self.client.0.update(id, update).await.expect("Failed to update chip");
@@ -320,28 +293,11 @@ impl World {
 
     // --- Then Steps ---
 
-    pub async fn then_chip_position_is(
-        &self,
-        name: &str,
-        expected: netsim_model::device::Position,
-    ) {
+    pub async fn then_chip_position_is(&self, name: &str, expected: netsim_model::Position) {
         let id = *self.chips.get(name).expect("Chip not found");
         let chip =
             self.client.0.get(id).await.expect("Failed to get chip").expect("Chip should exist");
         assert_eq!(chip.pose.position, expected, "Chip position matches");
-    }
-
-    pub async fn then_chip_exists(&self, name: &str) {
-        let id = *self.chips.get(name).expect("Chip name tracked in World");
-        let chip = self.client.0.get(id).await.expect("Failed to get chip");
-        assert!(chip.is_some(), "Chip {} ({}) should exist", name, id);
-    }
-
-    pub async fn then_chip_does_not_exist(&self, name: &str) {
-        if let Some(id) = self.chips.get(name) {
-            let chip = self.client.0.get(*id).await.expect("Failed to get chip");
-            assert!(chip.is_none(), "Chip {} ({}) should NOT exist", name, id);
-        }
     }
 
     pub async fn then_chip_count_is(&self, expected: usize) {
@@ -354,19 +310,6 @@ impl World {
         assert_eq!(chip.name, expected, "Chip name match");
     }
 
-    pub async fn then_chip_address_is_generated(&self, id: ChipId) {
-        let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
-        if let Some(netsim_model::chip::ChipVariant::Bluetooth(_)) = &chip.variant {
-            info!("Chip {} exists and is a Bluetooth variant.", id.0);
-            // Note: Verification of the generated address via the `Chip` struct
-            // is not currently supported by the model, as the
-            // address is used for controller initialization but not
-            // persisted in the generic `Chip` state.
-        } else {
-            panic!("Chip {} is not a Bluetooth variant", id.0);
-        }
-    }
-
     pub async fn when_packet_sent(&mut self, name: &str, packet: bytes::Bytes) {
         let tx = self.streams.get_mut(name).expect("Stream not found for chip");
         tx.send(packet).await.expect("Failed to send packet");
@@ -374,13 +317,13 @@ impl World {
 
     /// Encodes and sends an HCI command with the packet type prefix.
     pub async fn when_command_sent<
-        T: netsim_packets::hci::HciCommand + IntoBytes + Immutable + KnownLayout,
+        T: netsim_packets::HciCommand + IntoBytes + Immutable + KnownLayout,
     >(
         &mut self,
         name: &str,
         payload: T,
     ) {
-        let header = netsim_packets::hci::HciCommandHeader {
+        let header = netsim_packets::HciCommandHeader {
             op_code: T::OP_CODE,
             parameter_total_length: payload.as_bytes().len() as u8,
         };
@@ -479,19 +422,5 @@ impl World {
             tokio::time::sleep(duration).await;
         }
         panic!("Chip {name} was not removed after timeout");
-    }
-
-    /// Helper to create a ChipConfig.
-    pub fn create_chip_config(id: ChipId, mode: BluetoothMode) -> ChipConfig {
-        ChipConfig::new(
-            "test_chip",
-            "test_manufacturer",
-            "test_product",
-            ChipKindParams::Bluetooth(BluetoothCreate {
-                address: format!("00:00:00:00:00:{:02x}", id.0),
-                bt_properties: Default::default(),
-                mode,
-            }),
-        )
     }
 }

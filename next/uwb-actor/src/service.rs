@@ -4,11 +4,7 @@
 use actor_framework::{ActorService, DynContext};
 use bytes::Bytes;
 use futures::{FutureExt, SinkExt, StreamExt};
-use netsim_model::{
-    chip::{Chip, ChipCreate, ChipUpdate, ChipVariant},
-    chip_error::ChipError,
-    ChipId, ChipKind,
-};
+use netsim_model::{Chip, ChipCreate, ChipError, ChipId, ChipUpdate};
 use pdl_runtime::Packet;
 use pica::{packets::uci, PicaCommand, PicaEvent};
 
@@ -39,17 +35,8 @@ impl ActorService for UwbActor {
             return Err(ChipError::ChipExists(chip_id.0).into());
         }
 
-        let chip = Chip {
-            id: chip_id.0,
-            device_id: params.device_id,
-            kind: ChipKind::UWB,
-            variant: Some(ChipVariant::Uwb(Default::default())),
-            name: params.config.name,
-            manufacturer: params.config.manufacturer,
-            product_name: params.config.product_name,
-            pose: params.pose,
-            ..Default::default()
-        };
+        let mut chip = params.chip;
+        chip.id = chip_id.0;
 
         let stream =
             params.packet_stream.ok_or(UwbError::PacketStreamMissing)?.map(|b| b.to_vec()).boxed();
@@ -168,10 +155,10 @@ impl ActorService for UwbActor {
                     .unwrap()
                     .values()
                     .map(|state| {
-                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = state.chip.id;
                         radio_stats.name = state.chip.name.clone();
-                        radio_stats.kind = netsim_model::stats::RadioKind::Uwb;
+                        radio_stats.kind = netsim_model::RadioKind::Uwb;
                         radio_stats
                     })
                     .collect();

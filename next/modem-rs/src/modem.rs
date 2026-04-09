@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use netsim_model::cell::RegistrationStatus;
+use netsim_model::RegistrationStatus;
 use tracing::error;
 
 use crate::{
@@ -58,13 +58,13 @@ impl ModemImpl {
         Self {
             id,
             sim_service: SimService::new(&profile),
-            network_service: NetworkService::new(),
-            sms_service: SmsService::new(),
-            stk_service: StkService::new(),
-            sup_service: SupService::new(),
-            misc_service: MiscService::new(),
-            call_service: CallService::new(),
-            data_service: DataService::new(),
+            network_service: NetworkService::default(),
+            sms_service: SmsService::default(),
+            stk_service: StkService::default(),
+            sup_service: SupService::default(),
+            misc_service: MiscService::default(),
+            call_service: CallService::default(),
+            data_service: DataService::default(),
             phone_number: "".to_string(),
             _state: State::Idle,
         }

@@ -1,14 +1,12 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use bytes::Bytes;
 use futures::{pin_mut, stream::StreamExt, SinkExt, TryStreamExt};
-use netsim_model::initial_info::ChipInfo;
+use netsim_model::ChipInfo;
 use netsim_proto::{
     packet_streamer::{self, PacketRequest, PacketResponse},
-    packet_streamer_grpc::{self, PacketStreamer},
+    packet_streamer_grpc::PacketStreamer,
 };
 use packet_stream::{
     error::{PacketStreamError, Result},
@@ -35,7 +33,7 @@ impl PacketStreamerService {
 }
 
 fn grpc_error_to_packet_error(e: grpcio::Error) -> PacketStreamError {
-    PacketStreamError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+    PacketStreamError::Io(std::io::Error::other(e.to_string()))
 }
 
 async fn handle_grpc_initial_info(
@@ -108,13 +106,12 @@ impl PacketStreamer for PacketStreamerService {
             let is_bt = chip_info
                 .chip
                 .as_ref()
-                .map_or(false, |c| c.kind == netsim_model::initial_info::ChipKind::BLUETOOTH);
+                .is_some_and(|c| c.kind == netsim_model::ChipKind::BLUETOOTH);
 
-            let grpc_stream = stream.map_err(|err| grpc_error_to_packet_error(err)).and_then(
-                |packet_request| async {
+            let grpc_stream =
+                stream.map_err(grpc_error_to_packet_error).and_then(|packet_request| async {
                     packet_stream_converter::packet_request_to_bytes(packet_request)
-                },
-            );
+                });
             let (packet_stream_tx, packet_stream_rx) = mpsc::channel(100);
             let packet_stream = Box::pin(ReceiverStream::new(packet_stream_rx));
 
@@ -154,57 +151,6 @@ impl PacketStreamer for PacketStreamerService {
             }
         });
     }
-}
-
-pub async fn connect(
-    addr: &str,
-    port: u16,
-    chip_info: ChipInfo,
-) -> Result<(
-    PacketStream,
-    PacketSink,
-    packet_streamer_grpc::PacketStreamerClient,
-    grpcio::ClientDuplexSender<PacketRequest>,
-    grpcio::ClientDuplexReceiver<PacketResponse>,
-)> {
-    let env = Arc::new(grpcio::Environment::new(2));
-    let channel = grpcio::ChannelBuilder::new(env).connect(&format!("{}:{}", addr, port));
-    let client = packet_streamer_grpc::PacketStreamerClient::new(channel);
-
-    let (mut client_send, client_recv) =
-        client.stream_packets().map_err(grpc_error_to_packet_error)?;
-
-    // Send InitialInfo
-    let mut initial_req = PacketRequest::new();
-    initial_req.set_initial_info(packet_stream_converter::chip_info_to_proto(chip_info));
-    client_send
-        .send((initial_req, grpcio::WriteFlags::default()))
-        .await
-        .map_err(grpc_error_to_packet_error)?;
-
-    // Create MPSC channels for application communication
-    let (mpsc_tx_app_out, _mpsc_rx_bridge_in) = mpsc::channel::<Bytes>(100);
-    let (_mpsc_tx_bridge_out, mpsc_rx_app_in) = mpsc::channel::<Result<Bytes>>(100);
-
-    // This bridge is now part of the test, not spawned here.
-    // Note: The caller is responsible for bridging mpsc_rx_bridge_in and
-    // mpsc_tx_bridge_out to the client_send/client_recv if they want a full
-    // loop, or just using client directly.
-
-    // Create PacketStream and PacketSink for the application
-    let app_stream: PacketStream = Box::pin(ReceiverStream::new(mpsc_rx_app_in));
-    let app_sink: PacketSink =
-        Box::pin(futures::sink::unfold(mpsc_tx_app_out, |tx, item: Bytes| async move {
-            tx.send(item).await.map_err(|e| {
-                PacketStreamError::Io(std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    e.to_string(),
-                ))
-            })?;
-            Ok(tx)
-        }));
-
-    Ok((app_stream, app_sink, client, client_send, client_recv))
 }
 
 pub struct ChannelTransportListener {
