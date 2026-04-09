@@ -38,6 +38,14 @@ genrule(
     tools = ["//next/verify/codegen:verify_codegen"],
 )
 
+genrule(
+    name = "generate_netsim_link_steps_glue",
+    srcs = ["src/netsim_link_steps.rs"],
+    outs = ["netsim_link_steps_glue.rs"],
+    cmd = "$(location //next/verify/codegen:verify_codegen) $(location src/netsim_link_steps.rs) $@",
+    tools = ["//next/verify/codegen:verify_codegen"],
+)
+
 rust_binary(
     name = "runner",
     testonly = True,
@@ -45,12 +53,14 @@ rust_binary(
         ":generate_adb_steps_glue",
         ":generate_android_steps_glue",
         ":generate_host_steps_glue",
+        ":generate_netsim_link_steps_glue",
         ":generate_netsim_steps_glue",
     ],
     compile_data = glob(["tests/features/*.feature"]) + [
         ":generate_adb_steps_glue",
         ":generate_android_steps_glue",
         ":generate_host_steps_glue",
+        ":generate_netsim_link_steps_glue",
         ":generate_netsim_steps_glue",
     ],
     edition = "2021",
@@ -62,11 +72,16 @@ rust_binary(
         "ANDROID_STEPS_GLUE": "$(location :generate_android_steps_glue)",
         "HOST_STEPS_GLUE": "$(location :generate_host_steps_glue)",
         "NETSIM_STEPS_GLUE": "$(location :generate_netsim_steps_glue)",
+        "NETSIM_LINK_STEPS_GLUE": "$(location :generate_netsim_link_steps_glue)",
     },
     deps = [
+        "//next/common",
         "//next/verify/lib",
+        "//proto",
         "@anyhow",
         "@clap",
+        "@grpcio",
+        "@protobuf-rust",
         "@regex",
         "@tokio",
         "@tokio-util",
