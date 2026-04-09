@@ -47,7 +47,7 @@ netsim_rustfmt_test = rule(
     implementation = _netsim_rustfmt_test_impl,
     attrs = {
         "targets": attr.label_list(providers = [[rust_common.crate_info]]),
-        "config": attr.label(allow_single_file = True, default = Label("//next:rustfmt.toml")),
+        "config": attr.label(allow_single_file = True, default = Label("//next:rustfmt_stable.toml")),
     },
     test = True,
     toolchains = ["@rules_rust//rust:toolchain_type"],
