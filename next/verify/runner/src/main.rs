@@ -44,6 +44,7 @@ enum Commands {
 mod adb_steps;
 mod android_steps;
 mod host_steps;
+mod netsim_link_steps;
 mod netsim_steps;
 mod orchestrator;
 mod scenarios;

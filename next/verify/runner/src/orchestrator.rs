@@ -55,6 +55,7 @@ pub async fn run_android(
         is_dry_run: dry_run,
         is_verbose: verbose,
         variables: HashMap::new(),
+        grpc_client: None,
     };
     scenarios::run_suite(&mut ctx).await?;
     Ok(())
@@ -72,6 +73,7 @@ pub async fn list_scenarios() {
         is_dry_run: true,
         is_verbose: false,
         variables: HashMap::new(),
+        grpc_client: None,
     };
     scenarios::run_suite(&mut ctx).await.unwrap();
 }
@@ -90,6 +92,7 @@ pub struct TestContext {
     pub is_dry_run: bool,
     pub is_verbose: bool,
     pub variables: HashMap<String, String>,
+    pub grpc_client: Option<netsim_proto::frontend_grpc::FrontendServiceClient>,
 }
 
 impl features::World for TestContext {
@@ -113,6 +116,23 @@ impl features::World for TestContext {
 }
 
 impl TestContext {
+    pub fn get_or_create_grpc_client(
+        &mut self,
+    ) -> Result<&netsim_proto::frontend_grpc::FrontendServiceClient> {
+        if self.grpc_client.is_none() {
+            let server = common::util::ini_file::get_server_address(
+                common::util::os_utils::get_instance(None),
+            )
+            .ok_or_else(|| anyhow::anyhow!("Failed to get server address"))?;
+            let channel =
+                grpcio::ChannelBuilder::new(std::sync::Arc::new(grpcio::EnvBuilder::new().build()))
+                    .connect(&server);
+            self.grpc_client =
+                Some(netsim_proto::frontend_grpc::FrontendServiceClient::new(channel));
+        }
+        Ok(self.grpc_client.as_ref().unwrap())
+    }
+
     // Helper to resolve generic actor lookups for the engine
     // Since we removed TestActor enum, we need to dispatch manually if needed
     // But for now, most steps are specific to an actor type.
@@ -258,7 +278,10 @@ impl TestContext {
 
         self.host.reset_actor().await?;
         self.adb.reset_actor().await?;
-        self.netsim.reset_actor().await?;
+
+        // Reset netsim via gRPC
+        let client = self.get_or_create_grpc_client()?;
+        client.reset(&protobuf::well_known_types::empty::Empty::new())?;
 
         for agent in self.android.devices.values_mut() {
             agent.reset_actor().await?;

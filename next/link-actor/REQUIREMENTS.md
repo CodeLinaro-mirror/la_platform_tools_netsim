@@ -182,24 +182,24 @@ Verification is performed via BDD-style Integration Tests in `tests/`.
 
 | Requirement     | BDD Scenario                                   | Test Function                        | Test File                                                              |
 | :-------------- | :--------------------------------------------- | :----------------------------------- | :--------------------------------------------------------------------- |
-| **RQ-LINK-01**  | Successfully create a valid link               | `test_create_link_succeeds`          | [`link_create_test.rs`](tests/link_create_test.rs)                     |
+| **RQ-LINK-01**  | Successfully create a valid link               | `test_create_link_succeeds`          | [`link_create_test.rs`](tests/link_create_test.rs), [`link.feature`](../verify/runner/tests/features/link.feature) |
 | **RQ-LINK-02**  | Fail to create link with mismatched chip kinds | `test_create_link_fails_mismatch`    | [`link_create_test.rs`](tests/link_create_test.rs)                     |
 | **RQ-LINK-03**  | Fail to create loopback link                   | `test_create_link_fails_self`        | [`link_create_test.rs`](tests/link_create_test.rs)                     |
 | **RQ-LINK-04**  | Fail to create duplicate link                  | `test_duplicate_create_fails`        | [`link_create_test.rs`](tests/link_create_test.rs)                     |
-| **RQ-LINK-05**  | Successfully update link RSSI                  | `test_update_link_rssi`              | [`link_update_test.rs`](tests/link_update_test.rs)                     |
-| **RQ-LINK-06**  | Successfully delete an existing link           | `test_delete_link_succeeds`          | [`link_delete_test.rs`](tests/link_delete_test.rs)                     |
+| **RQ-LINK-05**  | Successfully update link RSSI                  | `test_update_link_rssi`              | [`link_update_test.rs`](tests/link_update_test.rs), [`link.feature`](../verify/runner/tests/features/link.feature) |
+| **RQ-LINK-06**  | Successfully delete an existing link           | `test_delete_link_succeeds`          | [`link_delete_test.rs`](tests/link_delete_test.rs), [`link.feature`](../verify/runner/tests/features/link.feature) |
 | **RQ-PROP-01**  | Link updates are propagated to chip clients    | `test_link_propagation`              | [`link_propagation_test.rs`](tests/link_propagation_test.rs)           |
-| **RQ-PROP-02**  | Link update (RSSI) is propagated               | `test_update_link_propagates_patch`  | [`link_propagation_test.rs`](tests/link_propagation_test.rs)           |
+| **RQ-PROP-02**  | Link update (RSSI) is propagated               | `test_update_link_propagates_patch`  | [`link_propagation_test.rs`](tests/link_propagation_test.rs), [`link.feature`](../verify/runner/tests/features/link.feature) |
 | **RQ-LIFE-03**  | Chip removal triggers link deletion patch      | `test_chip_removal_propagates_patch` | [`link_propagation_test.rs`](tests/link_propagation_test.rs)           |
-| **RQ-FRONT-01** | List Links via gRPC                            | `test_link_wiring_grpc`              | [`grpc_integration_test.rs`](../daemon/tests/grpc_integration_test.rs) |
-| **RQ-FRONT-02** | Patch Link via gRPC                            | `test_link_wiring_grpc`              | [`grpc_integration_test.rs`](../daemon/tests/grpc_integration_test.rs) |
-| **RQ-FRONT-03** | Delete Link via gRPC                           | `test_link_wiring_grpc`              | [`grpc_integration_test.rs`](../daemon/tests/grpc_integration_test.rs) |
+| **RQ-FRONT-01** | List Links via gRPC                            | `test_link_wiring_grpc`              | [`grpc_integration_test.rs`](../daemon/tests/grpc_integration_test.rs), [`link.feature`](../verify/runner/tests/features/link.feature) |
+| **RQ-FRONT-02** | Patch Link via gRPC                            | `test_link_wiring_grpc`              | [`grpc_integration_test.rs`](../daemon/tests/grpc_integration_test.rs), [`link.feature`](../verify/runner/tests/features/link.feature) |
+| **RQ-FRONT-03** | Delete Link via gRPC                           | `test_link_wiring_grpc`              | [`grpc_integration_test.rs`](../daemon/tests/grpc_integration_test.rs), [`link.feature`](../verify/runner/tests/features/link.feature) |
 
 ### 6.2 BDD Coverage Gaps
 
 | Requirement       | Description                                | Current Status                                                                                                          |
 | :---------------- | :----------------------------------------- | :---------------------------------------------------------------------------------------------------------------------- |
-| **RQ-QUERY-01**   | `list` capability                          | Covered by internal unit tests/usage, but no explicit BDD scenario in `tests/`.                                         |
+| **RQ-QUERY-01**   | `list` capability                          | Covered by E2E tests in `link_cli.feature` and `link_grpc.feature`.                                                     |
 | **RQ-NFR-01**     | Atomicity                                  | **Implicit**: Relying on Actor model single-threadedness. No explicit concurrency test.                                 |
 | **RQ-NFR-02**     | 1ms Latency Target (Performance benchmark) | **Missing**: No explicit benchmark test suite for propagation latency.                                                  |
 | **RQ-LIFE-01**    | Track Chip Existence                       | **Implicit**: verified via `create_link` success/failure, but no direct "List Chips" test.                              |
@@ -362,6 +362,19 @@ Then the chip client receives an update with the new RSSI
 Given a link exists between two chips
 When one chip is removed
 Then the peer chip receives an update removing the link
+```
+
+**Scenario: Scan Result with Configured RSSI**
+
+- **Requirement**: **RQ-PROP-02**
+- **Test**: [`link.feature`](../verify/runner/tests/features/link.feature)
+
+```gherkin
+Given @adb has 2 attached devices
+When @netsim links @android:1 to @android:2 by bluetooth RSSI -60 as "link"
+And @android:1 advertises with name "Netsim" and TxPower "HIGH"
+And @android:2 starts scanning
+Then @android:2 sees advertisement "Netsim" with RSSI "-60"
 ```
 
 ### Asymmetric Behavior
