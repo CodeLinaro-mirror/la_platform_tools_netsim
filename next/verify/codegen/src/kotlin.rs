@@ -51,7 +51,7 @@ pub fn process_kotlin_file(input_path: &Path, output_path: &Path) {
     let package_name = package_regex
         .captures(&content)
         .map(|c| c.get(1).unwrap().as_str())
-        .unwrap_or("com.android.netsim.ntest");
+        .unwrap_or("com.android.verify.vbs");
 
     // File name -> Class Name (WifiSteps.kt -> WifiStepsLoader)
     let file_stem = input_path.file_stem().unwrap().to_string_lossy();
@@ -60,8 +60,7 @@ pub fn process_kotlin_file(input_path: &Path, output_path: &Path) {
     let mut output = String::new();
     output.push_str(&format!("package {}\n\n", package_name));
     output.push_str("import android.content.Context\n");
-    // output.push_str("import com.android.netsim.ntest.StepRegistry\n\n"); //
-    // Assumed available
+    output.push_str("import com.android.verify.core.StepRegistry\n\n");
 
     output.push_str(&format!("object {} {{\n", loader_name));
     output.push_str("    fun loadSteps(registry: StepRegistry, context: Context) {\n");

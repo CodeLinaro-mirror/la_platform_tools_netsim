@@ -28,8 +28,7 @@ impl Medium {
         msg: &HwsimMsg,
         out_queue: &mut Vec<(u32, Bytes)>,
     ) -> WifiResult<()> {
-        let packet =
-            msg.encode_to_vec().map_err(|e| WifiError::Internal(Box::from(e.to_string())))?.into();
+        let packet = msg.encode_to_vec().map_err(|e| WifiError::Internal(Box::from(e)))?.into();
         out_queue.push((client_id, packet));
         Ok(())
     }

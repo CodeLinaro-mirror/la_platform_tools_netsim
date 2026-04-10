@@ -1,12 +1,11 @@
 # Copyright 2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 
-load("@rules_rust//rust:defs.bzl", "rust_test")
-load("//next:defs.bzl", "netsim_rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
-netsim_rust_library(
+rust_library(
     name = "lib",
     testonly = True,
     srcs = [
@@ -17,8 +16,6 @@ netsim_rust_library(
     ],
     crate_name = "features",
     edition = "2021",
-    enable_integration_test = False,
-    enable_rustfmt = False,
     proc_macro_deps = [
     ],
     deps = [

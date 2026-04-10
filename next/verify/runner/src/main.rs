@@ -19,7 +19,7 @@ enum Commands {
     Run {
         #[arg(long, help = "Path to the Android SDK root, platform-tools, or adb binary")]
         android_home: Option<String>,
-        #[arg(long, help = "Path to the ntest-agent APK")]
+        #[arg(long, help = "Path to the vbs APK")]
         apk_path: Option<String>,
         #[arg(long, help = "Path to netsimd binary")]
         netsim_path: Option<String>,
@@ -41,14 +41,7 @@ enum Commands {
     Scenarios,
 }
 
-mod adb_steps;
-mod android_steps;
-mod host_steps;
-mod netsim_link_steps;
-mod netsim_steps;
-mod orchestrator;
-mod scenarios;
-mod types;
+use verify_host_lib::orchestrator;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
