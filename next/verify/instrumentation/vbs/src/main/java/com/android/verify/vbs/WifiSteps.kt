@@ -12,6 +12,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.util.Log
+import com.android.verify.core.logToHost
 
 private const val WIFI_TAG = "Verify:WiFi"
 
@@ -42,6 +43,7 @@ fun connectToWifi(context: Context, args: List<String>) {
 fun verifyWifiInfoSsid(context: Context, args: List<String>) {
   val expectedSsid = args[0]
   Log.i(WIFI_TAG, "Verifying Wi-Fi device info SSID is: $expectedSsid")
+  context.logToHost("Verifying Wi-Fi device info SSID is: $expectedSsid")
 
   val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
   if (!lm.isLocationEnabled) {

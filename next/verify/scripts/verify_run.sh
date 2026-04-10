@@ -202,17 +202,28 @@ fi
 echo "================================================="
 echo "5. Running E2E Test Suite via Runner Binary"
 echo "================================================="
-BAZEL_BIN="$WORKSPACE_DIR/bazel-bin"
+BAZEL_BIN=$(bazel info bazel-bin 2>/dev/null || echo "$WORKSPACE_DIR/bazel-bin")
+BAZEL_OUT=$(realpath "$BAZEL_BIN/../..")
+
 if [ -z "$RUNNER_PATH" ]; then
-  RUNNER_PATH="$BAZEL_BIN/external/netsim+/next/verify/runner/runner"
+  RUNNER_PATH=$(find "$BAZEL_OUT" -path "*/verify/runner/runner" -type f | head -n 1)
+  if [ -z "$RUNNER_PATH" ]; then
+    RUNNER_PATH="$BAZEL_BIN/external/netsim+/next/verify/runner/runner"
+  fi
 fi
 
 if [ -z "$APK_PATH" ]; then
-  APK_PATH="$BAZEL_BIN/external/netsim+/next/verify/instrumentation/vbs/vbs.apk"
+  APK_PATH=$(find "$BAZEL_OUT" -path "*/verify/instrumentation/vbs/vbs.apk" -type f | head -n 1)
+  if [ -z "$APK_PATH" ]; then
+    APK_PATH="$BAZEL_BIN/external/netsim+/next/verify/instrumentation/vbs/vbs.apk"
+  fi
 fi
 
 if [ -z "$CLI_PATH" ]; then
-  CLI_PATH="$BAZEL_BIN/external/netsim+/next/cli/netsim"
+  CLI_PATH=$(find "$BAZEL_OUT" -path "*/cli/netsim" -type f | head -n 1)
+  if [ -z "$CLI_PATH" ]; then
+    CLI_PATH="$BAZEL_BIN/external/netsim+/next/cli/netsim"
+  fi
 fi
 
 RUNNER_ARGS=()

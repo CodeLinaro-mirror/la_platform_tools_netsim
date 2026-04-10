@@ -6,6 +6,7 @@ package com.android.verify.vbs
 
 import android.content.Context
 import android.util.Log
+import com.android.verify.core.logToHost
 import kotlin.math.abs
 import kotlin.random.Random
 import kotlinx.coroutines.TimeoutCancellationException
@@ -66,6 +67,12 @@ fun startUwbRangingSessionConfig(context: Context, args: List<String>) {
   val configId = args[1].toInt()
   val peer = args[2]
 
+  if (peer == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping UWB ranging because one of the devices is unsupported")
+    UwbSessionManager.skippedRanging.value = true
+    return
+  }
+
   UwbSessionManager.currentSessionId = sessionId
   UwbSessionManager.startRanging(listOf(peer), configId)
 }
@@ -75,12 +82,24 @@ fun startUwbRangingRoleConfig(context: Context, args: List<String>) {
   val configId = args[0].toInt()
   val peer = args[1]
 
+  if (peer == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping UWB ranging because one of the devices is unsupported")
+    UwbSessionManager.skippedRanging.value = true
+    return
+  }
+
   UwbSessionManager.startRanging(listOf(peer), configId)
 }
 
 /// STEP: ^Starts UWB Ranging with (.*)$
 fun startUwbRangingSimple(context: Context, args: List<String>) {
-  UwbSessionManager.startRanging(listOf(args[0]), 1)
+  val peer = args[0]
+  if (peer == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping UWB ranging because one of the devices is unsupported")
+    UwbSessionManager.skippedRanging.value = true
+    return
+  }
+  UwbSessionManager.startRanging(listOf(peer), 1)
 }
 
 /// STEP: ^Stops UWB Ranging$
@@ -94,6 +113,12 @@ fun startUwbRangingSessionPeer(context: Context, args: List<String>) {
   val peer = args[1]
   val configId = 1
 
+  if (peer == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping UWB ranging because one of the devices is unsupported")
+    UwbSessionManager.skippedRanging.value = true
+    return
+  }
+
   UwbSessionManager.currentSessionId = sessionId
   UwbSessionManager.startRanging(listOf(peer), configId)
 }
@@ -101,6 +126,11 @@ fun startUwbRangingSessionPeer(context: Context, args: List<String>) {
 /// STEP: ^starts UWB ranging with peer (.*)$
 fun startUwbRangingPeerRole(context: Context, args: List<String>) {
   val peer = args[0]
+  if (peer == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping UWB ranging because one of the devices is unsupported")
+    UwbSessionManager.skippedRanging.value = true
+    return
+  }
   val configId = 1
 
   UwbSessionManager.startRanging(listOf(peer), configId)
@@ -109,6 +139,11 @@ fun startUwbRangingPeerRole(context: Context, args: List<String>) {
 /// STEP: ^starts UWB ranging with peers (.*) as (CONTROLLER|CONTROLEE)$
 fun startUwbRangingMultiPeer(context: Context, args: List<String>) {
   val peers = args[0].split(",").map { it.trim() }
+  if (peers.contains("UNSUPPORTED") || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping UWB ranging because one of the devices is unsupported")
+    UwbSessionManager.skippedRanging.value = true
+    return
+  }
   val role = args[1].uppercase()
   val configId = 1
   UwbSessionManager.startRanging(peers, configId)
@@ -118,6 +153,11 @@ fun startUwbRangingMultiPeer(context: Context, args: List<String>) {
 fun startUwbRangingMultiPeerWithConfig(context: Context, args: List<String>) {
   val configId = args[0].toInt()
   val peers = args[1].split(",").map { it.trim() }
+  if (peers.contains("UNSUPPORTED") || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping UWB ranging because one of the devices is unsupported")
+    UwbSessionManager.skippedRanging.value = true
+    return
+  }
   UwbSessionManager.startRanging(peers, configId)
 }
 
@@ -127,12 +167,17 @@ fun verifyUwbDistance(context: Context, args: List<String>) {
   val expectedDist = args[1].toFloat()
   val tolerance = args[2].toFloat()
 
+  if (to == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping verify UWB distance because one of the devices is unsupported")
+    return
+  }
+
   try {
     runBlocking {
       withTimeout(5000L) {
         UwbSessionManager.lastDistanceMap.first { map ->
           val lastVal = map[to]
-          lastVal != null && abs(lastVal - expectedDist) <= tolerance
+          lastVal != null && Math.abs(lastVal - expectedDist) <= tolerance
         }
       }
     }
@@ -150,12 +195,17 @@ fun verifyUwbAzimuth(context: Context, args: List<String>) {
   val expectedAz = args[1].toFloat()
   val tolerance = args[2].toFloat()
 
+  if (to == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost("INFO Skipping verify UWB azimuth because one of the devices is unsupported")
+    return
+  }
+
   try {
     runBlocking {
       withTimeout(5000L) {
         UwbSessionManager.lastAzimuthMap.first { map ->
           val lastVal = map[to]
-          lastVal != null && abs(lastVal - expectedAz) <= tolerance
+          lastVal != null && Math.abs(lastVal - expectedAz) <= tolerance
         }
       }
     }
@@ -173,12 +223,19 @@ fun verifyUwbElevation(context: Context, args: List<String>) {
   val expectedEl = args[1].toFloat()
   val tolerance = args[2].toFloat()
 
+  if (to == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    context.logToHost(
+      "INFO Skipping verify UWB elevation because one of the devices is unsupported"
+    )
+    return
+  }
+
   try {
     runBlocking {
       withTimeout(5000L) {
         UwbSessionManager.lastElevationMap.first { map ->
           val lastVal = map[to]
-          lastVal != null && abs(lastVal - expectedEl) <= tolerance
+          lastVal != null && Math.abs(lastVal - expectedEl) <= tolerance
         }
       }
     }
@@ -211,6 +268,24 @@ fun verifyUwbMeasurementNotAvailable(context: Context, args: List<String>) {
 /// STEP: ^UWB session state is (.*)$
 fun verifyUwbSessionState(context: Context, args: List<String>) {
   val expected = args[0]
+
+  if (expected.equals("Active", ignoreCase = true) && UwbSessionManager.skippedRanging.value) {
+    context.logToHost(
+      "INFO Accepting Initialized state instead of Active because ranging was skipped"
+    )
+    try {
+      runBlocking {
+        withTimeout(1000L) {
+          UwbSessionManager.sessionState.first { it.equals("Initialized", ignoreCase = true) }
+        }
+      }
+    } catch (e: TimeoutCancellationException) {
+      val lastState = UwbSessionManager.sessionState.value
+      throw Exception("Timeout waiting for UWB session state Initialized. Actual: $lastState")
+    }
+    return
+  }
+
   try {
     runBlocking {
       withTimeout(5000L) {
@@ -253,6 +328,15 @@ fun verifyUwbPeerStateGlobal(context: Context, args: List<String>) {
 fun verifyUwbPeerStateSpecific(context: Context, args: List<String>) {
   val peer = args[0]
   val expectedStatus = if (args[1] == "connected") "Connected" else "Disconnected"
+
+  if (peer == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
+    if (expectedStatus == "Connected") {
+      context.logToHost(
+        "INFO Skipping verify UWB peer connected because one of the devices is unsupported"
+      )
+      return
+    }
+  }
 
   try {
     runBlocking {

@@ -140,7 +140,7 @@ impl AdbWorld {
                     .arg("true")
                     .status();
 
-                if let Err(e) = exec.setup_feedback() {
+                if let Err(e) = exec.setup_feedback().await {
                     println!("WARN   Failed to setup feedback on {}: {}", serial, e);
                     continue;
                 }
@@ -161,7 +161,7 @@ impl AdbWorld {
                     continue;
                 }
 
-                if let Err(e) = exec.wait_for_feedback() {
+                if let Err(e) = exec.wait_for_feedback().await {
                     println!("WARN   Failed to connect to VBS on {}: {}", serial, e);
                     continue;
                 }

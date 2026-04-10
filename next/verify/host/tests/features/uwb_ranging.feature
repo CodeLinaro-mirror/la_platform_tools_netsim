@@ -1,3 +1,4 @@
+@uwb
 Feature: Android UWB Ranging
 
   Scenario: UWB Ranging between two Android devices
