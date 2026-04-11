@@ -3,7 +3,7 @@
 
 //! # Features Engine
 //!
-//! This module provides the runtime support for executing BDD-style tests in
+//! This module provides the runtime support for executing HDD-style tests in
 //! Rust. It defines the `Features` struct, which holds registered steps, and
 //! the logic to match regex patterns against test input.
 
@@ -160,7 +160,7 @@ impl<W: ?Sized> Features<W> {
     }
 
     /// Parses a Gherkin feature and prints its matched scenarios and steps in
-    /// Cucumber style without executing them.
+    /// Verify style without executing them.
     pub fn dry_run_list(&self, content: &str) {
         let feature = Feature::parse(content, Default::default()).expect("Failed to parse feature");
         // No longer print the Feature title to save vertical noise

@@ -13,7 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 
 /**
  * VerifyInstrumentation is a specialized Android Instrumentation class that acts as a base for the
- * verify orchestrator. It executes BDD steps received over a TCP control channel (reverse tunneled
+ * verify orchestrator. It executes HDD steps received over a TCP control channel (reverse tunneled
  * via ADB) and reports results back to the host.
  */
 open class VerifyInstrumentation : Instrumentation() {
@@ -160,7 +160,7 @@ open class VerifyInstrumentation : Instrumentation() {
   }
 
   /**
-   * Starts the bidirectional control loop on a dedicated thread. Listens for raw BDD strings from
+   * Starts the bidirectional control loop on a dedicated thread. Listens for raw HDD strings from
    * the Host-side orchestrator.
    */
   private fun startControlLoop(socket: java.net.Socket) {

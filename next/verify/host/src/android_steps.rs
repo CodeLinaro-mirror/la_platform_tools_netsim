@@ -311,7 +311,7 @@ impl AndroidDevice {
                                                 GuestMessage::Event { event_type, message } => {
                                                     if event_type == "Log" {
                                                         if !silent_clone.load(Ordering::SeqCst) {
-                                                            Self::print_bdd_line(
+                                                            Self::print_hdd_line(
                                                                 &name_clone,
                                                                 &message,
                                                             );
@@ -344,7 +344,7 @@ impl AndroidDevice {
         Ok(())
     }
 
-    fn print_bdd_line(name: &str, line: &str) {
+    fn print_hdd_line(name: &str, line: &str) {
         let line = line.trim();
         let actor_tag = format!("@{:width$}", name, width = LABEL_WIDTH);
         if line.starts_with("GIVEN")

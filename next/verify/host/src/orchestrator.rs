@@ -5,7 +5,7 @@
 //!
 //! This module implements the central Control Plane for `verify`. It manages
 //! the lifecycle of test actors (Guest Emulators and the Host), handles
-//! ADB-based device discovery, and coordinates the execution of BDD-style
+//! ADB-based device discovery, and coordinates the execution of HDD-style
 //! scenarios.
 
 // Modules are now declared in main.rs (siblings)
@@ -293,7 +293,7 @@ impl TestContext {
         Ok(())
     }
 
-    /// Centralized logging for BDD steps and telemetry.
+    /// Centralized logging for HDD steps and telemetry.
     pub fn log_step(&self, actor: &str, verb: &str, msg: &str) {
         if self.is_verbose {
             let tag = self.actor_tag(actor);
@@ -371,7 +371,7 @@ impl TestContext {
         );
     }
 
-    /// Resolves BDD placeholders (e.g., {port}, {target}) to runtime values.
+    /// Resolves HDD placeholders (e.g., {port}, {target}) to runtime values.
     pub fn resolve_placeholders(&self, s: &str) -> String {
         let mut res = s.to_string();
 

@@ -2,12 +2,12 @@
 
 > "Vibe, but verify." &mdash; Ronald Reagan
 
-`verify` is a BDD-style orchestration tool designed to validate networking scenarios between the Host and Guest devices (Android Emulators).
+`verify` is a HDD-style orchestration tool designed to validate networking scenarios between the Host and Guest devices (Android Emulators).
 
 ## Key Features
 
 - **Multi-Device Orchestration**: Discovers available emulators via ADB and manages the test environment lifecycle.
-- **Narrative BDD Output**: Provides an aligned console output using `GIVEN / WHEN / THEN / INFO` tags for readability.
+- **Narrative HDD Output**: Provides an aligned console output using `GIVEN / WHEN / THEN / INFO` tags for readability.
 - **VBS Integration**: Pairs with a companion `vbs` (Verify Bundled Steps) APK running as a service on Android guests.
 - **Variable Resolution**: Supports template placeholders like `{port}`, `{target}`, and `{gateway_target}` that resolve during execution.
 
@@ -67,7 +67,7 @@ New projects can create their own instrumentation APK by depending on `core`, re
 ### Host Side
 
 The host-side Rust code follows a similar pattern:
-- **`lib`**: The core BDD engine and execution loop.
+- **`lib`**: The core HDD engine and execution loop.
 - **Runner**: A concrete binary that pulls in `lib` and specific step libraries to execute tests.
 
 > [!NOTE]
