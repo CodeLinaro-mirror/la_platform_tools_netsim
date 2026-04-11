@@ -38,6 +38,7 @@ pub async fn run_android(
     dry_run: bool,
     verbose: bool,
     features: features::Features<TestContext>,
+    spec_dir: Option<String>,
 ) -> Result<()> {
     let host = HostWorld::new(dry_run);
     let adb = AdbWorld::new(android_home, apk_path, netsim_path.clone(), netsim_args);
@@ -56,11 +57,14 @@ pub async fn run_android(
         variables: HashMap::new(),
         grpc_client: None,
     };
-    scenarios::run_suite(&mut ctx, features).await?;
+    scenarios::run_suite(&mut ctx, features, spec_dir).await?;
     Ok(())
 }
 
-pub async fn list_scenarios(features: features::Features<TestContext>) {
+pub async fn list_scenarios(
+    features: features::Features<TestContext>,
+    spec_dir: Option<String>,
+) -> Result<()> {
     let mut ctx = TestContext {
         android: AndroidWorld::new(),
         host: HostWorld::new(true),
@@ -74,7 +78,8 @@ pub async fn list_scenarios(features: features::Features<TestContext>) {
         variables: HashMap::new(),
         grpc_client: None,
     };
-    scenarios::run_suite(&mut ctx, features).await.unwrap();
+    scenarios::run_suite(&mut ctx, features, spec_dir).await?;
+    Ok(())
 }
 
 /// Global context for the test suite, holding actors and shared

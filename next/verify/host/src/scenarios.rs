@@ -42,82 +42,28 @@ async fn run_feature(
 pub async fn run_suite(
     ctx: &mut TestContext,
     mut features: features::Features<TestContext>,
+    spec_dir: Option<String>,
 ) -> Result<()> {
-    run_feature(&mut features, ctx, "echo.feature", include_str!("../tests/features/echo.feature"))
-        .await?;
+    if let Some(dir) = spec_dir {
+        let mut entries = Vec::new();
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "feature") {
+                entries.push(path);
+            }
+        }
+        // Sort for deterministic order
+        entries.sort();
 
-    run_feature(
-        &mut features,
-        ctx,
-        "wifi_service_discovery.feature",
-        include_str!("../tests/features/wifi_service_discovery.feature"),
-    )
-    .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
-        "gateway_performance.feature",
-        include_str!("../tests/features/gateway_performance.feature"),
-    )
-    .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
-        "multi_step_coordination.feature",
-        include_str!("../tests/features/multi_step_coordination.feature"),
-    )
-    .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
-        "multi_avd_echo.feature",
-        include_str!("../tests/features/multi_avd_echo.feature"),
-    )
-    .await?;
-
-    run_feature(&mut features, ctx, "nsd.feature", include_str!("../tests/features/nsd.feature"))
-        .await?;
-
-    run_feature(&mut features, ctx, "p2p.feature", include_str!("../tests/features/p2p.feature"))
-        .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
-        "bluetooth_advertisements.feature",
-        include_str!("../tests/features/bluetooth_advertisements.feature"),
-    )
-    .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
-        "uwb_ranging.feature",
-        include_str!("../tests/features/uwb_ranging.feature"),
-    )
-    .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
-        "wifi_auth.feature",
-        include_str!("../tests/features/wifi_auth.feature"),
-    )
-    .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
-        "wifi_ap.feature",
-        include_str!("../tests/features/wifi_ap.feature"),
-    )
-    .await?;
-
-    run_feature(&mut features, ctx, "link.feature", include_str!("../tests/features/link.feature"))
-        .await?;
+        for path in entries {
+            let filename = path.file_name().unwrap().to_string_lossy().into_owned();
+            let content = std::fs::read_to_string(&path)?;
+            run_feature(&mut features, ctx, &filename, &content).await?;
+        }
+    } else {
+        anyhow::bail!("No spec directory provided. Use --spec-dir.");
+    }
 
     Ok(())
 }

@@ -36,9 +36,14 @@ enum Commands {
         dry_run: bool,
         #[arg(long, short, help = "Enable verbose output")]
         verbose: bool,
+        #[arg(long, help = "Directory containing feature files (specs)")]
+        spec_dir: Option<String>,
     },
     /// List available test scenarios
-    Scenarios,
+    Scenarios {
+        #[arg(long, help = "Directory containing feature files (specs)")]
+        spec_dir: Option<String>,
+    },
 }
 
 use verify_host_lib::{
@@ -64,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
             filter,
             dry_run,
             verbose,
+            spec_dir,
         } => {
             let resolved_android_home = match android_home
                 .or_else(|| std::env::var("ANDROID_HOME").ok())
@@ -105,18 +111,20 @@ async fn main() -> anyhow::Result<()> {
                 dry_run,
                 verbose,
                 features,
+                spec_dir,
             )
             .await?;
         }
-        Commands::Scenarios => {
+        Commands::Scenarios { spec_dir } => {
             let mut features = Features::<TestContext>::new();
             adb_steps::register_steps(&mut features);
             android_steps::register_steps(&mut features);
             host_steps::register_steps(&mut features);
             netsim_steps::register_steps(&mut features);
             netsim_link_steps::register_steps(&mut features);
-            orchestrator::list_scenarios(features).await;
+            orchestrator::list_scenarios(features, spec_dir).await?;
         }
     }
+
     Ok(())
 }

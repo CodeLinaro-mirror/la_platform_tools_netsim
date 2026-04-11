@@ -23,6 +23,7 @@ NETSIMD_PATH=""
 RUNNER_PATH=""
 APK_PATH=""
 CLI_PATH=""
+SPEC_DIR=
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
@@ -35,6 +36,7 @@ while [[ "$#" -gt 0 ]]; do
     --runner-path) RUNNER_PATH="$2"; shift ;;
     --apk-path) APK_PATH="$2"; shift ;;
     --cli-path) CLI_PATH="$2"; shift ;;
+    --spec-dir) SPEC_DIR="$2"; shift ;;
     -h|--help)
       echo "Usage: $0 [options]"
       echo "Options:"
@@ -47,6 +49,7 @@ while [[ "$#" -gt 0 ]]; do
       echo "  --runner-path <path>          Path to runner binary"
       echo "  --apk-path <path>             Path to vbs APK"
       echo "  --cli-path <path>             Path to netsim CLI binary"
+      echo "  --spec-dir <path>             Directory containing feature files (specs)"
       exit 0
       ;;
     *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -244,6 +247,11 @@ fi
 if [ "$VERBOSE" = true ]; then
   RUNNER_ARGS+=(--verbose)
 fi
+
+if [ -z "$SPEC_DIR" ]; then
+  SPEC_DIR="$WORKSPACE_DIR/tools/netsim/next/verify/host/tests/features"
+fi
+RUNNER_ARGS+=(--spec-dir "$SPEC_DIR")
 
 "$RUNNER_PATH" run \
   --android-home "$ANDROID_HOME" \

@@ -11,19 +11,19 @@ pub struct CalculatorWorld {
 pub mod steps {
     use super::*;
 
-    #[step(r"Given the calculator is clear")]
+    #[step(r"the calculator is clear")]
     async fn clear(w: &mut CalculatorWorld) {
         w.display = 0;
         println!("Display cleared in CalculatorWorld");
     }
 
-    #[step(r"When I add (\d+)")]
+    #[step(r"I add (\d+)")]
     async fn add(w: &mut CalculatorWorld, val: i32) {
         w.display += val;
         println!("Added {} to CalculatorWorld", val);
     }
 
-    #[step(r"Then the display should be (\d+)")]
+    #[step(r"the display should be (\d+)")]
     async fn check_display(w: &mut CalculatorWorld, expected: i32) {
         assert_eq!(w.display, expected);
         println!("Checked display {} == {}", w.display, expected);
