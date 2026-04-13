@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Result};
+use netsim_proto::{
+    access_point, access_point_grpc::AccessPointServiceClient, frontend,
+    frontend_grpc::FrontendServiceClient,
+};
+use protobuf::{well_known_types::empty::Empty, MessageField};
 use verify_macros::{step, step_module};
 
 use crate::{
@@ -9,33 +14,15 @@ use crate::{
     types::{ClientParams, Throughput},
 };
 
-pub struct NetsimWorld {
-    pub netsim_path: Option<String>,
-}
+pub struct NetsimWorld;
 
 impl NetsimWorld {
-    pub fn new(netsim_path: Option<String>) -> Self {
-        Self { netsim_path }
+    pub fn new() -> Self {
+        Self
     }
 
     pub async fn run_client(&mut self, _params: ClientParams) -> Result<Option<Throughput>> {
         Ok(None)
-    }
-
-    /// Global reset for the netsim simulation environment.
-    pub async fn reset_actor(&mut self) -> Result<()> {
-        let cli_path = self
-            .netsim_path
-            .as_ref()
-            .ok_or_else(|| anyhow!("Cannot reset devices without netsim cli"))?;
-        let mut cmd = std::process::Command::new(cli_path);
-        cmd.arg("reset");
-        if cmd.status()?.success() {
-            Ok(())
-        } else {
-            let output = cmd.output()?;
-            Err(anyhow!("Failed to reset device: {}", String::from_utf8_lossy(&output.stdout)))
-        }
     }
 
     pub fn get_label(&self) -> String {
@@ -74,35 +61,6 @@ impl NetsimWorld {
             Err(anyhow!("Failed to call adb shell: {}", String::from_utf8_lossy(&output.stdout)))
         }
     }
-
-    pub fn move_device(
-        &self,
-        w: &TestContext,
-        netsim_device: String,
-        x: f32,
-        y: f32,
-        z: f32,
-    ) -> Result<()> {
-        let cli_path = w
-            .netsim
-            .netsim_path
-            .as_ref()
-            .ok_or_else(|| anyhow!("Cannot move devices without netsim cli"))?;
-
-        let mut cmd = std::process::Command::new(cli_path);
-        cmd.arg("move")
-            .arg(&netsim_device)
-            .arg(x.to_string())
-            .arg(y.to_string())
-            .arg(z.to_string());
-
-        if cmd.status()?.success() {
-            Ok(())
-        } else {
-            let output = cmd.output()?;
-            Err(anyhow!("Failed to move device: {}", String::from_utf8_lossy(&output.stdout)))
-        }
-    }
 }
 
 #[step_module]
@@ -125,12 +83,29 @@ pub mod steps {
             "->",
             &format!("Moves {} ({}) to {}, {}, {}", resolved_actor, netsim_device, x, y, z),
         );
-
         if w.is_dry_run {
             return;
         }
 
-        w.netsim.move_device(w, netsim_device, x, y, z).expect("moved successfully");
+        let client = w.get_or_create_grpc_client().expect("got grpc client");
+        let resp = client.list_device(&Empty::new()).expect("listed devices");
+        let device =
+            resp.devices.iter().find(|d| d.name == netsim_device).unwrap_or_else(|| {
+                panic!("Device '{}' not found in netsim devices", netsim_device)
+            });
+
+        let mut req = frontend::PatchDeviceRequest::new();
+        req.id = Some(device.id);
+
+        let mut fields = frontend::patch_device_request::PatchDeviceFields::new();
+        let mut pos = netsim_proto::model::Position::new();
+        pos.x = x;
+        pos.y = y;
+        pos.z = z;
+        fields.position = MessageField::some(pos);
+        req.device = MessageField::some(fields);
+
+        client.patch_device(&req).expect("patched device");
     }
 
     #[step(r#"Netsim creates Wi-Fi Access Point "([^"]+)" with protocol "([^"]+)""#)]
@@ -140,15 +115,13 @@ pub mod steps {
         if w.is_dry_run {
             return;
         }
-
-        let cli_path = w.netsim.netsim_path.as_ref().expect("got netsim cli path");
-        let mut cmd = std::process::Command::new(cli_path);
-        cmd.arg("ap").arg("create").arg("--ssid").arg(&ssid).arg("--protocol").arg(&protocol);
-
-        let output = cmd.output().expect("failed to execute netsim ap create");
-        if !output.status.success() {
-            panic!("Failed to create AP: {}", String::from_utf8_lossy(&output.stderr));
-        }
+        let client = w.get_or_create_ap_client().expect("got ap client");
+        let mut ap = access_point::AccessPoint::new();
+        ap.ssid = ssid;
+        ap.hw_mode = protocol;
+        let mut req = access_point::CreateAccessPointRequest::new();
+        req.access_point = MessageField::some(ap);
+        client.create(&req).expect("created AP");
     }
 
     #[step(
@@ -169,22 +142,14 @@ pub mod steps {
         if w.is_dry_run {
             return;
         }
-
-        let cli_path = w.netsim.netsim_path.as_ref().expect("got netsim cli path");
-        let mut cmd = std::process::Command::new(cli_path);
-        cmd.arg("ap")
-            .arg("create")
-            .arg("--ssid")
-            .arg(&ssid)
-            .arg("--protocol")
-            .arg(&protocol)
-            .arg("--password")
-            .arg(&password);
-
-        let output = cmd.output().expect("failed to execute netsim ap create");
-        if !output.status.success() {
-            panic!("Failed to create Secured AP: {}", String::from_utf8_lossy(&output.stderr));
-        }
+        let client = w.get_or_create_ap_client().expect("got ap client");
+        let mut ap = access_point::AccessPoint::new();
+        ap.ssid = ssid;
+        ap.hw_mode = protocol;
+        ap.wpa_passphrase = password;
+        let mut req = access_point::CreateAccessPointRequest::new();
+        req.access_point = MessageField::some(ap);
+        client.create(&req).expect("created secured AP");
     }
 
     #[step(r#"Wi-Fi Access Point "([^"]+)" in netsim has protocol "([^"]+)""#)]
@@ -195,34 +160,14 @@ pub mod steps {
             return;
         }
 
-        let cli_path = w.netsim.netsim_path.as_ref().expect("got netsim cli path");
-        let mut cmd = std::process::Command::new(cli_path);
-        cmd.arg("ap").arg("list");
+        let client = w.get_or_create_ap_client().expect("got ap client");
+        let req = access_point::ListAccessPointsRequest::new();
+        let resp = client.list(&req).expect("listed APs");
 
-        let output = cmd.output().expect("failed to execute netsim ap list");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        let expected_phy_mode = format!("802.11{}", protocol);
-        let mut found = false;
-
-        for line in stdout.lines() {
-            if line.contains(&ssid) {
-                let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
-                if parts.len() >= 7 {
-                    let phy_mode = parts[6];
-                    if phy_mode == expected_phy_mode {
-                        found = true;
-                        break;
-                    }
-                }
-            }
-        }
+        let found = resp.access_points.iter().any(|ap| ap.ssid == ssid && ap.hw_mode == protocol);
 
         if !found {
-            panic!(
-                "AP '{}' with protocol '{}' not found in netsim ap list output:\n{}",
-                ssid, protocol, stdout
-            );
+            panic!("AP with SSID '{}' and protocol '{}' not found", ssid, protocol);
         }
     }
 
@@ -233,39 +178,19 @@ pub mod steps {
         if w.is_dry_run {
             return;
         }
+        let client = w.get_or_create_ap_client().expect("got ap client");
+        let req = access_point::ListAccessPointsRequest::new();
+        let resp = client.list(&req).expect("listed APs");
 
-        let cli_path = w.netsim.netsim_path.as_ref().expect("got netsim cli path");
+        let ap = resp
+            .access_points
+            .iter()
+            .find(|ap| ap.ssid == ssid)
+            .unwrap_or_else(|| panic!("AP with SSID '{}' not found", ssid));
 
-        // 1. Get AP list to find ID
-        let mut list_cmd = std::process::Command::new(cli_path);
-        list_cmd.arg("ap").arg("list");
-        let output = list_cmd.output().expect("failed to execute netsim ap list");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        let mut id: Option<u32> = None;
-        for line in stdout.lines() {
-            if line.contains(&ssid) {
-                let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
-                if !parts.is_empty() {
-                    if let Ok(parsed_id) = parts[0].parse::<u32>() {
-                        id = Some(parsed_id);
-                        break;
-                    }
-                }
-            }
-        }
-
-        let id =
-            id.unwrap_or_else(|| panic!("AP with SSID '{}' not found in netsim ap list", ssid));
-
-        // 2. Remove AP
-        let mut remove_cmd = std::process::Command::new(cli_path);
-        remove_cmd.arg("ap").arg("remove").arg(id.to_string());
-
-        let output = remove_cmd.output().expect("failed to execute netsim ap remove");
-        if !output.status.success() {
-            panic!("Failed to remove AP: {}", String::from_utf8_lossy(&output.stderr));
-        }
+        let mut del_req = access_point::DeleteAccessPointRequest::new();
+        del_req.id = ap.id;
+        client.delete(&del_req).expect("deleted AP");
     }
 }
 

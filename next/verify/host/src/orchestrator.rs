@@ -30,7 +30,6 @@ use crate::{
 pub async fn run_android(
     android_home: Option<String>,
     netsim_path: Option<String>,
-    netsim_cli_path: Option<String>,
     netsim_args: Option<String>,
     apk_path: Option<String>,
     gateway_ip: Option<String>,
@@ -42,7 +41,7 @@ pub async fn run_android(
 ) -> Result<()> {
     let host = HostWorld::new(dry_run);
     let adb = AdbWorld::new(android_home, apk_path, netsim_path.clone(), netsim_args);
-    let netsim = NetsimWorld::new(netsim_cli_path);
+    let netsim = NetsimWorld::new();
 
     let mut ctx = TestContext {
         android: AndroidWorld::new(),
@@ -55,7 +54,9 @@ pub async fn run_android(
         is_dry_run: dry_run,
         is_verbose: verbose,
         variables: HashMap::new(),
+        grpc_channel: None,
         grpc_client: None,
+        ap_client: None,
     };
     scenarios::run_suite(&mut ctx, features, spec_dir).await?;
     Ok(())
@@ -69,14 +70,16 @@ pub async fn list_scenarios(
         android: AndroidWorld::new(),
         host: HostWorld::new(true),
         adb: AdbWorld::new(None, None, None, None),
-        netsim: NetsimWorld::new(None),
+        netsim: NetsimWorld::new(),
         target_ip: "10.0.2.2".to_string(),
         gateway_ip: "10.0.2.2".to_string(),
         filter: None,
         is_dry_run: true,
         is_verbose: false,
         variables: HashMap::new(),
+        grpc_channel: None,
         grpc_client: None,
+        ap_client: None,
     };
     scenarios::run_suite(&mut ctx, features, spec_dir).await?;
     Ok(())
@@ -96,7 +99,9 @@ pub struct TestContext {
     pub is_dry_run: bool,
     pub is_verbose: bool,
     pub variables: HashMap<String, String>,
+    pub grpc_channel: Option<grpcio::Channel>,
     pub grpc_client: Option<netsim_proto::frontend_grpc::FrontendServiceClient>,
+    pub ap_client: Option<netsim_proto::access_point_grpc::AccessPointServiceClient>,
 }
 
 impl features::World for TestContext {
@@ -120,10 +125,8 @@ impl features::World for TestContext {
 }
 
 impl TestContext {
-    pub fn get_or_create_grpc_client(
-        &mut self,
-    ) -> Result<&netsim_proto::frontend_grpc::FrontendServiceClient> {
-        if self.grpc_client.is_none() {
+    pub fn get_or_create_channel(&mut self) -> Result<grpcio::Channel> {
+        if self.grpc_channel.is_none() {
             let server = common::util::ini_file::get_server_address(
                 common::util::os_utils::get_instance(None),
             )
@@ -131,10 +134,31 @@ impl TestContext {
             let channel =
                 grpcio::ChannelBuilder::new(std::sync::Arc::new(grpcio::EnvBuilder::new().build()))
                     .connect(&server);
+            self.grpc_channel = Some(channel);
+        }
+        Ok(self.grpc_channel.as_ref().unwrap().clone())
+    }
+
+    pub fn get_or_create_grpc_client(
+        &mut self,
+    ) -> Result<&netsim_proto::frontend_grpc::FrontendServiceClient> {
+        if self.grpc_client.is_none() {
+            let channel = self.get_or_create_channel()?;
             self.grpc_client =
                 Some(netsim_proto::frontend_grpc::FrontendServiceClient::new(channel));
         }
         Ok(self.grpc_client.as_ref().unwrap())
+    }
+
+    pub fn get_or_create_ap_client(
+        &mut self,
+    ) -> Result<&netsim_proto::access_point_grpc::AccessPointServiceClient> {
+        if self.ap_client.is_none() {
+            let channel = self.get_or_create_channel()?;
+            self.ap_client =
+                Some(netsim_proto::access_point_grpc::AccessPointServiceClient::new(channel));
+        }
+        Ok(self.ap_client.as_ref().unwrap())
     }
 
     // Helper to resolve generic actor lookups for the engine
