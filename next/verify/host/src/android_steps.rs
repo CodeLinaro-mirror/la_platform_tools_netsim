@@ -3,29 +3,50 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    io::{BufRead, BufReader, Write},
-    net::{TcpListener, TcpStream},
+    io::Write,
     process::{Child, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc, Arc, Mutex,
+        Arc,
     },
     time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result};
+use futures::StreamExt;
+use serde::{Deserialize, Serialize};
+use tokio::io::AsyncWriteExt;
+use tokio_util::codec::FramedRead;
 
 use crate::{
     orchestrator::TestContext,
     types::{ClientParams, Throughput, LABEL_WIDTH},
 };
 
-// Protocol markers for Guest-Host communication
-const MARKER_RECEIVED: &str = ">> RECEIVED:";
-const MARKER_COMPLETED: &str = "<< COMPLETED:";
-const MARKER_FATAL: &str = "!! ERROR:";
-const RESULT_FAILURE: &str = "RESULT=FAILURE";
-const MSG_KEY: &str = "MSG=";
+// Protocol markers for Guest-Host communication (legacy)
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+enum RunnerMessage {
+    ExecuteStep { id: i32, step: String },
+    Quit { id: i32 },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+pub enum GuestMessage {
+    Response {
+        id: i32,
+        status: String,
+        #[serde(default)]
+        error_message: Option<String>,
+        #[serde(default)]
+        variables: HashMap<String, String>,
+    },
+    Event {
+        event_type: String,
+        message: String,
+    },
+}
 
 pub struct AndroidWorld {
     pub devices: HashMap<String, AndroidDevice>,
@@ -103,9 +124,11 @@ pub struct AndroidDevice {
     pub apk_path: Option<String>,
     pub avd_name: Option<String>,
     pub feedback_port: Option<u16>,
-    pub feedback_stream: Arc<Mutex<Option<TcpStream>>>,
-    pub feedback_receiver: Arc<Mutex<Option<mpsc::Receiver<String>>>>,
+    pub feedback_sender: Arc<tokio::sync::Mutex<Option<tokio::net::tcp::OwnedWriteHalf>>>,
+    pub feedback_receiver:
+        Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::Receiver<GuestMessage>>>>,
     pub silent: Arc<AtomicBool>,
+    pub next_msg_id: i32,
 }
 
 impl AndroidDevice {
@@ -154,9 +177,10 @@ impl AndroidDevice {
             netsim_process: None,
             avd_name: None,
             feedback_port: None,
-            feedback_stream: Arc::new(Mutex::new(None)),
-            feedback_receiver: Arc::new(Mutex::new(None)),
+            feedback_sender: Arc::new(tokio::sync::Mutex::new(None)),
+            feedback_receiver: Arc::new(tokio::sync::Mutex::new(None)),
             silent: Arc::new(AtomicBool::new(false)),
+            next_msg_id: 1,
         })
     }
 
@@ -215,8 +239,8 @@ impl AndroidDevice {
     }
 
     /// Set up TCP reverse tunneling for feedback from the Kotlin agent.
-    pub fn setup_feedback(&mut self) -> anyhow::Result<()> {
-        let listener = TcpListener::bind("0.0.0.0:0")?;
+    pub async fn setup_feedback(&mut self) -> anyhow::Result<()> {
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await?;
         let port = listener.local_addr()?.port();
         self.feedback_port = Some(port);
         self.adb_command()
@@ -228,37 +252,77 @@ impl AndroidDevice {
             .status()?;
 
         let name = self.get_label();
-        let feedback_stream = self.feedback_stream.clone();
+        let feedback_sender = self.feedback_sender.clone();
         let silent = self.silent.clone();
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
         {
-            let mut guard = self.feedback_receiver.lock().unwrap();
+            let mut guard = self.feedback_receiver.lock().await;
             *guard = Some(rx);
         }
 
-        std::thread::spawn(move || {
-            for stream in listener.incoming() {
-                match stream {
-                    Ok(s) => {
+        tokio::spawn(async move {
+            loop {
+                match listener.accept().await {
+                    Ok((stream, _)) => {
                         let name_clone = name.clone();
-                        if let Ok(cloned) = s.try_clone() {
-                            let mut guard = feedback_stream.lock().unwrap();
-                            *guard = Some(cloned);
-                        }
-                        let tx_clone = tx.clone();
                         let silent_clone = silent.clone();
-                        std::thread::spawn(move || {
-                            let reader = BufReader::new(s);
-                            for line in reader.lines().map_while(Result::ok) {
-                                // Filter out protocol markers from the narrative output
-                                if !line.contains(MARKER_RECEIVED)
-                                    && !line.contains(MARKER_COMPLETED)
-                                {
-                                    if !silent_clone.load(Ordering::SeqCst) {
-                                        Self::print_bdd_line(&name_clone, &line);
+                        let tx_clone = tx.clone();
+                        let feedback_sender_clone = feedback_sender.clone();
+
+                        tokio::spawn(async move {
+                            let (read_half, write_half) = stream.into_split();
+
+                            {
+                                let mut guard = feedback_sender_clone.lock().await;
+                                *guard = Some(write_half);
+                            }
+
+                            let mut framed_read = FramedRead::new(
+                                read_half,
+                                tokio_util::codec::LengthDelimitedCodec::builder()
+                                    .length_field_length(2)
+                                    .length_field_type::<u16>()
+                                    .new_codec(),
+                            );
+
+                            while let Some(frame) = framed_read.next().await {
+                                match frame {
+                                    Ok(bytes) => {
+                                        let json_str = match String::from_utf8(bytes.to_vec()) {
+                                            Ok(s) => s,
+                                            Err(e) => {
+                                                eprintln!("!! ERR: Invalid UTF-8: {}", e);
+                                                continue;
+                                            }
+                                        };
+
+                                        if let Ok(msg) =
+                                            serde_json::from_str::<GuestMessage>(&json_str)
+                                        {
+                                            match msg {
+                                                GuestMessage::Event { event_type, message } => {
+                                                    if event_type == "Log" {
+                                                        if !silent_clone.load(Ordering::SeqCst) {
+                                                            Self::print_bdd_line(
+                                                                &name_clone,
+                                                                &message,
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                                GuestMessage::Response { .. } => {
+                                                    let _ = tx_clone.send(msg).await;
+                                                }
+                                            }
+                                        } else {
+                                            eprintln!("!! ERR: Failed to parse JSON: {}", json_str);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("!! ERR: Failed to read frame: {}", e);
+                                        break;
                                     }
                                 }
-                                let _ = tx_clone.send(line);
                             }
                         });
                     }
@@ -278,6 +342,7 @@ impl AndroidDevice {
             || line.starts_with("WHEN")
             || line.starts_with("AND")
             || line.starts_with("THEN")
+            || line.starts_with("INFO")
         {
             let mut parts = line.splitn(2, ' ');
             let _verb = parts.next().unwrap_or("");
@@ -314,87 +379,87 @@ impl AndroidDevice {
         Ok(())
     }
 
-    pub fn wait_for_feedback(&self) -> anyhow::Result<()> {
+    pub async fn wait_for_feedback(&self) -> anyhow::Result<()> {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(60) {
-            if self.feedback_stream.lock().unwrap().is_some() {
+            if self.feedback_sender.lock().await.is_some() {
                 return Ok(());
             }
-            std::thread::sleep(Duration::from_millis(100));
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
         anyhow::bail!("Feedback timeout waiting for VBS to connect (60s)")
     }
 
-    /// Blocks until a specific pattern is received on the feedback channel.
-    /// This is the primary synchronization primitive for Guest orchestration.
-    async fn wait_for_pattern(&self, pattern: &str, timeout_secs: u64) -> anyhow::Result<String> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let pattern = pattern.to_string();
+    async fn wait_for_response(
+        &self,
+        expected_id: i32,
+        timeout_secs: u64,
+    ) -> anyhow::Result<GuestMessage> {
         let receiver = self.feedback_receiver.clone();
+        let mut rx_guard = receiver.lock().await;
+        let rx = rx_guard
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Feedback receiver not initialized"))?;
 
-        std::thread::spawn(move || {
-            let rx_guard = receiver.lock().unwrap();
-            if let Some(receiver_rx) = rx_guard.as_ref() {
-                let start = Instant::now();
-                while start.elapsed().as_secs() < timeout_secs {
-                    // Poll with a small sleep to avoid pegged CPU while maintaining responsiveness
-                    if let Ok(line) = receiver_rx.recv_timeout(Duration::from_millis(10)) {
-                        if line.contains(&pattern) {
-                            let _ = tx.send(Ok(line));
-                            return;
-                        }
-                        if line.contains(MARKER_FATAL) {
-                            let _ = tx.send(Err(anyhow::anyhow!("Guest fatal error: {}", line)));
-                            return;
+        let start = Instant::now();
+        while start.elapsed().as_secs() < timeout_secs {
+            match tokio::time::timeout(Duration::from_millis(100), rx.recv()).await {
+                Ok(Some(msg)) => {
+                    if let GuestMessage::Response { id, .. } = &msg {
+                        if *id == expected_id {
+                            return Ok(msg);
                         }
                     }
                 }
-                let _ = tx.send(Err(anyhow::anyhow!("Timeout waiting for pattern: {}", pattern)));
+                Ok(None) => {
+                    anyhow::bail!("Feedback channel closed");
+                }
+                Err(_) => {
+                    // Timeout, continue loop
+                }
             }
-        });
-
-        tokio::time::timeout(Duration::from_secs(timeout_secs + 1), rx)
-            .await
-            .context("Pattern wait timed out at the orchestrator level")??
+        }
+        anyhow::bail!("Timeout waiting for response ID: {}", expected_id)
     }
 }
 
 impl AndroidDevice {
+    async fn send_message(&self, msg: &RunnerMessage) -> anyhow::Result<()> {
+        let json_str = serde_json::to_string(msg)?;
+        let bytes = json_str.as_bytes();
+        let len = bytes.len() as u16;
+
+        let mut guard = self.feedback_sender.lock().await;
+        let stream =
+            guard.as_mut().ok_or_else(|| anyhow::anyhow!("Feedback channel disconnected"))?;
+        stream.write_all(&len.to_be_bytes()).await?;
+        stream.write_all(bytes).await?;
+        stream.flush().await?;
+        Ok(())
+    }
+
     pub async fn execute_step(
         &mut self,
         step: &str,
         timeout_secs: u64,
     ) -> anyhow::Result<HashMap<String, String>> {
-        {
-            let mut guard = self.feedback_stream.lock().unwrap();
-            let stream =
-                guard.as_mut().ok_or_else(|| anyhow::anyhow!("Feedback channel disconnected"))?;
-            writeln!(stream, "{}", step)?;
-            stream.flush()?;
-        }
+        let id = self.next_msg_id;
+        self.next_msg_id += 1;
+        let cmd = RunnerMessage::ExecuteStep { id, step: step.to_string() };
 
-        // 1. Wait for acknowledgement that the step was received
-        self.wait_for_pattern(&format!("{} {}", MARKER_RECEIVED, step), 5).await?;
+        self.send_message(&cmd).await?;
 
-        // 2. Wait for the completion signal
-        let complete_line =
-            self.wait_for_pattern(&format!("{} {}", MARKER_COMPLETED, step), timeout_secs).await?;
+        // Wait for the completion signal
+        let response = self.wait_for_response(id, timeout_secs).await?;
 
-        if complete_line.contains(RESULT_FAILURE) {
-            let msg = complete_line.split(MSG_KEY).last().unwrap_or("Unknown actor-side error");
-            anyhow::bail!("Step failed on actor: {}", msg);
-        }
-
-        // Parse output variables (VAR:key=value)
-        let mut vars = HashMap::new();
-        for part in complete_line.split_whitespace() {
-            if let Some(kv) = part.strip_prefix("VAR:") {
-                if let Some((k, v)) = kv.split_once('=') {
-                    vars.insert(k.to_string(), v.to_string());
-                }
+        if let GuestMessage::Response { status, error_message, variables, .. } = response {
+            if status == "Failure" {
+                let msg = error_message.unwrap_or_else(|| "Unknown actor-side error".to_string());
+                anyhow::bail!("Step failed on actor: {}", msg);
             }
+            return Ok(variables);
         }
-        Ok(vars)
+        anyhow::bail!("Internal error: did not receive Response message");
     }
 }
 
@@ -416,23 +481,28 @@ impl AndroidDevice {
     }
 
     pub async fn reset_actor(&mut self) -> anyhow::Result<()> {
-        let quit_step = "THEN Android Quits";
-        {
-            let mut guard = self.feedback_stream.lock().unwrap();
-            if let Some(stream) = guard.as_mut() {
-                let _ = writeln!(stream, "{}", quit_step);
-                let _ = stream.flush();
-                *guard = None;
-            }
+        let id = self.next_msg_id;
+        self.next_msg_id += 1;
+        let cmd = RunnerMessage::Quit { id };
+
+        if let Err(e) = self.send_message(&cmd).await {
+            eprintln!("WARN Failed to send Quit message during reset: {}", e);
         }
-        let quit_pattern = format!("{} {}", MARKER_RECEIVED, quit_step);
-        let _ = self.wait_for_pattern(&quit_pattern, 2).await;
+
+        {
+            let mut guard = self.feedback_sender.lock().await;
+            *guard = None;
+        }
+
+        // Wait for response with timeout 2s (best effort)
+        let _ = self.wait_for_response(id, 2).await;
+
         if let Some(mut child) = self.agent_process.take() {
             let _ = child.wait();
         }
         std::thread::sleep(Duration::from_millis(100));
         self.launch_agent()?;
-        self.wait_for_feedback()
+        self.wait_for_feedback().await
     }
 
     pub fn get_label(&self) -> String {

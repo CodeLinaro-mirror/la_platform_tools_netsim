@@ -7,6 +7,7 @@ package com.android.verify.vbs
 
 import android.content.Context
 import android.util.Log
+import com.android.verify.core.logToHost
 import java.io.IOException
 import java.net.ServerSocket
 import java.net.Socket
@@ -32,7 +33,9 @@ fun startTcpEchoServer(context: Context, args: List<String>): Any {
   }
 
   val ip = getWlanIp()
-  Log.i(TAG, "Started TCP echo server on $ip:$port")
+  val msg = "INFO Started TCP echo server on $ip:$port"
+  Log.i(TAG, msg)
+  context.logToHost(msg)
   return mapOf(varName to "$ip:$port")
 }
 

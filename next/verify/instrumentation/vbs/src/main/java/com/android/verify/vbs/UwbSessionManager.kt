@@ -12,6 +12,7 @@ import androidx.core.uwb.UwbAddress
 import androidx.core.uwb.UwbComplexChannel
 import androidx.core.uwb.UwbDevice
 import androidx.core.uwb.UwbManager
+import com.android.verify.core.logToHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +38,9 @@ object UwbSessionManager {
   // Session state: "Idle", "Initializing", "Initialized", "Active", "Ranging", "Stopped",
   // "Disconnected"
   val sessionState = MutableStateFlow<String>("Idle")
+
+  // Flag to indicate if ranging was skipped due to unsupported devices
+  val skippedRanging = MutableStateFlow<Boolean>(false)
 
   const val DEFAULT_SESSION_ID: UInt = 12345678u
 
@@ -66,26 +70,46 @@ object UwbSessionManager {
     controllerSession = null
     controleeSession = null
 
+    val hasUwb = context.packageManager.hasSystemFeature("android.hardware.uwb")
+    context.logToHost("INFO UWB Support Check: hasUwb=$hasUwb")
+
+    if (!hasUwb) {
+      Log.w(TAG, "UWB is not supported on this device")
+      context.logToHost("INFO UWB is not supported on this device")
+      sessionState.value = "Unsupported"
+      localAddress.value = "UNSUPPORTED"
+      return
+    }
+
     val uwbManager = UwbManager.createInstance(context)
 
     rangingJob = scope.launch {
       try {
+        context.logToHost("INFO UWB initSession: Creating UwbManager instance...")
         if (isController) {
+          context.logToHost("INFO UWB initSession: Getting controllerSessionScope...")
           val s = uwbManager.controllerSessionScope()
           controllerSession = s
           val addr = s.localAddress.address.toHexString()
-          Log.i(TAG, "Initialized Controller. Local Address: $addr")
+          val msg = "INFO Initialized Controller. Local Address: $addr"
+          Log.i(TAG, msg)
+          context.logToHost(msg)
           localAddress.value = addr
         } else {
+          context.logToHost("INFO UWB initSession: Getting controleeSessionScope...")
           val s = uwbManager.controleeSessionScope()
           controleeSession = s
           val addr = s.localAddress.address.toHexString()
-          Log.i(TAG, "Initialized Controlee. Local Address: $addr")
+          val msg = "INFO Initialized Controlee. Local Address: $addr"
+          Log.i(TAG, msg)
+          context.logToHost(msg)
           localAddress.value = addr
         }
         sessionState.value = "Initialized"
       } catch (e: Exception) {
-        Log.e(TAG, "Initialization error: ${e.message}")
+        val errorMsg = "UWB Initialization error: ${e.message}"
+        Log.e(TAG, errorMsg)
+        context.logToHost(errorMsg)
         sessionState.value = "Error: ${e.message}"
         e.printStackTrace()
       }

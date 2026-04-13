@@ -6,6 +6,7 @@
 package com.android.verify.core
 
 import android.app.Instrumentation
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
@@ -35,15 +36,23 @@ open class VerifyInstrumentation : Instrumentation() {
   private val TAG = "VerifyInstrumentation"
 
   @Volatile protected var registry: StepRegistry? = null
-  private var controlWriter: java.io.PrintWriter? = null
+  @Volatile protected var controlOutputStream: java.io.DataOutputStream? = null
   private val logExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
-  protected fun log(msg: String) {
+  fun log(msg: String) {
     Log.i(TAG, msg)
     logExecutor.execute {
       try {
-        controlWriter?.println(msg)
-        controlWriter?.flush()
+        controlOutputStream?.let { dos ->
+          val json = org.json.JSONObject()
+          json.put("type", "Event")
+          json.put("event_type", "Log")
+          json.put("message", msg)
+          val bytes = json.toString().toByteArray(Charsets.UTF_8)
+          dos.writeShort(bytes.size)
+          dos.write(bytes)
+          dos.flush()
+        }
       } catch (e: Exception) {
         Log.e(TAG, "Failed to write to control socket: ${e.message}")
       }
@@ -125,7 +134,7 @@ open class VerifyInstrumentation : Instrumentation() {
                 condition = { it != null },
               )!!
             Log.i(TAG, "Successfully connected to control port: $controlPort")
-            controlWriter = java.io.PrintWriter(finalSocket.getOutputStream(), true)
+            controlOutputStream = java.io.DataOutputStream(finalSocket.getOutputStream())
             startControlLoop(finalSocket)
           } catch (e: Exception) {
             Log.e(
@@ -160,49 +169,96 @@ open class VerifyInstrumentation : Instrumentation() {
       .Thread(
         {
           try {
-            val reader = socket.getInputStream().bufferedReader()
-            for (line in reader.lineSequence()) {
-              if (line.isBlank()) continue
-              val cmd = line.trim()
-
-              log("${Protocol.MARKER_RECEIVED} $cmd")
-              val r = registry
-              if (r == null) {
-                log("${Protocol.INFO_TAG} Registry not initialized")
-                continue
-              }
-
-              try {
-                val (found, result) = r.execute(cmd)
-                if (found) {
-                  val varStr =
-                    if (result is Map<*, *>) {
-                      result.entries.joinToString(" ") { "VAR:${it.key}=${it.value}" }
-                    } else {
-                      if (result != null) "VAR:DEBUG_TYPE=${result.javaClass.name}" else ""
-                    }
-                  log("${Protocol.MARKER_COMPLETED} $cmd ${Protocol.RESULT_SUCCESS} $varStr")
-                } else {
-                  log(
-                    "${Protocol.MARKER_COMPLETED} $cmd ${Protocol.RESULT_FAILURE} ${Protocol.MSG_KEY}No matching step found"
-                  )
+            val dis = java.io.DataInputStream(socket.getInputStream())
+            while (true) {
+              val length =
+                try {
+                  dis.readUnsignedShort()
+                } catch (e: java.io.EOFException) {
+                  break // Connection closed
                 }
-              } catch (e: QuitException) {
-                log("${Protocol.MARKER_COMPLETED} $cmd ${Protocol.RESULT_SUCCESS}")
+              val bytes = ByteArray(length)
+              dis.readFully(bytes)
+              val jsonStr = String(bytes, Charsets.UTF_8)
+              val json = org.json.JSONObject(jsonStr)
+
+              val type = json.optString("type")
+              if (type == "Quit") {
+                val id = json.optInt("id")
+                sendResponse(id, "Success", null, null)
                 finish(0, Bundle())
-              } catch (e: Exception) {
-                log(
-                  "${Protocol.MARKER_COMPLETED} $cmd ${Protocol.RESULT_FAILURE} ${Protocol.MSG_KEY}${e.message}"
-                )
+                break
+              } else if (type == "ExecuteStep") {
+                val id = json.optInt("id")
+                val cmd = json.optString("step")
+
+                val r = registry
+                if (r == null) {
+                  sendResponse(id, "Failure", "Registry not initialized", null)
+                  continue
+                }
+
+                try {
+                  val (found, result) = r.execute(cmd)
+                  if (found) {
+                    val variables =
+                      if (result is Map<*, *>) {
+                        val map = HashMap<String, String>()
+                        result.forEach { (k, v) -> map[k.toString()] = v.toString() }
+                        map
+                      } else null
+                    sendResponse(id, "Success", null, variables)
+                  } else {
+                    sendResponse(id, "Failure", "No matching step found", null)
+                  }
+                } catch (e: QuitException) {
+                  sendResponse(id, "Success", null, null)
+                  finish(0, Bundle())
+                  break
+                } catch (e: Exception) {
+                  sendResponse(id, "Failure", e.message ?: "Unknown error", null)
+                }
               }
             }
           } catch (e: Exception) {
-            // Connection closed or I/O error; terminate the control loop
+            Log.e(TAG, "Error in control loop: ${e.message}")
           }
         },
         "VerifyControlLoop",
       )
       .start()
+  }
+
+  private fun sendResponse(
+    id: Int,
+    status: String,
+    errorMessage: String?,
+    variables: Map<String, String>?,
+  ) {
+    logExecutor.execute {
+      try {
+        controlOutputStream?.let { dos ->
+          val json = org.json.JSONObject()
+          json.put("type", "Response")
+          json.put("id", id)
+          json.put("status", status)
+          if (errorMessage != null) {
+            json.put("error_message", errorMessage)
+          }
+          if (variables != null) {
+            val varsJson = org.json.JSONObject()
+            variables.forEach { (k, v) -> varsJson.put(k, v) }
+            json.put("variables", varsJson)
+          }
+          val bytes = json.toString().toByteArray(Charsets.UTF_8)
+          dos.writeShort(bytes.size)
+          dos.write(bytes)
+          dos.flush()
+        }
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to send response: ${e.message}")
+      }
+    }
   }
 
   /** To be overridden by subclasses to register specific steps. */
@@ -228,4 +284,9 @@ fun <T> retryUntil(
     }
   }
   throw IllegalStateException(errorMessage)
+}
+
+fun Context.logToHost(msg: String) {
+  val instr = InstrumentationRegistry.getInstrumentation() as? VerifyInstrumentation
+  instr?.log(msg)
 }

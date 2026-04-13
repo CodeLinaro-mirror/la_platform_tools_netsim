@@ -6,6 +6,7 @@ package com.android.verify.vbs
 
 import android.content.Context
 import android.util.Log
+import com.android.verify.core.logToHost
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -63,6 +64,10 @@ private fun sendTcp(size: Int, target: String) {
   val parts = target.split(":")
   val host = parts[0]
   val port = if (parts.size > 1) parts[1].toInt() else 8080
+
+  val context =
+    androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+  context.logToHost("INFO Attempting to connect to $host:$port")
 
   Socket(host, port).use { socket ->
     val output = socket.getOutputStream()
