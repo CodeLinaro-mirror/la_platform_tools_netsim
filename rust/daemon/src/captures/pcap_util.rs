@@ -13,7 +13,7 @@ use std::{
 };
 
 macro_rules! ne_vec {
-    ( $( $x:expr ),* ) => {
+    ( $( $x:expr_2021 ),* ) => {
          Vec::<u8>::new().iter().copied()
          $( .chain($x.to_ne_bytes()) )*
          .collect()
@@ -21,7 +21,7 @@ macro_rules! ne_vec {
     }
 
 macro_rules! be_vec {
-        ( $( $x:expr ),* ) => {
+        ( $( $x:expr_2021 ),* ) => {
              Vec::<u8>::new().iter().copied()
              $( .chain($x.to_be_bytes()) )*
              .collect()
@@ -29,7 +29,7 @@ macro_rules! be_vec {
         }
 
 macro_rules! le_vec {
-    ( $( $x:expr ),* ) => {
+    ( $( $x:expr_2021 ),* ) => {
             Vec::<u8>::new().iter().copied()
             $( .chain($x.to_le_bytes()) )*
             .collect()

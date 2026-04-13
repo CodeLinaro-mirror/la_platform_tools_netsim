@@ -38,10 +38,14 @@ use std::sync::Arc;
 ///
 /// The file descriptors passed in `NetsimdArgs::fd_startup_str` must remain valid and open for as
 /// long as the program runs.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rust_main(argc: c_int, argv: *const *const c_char) {
     // enable Rust backtrace by setting env RUST_BACKTRACE=full
-    env::set_var("RUST_BACKTRACE", "full");
+    // SAFETY: Single-threaded main function.
+    // Note: set_var and remove_var have always been unsound when called in
+    // a multi-threaded context. They are marked unsafe in edition 2024.
+    // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+    unsafe { env::set_var("RUST_BACKTRACE", "full") };
     ffi_util::set_up_crash_report();
     let netsimd_args = get_netsimd_args(argc, argv);
     netsim_logger::init("netsimd", netsimd_args.verbose);
@@ -350,7 +354,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
             // If create_ini fails, check if there is another netsimd instance.
             // If there isn't another netsimd instance, remove_ini and create_ini once more.
             for _ in 0..2 {
-                if let Err(e) = create_ini(instance_num, grpc_port, web_port, websocket_port) {
+                match create_ini(instance_num, grpc_port, web_port, websocket_port) { Err(e) => {
                     warn!("create_ini error with {e:?}");
                     // Continue if the address overlaps to support Oxygen CF Boot.
                     // The pre-warmed device may leave stale netsim ini with the same grpc port.
@@ -372,9 +376,9 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
                             error!("{e:?}");
                         }
                     }
-                } else {
+                } _ => {
                     break;
-                }
+                }}
             }
         }
     }

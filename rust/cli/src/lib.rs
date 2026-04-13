@@ -80,23 +80,23 @@ fn perform_command(
     for (i, req) in requests.iter().enumerate() {
         let result = match command {
             // Continuous option sends the gRPC call every second
-            args::Command::Devices(ref cmd) if cmd.continuous => {
+            &mut args::Command::Devices(ref cmd) if cmd.continuous => {
                 continuous_perform_command(command, &client, req, verbose)?;
                 panic!("Continuous command interrupted. Exiting.");
             }
-            args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
+            &mut args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
                 continuous_perform_command(command, &client, req, verbose)?;
                 panic!("Continuous command interrupted. Exiting.");
             }
             // Get Capture use streaming gRPC reader request
-            args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
+            args::Command::Capture(args::Capture::Get(cmd)) => {
                 let GrpcRequest::GetCapture(request) = req else {
                     panic!("Expected to find GetCaptureRequest. Got: {req:?}");
                 };
                 perform_streaming_request(&client, cmd, request, &cmd.filenames[i].to_owned())?;
                 Ok(None)
             }
-            args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
+            &mut args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
                 let response = grpc_client::send_grpc(&client, &GrpcRequest::ListDevice)?;
                 let GrpcResponse::ListDevice(response) = response else {
                     panic!("Expected to find ListDeviceResponse. Got: {response:?}");
@@ -186,7 +186,7 @@ fn process_result(
         Err(e) => Err(format!("Grpc call error: {e}").into()),
     }
 }
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// main Rust netsim CLI function to be called by C wrapper netsim.cc
 pub extern "C" fn rust_main() {
     let mut args = NetsimArgs::parse();

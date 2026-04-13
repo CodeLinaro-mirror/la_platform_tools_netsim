@@ -65,13 +65,13 @@ pub fn create_filename_hash_set() -> HashSet<String> {
     let mut valid_files: HashSet<String> = HashSet::new();
     for path_prefix in PATH_PREFIXES {
         let dir_path = ui_path(path_prefix);
-        if let Ok(mut file) = fs::read_dir(dir_path) {
+        match fs::read_dir(dir_path) { Ok(mut file) => {
             while let Some(Ok(entry)) = file.next() {
                 valid_files.insert(entry.path().to_str().unwrap().to_string());
             }
-        } else {
+        } _ => {
             warn!("netsim-ui doesn't exist");
-        }
+        }}
     }
     valid_files
 }
@@ -204,7 +204,7 @@ pub fn handle_connection(
     };
     router.add_route(Uri::from_static(r"/v1/link"), Box::new(handle_link_wrapper.clone()));
 
-    if let Ok(request) = parse_http_request::<&TcpStream>(&mut BufReader::new(&stream)) {
+    match parse_http_request::<&TcpStream>(&mut BufReader::new(&stream)) { Ok(request) => {
         let mut response_writer = ServerResponseWriter::new(&mut stream);
         router.handle_request(&request, &mut response_writer);
         if let Some(response) = response_writer.get_response() {
@@ -216,11 +216,11 @@ pub fn handle_connection(
                 };
             }
         }
-    } else {
+    } _ => {
         let mut response_writer = ServerResponseWriter::new(&mut stream);
         let body = "404 not found (netsim): parse header failed";
         response_writer.put_error(404, body);
-    };
+    }};
 }
 
 #[cfg(test)]
