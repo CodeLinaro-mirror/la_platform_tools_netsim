@@ -149,12 +149,11 @@ open class VerifyInstrumentation : Instrumentation() {
     }
 
     val initialStep = arguments.getString("step")
+    val wait = arguments.getString("wait") == "true"
 
     if (initialStep != null) {
       registry?.execute(initialStep)
     }
-
-    val wait = arguments.getString("wait") == "true"
     if (!wait) {
       finish(0, Bundle())
     }
@@ -188,6 +187,11 @@ open class VerifyInstrumentation : Instrumentation() {
                 sendResponse(id, "Success", null, null)
                 finish(0, Bundle())
                 break
+              } else if (type == "GetSteps") {
+                val id = json.optInt("id")
+                val r = registry
+                val steps = r?.getRegisteredRegexes() ?: emptyList()
+                sendStepsResponse(id, steps)
               } else if (type == "ExecuteStep") {
                 val id = json.optInt("id")
                 val cmd = json.optString("step")
@@ -257,6 +261,27 @@ open class VerifyInstrumentation : Instrumentation() {
         }
       } catch (e: Exception) {
         Log.e(TAG, "Failed to send response: ${e.message}")
+      }
+    }
+  }
+
+  private fun sendStepsResponse(id: Int, steps: List<String>) {
+    logExecutor.execute {
+      try {
+        controlOutputStream?.let { dos ->
+          val json = org.json.JSONObject()
+          json.put("type", "StepsResponse")
+          json.put("id", id)
+          val stepsJson = org.json.JSONArray()
+          steps.forEach { stepsJson.put(it) }
+          json.put("steps", stepsJson)
+          val bytes = json.toString().toByteArray(Charsets.UTF_8)
+          dos.writeShort(bytes.size)
+          dos.write(bytes)
+          dos.flush()
+        }
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to send steps response: ${e.message}")
       }
     }
   }

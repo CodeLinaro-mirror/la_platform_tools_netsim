@@ -9,6 +9,8 @@ kt_android_library(
     name = "verify-core-lib",
     testonly = True,
     srcs = [
+        "src/main/java/com/android/verify/core/Step.kt",
+        "src/main/java/com/android/verify/core/StepDiscovery.kt",
         "src/main/java/com/android/verify/core/StepRegistry.kt",
         "src/main/java/com/android/verify/core/VerifyInstrumentation.kt",
     ],

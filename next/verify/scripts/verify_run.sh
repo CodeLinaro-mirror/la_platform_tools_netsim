@@ -219,6 +219,12 @@ if [ -z "$APK_PATH" ]; then
   fi
 fi
 
+echo "INFO: Using APK_PATH=$APK_PATH"
+if [ ! -f "$APK_PATH" ]; then
+  echo "ERROR: APK file not found at $APK_PATH"
+  exit 1
+fi
+
 if [ -z "$CLI_PATH" ]; then
   CLI_PATH=$(find "$BAZEL_OUT" -path "*/cli/netsim" -type f | head -n 1)
   if [ -z "$CLI_PATH" ]; then

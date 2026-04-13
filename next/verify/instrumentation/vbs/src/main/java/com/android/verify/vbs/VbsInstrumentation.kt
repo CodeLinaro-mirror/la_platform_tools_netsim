@@ -8,6 +8,7 @@ package com.android.verify.vbs
 import android.os.Bundle
 import android.util.Log
 import com.android.verify.core.VerifyInstrumentation
+import com.android.verify.core.registerStepsFromScanning
 
 class VbsInstrumentation : VerifyInstrumentation() {
   private val TAG = "VbsInstrumentation"
@@ -33,13 +34,16 @@ class VbsInstrumentation : VerifyInstrumentation() {
     val r = registry ?: return
     val context = getContext()
 
-    WifiStepsLoader.loadSteps(r, context)
-    ConnectivityStepsLoader.loadSteps(r, context)
-    NetworkStepsLoader.loadSteps(r, context)
-    LifecycleStepsLoader.loadSteps(r, context)
-    ServiceDiscoveryLoader.loadSteps(r, context)
-    TcpEchoStepsLoader.loadSteps(r, context)
-    UwbStepsLoader.loadSteps(r, context)
-    BluetoothAdvStepsLoader.loadSteps(r, context)
+    val inventory = r.registerStepsFromScanning("com.android.verify.vbs") { it.endsWith("StepsKt") }
+
+    val arguments = androidx.test.platform.app.InstrumentationRegistry.getArguments()
+    val verbose = arguments.getString("verbose") == "true"
+
+    inventory.forEach { (className, steps) ->
+      log("INFO File: $className, Steps: ${steps.size}")
+      if (verbose) {
+        steps.forEach { log("INFO   Step: $it") }
+      }
+    }
   }
 }

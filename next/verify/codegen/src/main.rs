@@ -6,13 +6,11 @@
 //! This binary parses source files to find methods annotated with `/// STEP:`
 //! comments. It generates "glue" code that register these steps.
 
-mod kotlin;
 mod rust;
 mod utils;
 
 use std::{env, path::Path};
 
-use kotlin::process_kotlin_file;
 use rust::process_rust_file;
 
 fn main() {
@@ -28,8 +26,6 @@ fn main() {
     if let Some(ext) = input_path.extension() {
         if ext == "rs" {
             process_rust_file(input_path, output_path);
-        } else if ext == "kt" {
-            process_kotlin_file(input_path, output_path);
         } else {
             eprintln!("Unsupported file extension: {:?}", ext);
             std::process::exit(1);

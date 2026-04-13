@@ -6,6 +6,7 @@ package com.android.verify.vbs
 
 import android.content.Context
 import android.util.Log
+import com.android.verify.core.Step
 import com.android.verify.core.logToHost
 import kotlin.math.abs
 import kotlin.random.Random
@@ -16,7 +17,7 @@ import kotlinx.coroutines.withTimeout
 
 private const val TAG = "UwbSteps"
 
-/// STEP: ^enables UWB$
+@Step("enables UWB")
 fun enableUwb(context: Context, args: List<String>) {
   Log.i(TAG, "Enabling UWB via settings")
   try {
@@ -30,7 +31,7 @@ fun enableUwb(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^disables UWB$
+@Step("disables UWB")
 fun disableUwb(context: Context, args: List<String>) {
   Log.i(TAG, "Disabling UWB via settings and stopping active sessions")
   try {
@@ -45,7 +46,7 @@ fun disableUwb(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^configures UWB channel (\d+) and preamble (\d+)$
+@Step("configures UWB channel (\\d+) and preamble (\\d+)")
 fun configureUwbChannelPreamble(context: Context, args: List<String>) {
   val channel = args[0].toInt()
   val preamble = args[1].toInt()
@@ -54,14 +55,14 @@ fun configureUwbChannelPreamble(context: Context, args: List<String>) {
   UwbSessionManager.currentPreambleIndex = preamble
 }
 
-/// STEP: ^configures UWB session ID (.*)$
+@Step("configures UWB session ID (.*)")
 fun configureUwbSessionId(context: Context, args: List<String>) {
   val sessionId = args[0].toUInt()
   Log.i(TAG, "Configuring UWB Session ID: $sessionId")
   UwbSessionManager.currentSessionId = sessionId
 }
 
-/// STEP: ^starts UWB ranging with session (.*) and config (\d+) and peer (.*)$
+@Step("starts UWB ranging with session (.*) and config (\\d+) and peer (.*)")
 fun startUwbRangingSessionConfig(context: Context, args: List<String>) {
   val sessionId = args[0].toUInt()
   val configId = args[1].toInt()
@@ -77,7 +78,7 @@ fun startUwbRangingSessionConfig(context: Context, args: List<String>) {
   UwbSessionManager.startRanging(listOf(peer), configId)
 }
 
-/// STEP: ^starts UWB ranging with config (\d+) and peer (.*)$
+@Step("starts UWB ranging with config (\\d+) and peer (.*)")
 fun startUwbRangingRoleConfig(context: Context, args: List<String>) {
   val configId = args[0].toInt()
   val peer = args[1]
@@ -91,7 +92,7 @@ fun startUwbRangingRoleConfig(context: Context, args: List<String>) {
   UwbSessionManager.startRanging(listOf(peer), configId)
 }
 
-/// STEP: ^Starts UWB Ranging with (.*)$
+@Step("Starts UWB Ranging with (.*)")
 fun startUwbRangingSimple(context: Context, args: List<String>) {
   val peer = args[0]
   if (peer == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
@@ -102,12 +103,12 @@ fun startUwbRangingSimple(context: Context, args: List<String>) {
   UwbSessionManager.startRanging(listOf(peer), 1)
 }
 
-/// STEP: ^Stops UWB Ranging$
+@Step("Stops UWB Ranging")
 fun stopUwbRanging(context: Context, args: List<String>) {
   UwbSessionManager.stopRanging()
 }
 
-/// STEP: ^starts UWB ranging with session (.*) and peer (.*)$
+@Step("starts UWB ranging with session (.*) and peer (.*)")
 fun startUwbRangingSessionPeer(context: Context, args: List<String>) {
   val sessionId = args[0].toUInt()
   val peer = args[1]
@@ -123,7 +124,7 @@ fun startUwbRangingSessionPeer(context: Context, args: List<String>) {
   UwbSessionManager.startRanging(listOf(peer), configId)
 }
 
-/// STEP: ^starts UWB ranging with peer (.*)$
+@Step("starts UWB ranging with peer (.*)")
 fun startUwbRangingPeerRole(context: Context, args: List<String>) {
   val peer = args[0]
   if (peer == "UNSUPPORTED" || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
@@ -136,7 +137,7 @@ fun startUwbRangingPeerRole(context: Context, args: List<String>) {
   UwbSessionManager.startRanging(listOf(peer), configId)
 }
 
-/// STEP: ^starts UWB ranging with peers (.*) as (CONTROLLER|CONTROLEE)$
+@Step("starts UWB ranging with peers (.*) as (CONTROLLER|CONTROLEE)")
 fun startUwbRangingMultiPeer(context: Context, args: List<String>) {
   val peers = args[0].split(",").map { it.trim() }
   if (peers.contains("UNSUPPORTED") || UwbSessionManager.localAddress.value == "UNSUPPORTED") {
@@ -149,7 +150,7 @@ fun startUwbRangingMultiPeer(context: Context, args: List<String>) {
   UwbSessionManager.startRanging(peers, configId)
 }
 
-/// STEP: ^starts UWB ranging with config (\d+) and peers (.*)$
+@Step("starts UWB ranging with config (\\d+) and peers (.*)")
 fun startUwbRangingMultiPeerWithConfig(context: Context, args: List<String>) {
   val configId = args[0].toInt()
   val peers = args[1].split(",").map { it.trim() }
@@ -161,7 +162,7 @@ fun startUwbRangingMultiPeerWithConfig(context: Context, args: List<String>) {
   UwbSessionManager.startRanging(peers, configId)
 }
 
-/// STEP: ^UWB distance to (.*) is ([\d\.]+)m \(\+/- ([\d\.]+)m\)$
+@Step("UWB distance to (.*) is ([\\d\\.]+)m \\(\\+/- ([\\d\\.]+)m\\)")
 fun verifyUwbDistance(context: Context, args: List<String>) {
   val to = args[0]
   val expectedDist = args[1].toFloat()
@@ -189,7 +190,7 @@ fun verifyUwbDistance(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^UWB azimuth to (.*) is ([\d\.]+) degrees \(\+/- ([\d\.]+) degrees\)$
+@Step("UWB azimuth to (.*) is ([\\d\\.]+) degrees \\(\\+/- ([\\d\\.]+) degrees\\)")
 fun verifyUwbAzimuth(context: Context, args: List<String>) {
   val to = args[0]
   val expectedAz = args[1].toFloat()
@@ -217,7 +218,7 @@ fun verifyUwbAzimuth(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^UWB elevation to (.*) is ([\d\.]+) degrees \(\+/- ([\d\.]+) degrees\)$
+@Step("UWB elevation to (.*) is ([\\d\\.]+) degrees \\(\\+/- ([\\d\\.]+) degrees\\)")
 fun verifyUwbElevation(context: Context, args: List<String>) {
   val to = args[0]
   val expectedEl = args[1].toFloat()
@@ -247,7 +248,7 @@ fun verifyUwbElevation(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^UWB (distance|azimuth|elevation) to (.*) is not available$
+@Step("UWB (distance|azimuth|elevation) to (.*) is not available")
 fun verifyUwbMeasurementNotAvailable(context: Context, args: List<String>) {
   val type = args[0]
   val to = args[1]
@@ -265,7 +266,7 @@ fun verifyUwbMeasurementNotAvailable(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^UWB session state is (.*)$
+@Step("UWB session state is (.*)")
 fun verifyUwbSessionState(context: Context, args: List<String>) {
   val expected = args[0]
 
@@ -298,7 +299,7 @@ fun verifyUwbSessionState(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^UWB is (connected|disconnected)$
+@Step("UWB is (connected|disconnected)")
 fun verifyUwbPeerStateGlobal(context: Context, args: List<String>) {
   val expectedState = if (args[0] == "connected") "Ranging" else "Disconnected"
 
@@ -324,7 +325,7 @@ fun verifyUwbPeerStateGlobal(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^UWB peer (.*) is (connected|disconnected)$
+@Step("UWB peer (.*) is (connected|disconnected)")
 fun verifyUwbPeerStateSpecific(context: Context, args: List<String>) {
   val peer = args[0]
   val expectedStatus = if (args[1] == "connected") "Connected" else "Disconnected"
@@ -355,14 +356,14 @@ fun verifyUwbPeerStateSpecific(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^initializes UWB (CONTROLLER|CONTROLEE) session$
+@Step("initializes UWB (CONTROLLER|CONTROLEE) session")
 fun initUwbSessionWithRole(context: Context, args: List<String>) {
   val role = args[0]
   val isController = role.equals("CONTROLLER", ignoreCase = true)
   UwbSessionManager.initSession(context, isController)
 }
 
-/// STEP: ^is a UWB (CONTROLLER|CONTROLEE) with session (.*) and address (.*)$
+@Step("is a UWB (CONTROLLER|CONTROLEE) with session (.*) and address (.*)")
 fun setupUwbDevice(context: Context, args: List<String>): Any {
   val role = args[0]
   val sessionArg = args[1]
@@ -370,7 +371,7 @@ fun setupUwbDevice(context: Context, args: List<String>): Any {
   return setupUwbDeviceInternal(context, role, sessionArg, addrVarName)
 }
 
-/// STEP: ^is a UWB (CONTROLLER|CONTROLEE) with address (.*)$
+@Step("is a UWB (CONTROLLER|CONTROLEE) with address (.*)")
 fun setupUwbDeviceNoSession(context: Context, args: List<String>): Any {
   val role = args[0]
   val addrVarName = args[1]
@@ -424,7 +425,7 @@ fun setupUwbDeviceInternal(
   return returns
 }
 
-/// STEP: ^UWB address is available$
+@Step("UWB address is available")
 fun waitForUwbAddress(context: Context, args: List<String>): Any {
   val addr =
     try {
@@ -437,7 +438,7 @@ fun waitForUwbAddress(context: Context, args: List<String>): Any {
   return mapOf("UWB_ADDRESS" to addr!!)
 }
 
-/// STEP: ^UWB address is available as (.*)$
+@Step("UWB address is available as (.*)")
 fun waitForUwbAddressAsVar(context: Context, args: List<String>): Any {
   val addr =
     try {

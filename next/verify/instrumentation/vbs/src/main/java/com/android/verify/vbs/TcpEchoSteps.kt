@@ -7,6 +7,7 @@ package com.android.verify.vbs
 
 import android.content.Context
 import android.util.Log
+import com.android.verify.core.Step
 import com.android.verify.core.logToHost
 import java.io.IOException
 import java.net.ServerSocket
@@ -15,7 +16,7 @@ import kotlin.concurrent.thread
 
 private const val TAG = "TcpEchoServer"
 
-/// STEP: ^starts a TCP echo server on "(.*)"$
+@Step("starts a TCP echo server on \"(.*)\"")
 fun startTcpEchoServer(context: Context, args: List<String>): Any {
   val varName = args[0]
   val serverSocket = ServerSocket(0)

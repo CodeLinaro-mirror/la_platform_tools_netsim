@@ -6,6 +6,7 @@ package com.android.verify.vbs
 
 import android.content.Context
 import android.util.Log
+import com.android.verify.core.Step
 import com.android.verify.core.logToHost
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -14,11 +15,33 @@ import java.net.Socket
 
 private const val TAG = "NetworkSteps"
 
-/// STEP: ^(?:When Android )?sends (\d+) bytes of (UDP|TCP) data to (.*)$
+@Step("(?:When Android )?sends (\\d+) bytes of (UDP|TCP) data to (.*)")
 fun sendData(context: Context, args: List<String>) {
   val size = args[0].toInt()
   val proto = args[1]
   val target = args[2]
+
+  if (proto == "UDP") {
+    sendUdp(size, target)
+  } else {
+    sendTcp(size, target)
+  }
+}
+
+@Step("sends (\\d+)(KB|MB|B) (TCP|UDP) to (.*)")
+fun sendDataFeatureFile(context: Context, args: List<String>) {
+  val sizeVal = args[0].toInt()
+  val unit = args[1]
+  val proto = args[2]
+  val target = args[3]
+
+  val size =
+    when (unit) {
+      "KB" -> sizeVal * 1024
+      "MB" -> sizeVal * 1024 * 1024
+      "B" -> sizeVal
+      else -> throw IllegalArgumentException("Unhandled unit: $unit")
+    }
 
   if (proto == "UDP") {
     sendUdp(size, target)
@@ -93,7 +116,7 @@ private fun sendTcp(size: Int, target: String) {
   }
 }
 
-/// STEP: ^receives (\d+) bytes of (UDP|TCP) data$
+@Step("receives (\\d+) bytes of (UDP|TCP) data")
 fun receiveData(context: Context, args: List<String>) {
   val size = args[0].toInt()
   Log.i(TAG, "Assumed received $size bytes of data based on successful transmission")

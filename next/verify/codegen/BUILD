@@ -8,7 +8,6 @@ package(default_visibility = ["//visibility:public"])
 rust_binary(
     name = "verify_codegen",
     srcs = [
-        "src/kotlin.rs",
         "src/main.rs",
         "src/rust.rs",
         "src/utils.rs",

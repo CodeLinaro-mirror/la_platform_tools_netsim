@@ -6,15 +6,16 @@ package com.android.verify.vbs
 
 import android.content.Context
 import com.android.verify.core.QuitException
+import com.android.verify.core.Step
 
-/// STEP: ^resets world$
+@Step("resets world")
 fun resetState(context: Context, args: List<String>) {
   BluetoothState.reset(context)
   UwbSessionManager.reset(context)
   DiscoveryState.reset(context)
 }
 
-/// STEP: ^THEN Android Quits$
+@Step("THEN Android Quits")
 fun quit(context: Context, args: List<String>) {
   DiscoveryState.reset(context)
   throw QuitException()

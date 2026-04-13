@@ -21,6 +21,7 @@ import android.location.LocationManager
 import android.os.ParcelUuid
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.verify.core.Step
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -149,7 +150,7 @@ object BluetoothState {
   }
 }
 
-/// STEP: ^advertises with name "(.*)" and TxPower "(.*)"$
+@Step("advertises with name \"(.*)\" and TxPower \"(.*)\"")
 fun advertiseWithNameAndPower(context: Context, args: List<String>): Map<String, String> {
   val name = args[0]
   val txPowerStr = args[1]
@@ -252,7 +253,7 @@ fun advertiseWithNameAndPower(context: Context, args: List<String>): Map<String,
   return mapOf("status" to "advertising", "name" to name)
 }
 
-/// STEP: ^starts scanning$
+@Step("starts scanning")
 fun startScanning(context: Context, args: List<String>): Map<String, String> {
   val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
   val adapter = manager.adapter
@@ -318,7 +319,7 @@ fun startScanning(context: Context, args: List<String>): Map<String, String> {
   return mapOf("status" to "scanning")
 }
 
-/// STEP: ^starts scanning for "(.*)"$
+@Step("starts scanning for \"(.*)\"")
 fun startScanningFor(context: Context, args: List<String>): Map<String, String> {
   val name = args[0]
   val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -374,7 +375,7 @@ fun startScanningFor(context: Context, args: List<String>): Map<String, String> 
   return mapOf("status" to "scanning", "filter" to name)
 }
 
-/// STEP: ^sees advertisement "(.*)" with RSSI "(.*)"$
+@Step("sees advertisement \"(.*)\" with RSSI \"(.*)\"")
 fun seesAdvertisementWithRssi(context: Context, args: List<String>) {
   val name = args[0]
   val rssiReq = args[1]
@@ -446,7 +447,7 @@ fun seesAdvertisementWithRssi(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^resets bluetooth state$
+@Step("resets bluetooth state")
 fun resetBluetoothState(context: Context, args: List<String>) {
   BluetoothState.reset(context)
   Log.i(TAG, "Reset Bluetooth State")

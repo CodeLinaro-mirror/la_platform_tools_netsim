@@ -12,11 +12,12 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.util.Log
+import com.android.verify.core.Step
 import com.android.verify.core.logToHost
 
 private const val WIFI_TAG = "Verify:WiFi"
 
-/// STEP: ^When Android Connects to Wifi$
+@Step("When Android Connects to Wifi")
 fun connectToWifi(context: Context, args: List<String>) {
   Log.i(WIFI_TAG, "Ensuring Wifi is enabled")
   var success = false
@@ -39,7 +40,7 @@ fun connectToWifi(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^Then Wi-Fi device info shows SSID "(.*)"$
+@Step("Then Wi-Fi device info shows SSID \"(.*)\"")
 fun verifyWifiInfoSsid(context: Context, args: List<String>) {
   val expectedSsid = args[0]
   Log.i(WIFI_TAG, "Verifying Wi-Fi device info SSID is: $expectedSsid")
@@ -94,7 +95,7 @@ fun verifyWifiInfoSsid(context: Context, args: List<String>) {
   }
 }
 
-/// STEP: ^Then Android is connected to Wi-Fi SSID "(.*)"$
+@Step("Then Android is connected to Wi-Fi SSID \"(.*)\"")
 fun verifyAndroidIsConnectedToWifi(context: Context, args: List<String>) {
   val expectedSsid = args[0]
   Log.i(WIFI_TAG, "Verifying Android is connected to Wi-Fi SSID: $expectedSsid")
@@ -102,7 +103,7 @@ fun verifyAndroidIsConnectedToWifi(context: Context, args: List<String>) {
   verifyWifiInfoSsid(context, args)
 }
 
-/// STEP: ^When Android releases Wi-Fi connection$
+@Step("When Android releases Wi-Fi connection")
 fun releaseWifiConnection(context: Context, args: List<String>) {
   Log.i(WIFI_TAG, "Releasing Wi-Fi connection")
   val wm = context.getSystemService(Context.WIFI_SERVICE) as WifiManager

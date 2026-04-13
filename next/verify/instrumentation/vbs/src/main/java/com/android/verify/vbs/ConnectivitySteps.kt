@@ -11,15 +11,16 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.util.Log
+import com.android.verify.core.Step
 
 private const val TAG = "Verify:Connectivity"
 
-/// STEP: ^When Android connects to Wi-Fi SSID "(.*)"$
+@Step("When Android connects to Wi-Fi SSID \"(.*)\"")
 fun connectToWifiSsid(context: Context, args: List<String>) {
   connectToWifiInternal(context, args[0], null)
 }
 
-/// STEP: ^When Android connects to Wi-Fi SSID "([^"]+)" with password "([^"]+)"$
+@Step("When Android connects to Wi-Fi SSID \"([^\"]+)\" with password \"([^\"]+)\"")
 fun connectToSecuredWifiSsid(context: Context, args: List<String>) {
   connectToWifiInternal(context, args[0], args[1])
 }

@@ -8,11 +8,12 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.util.Log
+import com.android.verify.core.Step
 import java.net.ServerSocket
 
 private const val TAG = "ServiceDiscovery"
 
-/// STEP: ^advertises service (.*) as (.*) on port (\d+)$
+@Step("advertises service (.*) as (.*) on port (\\d+)")
 fun advertiseServiceWithPort(context: Context, args: List<String>): Map<String, String> {
   val serviceType = args[0]
   val serviceName = args[1]
@@ -20,21 +21,21 @@ fun advertiseServiceWithPort(context: Context, args: List<String>): Map<String, 
   return startNsd(context, serviceName, serviceType, port)
 }
 
-/// STEP: ^advertises service (.*) as (.*)$
+@Step("advertises service (.*) as (.*)")
 fun advertiseService(context: Context, args: List<String>): Map<String, String> {
   val serviceType = args[0]
   val serviceName = args[1]
   return startNsd(context, serviceName, serviceType, 0)
 }
 
-/// STEP: ^starts discovery for (.*)$
+@Step("starts discovery for (.*)")
 fun startDiscovery(context: Context, args: List<String>) {
   val serviceType = args[0]
   DiscoveryState.reset(context)
   discoverNsd(context, serviceType)
 }
 
-/// STEP: ^finds service (.*)$
+@Step("finds service (.*)")
 fun findService(context: Context, args: List<String>) {
   val expectedName = args[0]
   val start = System.currentTimeMillis()
