@@ -16,6 +16,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::FramedRead;
+use verify_macros::{step, step_module};
 
 use crate::{
     orchestrator::TestContext,
@@ -28,6 +29,7 @@ use crate::{
 #[serde(tag = "type")]
 enum RunnerMessage {
     ExecuteStep { id: i32, step: String },
+    GetSteps { id: i32 },
     Quit { id: i32 },
 }
 
@@ -41,6 +43,10 @@ pub enum GuestMessage {
         error_message: Option<String>,
         #[serde(default)]
         variables: HashMap<String, String>,
+    },
+    StepsResponse {
+        id: i32,
+        steps: Vec<String>,
     },
     Event {
         event_type: String,
@@ -129,6 +135,7 @@ pub struct AndroidDevice {
         Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::Receiver<GuestMessage>>>>,
     pub silent: Arc<AtomicBool>,
     pub next_msg_id: i32,
+    pub steps: Vec<regex::Regex>,
 }
 
 impl AndroidDevice {
@@ -181,6 +188,7 @@ impl AndroidDevice {
             feedback_receiver: Arc::new(tokio::sync::Mutex::new(None)),
             silent: Arc::new(AtomicBool::new(false)),
             next_msg_id: 1,
+            steps: Vec::new(),
         })
     }
 
@@ -310,7 +318,8 @@ impl AndroidDevice {
                                                         }
                                                     }
                                                 }
-                                                GuestMessage::Response { .. } => {
+                                                GuestMessage::Response { .. }
+                                                | GuestMessage::StepsResponse { .. } => {
                                                     let _ = tx_clone.send(msg).await;
                                                 }
                                             }
@@ -404,13 +413,11 @@ impl AndroidDevice {
         let start = Instant::now();
         while start.elapsed().as_secs() < timeout_secs {
             match tokio::time::timeout(Duration::from_millis(100), rx.recv()).await {
-                Ok(Some(msg)) => {
-                    if let GuestMessage::Response { id, .. } = &msg {
-                        if *id == expected_id {
-                            return Ok(msg);
-                        }
-                    }
-                }
+                Ok(Some(msg)) => match &msg {
+                    GuestMessage::Response { id, .. } if *id == expected_id => return Ok(msg),
+                    GuestMessage::StepsResponse { id, .. } if *id == expected_id => return Ok(msg),
+                    _ => {}
+                },
                 Ok(None) => {
                     anyhow::bail!("Feedback channel closed");
                 }
@@ -436,6 +443,27 @@ impl AndroidDevice {
         stream.write_all(bytes).await?;
         stream.flush().await?;
         Ok(())
+    }
+
+    pub async fn get_steps(&mut self) -> anyhow::Result<()> {
+        let id = self.next_msg_id;
+        self.next_msg_id += 1;
+        self.send_message(&RunnerMessage::GetSteps { id }).await?;
+        let response = self.wait_for_response(id, 10).await?;
+        if let GuestMessage::StepsResponse { steps, .. } = response {
+            self.steps = steps
+                .into_iter()
+                .filter_map(|s| match regex::Regex::new(&s) {
+                    Ok(re) => Some(re),
+                    Err(e) => {
+                        eprintln!("Invalid regex from guest: '{}' - {}", s, e);
+                        None
+                    }
+                })
+                .collect();
+            return Ok(());
+        }
+        anyhow::bail!("Unexpected response to GetSteps");
     }
 
     pub async fn execute_step(
@@ -518,126 +546,117 @@ impl AndroidDevice {
     }
 }
 
-/// STEP: When ^(?:@avd|@android)(?::(\S+))? sends (\d+)(KB|B) (TCP|UDP) to
-/// (.*)$
-async fn avd_sends_packet(
-    w: &mut TestContext,
-    label: String,
-    size_val: usize,
-    unit: String,
-    proto: String,
-    target: String,
-) {
-    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
-    let proto = proto.to_lowercase();
+#[step_module]
+pub mod steps {
+    use super::*;
 
-    let payload_size = match unit.as_str() {
-        "KB" => size_val * 1024,
-        "MB" => size_val * 1024 * 1024,
-        "B" => size_val,
-        _ => size_val,
-    };
+    // Helper function
+    async fn generic_execution(
+        w: &mut TestContext,
+        actor: String,
+        step: String,
+        timeout_secs: u64,
+    ) {
+        let step = w.resolve_placeholders(&step);
+        let vars = {
+            let android = w
+                .get_android_actor_mut(&actor)
+                .expect("Actor not found or is not an Android Agent");
 
-    w.log_step(
-        &actor,
-        "->",
-        &format!("sends {}{} {} to {}", size_val, unit, proto.to_uppercase(), target),
-    );
+            if android.steps.is_empty() {
+                android.get_steps().await.expect("Failed to fetch steps from Android");
+            }
 
-    w.run_client_check(
-        &actor,
-        ClientParams { proto, target, payload_size, expect_eof: false, timeout_ms: 1000 },
-    )
-    .await
-    .expect("Client check failed");
-}
+            if !android.steps.iter().any(|re| {
+                if let Some(m) = re.find(&step) {
+                    m.start() == 0 && m.end() == step.len()
+                } else {
+                    false
+                }
+            }) {
+                panic!("Step '{}' does not match any registered step on guest {}", step, actor);
+            }
 
-/// STEP: When ^(?:@avd|@android)(?::(\S+))? (.*)$
-async fn generic_execution_step(w: &mut TestContext, label: String, step: String) {
-    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
-
-    let step = step.trim().to_string();
-    w.log_step(&actor, "->", &step);
-
-    if w.is_dry_run {
-        return;
+            android.execute_step(&step, timeout_secs).await.expect("Android step execution failed")
+        };
+        for (k, v) in vars {
+            w.set_variable(&k, v);
+        }
     }
-    generic_execution(w, actor, step, 60).await;
-}
 
-// Helper function
-async fn generic_execution(w: &mut TestContext, actor: String, step: String, timeout_secs: u64) {
-    let step = w.resolve_placeholders(&step);
-    let vars = {
-        let android =
-            w.get_android_actor_mut(&actor).expect("Actor not found or is not an Android Agent");
-        android.execute_step(&step, timeout_secs).await.expect("Android step execution failed")
-    };
-    for (k, v) in vars {
-        w.set_variable(&k, v);
+    #[step(r#"(?:@avd|@android)(?::(\S+))? measures performance with (\d+) samples of (\d+)(KB|MB|B) (TCP|UDP) to (.*)"#)]
+    async fn performance_benchmark(
+        w: &mut TestContext,
+        label: String,
+        samples: usize,
+        size_val: usize,
+        unit: String,
+        proto: String,
+        target: String,
+    ) {
+        let proto = proto.to_lowercase();
+        let payload_size = match unit.as_str() {
+            "KB" => size_val * 1024,
+            "MB" => size_val * 1024 * 1024,
+            "B" => size_val,
+            _ => size_val,
+        };
+
+        let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+        w.run_benchmark(
+            &actor,
+            ClientParams { proto, target, payload_size, expect_eof: false, timeout_ms: 60000 },
+            samples,
+        )
+        .await
+        .expect("Benchmark failed");
+    }
+
+    #[step(r#"Android connects to Wi-Fi SSID "([^"]+)""#)]
+    async fn android_connects_to_wifi(w: &mut TestContext, ssid: String) {
+        let step = format!("When Android connects to Wi-Fi SSID \"{}\"", ssid);
+        generic_execution(w, "@avd:1".to_string(), step, 120).await;
+    }
+
+    #[step(r#"Android connects to Wi-Fi SSID "([^"]+)" with password "([^"]+)""#)]
+    async fn android_connects_to_secured_wifi(w: &mut TestContext, ssid: String, password: String) {
+        let step = format!(
+            "When Android connects to Wi-Fi SSID \"{}\" with password \"{}\"",
+            ssid, password
+        );
+        generic_execution(w, "@avd:1".to_string(), step, 120).await;
+    }
+
+    #[step(r#"Android is connected to Wi-Fi SSID "([^"]+)""#)]
+    async fn android_is_connected_to_wifi(w: &mut TestContext, ssid: String) {
+        let step = format!("Then Android is connected to Wi-Fi SSID \"{}\"", ssid);
+        generic_execution(w, "@avd:1".to_string(), step, 60).await;
+    }
+
+    #[step(r#"Wi-Fi device info shows SSID "([^"]+)""#)]
+    async fn wifi_device_info_shows_ssid(w: &mut TestContext, ssid: String) {
+        let step = format!("Then Wi-Fi device info shows SSID \"{}\"", ssid);
+        generic_execution(w, "@avd:1".to_string(), step, 60).await;
+    }
+
+    #[step("Android releases Wi-Fi connection")]
+    async fn android_releases_wifi_connection(w: &mut TestContext) {
+        let step = "When Android releases Wi-Fi connection".to_string();
+        generic_execution(w, "@avd:1".to_string(), step, 60).await;
+    }
+
+    #[step(r#"(?:@avd|@android)(?::(\S+))? (.*)"#)]
+    async fn generic_execution_step(w: &mut TestContext, label: String, step: String) {
+        let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+
+        let step = step.trim().to_string();
+        w.log_step(&actor, "->", &step);
+
+        if w.is_dry_run {
+            return;
+        }
+        generic_execution(w, actor, step, 60).await;
     }
 }
 
-/// STEP: Then ^(?:@avd|@android)(?::(\S+))? measures performance with (\d+)
-/// samples of (\d+)(KB|MB|B) (TCP|UDP) to (.*)$
-async fn performance_benchmark(
-    w: &mut TestContext,
-    label: String,
-    samples: usize,
-    size_val: usize,
-    unit: String,
-    proto: String,
-    target: String,
-) {
-    let proto = proto.to_lowercase();
-    let payload_size = match unit.as_str() {
-        "KB" => size_val * 1024,
-        "MB" => size_val * 1024 * 1024,
-        "B" => size_val,
-        _ => size_val,
-    };
-
-    let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
-    w.run_benchmark(
-        &actor,
-        ClientParams { proto, target, payload_size, expect_eof: false, timeout_ms: 60000 },
-        samples,
-    )
-    .await
-    .expect("Benchmark failed");
-}
-
-/// STEP: When ^Android connects to Wi-Fi SSID "([^"]+)"$
-async fn android_connects_to_wifi(w: &mut TestContext, ssid: String) {
-    let step = format!("When Android connects to Wi-Fi SSID \"{}\"", ssid);
-    generic_execution(w, "@avd:1".to_string(), step, 120).await;
-}
-
-/// STEP: When ^Android connects to Wi-Fi SSID "([^"]+)" with password
-/// "([^"]+)"$
-async fn android_connects_to_secured_wifi(w: &mut TestContext, ssid: String, password: String) {
-    let step =
-        format!("When Android connects to Wi-Fi SSID \"{}\" with password \"{}\"", ssid, password);
-    generic_execution(w, "@avd:1".to_string(), step, 120).await;
-}
-
-/// STEP: Then ^Android is connected to Wi-Fi SSID "([^"]+)"$
-async fn android_is_connected_to_wifi(w: &mut TestContext, ssid: String) {
-    let step = format!("Then Android is connected to Wi-Fi SSID \"{}\"", ssid);
-    generic_execution(w, "@avd:1".to_string(), step, 60).await;
-}
-
-/// STEP: Then ^Wi-Fi device info shows SSID "([^"]+)"$
-async fn wifi_device_info_shows_ssid(w: &mut TestContext, ssid: String) {
-    let step = format!("Then Wi-Fi device info shows SSID \"{}\"", ssid);
-    generic_execution(w, "@avd:1".to_string(), step, 60).await;
-}
-
-/// STEP: When ^Android releases Wi-Fi connection$
-async fn android_releases_wifi_connection(w: &mut TestContext) {
-    let step = "When Android releases Wi-Fi connection".to_string();
-    generic_execution(w, "@avd:1".to_string(), step, 60).await;
-}
-
-// Include generated glue code
-include!(env!("ANDROID_STEPS_GLUE"));
+pub use steps::register_steps;

@@ -30,7 +30,6 @@ rust_test(
     name = "integration-test",
     srcs = [
         "tests/lib_test_world.rs",
-        "tests/lib_test_world_glue.rs",
     ],
     compile_data = glob([
         "tests/features/*.feat",
@@ -39,6 +38,9 @@ rust_test(
     crate_features = ["testing"],
     crate_root = "tests/lib_test_world.rs",
     edition = "2021",
+    proc_macro_deps = [
+        "//next/verify/macros:verify_macros",
+    ],
     deps = [
         ":lib",
         "//next/packets",
@@ -55,12 +57,4 @@ rust_test(
         "@tracing-subscriber",
         "@zerocopy",
     ],
-)
-
-genrule(
-    name = "generate_intentions_tests_glue",
-    srcs = ["tests/lib_test_world.rs"],
-    outs = ["tests/lib_test_world_glue.rs"],
-    cmd = "$(location //next/verify/codegen:verify_codegen) $(location tests/lib_test_world.rs) $@",
-    tools = ["//next/verify/codegen:verify_codegen"],
 )

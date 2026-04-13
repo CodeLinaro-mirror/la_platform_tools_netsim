@@ -112,13 +112,17 @@ impl<W: ?Sized> Features<W> {
         // Dispatch to Global Registry
         for (regex, step) in &self.steps {
             if let Some(captures) = regex.captures(text) {
-                let args: Vec<String> = captures
-                    .iter()
-                    .skip(1)
-                    .map(|m| m.map_or("", |m| m.as_str()).to_string())
-                    .collect();
-                step.call(world, args, ctx).await;
-                return;
+                // Enforce full match to prevent unintended partial matches
+                let m = captures.get(0).unwrap();
+                if m.start() == 0 && m.end() == text.len() {
+                    let args: Vec<String> = captures
+                        .iter()
+                        .skip(1)
+                        .map(|m| m.map_or("", |m| m.as_str()).to_string())
+                        .collect();
+                    step.call(world, args, ctx).await;
+                    return;
+                }
             }
         }
 
@@ -230,8 +234,10 @@ impl<W: ?Sized> Features<W> {
 
     fn is_match(&self, text: &str) -> bool {
         for (regex, _) in &self.steps {
-            if regex.is_match(text) {
-                return true;
+            if let Some(m) = regex.find(text) {
+                if m.start() == 0 && m.end() == text.len() {
+                    return true;
+                }
             }
         }
         false

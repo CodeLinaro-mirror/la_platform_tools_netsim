@@ -39,15 +39,10 @@ async fn run_feature(
     Ok(())
 }
 
-/// Programmatic entry point for the entire integration test suite.
-pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
-    let mut features = features::Features::<TestContext>::new();
-    crate::adb_steps::register_steps(&mut features);
-    crate::android_steps::register_steps(&mut features);
-    crate::host_steps::register_steps(&mut features);
-    crate::netsim_steps::register_steps(&mut features);
-    crate::netsim_link_steps::register_steps(&mut features);
-
+pub async fn run_suite(
+    ctx: &mut TestContext,
+    mut features: features::Features<TestContext>,
+) -> Result<()> {
     run_feature(&mut features, ctx, "echo.feature", include_str!("../tests/features/echo.feature"))
         .await?;
 

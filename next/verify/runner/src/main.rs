@@ -15,7 +15,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run integration tests
+    /// Run e2e tests
     Run {
         #[arg(long, help = "Path to the Android SDK root, platform-tools, or adb binary")]
         android_home: Option<String>,
@@ -41,7 +41,12 @@ enum Commands {
     Scenarios,
 }
 
-use verify_host_lib::orchestrator;
+use verify_host_lib::{
+    adb_steps, android_steps,
+    features::Features,
+    host_steps, netsim_link_steps, netsim_steps,
+    orchestrator::{self, TestContext},
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -81,6 +86,13 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
 
+            let mut features = Features::<TestContext>::new();
+            adb_steps::register_steps(&mut features);
+            android_steps::register_steps(&mut features);
+            host_steps::register_steps(&mut features);
+            netsim_steps::register_steps(&mut features);
+            netsim_link_steps::register_steps(&mut features);
+
             // Orchestrate Android integration tests
             orchestrator::run_android(
                 Some(resolved_android_home),
@@ -92,11 +104,18 @@ async fn main() -> anyhow::Result<()> {
                 filter,
                 dry_run,
                 verbose,
+                features,
             )
             .await?;
         }
         Commands::Scenarios => {
-            orchestrator::list_scenarios().await;
+            let mut features = Features::<TestContext>::new();
+            adb_steps::register_steps(&mut features);
+            android_steps::register_steps(&mut features);
+            host_steps::register_steps(&mut features);
+            netsim_steps::register_steps(&mut features);
+            netsim_link_steps::register_steps(&mut features);
+            orchestrator::list_scenarios(features).await;
         }
     }
     Ok(())
