@@ -1,7 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use ap_actor::SharedKeyStore;
 use netsim_packets::{
     HwsimAttrSet, HwsimCmd, HwsimFrame, HwsimMsg, HwsimMsgHdr, Ieee80211, MacAddress, NlMsgHdr,
     TxRate, TxRateFlag,
@@ -16,38 +15,13 @@ const NLMSG_MIN_TYPE: u16 = 0x10;
 const NL_AUTO_SEQ: u16 = 0;
 const NL_AUTO_PORT: u32 = 0;
 
-pub fn create_encrypted_hwsim_msg(
+pub fn create_hwsim_msg_with_attrs(
     frame: &HwsimFrame,
-    ieee80211: &netsim_packets::Ieee80211,
+    ieee80211: &Ieee80211,
     dest_hwsim_addr: &MacAddress,
-    key_store: &SharedKeyStore,
-    simulate_ap_reflection: bool,
 ) -> WifiResult<HwsimMsg> {
     let attrs = &frame.attrs;
-    let ieee80211_response = match simulate_ap_reflection
-        && ieee80211.is_to_ap()
-        && ieee80211.get_bssid().is_some_and(|b| key_store.has_bssid(&b))
-    {
-        true => std::borrow::Cow::Owned(
-            ieee80211
-                .into_from_ap()
-                .map_err(|e: String| WifiError::Internal(Box::from(e)))?
-                .try_into()
-                .map_err(|e: String| WifiError::Internal(Box::from(e)))?,
-        ),
-        false => std::borrow::Cow::Borrowed(ieee80211),
-    };
-
-    let ieee80211_response = if let Some(encrypted_bytes) =
-        key_store.try_encrypt(&ieee80211_response)
-    {
-        std::borrow::Cow::Owned(netsim_packets::Ieee80211::decode(&encrypted_bytes).map_err(
-            |e| WifiError::Internal(Box::from(format!("Failed to decode encrypted frame: {e}"))),
-        )?)
-    } else {
-        ieee80211_response
-    };
-    let frame_bytes = ieee80211_response.as_bytes();
+    let frame_bytes = ieee80211.as_bytes();
 
     let hwsim_msg = construct_hwsim_msg(
         &dest_hwsim_addr.bytes,

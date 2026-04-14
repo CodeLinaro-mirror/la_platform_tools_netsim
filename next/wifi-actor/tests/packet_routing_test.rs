@@ -298,18 +298,40 @@ async fn test_unknown_unicast_flooding() {
 #[tokio::test]
 async fn test_dhcp_m2u_race_condition() {
     let mut world = World::new().await;
-    world.given_an_ap().await;
+    world.given_a_secure_ap().await;
     let _rx = world.given_a_chip(1).await;
     let rx_mac = world.chips[0].mac;
+
+    // Trigger association to set GTK in SharedKeyStore
+    world.when_chip_transmits_mgmt_to_ap(0).await;
+
+    let timeout_assoc = tokio::time::sleep(std::time::Duration::from_secs(3));
+    tokio::pin!(timeout_assoc);
+
+    loop {
+        tokio::select! {
+            Some(bytes) = world.chips[0].stream_rx.recv() => {
+                if let Ok(hwsim_msg) = netsim_packets::HwsimMsg::decode_full(&bytes) {
+                    if let Ok(frame) = netsim_packets::HwsimFrame::parse(&hwsim_msg) {
+                        let ieee80211 = frame.ieee80211;
+                        if ieee80211.is_mgmt() && ieee80211.stype() == 1 {
+                            tracing::info!("Received Association Response");
+                            break;
+                        }
+                    }
+                }
+            }
+            _ = &mut timeout_assoc => {
+                panic!("Timeout waiting for Association Response");
+            }
+        }
+    }
 
     // Simulation: The station is associated but we simulate a handshake delay
     // by not installing the PTK in the SharedKeyStore.
 
-    info!("Injecting Broadcast DHCPOFFER from Infra...");
+    tracing::info!("Injecting Broadcast DHCPOFFER from Infra...");
     world.when_infra_transmits_multicast("DHCPOFFER").await;
-
-    // Verify that the frame is delivered as a BROADCAST frame (FF:FF:FF:FF:FF:FF)
-    // because unicast encryption is not yet available.
 
     let chip = &mut world.chips[0];
     let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
@@ -333,6 +355,102 @@ async fn test_dhcp_m2u_race_condition() {
                         if dst_mac == broadcast {
                              info!("CORRECT: DHCPOFFER remained BROADCAST");
                              return;
+                        }
+                    }
+                }
+            }
+            _ = &mut timeout => {
+                panic!("Timeout waiting for DHCPOFFER");
+            }
+        }
+    }
+}
+
+// Scenario: Verify that P2P traffic bypasses M2U and encryption logic,
+// acting as a transparent air proxy.
+//
+// Given a Wifi Medium with two chips
+// When a P2P frame is transmitted
+// Then the packet must be delivered without modifications (e.g. no M2U
+// conversion)
+#[tokio::test]
+async fn test_p2p_transparent_proxy() {
+    let mut world = World::new().await;
+    let _ap = world.given_a_chip(1).await; // ID 1
+    let _rx = world.given_a_chip(2).await; // ID 2
+    let rx_mac = world.chips[1].mac;
+
+    info!("Injecting Broadcast DHCPOFFER from Chip 1...");
+    world.when_chip_transmits_broadcast(0, "DHCPOFFER").await;
+
+    // Verify that the frame is delivered as a BROADCAST frame (FF:FF:FF:FF:FF:FF)
+    // because unicast encryption is not yet available.
+
+    let chip = &mut world.chips[1];
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
+    tokio::pin!(timeout);
+
+    loop {
+        tokio::select! {
+            Some(bytes) = chip.stream_rx.recv() => {
+                if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
+                    if eth.windows(9).any(|w| w == b"DHCPOFFER") {
+                        let dst_mac = &eth[0..6];
+                        info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
+
+                        // If it's the bug, it will be Unicast (rx_mac)
+                        if dst_mac == rx_mac {
+                            panic!("REPRODUCED: P2P DHCPOFFER was incorrectly converted to UNENCRYPTED UNICAST (dst={:02X?})", dst_mac);
+                        }
+
+                        // If it's correct, it should be Broadcast (at least if unencrypted)
+                        let broadcast = [0xFF; 6];
+                        if dst_mac == broadcast {
+                             info!("CORRECT: P2P DHCPOFFER remained BROADCAST");
+                             return;
+                        }
+                    }
+                }
+            }
+            _ = &mut timeout => {
+                panic!("Timeout waiting for DHCPOFFER");
+            }
+        }
+    }
+}
+
+// Scenario: Verify that broadcast frames are converted to unicast (M2U)
+// on an open network and delivered unencrypted.
+#[tokio::test]
+async fn test_open_network_m2u() {
+    let mut world = World::new().await;
+    world.given_an_ap().await; // Creates Open AP by default
+    let _rx = world.given_a_chip(1).await;
+    let rx_mac = world.chips[0].mac;
+
+    tracing::info!("Injecting Broadcast DHCPOFFER from Infra on Open Network...");
+    world.when_infra_transmits_multicast("DHCPOFFER").await;
+
+    let chip = &mut world.chips[0];
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
+    tokio::pin!(timeout);
+
+    loop {
+        tokio::select! {
+            Some(bytes) = chip.stream_rx.recv() => {
+                if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
+                    if eth.windows(9).any(|w| w == b"DHCPOFFER") {
+                        let dst_mac = &eth[0..6];
+                        tracing::info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
+
+                        // For Open Networks, M2U should succeed and deliver as UNICAST
+                        if dst_mac == rx_mac {
+                            tracing::info!("CORRECT: DHCPOFFER was converted to UNICAST on Open Network");
+                            return;
+                        }
+
+                        if dst_mac == [0xFF; 6] {
+                             panic!("FAILED: DHCPOFFER remained BROADCAST on Open Network");
                         }
                     }
                 }

@@ -176,23 +176,11 @@ impl Medium {
                     let target_mac = netsim_packets::MacAddress::new(dest.addr.into());
                     unicast_frame.set_destination(&target_mac);
 
-                    // If WPA is active, we must successfully encrypt using the destination's PTK
-                    // for M2U (Broadcast-to-Unicast) to be valid.
-                    if let Some(encrypted_bytes) = self.key_store.try_encrypt(&unicast_frame) {
-                        Ieee80211::decode(&encrypted_bytes).unwrap_or(unicast_frame)
-                    } else if dest_addr.is_multicast() || dest_addr.is_broadcast() {
-                        // For Broadcast/Multicast M2U, if encryption fails (keys not ready),
-                        // we MUST NOT send unencrypted unicast. Fall back to original.
-                        ieee80211.clone()
-                    } else {
-                        // For Unicast Flooding, we keep the rewritten MAC even if unencrypted
-                        // as per standard 802.11 bridge behavior.
-                        unicast_frame
-                    }
-                } else if let Some(encrypted_bytes) = self.key_store.try_encrypt(&ieee80211) {
-                    Ieee80211::decode(&encrypted_bytes).unwrap_or(ieee80211.clone())
+                    self.prepare_frame_for_delivery(&unicast_frame, &ieee80211, true)
+                        .unwrap_or(unicast_frame)
                 } else {
-                    ieee80211.clone()
+                    self.prepare_frame_for_delivery(&ieee80211, &ieee80211, true)
+                        .unwrap_or_else(|| ieee80211.clone())
                 };
 
                 let msg = utils::create_hwsim_msg_from_frame(
@@ -207,6 +195,35 @@ impl Medium {
             }
         }
         Ok(())
+    }
+
+    fn prepare_frame_for_delivery(
+        &self,
+        frame: &Ieee80211,
+        original_frame: &Ieee80211,
+        is_infra: bool,
+    ) -> Option<Ieee80211> {
+        if !is_infra {
+            return Some(frame.clone());
+        }
+
+        if let Some(encrypted_bytes) = self.key_store.try_encrypt(frame) {
+            match Ieee80211::decode(&encrypted_bytes) {
+                Ok(decoded) => Some(decoded),
+                Err(e) => {
+                    tracing::error!("Failed to decode encrypted frame: {e}");
+                    None
+                }
+            }
+        } else if self.key_store.get_gtk().is_some()
+            && original_frame.get_destination().is_multicast()
+        {
+            // Secure network fallback
+            Some(original_frame.clone())
+        } else {
+            // Open network or unicast flooding fallback
+            Some(frame.clone())
+        }
     }
 
     pub fn transmit(
@@ -237,7 +254,11 @@ impl Medium {
             self.wifi_stats.incr_wmedium_unicast_frames_tx();
         }
 
-        let is_m2u_conversion = targets.len() > 1 || dest_addr.is_multicast();
+        // Determine if this packet aligns with hosted infra
+        let is_infra = ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
+
+        // RESTRICT: Only run M2U optimizations for infrastructure networks
+        let is_m2u_conversion = is_infra && (targets.len() > 1 || dest_addr.is_multicast());
 
         for dest in targets {
             // Drop unicast packets destined to the sender itself (invalid for hwsim)
@@ -250,19 +271,40 @@ impl Medium {
             let src_enabled = self.enabled(source.client_id)?;
             let dst_enabled = self.enabled(dest.client_id)?;
             if src_enabled && dst_enabled {
-                let mut target_frame = ieee80211.clone();
+                // 1. Apply AP Reflection first on the original broadcast frame
+                let reflected_frame =
+                    if self.simulate_ap_reflection && ieee80211.is_to_ap() && is_infra {
+                        ieee80211
+                            .clone()
+                            .into_from_ap()
+                            .map_err(|e: String| WifiError::Internal(Box::from(e)))?
+                            .try_into()
+                            .map_err(|e: String| WifiError::Internal(Box::from(e)))?
+                    } else {
+                        ieee80211.clone()
+                    };
+
+                // 2. Create the targeted frame (rewrite MAC if M2U)
+                let mut target_frame = reflected_frame.clone();
                 if is_m2u_conversion && dest.addr != source_addr {
                     let target_mac = netsim_packets::MacAddress::new(dest.addr.into());
                     target_frame.set_destination(&target_mac);
                 }
 
-                match utils::create_encrypted_hwsim_msg(
-                    frame,
+                // 3. Encryption and Fallback
+                let frame_to_send = match self.prepare_frame_for_delivery(
                     &target_frame,
-                    &dest.hwsim_addr,
-                    &self.key_store,
-                    self.simulate_ap_reflection,
+                    &reflected_frame,
+                    is_infra,
                 ) {
+                    Some(f) => f,
+                    None => continue, // Skip on decode failure in transmit
+                };
+
+                let msg_result =
+                    utils::create_hwsim_msg_with_attrs(frame, &frame_to_send, &dest.hwsim_addr);
+
+                match msg_result {
                     Ok(msg) => {
                         self.wifi_stats.incr_wmedium_frames_tx();
                         self.wifi_stats.incr_hwsim_frames_tx();
