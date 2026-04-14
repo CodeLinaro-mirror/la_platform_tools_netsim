@@ -169,3 +169,18 @@ async fn test_capture_patch_enabled_flag() {
     world.when_patch_capture(chip.id, false).await;
     world.then_capture_is(chip.id, false).await;
 }
+
+// Scenario: Start daemon with --test_beacons
+//   Given I start netsimd with --test_beacons
+//   Then test beacons should be created automatically
+#[tokio::test]
+async fn test_test_beacons_args() {
+    let mut args = daemon::Args::default();
+    args.logtostderr = true;
+    args.test_beacons = true;
+
+    let mut world = World::new_with_args(args).await;
+
+    world.then_device_list_contains_by_name("gDevice-beacon-1").await;
+    world.then_device_list_contains_by_name("gDevice-beacon-2").await;
+}

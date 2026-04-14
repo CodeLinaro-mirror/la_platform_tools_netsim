@@ -594,6 +594,18 @@ impl NetsimDaemon {
             ap_client.create_ap(Some(0), ap_config).await.expect("Failed to create default AP");
         }
 
+        // Create test beacons if required
+        let test_beacons = match (args.test_beacons, args.no_test_beacons) {
+            (true, false) => true,
+            (false, true) => false,
+            (false, false) => cfg!(feature = "cuttlefish"),
+            (true, true) => panic!("unexpected flag combination"),
+        };
+
+        if test_beacons {
+            crate::test_beacons::create_test_beacons(&device_client).await;
+        }
+
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();
 

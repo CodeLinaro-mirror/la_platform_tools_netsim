@@ -95,6 +95,14 @@ pub struct Args {
     #[arg(long)]
     pub forward_host_mdns: bool,
 
+    /// Start with test beacons
+    #[arg(long, alias = "test_beacons", overrides_with("no_test_beacons"))]
+    pub test_beacons: bool,
+
+    /// Do not start with test beacons
+    #[arg(long, alias = "no_test_beacons", overrides_with("test_beacons"))]
+    pub no_test_beacons: bool,
+
     /// Set the initial SSID for the default Access Point (defaults to
     /// 'AndroidWifi')
     #[command(flatten)]
