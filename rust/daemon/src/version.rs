@@ -5,7 +5,7 @@
 
 /// Version library.
 
-pub const VERSION: &str = "0.3.102";
+pub const VERSION: &str = "0.3.103";
 
 pub fn get_version() -> String {
     VERSION.to_owned()
