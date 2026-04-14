@@ -44,25 +44,30 @@ pub async fn run_suite(
     mut features: features::Features<TestContext>,
     spec_dir: Option<String>,
 ) -> Result<()> {
-    if let Some(dir) = spec_dir {
-        let mut entries = Vec::new();
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "feature") {
-                entries.push(path);
-            }
-        }
-        // Sort for deterministic order
-        entries.sort();
+    let dir_path = match spec_dir {
+        Some(path) => path,
+        None => anyhow::bail!("No spec directory provided. Use --spec-dir."),
+    };
+    let dir = std::path::Path::new(&dir_path);
+    if !dir.is_dir() {
+        anyhow::bail!("Features directory not found: {}", dir_path);
+    }
 
-        for path in entries {
-            let filename = path.file_name().unwrap().to_string_lossy().into_owned();
-            let content = std::fs::read_to_string(&path)?;
-            run_feature(&mut features, ctx, &filename, &content).await?;
+    let mut entries = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().map_or(false, |ext| ext == "feature") {
+            entries.push(path);
         }
-    } else {
-        anyhow::bail!("No spec directory provided. Use --spec-dir.");
+    }
+    // Sort for deterministic order
+    entries.sort();
+
+    for path in entries {
+        let filename = path.file_name().unwrap().to_string_lossy().into_owned();
+        let content = std::fs::read_to_string(&path)?;
+        run_feature(&mut features, ctx, &filename, &content).await?;
     }
 
     Ok(())
