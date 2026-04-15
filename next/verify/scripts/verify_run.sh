@@ -121,7 +121,7 @@ echo "================================================="
 cleanup
 
 echo "================================================="
-echo "3. Starting Netsims daemon"
+echo "3. Starting Netsim daemon"
 echo "================================================="
 # We run the binary directly from bazel-bin for immediate execution
 if [ -z "$NETSIMD_PATH" ]; then
