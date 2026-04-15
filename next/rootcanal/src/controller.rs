@@ -161,7 +161,7 @@ impl ControllerImpl {
                     Some(send_ll_trampoline),
                     Some(invalid_packet_trampoline),
                     None,
-                    context_ptr as *mut c_void,
+                    context_ptr.cast::<c_void>(),
                     proto_ptr,
                     proto_len,
                 )
@@ -181,11 +181,11 @@ impl ControllerImpl {
     pub(crate) fn receive_hci(&self, data: Bytes) {
         self.hci_commands_in.fetch_add(1, Ordering::Relaxed);
         let controller = self.controller.lock().unwrap();
+        let idc = data[0] as c_int;
+        let data: &[u8] = &data[1..];
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
         // as long as `self` exists. `data` is a valid slice, and we provide its
         // length to ensure the C++ side does not read out of bounds.
-        let idc = data[0] as c_int;
-        let data: &[u8] = &data[1..];
         unsafe {
             ffi::ffi_controller_receive_hci(
                 controller.0,
@@ -293,7 +293,7 @@ unsafe fn context_from_cookie<'a>(cookie: *mut c_void) -> &'a mut CallbackContex
     // during `ffi_controller_new` and that it points to a valid `CallbackContext`.
     // The lifetime of the returned reference is tied to the scope of the calling
     // trampoline function, which is safe.
-    unsafe { &mut *(cookie as *mut CallbackContext) }
+    unsafe { &mut *(cookie.cast::<CallbackContext>()) }
 }
 
 // The trampoline function that is called by the C++ code.

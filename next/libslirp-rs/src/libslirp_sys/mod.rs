@@ -33,6 +33,7 @@ use std::{
 mod bindings {
     #![allow(missing_docs)]
     #![allow(clippy::missing_safety_doc)]
+    #![allow(clippy::ptr_as_ptr)]
     #![allow(unsafe_op_in_unsafe_fn)]
     #![allow(non_upper_case_globals)]
     #![allow(non_camel_case_types)]
@@ -42,6 +43,7 @@ mod bindings {
     #![allow(clippy::type_complexity)]
     #![allow(clippy::too_many_arguments)]
     #![allow(clippy::unnecessary_cast)]
+    #![allow(clippy::undocumented_unsafe_blocks)]
     // TODO(b/203002625) - since rustc 1.53, bindgen causes UB warnings
     // Remove this once bindgen figures out how to do this correctly
     #![allow(deref_nullptr)]
@@ -77,25 +79,25 @@ impl Default for sockaddr_storage {
 fn v4_ref(storage: &sockaddr_storage) -> &sockaddr_in {
     // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
     // `sockaddr_in`. Neither types have any padding.
-    unsafe { &*(storage as *const sockaddr_storage as *const sockaddr_in) }
+    unsafe { &*((storage as *const sockaddr_storage).cast::<sockaddr_in>()) }
 }
 
 fn v6_ref(storage: &sockaddr_storage) -> &sockaddr_in6 {
     // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
     // `sockaddr_in6`. Neither types have any padding.
-    unsafe { &*(storage as *const sockaddr_storage as *const sockaddr_in6) }
+    unsafe { &*((storage as *const sockaddr_storage).cast::<sockaddr_in6>()) }
 }
 
 fn v4_mut(storage: &mut sockaddr_storage) -> &mut sockaddr_in {
     // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
     // `sockaddr_in`. Neither types have any padding.
-    unsafe { &mut *(storage as *mut sockaddr_storage as *mut sockaddr_in) }
+    unsafe { &mut *((storage as *mut sockaddr_storage).cast::<sockaddr_in>()) }
 }
 
 fn v6_mut(storage: &mut sockaddr_storage) -> &mut sockaddr_in6 {
     // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
     // `sockaddr_in6`. Neither types have any padding.
-    unsafe { &mut *(storage as *mut sockaddr_storage as *mut sockaddr_in6) }
+    unsafe { &mut *((storage as *mut sockaddr_storage).cast::<sockaddr_in6>()) }
 }
 
 // Type for libslirp poll bitfield mask SLIRP_POLL_nnn

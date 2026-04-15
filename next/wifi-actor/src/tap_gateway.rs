@@ -71,6 +71,7 @@ impl TapInterface {
         };
 
         // Prepare ifreq
+        // SAFETY: `libc::ifreq` is a C struct that is safe to zero-initialize.
         let mut if_req: libc::ifreq = unsafe { std::mem::zeroed() };
 
         // Set name
@@ -88,7 +89,7 @@ impl TapInterface {
         // might vary or be inaccessible in some libc versions/bindgen outputs.
         unsafe {
             let flags = (libc::IFF_TAP | libc::IFF_NO_PI) as libc::c_short;
-            *(&mut if_req.ifr_ifru as *mut _ as *mut libc::c_short) = flags;
+            *(&raw mut if_req.ifr_ifru).cast::<libc::c_short>() = flags;
         }
 
         // IOCTL
