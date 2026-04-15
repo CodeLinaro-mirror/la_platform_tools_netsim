@@ -1,6 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 
-use netsim_model::{chip::ChipId, chip_error::ChipError};
+use netsim_model::chip_error::ChipError;
 
 use crate::world::World;
 
@@ -25,9 +25,9 @@ async fn test_get_chip_not_found() {
     let result = world.when_get_chip(chip_id).await;
 
     // Then
-    match result {
-        Err(ChipError::ChipNotFound(id)) => {
-            assert_eq!(id, ChipId(chip_id));
+    match result.as_ref().map_err(|err| err.as_chip_error()) {
+        Err(Some(ChipError::ChipNotFound(id))) => {
+            assert_eq!(id.0, chip_id);
         }
         _ => panic!("Expected ChipNotFound error, got {:?}", result),
     }

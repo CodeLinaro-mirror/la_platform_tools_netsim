@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use link_api::Link;
 use netsim_model::chip::{ChipId, ChipKind};
+use tracing::error;
 
 /// Context for LinkActor.
 ///
@@ -55,7 +56,7 @@ impl LinkActor {
         let update = netsim_model::chip::ChipUpdate { links: Some(links), ..Default::default() };
 
         if let Err(e) = client.update(chip_id, update).await {
-            log::error!("Failed to update links for chip {}: {:?}", chip_id, e);
+            error!("Failed to update links for chip {}: {:?}", chip_id, e);
         }
     }
 }

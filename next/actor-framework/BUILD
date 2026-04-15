@@ -5,11 +5,12 @@ package(default_visibility = ["//visibility:public"])
 DEPS = [
     "@bytes",
     "@futures",
-    "@log",
     "@tokio",
     "@tokio-stream",
     "@tokio-util",
     "@thiserror",
+    "@tracing",
+    "//next/model",
 ]
 
 netsim_rust_library(

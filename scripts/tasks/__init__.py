@@ -18,20 +18,22 @@ import logging
 import platform
 from typing import Mapping
 
+from tasks.build_task import BuildTask
 from tasks.compile_install_task import CompileInstallTask
-from tasks.compile_task import CompileTask
 from tasks.configure_task import ConfigureTask
 from tasks.install_emulator_task import InstallEmulatorTask
 from tasks.run_pytest_task import RunPyTestTask
-from tasks.run_test_task import RunTestTask
 from tasks.task import Task
+from tasks.test_task import TestTask
 from tasks.zip_artifact_task import ZipArtifactTask
+
+TASK_ALIASES = ["compile", "runtest"]
 
 TASK_LIST = [
     "Configure",
-    "Compile",
+    "Build",
     "CompileInstall",
-    "RunTest",
+    "Test",
     "ZipArtifact",
     "InstallEmulator",
     "RunPyTest",
@@ -52,9 +54,9 @@ def get_tasks(args, env) -> Mapping[str, Task]:
   # Mapping of tasks
   tasks = {
       "Configure": ConfigureTask(args, env),
-      "Compile": CompileTask(args, env),
+      "Build": BuildTask(args, env),
       "CompileInstall": CompileInstallTask(args, env),
-      "RunTest": RunTestTask(args, env),
+      "Test": TestTask(args, env),
       "ZipArtifact": ZipArtifactTask(args),
       "InstallEmulator": InstallEmulatorTask(args),
       "RunPyTest": RunPyTestTask(args),
@@ -65,7 +67,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
     for task_name in [
         "Configure",
         "CompileInstall",
-        "RunTest",
+        "Test",
         "ZipArtifact",
         "InstallEmulator",
         "RunPyTest",
@@ -76,17 +78,19 @@ def get_tasks(args, env) -> Mapping[str, Task]:
   # Define the complete task map declaratively.
   task_map = {
       "configure": ["Configure"],
-      "compile": ["Compile"],
+      "build": ["Build"],
+      "compile": ["Build"],
       "compileinstall": ["CompileInstall"],
-      "runtest": ["RunTest"],
+      "test": ["Test"],
+      "runtest": ["Test"],
       "zipartifact": ["ZipArtifact"],
       "installemulator": ["InstallEmulator"],
       "runpytest": ["RunPyTest"],
-      "fullbuild": ["Configure", "Compile", "InstallEmulator"],
+      "fullbuild": ["Configure", "Build", "InstallEmulator"],
       "localrunall": [
           "Configure",
           "CompileInstall",
-          "RunTest",
+          "Test",
           "InstallEmulator",
           "RunPyTest",
       ],

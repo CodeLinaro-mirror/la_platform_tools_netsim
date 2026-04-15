@@ -1,16 +1,4 @@
-// Copyright 2022 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2022 The Android Open Source Project
 
 use std::cmp::max;
 
@@ -101,37 +89,32 @@ impl args::Command {
                     println!("Successfully downloaded file: {}", cmd.current_file);
                 }
             }
-            Command::Gui => {
-                unimplemented!("No Grpc Response for Gui Command.");
-            }
-            Command::Artifact => {
-                unimplemented!("No Grpc Response for Artifact Command.");
-            }
-            Command::Beacon(action) => match action {
-                Beacon::Create(kind) => match kind {
-                    BeaconCreate::Ble(_) => {
-                        if !verbose {
-                            return Ok(());
+
+            Command::Beacon(action) => {
+                match action {
+                    Beacon::Create(kind) => match kind {
+                        BeaconCreate::Ble(_) => {
+                            if !verbose {
+                                return Ok(());
+                            }
+                            let GrpcResponse::CreateDevice(res) = response else {
+                                return Err(format!(
+                                    "Expected to print CreateDeviceResponse. Got: {response:?}"
+                                )
+                                .into());
+                            };
+                            let device = &res.device;
+                            if device.chips.len() == 1 {
+                                println!(
+                                    "Created device '{}' with ble beacon chip '{}'",
+                                    device.name, device.chips[0].name
+                                );
+                            } else {
+                                return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
+                            }
                         }
-                        let GrpcResponse::CreateDevice(res) = response else {
-                            return Err(format!(
-                                "Expected to print CreateDeviceResponse. Got: {response:?}"
-                            )
-                            .into());
-                        };
-                        let device = &res.device;
-                        if device.chips.len() == 1 {
-                            println!(
-                                "Created device '{}' with ble beacon chip '{}'",
-                                device.name, device.chips[0].name
-                            );
-                        } else {
-                            return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
-                        }
-                    }
-                },
-                Beacon::Patch(kind) => {
-                    match kind {
+                    },
+                    Beacon::Patch(kind) => match kind {
                         BeaconPatch::Ble(args) => {
                             if !verbose {
                                 return Ok(());
@@ -178,22 +161,16 @@ impl args::Command {
                                 println!("Set timeout to {timeout} ms");
                             }
                         }
-                    }
-                }
-                Beacon::Remove(args) => {
-                    if !verbose {
-                        return Ok(());
-                    }
-                    if let Some(chip_name) = &args.chip_name {
-                        println!("Removed chip '{}' from device '{}'", chip_name, args.device_name)
-                    } else {
+                    },
+                    Beacon::Remove(args) => {
+                        if !verbose {
+                            return Ok(());
+                        }
                         println!("Removed device '{}'", args.device_name)
                     }
                 }
-            },
-            Command::Bumble => {
-                unimplemented!("No Grpc Response for Bumble Command.");
             }
+
             Command::Link(link_cmd) => match link_cmd {
                 Link::Create(_) => {
                     if verbose {
@@ -269,6 +246,10 @@ impl args::Command {
                     }
                 }
             },
+            // These commands are intercepted early in main.rs and have no direct gRPC pipeline.
+            _ => {
+                unimplemented!("No Grpc Response for this Command.");
+            }
         }
         Ok(())
     }

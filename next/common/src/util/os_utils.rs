@@ -19,9 +19,12 @@
 use std::os::fd::AsRawFd;
 #[cfg(target_os = "windows")]
 use std::os::windows::io::AsRawHandle;
-use std::{ffi::CString, path::PathBuf};
+use std::{
+    ffi::{CString, NulError},
+    path::PathBuf,
+};
 
-use log::warn;
+use tracing::warn;
 
 use crate::system::netsimd_temp_dir;
 
@@ -104,23 +107,17 @@ pub fn get_instance_name(instance_num: Option<u16>, connector_instance: Option<u
 }
 
 /// Redirect Standard Stream
-pub fn redirect_std_stream(instance_name: &str) -> anyhow::Result<()> {
+pub fn redirect_std_stream(instance_name: &str) -> Result<(), NulError> {
     // Construct File Paths
     let netsim_temp_dir = netsimd_temp_dir();
-    let stdout_filename = netsim_temp_dir
-        .join(format!("netsim_{instance_name}stdout.log"))
-        .into_os_string()
-        .into_string()
-        .map_err(|err| anyhow::anyhow!("{err:?}"))?;
-    let stderr_filename = netsim_temp_dir
-        .join(format!("netsim_{instance_name}stderr.log"))
-        .into_os_string()
-        .into_string()
-        .map_err(|err| anyhow::anyhow!("{err:?}"))?;
+    let stdout_filename =
+        netsim_temp_dir.join(format!("netsim_{instance_name}stdout.log")).into_os_string();
+    let stderr_filename =
+        netsim_temp_dir.join(format!("netsim_{instance_name}stderr.log")).into_os_string();
 
     // CStrings
-    let stdout_filename_c = CString::new(stdout_filename)?;
-    let stderr_filename_c = CString::new(stderr_filename)?;
+    let stdout_filename_c = CString::new(stdout_filename.as_encoded_bytes())?;
+    let stderr_filename_c = CString::new(stderr_filename.as_encoded_bytes())?;
     let mode_c = CString::new("w")?;
 
     // Obtain the raw file descriptors for stdout.

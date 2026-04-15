@@ -5,8 +5,9 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use daemon::netsimd::{NetsimDaemon, StartUpMode};
 use grpcio::{ChannelBuilder, EnvBuilder};
 use netsim_proto::{
+    access_point_grpc::AccessPointServiceClient,
     common::ChipKind,
-    frontend::{CreateDeviceRequest, DeleteChipRequest},
+    frontend::{CreateDeviceRequest, DeleteChipRequest, DeleteDeviceRequest},
     frontend_grpc::FrontendServiceClient,
     model::{ChipCreate, DeviceCreate},
     packet_streamer_grpc::PacketStreamerClient,
@@ -17,6 +18,7 @@ use netsim_proto::{
 pub struct World {
     pub daemon: Option<NetsimDaemon>,
     pub frontend_client: Option<FrontendServiceClient>,
+    pub access_point_client: Option<AccessPointServiceClient>,
     pub packet_client: Option<PacketStreamerClient>,
     pub capture_client: capture_actor::CaptureClient,
 
@@ -37,6 +39,7 @@ impl World {
         let mut args = daemon::args::Args::default();
         args.logtostderr = true; // Disable log redirection
         args.no_shutdown = true; // Prevent tests from dying when deleting devices
+        args.hci_port = Some(0); // Let the OS assign a random available port
         Self::new_with_args(args).await
     }
 
@@ -44,7 +47,7 @@ impl World {
         let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
 
-        let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone(), args)
+        let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), args)
             .await
             .expect("Failed to create daemon");
 
@@ -63,6 +66,7 @@ impl World {
         World {
             daemon: Some(daemon),
             frontend_client: None,
+            access_point_client: None,
             packet_client: None,
             capture_client,
             grpc_port,
@@ -79,6 +83,16 @@ impl World {
             self.frontend_client = Some(FrontendServiceClient::new(ch));
         }
         self.frontend_client.as_ref().unwrap()
+    }
+
+    /// Helper to get or create Access Point client
+    pub fn ensure_access_point_client(&mut self) -> &AccessPointServiceClient {
+        if self.access_point_client.is_none() {
+            let env = Arc::new(EnvBuilder::new().build());
+            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
+            self.access_point_client = Some(AccessPointServiceClient::new(ch));
+        }
+        self.access_point_client.as_ref().unwrap()
     }
 
     /// Helper to get or create packet streamer client
@@ -130,6 +144,26 @@ impl World {
         resp.device.id
     }
 
+    pub async fn when_delete_device(&mut self, device_id: u32) {
+        let client = self.ensure_frontend_client();
+        let mut req = DeleteDeviceRequest::new();
+        req.id = device_id;
+        client.delete_device_async(&req).expect("DeleteDevice failed").await.expect("RPC failed");
+    }
+
+    /// When I list access points
+    pub async fn when_list_access_points(
+        &mut self,
+    ) -> Vec<netsim_proto::access_point::AccessPoint> {
+        let client = self.ensure_access_point_client();
+        let resp = client
+            .list_async(&netsim_proto::access_point::ListAccessPointsRequest::new())
+            .expect("ListAccessPoints failed")
+            .await
+            .expect("RPC failed");
+        resp.access_points
+    }
+
     /// When I list devices
     pub async fn when_list_devices(&mut self) -> Vec<netsim_proto::model::Device> {
         let client = self.ensure_frontend_client();
@@ -141,11 +175,11 @@ impl World {
         resp.devices
     }
 
-    /// When I delete a chip (device)
-    pub async fn when_delete_chip(&mut self, device_id: u32) {
+    /// When I delete a chip
+    pub async fn when_delete_chip(&mut self, chip_id: u32) {
         let client = self.ensure_frontend_client();
         let mut req = DeleteChipRequest::new();
-        req.id = device_id;
+        req.id = chip_id;
         client.delete_chip_async(&req).expect("DeleteChip failed").await.expect("RPC failed");
     }
 

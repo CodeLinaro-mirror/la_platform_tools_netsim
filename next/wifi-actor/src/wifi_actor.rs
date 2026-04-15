@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
-use ap_actor::{shared::SharedKeyStore, ApClient};
-use log::debug;
+use ap_actor::{ApClient, SharedKeyStore};
 use netsim_model::{
     chip::{Chip, ChipId},
     stats::NetsimRadioStats,
@@ -11,6 +10,9 @@ use netsim_packets::ieee80211::Ieee80211;
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
+#[cfg(not(target_os = "linux"))]
+use tracing::warn;
+use tracing::{debug, trace};
 
 #[cfg(target_os = "linux")]
 use crate::tap_gateway::TapGateway;
@@ -37,7 +39,6 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiStats>),
-    Error(String),
 }
 
 pub type SlirpPendingRequest = (
@@ -60,6 +61,7 @@ pub struct WifiActor {
     pub(crate) to_ap: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
     // Gateway for Infra packets (Tap or Slirp)
     pub(crate) gateway: Box<dyn GatewayTrait>,
+    pub(crate) forward_host_mdns: bool,
 }
 
 impl WifiActor {
@@ -70,6 +72,7 @@ impl WifiActor {
         wifi_tap: Option<String>,
         shared_keys: Arc<SharedKeyStore>,
         clock: Arc<dyn crate::stats::Clock>,
+        forward_host_mdns: bool,
     ) -> Self {
         // Fixup pending channels if we just created a SlirpGateway
         let gateway = if let Some(if_name) = wifi_tap {
@@ -80,14 +83,21 @@ impl WifiActor {
             #[cfg(not(target_os = "linux"))]
             {
                 let _ = if_name;
-                log::warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
+                warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
                 Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
             }
         } else {
             // Default to SlirpGateway
             Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
         };
-        Self::new_with_gateway(ap_client, gateway, device_client, shared_keys, clock)
+        Self::new_with_gateway(
+            ap_client,
+            gateway,
+            device_client,
+            shared_keys,
+            clock,
+            forward_host_mdns,
+        )
     }
 
     pub fn new_with_gateway(
@@ -96,6 +106,7 @@ impl WifiActor {
         device_client: device_actor::DeviceClient,
         shared_keys: Arc<SharedKeyStore>,
         clock: Arc<dyn crate::stats::Clock>,
+        forward_host_mdns: bool,
     ) -> Self {
         let medium = Medium::new(
             shared_keys.clone(),
@@ -113,6 +124,7 @@ impl WifiActor {
             device_client,
             to_ap: None,
             gateway,
+            forward_host_mdns,
         }
     }
 
@@ -138,7 +150,7 @@ impl WifiActor {
 
             Ok(())
         } else {
-            Err(WifiError::Client(format!("Chip {} not found", id)))
+            Err(WifiError::Internal(Box::from(format!("Chip {} not found", id))))
         }
     }
 
@@ -152,7 +164,7 @@ impl WifiActor {
 
     // this is the input router
     pub(crate) async fn process_guest_packet(&mut self, chip_id: u32, packet: bytes::Bytes) {
-        debug!("WifiActor: Packet from Guest (Chip {}) len {}", chip_id, packet.len());
+        trace!("WifiActor: Packet from Guest (Chip {}) len {}", chip_id, packet.len());
 
         match self.medium.resolve_tx_packet(chip_id, &packet) {
             Ok(tx_state) => {
@@ -168,7 +180,9 @@ impl WifiActor {
                                 to_ap
                                     .send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()))
                                     .map_err(|e| {
-                                        WifiError::Hostapd(format!("Failed to send to AP: {e}"))
+                                        WifiError::Hostapd(Box::from(format!(
+                                            "Failed to send to AP: {e}"
+                                        )))
                                     }),
                                 |stats, _| stats.incr_hostapd_frames_tx(),
                             );
@@ -235,7 +249,7 @@ impl WifiActor {
     }
 
     pub(crate) fn process_ap_packet(&mut self, packet: bytes::Bytes) {
-        debug!("AP_PKT: len {}", packet.len());
+        trace!("AP_PKT: len {}", packet.len());
         self.medium.wifi_stats.incr_hostapd_frames_rx();
         if !packet.is_empty() {
             let res = self.medium.transmit_from_infra(&packet, &mut self.out_queue);

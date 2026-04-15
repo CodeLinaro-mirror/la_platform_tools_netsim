@@ -19,13 +19,13 @@ package(default_visibility = ["//visibility:public"])
 NETSIM_API_DEPS = [
     "@bytes",
     "@futures",
-    "@log",
     "//next/types",
     "//proto",
     "@serde",
     "@thiserror",
     "@tokio",
     "@tokio-stream",
+    "@tracing",
 ]
 
 netsim_rust_library(

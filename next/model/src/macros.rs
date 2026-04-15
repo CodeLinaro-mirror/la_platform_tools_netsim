@@ -23,9 +23,9 @@ macro_rules! client_method {
             $(
                 #[doc = "* `"]
                 #[doc = stringify!($param)]
-                #[doc = "`: The "]
+                #[doc = "`: The `"]
                 #[doc = stringify!($param_type)]
-                #[doc = " for the command."]
+                #[doc = "` for the command."]
             )*
             pub async fn $method(&self, $($param: $param_type),*) -> std::result::Result<$return_type, ClientError> {
                 let (respond_to, response) = oneshot::channel();
@@ -33,7 +33,7 @@ macro_rules! client_method {
                     $($param,)*
                     respond_to,
                 }).await.map_err(|e| ClientError::Send(e.to_string()))?;
-                Ok(response.await??)
+                response.await?.map_err(|device_err| ClientError::Framework(Box::new(device_err)))
             }
         }
     };
@@ -49,7 +49,7 @@ macro_rules! client_method {
                 self.sender.send($request::$variant { respond_to })
                     .await
                     .map_err(|e| ClientError::Send(e.to_string()))?;
-                Ok(response.await??)
+                response.await?
             }
         }
     };

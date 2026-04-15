@@ -1,3 +1,5 @@
+# Copyright 2026 The Android Open Source Project
+
 [package]
 name = "netsim-cli"
 version = "0.3.92"
@@ -24,7 +26,10 @@ grpcio = { version = "0.13.0", default-features = false, features = [
   "protobufv3-codec",
 ] }
 hex = "0.4.3"
-log = "0.4.17"
 netsim-common = { path = "../common" }
-netsim-proto = { path = "../proto" }
+netsim-packets = { path = "../packets" }
+netsim-proto = { path = "../rust/proto" }
 protobuf = "3.7.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"

@@ -8,6 +8,7 @@ use std::{
 };
 
 use pica::{Handle, RangingEstimator, RangingMeasurement};
+use tracing::warn;
 
 use crate::{
     ranging::{compute_range_azimuth_elevation, Pose},
@@ -16,7 +17,7 @@ use crate::{
 
 /// UWB Ranging Estimator that uses shared chip state to calculate ranging
 /// measurements.
-pub struct UwbRangingEstimator {
+pub(crate) struct UwbRangingEstimator {
     shared_chips: Arc<RwLock<HashMap<Handle, UwbChipState>>>,
 }
 
@@ -45,7 +46,7 @@ impl RangingEstimator for UwbRangingEstimator {
                 Some(RangingMeasurement { range: range as u16, azimuth, elevation })
             }
             Err(e) => {
-                log::warn!("Failed to estimate ranging measurement: {}", e);
+                warn!("Failed to estimate ranging measurement: {}", e);
                 None
             }
         }
