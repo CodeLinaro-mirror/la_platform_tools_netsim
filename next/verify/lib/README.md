@@ -1,6 +1,6 @@
 # Verify Library
 
-The `verify/lib` crate provides a lightweight, asynchronous BDD (Behavior Driven Development) execution engine for Rust. It parses Gherkin feature files and executes matching step definitions against a shared "World" state.
+The `verify/lib` crate provides a lightweight, asynchronous HDD (Humanity Driven Development) execution engine for Rust. It parses Gherkin feature files and executes matching step definitions against a shared "World" state.
 
 It is designed to be used in two main contexts:
 1.  **End-to-End Runners**: Orchestrating complex test scenarios involving external devices (e.g., Android Emulators).

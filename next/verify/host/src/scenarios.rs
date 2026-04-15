@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-//! # Netsim BDD Scenarios
+//! # Netsim HDD Scenarios
 //!
 //! This module defines the sequence of operations for the integration test
 //! suite.
