@@ -108,10 +108,9 @@ For more details on running E2E tests, see the workflow documentation at `tools/
 If you run the `verify` binary directly:
 
 ```bash
-./verify run --apk-path vbs.apk --netsim-path netsimd
+./verify run --apk-path vbs.apk
 ```
 
 Options:
 - `--android-home <PATH>`: Path to the Android SDK root.
 - `--apk-path <PATH>`: Path to the `vbs.apk`.
-- `--netsim-path <PATH>`: Path to `netsimd` binary.
