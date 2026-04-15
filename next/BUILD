@@ -2,3 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 exports_files(["rustfmt_stable.toml"])
+
+filegroup(
+    name = "features",
+    srcs = glob(["tests/features/*.feature"]),
+    visibility = ["//visibility:public"],
+)

@@ -29,9 +29,12 @@ sh_test(
         "$(location //next/verify/instrumentation/vbs:vbs.apk)",
         "$(location @netsim//:netsimd)",
         "$(location //next/cli:netsim)",
+        "--spec-dir",
+        "../netsim+/next/tests/features",
     ],
     data = [
         ":runner",
+        "//next:features",
         "//next/cli:netsim",
         "//next/verify/instrumentation/vbs:vbs.apk",
         "@netsim//:netsimd",

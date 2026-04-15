@@ -9,7 +9,6 @@ rust_library(
     name = "verify_host_lib",
     testonly = True,
     srcs = glob(["src/**/*.rs"]),
-    compile_data = glob(["tests/features/*.feature"]),
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
