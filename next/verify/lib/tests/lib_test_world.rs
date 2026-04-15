@@ -57,6 +57,8 @@ impl TestWorld {}
 
 #[step_module]
 pub mod steps {
+    use anyhow::Result;
+
     use super::*;
 
     #[step(r"I reset the counter")]
@@ -209,22 +211,33 @@ pub mod steps {
             }
         }
     }
+
+    #[step(r"I fail with an error")]
+    async fn when_i_fail_with_an_error(_w: &mut TestWorld) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("Intentional failure"))
+    }
 }
 
 fn before_helper<'a>(
     w: &'a mut TestWorld,
     _args: Vec<String>,
     _ctx: features::StepContext,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
-    Box::pin(steps::before_hook(w))
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+    Box::pin(async move {
+        steps::before_hook(w).await;
+        Ok(())
+    })
 }
 
 fn after_helper<'a>(
     w: &'a mut TestWorld,
     _args: Vec<String>,
     _ctx: features::StepContext,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
-    Box::pin(steps::after_hook(w))
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+    Box::pin(async move {
+        steps::after_hook(w).await;
+        Ok(())
+    })
 }
 
 fn setup_features_world() -> (Features<TestWorld>, TestWorld) {
@@ -250,9 +263,9 @@ async fn test_features_methods_success() {
     let (features, mut world) = setup_features_world();
     world.display = 999;
 
-    features.run("I reset the counter", &mut world).await;
-    features.run("I add 10", &mut world).await;
-    features.run("result is 10", &mut world).await;
+    features.run("I reset the counter", &mut world).await.unwrap();
+    features.run("I add 10", &mut world).await.unwrap();
+    features.run("result is 10", &mut world).await.unwrap();
 
     assert_eq!(world.log, vec!["reset", "add 10", "check 10"]);
 }
@@ -262,7 +275,10 @@ async fn test_features_background() {
     netsim_testing::logger::setup(None);
     let (features, mut world) = setup_features_world();
 
-    features.execute_from_memory(include_str!("features/background.feat"), &mut world).await;
+    features
+        .execute_from_memory(include_str!("features/background.feat"), &mut world)
+        .await
+        .unwrap();
 
     // Feature: Background Support
     // Background: reset_background
@@ -279,7 +295,7 @@ async fn test_features_outline() {
     netsim_testing::logger::setup(None);
     let (features, mut world) = setup_features_world();
 
-    features.execute_from_memory(include_str!("features/outline.feat"), &mut world).await;
+    features.execute_from_memory(include_str!("features/outline.feat"), &mut world).await.unwrap();
 
     // Feature: Scenario Outline Support
     // Background: reset_outline
@@ -316,17 +332,17 @@ async fn test_features_outline() {
 async fn test_features_assertion_failure() {
     let (features, mut world) = setup_features_world();
 
-    features.run("I reset the counter", &mut world).await;
-    features.run("I add 10", &mut world).await;
+    features.run("I reset the counter", &mut world).await.unwrap();
+    features.run("I add 10", &mut world).await.unwrap();
     // This should panic
-    features.run("result is 9999", &mut world).await;
+    features.run("result is 9999", &mut world).await.unwrap();
 }
 
 #[tokio::test]
-#[should_panic(expected = "No step definition found for: I do not exist")]
 async fn test_features_missing_step() {
     let (features, mut world) = setup_features_world();
-    features.run("I do not exist", &mut world).await;
+    let err = features.run("I do not exist", &mut world).await.unwrap_err();
+    assert_eq!(err.to_string(), "No step definition found for: I do not exist");
 }
 
 #[tokio::test]
@@ -337,7 +353,7 @@ async fn test_features_tags_filtering() {
     // Set filter to @wip
     features.filter("@wip");
 
-    features.execute_from_memory(include_str!("features/tags.feat"), &mut world).await;
+    features.execute_from_memory(include_str!("features/tags.feat"), &mut world).await.unwrap();
 
     // Filtered execution (only Tagged scenario)
     // Before -> Background(reset_tags) -> Steps(add 100, check 100) -> After
@@ -352,7 +368,7 @@ async fn test_features_data_table() {
 
     let feature = include_str!("features/data_table.feat");
 
-    features.execute_from_memory(feature, &mut world).await;
+    features.execute_from_memory(feature, &mut world).await.unwrap();
 
     assert_eq!(
         world.log,
@@ -374,7 +390,7 @@ async fn test_features_types() {
 
     let feature = include_str!("features/types.feat");
 
-    features.execute_from_memory(feature, &mut world).await;
+    features.execute_from_memory(feature, &mut world).await.unwrap();
 
     // Feature: Type Support
     // Scenario: Boolean and Float types
@@ -411,7 +427,7 @@ async fn test_features_enum() {
 
     let feature_content = include_str!("features/enum.feat");
 
-    features.execute_from_memory(feature_content, &mut world).await;
+    features.execute_from_memory(feature_content, &mut world).await.unwrap();
 
     assert_eq!(world.log, vec!["before", "tx_power High", "tx_power Ultralow", "after"]);
     assert_eq!(world.tx_power, TxPower::Ultralow);
@@ -421,7 +437,7 @@ async fn test_features_enum() {
 async fn test_features_network() {
     netsim_testing::logger::setup(None);
     let (features, mut world) = setup_features_world();
-    features.execute_from_memory(include_str!("features/network.feat"), &mut world).await;
+    features.execute_from_memory(include_str!("features/network.feat"), &mut world).await.unwrap();
 
     assert_eq!(
         world.log,
@@ -436,7 +452,8 @@ async fn test_features_background_table() {
 
     features
         .execute_from_memory(include_str!("features/background_table.feature"), &mut world)
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(
         world.log,
@@ -458,7 +475,8 @@ async fn test_features_methods_success_file() {
 
     features
         .execute_from_memory(include_str!("features/methods_success.feature"), &mut world)
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(world.log, vec!["before", "reset", "add 10", "check 10", "after"]);
 }
@@ -468,7 +486,10 @@ async fn test_features_outline_table() {
     netsim_testing::logger::setup(None);
     let (features, mut world) = setup_features_world();
 
-    features.execute_from_memory(include_str!("features/outline_table.feature"), &mut world).await;
+    features
+        .execute_from_memory(include_str!("features/outline_table.feature"), &mut world)
+        .await
+        .unwrap();
 
     assert_eq!(
         world.log,
@@ -480,4 +501,11 @@ async fn test_features_outline_table() {
             "check 10", "after"
         ]
     );
+}
+
+#[tokio::test]
+async fn test_features_result_error_propagation() {
+    let (features, mut world) = setup_features_world();
+    let result = features.run("I fail with an error", &mut world).await;
+    assert!(result.is_err());
 }

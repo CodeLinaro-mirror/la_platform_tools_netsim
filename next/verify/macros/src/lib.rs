@@ -85,12 +85,30 @@ pub fn step_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 let world_t = world_type.clone().expect("Could not infer World type");
 
-                wrappers.push(quote! {
-                    fn #wrapper_name(w: &mut #world_t, #[allow(unused_variables)] args: Vec<String>, #[allow(unused_variables)] ctx: ::features::StepContext) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> {
+                let return_type = &item_fn.sig.output;
+
+                let wrapper_body = match return_type {
+                    syn::ReturnType::Default => quote! {
                         Box::pin(async move {
                             #(#args_parsing)*
                             #fn_name(#(#method_call_args),*).await;
+                            Ok(())
                         })
+                    },
+                    // NOTE: We assume that if a return type is specified, it is `Result<()>`.
+                    // If it is another type, the generated code will fail to compile when
+                    // assigned to the `AsyncStep` trait object.
+                    syn::ReturnType::Type(_, _) => quote! {
+                        Box::pin(async move {
+                            #(#args_parsing)*
+                            #fn_name(#(#method_call_args),*).await
+                        })
+                    },
+                };
+
+                wrappers.push(quote! {
+                    fn #wrapper_name(w: &mut #world_t, #[allow(unused_variables)] args: Vec<String>, #[allow(unused_variables)] ctx: ::features::StepContext) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+                        #wrapper_body
                     }
                 });
 

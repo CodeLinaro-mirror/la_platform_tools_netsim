@@ -548,6 +548,8 @@ impl AndroidDevice {
 
 #[step_module]
 pub mod steps {
+    use anyhow::Result;
+
     use super::*;
 
     // Helper function

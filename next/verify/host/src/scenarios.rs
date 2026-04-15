@@ -34,7 +34,7 @@ async fn run_feature(
         return Ok(());
     }
 
-    features.execute_from_memory(content, ctx).await;
+    features.execute_from_memory(content, ctx).await?;
     ctx.reset_actors().await?;
     Ok(())
 }

@@ -16,6 +16,7 @@ rust_binary(
     ],
     deps = [
         "//next/verify/lib",
+        "@anyhow",
         "@tokio",
     ],
 )
