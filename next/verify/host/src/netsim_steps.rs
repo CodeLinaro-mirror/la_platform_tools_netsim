@@ -1,7 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
+use features;
 use netsim_proto::{
     access_point, access_point_grpc::AccessPointServiceClient, frontend,
     frontend_grpc::FrontendServiceClient,
@@ -68,15 +69,16 @@ pub mod steps {
     use super::*;
 
     #[step("@netsim is running")]
-    async fn netsim_running(w: &mut TestContext) {
+    async fn netsim_running(w: &mut TestContext) -> Result<()> {
         w.log_step("@netsim", "GIVEN", "Is running");
+        Ok(())
     }
 
     #[step(r#"@netsim moves @(\S+) to ([\d\.]+), ([\d\.]+), ([\d\.]+)"#)]
-    async fn netsim_move(w: &mut TestContext, actor: String, x: f32, y: f32, z: f32) {
+    async fn netsim_move(w: &mut TestContext, actor: String, x: f32, y: f32, z: f32) -> Result<()> {
         let resolved_actor = w.resolve_placeholders(&format!("@{}", actor));
         let netsim_device =
-            w.netsim.map_actor_to_netsim(w, &resolved_actor).expect("got netsim device name");
+            w.netsim.map_actor_to_netsim(w, &resolved_actor).context("got netsim device name")?;
 
         w.log_step(
             "@netsim",
@@ -84,15 +86,16 @@ pub mod steps {
             &format!("Moves {} ({}) to {}, {}, {}", resolved_actor, netsim_device, x, y, z),
         );
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().expect("got grpc client");
-        let resp = client.list_device(&Empty::new()).expect("listed devices");
-        let device =
-            resp.devices.iter().find(|d| d.name == netsim_device).unwrap_or_else(|| {
-                panic!("Device '{}' not found in netsim devices", netsim_device)
-            });
+        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let resp = client.list_device(&Empty::new()).context("listed devices")?;
+        let device = resp
+            .devices
+            .iter()
+            .find(|d| d.name == netsim_device)
+            .ok_or_else(|| anyhow!("Device '{}' not found in netsim devices", netsim_device))?;
 
         let mut req = frontend::PatchDeviceRequest::new();
         req.id = Some(device.id);
@@ -105,23 +108,25 @@ pub mod steps {
         fields.position = MessageField::some(pos);
         req.device = MessageField::some(fields);
 
-        client.patch_device(&req).expect("patched device");
+        client.patch_device(&req).context("patched device")?;
+        Ok(())
     }
 
     #[step(r#"Netsim creates Wi-Fi Access Point "([^"]+)" with protocol "([^"]+)""#)]
-    async fn host_creates_ap(w: &mut TestContext, ssid: String, protocol: String) {
+    async fn host_creates_ap(w: &mut TestContext, ssid: String, protocol: String) -> Result<()> {
         w.log_step("@netsim", "->", &format!("Creates AP '{}' with protocol '{}'", ssid, protocol));
 
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
-        let client = w.get_or_create_ap_client().expect("got ap client");
+        let client = w.get_or_create_ap_client().context("got ap client")?;
         let mut ap = access_point::AccessPoint::new();
         ap.ssid = ssid;
         ap.hw_mode = protocol;
         let mut req = access_point::CreateAccessPointRequest::new();
         req.access_point = MessageField::some(ap);
-        client.create(&req).expect("created AP");
+        client.create(&req).context("created AP")?;
+        Ok(())
     }
 
     #[step(
@@ -132,7 +137,7 @@ pub mod steps {
         ssid: String,
         protocol: String,
         password: String,
-    ) {
+    ) -> Result<()> {
         w.log_step(
             "@netsim",
             "->",
@@ -140,57 +145,60 @@ pub mod steps {
         );
 
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
-        let client = w.get_or_create_ap_client().expect("got ap client");
+        let client = w.get_or_create_ap_client().context("got ap client")?;
         let mut ap = access_point::AccessPoint::new();
         ap.ssid = ssid;
         ap.hw_mode = protocol;
         ap.wpa_passphrase = password;
         let mut req = access_point::CreateAccessPointRequest::new();
         req.access_point = MessageField::some(ap);
-        client.create(&req).expect("created secured AP");
+        client.create(&req).context("created secured AP")?;
+        Ok(())
     }
 
     #[step(r#"Wi-Fi Access Point "([^"]+)" in netsim has protocol "([^"]+)""#)]
-    async fn verify_ap_protocol(w: &mut TestContext, ssid: String, protocol: String) {
+    async fn verify_ap_protocol(w: &mut TestContext, ssid: String, protocol: String) -> Result<()> {
         w.log_step("@netsim", "THEN", &format!("AP '{}' has protocol '{}'", ssid, protocol));
 
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
 
-        let client = w.get_or_create_ap_client().expect("got ap client");
+        let client = w.get_or_create_ap_client().context("got ap client")?;
         let req = access_point::ListAccessPointsRequest::new();
-        let resp = client.list(&req).expect("listed APs");
+        let resp = client.list(&req).context("listed APs")?;
 
         let found = resp.access_points.iter().any(|ap| ap.ssid == ssid && ap.hw_mode == protocol);
 
         if !found {
-            panic!("AP with SSID '{}' and protocol '{}' not found", ssid, protocol);
+            anyhow::bail!("AP with SSID '{}' and protocol '{}' not found", ssid, protocol);
         }
+        Ok(())
     }
 
     #[step(r#"Netsim removes Wi-Fi Access Point "([^"]+)""#)]
-    async fn host_removes_ap(w: &mut TestContext, ssid: String) {
+    async fn host_removes_ap(w: &mut TestContext, ssid: String) -> Result<()> {
         w.log_step("@netsim", "->", &format!("Removes AP '{}'", ssid));
 
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
-        let client = w.get_or_create_ap_client().expect("got ap client");
+        let client = w.get_or_create_ap_client().context("got ap client")?;
         let req = access_point::ListAccessPointsRequest::new();
-        let resp = client.list(&req).expect("listed APs");
+        let resp = client.list(&req).context("listed APs")?;
 
         let ap = resp
             .access_points
             .iter()
             .find(|ap| ap.ssid == ssid)
-            .unwrap_or_else(|| panic!("AP with SSID '{}' not found", ssid));
+            .context(format!("AP with SSID '{}' not found", ssid))?;
 
         let mut del_req = access_point::DeleteAccessPointRequest::new();
         del_req.id = ap.id;
-        client.delete(&del_req).expect("deleted AP");
+        client.delete(&del_req).context("deleted AP")?;
+        Ok(())
     }
 }
 

@@ -1,7 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
+use features;
 use netsim_proto::{frontend, frontend_grpc::FrontendServiceClient};
 use protobuf::{well_known_types::empty, MessageField};
 use verify_macros::{step, step_module};
@@ -20,13 +21,15 @@ pub mod steps {
         kind: String,
         rssi: i32,
         var_name: String,
-    ) {
+    ) -> Result<()> {
         let resolved_sender = w.resolve_placeholders(&format!("@{}", sender));
         let resolved_receiver = w.resolve_placeholders(&format!("@{}", receiver));
         let sender_device =
-            w.netsim.map_actor_to_netsim(w, &resolved_sender).expect("got sender device name");
-        let receiver_device =
-            w.netsim.map_actor_to_netsim(w, &resolved_receiver).expect("got receiver device name");
+            w.netsim.map_actor_to_netsim(w, &resolved_sender).context("got sender device name")?;
+        let receiver_device = w
+            .netsim
+            .map_actor_to_netsim(w, &resolved_receiver)
+            .context("got receiver device name")?;
 
         w.log_step(
             "@netsim",
@@ -39,13 +42,14 @@ pub mod steps {
 
         if w.is_dry_run {
             w.variables.insert(var_name, "dummy_link_id".to_string());
-            return;
+            return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().expect("got grpc client");
+        let client = w.get_or_create_grpc_client().context("got grpc client")?;
 
         let (sender_id, receiver_id) =
-            get_chip_ids(&client, &sender_device, &receiver_device, &kind).expect("found chip ids");
+            get_chip_ids(&client, &sender_device, &receiver_device, &kind)
+                .context("found chip ids")?;
 
         let mut link = netsim_proto::model::Link::new();
         link.sender_id = sender_id;
@@ -56,32 +60,35 @@ pub mod steps {
         let mut req = frontend::CreateLinkRequest::new();
         req.link = protobuf::MessageField::some(link);
 
-        client.create_link(&req).expect("created link");
+        client.create_link(&req).context("created link")?;
 
-        let link_id = find_link_id(&client, sender_id, receiver_id, &kind).expect("found link id");
+        let link_id =
+            find_link_id(&client, sender_id, receiver_id, &kind).context("found link id")?;
         w.variables.insert(var_name, link_id.to_string());
+        Ok(())
     }
 
     #[step(r#"@netsim should list a link with RSSI (-?\d+)"#)]
-    async fn netsim_verify_link_rssi(w: &mut TestContext, expected_rssi: i32) {
+    async fn netsim_verify_link_rssi(w: &mut TestContext, expected_rssi: i32) -> Result<()> {
         w.log_step("@netsim", "THEN", &format!("Should list a link with RSSI {}", expected_rssi));
 
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().expect("got grpc client");
+        let client = w.get_or_create_grpc_client().context("got grpc client")?;
         let links_resp = client
             .list_link(&protobuf::well_known_types::empty::Empty::new())
-            .expect("listed links");
+            .context("listed links")?;
 
         if !links_resp.links.iter().any(|link| link.rssi == expected_rssi) {
-            panic!("Link with RSSI '{}' not found in ListLink response", expected_rssi);
+            anyhow::bail!("Link with RSSI '{}' not found in ListLink response", expected_rssi);
         }
+        Ok(())
     }
 
     #[step(r#"@netsim patches link (\S+) with RSSI (-?\d+)"#)]
-    async fn netsim_patch_link(w: &mut TestContext, link_var: String, rssi: i32) {
+    async fn netsim_patch_link(w: &mut TestContext, link_var: String, rssi: i32) -> Result<()> {
         let resolved_link_id = w.resolve_placeholders(&link_var);
 
         w.log_step(
@@ -91,17 +98,17 @@ pub mod steps {
         );
 
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
 
-        let link_id = resolved_link_id.parse::<u32>().expect("valid link id");
+        let link_id = resolved_link_id.parse::<u32>().context("valid link id")?;
 
-        let client = w.get_or_create_grpc_client().expect("got grpc client");
+        let client = w.get_or_create_grpc_client().context("got grpc client")?;
         let links_resp = client
             .list_link(&protobuf::well_known_types::empty::Empty::new())
-            .expect("listed links");
+            .context("listed links")?;
         let existing_link =
-            links_resp.links.iter().find(|l| l.id == link_id).expect("found existing link");
+            links_resp.links.iter().find(|l| l.id == link_id).context("found existing link")?;
 
         let mut link = netsim_proto::model::Link::new();
         link.sender_id = existing_link.sender_id;
@@ -113,26 +120,28 @@ pub mod steps {
         req.link = protobuf::MessageField::some(link);
         req.id = link_id;
 
-        client.patch_link(&req).expect("patched link");
+        client.patch_link(&req).context("patched link")?;
+        Ok(())
     }
 
     #[step(r#"@netsim deletes link (\S+)"#)]
-    async fn netsim_delete_link(w: &mut TestContext, link_var: String) {
+    async fn netsim_delete_link(w: &mut TestContext, link_var: String) -> Result<()> {
         let resolved_link_id = w.resolve_placeholders(&link_var);
 
         w.log_step("@netsim", "->", &format!("Deletes link {}", resolved_link_id));
 
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
 
-        let link_id = resolved_link_id.parse::<u32>().expect("valid link id");
-        let client = w.get_or_create_grpc_client().expect("got grpc client");
+        let link_id = resolved_link_id.parse::<u32>().context("valid link id")?;
+        let client = w.get_or_create_grpc_client().context("got grpc client")?;
 
         let mut req = frontend::DeleteLinkRequest::new();
         req.id = link_id;
 
-        client.delete_link(&req).expect("deleted link");
+        client.delete_link(&req).context("deleted link")?;
+        Ok(())
     }
 
     // Helper functions
