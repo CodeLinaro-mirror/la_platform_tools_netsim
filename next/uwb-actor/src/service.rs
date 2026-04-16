@@ -28,11 +28,11 @@ impl ActorService for UwbActor {
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = params.id;
+        let chip_id = id.ok_or(ChipError::InvalidArguments("missing chip id".to_string()))?;
         if self.chip_to_handle.contains_key(&chip_id) {
             return Err(ChipError::ChipExists(chip_id.0));
         }

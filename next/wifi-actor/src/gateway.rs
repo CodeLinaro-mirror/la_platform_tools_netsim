@@ -3,7 +3,9 @@ use ap_actor::shared::SharedKeyStore;
 use netsim_model::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
 
-use crate::{medium::Medium, wifi_actor::WifiActor};
+use crate::{error::WifiError, medium::Medium, wifi_actor::WifiActor};
+
+pub const ETHERNET_HEADER_LEN: usize = 14;
 
 /// Abstract interface for different network backends (e.g. TAP vs Slirp).
 ///
@@ -13,9 +15,10 @@ use crate::{medium::Medium, wifi_actor::WifiActor};
 ///
 /// - `TapGateway`: Bridges traffic to a host TAP interface (kernel).
 /// - `SlirpGateway`: Bridges traffic to `SlirpActor` (user-mode networking).
+
 #[async_trait::async_trait]
 pub trait GatewayTrait: Send + Sync + std::fmt::Debug {
-    async fn send_80211(&self, chip_id: ChipId, ieee80211: &Ieee80211) -> bool;
+    async fn send_80211(&self, chip_id: ChipId, ieee80211: &Ieee80211) -> Result<usize, WifiError>;
     fn should_handle(&self, chip_id: ChipId) -> bool;
     fn handle_incoming(
         &self,

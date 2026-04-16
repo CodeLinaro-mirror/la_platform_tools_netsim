@@ -1,14 +1,12 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorLifecycle, ActorService, BoxStream, Context};
-use async_trait::async_trait;
 use futures::future::BoxFuture;
 use slirp_actor::{SlirpActor, SlirpReq};
 use tokio::sync::mpsc;
 
 struct MockContext;
 
-#[async_trait]
 impl Context<SlirpActor> for MockContext {
     fn set_interval(&mut self, _duration: std::time::Duration) {}
     fn add_stream(&mut self, _id: u32, _stream: BoxStream) {}

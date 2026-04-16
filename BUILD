@@ -1,5 +1,22 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_license//rules:license.bzl", "license")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
+
+package(
+    default_applicable_licenses = [":license"],
+)
+
+license(
+    name = "license",
+    package_name = "netsim",
+    copyright_notice = "Copyright 2025 - The Android Open Source Project",
+    license_kinds = ["@rules_license//licenses/spdx:Apache-2.0"],
+    license_text = "LICENSE",
+    package_url = "https://android.googlesource.com/platform/tools/netsim/",
+    visibility = ["//visibility:public"],
+)
+
+exports_files(["LICENSE"])
 
 cc_library(
     name = "netsimd_cc_proto",

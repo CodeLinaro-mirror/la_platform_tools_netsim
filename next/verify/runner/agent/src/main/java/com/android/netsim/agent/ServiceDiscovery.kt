@@ -29,7 +29,7 @@ fun advertiseService(context: Context, args: List<String>): Map<String, String> 
 /// STEP: ^starts discovery for (.*)$
 fun startDiscovery(context: Context, args: List<String>) {
   val serviceType = args[0]
-  DiscoveryState.reset()
+  DiscoveryState.reset(context)
   discoverNsd(context, serviceType)
 }
 
@@ -61,13 +61,9 @@ object DiscoveryState {
   private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
   var nsdManagerForCleanup: NsdManager? = null
 
-  fun reset() {
-    synchronized(lock) { foundServices.clear() }
-  }
-
-  fun cleanup() {
+  fun reset(context: Context) {
     synchronized(lock) {
-      reset()
+      foundServices.clear()
       nsdManagerForCleanup?.let { manager ->
         val latch = java.util.concurrent.CountDownLatch(activeRegistrations.size)
         activeRegistrations.forEach { listener ->

@@ -11,10 +11,9 @@ netsim_rust_library(
         "@async-trait",
     ],
     deps = [
-        "//next/actor-framework",
-        "//next/client",
-        "//next/common",
+        "//next/device-actor",
         "//next/device-api",
+        "//next/link-actor",
         "//next/link-api",
         "//next/model",
         "//next/packet-stream",

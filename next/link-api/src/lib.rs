@@ -37,7 +37,7 @@ pub use netsim_model::{
     ChipKind,
 };
 
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait LinkClient: std::fmt::Debug + Send + Sync {
     async fn list(&self) -> Result<Vec<Link>, String>;
@@ -47,5 +47,6 @@ pub trait LinkClient: std::fmt::Debug + Send + Sync {
     async fn action(&self, id: Option<LinkId>, action: LinkAction) -> Result<(), String>;
     async fn notify_chip_added(&self, chip_id: ChipId, kind: ChipKind) -> Result<(), String>;
     async fn notify_chip_removed(&self, chip_id: ChipId) -> Result<(), String>;
+    async fn reset(&self) -> Result<(), String>;
     async fn shutdown(&self) -> Result<(), String>;
 }
