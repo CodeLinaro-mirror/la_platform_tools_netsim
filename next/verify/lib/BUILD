@@ -44,7 +44,6 @@ rust_test(
     ],
     deps = [
         ":lib",
-        "//next/packets",
         "//next/testing:netsim-testing",
         "@anyhow",
         "@bytes",
@@ -57,6 +56,5 @@ rust_test(
         "@tokio-stream",
         "@tracing",
         "@tracing-subscriber",
-        "@zerocopy",
     ],
 )

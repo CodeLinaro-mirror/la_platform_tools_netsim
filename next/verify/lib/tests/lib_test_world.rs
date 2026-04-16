@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use features::{assert_json_matches_table, table_to_struct, DataTable, Features};
-use netsim_packets::UdpHeader;
 use verify_macros::{step, step_module};
-use zerocopy::IntoBytes;
 
 /// # Example World
 ///
@@ -49,6 +47,21 @@ impl std::str::FromStr for TxPower {
             _ => Err(format!("Invalid TxPower: {}", s)),
         }
     }
+}
+
+// NOTE: Using String for numeric fields because Gherkin tables provide strings,
+// and table_to_struct produces mixed types in JSON. Using String avoids the
+// need for custom flexible deserializers in this test mock.
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
+struct MockPacket {
+    #[serde(rename = "udp.srcport")]
+    src_port: String,
+    #[serde(rename = "udp.dstport")]
+    dst_port: String,
+    #[serde(rename = "udp.length")]
+    length: String,
+    #[serde(rename = "udp.checksum")]
+    checksum: String,
 }
 
 impl features::World for TestWorld {}
@@ -165,24 +178,22 @@ pub mod steps {
     }
 
     #[step(r"I send a UDP packet with:")]
-    async fn when_send_packet(w: &mut TestWorld, table: DataTable) {
-        let json_header: netsim_packets::JsonUdpHeader =
-            table_to_struct(&table).expect("Failed to parse UdpHeader");
-        let header: UdpHeader =
-            json_header.try_into().expect("Failed to convert JsonUdpHeader to UdpHeader");
-        w.received_packets.push(header.as_bytes().to_vec());
+    async fn when_send_packet(w: &mut TestWorld, table: DataTable) -> anyhow::Result<()> {
+        let packet: MockPacket = table_to_struct(&table)
+            .map_err(|e| anyhow::anyhow!("Failed to parse MockPacket: {}", e))?;
+        w.received_packets.push(serde_json::to_vec(&packet)?);
         w.log.push("send_udp".to_string());
+        Ok(())
     }
 
     #[step(r"I receive a UDP packet matching:")]
-    async fn then_receive_packet(w: &mut TestWorld, table: DataTable) {
-        assert!(!w.received_packets.is_empty(), "No packets received");
+    async fn then_receive_packet(w: &mut TestWorld, table: DataTable) -> anyhow::Result<()> {
+        anyhow::ensure!(!w.received_packets.is_empty(), "No packets received");
         let last_packet = w.received_packets.last().unwrap();
-        let (header, _payload) =
-            UdpHeader::parse(last_packet.as_slice()).expect("Failed to parse UDP header");
-        let packet_json = netsim_packets::to_json(&header);
-        assert_json_matches_table(&packet_json, &table);
+        let packet: MockPacket = serde_json::from_slice(last_packet)?;
+        assert_json_matches_table(&packet, &table);
         w.log.push("check_udp".to_string());
+        Ok(())
     }
 
     #[step(r"I setup with default users:")]
