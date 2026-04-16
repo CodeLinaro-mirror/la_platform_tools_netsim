@@ -1,29 +1,32 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-// use features::Features; // Already used below
+use verify_macros::{step, step_module};
 
 pub struct CalculatorWorld {
     display: i32,
 }
 
-impl CalculatorWorld {
-    /// STEP: Given the calculator is clear
-    async fn clear(&mut self) {
-        self.display = 0;
+#[step_module]
+pub mod steps {
+    use super::*;
+
+    #[step(r"the calculator is clear")]
+    async fn clear(w: &mut CalculatorWorld) {
+        w.display = 0;
         println!("Display cleared in CalculatorWorld");
     }
 
-    /// STEP: When I add (\d+)
-    async fn add(&mut self, val: i32) {
-        self.display += val;
+    #[step(r"I add (\d+)")]
+    async fn add(w: &mut CalculatorWorld, val: i32) {
+        w.display += val;
         println!("Added {} to CalculatorWorld", val);
     }
 
-    /// STEP: Then the display should be (\d+)
-    async fn check_display(&mut self, expected: i32) {
-        assert_eq!(self.display, expected);
-        println!("Checked display {} == {}", self.display, expected);
+    #[step(r"the display should be (\d+)")]
+    async fn check_display(w: &mut CalculatorWorld, expected: i32) {
+        assert_eq!(w.display, expected);
+        println!("Checked display {} == {}", w.display, expected);
     }
 }
 
@@ -34,13 +37,7 @@ use features::Features;
 pub fn setup_world() -> (Features<CalculatorWorld>, CalculatorWorld) {
     let mut features = Features::<CalculatorWorld>::new();
 
-    // Include the generated glue code
-    mod glue {
-        use super::*;
-        include!(env!("GLUE_RS"));
-    }
-
-    glue::register_steps(&mut features);
+    steps::register_steps(&mut features);
 
     let world = CalculatorWorld { display: 0 };
     (features, world)

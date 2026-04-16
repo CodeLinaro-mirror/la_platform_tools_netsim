@@ -1,12 +1,11 @@
 # Copyright 2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 
-load("@rules_rust//rust:defs.bzl", "rust_test")
-load("//next:defs.bzl", "netsim_rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
-netsim_rust_library(
+rust_library(
     name = "lib",
     testonly = True,
     srcs = [
@@ -17,8 +16,6 @@ netsim_rust_library(
     ],
     crate_name = "features",
     edition = "2021",
-    enable_integration_test = False,
-    enable_rustfmt = False,
     proc_macro_deps = [
     ],
     deps = [
@@ -33,7 +30,6 @@ rust_test(
     name = "integration-test",
     srcs = [
         "tests/lib_test_world.rs",
-        "tests/lib_test_world_glue.rs",
     ],
     compile_data = glob([
         "tests/features/*.feat",
@@ -42,6 +38,9 @@ rust_test(
     crate_features = ["testing"],
     crate_root = "tests/lib_test_world.rs",
     edition = "2021",
+    proc_macro_deps = [
+        "//next/verify/macros:verify_macros",
+    ],
     deps = [
         ":lib",
         "//next/packets",
@@ -58,12 +57,4 @@ rust_test(
         "@tracing-subscriber",
         "@zerocopy",
     ],
-)
-
-genrule(
-    name = "generate_intentions_tests_glue",
-    srcs = ["tests/lib_test_world.rs"],
-    outs = ["tests/lib_test_world_glue.rs"],
-    cmd = "$(location //next/verify/codegen:verify_codegen) $(location tests/lib_test_world.rs) $@",
-    tools = ["//next/verify/codegen:verify_codegen"],
 )

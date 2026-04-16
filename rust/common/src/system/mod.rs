@@ -55,8 +55,14 @@ mod tests {
     #[test]
     fn test_forge() {
         let _locked = ENV_MUTEX.lock();
-        env::set_var("ANDROID_TMP", "/tmp/forge");
-        env::set_var("USER", "ryle");
+        // SAFETY: Test code.
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe {
+            env::set_var("ANDROID_TMP", "/tmp/forge");
+            env::set_var("USER", "ryle");
+        }
         let tmp_dir = netsimd_temp_dir_pathbuf();
         assert_eq!(tmp_dir.to_str().unwrap(), "/tmp/forge/android-ryle/netsimd");
     }
@@ -65,8 +71,14 @@ mod tests {
     fn test_non_forge() {
         let _locked = ENV_MUTEX.lock();
         let temp_dir = env::temp_dir();
-        env::remove_var("ANDROID_TMP");
-        env::set_var("USER", "ryle");
+        // SAFETY: Test code.
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe {
+            env::remove_var("ANDROID_TMP");
+            env::set_var("USER", "ryle");
+        }
         let netsimd_temp_dir = netsimd_temp_dir_pathbuf();
         assert_eq!(
             netsimd_temp_dir.to_str().unwrap(),

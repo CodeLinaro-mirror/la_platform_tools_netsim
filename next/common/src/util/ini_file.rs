@@ -2,13 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! # IniFile class
-
 use std::{
-    collections::HashMap,
-    error::Error,
-    fs::File,
-    io::{prelude::*, BufReader},
+    collections::{hash_map::Entry, HashMap},
+    fs::read_to_string,
     path::PathBuf,
 };
 
@@ -16,122 +12,85 @@ use tracing::error;
 
 use super::os_utils::get_discovery_directory;
 
-/// A simple class to process init file. Based on
-/// external/qemu/android/android-emu-base/android/base/files/IniFile.h
-struct IniFile {
-    /// The data stored in the ini file.
-    data: HashMap<String, String>,
-    /// The path to the ini file.
-    filepath: PathBuf,
+#[derive(Default)]
+pub struct IniParserOptions {
+    pub strict: bool,
 }
 
-impl IniFile {
-    /// Creates a new IniFile with the given filepath.
-    ///
-    /// # Arguments
-    ///
-    /// * `filepath` - The path to the ini file.
-    fn new(filepath: PathBuf) -> IniFile {
-        IniFile { data: HashMap::new(), filepath }
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum IniParseErrorKind {
+    #[error("Empty key")]
+    EmptyKey,
+    #[error("Missing `=`")]
+    MissingDelimiter,
+    #[error("Duplicate key `{key}` with conflicting values: `{existing_value}` vs `{new_value}`")]
+    DuplicateKey { key: String, existing_value: String, new_value: String },
+}
 
-    /// Reads data into IniFile from the backing file, overwriting any
-    /// existing data.
-    ///
-    /// # Returns
-    ///
-    /// `Ok` if the write was successful, `Error` otherwise.
-    fn read(&mut self) -> Result<(), Box<dyn Error>> {
-        self.data.clear();
+#[derive(Debug, thiserror::Error)]
+#[error("{line_number}:{column_number} {kind} ({line_content})")]
+pub struct IniParseError {
+    pub line_number: usize,
+    pub column_number: usize,
+    pub kind: IniParseErrorKind,
+    pub line_content: String,
+}
 
-        let mut f = File::open(self.filepath.clone())?;
-        let reader = BufReader::new(&mut f);
-
-        for line in reader.lines() {
-            let line = line?;
-            let parts = line.split_once('=');
-            if parts.is_none() {
-                continue;
+pub fn parse_ini(
+    content: &str,
+    options: &IniParserOptions,
+) -> Result<HashMap<String, String>, IniParseError> {
+    let mut map: HashMap<String, String> = HashMap::new();
+    for (line_idx, line) in content.lines().enumerate() {
+        let line_number = line_idx + 1;
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+            if options.strict && key.is_empty() {
+                let column_number = line.find('=').unwrap_or(0) + 1;
+                return Err(IniParseError {
+                    line_number,
+                    column_number,
+                    kind: IniParseErrorKind::EmptyKey,
+                    line_content: line.to_string(),
+                });
             }
-            let key = parts.unwrap().0.trim();
-            let value = parts.unwrap().1.trim();
-            self.data.insert(key.to_owned(), value.to_owned());
+
+            let entry = map.entry(key.to_string());
+            if options.strict {
+                if let Entry::Occupied(ref occupied) = entry {
+                    let existing_value = occupied.get();
+                    if existing_value != value {
+                        let column_number = line.find(key).unwrap_or(0) + 1;
+                        return Err(IniParseError {
+                            line_number,
+                            column_number,
+                            kind: IniParseErrorKind::DuplicateKey {
+                                key: key.to_string(),
+                                existing_value: existing_value.to_string(),
+                                new_value: value.to_string(),
+                            },
+                            line_content: line.to_string(),
+                        });
+                    }
+                }
+            }
+            entry.insert_entry(value.to_string());
+        } else if options.strict {
+            let column_number = line.find(trimmed).unwrap_or(0) + 1;
+            return Err(IniParseError {
+                line_number,
+                column_number,
+                kind: IniParseErrorKind::MissingDelimiter,
+                line_content: line.to_string(),
+            });
         }
-
-        Ok(())
     }
-
-    /// Writes the current IniFile to the backing file.
-    ///
-    /// # Returns
-    ///
-    /// `Ok` if the write was successful, `Error` otherwise.
-    fn write(&self) -> std::io::Result<()> {
-        let mut f = create_new(self.filepath.clone())?;
-        for (key, value) in &self.data {
-            writeln!(&mut f, "{key}={value}")?;
-        }
-        f.flush()?;
-        Ok(())
-    }
-
-    /// Gets value.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key to get the value for.
-    ///
-    /// # Returns
-    ///
-    /// An `Option` containing the value if it exists, `None` otherwise.
-    fn get(&self, key: &str) -> Option<&str> {
-        self.data.get(key).map(|v| v.as_str())
-    }
-
-    /// Inserts a key-value pair.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key to set the value for.
-    /// * `value` - The value to set.
-    fn insert(&mut self, key: &str, value: &str) {
-        self.data.insert(key.to_owned(), value.to_owned());
-    }
-}
-
-// TODO: Replace with std::fs::File::create_new once Rust toolchain is upgraded
-// to 1.77
-/// Create new file, errors if it already exists.
-fn create_new<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<File> {
-    std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(path.as_ref())
-}
-
-/// Write ports to ini file
-pub fn create_ini(
-    instance_num: u16,
-    grpc_port: u32,
-    web_port: Option<u16>,
-    websocket_port: Option<u16>,
-) -> std::io::Result<()> {
-    // Instantiate IniFile
-    let filepath = get_ini_filepath(instance_num);
-    let mut ini_file = IniFile::new(filepath);
-
-    // Write ports to ini file
-    if let Some(num) = web_port {
-        ini_file.insert("web.port", &num.to_string());
-    }
-    if let Some(num) = websocket_port {
-        ini_file.insert("ws.port", &num.to_string())
-    }
-    ini_file.insert("grpc.port", &grpc_port.to_string());
-    ini_file.write()
-}
-
-/// Remove netsim ini file
-pub fn remove_ini(instance_num: u16) -> std::io::Result<()> {
-    let filepath = get_ini_filepath(instance_num);
-    std::fs::remove_file(filepath)
+    Ok(map)
 }
 
 /// Get the filepath of netsim.ini under discovery directory
@@ -157,11 +116,17 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
         error!("Not a file: {filepath:?}");
         return None;
     }
-    let mut ini_file = IniFile::new(filepath);
-    if let Err(err) = ini_file.read() {
-        error!("Error reading ini file: {err:?}");
-    }
-    ini_file.get("grpc.port").map(|s: &str| {
+    let ini_file_contents = read_to_string(filepath)
+        .inspect_err(|err| {
+            error!("Error reading ini file: {err}");
+        })
+        .ok()?;
+    let ini_map = parse_ini(&ini_file_contents, &IniParserOptions { strict: false })
+        .inspect_err(|err| {
+            error!("Error parsing ini file: {err}");
+        })
+        .ok()?;
+    ini_map.get("grpc.port").map(|s| {
         if s.contains(':') {
             s.to_string()
         } else {
@@ -172,219 +137,30 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        env,
-        fs::File,
-        io::{Read, Write},
-        path::PathBuf,
-        time::SystemTime,
-    };
+    use std::path::PathBuf;
 
-    use super::{get_ini_filepath, IniFile};
+    use super::{get_ini_filepath, parse_ini};
     use crate::tests::ENV_MUTEX;
 
-    impl IniFile {
-        /// Checks if a certain key exists in the file.
-        ///
-        /// # Arguments
-        ///
-        /// * `key` - The key to check.
-        ///
-        /// # Returns
-        ///
-        /// `true` if the key exists, `false` otherwise.
-        fn contains_key(&self, key: &str) -> bool {
-            self.data.contains_key(key)
-        }
-    }
-
-    fn get_temp_ini_filepath(prefix: &str) -> PathBuf {
-        env::temp_dir().join(format!(
-            "{prefix}_{}.ini",
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-                .to_string()
-                + "_"
-                + &rand::random::<u64>().to_string()
-        ))
-    }
-
-    // NOTE: ctest run a test at least twice tests in parallel, so we need to use
-    // unique temp file to prevent tests from accessing the same file
-    // simultaneously.
     #[test]
     fn test_read() {
         for test_case in ["port=123", "port= 123", "port =123", " port = 123 "] {
-            let filepath = get_temp_ini_filepath("test_read");
-
-            {
-                let mut tmpfile = match File::create(&filepath) {
-                    Ok(f) => f,
-                    Err(_) => return,
-                };
-                writeln!(tmpfile, "{test_case}").unwrap();
-            }
-
-            let mut inifile = IniFile::new(filepath.clone());
-            inifile.read().unwrap();
-
-            assert!(!inifile.contains_key("unknown-key"));
-            assert!(inifile.contains_key("port"), "Fail in test case: {test_case}");
-            assert_eq!(inifile.get("port").unwrap(), "123");
-            assert_eq!(inifile.get("unknown-key"), None);
-
-            // Note that there is no guarantee that the file is immediately deleted (e.g.,
-            // depending on platform, other open file descriptors may prevent immediate
-            // removal). https://doc.rust-lang.org/std/fs/fn.remove_file.html.
-            std::fs::remove_file(filepath).unwrap();
+            let ini_map = parse_ini(test_case, &Default::default()).unwrap();
+            assert_eq!(ini_map.get("port").unwrap(), "123");
         }
     }
 
     #[test]
     fn test_read_no_newline() {
-        let filepath = get_temp_ini_filepath("test_read_no_newline");
-
-        {
-            let mut tmpfile = match File::create(&filepath) {
-                Ok(f) => f,
-                Err(_) => return,
-            };
-            write!(tmpfile, "port=123").unwrap();
-        }
-
-        let mut inifile = IniFile::new(filepath.clone());
-        inifile.read().unwrap();
-
-        assert!(!inifile.contains_key("unknown-key"));
-        assert!(inifile.contains_key("port"));
-        assert_eq!(inifile.get("port").unwrap(), "123");
-        assert_eq!(inifile.get("unknown-key"), None);
-
-        std::fs::remove_file(filepath).unwrap();
-    }
-
-    #[test]
-    fn test_read_no_file() {
-        let filepath = get_temp_ini_filepath("test_read_no_file");
-        let mut inifile = IniFile::new(filepath.clone());
-        assert!(inifile.read().is_err());
+        let ini_map = parse_ini("port=123", &Default::default()).unwrap();
+        assert_eq!(ini_map.get("port").unwrap(), "123");
     }
 
     #[test]
     fn test_read_multiple_lines() {
-        let filepath = get_temp_ini_filepath("test_read_multiple_lines");
-
-        {
-            let mut tmpfile = match File::create(&filepath) {
-                Ok(f) => f,
-                Err(_) => return,
-            };
-            write!(tmpfile, "port=123\nport2=456\n").unwrap();
-        }
-
-        let mut inifile = IniFile::new(filepath.clone());
-        inifile.read().unwrap();
-
-        assert!(!inifile.contains_key("unknown-key"));
-        assert!(inifile.contains_key("port"));
-        assert!(inifile.contains_key("port2"));
-        assert_eq!(inifile.get("port").unwrap(), "123");
-        assert_eq!(inifile.get("port2").unwrap(), "456");
-        assert_eq!(inifile.get("unknown-key"), None);
-
-        std::fs::remove_file(filepath).unwrap();
-    }
-
-    #[test]
-    fn test_insert_and_contains_key() {
-        let filepath = get_temp_ini_filepath("test_insert_and_contains_key");
-
-        let mut inifile = IniFile::new(filepath);
-
-        assert!(!inifile.contains_key("port"));
-        assert!(!inifile.contains_key("unknown-key"));
-
-        inifile.insert("port", "123");
-
-        assert!(inifile.contains_key("port"));
-        assert!(!inifile.contains_key("unknown-key"));
-        assert_eq!(inifile.get("port").unwrap(), "123");
-        assert_eq!(inifile.get("unknown-key"), None);
-
-        // Update the value of an existing key.
-        inifile.insert("port", "234");
-
-        assert!(inifile.contains_key("port"));
-        assert!(!inifile.contains_key("unknown-key"));
-        assert_eq!(inifile.get("port").unwrap(), "234");
-        assert_eq!(inifile.get("unknown-key"), None);
-    }
-
-    #[test]
-    fn test_write() {
-        let filepath = get_temp_ini_filepath("test_write");
-
-        let mut inifile = IniFile::new(filepath.clone());
-
-        assert!(!inifile.contains_key("port"));
-        assert!(!inifile.contains_key("unknown-key"));
-
-        inifile.insert("port", "123");
-
-        assert!(inifile.contains_key("port"));
-        assert!(!inifile.contains_key("unknown-key"));
-        assert_eq!(inifile.get("port").unwrap(), "123");
-        assert_eq!(inifile.get("unknown-key"), None);
-
-        if inifile.write().is_err() {
-            return;
-        }
-        let mut file = File::open(&filepath).unwrap();
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).unwrap();
-
-        assert_eq!(contents, "port=123\n");
-
-        std::fs::remove_file(filepath).unwrap();
-    }
-
-    #[test]
-    fn test_write_and_read() {
-        let filepath = get_temp_ini_filepath("test_write_and_read");
-
-        {
-            let mut inifile = IniFile::new(filepath.clone());
-
-            assert!(!inifile.contains_key("port"));
-            assert!(!inifile.contains_key("port2"));
-            assert!(!inifile.contains_key("unknown-key"));
-
-            inifile.insert("port", "123");
-            inifile.insert("port2", "456");
-
-            assert!(inifile.contains_key("port"));
-            assert!(!inifile.contains_key("unknown-key"));
-            assert_eq!(inifile.get("port").unwrap(), "123");
-            assert_eq!(inifile.get("unknown-key"), None);
-
-            if inifile.write().is_err() {
-                return;
-            }
-        }
-
-        let mut inifile = IniFile::new(filepath.clone());
-        inifile.read().unwrap();
-
-        assert!(!inifile.contains_key("unknown-key"));
-        assert!(inifile.contains_key("port"));
-        assert!(inifile.contains_key("port2"));
-        assert_eq!(inifile.get("port").unwrap(), "123");
-        assert_eq!(inifile.get("port2").unwrap(), "456");
-        assert_eq!(inifile.get("unknown-key"), None);
-
-        std::fs::remove_file(filepath).unwrap();
+        let ini_map = parse_ini("port=123\nport2=456\n", &Default::default()).unwrap();
+        assert_eq!(ini_map.get("port").unwrap(), "123");
+        assert_eq!(ini_map.get("port2").unwrap(), "456");
     }
 
     #[test]
@@ -397,5 +173,62 @@ mod tests {
         // Test get_netsim_ini_filepath
         assert_eq!(get_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));
         assert_eq!(get_ini_filepath(2), PathBuf::from("/tmpdir/netsim_2.ini"));
+    }
+    #[test]
+    fn test_parse_ini_strict() {
+        use super::{parse_ini, IniParseErrorKind, IniParserOptions};
+
+        // Test empty key
+        let content = "=value";
+        let result = parse_ini(content, &IniParserOptions { strict: true });
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.line_number, 1);
+        assert_eq!(err.column_number, 1);
+        assert!(matches!(err.kind, IniParseErrorKind::EmptyKey));
+        assert_eq!(err.line_content, "=value");
+
+        // Test missing delimiter
+        let content = "key_without_equals";
+        let result = parse_ini(content, &IniParserOptions { strict: true });
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.line_number, 1);
+        assert_eq!(err.column_number, 1);
+        assert!(matches!(err.kind, IniParseErrorKind::MissingDelimiter));
+        assert_eq!(err.line_content, "key_without_equals");
+
+        // Test duplicate key
+        let content = "key=value1\nkey=value2";
+        let result = parse_ini(content, &IniParserOptions { strict: true });
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.line_number, 2);
+        assert_eq!(err.column_number, 1);
+        if let IniParseErrorKind::DuplicateKey { key, existing_value, new_value } = err.kind {
+            assert_eq!(key, "key");
+            assert_eq!(existing_value, "value1");
+            assert_eq!(new_value, "value2");
+        } else {
+            panic!("Expected DuplicateKey error");
+        }
+        assert_eq!(err.line_content, "key=value2");
+
+        // Test duplicate key with same value passes
+        let content = "key=value1\nkey=value1";
+        let result = parse_ini(content, &IniParserOptions { strict: true });
+        assert!(result.is_ok());
+        let map = result.unwrap();
+        assert_eq!(map.get("key").unwrap(), "value1");
+        assert_eq!(map.len(), 1);
+
+        // Test non-strict mode ignores these
+        let content = "=value\nkey_without_equals\nkey=value1\nkey=value2";
+        let result = parse_ini(content, &IniParserOptions { strict: false });
+        assert!(result.is_ok());
+        let map = result.unwrap();
+        assert_eq!(map.get("").unwrap(), "value");
+        assert_eq!(map.get("key").unwrap(), "value2");
+        assert_eq!(map.len(), 2);
     }
 }

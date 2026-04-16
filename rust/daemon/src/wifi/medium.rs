@@ -152,7 +152,7 @@ impl Medium {
         self.clients.read().unwrap().contains_key(&client_id)
     }
 
-    fn stations(&self) -> impl Iterator<Item = Arc<Station>> {
+    fn stations(&self) -> impl Iterator<Item = Arc<Station>> + use<> {
         self.stations.read().expect("RwLock poisoned").clone().into_values()
     }
 

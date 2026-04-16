@@ -388,7 +388,11 @@ mod tests {
         let _locked = ENV_MUTEX.lock();
 
         // Test with TMPDIR variable
-        std::env::set_var("TMPDIR", "/tmpdir");
+        // SAFETY: Test code
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe { std::env::set_var("TMPDIR", "/tmpdir") };
 
         // Test get_netsim_ini_filepath
         assert_eq!(get_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));

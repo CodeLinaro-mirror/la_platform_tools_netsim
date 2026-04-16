@@ -3,7 +3,7 @@
 
 //! # Features Engine
 //!
-//! This module provides the runtime support for executing BDD-style tests in
+//! This module provides the runtime support for executing HDD-style tests in
 //! Rust. It defines the `Features` struct, which holds registered steps, and
 //! the logic to match regex patterns against test input.
 
@@ -112,13 +112,17 @@ impl<W: ?Sized> Features<W> {
         // Dispatch to Global Registry
         for (regex, step) in &self.steps {
             if let Some(captures) = regex.captures(text) {
-                let args: Vec<String> = captures
-                    .iter()
-                    .skip(1)
-                    .map(|m| m.map_or("", |m| m.as_str()).to_string())
-                    .collect();
-                step.call(world, args, ctx).await;
-                return;
+                // Enforce full match to prevent unintended partial matches
+                let m = captures.get(0).unwrap();
+                if m.start() == 0 && m.end() == text.len() {
+                    let args: Vec<String> = captures
+                        .iter()
+                        .skip(1)
+                        .map(|m| m.map_or("", |m| m.as_str()).to_string())
+                        .collect();
+                    step.call(world, args, ctx).await;
+                    return;
+                }
             }
         }
 
@@ -156,7 +160,7 @@ impl<W: ?Sized> Features<W> {
     }
 
     /// Parses a Gherkin feature and prints its matched scenarios and steps in
-    /// Cucumber style without executing them.
+    /// Verify style without executing them.
     pub fn dry_run_list(&self, content: &str) {
         let feature = Feature::parse(content, Default::default()).expect("Failed to parse feature");
         // No longer print the Feature title to save vertical noise
@@ -230,8 +234,10 @@ impl<W: ?Sized> Features<W> {
 
     fn is_match(&self, text: &str) -> bool {
         for (regex, _) in &self.steps {
-            if regex.is_match(text) {
-                return true;
+            if let Some(m) = regex.find(text) {
+                if m.start() == 0 && m.end() == text.len() {
+                    return true;
+                }
             }
         }
         false

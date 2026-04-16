@@ -3,6 +3,7 @@
 
 use features::{assert_json_matches_table, table_to_struct, DataTable, Features};
 use netsim_packets::UdpHeader;
+use verify_macros::{step, step_module};
 use zerocopy::IntoBytes;
 
 /// # Example World
@@ -54,185 +55,183 @@ impl features::World for TestWorld {}
 
 impl TestWorld {}
 
-/// STEP: Given I reset the counter
-async fn given_i_reset_the_counter(w: &mut TestWorld) {
-    w.display = 0;
-    w.log.push("reset".to_string());
-}
+#[step_module]
+pub mod steps {
+    use super::*;
 
-/// STEP: Given I have a calculator with Memory (\d+)
-async fn given_i_have_a_calculator_with_memory(w: &mut TestWorld, memory: i32) {
-    w.memory = memory;
-    w.log.push(format!("reset_calculator memory {}", memory));
-}
-
-/// STEP: Given I have a calculator with No Memory
-async fn given_i_have_a_calculator_with_no_memory(w: &mut TestWorld) {
-    w.memory = 0;
-    w.log.push("reset_calculator memory 0".to_string());
-}
-
-/// STEP: Given I want to ensure a clean state before every scenario
-async fn given_clean_state(w: &mut TestWorld) {
-    // Already handled by Before hook example, but this is an explicit step
-    w.display = 0;
-    w.log.push("reset_background".to_string());
-}
-
-/// STEP: Given I organize my scenarios with tags
-async fn given_tags(w: &mut TestWorld) {
-    w.log.push("reset_tags".to_string());
-}
-
-/// STEP: When I set TxPower to (High|Medium|Low|Ultralow)
-async fn when_i_set_tx_power(w: &mut TestWorld, level: TxPower) {
-    w.tx_power = level;
-    w.log.push(format!("tx_power {:?}", level));
-}
-
-/// STEP: When I add (\d+)
-async fn when_i_add(w: &mut TestWorld, val: i32) {
-    w.display += val;
-    w.log.push(format!("add {}", val));
-}
-
-/// STEP: Then result is (\d+)
-async fn then_result_is(w: &mut TestWorld, val: i32) {
-    assert_eq!(w.display, val, "Check failed: expected {}, got {}", val, w.display);
-    w.log.push(format!("check {}", val));
-}
-
-/// STEP: Given system is (true|false)
-async fn given_system_is(w: &mut TestWorld, state: bool) {
-    w.enabled = state;
-    w.log.push(format!("system is {}", state));
-}
-
-/// STEP: When I set temperature to (\d+\.\d+)
-async fn when_i_set_temperature(w: &mut TestWorld, temp: f64) {
-    w.temperature = temp;
-    w.log.push(format!("temperature set to {}", temp));
-}
-
-/// STEP: Then system should be (true|false)
-async fn then_system_should_be(w: &mut TestWorld, state: bool) {
-    assert_eq!(w.enabled, state);
-    w.log.push(format!("check system is {}", state));
-}
-
-/// STEP: Then temperature should be (\d+\.\d+)
-async fn then_temperature_should_be(w: &mut TestWorld, temp: f64) {
-    // float cmp
-    assert!((w.temperature - temp).abs() < 0.001);
-    w.log.push(format!("check temperature is {}", temp));
-}
-
-/// STEP: Before
-async fn before_hook(w: &mut TestWorld) {
-    w.display = 0;
-    w.log.push("before".to_string());
-}
-
-/// STEP: After
-async fn after_hook(w: &mut TestWorld) {
-    w.log.push("after".to_string());
-}
-
-/*
-/// STEP: Given I have the following users:
-async fn given_users(w: &mut TestWorld, table: DataTable) {
-    // Parse table
-}
-*/
-
-/// STEP: Given the following users:
-async fn given_users(w: &mut TestWorld, table: DataTable) {
-    // Skip header row
-    for row in table.iter().skip(1) {
-        let name = row[0].clone();
-        let age: i32 = row[1].parse().expect("Age must be a number");
-        w.users.insert(name.clone(), age);
-        w.log.push(format!("user {} age {}", name, age));
-    }
-}
-
-/// STEP: Then lookup (\w+) is (\d+)
-async fn then_lookup(w: &mut TestWorld, name: String, age: i32) {
-    let actual = w.users.get(&name).expect("User not found");
-    assert_eq!(*actual, age, "Age mismatch for {}", name);
-    w.log.push(format!("lookup {} is {}", name, age));
-}
-
-/// STEP: Given I have a UDP Echo Server on Port (\d+)
-async fn given_udp_echo_server(w: &mut TestWorld, _port: u16) {
-    w.received_packets.clear();
-    w.log.push("udp_echo_server_init".to_string());
-}
-
-/// STEP: When I send a UDP packet with:
-async fn when_send_packet(w: &mut TestWorld, table: DataTable) {
-    let json_header: netsim_packets::JsonUdpHeader =
-        table_to_struct(&table).expect("Failed to parse UdpHeader");
-    let header: UdpHeader =
-        json_header.try_into().expect("Failed to convert JsonUdpHeader to UdpHeader");
-
-    // Simulate sending by pushing to received_packets
-    w.received_packets.push(header.as_bytes().to_vec());
-    w.log.push("send_udp".to_string());
-}
-
-/// STEP: Then I receive a UDP packet matching:
-async fn then_receive_packet(w: &mut TestWorld, table: DataTable) {
-    assert!(!w.received_packets.is_empty(), "No packets received");
-    let last_packet = w.received_packets.last().unwrap();
-
-    // Parse the packet
-    let (header, _payload) =
-        UdpHeader::parse(last_packet.as_slice()).expect("Failed to parse UDP header");
-    let packet_json = netsim_packets::to_json(&header);
-
-    assert_json_matches_table(&packet_json, &table);
-
-    w.log.push("check_udp".to_string());
-}
-
-/// STEP: Given I setup with default users:
-async fn given_setup_default_users(w: &mut TestWorld, table: DataTable) {
-    given_users(w, table).await;
-}
-
-/// STEP: And I check if additive table works:
-async fn check_additive_table(w: &mut TestWorld, table: DataTable) {
-    use features::horizontal_table_to_structs;
-    use serde::Deserialize;
-
-    #[derive(Deserialize)]
-    struct KeyVal {
-        key: String,
-        value: String,
+    #[step(r"I reset the counter")]
+    async fn given_i_reset_the_counter(w: &mut TestWorld) {
+        w.display = 0;
+        w.log.push("reset".to_string());
     }
 
-    let rows: Vec<KeyVal> = horizontal_table_to_structs(&table).expect("Failed to parse table");
+    #[step(r"I have a calculator with Memory (\d+)")]
+    async fn given_i_have_a_calculator_with_memory(w: &mut TestWorld, memory: i32) {
+        w.memory = memory;
+        w.log.push(format!("reset_calculator memory {}", memory));
+    }
 
-    for row in rows {
-        if row.key == "add" {
-            let val: i32 = row.value.parse().expect("Value must be a number");
-            w.display += val;
-            w.log.push(format!("add {}", val));
+    #[step(r"I have a calculator with No Memory")]
+    async fn given_i_have_a_calculator_with_no_memory(w: &mut TestWorld) {
+        w.memory = 0;
+        w.log.push("reset_calculator memory 0".to_string());
+    }
+
+    #[step(r"I want to ensure a clean state before every scenario")]
+    async fn given_clean_state(w: &mut TestWorld) {
+        w.display = 0;
+        w.log.push("reset_background".to_string());
+    }
+
+    #[step(r"I organize my scenarios with tags")]
+    async fn given_tags(w: &mut TestWorld) {
+        w.log.push("reset_tags".to_string());
+    }
+
+    #[step(r"I set TxPower to (High|Medium|Low|Ultralow)")]
+    async fn when_i_set_tx_power(w: &mut TestWorld, level: TxPower) {
+        w.tx_power = level;
+        w.log.push(format!("tx_power {:?}", level));
+    }
+
+    #[step(r"I add (\d+)")]
+    async fn when_i_add(w: &mut TestWorld, val: i32) {
+        w.display += val;
+        w.log.push(format!("add {}", val));
+    }
+
+    #[step(r"result is (\d+)")]
+    async fn then_result_is(w: &mut TestWorld, val: i32) {
+        assert_eq!(w.display, val, "Check failed: expected {}, got {}", val, w.display);
+        w.log.push(format!("check {}", val));
+    }
+
+    #[step(r"system is (true|false)")]
+    async fn given_system_is(w: &mut TestWorld, state: bool) {
+        w.enabled = state;
+        w.log.push(format!("system is {}", state));
+    }
+
+    #[step(r"I set temperature to (\d+\.\d+)")]
+    async fn when_i_set_temperature(w: &mut TestWorld, temp: f64) {
+        w.temperature = temp;
+        w.log.push(format!("temperature set to {}", temp));
+    }
+
+    #[step(r"system should be (true|false)")]
+    async fn then_system_should_be(w: &mut TestWorld, state: bool) {
+        assert_eq!(w.enabled, state);
+        w.log.push(format!("check system is {}", state));
+    }
+
+    #[step(r"temperature should be (\d+\.\d+)")]
+    async fn then_temperature_should_be(w: &mut TestWorld, temp: f64) {
+        assert!((w.temperature - temp).abs() < 0.001);
+        w.log.push(format!("check temperature is {}", temp));
+    }
+
+    pub async fn before_hook(w: &mut TestWorld) {
+        w.display = 0;
+        w.log.push("before".to_string());
+    }
+
+    pub async fn after_hook(w: &mut TestWorld) {
+        w.log.push("after".to_string());
+    }
+
+    #[step(r"the following users:")]
+    async fn given_users(w: &mut TestWorld, table: DataTable) {
+        for row in table.iter().skip(1) {
+            let name = row[0].clone();
+            let age: i32 = row[1].parse().expect("Age must be a number");
+            w.users.insert(name.clone(), age);
+            w.log.push(format!("user {} age {}", name, age));
+        }
+    }
+
+    #[step(r"lookup (\w+) is (\d+)")]
+    async fn then_lookup(w: &mut TestWorld, name: String, age: i32) {
+        let actual = w.users.get(&name).expect("User not found");
+        assert_eq!(*actual, age, "Age mismatch for {}", name);
+        w.log.push(format!("lookup {} is {}", name, age));
+    }
+
+    #[step(r"I have a UDP Echo Server on Port (\d+)")]
+    async fn given_udp_echo_server(w: &mut TestWorld, _port: u16) {
+        w.received_packets.clear();
+        w.log.push("udp_echo_server_init".to_string());
+    }
+
+    #[step(r"I send a UDP packet with:")]
+    async fn when_send_packet(w: &mut TestWorld, table: DataTable) {
+        let json_header: netsim_packets::JsonUdpHeader =
+            table_to_struct(&table).expect("Failed to parse UdpHeader");
+        let header: UdpHeader =
+            json_header.try_into().expect("Failed to convert JsonUdpHeader to UdpHeader");
+        w.received_packets.push(header.as_bytes().to_vec());
+        w.log.push("send_udp".to_string());
+    }
+
+    #[step(r"I receive a UDP packet matching:")]
+    async fn then_receive_packet(w: &mut TestWorld, table: DataTable) {
+        assert!(!w.received_packets.is_empty(), "No packets received");
+        let last_packet = w.received_packets.last().unwrap();
+        let (header, _payload) =
+            UdpHeader::parse(last_packet.as_slice()).expect("Failed to parse UDP header");
+        let packet_json = netsim_packets::to_json(&header);
+        assert_json_matches_table(&packet_json, &table);
+        w.log.push("check_udp".to_string());
+    }
+
+    #[step(r"I setup with default users:")]
+    async fn given_setup_default_users(w: &mut TestWorld, table: DataTable) {
+        given_users(w, table).await;
+    }
+
+    #[step(r"I check if additive table works:")]
+    async fn check_additive_table(w: &mut TestWorld, table: DataTable) {
+        use features::horizontal_table_to_structs;
+        use serde::Deserialize;
+
+        #[derive(Deserialize)]
+        struct KeyVal {
+            key: String,
+            value: String,
+        }
+
+        let rows: Vec<KeyVal> = horizontal_table_to_structs(&table).expect("Failed to parse table");
+
+        for row in rows {
+            if row.key == "add" {
+                let val: i32 = row.value.parse().expect("Value must be a number");
+                w.display += val;
+                w.log.push(format!("add {}", val));
+            }
         }
     }
 }
+
+fn before_helper<'a>(
+    w: &'a mut TestWorld,
+    _args: Vec<String>,
+    _ctx: features::StepContext,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+    Box::pin(steps::before_hook(w))
+}
+
+fn after_helper<'a>(
+    w: &'a mut TestWorld,
+    _args: Vec<String>,
+    _ctx: features::StepContext,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+    Box::pin(steps::after_hook(w))
+}
+
 fn setup_features_world() -> (Features<TestWorld>, TestWorld) {
     let mut features = Features::<TestWorld>::new();
-    // The glue code is generated by `features_codegen` from the doc comments
-    // above.
-    mod glue {
-        use super::*;
-        // This include works because the generated file is in the same directory
-        // (tests/) during build.
-        include!("lib_test_world_glue.rs");
-    }
-    glue::register_steps(&mut features);
+    steps::register_steps(&mut features);
+    features.before(before_helper);
+    features.after(after_helper);
     let world = TestWorld {
         display: 0,
         log: Vec::new(),
@@ -251,9 +250,9 @@ async fn test_features_methods_success() {
     let (features, mut world) = setup_features_world();
     world.display = 999;
 
-    features.run("Given I reset the counter", &mut world).await;
-    features.run("When I add 10", &mut world).await;
-    features.run("Then result is 10", &mut world).await;
+    features.run("I reset the counter", &mut world).await;
+    features.run("I add 10", &mut world).await;
+    features.run("result is 10", &mut world).await;
 
     assert_eq!(world.log, vec!["reset", "add 10", "check 10"]);
 }
@@ -317,10 +316,10 @@ async fn test_features_outline() {
 async fn test_features_assertion_failure() {
     let (features, mut world) = setup_features_world();
 
-    features.run("Given I reset the counter", &mut world).await;
-    features.run("When I add 10", &mut world).await;
+    features.run("I reset the counter", &mut world).await;
+    features.run("I add 10", &mut world).await;
     // This should panic
-    features.run("Then result is 9999", &mut world).await;
+    features.run("result is 9999", &mut world).await;
 }
 
 #[tokio::test]

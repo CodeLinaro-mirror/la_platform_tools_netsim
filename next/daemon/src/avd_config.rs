@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use common::util::ini_file::{parse_ini, IniParserOptions};
 use tracing::{info, warn};
 
 // This struct matches the top-level configuration.
@@ -16,21 +17,8 @@ struct NetsimConfig {
     bluetooth_address: Option<String>,
 }
 
-// Basic INI parser for header-less format
-fn parse_ini(content: &str) -> Result<HashMap<String, String>, String> {
-    let mut map = HashMap::new();
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with(';') || trimmed.is_empty() {
-            continue; // Skip comments and empty lines
-        }
-        if let Some((key, value)) = trimmed.split_once('=') {
-            map.insert(key.trim().to_string(), value.trim().to_string());
-        } else {
-            return Err(format!("Invalid INI line: {}", line));
-        }
-    }
-    Ok(map)
+fn parse_avd_ini(content: &str) -> Result<HashMap<String, String>, String> {
+    parse_ini(content, &IniParserOptions { strict: true }).map_err(|e| e.to_string())
 }
 
 // Basic INI serializer for header-less format
@@ -44,7 +32,7 @@ fn serialize_ini(config: &NetsimConfig) -> String {
 
 impl NetsimConfig {
     fn from_ini(content: &str) -> Result<Self, String> {
-        let map = parse_ini(content)?;
+        let map = parse_avd_ini(content)?;
         Ok(NetsimConfig { bluetooth_address: map.get("bluetooth.address").cloned() })
     }
 }

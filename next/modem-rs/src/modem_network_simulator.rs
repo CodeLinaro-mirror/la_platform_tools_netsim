@@ -469,7 +469,7 @@ impl ModemNetworkSimulator {
 
     /// Returns a list of modem IDs.
     pub fn get_modem_ids(&self) -> Vec<ModemId> {
-        self.modems.keys().cloned().collect()
+        self.modems.keys().copied().collect()
     }
 
     /// Returns a modem instance.
