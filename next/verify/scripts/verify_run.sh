@@ -76,14 +76,14 @@ if [ "$DRY_RUN" = false ]; then
 fi
 
 
-NETSIM_PID=""
+NETSIMD_PID=""
 EMU_PIDS=()
 
 cleanup() {
   echo -n "Cleaning up dangling processes from E2E suite..."
 
   # Kill locally tracked PIDs if they exist
-  if [ -n "$NETSIM_PID" ]; then kill -TERM $NETSIM_PID 2>/dev/null || true; fi
+  if [ -n "$NETSIMD_PID" ]; then kill -TERM $NETSIMD_PID 2>/dev/null || true; fi
   for pid in "${EMU_PIDS[@]}"; do
     kill -TERM "$pid" 2>/dev/null || true
   done
@@ -123,18 +123,31 @@ cleanup
 echo "================================================="
 echo "3. Starting Netsim daemon"
 echo "================================================="
-# We run the binary directly from bazel-bin for immediate execution
+
+BAZEL_BIN=$(bazel info bazel-bin 2>/dev/null || echo "$WORKSPACE_DIR/bazel-bin")
+BAZEL_OUT=$(realpath "$BAZEL_BIN/../..")
+
 if [ -z "$NETSIMD_PATH" ]; then
-  NETSIM_BIN="$WORKSPACE_DIR/bazel-bin/external/netsim+/next/daemon/daemon"
+  NETSIMD_BIN=$(find "$BAZEL_OUT" -path "*/daemon/daemon" -type f | head -n 1)
+  if [ -z "$NETSIMD_BIN" ]; then
+    NETSIMD_BIN="$BAZEL_BIN/external/netsim+/next/daemon/daemon"
+  fi
 else
-  NETSIM_BIN="$NETSIMD_PATH"
+  NETSIMD_BIN="$NETSIMD_PATH"
 fi
-$NETSIM_BIN --no-shutdown -v --logtostderr > /tmp/netsimd_e2e.log 2>&1 &
-NETSIM_PID=$!
+$NETSIMD_BIN --no-shutdown -v --logtostderr > /tmp/netsimd_e2e.log 2>&1 &
+NETSIMD_PID=$!
 
 echo -n "Waiting for netsim gRPC to bind..."
 WAIT_CYCLES=0
-until netsim version 2>/dev/null | grep -i -q "version"; do
+
+if [ -z "$CLI_PATH" ]; then
+  CLI_PATH=$(find "$BAZEL_OUT" -path "*/cli/netsim" -type f | head -n 1)
+  if [ -z "$CLI_PATH" ]; then
+    CLI_PATH="$BAZEL_BIN/external/netsim+/next/cli/netsim"
+  fi
+fi
+until $CLI_PATH version 2>/dev/null | grep -i -q "version"; do
   sleep 1
   WAIT_CYCLES=$((WAIT_CYCLES + 1))
   if [ $WAIT_CYCLES -gt 30 ]; then
@@ -205,8 +218,6 @@ fi
 echo "================================================="
 echo "5. Running E2E Test Suite via Runner Binary"
 echo "================================================="
-BAZEL_BIN=$(bazel info bazel-bin 2>/dev/null || echo "$WORKSPACE_DIR/bazel-bin")
-BAZEL_OUT=$(realpath "$BAZEL_BIN/../..")
 
 if [ -z "$RUNNER_PATH" ]; then
   RUNNER_PATH=$(find "$BAZEL_OUT" -path "*/verify/runner/runner" -type f | head -n 1)
@@ -228,13 +239,6 @@ if [ ! -f "$APK_PATH" ]; then
   exit 1
 fi
 
-if [ -z "$CLI_PATH" ]; then
-  CLI_PATH=$(find "$BAZEL_OUT" -path "*/cli/netsim" -type f | head -n 1)
-  if [ -z "$CLI_PATH" ]; then
-    CLI_PATH="$BAZEL_BIN/external/netsim+/next/cli/netsim"
-  fi
-fi
-
 RUNNER_ARGS=()
 if [ -n "$TEST_FILTER" ]; then
   RUNNER_ARGS+=(--filter "$TEST_FILTER")
@@ -249,14 +253,13 @@ if [ "$VERBOSE" = true ]; then
 fi
 
 if [ -z "$SPEC_DIR" ]; then
-  SPEC_DIR="$WORKSPACE_DIR/tools/netsim/next/verify/host/tests/features"
+  SPEC_DIR="$WORKSPACE_DIR/tools/netsim/next/tests/features"
 fi
 RUNNER_ARGS+=(--spec-dir "$SPEC_DIR")
 
 "$RUNNER_PATH" run \
   --android-home "$ANDROID_HOME" \
   --apk-path "$APK_PATH" \
-  --netsim-cli-path "$CLI_PATH" \
   "${RUNNER_ARGS[@]}"
 
 echo "Tests finished successfully!"
