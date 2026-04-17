@@ -64,10 +64,28 @@ pub async fn run_suite(
     // Sort for deterministic order
     entries.sort();
 
+    let mut error_messages = Vec::new();
+
     for path in entries {
         let filename = path.file_name().unwrap().to_string_lossy().into_owned();
         let content = std::fs::read_to_string(&path)?;
-        run_feature(&mut features, ctx, &filename, &content).await?;
+        match run_feature(&mut features, ctx, &filename, &content).await {
+            Ok(_) => {}
+            Err(e) => {
+                error_messages.push(format!("{}: {:?}", filename, e));
+                if !ctx.keep_going {
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    if !error_messages.is_empty() {
+        println!("\n--- Test Failures Summary ---");
+        for msg in &error_messages {
+            println!("{}", msg);
+        }
+        anyhow::bail!("Some specifications failed");
     }
 
     Ok(())
