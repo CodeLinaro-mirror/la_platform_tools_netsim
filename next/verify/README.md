@@ -75,6 +75,49 @@ The host-side Rust code follows a similar pattern:
 
 ---
 
+## Feature Observables
+
+`verify` supports counting and verifying features during a scenario. This is useful for cross-validating test effectiveness and telemetry correctness.
+
+### Guest-side (Android)
+
+To expose feature counters on the Android guest:
+
+1.  **Implement `FeatureObservable`**: Create a class that implements the interface and returns a map of counters.
+    ```kotlin
+    import com.android.verify.core.FeatureObservable
+
+    class MyFeatureCounters : FeatureObservable {
+        var wifiP2pConnections = 0
+        override fun getObservables(): Map<String, String> {
+            return mapOf("wifi-p2p-connections" to wifiP2pConnections.toString())
+        }
+    }
+    ```
+
+2.  **Register in your Instrumentation**:
+    ```kotlin
+    class MyInstrumentation : VerifyInstrumentation() {
+        private val myCounters = MyFeatureCounters()
+        override fun onCreate(arguments: Bundle) {
+            super.onCreate(arguments)
+            registerObservable(myCounters)
+        }
+    }
+    ```
+
+### Host-side
+
+On the host, you can fetch and verify these counters using Gherkin steps:
+
+```gherkin
+  Scenario: Verify P2P connection count
+    When @avd fetch feature observables
+    Then @avd observes "wifi-p2p-connections" should be "1"
+```
+
+---
+
 ## Getting Started
 
 ### Prerequisites
