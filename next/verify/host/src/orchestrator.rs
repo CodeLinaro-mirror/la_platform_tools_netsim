@@ -38,6 +38,7 @@ pub async fn run_android(
     verbose: bool,
     features: features::Features<TestContext>,
     spec_dir: Option<String>,
+    keep_going: bool,
 ) -> Result<()> {
     let host = HostWorld::new(dry_run);
     let adb = AdbWorld::new(android_home, apk_path, netsim_path.clone(), netsim_args);
@@ -53,6 +54,7 @@ pub async fn run_android(
         filter,
         is_dry_run: dry_run,
         is_verbose: verbose,
+        keep_going,
         variables: HashMap::new(),
         grpc_channel: None,
         grpc_client: None,
@@ -76,6 +78,7 @@ pub async fn list_scenarios(
         filter: None,
         is_dry_run: true,
         is_verbose: false,
+        keep_going: false,
         variables: HashMap::new(),
         grpc_channel: None,
         grpc_client: None,
@@ -98,6 +101,7 @@ pub struct TestContext {
     pub filter: Option<String>,
     pub is_dry_run: bool,
     pub is_verbose: bool,
+    pub keep_going: bool,
     pub variables: HashMap<String, String>,
     pub grpc_channel: Option<grpcio::Channel>,
     pub grpc_client: Option<netsim_proto::frontend_grpc::FrontendServiceClient>,

@@ -36,6 +36,9 @@ enum Commands {
         verbose: bool,
         #[arg(long, help = "Directory containing feature files (specs)")]
         spec_dir: Option<String>,
+        #[arg(long, help = "Continue running tests after a failure")]
+        #[arg(default_value_t = false)]
+        keep_going: bool,
     },
     /// List available test scenarios
     Scenarios {
@@ -67,6 +70,7 @@ async fn main() -> anyhow::Result<()> {
             dry_run,
             verbose,
             spec_dir,
+            keep_going,
         } => {
             let resolved_android_home = match android_home
                 .or_else(|| std::env::var("ANDROID_HOME").ok())
@@ -108,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
                 verbose,
                 features,
                 spec_dir,
+                keep_going,
             )
             .await?;
         }
