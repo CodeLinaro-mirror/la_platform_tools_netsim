@@ -4,8 +4,11 @@ use std::{sync::Arc, time::Duration};
 
 use actor_framework::ResourceActor;
 use ap_actor::{shared::SharedKeyStore, ApActor, ApClient};
-use client::DeviceClient;
-use netsim_model::chip::{ChipClient, ChipCreate, ChipId};
+use device_actor::DeviceClient;
+use netsim_model::{
+    chip::{ChipClient, ChipCreate},
+    ChipId,
+};
 use slirp_actor::SlirpActor;
 use tokio::{net::UdpSocket, sync::mpsc};
 use wifi_actor::WifiActor;
@@ -48,10 +51,10 @@ async fn test_udp_guest_to_host() {
     let wifi_actor_impl = WifiActor::new(
         Some(ap_client.clone()),
         Some(slirp_client.clone()),
-        Some(ap_rx_out),
-        shared_keys.clone(),
         device_client,
-        false, // Do not create default AP
+        None, // wifi_tap
+        shared_keys.clone(),
+        Arc::new(wifi_actor::stats::SystemClock),
     );
 
     // Create Runner
@@ -84,7 +87,6 @@ async fn test_udp_guest_to_host() {
     );
     let chip_id = ChipId(1);
     let params = ChipCreate {
-        id: chip_id,
         device_id: device_api::DeviceId(1),
         packet_stream: Some(packet_stream),
         packet_sink: Some(packet_sink),
@@ -105,7 +107,7 @@ async fn test_udp_guest_to_host() {
     println!("AP Created with ID: {}", id);
     println!("BSSID in KeyStore: {:?}", shared_keys.get_bssid());
 
-    wifi_client.create(params).await.expect("Failed to create chip");
+    wifi_client.create(chip_id, params).await.expect("Failed to create chip");
     println!("Chip created");
 
     // 3. Setup Host UDP Listener

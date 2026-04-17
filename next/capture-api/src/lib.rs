@@ -77,12 +77,20 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use netsim_model::chip::{ChipId, ChipKind};
+use netsim_model::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait CaptureSender: Send + Sync {
-    async fn create_capture(&self, create: CaptureCreate) -> anyhow::Result<()>;
+    /// Creates a new capture for a chip.
+    async fn create_capture(&self, chip_id: ChipId, create: CaptureCreate) -> anyhow::Result<()>;
+
+    /// Captures a single packet.
+    ///
+    /// # Arguments
+    /// * `chip_id` - The ID of the chip.
+    /// * `direction` - The direction of the packet.
+    /// * `bytes` - The packet data.
     fn capture_packet(&self, chip_id: ChipId, direction: Direction, packet: Bytes);
 }
 
@@ -93,21 +101,15 @@ pub enum Direction {
     Sent,
     /// Packet was received by the device.
     Received,
-    /// Direction is unknown.
-    Unknown,
 }
 
 /// Parameters for creating a new capture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptureCreate {
-    /// The ID of the chip to capture.
-    pub chip_id: ChipId,
     /// The kind of chip.
     pub chip_kind: ChipKind,
     /// The name of the device.
     pub device_name: String,
-    /// Whether capture should be enabled by default.
-    pub default_enabled: bool,
     /// Optional flag to be updated when capture status changes.
     #[serde(skip)]
     pub enabled_flag: Arc<AtomicBool>,
@@ -124,8 +126,6 @@ pub enum CaptureAction {
     Create { chip_id: ChipId, chip_kind: ChipKind, device_name: String },
     /// Delete a capture.
     Delete { chip_id: ChipId },
-    /// Set default capture state for new captures.
-    SetDefaultCapture { enabled: bool },
     /// Set default capture directory.
     SetCaptureDirectory { path: PathBuf },
 }

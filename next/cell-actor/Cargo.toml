@@ -1,0 +1,16 @@
+[package]
+name = "cell-actor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytes = "1"
+
+device-api = { path = "../device-api" }
+futures = "0.3"
+log = "0.4"
+modem-rs = { path = "../modem-rs" }
+netsim-model = { path = "../model" }
+thiserror = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"

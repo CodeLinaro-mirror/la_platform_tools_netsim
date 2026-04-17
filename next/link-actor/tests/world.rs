@@ -48,7 +48,7 @@ impl World {
         let mut mock = MockChipClient::new();
         mock.expect_read().returning(|_| Ok(netsim_model::chip::Chip::default()));
         mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
-        mock.expect_create().returning(|_| Ok(()));
+        mock.expect_create().returning(|_, _| Ok(()));
         mock.expect_delete().returning(|_| Ok(()));
         mock.expect_read_statistics().returning(|| Ok(Box::from([])));
         mock.expect_reset().returning(|_| Ok(()));

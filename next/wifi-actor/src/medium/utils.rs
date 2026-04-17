@@ -35,72 +35,71 @@ pub fn create_encrypted_hwsim_msg(
         true => std::borrow::Cow::Owned(
             ieee80211
                 .into_from_ap()
-                .map_err(|e| WifiError::Internal(format!("{e}")))?
+                .map_err(|e| WifiError::Frame(format!("{e}")))?
                 .try_into()
-                .map_err(|e| WifiError::Internal(format!("{e}")))?,
+                .map_err(|e| WifiError::Frame(format!("{e}")))?,
         ),
         false => std::borrow::Cow::Borrowed(ieee80211),
     };
 
-    let ieee80211_response =
-        if let Some(encrypted_bytes) = key_store.try_encrypt(&ieee80211_response) {
-            std::borrow::Cow::Owned(
-                netsim_packets::ieee80211::Ieee80211::decode(&encrypted_bytes).map_err(|e| {
-                    WifiError::Internal(format!("Failed to decode encrypted frame: {e}"))
-                })?,
-            )
-        } else {
-            ieee80211_response
-        };
+    let ieee80211_response = if let Some(encrypted_bytes) =
+        key_store.try_encrypt(&ieee80211_response)
+    {
+        std::borrow::Cow::Owned(
+            netsim_packets::ieee80211::Ieee80211::decode(&encrypted_bytes)
+                .map_err(|e| WifiError::Frame(format!("Failed to decode encrypted frame: {e}")))?,
+        )
+    } else {
+        ieee80211_response
+    };
     let frame_bytes = ieee80211_response.as_bytes();
 
-    // HwsimFrame / HwsimMsg reuses the original flags, we mimic that here via
-    // construct_hwsim_msg but passing specific fields.
-    construct_hwsim_msg(
+    let hwsim_msg = construct_hwsim_msg(
         &dest_hwsim_addr.bytes,
         frame_bytes,
-        None, // Transmitter not explicitly set here in original code, relied on attrs check?
+        None, // Legacy did not include transmitter for RX frames
         attrs.freq,
         Some(attrs.rx_rate_idx.unwrap_or(RX_RATE)),
         Some(attrs.signal.unwrap_or(SIGNAL)),
         attrs.flags,
-        attrs.cookie,
+        None, // Do not echo the TX cookie to the RX path
         attrs.tx_info.as_deref(),
         attrs.tx_info_flags.as_deref(),
         frame.hwsim_msg.nl_hdr.nlmsg_flags,
-    )
+    )?;
+
+    Ok(hwsim_msg)
 }
 
 pub fn parse_hwsim_frame(packet: &bytes::Bytes, client_id: u32) -> WifiResult<HwsimFrame> {
-    let hwsim_msg =
-        HwsimMsg::decode_full(packet).map_err(|e| WifiError::Internal(e.to_string()))?;
+    let hwsim_msg = HwsimMsg::decode_full(packet).map_err(|e| WifiError::Frame(e.to_string()))?;
     match hwsim_msg.hwsim_hdr.hwsim_cmd {
         HwsimCmd::Frame => {
             let frame =
-                HwsimFrame::parse(&hwsim_msg).map_err(|e| WifiError::Internal(e.to_string()))?;
+                HwsimFrame::parse(&hwsim_msg).map_err(|e| WifiError::Frame(e.to_string()))?;
             if frame.transmitter.is_none()
                 || frame.flags.is_none()
                 || frame.cookie.is_none()
                 || frame.tx_info.is_none()
             {
-                return Err(WifiError::Internal(format!(
+                return Err(WifiError::Frame(format!(
                     "Missing Hwsim attributes for incoming packet for client: {client_id}"
                 )));
             }
-            let _ = frame.transmitter.ok_or(WifiError::Internal(format!(
+            let _ = frame.transmitter.ok_or(WifiError::Frame(format!(
                 "Missing transmitter attribute in frame for client: {client_id}"
             )))?;
-            let _ = frame.flags.ok_or(WifiError::Internal(format!(
+            let _ = frame.flags.ok_or(WifiError::Frame(format!(
                 "Missing flags attribute in frame for client: {client_id}"
             )))?;
-            let _ = frame.cookie.ok_or(WifiError::Internal(format!(
+            let _ = frame.cookie.ok_or(WifiError::Frame(format!(
                 "Missing cookie attribute in frame for client: {client_id}"
             )))?;
             // Removed debug logging here to avoid log dependency in utils, or we can add
             // it. Caller can log if needed.
             Ok(frame)
         }
-        _ => Err(WifiError::Internal(format!(
+        _ => Err(WifiError::Frame(format!(
             "Another command found {hwsim_msg:?} for client: {client_id}"
         ))),
     }
@@ -169,7 +168,7 @@ fn construct_hwsim_msg(
         builder.tx_info_flags(t);
     }
 
-    let attributes = builder.build().map_err(|e| WifiError::Internal(e.to_string()))?.attributes;
+    let attributes = builder.build().map_err(|e| WifiError::Frame(e.to_string()))?.attributes;
     let hwsim_hdr = HwsimMsgHdr { hwsim_cmd: HwsimCmd::Frame, hwsim_version: 0, reserved: 0 };
     let nlmsg_len = (NL_MSG_HDR_LEN + hwsim_hdr.encoded_len() as usize + attributes.len()) as u32;
     let nl_hdr = NlMsgHdr {
@@ -183,8 +182,8 @@ fn construct_hwsim_msg(
 }
 
 pub fn build_tx_info(hwsim_msg: &HwsimMsg) -> WifiResult<HwsimMsg> {
-    let attrs = HwsimAttrSet::parse(&hwsim_msg.attributes)
-        .map_err(|e| WifiError::Internal(e.to_string()))?;
+    let attrs =
+        HwsimAttrSet::parse(&hwsim_msg.attributes).map_err(|e| WifiError::Frame(e.to_string()))?;
 
     let hwsim_hdr = &hwsim_msg.hwsim_hdr;
     let nl_hdr = &hwsim_msg.nl_hdr;
@@ -195,23 +194,23 @@ pub fn build_tx_info(hwsim_msg: &HwsimMsg) -> WifiResult<HwsimMsg> {
         .transmitter(
             &attrs
                 .transmitter
-                .ok_or(WifiError::Internal("Missing transmitter in HwsimAttrSet".into()))?
+                .ok_or(WifiError::Frame("Missing transmitter in HwsimAttrSet".into()))?
                 .into(),
         )
         .flags(
-            attrs.flags.ok_or(WifiError::Internal("Missing flags in HwsimAttrSet".into()))?
+            attrs.flags.ok_or(WifiError::Frame("Missing flags in HwsimAttrSet".into()))?
                 | HWSIM_TX_STAT_ACK,
         )
-        .cookie(attrs.cookie.ok_or(WifiError::Internal("Missing cookie in HwsimAttrSet".into()))?)
+        .cookie(attrs.cookie.ok_or(WifiError::Frame("Missing cookie in HwsimAttrSet".into()))?)
         .signal(attrs.signal.unwrap_or(SIGNAL))
         .tx_info(
             attrs
                 .tx_info
-                .ok_or(WifiError::Internal("Missing tx_info in HwsimAttrSet".into()))?
+                .ok_or(WifiError::Frame("Missing tx_info in HwsimAttrSet".into()))?
                 .as_slice(),
         );
 
-    let new_attr = new_attr_builder.build().map_err(|e| WifiError::Internal(e.to_string()))?;
+    let new_attr = new_attr_builder.build().map_err(|e| WifiError::Frame(e.to_string()))?;
     let nlmsg_len = (NlMsgHdr::SIZE + HwsimMsgHdr::SIZE + new_attr.attributes.len()) as u32;
     let new_hwsim_msg = HwsimMsg {
         attributes: new_attr.attributes,

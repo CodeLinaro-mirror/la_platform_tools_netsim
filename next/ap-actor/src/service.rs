@@ -1,7 +1,6 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use netsim_model::{
     chip::{
         Ap, Chip, ChipCreate, ChipId, ChipKind, ChipKindParams, ChipUpdate, ChipVariant,
@@ -18,7 +17,6 @@ use crate::{
 // 1024 microseconds per Time Unit (TU)
 const TU_INTERVAL_US: u128 = 1024;
 
-#[async_trait]
 impl ActorService for ApActor {
     type Id = ChipId;
     type Create = ChipCreate;
@@ -28,14 +26,15 @@ impl ActorService for ApActor {
 
     type Error = ApError;
     type Entity = Chip;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         params: Self::Create,
         _: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id_val = params.id.0;
+        let id_val = id.ok_or_else(|| ApError::Internal("missing chip id".into()))?.0;
         if self.aps.contains_key(&id_val) {
             return Err(ApError::Internal(format!("AP with ID {} already exists", id_val)));
         }

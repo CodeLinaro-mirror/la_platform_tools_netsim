@@ -76,7 +76,7 @@ CMAKE = shutil.which(
 def rust_version() -> str:
   """Returns rust version"""
   with open(
-      AOSP_ROOT / "external" / "qemu" / "android" / "build" / "toolchains.json",
+      AOSP_ROOT / "build" / "bazel" / "toolchains" / "tool_versions.json",
       encoding="utf-8",
   ) as f:
     return json.load(f)["rust"]
@@ -363,10 +363,10 @@ def run_gcloud_auth(env):
   )
 
 
-def get_bazel_startup_options(env):
+def get_bazel_startup_options():
   """Returns the bazel startup options."""
   startup_options = []
-  tmp_dir = getattr(env, "tmp_dir", None)
+  tmp_dir = Path(os.environ.get("TMPDIR")) if os.environ.get("TMPDIR") else None
   if tmp_dir:
     startup_options += [
         f"--output_base={tmp_dir / 'output'}",
@@ -388,6 +388,8 @@ def get_bazel_build_configs(args, env):
   if platform.system().lower() == "windows":
     # Force Static CRT linking to avoid ABI mismatches with the Emulator's prebuilt DLLs.
     build_configs.append("--features=static_link_msvcrt")
+  if not getattr(args, "enable_repo_cache", False):
+    build_configs.append("--repo_contents_cache=")
   return build_configs
 
 
@@ -398,10 +400,4 @@ def get_bazel_targets(args):
       "@netsim//rust/...",
       "@netsim//next/...",
   ]
-  # TODO(b/320434273): Include next/... for windows once dependent crates are imported
-  if platform.system().lower() == "windows":
-    targets = args.bazel_targets or [
-        "@netsim//:all",
-        "@netsim//rust/...",
-    ]
   return targets

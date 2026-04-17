@@ -5,21 +5,17 @@ package(default_visibility = ["//visibility:public"])
 
 BLUETOOTH_DEPS = [
     "//next/actor-framework",
-    "//next/client",
-    "//next/device-api",
+    "//next/device-actor",
     "//next/model",
     "//next/rootcanal",
+    "//proto",
+    "//next/packets",
     "@bytes",
-    "@env_logger",
     "@futures",
-    "@hex",
     "@log",
-    "@protobuf-rust",
-    "@rand",
     "@serde",
     "@thiserror",
     "@tokio",
-    "@tokio-stream",
     "@zerocopy",
 ]
 
@@ -28,9 +24,9 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "bluetooth_actor",
     edition = "2021",
+    enable_integration_test = False,
     proc_macro_deps = [
         "@async-trait",
-        "@zerocopy-derive",
     ],
     deps = BLUETOOTH_DEPS,
 )
@@ -50,13 +46,14 @@ rust_test(
     deps = [
         ":testing",
         "//next/actor-framework:testing",
-        "//next/client:testing",
         "//next/common",
         "//next/device-actor:testing",
         "//next/device-api:testing",
         "//next/model:testing",
+        "//next/packets",
         "//next/rootcanal:testing",
         "//next/testing",
+        "//proto",
         "@bytes",
         "@env_logger",
         "@futures",

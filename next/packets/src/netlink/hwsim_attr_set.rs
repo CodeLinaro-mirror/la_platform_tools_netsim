@@ -369,6 +369,23 @@ impl HwsimAttrSet {
                         builder.tx_info(&rates);
                     }
                 }
+                Some(HwsimAttrEnum::TxInfoFlags) => {
+                    let data = &attributes[index + 4..index + nla_len];
+                    if data.len() % 3 == 0 {
+                        let count = data.len() / 3;
+                        let mut flags = Vec::with_capacity(count);
+                        for i in 0..count {
+                            let flag =
+                                zerocopy::Ref::<&[u8], TxRateFlag>::from_prefix(&data[i * 3..])
+                                    .map_err(|_| {
+                                        HwsimError::Frame("Failed to read TxRateFlag".into())
+                                    })?
+                                    .0;
+                            flags.push(*flag);
+                        }
+                        builder.tx_info_flags(&flags);
+                    }
+                }
                 _ => {}
             }
             index += nla_align(nla_len);
@@ -383,5 +400,44 @@ impl HwsimAttrSet {
         }
 
         builder.build()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hwsim_attr_set_parse_tx_info_flags() {
+        // Construct a manual HwsimAttrSet byte array simulating what the kernel sends
+        let mut bytes = Vec::new();
+
+        // NLA Header for TxInfoFlags: Length = 4 (header) + 3 (1 TxRateFlag) = 7
+        // Type = HwsimAttrEnum::TxInfoFlags (17)
+        let nla_len: u16 = 7;
+        let nla_type: u16 = HwsimAttrEnum::TxInfoFlags as u16;
+
+        bytes.extend_from_slice(&nla_len.to_le_bytes()); // Length
+        bytes.extend_from_slice(&nla_type.to_le_bytes()); // Type
+
+        // 1 TxRateFlag (3 bytes: idx=2, mcs=1, flags=0x04)
+        bytes.extend_from_slice(&[2, 1, 0x04]);
+
+        // NLA padding (must align to 4 bytes: 7 ends at 8 -> 1 byte of padding)
+        bytes.push(0);
+
+        // Parse the attributes back out
+        let attr_set = HwsimAttrSet::parse(&bytes).expect("Failed to parse HwsimAttrSet bytes");
+
+        // Assert the tx_info_flags array was captured correctly and not dropped
+        let flags =
+            attr_set.tx_info_flags.expect("tx_info_flags was missing from parsed HwsimAttrSet");
+        assert_eq!(flags.len(), 1);
+
+        let flag = &flags[0];
+        let idx = flag.idx;
+        let p_flags = flag.flags;
+        assert_eq!(idx, 2);
+        assert_eq!(p_flags, 0x0401);
     }
 }

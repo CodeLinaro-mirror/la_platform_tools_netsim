@@ -3,6 +3,8 @@
 pub mod actions;
 pub mod client;
 pub mod lifecycle;
+mod ranging;
+mod ranging_estimator;
 pub mod service;
 pub mod uwb_actor;
 

@@ -1,6 +1,4 @@
-use netsim_model::chip::ChipClient;
-#[allow(unused_imports)]
-use netsim_model::stats::NetsimRadioStats;
+use netsim_model::{chip::ChipClient, stats::NetsimRadioStats};
 
 use crate::world::World;
 
@@ -19,8 +17,10 @@ async fn test_read_statistics() {
     let expected_stats = [NetsimRadioStats {
         name: format!("uwb_chip_{}", chip_id),
         id: chip_id,
+        kind: netsim_model::stats::RadioKind::Uwb,
         tx_bytes: 0,
         rx_bytes: 0,
+        ..Default::default()
     }];
     assert_eq!(&*stats, &expected_stats[..]);
 }

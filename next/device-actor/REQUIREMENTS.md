@@ -211,6 +211,33 @@ The system supports two distinct provisioning flows:
   Grace Period" (default: 15s) where the idle timer is suppressed, allowing time
   for the first emulator to connect before self-terminating.
 
+### 4.6 Statistics & Reporting
+
+The `Stats` module within `DeviceActor` is responsible for tracking and persisting session-level metrics.
+
+#### 4.6.1 Metrics Tracking
+- **RQ-STATS-01**: The system shall track the current number of active devices (accessible via List API).
+- **RQ-STATS-02**: The system shall track the maximum number of concurrent devices seen during the session (`peak_concurrent_devices`).
+- **RQ-STATS-03**: The system shall track the session duration in seconds (`session_duration_seconds`).
+- **RQ-STATS-04**: The system shall track the Netsim version string (`version`).
+- **RQ-STATS-05**: The system shall support fetching aggregated Radio Statistics on-demand from connected chips (but not yet persist them).
+- **RQ-STATS-06**: The system shall track the total cumulative number of devices created during the session (`device_count` in persistence).
+- **RQ-STATS-07**: **Transport Stats**: The system shall track packet and byte counts for both Tx and Rx directions (`tx_packets`, `rx_packets`, `tx_bytes`, `rx_bytes`) and the duration of the stats collection (`duration_secs`).
+- **RQ-STATS-08**: **Error Stats**: The system shall report invalid packets encountered by the radio (`invalid_packets`), including reason and description.
+- **RQ-STATS-09**: **Universal Stats Support**: All registered Chip Actors must implement the `GetStatistics` command. If no stats are available, they must return an empty list rather than failure or timeout.
+- **RQ-STATS-10**: **Device Metadata Stats**: The system shall track static metadata for each created device, including `device_id`, `name`, `kind`, `version`, `sdk_version`, `build_id`, `variant`, and `arch`.
+
+#### 4.6.2 Persistence
+- **RQ-STATS-PERSIST-01**: Upon shutdown (`Drop`), the system shall write the collected statistics to a JSON file named `netsim_session_stats.json` in the `netsimd_temp_dir`.
+- **RQ-STATS-PERSIST-03**: **Radio Stats Persistence**. The system shall persist radio stats (Tx/Rx) cumulatively when a chip is removed or the session ends.
+- **RQ-STATS-PERSIST-04**: **LKG Strategy**: The system shall cache the Last Known Good (LKG) stats to prevent data loss on chip/actor failure or partial updates.
+- **RQ-STATS-PERSIST-05**: **Device Stats Persistence**: The system shall persist the list of all devices created during the session, including their metadata (RQ-STATS-10), to `netsim_session_stats.json` inside the `device_stats` array.
+
+#### 4.6.3 Performance & Safety
+- **RQ-STATS-PERF-01**: Stats collection must not block the main actor loop for more than 1ms.
+- **RQ-STATS-SAFETY-01**: File I/O errors during save should be logged but must not panic the actor.
+
+
 ## 5. Non-Functional Requirements
 
 - **RQ-NFR-SCALE**: The system shall support **64 concurrent devices**, each
@@ -257,6 +284,20 @@ Verification is performed via the standard Netsim testing strategy:
 | **RQ-OBS-02**   | Track active count                | `list_device_test.rs`    | List devices populated                                    | **Full**    |
 | **RQ-POL-01**   | Idle Timeout                      | `actor_shutdown_test.rs` | Server shuts down after idle timeout                      | **Full**    |
 | **RQ-POL-02**   | Startup Timeout                   | `actor_shutdown_test.rs` | Server shuts down on startup timeout                      | **Full**    |
+| **RQ-STATS-01**   | Track active devices              | `list_device_test.rs`    | List devices populated                                    | **Full**    |
+| **RQ-STATS-02**   | Track peak concurrent devices     | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-03**   | Track session duration            | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-04**   | Track Netsim Version              | `stats_lifecycle_test.rs`| Verifies version string in JSON                           | **Full**    |
+| **RQ-STATS-05**   | Aggregate Radio Stats             | `stats_collection_test.rs`| Verifies aggregation of Tx/Rx bytes from chips           | **Full**    |
+| **RQ-STATS-06**   | Track cumulative devices          | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-07**   | Transport Stats (Pkts/Bytes/Dur)  | `stats_collection_test.rs`| Verifies aggregation of Tx/Rx bytes/packets               | **Full**    |
+| **RQ-STATS-08**   | Error Stats (Invalid Packets)     | `stats_collection_test.rs`| Verifies invalid packet reporting                         | **Partial** |
+| **RQ-STATS-09**   | Universal Stats Support           | `stats_collection_test.rs`| Verifies all chips respond to stats requests              | **Full**    |
+| **RQ-STATS-PERSIST-01** | Persist stats to JSON       | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-PERSIST-02** | Atomic write (rename)       | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-PERSIST-03** | Radio Stats Persistence     | `stats_collection_test.rs`| Verifies radio stats persistence                         | **Full**    |
+| **RQ-STATS-PERSIST-04** | LKG Caching                 | `stats_collection_test.rs`| Verifies LKG fallback                                    | **Full**    |
+| **RQ-STATS-PERSIST-05** | Device Stats Persistence    | `device_stats_test.rs`    | Verifies device metadata in JSON                         | **Full**    |
 
 ### 6.3 Coverage Gaps
 
@@ -273,3 +314,7 @@ prioritized for the next test sprint:
 - **RQ-NFR-SCALE**: No load test exists to verify support for 32+ simultaneous
   devices.
 - **RQ-NFR-SYNC**: No latency benchmark exists for position propagation.
+- **RQ-STATS-GAP-01**: **Per-Device Stats Persistence**. (Resolved in CL 4).
+- **RQ-STATS-GAP-03**: **WiFi Stats Integration**. (Resolved in CL 5). The new system integrates with `WiFi-Actor` to collect and persist granular WiFi statistics.
+- **RQ-STATS-GAP-04**: **Frontend Stats Integration**. The legacy system reported frontend (gRPC/WebUI) connection activity as part of the session stats. This needs to be implemented in the Daemon and passed down to `DeviceActor`.
+

@@ -48,4 +48,5 @@ rust_doc(
 rust_doc_test(
     name = "doc_test",
     crate = ":modem-rs-derive",
+    target_compatible_with = ["@platforms//os:linux"],
 )

@@ -1,22 +1,23 @@
-// Copyright 2023-2025 The Android Open Source Project // touch
+// Copyright 2023-2025 The Android Open Source Project
 
 use std::{
     collections::HashMap,
-    env, fs, io,
+    env, io,
     path::PathBuf,
     sync::{atomic::AtomicU32, Arc},
     time::Duration,
 };
 
-use client::{CaptureClient, DeviceClient};
+use capture_actor::CaptureClient;
 use common::{
     system::netsimd_temp_dir,
-    util::os_utils::{get_instance_name, redirect_std_stream},
+    util::os_utils::{get_hci_port, get_instance, get_instance_name, redirect_std_stream},
 };
+use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
-use link_api::LinkClient;
+use link_actor::LinkClient;
 use log::{error, info, warn};
 use netsim_model::{
     chip::{
@@ -29,7 +30,7 @@ use netsim_model::{
 };
 use packet_stream::{
     transport::traits::{PacketSink, PacketStream},
-    StreamAddress, Streams, TransportType,
+    StreamAddress, Streams,
 };
 use slirp_actor::SlirpClient;
 use tokio::{sync::mpsc, task::JoinSet};
@@ -92,6 +93,7 @@ async fn handle_new_connection(
         position: Default::default(),
         orientation: Default::default(),
         builtin: false,
+        device_info: chip_info.device_info.clone().map(Into::into),
     };
 
     let mut chip = match chip_info.chip {
@@ -170,6 +172,10 @@ async fn setup_uds_listener(
     listener_addresses: &mut HashMap<String, StreamAddress>,
     runtime_dir: &PathBuf,
 ) -> Result<(), RunResult> {
+    use std::fs;
+
+    use packet_stream::TransportType;
+
     let uds_path = runtime_dir.join("netsim.sock");
     if uds_path.exists() {
         fs::remove_file(&uds_path).map_err(init_error)?;
@@ -201,7 +207,7 @@ async fn setup_grpc_listener(
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
     device_client: DeviceClient,
-    link_client: client::LinkClient,
+    link_client: LinkClient,
     version: String,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
@@ -264,7 +270,8 @@ pub struct NetsimDaemon {
     _grpc_server: Option<grpcio::Server>,
     /// The DeviceActor task handle.
     device_task: tokio::task::JoinHandle<()>,
-    link_client: Box<dyn LinkClient>,
+    link_client: Box<dyn link_api::LinkClient>,
+
     slirp_client: Option<SlirpClient>,
     chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
 }
@@ -273,6 +280,11 @@ impl NetsimDaemon {
     /// Returns a reference to the DeviceClient.
     pub fn device_client(&self) -> &DeviceClient {
         &self.device_client
+    }
+
+    /// Returns a reference to the CaptureClient.
+    pub fn capture_client(&self) -> &CaptureClient {
+        &self.capture_client
     }
 
     /// Creates a new `NetsimDaemon` instance or returns config for forwarding.
@@ -323,8 +335,6 @@ impl NetsimDaemon {
                 None
             }
         });
-        #[cfg(not(target_os = "linux"))]
-        let wifi_tap: Option<String> = None;
 
         // Pre-check TAP permissions if configured.
         // We do this BEFORE redirection so the user can see the error in the console.
@@ -357,11 +367,10 @@ impl NetsimDaemon {
             std::env::consts::ARCH
         );
 
-        let mut ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
+        let ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
 
         // Attempt to acquire the singleton lock for the netsim daemon.
-        // The lock file (netsim.ini.lock) is managed by the `named_lock` crate
-        // in a system-wide temporary directory.
+        // The lock is managed by direct file locking on the netsim.ini file.
         match ini_file.try_acquire().map_err(init_error)? {
             // This instance is the Writer (the primary daemon).
             IniFileAccess::Writer(ini_guard) => {
@@ -376,21 +385,12 @@ impl NetsimDaemon {
     }
 
     async fn initialize_primary_daemon(
-        ini_guard: IniFileGuard,
+        mut ini_guard: IniFileGuard,
         args: Args,
         _runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
-        let ini_path = ini_guard.path();
-        info!("INI file path: {}", ini_path.display());
-
-        // Remove any potential stale INI file from a previous unclean shutdown.
-        if ini_path.exists() {
-            if let Err(e) = fs::remove_file(ini_path) {
-                log::warn!("Failed to remove stale INI file: {}", e);
-                // Continue anyway, as we will overwrite it
-            }
-        }
+        info!("INI file path: {}", ini_guard.path().display());
 
         // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
@@ -403,8 +403,7 @@ impl NetsimDaemon {
         let (device_runner, device_client) = device_actor::new();
 
         // Setup Capture Server
-        let (capture_runner, capture_generic_client) = capture_actor::new();
-        let capture_client = client::CaptureClient::new(capture_generic_client);
+        let (capture_runner, capture_client) = capture_actor::new();
 
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
@@ -424,11 +423,17 @@ impl NetsimDaemon {
             StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], actual_grpc_port))),
         );
 
+        // HCI TCP socket server
+        let instance_num = get_instance(args.instance);
+        let hci_port = args.hci_port.unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
+        tokio::spawn(hci_server::server::run(hci_port, device_client.clone()));
+
         // Write the current daemon's information to the INI file.
         // Clients will use this to connect.
         let mut ini_data = HashMap::from([
             ("pid".to_string(), std::process::id().to_string()),
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
+            ("hci.port".to_string(), hci_port.to_string()),
         ]);
         if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
@@ -437,7 +442,7 @@ impl NetsimDaemon {
         // Even if stale file removal failed, we can proceed as ini_guard.write will
         // overwrite.
         ini_guard.write(&ini_data).map_err(init_error)?;
-        info!("Wrote to INI file {}", ini_path.display());
+        info!("Wrote to INI file {}", ini_guard.path().display());
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
@@ -449,8 +454,10 @@ impl NetsimDaemon {
         let slirp_actor_state = slirp_actor::SlirpActor::new(Default::default());
 
         // Setup AP Actor
+        let shared_keys = std::sync::Arc::new(ap_actor::shared::SharedKeyStore::new());
+
         let (ap_runner, ap_client) = ap_actor::new();
-        let ap_actor_state = ap_actor::ApActor::new();
+        let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 
         // Setup Wifi Actor
         let (wifi_runner, wifi_client) = wifi_actor::new();
@@ -475,6 +482,8 @@ impl NetsimDaemon {
             Some(slirp_client.clone()),
             device_client.clone(),
             wifi_tap,
+            shared_keys.clone(),
+            Arc::new(wifi_actor::stats::SystemClock),
         );
 
         // Setup Uwb Server
@@ -482,10 +491,8 @@ impl NetsimDaemon {
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
-        // TODO: Replace with real modem network.
-        let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
-        let (cell_runner, cell_client) = cell::new();
-        let cell_server = cell::Server::new(device_client.clone(), cell_controller);
+        let (cell_runner, cell_client) = cell_actor::new();
+        let cell_actor_state = cell_actor::CellActor::new(device_client.clone());
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
@@ -514,13 +521,16 @@ impl NetsimDaemon {
             )
         };
 
-        let device_actor_state = device_actor::DeviceActor::new(
+        let mut device_actor_state = device_actor::DeviceActor::new(
             chip_clients.clone(),
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
             Box::new(link_client.clone()),
             startup_timeout,
             idle_timeout,
+            get_version(),
+            None,
+            None,
         );
 
         // Spawn server tasks
@@ -529,14 +539,13 @@ impl NetsimDaemon {
         join_set.spawn(wifi_runner.run(wifi_actor_state));
         join_set.spawn(ap_runner.run(ap_actor_state));
         join_set.spawn(slirp_runner.run(slirp_actor_state));
-        join_set.spawn(async move {
-            cell_runner.run(cell_server).await;
-        });
+        join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
-        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
+        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap, None)));
         join_set.spawn(uwb_runner.run(uwb_actor));
 
         // Spawn DeviceActor separately
+        device_actor_state.set_self_client(device_client.clone());
         let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
@@ -551,10 +560,6 @@ impl NetsimDaemon {
         }
 
         device_client.create_device(device_create).await.expect("Failed to create default AP");
-
-        if args.pcap {
-            capture_client.set_default_capture(true).await.expect("Failed to set default capture");
-        }
 
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();

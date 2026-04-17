@@ -195,16 +195,17 @@ pub struct ApState {
     pub sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
     pub eap_sessions: HashMap<MacAddr, crate::eap_auth::EapAuthenticator>,
     pub associations: std::collections::HashSet<MacAddr>,
+    pub delayed_frames: std::collections::VecDeque<(std::time::Instant, bytes::Bytes)>,
     pub enabled: bool,
 }
 
 impl ApActor {
-    pub fn new() -> Self {
+    pub fn new(shared_keys: std::sync::Arc<shared::SharedKeyStore>) -> Self {
         Self {
             sink: None,
             aps: HashMap::new(),
             manager: Ieee80211Manager::new(),
-            shared_keys: std::sync::Arc::new(shared::SharedKeyStore::new()),
+            shared_keys,
             beacon_interval: None,
         }
     }
@@ -218,6 +219,7 @@ impl ApState {
             sae_sessions: HashMap::new(),
             eap_sessions: HashMap::new(),
             associations: std::collections::HashSet::new(),
+            delayed_frames: std::collections::VecDeque::new(),
             enabled: true,
         }
     }

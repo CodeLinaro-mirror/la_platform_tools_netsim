@@ -4,11 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actor-framework = { path = "../actor-framework" }
 bluetooth-actor = { package = "bluetooth", path = "../bluetooth-actor" }
 capture-actor = { path = "../capture-actor" }
-cell = { path = "../cell" }
-chrono = { version = "0.4", features = ["now"] }
+cell-actor = { path = "../cell-actor" }
 clap = { version = "4.1.8", default-features = false, features = [
   "derive",
   "error-context",
@@ -17,24 +15,26 @@ clap = { version = "4.1.8", default-features = false, features = [
   "usage",
   "env",
 ] }
-client = { path = "../client" }
+
 device-actor = { path = "../device-actor" }
 grpc-server = { path = "../grpc-server" }
 grpcio = { version = "0.13", default-features = false, features = [
   "protobufv3-codec",
   "openssl",
 ] }
+hci-server = { path = "../hci-server" }
 link-actor = { path = "../link-actor" }
 log = "0.4"
-named-lock = "0.4.1"
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
 packet-stream = { path = "../packet-stream" }
-tokio = { version = "1.28.2", features = ["full"] }
+tokio = { version = "1.28.2", features = ["full", "tracing"] }
 uwb-actor = { path = "../uwb-actor" }
 wifi-actor = { path = "../wifi-actor" }
 
 [dev-dependencies]
+regex = "1"
+tempfile = "3"
 
 [features]
 default = []

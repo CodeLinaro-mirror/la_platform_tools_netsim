@@ -22,9 +22,10 @@ netsim_rust_library(
     edition = "2021",
     features = ["test-utils"],
     proc_macro_deps = [
-        "@async-trait",
-        "@serde_derive",
         "//next/modem-rs-derive",
+    ],
+    test_deps = [
+        "@env_logger",
     ],
     deps = [
         "//next/model",

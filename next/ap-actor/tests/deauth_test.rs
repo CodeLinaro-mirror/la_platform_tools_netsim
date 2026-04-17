@@ -52,7 +52,7 @@ async fn test_station_deauth() {
     let reason_code: u16 = 3;
     frame.extend_from_slice(&reason_code.to_le_bytes());
 
-    let src_id = netsim_model::chip::ChipId(99);
+    let src_id = netsim_model::ChipId(99);
     tx.send(bytes::Bytes::from(frame)).expect("Failed to send Deauth");
 
     // 3. Verify System Stability or State Change

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use client::{DeviceClient, DeviceError};
+use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
@@ -146,6 +146,7 @@ impl FrontendClient {
                         req.device.orientation.clone().unwrap_or_default(),
                     ),
                     builtin: false,
+                    device_info: None,
                 };
 
                 let device_create = device_api::api::DeviceCreate {
@@ -251,8 +252,6 @@ impl FrontendClient {
     }
 
     async fn handle_reset(client: DeviceClient) -> Result<(), RpcStatus> {
-        // TODO: Implement global reset in DeviceClient.
-        // Currently using None for global reset.
         client.reset(None).await.map_err(|e| {
             RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,
@@ -402,7 +401,7 @@ impl FrontendService for FrontendClient {
 #[cfg(test)]
 mod tests {
     use link_api::{Link, LinkId, MockLinkClient};
-    use netsim_model::chip::ChipId;
+    use netsim_model::{ChipId, ChipKind};
     use protobuf::EnumOrUnknown;
 
     use super::*;
@@ -473,7 +472,7 @@ mod tests {
                 id: LinkId(1),
                 sender: ChipId(10),
                 receiver: ChipId(11),
-                kind: netsim_model::chip::ChipKind::BLUETOOTH,
+                kind: ChipKind::BLUETOOTH,
                 rssi: -70,
             }])
         });

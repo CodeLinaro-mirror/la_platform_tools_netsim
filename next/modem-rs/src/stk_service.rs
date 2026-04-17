@@ -1,9 +1,5 @@
-// src/stk_service.rs
-
 use crate::{
-    modem::ModemImpl,
     parser::{Command, QuotedString},
-    traits::CommandExecutor,
     types::{ExecutionResult, HandledCommand},
 };
 
@@ -68,10 +64,8 @@ impl StkService {
             action: None,
         })
     }
-}
 
-impl CommandExecutor for StkService {
-    fn execute(&self, _context: &ModemImpl, command: &Command) -> ExecutionResult {
+    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
             Command::QueryStkReady => self.handle_query_stk_ready(),
             Command::SendStkEnvelopeCommand(envelope_command) => {

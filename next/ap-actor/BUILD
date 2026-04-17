@@ -1,18 +1,31 @@
 load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@rules_rust//rust:defs.bzl", "rust_test")
 load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
+genrule(
+    name = "cxx-bridge-header",
+    outs = ["cxx.h"],
+    cmd = "$(location @cxx.rs//:codegen) --header >> $(OUTS)",
+    tools = ["@cxx.rs//:codegen"],
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "hostap_crypto_shim",
     srcs = ["src/crypto_ffi.cc"],
-    hdrs = ["src/crypto_ffi.h"],
+    hdrs = [
+        "src/crypto_ffi.h",
+        ":cxx-bridge-header",
+    ],
     defines = [
         "CONFIG_OPENSSL_INTERNAL_AES_WRAP",
     ],
-    includes = ["src"],
+    includes = [
+        ".",
+        "src",
+    ],
     deps = [
         "@boringssl//:crypto",
         "@cxx.rs//:core",
@@ -27,6 +40,11 @@ netsim_rust_library(
     proc_macro_deps = [
         "@async-trait",
     ],
+    test_deps = [
+        "//next/testing",
+        "@env_logger",
+        "@rand",
+    ],
     deps = [
         ":ap_actor_cxx",
         ":hostap_crypto_shim",
@@ -37,9 +55,7 @@ netsim_rust_library(
         "@bytes",
         "@ccm",
         "@cxx.rs//:cxx",
-        "@futures",
         "@log",
-        "@mockall",
         "@serde",
         "@thiserror",
         "@tokio",
@@ -68,28 +84,5 @@ cc_library(
     deps = [
         ":hostap_crypto_shim",
         "@cxx.rs//:core",
-    ],
-)
-
-rust_test(
-    name = "integration-test",
-    size = "small",
-    srcs = glob(["tests/**/*.rs"]),
-    crate_root = "tests/mod.rs",
-    edition = "2021",
-    deps = [
-        ":testing",
-        "//next/actor-framework:testing",
-        "//next/model",
-        "//next/packets:testing",
-        "//next/testing",
-        "@bytes",
-        "@env_logger",
-        "@futures",
-        "@log",
-        "@rand",
-        "@tokio",
-        "@tokio-stream",
-        "@zerocopy",
     ],
 )

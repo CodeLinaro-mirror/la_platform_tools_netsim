@@ -1,12 +1,12 @@
 // Copyright 2026 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{FutureExt, SinkExt, StreamExt};
 use netsim_model::{
-    chip::{Chip, ChipCreate, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate},
+    chip::{Chip, ChipCreate, ChipUpdate, ChipVariant},
     chip_error::ChipError,
+    ChipId, ChipKind,
 };
 use pdl_runtime::Packet;
 use pica::{packets::uci, PicaCommand, PicaEvent};
@@ -16,7 +16,6 @@ use crate::{
     UwbAction, UwbActionResult,
 };
 
-#[async_trait]
 impl ActorService for UwbActor {
     type Id = ChipId;
     type Create = ChipCreate;
@@ -25,22 +24,23 @@ impl ActorService for UwbActor {
     type ActionResult = UwbActionResult;
     type Error = ChipError;
     type Entity = Chip;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = params.id;
-        if self.chip_states.contains_key(&chip_id) {
+        let chip_id = id.ok_or(ChipError::InvalidArguments("missing chip id".to_string()))?;
+        if self.chip_to_handle.contains_key(&chip_id) {
             return Err(ChipError::ChipExists(chip_id.0));
         }
 
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
-            kind: netsim_model::chip::ChipKind::UWB,
+            kind: ChipKind::UWB,
             variant: Some(ChipVariant::Uwb(Default::default())),
             name: Some(params.config.name),
             manufacturer: Some(params.config.manufacturer),
@@ -48,7 +48,6 @@ impl ActorService for UwbActor {
             ..Default::default()
         };
 
-        // Add chip to Pica
         let stream =
             params.packet_stream.expect("Packet stream is present").map(|b| b.to_vec()).boxed();
 
@@ -77,8 +76,8 @@ impl ActorService for UwbActor {
             }
         };
 
-        self.chip_states.insert(chip_id, UwbChipState { chip, pica_handle: handle });
-        self.handle_to_chip.insert(handle, chip_id);
+        self.chip_states.write().unwrap().insert(handle, UwbChipState { chip });
+        self.chip_to_handle.insert(chip_id, handle);
 
         Ok(chip_id)
     }
@@ -88,7 +87,8 @@ impl ActorService for UwbActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        Ok(self.chip_states.get(&id).map(|state| state.chip.clone()))
+        let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
+        Ok(self.chip_states.read().unwrap().get(handle).map(|state| state.chip.clone()))
     }
 
     async fn handle_update(
@@ -97,22 +97,12 @@ impl ActorService for UwbActor {
         update: Self::Update,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        let state = self.chip_states.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
-        if let Some(pos) = update.position {
-            state.chip.position = pos;
-        }
-        if let Some(orient) = update.orientation {
-            state.chip.orientation = orient;
-        }
-        match (update.variant, &mut state.chip.variant) {
-            (Some(ChipVariantUpdate::Uwb(uwb_update)), Some(ChipVariant::Uwb(uwb_radio))) => {
-                uwb_update.radio.apply(&mut uwb_radio.radio);
-            }
-            (Some(other), _) => {
-                log::warn!("Received unexpected update for chip {id}: {other:?}");
-            }
-            (None, _) => {}
-        }
+        let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
+        let mut chips = self.chip_states.write().unwrap();
+        let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
+
+        state.apply(update);
+
         Ok(state.chip.clone())
     }
 
@@ -121,22 +111,19 @@ impl ActorService for UwbActor {
         id: Self::Id,
         ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        let state = self.chip_states.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
+        let handle = self.chip_to_handle.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
+        let state = self.chip_states.write().unwrap().remove(&handle).unwrap();
 
-        // If this request came from an external source, tell Pica to disconnect the
-        // chip.
-        if self.handle_to_chip.contains_key(&state.pica_handle) {
-            let _ = self.pica_commands.send(PicaCommand::Disconnect(state.pica_handle)).await;
-            // Disconnect completes asynchronously and is handled in the
-            // lifecycle `on_tick`.
-        }
+        // Disconnect from Pica. This completes asynchronously as we'll receive a
+        // `PicaEvent::Disconnected` event in the lifecycle `on_tick`.
+        let _ = self.pica_commands.send(PicaCommand::Disconnect(handle)).await;
 
         let device_client = self.device_client.clone();
         let device_id = state.chip.device_id;
         ctx.spawn(
             id,
             async move {
-                let _ = device_client.notify_chip_removed(device_id, id);
+                let _ = device_client.notify_chip_removed(device_id, id).await;
                 id
             }
             .boxed(),
@@ -152,14 +139,13 @@ impl ActorService for UwbActor {
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             UwbAction::Reset { id } => {
-                if let Some(state) = self.chip_states.get(&id) {
-                    let handle = state.pica_handle;
+                if let Some(handle) = self.chip_to_handle.get(&id) {
                     let reset_cmd =
                         uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
                     let _ = self
                         .pica_commands
                         .send(PicaCommand::UciPacket(
-                            handle,
+                            *handle,
                             reset_cmd.encode_to_vec().expect("encoding succeeds"),
                         ))
                         .await;
@@ -169,15 +155,43 @@ impl ActorService for UwbActor {
             UwbAction::GetStatistics => {
                 let stats = self
                     .chip_states
+                    .read()
+                    .unwrap()
                     .values()
                     .map(|state| netsim_model::stats::NetsimRadioStats {
                         id: state.chip.id,
                         name: state.chip.name.clone().unwrap_or_default(),
+                        kind: netsim_model::stats::RadioKind::Uwb,
+                        tx_count: 0,
+                        rx_count: 0,
                         tx_bytes: 0,
                         rx_bytes: 0,
+                        ..Default::default()
                     })
                     .collect();
                 Ok(UwbActionResult::Statistics(stats))
+            }
+            #[cfg(any(test, feature = "testing"))]
+            UwbAction::StartRanging { id, session_id } => {
+                if let Some(handle) = self.chip_to_handle.get(&id) {
+                    let _ =
+                        self.pica_commands.send(PicaCommand::Ranging(*handle, session_id)).await;
+                }
+                Ok(UwbActionResult::Success)
+            }
+            #[cfg(any(test, feature = "testing"))]
+            UwbAction::StopRanging { id, session_id } => {
+                if let Some(handle) = self.chip_to_handle.get(&id) {
+                    let stop_cmd = uci::SessionStopCmd { session_id };
+                    let _ = self
+                        .pica_commands
+                        .send(PicaCommand::UciPacket(
+                            *handle,
+                            stop_cmd.encode_to_vec().expect("encoding succeeds"),
+                        ))
+                        .await;
+                }
+                Ok(UwbActionResult::Success)
             }
         }
     }
@@ -186,6 +200,6 @@ impl ActorService for UwbActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(self.chip_states.values().map(|state| state.chip.clone()).collect())
+        Ok(self.chip_states.read().unwrap().values().map(|state| state.chip.clone()).collect())
     }
 }

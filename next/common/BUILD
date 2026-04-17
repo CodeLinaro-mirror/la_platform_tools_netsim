@@ -9,14 +9,19 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "common",
     edition = "2021",
+    test_deps = [
+        "@rand",
+        "@regex",
+    ],
     deps = [
         "@anyhow",
         "@chrono",
-        "@env_logger",
         "@libc",
         "@log",
         "@protobuf-json-mapping",
-        "@rand",
+        "@tracing",
+        "@tracing-log",
+        "@tracing-subscriber",
         "@zip",
     ],
 )

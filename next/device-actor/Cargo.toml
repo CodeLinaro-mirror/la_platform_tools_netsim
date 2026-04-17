@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 actor-framework = { path = "../actor-framework" }
-async-trait = "0.1"
 capture-api = { path = "../capture-api" }
 device-api = { path = "../device-api" }
 futures = "0.3"
@@ -14,7 +13,8 @@ link-api = { path = "../link-api" }
 log = "0.4"
 netsim-model = { path = "../model" }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["full"] }
+
 [dev-dependencies]
-client = { path = "../client" }

@@ -1,26 +1,42 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::{ActorLifecycle, DynContext};
-use async_trait::async_trait;
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
 
 use crate::ap_actor::{ApActor, WIFI_STREAM_ID};
 
-#[async_trait]
 impl ActorLifecycle for ApActor {
     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
         log::info!("ApActor started");
     }
 
     async fn on_tick(&mut self, ctx: &mut DynContext<Self>) {
-        // Beacon generation logic
         if let Some(sink) = &self.sink {
             let interval = self.beacon_interval.unwrap_or(200);
-            for ap in self.aps.values() {
+            let now = std::time::Instant::now();
+            for ap in self.aps.values_mut() {
                 if !ap.enabled {
                     continue;
                 }
+
+                // Process asynchronous delayed queues initially
+                while let Some((time, _)) = ap.delayed_frames.front() {
+                    if now >= *time {
+                        if let Some((_, frame)) = ap.delayed_frames.pop_front() {
+                            if sink.send(frame).is_err() {
+                                log::warn!("Sink closed while transmitting delayed frame");
+                                ctx.shutdown();
+                                self.sink = None;
+                                return;
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                // Beacon generation logic
                 if let Ok(frames) = self.manager.generate_beacon(ap, interval) {
                     for frame in frames {
                         if sink.send(frame).is_err() {

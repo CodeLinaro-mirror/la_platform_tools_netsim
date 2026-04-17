@@ -1,0 +1,16 @@
+[package]
+name = "hci-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytes = "1.4"
+device-actor = { path = "../device-actor" }
+
+device-api = { path = "../device-api" }
+futures = "0.3"
+log = "0.4"
+netsim-model = { path = "../model" }
+tokio = { version = "1.28.2", features = ["full"] }
+tokio-stream = "0.1"
+tokio-util = { version = "0.7", features = ["codec"] }

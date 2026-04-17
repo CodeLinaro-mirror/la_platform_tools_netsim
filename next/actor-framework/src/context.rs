@@ -18,7 +18,7 @@ use tokio::sync::oneshot;
 use tokio_stream::{StreamMap, StreamNotifyClose};
 use tokio_util::time::{delay_queue, DelayQueue};
 
-use crate::{ActorService, BoxStream};
+use crate::{ActorService, BoxStream, BoxTypedStream};
 
 pub type TimerKey = delay_queue::Key;
 
@@ -34,8 +34,14 @@ pub trait Context<T: ActorService>: Send + 'static {
     /// Adds a new stream to be managed by the actor.
     fn add_stream(&mut self, id: T::Id, stream: BoxStream);
 
-    /// Removes a managed stream by its ID.
+    /// Removes a stream by its ID.
     fn remove_stream(&mut self, id: T::Id);
+
+    /// Adds a typed stream to the context.
+    fn add_typed_stream(&mut self, id: usize, stream: BoxTypedStream<T::TypedStream>);
+
+    /// Removes a typed stream by its ID.
+    fn remove_typed_stream(&mut self, id: usize);
 
     /// Spawns a background task to be managed by the runtime.
     ///
@@ -64,6 +70,7 @@ pub trait Context<T: ActorService>: Send + 'static {
 pub(crate) struct FrameworkContext<T: ActorService> {
     pub(crate) interval: tokio::time::Interval,
     pub(crate) streams: StreamMap<T::Id, StreamNotifyClose<BoxStream>>,
+    pub(crate) typed_streams: StreamMap<usize, StreamNotifyClose<BoxTypedStream<T::TypedStream>>>,
     pub(crate) shutdown_tx: Option<oneshot::Sender<()>>,
     pub(crate) tasks: tokio::task::JoinSet<T::Id>,
     pub(crate) task_handles: std::collections::HashMap<T::Id, tokio::task::AbortHandle>,
@@ -85,6 +92,7 @@ impl<T: ActorService> FrameworkContext<T> {
             Self {
                 interval,
                 streams: StreamMap::new(),
+                typed_streams: StreamMap::new(),
                 shutdown_tx: Some(shutdown_tx),
                 tasks: tokio::task::JoinSet::new(),
                 task_handles: std::collections::HashMap::new(),
@@ -108,6 +116,14 @@ impl<T: ActorService> Context<T> for FrameworkContext<T> {
 
     fn remove_stream(&mut self, id: T::Id) {
         self.streams.remove(&id);
+    }
+
+    fn add_typed_stream(&mut self, id: usize, stream: BoxTypedStream<T::TypedStream>) {
+        self.typed_streams.insert(id, StreamNotifyClose::new(stream));
+    }
+
+    fn remove_typed_stream(&mut self, id: usize) {
+        self.typed_streams.remove(&id);
     }
 
     fn spawn(&mut self, id: T::Id, task: BoxFuture<'static, T::Id>) {

@@ -47,7 +47,6 @@ use crate::{
 /// use actor_framework::{
 ///     ActorLifecycle, ActorService, BoxStream, Context, DynContext, ResourceActor,
 /// };
-/// use async_trait::async_trait;
 ///
 /// // Minimal Actor Definition
 /// #[derive(Clone, Debug)]
@@ -75,7 +74,6 @@ use crate::{
 ///     }
 /// }
 ///
-/// #[async_trait]
 /// impl ActorService for MyActor {
 ///     type Id = u32;
 ///     type Create = MyCreate;
@@ -84,6 +82,7 @@ use crate::{
 ///     type ActionResult = ();
 ///     type Error = MyError;
 ///     type Entity = MyActor;
+///     type TypedStream = ();
 ///
 ///     async fn handle_create(
 ///         &mut self,
@@ -132,7 +131,6 @@ use crate::{
 ///     }
 /// }
 ///
-/// #[async_trait]
 /// impl ActorLifecycle for MyActor {
 ///     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 ///     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
@@ -196,11 +194,13 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
         actor.on_start(&mut self.ctx).await;
 
         loop {
-            // Move out of select! to avoid borrow conflicts
-            let stream_fut = self.ctx.streams.next();
-            // We need to poll the timers
-            // If the delay queue is empty, peek() returns None, which is fine.
-            let timer_fut = self.ctx.timers.next();
+            // Framework Starvation Pattern:
+            // We use "Lazy Polling" (checking .is_empty() before creating futures
+            // via tokio::select! if-guards) for all event sources. This is
+            // critical to avoid "select churn" that can starve high-frequency
+            // data paths (like Bluetooth HCI) when multiple actors are running
+            // in the same Tokio runtime.
+            // DO NOT add unconditional branches to this loop.
 
             tokio::select! {
                 Some(msg) = self.receiver.recv() => {
@@ -209,14 +209,20 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
                 _ = self.ctx.interval.tick() => {
                     actor.on_tick(&mut self.ctx).await;
                 }
-                Some((id, msg_opt)) = stream_fut => {
+                // Lazy Polling: Only poll collections if they are non-empty.
+                // The `if` guard format in tokio::select! is the most efficient
+                // way to dynamically disable branches.
+                Some((id, msg_opt)) = self.ctx.streams.next(), if !self.ctx.streams.is_empty() => {
                     Self::handle_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
                 }
-                Some(expired) = timer_fut => {
+                Some((id, msg_opt)) = self.ctx.typed_streams.next(), if !self.ctx.typed_streams.is_empty() => {
+                    Self::handle_typed_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
+                }
+                Some(expired) = self.ctx.timers.next(), if !self.ctx.timers.is_empty() => {
                     let task = expired.into_inner();
                     task(&mut actor, &mut self.ctx);
                 }
-                Some(res) = self.ctx.tasks.join_next() => {
+                Some(res) = self.ctx.tasks.join_next(), if !self.ctx.tasks.is_empty() => {
                     match res {
                         Ok(id) => Self::handle_task_closed(&mut actor, id, &mut self.ctx).await,
                         Err(e) => error!("Monitored task failed: {e}"),
@@ -239,6 +245,21 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
         match msg_opt {
             Some(msg) => actor.on_stream(id, msg, ctx).await,
             Option::None => actor.on_stream_closed(id, ctx).await,
+        }
+    }
+
+    async fn handle_typed_stream_event(
+        actor: &mut T,
+        id: usize,
+        msg_opt: Option<T::TypedStream>,
+        ctx: &mut DynContext<T>,
+    ) {
+        match msg_opt {
+            Some(msg) => actor.on_typed_stream(id, msg, ctx).await,
+            None => {
+                ctx.remove_typed_stream(id);
+                actor.on_typed_stream_closed(id, ctx).await;
+            }
         }
     }
 

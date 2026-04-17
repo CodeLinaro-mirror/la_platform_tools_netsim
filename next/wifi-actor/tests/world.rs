@@ -39,6 +39,8 @@ pub struct World {
     // Injector for AP packets
     pub ap_injector: mpsc::UnboundedSender<Bytes>,
     pub device_action_rx: mpsc::UnboundedReceiver<DeviceAction>,
+    pub baseline_stats: Option<netsim_proto::stats::WifiStats>,
+    pub mock_clock: std::sync::Arc<wifi_actor::stats::MockClock>,
 }
 
 #[allow(dead_code)]
@@ -58,7 +60,8 @@ impl World {
         let (slirp_runner, slirp_client) = slirp_actor::new();
         tokio::spawn(slirp_runner.run(slirp_actor_impl));
 
-        let ap_actor_impl = ApActor::new();
+        let shared_keys = Arc::new(ap_actor::shared::SharedKeyStore::new());
+        let ap_actor_impl = ApActor::new(shared_keys.clone());
 
         let (ap_runner, ap_client_base) = ResourceActor::new(32);
         tokio::spawn(ap_runner.run(ap_actor_impl));
@@ -97,7 +100,7 @@ impl World {
         });
 
         // Initialize the DeviceClient with the mock.
-        let device_client = client::DeviceClient::new(Box::new(mock_device));
+        let device_client = device_actor::DeviceClient::new(Box::new(mock_device));
 
         // Create ApClient with interceptor to capture the downlink sink
         let (capture_tx, mut capture_rx) = mpsc::unbounded_channel();
@@ -114,14 +117,24 @@ impl World {
             ApClient::new_with_interceptor(ap_client_base, ap_client_interceptor);
         let spying_ap_client_arc = Arc::new(spying_ap_client.clone());
 
+        let mock_clock = std::sync::Arc::new(wifi_actor::stats::MockClock::new());
+
         let wifi_actor_impl = if let Some(gw) = gateway {
-            WifiActor::new_with_gateway(Some(spying_ap_client_arc.clone()), gw, device_client)
+            WifiActor::new_with_gateway(
+                Some(spying_ap_client_arc.clone()),
+                gw,
+                device_client,
+                shared_keys.clone(),
+                mock_clock.clone(),
+            )
         } else {
             WifiActor::new(
                 Some(spying_ap_client_arc.clone()),
                 Some(slirp_client),
                 device_client,
                 None,
+                shared_keys.clone(),
+                mock_clock.clone(),
             )
         };
 
@@ -147,6 +160,8 @@ impl World {
             chips: Vec::new(),
             ap_injector,
             device_action_rx: device_rx,
+            baseline_stats: None,
+            mock_clock,
         }
     }
 
@@ -192,14 +207,13 @@ impl World {
         let id = ChipId(id_val);
 
         let params = ChipCreate {
-            id,
             device_id: DeviceId(1),
             packet_stream: Some(packet_stream),
             packet_sink: Some(packet_sink),
             config,
         };
 
-        self.wifi_client.create(params).await.expect("Failed to create chip");
+        self.wifi_client.create(id, params).await.expect("Failed to create chip");
         let created_id = id_val;
 
         let src_mac = [0x00, 0x00, 0x00, 0x00, 0x00, created_id as u8];
@@ -262,7 +276,8 @@ impl World {
         let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
         let bssid = MacAddress::new(src_mac);
         let ieee80211 =
-            Ieee80211::from_ieee8023(&Bytes::from(eth), bssid, FrameDirection::FromAp).unwrap();
+            Ieee80211::from_ieee8023(&Bytes::from(eth), bssid, FrameDirection::FromAp, 100)
+                .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
 
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP packet");
@@ -277,6 +292,7 @@ impl World {
             &Bytes::from(eth),
             bssid,
             netsim_packets::ieee80211::FrameDirection::FromAp,
+            100,
         )
         .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
@@ -294,6 +310,7 @@ impl World {
             &Bytes::from(eth),
             bssid,
             netsim_packets::ieee80211::FrameDirection::FromAp,
+            100,
         )
         .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
@@ -324,6 +341,7 @@ impl World {
             bssid: MacAddress::new(bssid),
             duration_id: 0,
             seq_ctrl: 0,
+            qos_ctrl: None,
             protected: 0,
             order: 0,
             more_frags: 0,
@@ -370,6 +388,7 @@ impl World {
             bssid: MacAddress::new(bssid),
             duration_id: 0,
             seq_ctrl: 0,
+            qos_ctrl: None,
             protected: 0,
             order: 0,
             more_frags: 0,
@@ -481,6 +500,7 @@ impl World {
             bssid: MacAddress::new(bssid),
             duration_id: 0,
             seq_ctrl: 0,
+            qos_ctrl: None,
             protected: 0,
             order: 0,
             more_frags: 0,
@@ -515,6 +535,20 @@ impl World {
 
         let msg =
             wrap_ethernet_in_hwsim(&eth, &bssid_p2p, &mdns_multicast, &sender_mac, 2412).unwrap();
+        self.chips[sender_idx].sink_tx.send(Bytes::from(msg)).await.unwrap();
+    }
+
+    pub async fn when_chip_transmits_infra_mdns(&mut self, sender_idx: usize, payload: &str) {
+        let sender_mac = self.chips[sender_idx].mac;
+        let mdns_multicast = [0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB]; // IPv4 mDNS
+
+        let eth = Self::create_ethernet_frame(&sender_mac, &mdns_multicast, payload.as_bytes());
+
+        // Infra Context: Use AP BSSID.
+        let ap_bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+        // The packet goes to the AP (dest_hwsim_addr = ap_bssid)
+        let msg = wrap_ethernet_in_hwsim(&eth, &ap_bssid, &ap_bssid, &sender_mac, 2412).unwrap();
         self.chips[sender_idx].sink_tx.send(Bytes::from(msg)).await.unwrap();
     }
 
@@ -572,6 +606,65 @@ impl World {
             }
         }
     }
+
+    pub async fn when_global_stats_are_captured(&mut self) {
+        self.baseline_stats = Some(self.wifi_client.get_global_stats_proto().await.unwrap());
+    }
+
+    pub async fn when_chip_transmits_malformed_packet(&mut self, chip_idx: usize) {
+        self.chips[chip_idx].sink_tx.send(bytes::Bytes::from(vec![0x00, 0x01])).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+
+    pub async fn then_client_errors_increased_by(&self, expected_increase: i32) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert_eq!(
+            final_stats.client_errors(),
+            self.baseline_stats.as_ref().unwrap().client_errors() + expected_increase
+        );
+    }
+
+    pub async fn then_frame_errors_increased_by(&self, expected_increase: i32) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert_eq!(
+            final_stats.frame_errors(),
+            self.baseline_stats.as_ref().unwrap().frame_errors() + expected_increase
+        );
+    }
+
+    pub async fn then_hostapd_frames_tx_increased_by(&mut self, expected_increase: i32) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert_eq!(
+            final_stats.hostapd_frames_tx(),
+            self.baseline_stats.as_ref().unwrap().hostapd_frames_tx() + expected_increase
+        );
+        // refresh baseline since test_hostapd_and_network_tx_stats does sequential
+        // checks
+        self.baseline_stats = Some(final_stats);
+    }
+
+    pub async fn then_network_packets_tx_increased_by(&mut self, expected_increase: i32) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert_eq!(
+            final_stats.network_packets_tx(),
+            self.baseline_stats.as_ref().unwrap().network_packets_tx() + expected_increase
+        );
+        self.baseline_stats = Some(final_stats);
+    }
+
+    pub async fn then_max_upload_throughput_is_greater_than(&mut self, expected_min: f32) {
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert!(
+            final_stats.max_upload_throughput() > expected_min,
+            "max_upload_throughput {} is not greater than {}",
+            final_stats.max_upload_throughput(),
+            expected_min
+        );
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -591,11 +684,13 @@ impl wifi_actor::gateway::GatewayTrait for MockGateway {
         &self,
         chip_id: netsim_model::chip::ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> bool {
-        use zerocopy::IntoBytes;
-        let bytes = ieee80211.encode_to_vec().unwrap();
+    ) -> Result<usize, wifi_actor::error::WifiError> {
+        let bytes = ieee80211
+            .encode_to_vec()
+            .map_err(|e| wifi_actor::error::WifiError::Frame(e.to_string()))?;
+        let len = bytes.len();
         self.outgoing_packets.lock().unwrap().push((chip_id, bytes::Bytes::from(bytes)));
-        true
+        Ok(len)
     }
 
     fn should_handle(&self, _chip_id: netsim_model::chip::ChipId) -> bool {

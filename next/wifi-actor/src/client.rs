@@ -7,20 +7,29 @@ use netsim_model::{
     client_error::ClientError,
     stats::NetsimRadioStats,
 };
+use netsim_proto::protobuf::Message;
 
 use crate::wifi_actor::WifiActor;
 
-#[derive(Clone, Debug)]
-pub struct WifiClient(ResourceClient<WifiActor>);
+#[derive(Clone)]
+pub struct WifiClient {
+    pub(crate) inner: Box<dyn actor_framework::ActorClient<WifiActor>>,
+}
+impl std::fmt::Debug for WifiClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WifiClient").finish_non_exhaustive()
+    }
+}
 
 impl WifiClient {
     pub fn new(client: ResourceClient<WifiActor>) -> Self {
-        Self(client)
+        Self { inner: Box::new(client) }
     }
 
-    pub fn debug_trait_check(&self) {
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<Self>();
+    /// Creates a new WifiClient with a custom internal client (e.g. for
+    /// mocking).
+    pub fn from_client(client: Box<dyn actor_framework::ActorClient<WifiActor>>) -> Self {
+        Self { inner: client }
     }
 
     pub async fn set_rf_state(&self, id: ChipId, enabled: bool) -> Result<(), ClientError> {
@@ -29,18 +38,32 @@ impl WifiClient {
             enabled: Some(enabled),
             ..Default::default()
         };
-        self.0.update(id, patch).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
+        self.inner.update(id, patch).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
+    }
+
+    pub async fn get_global_stats_proto(
+        &self,
+    ) -> Result<netsim_proto::stats::WifiStats, ClientError> {
+        match self.inner.perform_action(None, crate::wifi_actor::WifiReq::GetGlobalStats).await {
+            Ok(crate::wifi_actor::WifiResponse::GlobalStats(stats)) => Ok(*stats),
+            Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
+            Err(e) => Err(ClientError::Send(e.to_string())),
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl ChipClient for WifiClient {
-    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
-        self.0.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
+    async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
+        self.inner
+            .create_with_id(id, params)
+            .await
+            .map(|_| ())
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {
-        self.0
+        self.inner
             .get(id)
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?
@@ -48,15 +71,15 @@ impl ChipClient for WifiClient {
     }
 
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
-        self.0.update(id, patch).await.map_err(|e| ClientError::Send(e.to_string()))
+        self.inner.update(id, patch).await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn delete(&self, id: ChipId) -> Result<(), ClientError> {
-        self.0.delete(id).await.map_err(|e| ClientError::Send(e.to_string()))
+        self.inner.delete(id).await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError> {
-        match self.0.perform_action(None, crate::wifi_actor::WifiReq::GetStatistics).await {
+        match self.inner.perform_action(None, crate::wifi_actor::WifiReq::GetStatistics).await {
             Ok(crate::wifi_actor::WifiResponse::Statistics(stats)) => Ok(stats),
             Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
             Err(e) => Err(ClientError::Send(e.to_string())),
@@ -64,19 +87,28 @@ impl ChipClient for WifiClient {
     }
 
     async fn read_count_for_testing(&self) -> Result<usize, ClientError> {
-        self.0.list().await.map(|chips| chips.len()).map_err(|e| ClientError::Send(e.to_string()))
+        self.inner
+            .list()
+            .await
+            .map(|chips| chips.len())
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        self.0.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
+        self.inner.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
-        self.0
+        self.inner
             .perform_action(Some(id), crate::wifi_actor::WifiReq::Reset { id })
             .await
             .map(|_| ())
             .map_err(|e| ClientError::Send(e.to_string()))
+    }
+
+    async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
+        let stats = self.get_global_stats_proto().await?;
+        stats.write_to_bytes().map(Some).map_err(|e| ClientError::Recv(e.to_string()))
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {
