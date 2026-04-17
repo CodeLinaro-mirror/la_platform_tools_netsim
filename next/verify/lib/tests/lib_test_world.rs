@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use features::{assert_json_matches_table, table_to_struct, DataTable, Features};
+use tracing_subscriber::fmt::try_init;
 use verify_macros::{step, step_module};
 
 /// # Example World
@@ -283,7 +284,7 @@ async fn test_features_methods_success() {
 
 #[tokio::test]
 async fn test_features_background() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     features
@@ -303,7 +304,7 @@ async fn test_features_background() {
 
 #[tokio::test]
 async fn test_features_outline() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     features.execute_from_memory(include_str!("features/outline.feat"), &mut world).await.unwrap();
@@ -358,7 +359,7 @@ async fn test_features_missing_step() {
 
 #[tokio::test]
 async fn test_features_tags_filtering() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (mut features, mut world) = setup_features_world();
 
     // Set filter to @wip
@@ -374,7 +375,7 @@ async fn test_features_tags_filtering() {
 
 #[tokio::test]
 async fn test_features_data_table() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     let feature = include_str!("features/data_table.feat");
@@ -396,7 +397,7 @@ async fn test_features_data_table() {
 
 #[tokio::test]
 async fn test_features_types() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     let feature = include_str!("features/types.feat");
@@ -433,7 +434,7 @@ async fn test_features_types() {
 
 #[tokio::test]
 async fn test_features_enum() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (mut features, mut world) = setup_features_world();
 
     let feature_content = include_str!("features/enum.feat");
@@ -446,7 +447,7 @@ async fn test_features_enum() {
 
 #[tokio::test]
 async fn test_features_network() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
     features.execute_from_memory(include_str!("features/network.feat"), &mut world).await.unwrap();
 
@@ -458,7 +459,7 @@ async fn test_features_network() {
 
 #[tokio::test]
 async fn test_features_background_table() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     features
@@ -481,7 +482,7 @@ async fn test_features_background_table() {
 
 #[tokio::test]
 async fn test_features_methods_success_file() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     features
@@ -494,7 +495,7 @@ async fn test_features_methods_success_file() {
 
 #[tokio::test]
 async fn test_features_outline_table() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     features

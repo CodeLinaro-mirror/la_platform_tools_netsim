@@ -44,7 +44,7 @@ rust_test(
     ],
     deps = [
         ":lib",
-        "//next/testing:netsim-testing",
+        "//next/packets",
         "@anyhow",
         "@bytes",
         "@futures",
