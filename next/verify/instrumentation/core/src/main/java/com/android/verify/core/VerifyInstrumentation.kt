@@ -56,6 +56,10 @@ open class VerifyInstrumentation : Instrumentation() {
     return result
   }
 
+  private fun registerCoreSteps() {
+    registry?.register("When I fetch feature observables") { _ -> getCollectedObservables() }
+  }
+
   @Volatile protected var controlOutputStream: java.io.DataOutputStream? = null
   private val logExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
@@ -128,6 +132,7 @@ open class VerifyInstrumentation : Instrumentation() {
     }
 
     registerSteps()
+    registerCoreSteps()
 
     if (controlPort > 0) {
       java.lang
