@@ -31,6 +31,8 @@ enum RunnerMessage {
     ExecuteStep { id: i32, step: String },
     GetSteps { id: i32 },
     Quit { id: i32 },
+    StartScenario { id: i32 },
+    StopScenario { id: i32 },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -489,6 +491,24 @@ impl AndroidDevice {
         }
         anyhow::bail!("Internal error: did not receive Response message");
     }
+
+    pub async fn start_scenario(&mut self) -> anyhow::Result<()> {
+        let id = self.next_msg_id;
+        self.next_msg_id += 1;
+        let cmd = RunnerMessage::StartScenario { id };
+        self.send_message(&cmd).await?;
+        self.wait_for_response(id, 10).await?;
+        Ok(())
+    }
+
+    pub async fn stop_scenario(&mut self) -> anyhow::Result<()> {
+        let id = self.next_msg_id;
+        self.next_msg_id += 1;
+        let cmd = RunnerMessage::StopScenario { id };
+        self.send_message(&cmd).await?;
+        self.wait_for_response(id, 10).await?;
+        Ok(())
+    }
 }
 
 impl AndroidDevice {
@@ -508,7 +528,7 @@ impl AndroidDevice {
         Ok(Some(Throughput { bytes: params.payload_size, duration }))
     }
 
-    pub async fn reset_actor(&mut self) -> anyhow::Result<()> {
+    pub async fn hard_reset(&mut self) -> anyhow::Result<()> {
         let id = self.next_msg_id;
         self.next_msg_id += 1;
         let cmd = RunnerMessage::Quit { id };
@@ -531,6 +551,17 @@ impl AndroidDevice {
         std::thread::sleep(Duration::from_millis(100));
         self.launch_agent()?;
         self.wait_for_feedback().await
+    }
+
+    pub async fn reset_actor(&mut self, hard: bool) -> anyhow::Result<()> {
+        if hard {
+            self.hard_reset().await?;
+        } else if let Err(e) = self.stop_scenario().await {
+            eprintln!("WARN Failed to stop scenario during reset: {}", e);
+            // Fallback to hard reset if soft reset fails
+            self.hard_reset().await?;
+        }
+        self.start_scenario().await
     }
 
     pub fn get_label(&self) -> String {

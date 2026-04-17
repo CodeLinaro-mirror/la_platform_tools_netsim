@@ -112,7 +112,7 @@ impl features::World for TestContext {
     fn reset(&mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
             // 1. Reset all host-side actors and the simulation environment
-            let _ = self.reset_actors().await;
+            let _ = self.reset_actors(false).await;
 
             // 2. Explicitly trigger Kotlin agent reset for each device
             let keys: Vec<String> = self.android.devices.keys().cloned().collect();
@@ -303,7 +303,7 @@ impl TestContext {
         Ok(())
     }
 
-    pub async fn reset_actors(&mut self) -> Result<()> {
+    pub async fn reset_actors(&mut self, hard: bool) -> Result<()> {
         if self.is_dry_run {
             return Ok(());
         }
@@ -316,7 +316,7 @@ impl TestContext {
         client.reset(&protobuf::well_known_types::empty::Empty::new())?;
 
         for agent in self.android.devices.values_mut() {
-            agent.reset_actor().await?;
+            agent.reset_actor(hard).await?;
         }
         Ok(())
     }

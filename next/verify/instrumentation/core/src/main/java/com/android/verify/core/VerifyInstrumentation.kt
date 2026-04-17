@@ -222,6 +222,14 @@ open class VerifyInstrumentation : Instrumentation() {
                 } catch (e: Exception) {
                   sendResponse(id, "Failure", e.message ?: "Unknown error", null)
                 }
+              } else if (type == "StartScenario") {
+                val id = json.optInt("id")
+                Log.i(TAG, "Starting scenario")
+                sendResponse(id, "Success", null, null)
+              } else if (type == "StopScenario") {
+                val id = json.optInt("id")
+                Log.i(TAG, "Stopping scenario, performing cleanup")
+                sendResponse(id, "Success", null, null)
               }
             }
           } catch (e: Exception) {
