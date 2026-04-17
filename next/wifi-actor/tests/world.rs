@@ -164,12 +164,20 @@ impl World {
     }
 
     pub async fn given_an_ap(&mut self) -> u32 {
+        self.given_an_ap_with_passphrase(None).await
+    }
+
+    pub async fn given_a_secure_ap(&mut self) -> u32 {
+        self.given_an_ap_with_passphrase(Some("secretpassword".to_string())).await
+    }
+
+    async fn given_an_ap_with_passphrase(&mut self, passphrase: Option<String>) -> u32 {
         let ap_config = ap_actor::ApConfig {
             ssid: "TestAP".to_string(),
             bssid: MacAddr::from([0x02, 0x00, 0x00, 0x00, 0x00, 0x00]),
             channel: 6,
             hw_mode: netsim_model::WifiMode::G,
-            wpa_passphrase: None,
+            wpa_passphrase: passphrase,
             beacon_interval: 100,
             country_code: None,
             dtim_period: 2,
