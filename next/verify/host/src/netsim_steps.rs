@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Context, Result};
-use features;
+use features::{self, DataTable};
 use netsim_proto::{
     access_point, access_point_grpc::AccessPointServiceClient, frontend,
     frontend_grpc::FrontendServiceClient,
@@ -67,6 +67,62 @@ impl NetsimWorld {
 #[step_module]
 pub mod steps {
     use super::*;
+
+    fn evaluate_condition(key: &str, actual: &str, expected: &str) -> Result<()> {
+        if expected == "*" {
+            return Ok(());
+        }
+        if expected.starts_with(">=") {
+            let exp_val = expected[2..].parse::<f64>().context("Parse expected value")?;
+            let act_val = actual.parse::<f64>().context("Parse actual value")?;
+            anyhow::ensure!(
+                act_val >= exp_val,
+                "Expected '{}' >= {}, but got {}",
+                key,
+                exp_val,
+                act_val
+            );
+        } else if expected.starts_with(">") {
+            let exp_val = expected[1..].parse::<f64>().context("Parse expected value")?;
+            let act_val = actual.parse::<f64>().context("Parse actual value")?;
+            anyhow::ensure!(
+                act_val > exp_val,
+                "Expected '{}' > {}, but got {}",
+                key,
+                exp_val,
+                act_val
+            );
+        } else if expected.starts_with("<=") {
+            let exp_val = expected[2..].parse::<f64>().context("Parse expected value")?;
+            let act_val = actual.parse::<f64>().context("Parse actual value")?;
+            anyhow::ensure!(
+                act_val <= exp_val,
+                "Expected '{}' <= {}, but got {}",
+                key,
+                exp_val,
+                act_val
+            );
+        } else if expected.starts_with("<") {
+            let exp_val = expected[1..].parse::<f64>().context("Parse expected value")?;
+            let act_val = actual.parse::<f64>().context("Parse actual value")?;
+            anyhow::ensure!(
+                act_val < exp_val,
+                "Expected '{}' < {}, but got {}",
+                key,
+                exp_val,
+                act_val
+            );
+        } else {
+            anyhow::ensure!(
+                actual.trim() == expected.trim(),
+                "Expected '{}' to be '{}', but got '{}'",
+                key,
+                expected,
+                actual
+            );
+        }
+        Ok(())
+    }
 
     #[step("@netsim is running")]
     async fn netsim_running(w: &mut TestContext) -> Result<()> {
@@ -198,6 +254,59 @@ pub mod steps {
         let mut del_req = access_point::DeleteAccessPointRequest::new();
         del_req.id = ap.id;
         client.delete(&del_req).context("deleted AP")?;
+        Ok(())
+    }
+
+    async fn fetch_netsim_observables_internal(w: &mut TestContext) -> Result<()> {
+        if w.is_dry_run {
+            w.variables.insert("connected-devices".to_string(), "1".to_string());
+            return Ok(());
+        }
+        let (actual_count, version) = {
+            let client = w.get_or_create_grpc_client().context("got grpc client")?;
+            let resp = client.list_device(&Empty::new()).context("listed devices")?;
+            let version_resp = client.get_version(&Empty::new()).context("got version")?;
+            (resp.devices.len(), version_resp.version)
+        };
+        w.variables.insert("connected-devices".to_string(), actual_count.to_string());
+        w.variables.insert("netsim-version".to_string(), version);
+        Ok(())
+    }
+
+    #[step(r#"@netsim observes "([^"]+)" should be "([^"]+)""#)]
+    async fn then_netsim_observes_is(
+        w: &mut TestContext,
+        key: String,
+        expected_value: String,
+    ) -> Result<()> {
+        w.log_step(
+            "@netsim",
+            "THEN",
+            &format!("observes \"{}\" should be \"{}\"", key, expected_value),
+        );
+        fetch_netsim_observables_internal(w).await?;
+        let actual_value = w
+            .variables
+            .get(&key)
+            .ok_or_else(|| anyhow::anyhow!("Observable '{}' not found", key))?;
+        evaluate_condition(&key, actual_value, &expected_value)?;
+        Ok(())
+    }
+
+    #[step(r#"@netsim observes:?"#)]
+    async fn then_netsim_observes_table(w: &mut TestContext, table: DataTable) -> Result<()> {
+        w.log_step("@netsim", "THEN", "observes multiple fields");
+        fetch_netsim_observables_internal(w).await?;
+        let expected_fields = features::vertical_table_to_map(&table);
+
+        for (key, expected_value) in expected_fields {
+            w.log_step("@netsim", "INFO", &format!("  | {} | {} |", key, expected_value));
+            let actual_value = w
+                .variables
+                .get(&key)
+                .ok_or_else(|| anyhow::anyhow!("Observable '{}' not found", key))?;
+            evaluate_condition(&key, actual_value, &expected_value)?;
+        }
         Ok(())
     }
 }

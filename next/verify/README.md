@@ -108,13 +108,43 @@ To expose feature counters on the Android guest:
 
 ### Host-side
 
-On the host, you can fetch and verify these counters using Gherkin steps:
+On the host, you can verify these counters using Gherkin steps:
 
 ```gherkin
   Scenario: Verify P2P connection count
-    When @avd fetch feature observables
     Then @avd observes "wifi-p2p-connections" should be "1"
 ```
+
+### Host-side (gRPC)
+
+You can also query `netsimd` directly via gRPC to check for host-side observables, such as the number of connected devices and version:
+
+```gherkin
+  Scenario: Verify connected device count
+    Then @netsim observes "connected-devices" should be ">=1"
+```
+
+You can also use Data Tables to assert on multiple observables at once, and use operators like `>=` or `*` (wildcard for existence):
+
+```gherkin
+  Scenario: Verify device count and valid version
+    Then @netsim observes:
+      | connected-devices | >=1     |
+      | netsim-version    | *       |
+```
+
+This step uses the `ListDevice` gRPC call to count the devices registered in `netsimd`.
+
+### Supported Operators for Observables
+
+When asserting on observables (either via single line or Data Table), you can use the following operators in the expected value string:
+
+- **`*`**: Wildcard. Asserts that the key exists (any value is acceptable).
+- **`>=N`**: Asserts that the value parsed as a number is greater than or equal to N.
+- **`>N`**: Asserts that the value parsed as a number is greater than N.
+- **`<=N`**: Asserts that the value parsed as a number is less than or equal to N.
+- **`<N`**: Asserts that the value parsed as a number is less than N.
+- **Plain String**: Asserts exact string equality.
 
 ---
 

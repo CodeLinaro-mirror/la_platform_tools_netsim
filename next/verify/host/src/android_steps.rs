@@ -692,7 +692,7 @@ pub mod steps {
         generic_execution(w, "@avd:1".to_string(), step, 60).await
     }
 
-    #[step(r#"((?:@avd|@android|@netsim)(?::\S+)?)\s*observes "([^"]+)" should be "([^"]+)""#)]
+    #[step(r#"((?:@avd|@android)(?::\S+)?)\s*observes "([^"]+)" should be "([^"]+)""#)]
     async fn then_observed_feature_should_be(
         w: &mut TestContext,
         actor: String,
@@ -728,9 +728,7 @@ pub mod steps {
         Ok(())
     }
 
-    #[step(
-        r#"((?:@avd|@android|@netsim)(?::\S+)?)\s*observes "([^"]+)" should be greater than (\d+)"#
-    )]
+    #[step(r#"((?:@avd|@android)(?::\S+)?)\s*observes "([^"]+)" should be greater than (\d+)"#)]
     async fn then_observed_feature_should_be_greater_than(
         w: &mut TestContext,
         actor: String,
