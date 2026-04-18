@@ -146,6 +146,18 @@ When asserting on observables (either via single line or Data Table), you can us
 - **`<N`**: Asserts that the value parsed as a number is less than N.
 - **Plain String**: Asserts exact string equality.
 
+### Ergonomic Tags for Automatic Verification
+
+To reduce boilerplate, you can tag a scenario with `@verify_observed:<feature_name>`. The framework will automatically verify that the feature was observed (count > 0) at the end of the scenario.
+
+```gherkin
+  @verify_observed:wifi-p2p-connections
+  Scenario: Verify P2P connection count with tags
+    When @avd fetch feature observables
+```
+
+This removes the need to add an explicit `Then` step for verification.
+
 ---
 
 ## Getting Started

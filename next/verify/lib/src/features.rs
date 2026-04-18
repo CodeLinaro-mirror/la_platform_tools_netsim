@@ -293,6 +293,23 @@ impl<W: ?Sized> Features<W> {
             self.run_hooks(&self.before_hooks, world).await?;
             self.run_background(&feature.background, world).await?;
             self.run_steps(&scenario.steps, world, &[]).await?;
+
+            // Automatic verification based on tags
+
+            let mut observables_fetched = false;
+            for tag in &scenario.tags {
+                let tag_str = tag.strip_prefix("@").unwrap_or(tag);
+                if let Some(feature_name) = tag_str.strip_prefix("verify_observed:") {
+                    if !observables_fetched {
+                        world.fetch_observables().await?;
+                        observables_fetched = true;
+                    }
+                    let verify_step =
+                        format!("@netsim observes \"{}\" should be \">0\"", feature_name);
+                    self.run_with_context(&verify_step, world, StepContext::default()).await?;
+                }
+            }
+
             Ok(())
         }
         .await;

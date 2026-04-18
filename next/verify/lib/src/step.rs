@@ -23,13 +23,21 @@ pub trait World: Send + Sync {
     fn reset(&mut self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
         Box::pin(async {})
     }
+
+    /// Fetches all observables from guest and host subsystems and populates
+    /// variables.
+    fn fetch_observables(
+        &mut self,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + '_>> {
+        Box::pin(async { Ok(()) })
+    }
 }
 
 /// A trait for async steps that can be executed by the Features engine.
 ///
 /// This trait is automatically implemented for any function that matches the
 /// signature: `fn(&mut W, Vec<String>, StepContext) -> Pin<Box<dyn
-/// Future<Output = ()> + Send>>`.
+/// Future<Output = anyhow::Result<()>> + Send>>`.
 pub trait AsyncStep<W: ?Sized>: Send + Sync {
     fn call<'a>(
         &'a self,

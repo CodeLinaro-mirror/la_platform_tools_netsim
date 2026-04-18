@@ -12,7 +12,8 @@
 
 pub use std::collections::{HashMap, HashSet};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use protobuf::well_known_types::empty::Empty;
 
 use crate::{
     adb_steps::AdbWorld,
@@ -22,8 +23,6 @@ use crate::{
     scenarios,
     types::{ClientParams, Throughput, LABEL_WIDTH},
 };
-
-// ...
 
 /// Orchestrates Android integration tests by discovering devices and running
 /// the suite.
@@ -126,6 +125,40 @@ impl features::World for TestContext {
             }
         })
     }
+
+    fn fetch_observables(
+        &mut self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            // 1. Fetch from Kotlin agents (Android side)
+            let keys: Vec<String> = self.android.devices.keys().cloned().collect();
+            for key in keys {
+                if self.is_dry_run {
+                    self.variables.insert("mock-feature".to_string(), "42".to_string());
+                } else {
+                    let android = self
+                        .get_android_actor_mut(&key)
+                        .ok_or_else(|| anyhow::anyhow!("Android actor '{}' not found", key))?;
+                    let vars = android.execute_step("fetch feature observables", 60).await?;
+                    self.variables.extend(vars);
+                }
+            }
+
+            // 2. Fetch from Netsim (Host side)
+            if self.is_dry_run {
+                self.variables.insert("connected-devices".to_string(), "1".to_string());
+            } else {
+                let client = self.get_or_create_grpc_client().context("got grpc client")?;
+                let resp = client.list_device(&Empty::new()).context("listed devices")?;
+                let version_resp = client.get_version(&Empty::new()).context("got version")?;
+                self.variables
+                    .insert("connected-devices".to_string(), resp.devices.len().to_string());
+                self.variables.insert("netsim-version".to_string(), version_resp.version);
+            }
+
+            Ok(())
+        })
+    }
 }
 
 impl TestContext {
@@ -216,8 +249,6 @@ impl TestContext {
             anyhow::bail!("Unknown actor: {}", actor)
         }
     }
-
-    // Removed execute_step helper
 
     /// Run a benchmark with multiple samples and log iperf3-style output.
     pub async fn run_benchmark(
