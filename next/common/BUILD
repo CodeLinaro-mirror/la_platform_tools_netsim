@@ -18,6 +18,7 @@ netsim_rust_library(
         "@chrono",
         "@libc",
         "@protobuf-json-mapping",
+        "@thiserror",
         "@tracing",
         "@tracing-log",
         "@tracing-subscriber",

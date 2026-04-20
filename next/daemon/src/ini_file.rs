@@ -22,7 +22,8 @@ use std::{
     str::FromStr,
 };
 
-use tracing::{debug, warn};
+use common::util::ini_file::{parse_ini, IniParserOptions};
+use tracing::warn;
 
 // --- INI File Management ---
 
@@ -225,43 +226,13 @@ impl IniFile {
     /// containing '=', quotes, or escape sequences. Comments start with '#'
     /// or ';'.
     fn read_shared(&self) -> io::Result<HashMap<String, String>> {
-        debug!("read_shared called for {}", self.path.display());
-        let mut data = HashMap::new();
         let content = fs::read_to_string(&self.path)?;
-        debug!("Content: {:#?}", content);
-        for (line_num, line) in content.lines().enumerate() {
-            let trimmed = line.trim();
-            debug!("Line {}: '{}'", line_num + 1, trimmed);
-            if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
-                debug!("  Skipping comment/empty");
-                continue;
-            }
-            if let Some((key, value)) = trimmed.split_once('=') {
-                let key = key.trim();
-                let value = value.trim();
-                if key.is_empty() {
-                    debug!("  Error: Empty key");
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!(
-                            "Malformed line {} in INI file: Empty key '{}'",
-                            line_num + 1,
-                            line
-                        ),
-                    ));
-                }
-                debug!("  Parsed: {} = {}", key, value);
-                data.insert(key.to_string(), value.to_string());
-            } else {
-                debug!("  Error: Missing =");
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Malformed line {} in INI file: Missing '=' '{}'", line_num + 1, line),
-                ));
-            }
-        }
-        debug!("read_shared success: {:?}", data);
-        Ok(data)
+        parse_ini(&content, &IniParserOptions { strict: true }).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("In `{}`: {}", self.path.display(), e),
+            )
+        })
     }
 
     /// Reads and parses the INI file into a NetsimConfig struct.

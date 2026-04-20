@@ -181,7 +181,7 @@ impl DeviceActor {
 
         let mut stats_list = Vec::new();
         for device_entry in self.devices.values_mut() {
-            for chip in &device_entry.device.chips {
+            for chip in &mut device_entry.device.chips {
                 let stream_stats = device_entry.chip_stats.get(&ChipId(chip.id));
                 let duration_secs =
                     stream_stats.map(|s| s.start_time.elapsed().as_secs()).unwrap_or(0);
@@ -189,6 +189,41 @@ impl DeviceActor {
                 if let Some(client_stats) =
                     chip_stats_map.get(&ChipId(chip.id)).filter(|v| !v.is_empty())
                 {
+                    // Update in-memory model with fresh stats
+                    for stat in client_stats {
+                        match (&mut chip.variant, stat.kind) {
+                            (
+                                Some(netsim_model::ChipVariant::Wifi(wifi)),
+                                netsim_model::RadioKind::Wifi,
+                            ) => {
+                                wifi.radio.tx_count = stat.tx_count;
+                                wifi.radio.rx_count = stat.rx_count;
+                            }
+                            (
+                                Some(netsim_model::ChipVariant::Uwb(uwb)),
+                                netsim_model::RadioKind::Uwb,
+                            ) => {
+                                uwb.radio.tx_count = stat.tx_count;
+                                uwb.radio.rx_count = stat.rx_count;
+                            }
+                            (
+                                Some(netsim_model::ChipVariant::Bluetooth(bt)),
+                                netsim_model::RadioKind::BluetoothLowEnergy,
+                            ) => {
+                                bt.low_energy.tx_count = stat.tx_count;
+                                bt.low_energy.rx_count = stat.rx_count;
+                            }
+                            (
+                                Some(netsim_model::ChipVariant::Bluetooth(bt)),
+                                netsim_model::RadioKind::BluetoothClassic,
+                            ) => {
+                                bt.classic.tx_count = stat.tx_count;
+                                bt.classic.rx_count = stat.rx_count;
+                            }
+                            _ => {}
+                        }
+                    }
+
                     let mut chip_stats: Vec<netsim_model::NetsimRadioStats> = client_stats
                         .iter()
                         .map(|stat| {

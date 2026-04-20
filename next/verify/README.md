@@ -1,118 +1,117 @@
-## Verify: A Software Validation Framework
+# Verify: A Software Validation Framework
 
 > "Vibe, but verify." &mdash; Ronald Reagan
 
-Verify is a way to bridge **Human Intentions** and **Generative AI Sofware**
-using a set of tools and libraries.
+`verify` is a HDD-style orchestration tool designed to validate networking scenarios between the Host and Guest devices (Android Emulators).
 
-### 1. The Gherkin Language
+## Key Features
 
-This is a domain specific language widely used by the BDD community that allows
-you to define the features of your software in plain English.
-
-The current implementation uses Gherkin syntax with these additions:
-
-1. Actors, where the steps are run, can be specified in the feature file.
-2. Parameters can be expanded in steps using interpolation.
-
-### 1. Actors
-
-A specific environment or state where the Intention step is executed. Actors are
-specified in the feature file:
-
-```
-Feature: mDNS Service Discovery
-
-  Scenario: Basic mDNS Service Discovery
-    GIVEN @actor_name is advertising an mDNS service: "foo"
-    WHEN @actor_name discovers mDNS services
-    THEN @actor_name should discover the mDNS {service}
-```
-
-#### Actor Ecosystem
-
-The runner will register an initial set of actors:
-
-| Actor     | Description              |
-| :-------- | :----------------------- |
-| `adb`     | The Android Debug Bridge |
-| `network` | The netsim network       |
-| `host`    | The host machine         |
-
-[NYI] The `adb` actor will register the following actors:
-
-| Actor    | Description                             |
-| :------- | :-------------------------------------- |
-| `avd`    | The first AVD running                   |
-| `phone`  | The first AVD running property `phone`  |
-| `tablet` | The first AVD running property `tablet` |
-| `watch`  | The first AVD running property `watch`  |
-| `tv`     | The first AVD running property `tv`     |
-
-If more than one actor of the type is registered, the actor will be named
-`avd:1`, `avd:2`, etc.
-
-[NYI] The `network` actor will register the following actors:
-
-| Actor    | Description                                  |
-| :------- | :------------------------------------------- |
-| `ap`     | The first Access Point running property `ap` |
-| `beacon` | The first Beacon running property `beacon`   |
-
-If more than one actor of the type is registered, the actor will be named
-`ap:SSID`, `ap:SSID2`, etc.
-
-- _Example:_ "User uploads a 1GB file via the API."
-
-### 2. Sharing Parameters across actors
-
-Interpolation is used to share parameters across actors. For example, if an
-actor creates a TCP port, it can be shared with another actor using
-interpolation.
-
-```
-GIVEN @actor_name creates echo service on tcp_port
-THEN @actor_name should echo {tcp_port}
-```
-
-TODO: currently the actor decides the names of the parameter keys which may be a
-problem in multi-actor scenarios.
-
-### 3. Codegen
-
-Each line in the feature file is translated into a Rust function call.
-
-The codegen reads the feature files and generates the Rust code that will be
-used to run the tests.
-
-Comments are used to provide additional information to the codegen.
-
-Example:
-
-### 4. Agents
-
-The piece of code that lives inside the system being tested.
-
-- It **Executes** the steps of the Scene.
-- It **Validates** that the Rails weren't crossed.
-- In a backend, the Agent might be a sidecar container. In a library, it might
-  be a wrapper.
-
-### 5. The Runner
-
-The piece of code that lives inside the system being tested.
-
-- It **Executes** the steps of the Scene.
-- It **Validates** that the Rails weren't crossed.
-- In a backend, the Agent might be a sidecar container. In a library, it might
-  be a wrapper.
+- **Multi-Device Orchestration**: Discovers available emulators via ADB and manages the test environment lifecycle.
+- **Narrative HDD Output**: Provides an aligned console output using `GIVEN / WHEN / THEN / INFO` tags for readability.
+- **VBS Integration**: Pairs with a companion `vbs` (Verify Bundled Steps) APK running as a service on Android guests.
+- **Variable Resolution**: Supports template placeholders like `{port}`, `{target}`, and `{gateway_target}` that resolve during execution.
 
 ---
 
-## Why this works for _any_ Software
+## Core Concepts
 
-| Testing Level   | How Intentions handles it                                                                                 |
-| --------------- | --------------------------------------------------------------------------------------------------------- |
-| **Integration** | The **Agent** probes internal APIs and state to prove the logic is sound.                                 |
-| **End-to-End**  | The **Agent** interacts with the external interface (API, CLI, or UI) to prove the experience is correct. |
-| **Distributed** | Multiple **Agents** coordinate across different servers/services to prove the system-wide intent.         |
+### 1. The Gherkin Language
+
+Verify uses Gherkin syntax to define test features in text.
+
+The implementation adds:
+- **Actors**, where the steps are run, can be specified in the feature file using the `@` prefix (e.g., `@Host`, `@Small_Phone`).
+- **Parameters** can be expanded in steps using interpolation (e.g., `{port}`).
+
+### 2. Actors
+
+An Actor represents a specific environment or state where the intention step is executed.
+
+#### Actor Ecosystem
+The runner registers an initial set of actors:
+- `@host`: The Linux host machine running the orchestrator.
+- `@adb`: The ADB Bridge (used for environment setup/discovery logs).
+- `@network`: The netsim network simulation environment.
+- `@AVD#N` or `@DeviceName`: Guest devices (Android Emulators) running the VBS service.
+
+### 3. Codegen
+
+Each line in the feature file is translated into a Rust function call. The codegen reads the feature files and generates the Rust glue code that will be used to run the tests.
+
+### 4. VBS (Verify Bundled Steps)
+
+VBS is the component that lives inside the system being tested (the Android Guest).
+- It **Executes** the steps of the scene on the device.
+- It **Validates** that project constraints are not violated.
+
+### 5. The Runner
+
+The piece of code that runs on the host.
+- It **Executes** the steps of the scene by orchestrating actors.
+- It **Validates** overall test success.
+
+---
+
+## Architecture and Extensibility
+
+`verify` is designed to be extensible so that new projects can create their own validation suites by reusing the core framework and combining shared steps.
+
+### Android Side (Guest)
+
+The Android instrumentation code is split into two parts:
+- **`core`**: Contains the base `VerifyInstrumentation` and `StepRegistry`. It is agnostic to specific step implementations.
+- **`instrumentation/vbs`**: Contains the Verify Bundled Steps (specific implementations for WiFi, UWB, etc.) and extends `VerifyInstrumentation` to register them.
+
+New projects can create their own instrumentation APK by depending on `core`, reusing steps from `vbs` if needed, and adding their own custom steps.
+
+### Host Side
+
+The host-side Rust code follows a similar pattern:
+- **`lib`**: The core HDD engine and execution loop.
+- **Runner**: A concrete binary that pulls in `lib` and specific step libraries to execute tests.
+
+> [!NOTE]
+> To further support extensibility, the `verify_host_lib` library could be split into more granular libraries (e.g., for ADB, Android, and Netsim steps) for future projects to use.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+To build and run the complete E2E test suite, you need:
+- **Android SDK**: Installed and configured.
+- **Environment Variables**: `ANDROID_HOME` pointing to your SDK path.
+- **Build Tools**: Android `build-tools` installed.
+
+### Building
+
+Build the orchestrator and the E2E runner:
+
+```bash
+bazel build //next/verify/runner:runner
+```
+
+### Running E2E Tests
+
+To run the full E2E test suite, including daemon and emulator lifecycle management, use the provided script:
+
+```bash
+# Recommended way to run E2E tests
+tools/netsim/next/verify/scripts/verify_run.sh
+```
+
+For more details on running E2E tests, see the workflow documentation at `tools/netsim/next/verify/workflows/verify_run.md`.
+
+### CLI Usage
+
+If you run the `verify` binary directly:
+
+```bash
+./verify run --apk-path vbs.apk --netsim-path netsimd
+```
+
+Options:
+- `--android-home <PATH>`: Path to the Android SDK root.
+- `--apk-path <PATH>`: Path to the `vbs.apk`.
+- `--netsim-path <PATH>`: Path to `netsimd` binary.

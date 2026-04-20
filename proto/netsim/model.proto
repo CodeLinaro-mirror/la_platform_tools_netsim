@@ -82,7 +82,7 @@ message Chip {
   // BleBeacon has numerous configurable fields.
   // Address, AdvertiseSetting, AdvertiseData.
   message BleBeacon {
-    // Advertise Settigns dictate how the beacon functions on the netwwork.
+    // Advertise Settings dictate how the beacon functions on the network.
     message AdvertiseSettings {
       // How often the beacon sends an advertising packet
       //
@@ -137,7 +137,7 @@ message Chip {
       }
       // Whether the beacon will respond to scan requests.
       bool scannable = 5;
-      // Limit adveritising to a given amoutn of time.
+      // Limit advertising to a given amount of time.
       uint64 timeout = 6;
     }
 
@@ -168,7 +168,7 @@ message Chip {
     Bluetooth bt = 1;
     // BD_ADDR address
     string address = 2;
-    // Settings on how beacon functions
+    // Settings on how the beacon functions
     AdvertiseSettings settings = 3;
     // Advertising Data
     AdvertiseData adv_data = 4;

@@ -18,6 +18,7 @@ pub(crate) mod avd_config;
 pub(crate) mod ini_file;
 pub(crate) mod logger;
 pub(crate) mod netsimd;
+pub(crate) mod test_beacons;
 pub(crate) mod version;
 
 pub use args::{Args, ClapWifiMode};

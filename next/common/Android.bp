@@ -16,6 +16,7 @@ rust_library_host {
         "libchrono",
         "liblibc",
         "libprotobuf_json_mapping",
+        "libthiserror",
         "libtracing",
         "libtracing_log",
         "libtracing_subscriber",

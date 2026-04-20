@@ -83,16 +83,14 @@ impl fmt::Display for Displayer<&model::Chip> {
                 let radio = ble_beacon.bt.low_energy.as_ref().unwrap_or_default();
                 let beacon_width = 16 + width;
 
-                if self.verbose || !radio.state.unwrap_or_default() {
-                    writeln!(f)?;
-                    write!(
-                        f,
-                        "{:indent$}{:beacon_width$} {}",
-                        "",
-                        format!("beacon-ble ({}):", self.value.name),
-                        Displayer::new(radio, self.verbose),
-                    )?;
-                }
+                writeln!(f)?;
+                write!(
+                    f,
+                    "{:indent$}{:beacon_width$} {}",
+                    "",
+                    format!("beacon-ble ({}):", self.value.name),
+                    Displayer::new(radio, self.verbose),
+                )?;
 
                 if self.verbose {
                     writeln!(f)?;
@@ -101,54 +99,40 @@ impl fmt::Display for Displayer<&model::Chip> {
             }
             Some(model::chip::Chip::Bt(bt)) => {
                 if let Some(ble) = bt.low_energy.as_ref() {
-                    if self.verbose || !ble.state.unwrap_or_default() {
-                        writeln!(f)?;
-                        write!(
-                            f,
-                            "{:indent$}{:width$}{}",
-                            "",
-                            "ble: ",
-                            Displayer::new(ble, self.verbose),
-                        )?;
-                    }
+                    writeln!(f)?;
+                    write!(
+                        f,
+                        "{:indent$}{:width$}{}",
+                        "",
+                        "ble: ",
+                        Displayer::new(ble, self.verbose)
+                    )?;
                 };
 
                 if let Some(classic) = bt.classic.as_ref() {
-                    if self.verbose || !classic.state.unwrap_or_default() {
-                        writeln!(f)?;
-                        write!(
-                            f,
-                            "{:indent$}{:width$}{}",
-                            "",
-                            "classic: ",
-                            Displayer::new(classic, self.verbose),
-                        )?;
-                    }
+                    writeln!(f)?;
+                    write!(
+                        f,
+                        "{:indent$}{:width$}{}",
+                        "",
+                        "classic: ",
+                        Displayer::new(classic, self.verbose)
+                    )?;
                 };
             }
             Some(model::chip::Chip::Wifi(wifi)) => {
-                if self.verbose || !wifi.state.unwrap_or_default() {
-                    writeln!(f)?;
-                    write!(
-                        f,
-                        "{:indent$}{:width$}{}",
-                        "",
-                        "wifi: ",
-                        Displayer::new(wifi, self.verbose)
-                    )?;
-                }
+                writeln!(f)?;
+                write!(
+                    f,
+                    "{:indent$}{:width$}{}",
+                    "",
+                    "wifi: ",
+                    Displayer::new(wifi, self.verbose)
+                )?;
             }
             Some(model::chip::Chip::Uwb(uwb)) => {
-                if self.verbose || !uwb.state.unwrap_or_default() {
-                    writeln!(f)?;
-                    write!(
-                        f,
-                        "{:indent$}{:width$}{}",
-                        "",
-                        "uwb: ",
-                        Displayer::new(uwb, self.verbose)
-                    )?;
-                }
+                writeln!(f)?;
+                write!(f, "{:indent$}{:width$}{}", "", "uwb: ", Displayer::new(uwb, self.verbose))?;
             }
             _ => {
                 if self.verbose {
@@ -328,13 +312,11 @@ impl fmt::Display for Displayer<&model::chip::Radio> {
         let count_width = 9;
         write!(f, "{:indent$}{}", "", Displayer::new(&self.value.state, self.verbose),)?;
 
-        if self.verbose {
-            write!(
-                f,
-                "| rx_count: {:count_width$} | tx_count: {:count_width$}",
-                self.value.rx_count, self.value.tx_count
-            )?
-        }
+        write!(
+            f,
+            "| rx_count: {:count_width$} | tx_count: {:count_width$}",
+            self.value.rx_count, self.value.tx_count
+        )?;
 
         Ok(())
     }

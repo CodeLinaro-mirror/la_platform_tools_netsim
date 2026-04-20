@@ -160,8 +160,14 @@ pub mod tests {
     fn test_get_discovery_directory() {
         let _locked = ENV_MUTEX.lock();
         // Remove all environment variable
-        std::env::remove_var(DISCOVERY.root_env);
-        std::env::remove_var("TMPDIR");
+        // SAFETY: Test code
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe {
+            std::env::remove_var(DISCOVERY.root_env);
+            std::env::remove_var("TMPDIR");
+        }
 
         // Test with no environment variables
         let actual = get_discovery_directory();
@@ -170,26 +176,42 @@ pub mod tests {
         assert_eq!(actual, expected);
 
         // Test with root_env variable
-        std::env::set_var(DISCOVERY.root_env, "/netsim-test");
+        // SAFETY: Test code
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe { std::env::set_var(DISCOVERY.root_env, "/netsim-test") };
         let actual = get_discovery_directory();
         let mut expected = PathBuf::from("/netsim-test");
         expected.push(DISCOVERY.subdir);
         assert_eq!(actual, expected);
 
         // Test with TMPDIR variable
-        std::env::set_var("TMPDIR", "/tmpdir");
+        // SAFETY: Test code
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe { std::env::set_var("TMPDIR", "/tmpdir") };
         assert_eq!(get_discovery_directory(), PathBuf::from("/tmpdir"));
     }
 
     #[test]
     fn test_get_instance_and_instance_name() {
         // Set NETSIM_INSTANCE environment variable
-        std::env::set_var("NETSIM_INSTANCE", "100");
+        // SAFETY: Test code
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe { std::env::set_var("NETSIM_INSTANCE", "100") };
         assert_eq!(get_instance(Some(0)), 100);
         assert_eq!(get_instance(Some(1)), 100);
 
         // Remove NETSIM_INSTANCE environment variable
-        std::env::remove_var("NETSIM_INSTANCE");
+        // SAFETY: Test code
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe { std::env::remove_var("NETSIM_INSTANCE") };
         assert_eq!(get_instance(None), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(0)), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(1)), 1);
@@ -215,12 +237,20 @@ pub mod tests {
         assert_eq!(get_hci_port(1, u16::MIN), 1);
 
         // Remove NETSIM_HCI_PORT with hci_port_flag = 0
-        std::env::remove_var("NETSIM_HCI_PORT");
+        // SAFETY: Test code
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe { std::env::remove_var("NETSIM_HCI_PORT") };
         assert_eq!(get_hci_port(0, 0), DEFAULT_HCI_PORT);
         assert_eq!(get_hci_port(0, 1), DEFAULT_HCI_PORT + 1);
 
         // Set NETSIM_HCI_PORT
-        std::env::set_var("NETSIM_HCI_PORT", "100");
+        // SAFETY: Test code
+        // Note: set_var and remove_var have always been unsound when called in
+        // a multi-threaded context. They are marked unsafe in edition 2024.
+        // See https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
+        unsafe { std::env::set_var("NETSIM_HCI_PORT", "100") };
         assert_eq!(get_hci_port(0, 0), 100);
         assert_eq!(get_hci_port(0, u16::MAX), 100);
     }

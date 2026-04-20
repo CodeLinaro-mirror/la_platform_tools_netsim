@@ -27,6 +27,7 @@ DAEMON_SRCS = [
     "src/lib.rs",
     "src/logger.rs",
     "src/netsimd.rs",
+    "src/test_beacons.rs",
     "src/version.rs",
 ]
 

@@ -28,8 +28,7 @@ impl Medium {
         msg: &HwsimMsg,
         out_queue: &mut Vec<(u32, Bytes)>,
     ) -> WifiResult<()> {
-        let packet =
-            msg.encode_to_vec().map_err(|e| WifiError::Internal(Box::from(e.to_string())))?.into();
+        let packet = msg.encode_to_vec().map_err(|e| WifiError::Internal(Box::from(e)))?.into();
         out_queue.push((client_id, packet));
         Ok(())
     }
@@ -89,24 +88,43 @@ impl Medium {
         if self.debug.debug_no_traffic || self.debug.debug_no_network {
             return Ok(());
         }
-        // TODO: Support multiple APs (BSSIDs).
-        // Currently, we assume a single BSSID globally.
-        // To support multiple APs, we need to store which BSSID each Station is
-        // associated with (e.g. Map<StationMAC, BSSID>) and look it up here
-        // using the packet's Destination MAC.
-        let bssid = self
-            .key_store
-            .get_bssid()
-            .unwrap_or(netsim_packets::MacAddress::new([0, 0, 0, 0, 0, 0]));
+        // Try to determine the destination MacAddress from the Ethernet header
+        let dest_mac_bytes: [u8; 6] = packet[0..6].try_into().map_err(|_| {
+            WifiError::Internal(Box::from("Failed to parse Ethernet Destination MAC"))
+        })?;
+        let dest_mac = netsim_packets::MacAddress::new(dest_mac_bytes);
+
+        if dest_mac.is_broadcast() || dest_mac.is_multicast() {
+            let bssids = self.key_store.bssids.read().unwrap().clone();
+            for bssid in bssids {
+                let seq = self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if let Ok(ieee80211) = netsim_packets::Ieee80211::from_ieee8023_qos(
+                    packet,
+                    bssid,
+                    FrameDirection::FromAp,
+                    true,
+                    seq,
+                ) {
+                    let _ = self.route_infra_packet(ieee80211, out_queue);
+                }
+            }
+            return Ok(());
+        }
+
+        let Some(bssid) = self.key_store.get_station_bssid(&dest_mac) else {
+            tracing::warn!("Dropping unicast packet to unknown station {}", dest_mac);
+            return Ok(());
+        };
 
         let seq = self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let ieee80211 =
-            Ieee80211::from_ieee8023_qos(packet, bssid, FrameDirection::FromAp, true, seq)
-                .map_err(|e| {
-                    WifiError::Internal(Box::from(format!(
-                        "Failed to process IEEE 802.3 response: {e}"
-                    )))
-                })?;
+        let ieee80211 = netsim_packets::Ieee80211::from_ieee8023_qos(
+            packet,
+            bssid,
+            FrameDirection::FromAp,
+            true,
+            seq,
+        )
+        .map_err(|e| WifiError::Internal(Box::from(e)))?;
         self.route_infra_packet(ieee80211, out_queue)
     }
 
@@ -148,8 +166,8 @@ impl Medium {
             }
         }
 
-        let is_m2u_conversion =
-            (targets.len() > 1 || dest_addr.is_multicast()) && self.key_store.get_bssid().is_some();
+        let is_m2u_conversion = (targets.len() > 1 || dest_addr.is_multicast())
+            && !self.key_store.bssids.read().unwrap().is_empty();
 
         for dest in targets {
             if self.enabled(dest.client_id)? {

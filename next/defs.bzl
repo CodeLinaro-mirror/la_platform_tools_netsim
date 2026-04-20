@@ -11,7 +11,24 @@ to provide standard targets for testing, linting, and formatting.
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
-NETSIM_CLIPPY_FLAGS = ["-Dwarnings"]
+NETSIM_CLIPPY_FLAGS = [
+    "-Dwarnings",
+    # Async / Concurrency
+    "-Dclippy::large_futures",
+    "-Dclippy::rc_mutex",
+    "-Dclippy::mutex_atomic",
+    # Performance
+    "-Dclippy::large_stack_arrays",
+    "-Dclippy::large_types_passed_by_value",
+    # FFI / Safety
+    "-Dclippy::ptr_as_ptr",
+    "-Dclippy::cast_ptr_alignment",
+    "-Dclippy::undocumented_unsafe_blocks",
+    # Code Hygiene
+    "-Dclippy::dbg_macro",
+    "-Dclippy::match_wild_err_arm",
+    "-Dclippy::cloned_instead_of_copied",
+]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.
 def _netsim_rustfmt_test_impl(ctx):
@@ -47,7 +64,7 @@ netsim_rustfmt_test = rule(
     implementation = _netsim_rustfmt_test_impl,
     attrs = {
         "targets": attr.label_list(providers = [[rust_common.crate_info]]),
-        "config": attr.label(allow_single_file = True, default = Label("//next:rustfmt.toml")),
+        "config": attr.label(allow_single_file = True, default = Label("//next:rustfmt_stable.toml")),
     },
     test = True,
     toolchains = ["@rules_rust//rust:toolchain_type"],

@@ -1,0 +1,35 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "verify_host_lib",
+    testonly = True,
+    srcs = glob(["src/**/*.rs"]),
+    edition = "2021",
+    proc_macro_deps = [
+        "@async-trait",
+        "//next/verify/macros:verify_macros",
+    ],
+    deps = [
+        "//next/common",
+        "//next/verify/lib",
+        "//proto",
+        "@anyhow",
+        "@clap",
+        "@futures",
+        "@grpcio",
+        "@protobuf-rust",
+        "@regex",
+        "@serde",
+        "@serde_json",
+        "@tokio",
+        "@tokio-util",
+        "@tracing",
+        "@tracing-subscriber",
+        "@which",
+    ],
+)
