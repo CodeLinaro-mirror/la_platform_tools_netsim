@@ -3,11 +3,7 @@
 
 use actor_framework::{ActorService, DynContext};
 use futures::{SinkExt, StreamExt};
-use netsim_model::{
-    chip::{Chip, ChipId, ChipVariant, Radio},
-    wifi::Wifi,
-    ChipKind,
-};
+use netsim_model::{Chip, ChipId, ChipVariant, Radio, Wifi};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -17,8 +13,8 @@ use crate::{
 
 impl ActorService for WifiActor {
     type Id = ChipId;
-    type Create = netsim_model::chip::ChipCreate;
-    type Update = netsim_model::chip::ChipUpdate;
+    type Create = netsim_model::ChipCreate;
+    type Update = netsim_model::ChipUpdate;
     type Action = WifiReq;
     type ActionResult = WifiResponse;
     type Error = WifiError;
@@ -66,20 +62,11 @@ impl ActorService for WifiActor {
         );
 
         // Register stream with context for polling
-        let mapped_stream = stream.map(move |packet| bytes::Bytes::from(packet));
+        let mapped_stream = stream.map(move |packet| packet);
         ctx.add_stream(id, Box::pin(mapped_stream));
 
-        let chip = Chip {
-            id: id.0,
-            device_id: params.device_id,
-            kind: ChipKind::WIFI,
-            variant: Some(netsim_model::chip::ChipVariant::Wifi(Default::default())),
-            name: params.config.name,
-            manufacturer: params.config.manufacturer,
-            product_name: params.config.product_name,
-            pose: params.pose,
-            ..Default::default()
-        };
+        let mut chip = params.chip;
+        chip.id = id.0;
         self.active_chips.insert(id, chip.clone());
         self.initial_chips.insert(id, chip);
 
@@ -147,10 +134,10 @@ impl ActorService for WifiActor {
                 for (id, chip) in &self.active_chips {
                     let rx_count = self.medium.get_rx_count(id.0);
                     let tx_count = self.medium.get_tx_count(id.0);
-                    let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                    let mut radio_stats = netsim_model::NetsimRadioStats::default();
                     radio_stats.id = id.0;
                     radio_stats.name = chip.name.clone();
-                    radio_stats.kind = netsim_model::stats::RadioKind::Wifi;
+                    radio_stats.kind = netsim_model::RadioKind::Wifi;
                     radio_stats.tx_count = tx_count as u64;
                     radio_stats.rx_count = rx_count as u64;
                     stats.push(radio_stats);

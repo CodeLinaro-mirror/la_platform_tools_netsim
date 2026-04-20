@@ -291,6 +291,7 @@ impl PacketBuilder {
     }
 
     /// Adds a TCP header.
+    #[allow(clippy::too_many_arguments)]
     pub fn tcp(
         mut self,
         src_port: u16,

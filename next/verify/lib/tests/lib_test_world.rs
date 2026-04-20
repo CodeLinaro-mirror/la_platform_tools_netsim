@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use features::{assert_json_matches_table, table_to_struct, DataTable, Features};
-use netsim_packets::transport::udp::UdpHeader;
+use netsim_packets::UdpHeader;
 use zerocopy::IntoBytes;
 
 /// # Example World
@@ -171,7 +171,7 @@ async fn given_udp_echo_server(w: &mut TestWorld, _port: u16) {
 
 /// STEP: When I send a UDP packet with:
 async fn when_send_packet(w: &mut TestWorld, table: DataTable) {
-    let json_header: netsim_packets::transport::udp_json::JsonUdpHeader =
+    let json_header: netsim_packets::JsonUdpHeader =
         table_to_struct(&table).expect("Failed to parse UdpHeader");
     let header: UdpHeader =
         json_header.try_into().expect("Failed to convert JsonUdpHeader to UdpHeader");
@@ -189,7 +189,7 @@ async fn then_receive_packet(w: &mut TestWorld, table: DataTable) {
     // Parse the packet
     let (header, _payload) =
         UdpHeader::parse(last_packet.as_slice()).expect("Failed to parse UDP header");
-    let packet_json = netsim_packets::transport::udp_json::to_json(&header);
+    let packet_json = netsim_packets::to_json(&header);
 
     assert_json_matches_table(&packet_json, &table);
 

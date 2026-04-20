@@ -14,10 +14,7 @@ use actor_framework::FrameworkError;
 use bytes::Bytes;
 use capture_actor::{CaptureActor, CaptureClient, CaptureError};
 use capture_api::{CaptureCreate, CaptureInfo, CaptureSender, Direction};
-use netsim_model::{
-    chip::{ChipId, ChipKind},
-    client_error::ClientError,
-};
+use netsim_model::{ChipId, ChipKind, ClientError};
 
 static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 

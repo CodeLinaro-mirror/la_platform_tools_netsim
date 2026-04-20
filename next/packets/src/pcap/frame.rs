@@ -15,6 +15,7 @@ use zerocopy::{
 use crate::pcap::ng::{EnhancedPacketBlock, InterfaceDescriptionBlock, SectionHeaderBlock};
 
 pub const PCAP_MAGIC_NUMBER: u32 = 0xa1b2c3d4;
+#[cfg(test)]
 pub const PCAPNG_MAGIC_NUMBER: u32 = 0x1A2B3C4D;
 pub const PCAPNG_MAGIC_NUMBER_SWAPPED: u32 = 0x4D3C2B1A;
 pub const PCAPNG_SECTION_HEADER_BLOCK_TYPE: u32 = 0x0A0D0D0A;

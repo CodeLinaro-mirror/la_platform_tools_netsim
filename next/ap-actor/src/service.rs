@@ -84,7 +84,7 @@ impl ActorService for ApActor {
             }
             for mac_str in ap_u.force_disconnect {
                 // Find MAC for this string
-                let mac = match mac_str.parse::<netsim_packets::ethernet::MacAddr>() {
+                let mac = match mac_str.parse::<netsim_packets::MacAddr>() {
                     Ok(m) => m,
                     Err(_) => {
                         warn!("Invalid MAC address in force_disconnect: {}", mac_str);

@@ -1,11 +1,8 @@
 // Copyright 2024 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::chip::WifiMode;
-use netsim_packets::ieee80211::{
-    action::{category, public_action},
-    management_subtype, Ieee80211,
-};
+use netsim_model::WifiMode;
+use netsim_packets::{category, management_subtype, public_action, Ieee80211, MacAddr};
 use zerocopy::IntoBytes;
 
 use crate::world;
@@ -24,7 +21,7 @@ async fn test_ftm_ranging_exchange() {
     let mut world = world::ApWorld::new().await;
     let config = ap_actor::ApConfig {
         ssid: "ftm_test_ap".to_string(),
-        bssid: netsim_packets::ethernet::MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]),
+        bssid: MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]),
         channel: 6,
         hw_mode: WifiMode::G,
         wpa_passphrase: None,
@@ -38,7 +35,7 @@ async fn test_ftm_ranging_exchange() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: netsim_model::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config.clone()).await;
@@ -57,13 +54,13 @@ async fn test_ftm_ranging_exchange() {
     let mut req_frame = Vec::new();
 
     // Header
-    let header = netsim_packets::ieee80211::MacHeader3Addr {
-        frame_control: netsim_packets::ieee80211::FrameControl::new(0x00D0), // Action
+    let header = netsim_packets::MacHeader3Addr {
+        frame_control: netsim_packets::FrameControl::new(0x00D0), // Action
         duration_id: zerocopy::U16::new(0),
         addr1: config.bssid,
         addr2: client_mac,
         addr3: config.bssid,
-        sequence_control: netsim_packets::ieee80211::SequenceControl::new(0),
+        sequence_control: netsim_packets::SequenceControl::new(0),
     };
     req_frame.extend_from_slice(header.as_bytes());
 

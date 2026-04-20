@@ -1,59 +1,56 @@
 // Copyright 2024 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::{Deserialize, Serialize};
-
-use crate::pcap::{PcapHeader, PcapRecordHeader};
-
-#[derive(Serialize, Deserialize)]
-pub struct PcapHeaderJson {
-    magic_number: String,
-    version_major: u16,
-    version_minor: u16,
-    thiszone: i32,
-    sigfigs: u32,
-    snaplen: u32,
-    network: u32,
-}
-
-impl From<PcapHeader> for PcapHeaderJson {
-    fn from(header: PcapHeader) -> Self {
-        Self {
-            magic_number: format!("{:#x}", header.magic_number.get()),
-            version_major: header.version_major.get(),
-            version_minor: header.version_minor.get(),
-            thiszone: header.thiszone.get(),
-            sigfigs: header.sigfigs.get(),
-            snaplen: header.snaplen.get(),
-            network: header.network.get(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PcapRecordHeaderJson {
-    ts_sec: u32,
-    ts_usec: u32,
-    incl_len: u32,
-    orig_len: u32,
-}
-
-impl From<PcapRecordHeader> for PcapRecordHeaderJson {
-    fn from(header: PcapRecordHeader) -> Self {
-        Self {
-            ts_sec: header.ts_sec.get(),
-            ts_usec: header.ts_usec.get(),
-            incl_len: header.incl_len.get(),
-            orig_len: header.orig_len.get(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use serde::{Deserialize, Serialize};
     use zerocopy::{byteorder::LittleEndian, U16, U32};
 
-    use super::*;
+    use crate::pcap::{PcapHeader, PcapRecordHeader};
+
+    #[derive(Serialize, Deserialize)]
+    pub struct PcapHeaderJson {
+        magic_number: String,
+        version_major: u16,
+        version_minor: u16,
+        thiszone: i32,
+        sigfigs: u32,
+        snaplen: u32,
+        network: u32,
+    }
+
+    impl From<PcapHeader> for PcapHeaderJson {
+        fn from(header: PcapHeader) -> Self {
+            Self {
+                magic_number: format!("{:#x}", header.magic_number.get()),
+                version_major: header.version_major.get(),
+                version_minor: header.version_minor.get(),
+                thiszone: header.thiszone.get(),
+                sigfigs: header.sigfigs.get(),
+                snaplen: header.snaplen.get(),
+                network: header.network.get(),
+            }
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct PcapRecordHeaderJson {
+        ts_sec: u32,
+        ts_usec: u32,
+        incl_len: u32,
+        orig_len: u32,
+    }
+
+    impl From<PcapRecordHeader> for PcapRecordHeaderJson {
+        fn from(header: PcapRecordHeader) -> Self {
+            Self {
+                ts_sec: header.ts_sec.get(),
+                ts_usec: header.ts_usec.get(),
+                incl_len: header.incl_len.get(),
+                orig_len: header.orig_len.get(),
+            }
+        }
+    }
 
     #[test]
     fn test_pcap_header_from() {

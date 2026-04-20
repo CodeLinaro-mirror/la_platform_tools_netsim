@@ -20,19 +20,19 @@ use crate::netlink::{nl80211_attr::NlAttrHdr, nl80211_util};
 /// attributes.
 #[derive(Debug)]
 pub enum JsonError {
-    SerdeJsonError(serde_json::Error),
-    HexParseError(hex::FromHexError),
-    ConversionError(String),
+    SerdeJson(serde_json::Error),
+    HexParse(hex::FromHexError),
+    Conversion(String),
 }
 
 impl fmt::Display for JsonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            JsonError::SerdeJsonError(e) => {
+            JsonError::SerdeJson(e) => {
                 write!(f, "JSON serialization/deserialization error: {}", e)
             }
-            JsonError::HexParseError(e) => write!(f, "Hex parsing error: {}", e),
-            JsonError::ConversionError(s) => write!(f, "Conversion error: {}", s),
+            JsonError::HexParse(e) => write!(f, "Hex parsing error: {}", e),
+            JsonError::Conversion(s) => write!(f, "Conversion error: {}", s),
         }
     }
 }
@@ -41,13 +41,13 @@ impl std::error::Error for JsonError {}
 
 impl From<serde_json::Error> for JsonError {
     fn from(err: serde_json::Error) -> Self {
-        JsonError::SerdeJsonError(err)
+        JsonError::SerdeJson(err)
     }
 }
 
 impl From<hex::FromHexError> for JsonError {
     fn from(err: hex::FromHexError) -> Self {
-        JsonError::HexParseError(err)
+        JsonError::HexParse(err)
     }
 }
 
@@ -89,7 +89,7 @@ impl TryFrom<&JsonNlAttrHdr> for NlAttrHdr {
     }
 }
 
-/// Inner fields for `JsonNlAttribute`, mimicking `tshark`-like layer objects.
+#[cfg(test)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonNlAttributeFields {
     #[serde(flatten)]
@@ -98,14 +98,14 @@ pub struct JsonNlAttributeFields {
     pub payload_hex: String,
 }
 
-/// A `serde`-compatible, `tshark`-like representation of a Netlink attribute.
-/// This structure creates a top-level "nl_attr" key.
+#[cfg(test)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonNlAttribute {
     #[serde(rename = "nl_attr")]
     pub fields: JsonNlAttributeFields,
 }
 
+#[cfg(test)]
 impl JsonNlAttribute {
     /// Creates a `JsonNlAttribute` from an `NlAttrHdr` and its payload bytes.
     pub fn from_parts(hdr: &NlAttrHdr, payload: &[u8]) -> Self {
@@ -126,14 +126,13 @@ impl JsonNlAttribute {
     }
 }
 
-/// Serializes an `NlAttrHdr` and its payload to a JSON string.
+#[cfg(test)]
 pub fn to_json_string(hdr: &NlAttrHdr, payload: &[u8]) -> Result<String, JsonError> {
     let json_attr = JsonNlAttribute::from_parts(hdr, payload);
     serde_json::to_string_pretty(&json_attr).map_err(JsonError::from)
 }
 
-/// Deserializes an `NlAttrHdr` and its payload from a JSON string.
-/// Returns the header and the payload as a `Vec<u8>`.
+#[cfg(test)]
 pub fn from_json_string(json_str: &str) -> Result<(NlAttrHdr, Vec<u8>), JsonError> {
     let json_attr: JsonNlAttribute = serde_json::from_str(json_str)?;
     json_attr.try_into_parts()

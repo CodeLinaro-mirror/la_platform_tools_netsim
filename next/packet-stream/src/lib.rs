@@ -47,6 +47,7 @@
 //! - **Containers**: Volume mounts or port forwarding
 
 // Benchmark module moved to packetstream-bins crate
+//!
 //! Netsim Packet Stream
 //!
 //! This crate provides the core transport and streaming abstractions for

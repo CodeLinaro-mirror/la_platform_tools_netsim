@@ -19,7 +19,7 @@ pub const DEFAULT_WIFI_BSSID: &str = "02:15:b2:00:00:00";
 ///
 /// This enum maps 1:1 with the expected "hw_mode" configurations
 /// used by hostapd and typically exposed via CLI or configuration files.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum WifiMode {
     /// 802.11a (5 GHz)
     #[serde(rename = "a")]
@@ -29,6 +29,7 @@ pub enum WifiMode {
     B,
     /// 802.11g (2.4 GHz)
     #[serde(rename = "g")]
+    #[default]
     G,
     /// 802.11n (Wi-Fi 4)
     #[serde(rename = "n")]
@@ -39,12 +40,6 @@ pub enum WifiMode {
     /// 802.11ax (Wi-Fi 6)
     #[serde(rename = "ax")]
     Ax,
-}
-
-impl Default for WifiMode {
-    fn default() -> Self {
-        Self::G
-    }
 }
 
 impl fmt::Display for WifiMode {

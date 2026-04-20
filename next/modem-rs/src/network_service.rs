@@ -3,7 +3,7 @@
 
 // src/network_service.rs
 
-use netsim_model::cell::RegistrationStatus;
+use netsim_model::RegistrationStatus;
 
 use crate::{
     parser::Command,
@@ -18,9 +18,8 @@ pub struct NetworkService {
     signal_strength: (u8, u8), // (rssi, ber)
 }
 
-impl NetworkService {
-    /// Creates a new NetworkService.
-    pub fn new() -> Self {
+impl Default for NetworkService {
+    fn default() -> Self {
         Self {
             // This will be loaded from config later.
             operator_name: "Android Virtual Operator".to_string(),
@@ -29,7 +28,9 @@ impl NetworkService {
             signal_strength: (20, 99),
         }
     }
+}
 
+impl NetworkService {
     pub fn handle_registration_complete(&mut self) -> ExecutionResult {
         self.voice_registration = RegistrationStatus::RegisteredHome;
         self.data_registration = RegistrationStatus::RegisteredHome;

@@ -19,32 +19,30 @@ use common::{
 use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
-use grpc_server::packet_streamer::PacketStreamerService;
+use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    chip::{
-        BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
-        ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
-        UwbCreate, WifiCreate,
-    },
-    device::Pose,
-    initial_info::ChipInfo,
-    set_if_some,
+    set_if_some, BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams,
+    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, Pose,
 };
 use packet_stream::{
     transport::traits::{PacketSink, PacketStream},
     StreamAddress, Streams,
 };
+#[cfg(not(feature = "cuttlefish"))]
 use slirp_actor::SlirpClient;
 use tokio::{sync::mpsc, task::JoinSet};
 use tracing::{error, info, warn};
 
 use crate::{
     args::Args,
-    ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig},
+    ini_file::{IniFile, IniFileAccess, IniFileInitialized, IniFileUninitialized, NetsimConfig},
     logger,
     version::get_version,
 };
+
+const MAX_INIT_RETRIES: i32 = 20;
+const RETRY_DELAY: Duration = Duration::from_millis(100);
 
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
@@ -57,8 +55,9 @@ fn init_error<E: std::fmt::Display>(e: E) -> RunResult {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum StartUpMode {
-    Owner(NetsimDaemon, IniFileGuard),
+    Owner(NetsimDaemon, IniFileInitialized),
     Client(NetsimConfig),
 }
 
@@ -116,26 +115,38 @@ async fn handle_new_connection(
         chip.address = chip.id.clone();
     }
 
-    let chip_kind_params = match ChipKind::from(chip.kind) {
-        ChipKind::BLUETOOTH => ChipKindParams::Bluetooth(BluetoothCreate {
-            address: chip.address.clone(),
-            bt_properties: Default::default(),
-            mode: BluetoothMode::Device(DeviceParams {}),
-        }),
-        ChipKind::UWB => ChipKindParams::Uwb(UwbCreate::default()),
-        ChipKind::WIFI => ChipKindParams::Wifi(WifiCreate::default()),
-        ChipKind::CELLULAR => ChipKindParams::Cell(CellCreate::default()),
+    let chip_variant = match chip.kind {
+        ChipKind::BLUETOOTH => {
+            Some(netsim_model::ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+                address: chip.address.clone(),
+                bt_properties: Default::default(),
+                mode: BluetoothMode::Device(DeviceParams {}),
+                ..Default::default()
+            })))
+        }
+        ChipKind::UWB => {
+            Some(netsim_model::ChipVariant::Uwb(netsim_model::Uwb { radio: Default::default() }))
+        }
+        ChipKind::WIFI => {
+            Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
+        }
+        ChipKind::CELLULAR => {
+            Some(netsim_model::ChipVariant::Cell(netsim_model::Cell { state: "idle".to_string() }))
+        }
         kind => {
             error!("Unsupported chip kind: {:?}", kind);
             return;
         }
     };
 
-    let chip_config = ChipConfig {
+    let chip_instance = netsim_model::Chip {
+        id: 0,
+        kind: chip.kind,
         name: chip.name.clone(),
         manufacturer: chip.manufacturer.clone(),
         product_name: chip.product_name.clone(),
-        chip_kind_params,
+        variant: chip_variant,
+        ..Default::default()
     };
 
     // Convert packet_stream types to netsim_model types
@@ -151,15 +162,14 @@ async fn handle_new_connection(
         })
     }));
 
-    let api_sink: ApiPacketSink =
-        Box::pin(sink.sink_map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+    let api_sink: ApiPacketSink = Box::pin(sink.sink_map_err(io::Error::other));
 
     let request = DeviceAddChip {
         device_guid,
         packet_stream: Some(api_stream),
         packet_sink: Some(api_sink),
         device_config,
-        chip_config,
+        chip: chip_instance,
     };
 
     if let Err(e) = device_client.add_chip(request).await {
@@ -167,13 +177,15 @@ async fn handle_new_connection(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
+    enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: LinkClient,
-    ap_client: ap_actor::ApClient,
+    #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
     version: String,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
@@ -181,17 +193,19 @@ async fn setup_grpc_listener(
     let packet_streamer_service = PacketStreamerService::new(new_connection_tx);
 
     // Start the gRPC server
-    let (server, port) = grpc_server::server::start(
+    let (server, port) = grpc_server::start(
         requested_port.into(),
+        enable_cli_ui,
         device_client,
         link_client,
+        #[cfg(not(feature = "cuttlefish"))]
         ap_client,
         packet_streamer_service,
         version,
     )
     .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
-    let listener = grpc_server::packet_streamer::ChannelTransportListener {
+    let listener = grpc_server::ChannelTransportListener {
         rx: new_connection_rx,
         local_addr: StreamAddress::Grpc(std::net::SocketAddr::new(
             std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
@@ -239,16 +253,12 @@ pub struct NetsimDaemon {
     device_task: tokio::task::JoinHandle<()>,
     link_client: Box<dyn link_api::LinkClient>,
 
+    #[cfg(not(feature = "cuttlefish"))]
     slirp_client: Option<SlirpClient>,
     chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
 }
 
 impl NetsimDaemon {
-    /// Returns a reference to the DeviceClient.
-    pub fn device_client(&self) -> &DeviceClient {
-        &self.device_client
-    }
-
     /// Returns a reference to the CaptureClient.
     pub fn capture_client(&self) -> &CaptureClient {
         &self.capture_client
@@ -261,6 +271,7 @@ impl NetsimDaemon {
     /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not
     ///   acquired.
     /// - `Err(RunResult::InitializationError)`: Fatal error.
+    #[allow(clippy::new_ret_no_self)]
     pub async fn new() -> Result<StartUpMode, RunResult> {
         let discovery_dir = get_discovery_directory();
         Self::new_with_dirs(discovery_dir, Args::parse()).await
@@ -303,9 +314,9 @@ impl NetsimDaemon {
 
         // Pre-check TAP permissions if configured.
         // We do this BEFORE redirection so the user can see the error in the console.
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(feature = "cuttlefish")))]
         if let Some(ref tap_config) = wifi_tap {
-            if let Err(e) = wifi_actor::tap_gateway::TapGateway::preflight_check(tap_config) {
+            if let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config) {
                 return Err(RunResult::InitializationError(format!(
                     "TAP configuration failed: {}",
                     e
@@ -332,25 +343,36 @@ impl NetsimDaemon {
             std::env::consts::ARCH
         );
 
-        let ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
+        let mut attempts = 0;
 
-        // Attempt to acquire the singleton lock for the netsim daemon.
-        // The lock is managed by direct file locking on the netsim.ini file.
-        match ini_file.try_acquire().map_err(init_error)? {
-            // This instance is the Writer (the primary daemon).
-            IniFileAccess::Writer(ini_guard) => {
-                Self::initialize_primary_daemon(ini_guard, args).await
-            }
-            // This instance is a Reader, another daemon is already running.
-            IniFileAccess::Reader(config) => {
-                info!("Lock held by another process. Reading config: {:?}", config);
-                Ok(StartUpMode::Client(config))
+        loop {
+            let ini_file = IniFile::new_for_dir(discovery_dir.clone()).map_err(init_error)?;
+
+            // Attempt to acquire the singleton lock for the netsim daemon.
+            // The lock is managed by direct file locking on the netsim.ini file.
+            match ini_file.try_acquire().map_err(init_error)? {
+                // This instance is the Writer (the primary daemon).
+                IniFileAccess::Writer(uninitialized_guard) => {
+                    return Self::initialize_primary_daemon(uninitialized_guard, args).await;
+                }
+                // This instance is a Reader, another daemon is already running.
+                IniFileAccess::Reader(config) => {
+                    info!("Lock held by another process. Reading config: {:?}", config);
+                    return Ok(StartUpMode::Client(config));
+                }
+                IniFileAccess::Initializing => {
+                    if attempts >= MAX_INIT_RETRIES {
+                        return Err(init_error("Timed out waiting for daemon to initialize"));
+                    }
+                    attempts += 1;
+                    tokio::time::sleep(RETRY_DELAY).await;
+                }
             }
         }
     }
 
     async fn initialize_primary_daemon(
-        mut ini_guard: IniFileGuard,
+        ini_guard: IniFileUninitialized,
         args: Args,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
@@ -373,8 +395,11 @@ impl NetsimDaemon {
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
         // Setup AP Actor (Needed for gRPC)
+        #[cfg(not(feature = "cuttlefish"))]
         let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
+        #[cfg(not(feature = "cuttlefish"))]
         let (ap_runner, ap_client) = ap_actor::new();
+        #[cfg(not(feature = "cuttlefish"))]
         let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 
         // gRPC port is determined after the listener starts.
@@ -382,8 +407,10 @@ impl NetsimDaemon {
             &mut streams,
             &mut listener_addresses,
             args.grpc_port.unwrap_or(0),
+            !args.no_cli_ui,
             device_client.clone(),
             link_client.clone(),
+            #[cfg(not(feature = "cuttlefish"))]
             ap_client.clone(),
             get_version(),
         )
@@ -400,9 +427,18 @@ impl NetsimDaemon {
         tokio::spawn(hci_server::server::run(hci_port, device_client.clone()));
 
         // WebSocket server
+        let mut actual_ws_port = None;
         let websocket_port = args.ws_port.map(|p| p + instance_num - 1);
         if let Some(ws_port) = websocket_port {
-            tokio::spawn(websocket_server::server::run(ws_port, device_client.clone()));
+            match websocket_server::server::bind(ws_port) {
+                Ok(listener) => {
+                    actual_ws_port = Some(listener.local_addr().map_err(init_error)?.port());
+                    tokio::spawn(websocket_server::server::run(listener, device_client.clone()));
+                }
+                Err(e) => {
+                    error!("Failed to bind WebSocket server: {e}");
+                }
+            }
         }
 
         // Write the current daemon's information to the INI file.
@@ -412,7 +448,7 @@ impl NetsimDaemon {
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
             ("hci.port".to_string(), hci_port.to_string()),
         ]);
-        if let Some(ws_port) = websocket_port {
+        if let Some(ws_port) = actual_ws_port {
             ini_data.insert("ws.port".to_string(), ws_port.to_string());
         }
         if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
@@ -421,8 +457,8 @@ impl NetsimDaemon {
 
         // Even if stale file removal failed, we can proceed as ini_guard.write will
         // overwrite.
-        ini_guard.write(&ini_data).map_err(init_error)?;
-        info!("Wrote to INI file {}", ini_guard.path().display());
+        let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
+        info!("Wrote to INI file {}", initialized_guard.path().display());
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
@@ -430,7 +466,9 @@ impl NetsimDaemon {
 
         // Setup Wifi Server (and dependencies: AP)
         // Setup Slirp Actor
+        #[cfg(not(feature = "cuttlefish"))]
         let (slirp_runner, slirp_client) = slirp_actor::new();
+        #[cfg(not(feature = "cuttlefish"))]
         let slirp_actor_state = slirp_actor::SlirpActor::new(
             Default::default(),
             args.http_proxy.clone(),
@@ -441,6 +479,7 @@ impl NetsimDaemon {
         // (AP Actor already initialized above)
 
         // Setup Wifi Actor
+        #[cfg(not(feature = "cuttlefish"))]
         let (wifi_runner, wifi_client) = wifi_actor::new();
         // Initialize wifi_tap configuration.
         // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d" pattern for
@@ -458,13 +497,14 @@ impl NetsimDaemon {
 
         // TAP preflight check is now done in `new_with_dirs` before lock acquisition.
 
+        #[cfg(not(feature = "cuttlefish"))]
         let wifi_actor_state = wifi_actor::WifiActor::new(
             Some(Arc::new(ap_client.clone())),
             Some(slirp_client.clone()),
             device_client.clone(),
             wifi_tap,
             shared_keys.clone(),
-            Arc::new(wifi_actor::stats::SystemClock),
+            Arc::new(wifi_actor::SystemClock),
             args.forward_host_mdns,
         );
 
@@ -479,6 +519,7 @@ impl NetsimDaemon {
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
+        #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
@@ -519,8 +560,11 @@ impl NetsimDaemon {
         // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_runner.run(bt_actor_state));
+        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(wifi_runner.run(wifi_actor_state));
+        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(ap_runner.run(ap_actor_state));
+        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
@@ -532,16 +576,19 @@ impl NetsimDaemon {
         let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
-        let mut ap_config = ap_actor::ApConfig::default();
-        if let Some(ssid) = &args.wifi.wifi_ssid {
-            ap_config.ssid = ssid.clone();
-        }
-        set_if_some!(ap_config.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
-        set_if_some!(ap_config.channel, args.wifi.wifi_channel);
-        set_if_some!(ap_config.beacon_interval, args.wifi.wifi_beacon_interval);
-        set_if_some!(ap_config.hw_mode, args.wifi.wifi_mode, Into::into);
+        #[cfg(not(feature = "cuttlefish"))]
+        {
+            let mut ap_config = ap_actor::ApConfig::default();
+            if let Some(ssid) = &args.wifi.wifi_ssid {
+                ap_config.ssid = ssid.clone();
+            }
+            set_if_some!(ap_config.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
+            set_if_some!(ap_config.channel, args.wifi.wifi_channel);
+            set_if_some!(ap_config.beacon_interval, args.wifi.wifi_beacon_interval);
+            set_if_some!(ap_config.hw_mode, args.wifi.wifi_mode, Into::into);
 
-        ap_client.create_ap(Some(0), ap_config).await.expect("Failed to create default AP");
+            ap_client.create_ap(Some(0), ap_config).await.expect("Failed to create default AP");
+        }
 
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();
@@ -558,19 +605,12 @@ impl NetsimDaemon {
                 _grpc_server: Some(grpc_server),
                 device_task,
                 link_client: Box::new(link_client),
+                #[cfg(not(feature = "cuttlefish"))]
                 slirp_client: Some(slirp_client.clone()),
                 chip_clients: daemon_chip_clients,
             },
-            ini_guard,
+            initialized_guard,
         ))
-    }
-
-    /// Gets the path to the Unix Domain Socket, if one is active.
-    pub fn uds_path(&self) -> Option<PathBuf> {
-        self.listener_addresses.get("netsim_uds").and_then(|addr| match addr {
-            StreamAddress::Uds(path) => Some(path.clone()),
-            _ => None,
-        })
     }
 
     /// Gets the gRPC port, if the server is running.
@@ -585,6 +625,7 @@ impl NetsimDaemon {
         info!("Graceful shutdown requested for all actors");
 
         let link_fut = self.link_client.shutdown();
+        #[cfg(not(feature = "cuttlefish"))]
         let slirp_fut = async {
             if let Some(slirp) = &self.slirp_client {
                 if let Err(e) = slirp.shutdown().await {
@@ -592,6 +633,8 @@ impl NetsimDaemon {
                 }
             }
         };
+        #[cfg(feature = "cuttlefish")]
+        let slirp_fut = async {};
         let chips_fut = futures::future::join_all(self.chip_clients.values().map(|c| c.shutdown()));
 
         // Execute all shutdown dispatches concurrently

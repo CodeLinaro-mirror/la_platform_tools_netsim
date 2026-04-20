@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_packets::ieee80211::MacAddress;
+use netsim_packets::MacAddress;
 
 use crate::error::WifiError;
 
@@ -30,6 +30,12 @@ pub struct Client {
     pub enabled: bool,
     pub tx_count: u32,
     pub rx_count: u32,
+}
+
+impl Default for Client {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Client {

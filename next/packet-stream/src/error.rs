@@ -72,7 +72,7 @@ impl From<tokio::time::error::Elapsed> for PacketStreamError {
 
 impl From<tokio::task::JoinError> for PacketStreamError {
     fn from(err: tokio::task::JoinError) -> Self {
-        PacketStreamError::Io(std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))
+        PacketStreamError::Io(std::io::Error::other(err.to_string()))
     }
 }
 

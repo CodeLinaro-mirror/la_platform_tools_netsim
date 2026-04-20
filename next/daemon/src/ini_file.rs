@@ -22,7 +22,6 @@ use std::{
     str::FromStr,
 };
 
-use common::util::os_utils::get_discovery_directory;
 use tracing::{debug, warn};
 
 // --- INI File Management ---
@@ -34,6 +33,7 @@ const INI_FILENAME: &str = "netsim.ini";
 /// On Windows, locking the discovery file would mean it cannot be read by other
 /// processes hence the separation from [INI_FILENAME].
 const LOCK_FILENAME: &str = "netsim.ini.lock";
+const INIT_LOCK_FILENAME: &str = "netsim.ini.init.lock";
 
 /// Parsed configuration from the INI file.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -43,41 +43,111 @@ pub struct NetsimConfig {
     pub uds_path: Option<String>,
 }
 
-/// Represents a locked INI file, held by the main daemon instance.
+/// Held while initializing. Can only be used to write the INI file once.
 #[derive(Debug)]
-pub struct IniFileGuard {
+pub struct IniFileUninitialized {
+    ini_file: File,
+    init_lock_file: Option<File>,
+    lock_file: Option<File>,
     path: PathBuf,
+    init_lock_path: PathBuf,
     lock_path: PathBuf,
-    /// Locked handle to [LOCK_FILENAME] that is unlocked on drop.
-    _lock_file: File,
 }
 
-impl IniFileGuard {
-    /// Writes the given `HashMap` to the INI file, overwriting any existing
-    /// content.
-    pub fn write(&mut self, data: &HashMap<String, String>) -> io::Result<()> {
-        let file = File::create(&self.path)?;
-        let mut writer = BufWriter::new(file);
+impl IniFileUninitialized {
+    pub fn new(
+        path: PathBuf,
+        lock_path: PathBuf,
+        init_lock_path: PathBuf,
+        locked_lock_file: File,
+    ) -> io::Result<Self> {
+        let init_lock = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&init_lock_path)?;
+        init_lock.try_lock()?; // Should succeed as we are owner
+        let ini_file = OpenOptions::new().write(true).create(true).truncate(true).open(&path)?;
+
+        Ok(IniFileUninitialized {
+            ini_file,
+            init_lock_file: Some(init_lock),
+            lock_file: Some(locked_lock_file),
+            path,
+            init_lock_path,
+            lock_path,
+        })
+    }
+
+    pub fn write(mut self, data: &HashMap<String, String>) -> io::Result<IniFileInitialized> {
+        let mut writer = BufWriter::new(&mut self.ini_file);
         for (key, value) in data {
             writeln!(writer, "{key}={value}")?;
         }
-        writer.flush()
+        writer.flush()?;
+
+        // Init lock should be released but left on disk.
+        let _released_init_lock = self.init_lock_file.take();
+
+        Ok(IniFileInitialized {
+            path: self.path.clone(),
+            lock_path: self.lock_path.clone(),
+            lock_file: self.lock_file.take(),
+            init_lock_path: self.init_lock_path.clone(),
+        })
     }
 
-    /// Returns a reference to the path of the INI file.
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
 }
 
-impl Drop for IniFileGuard {
+impl Drop for IniFileUninitialized {
     fn drop(&mut self) {
-        // Remove the INI file and lock file as part of cleanup.
-        if let Err(err) = fs::remove_file(&self.path) {
-            warn!("Failed to remove {}: {err}", self.path.display());
+        if let Some(file) = self.init_lock_file.take() {
+            drop(file);
+            if let Err(err) = fs::remove_file(&self.init_lock_path) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    warn!("Failed to remove {}: {err}", self.init_lock_path.display());
+                }
+            }
         }
-        if let Err(err) = fs::remove_file(&self.lock_path) {
-            warn!("Failed to remove {}: {err}", self.lock_path.display());
+        if let Some(file) = self.lock_file.take() {
+            drop(file);
+            if let Err(err) = fs::remove_file(&self.lock_path) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    warn!("Failed to remove {}: {err}", self.lock_path.display());
+                }
+            }
+        }
+    }
+}
+
+/// Held for the lifetime of the daemon. It cannot be used to write again.
+#[derive(Debug)]
+pub struct IniFileInitialized {
+    lock_file: Option<File>,
+    path: PathBuf,
+    lock_path: PathBuf,
+    init_lock_path: PathBuf,
+}
+
+impl IniFileInitialized {
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+}
+
+impl Drop for IniFileInitialized {
+    fn drop(&mut self) {
+        if let Some(file) = self.lock_file.take() {
+            drop(file);
+            for path in [&self.path, &self.lock_path, &self.init_lock_path] {
+                if let Err(err) = fs::remove_file(path) {
+                    warn!("Failed to remove {}: {err}", path.display());
+                }
+            }
         }
     }
 }
@@ -85,10 +155,9 @@ impl Drop for IniFileGuard {
 /// Represents the access level to the INI file.
 #[derive(Debug)]
 pub enum IniFileAccess {
-    /// This instance owns the lock and can write to the file.
-    Writer(IniFileGuard),
-    /// Another instance owns the lock; this instance can only read.
+    Writer(IniFileUninitialized),
     Reader(NetsimConfig),
+    Initializing,
 }
 
 /// Manages the lifecycle of a lockable INI file used for daemon status and
@@ -96,47 +165,56 @@ pub enum IniFileAccess {
 pub struct IniFile {
     path: PathBuf,
     lock_path: PathBuf,
-    lock_file: File,
+    unlocked_lock_file: File,
 }
 
 impl IniFile {
-    /// Creates a new `IniFile` manager for the default netsim INI file.
-    pub fn new() -> io::Result<Self> {
-        let dir = get_discovery_directory();
-        Self::new_for_dir(dir)
-    }
-
     /// Creates a new `IniFile` manager for an INI file in the specified
     /// directory.
     pub fn new_for_dir(dir: PathBuf) -> io::Result<Self> {
         fs::create_dir_all(&dir)?;
         let path = dir.join(INI_FILENAME);
         let lock_path = dir.join(LOCK_FILENAME);
-        let lock_file = OpenOptions::new().read(true).write(true).create(true).open(&lock_path)?;
+        let unlocked_lock_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)?;
 
-        Ok(IniFile { path, lock_path, lock_file })
+        Ok(IniFile { path, lock_path, unlocked_lock_file })
     }
 
     /// Attempts to acquire the lock and determine the access level.
     pub fn try_acquire(self) -> io::Result<IniFileAccess> {
-        match self.lock_file.try_lock() {
-            Ok(()) => Ok(IniFileAccess::Writer(IniFileGuard {
-                path: self.path,
-                lock_path: self.lock_path,
-                _lock_file: self.lock_file,
-            })),
+        let init_lock_path = self.path.with_file_name(INIT_LOCK_FILENAME);
+        match self.unlocked_lock_file.try_lock() {
+            Ok(()) => Ok(IniFileAccess::Writer(IniFileUninitialized::new(
+                self.path,
+                self.lock_path,
+                init_lock_path,
+                self.unlocked_lock_file,
+            )?)),
             Err(TryLockError::WouldBlock) => {
-                // Lock failed, another instance is running.
-                warn!(
-                    "Failed to acquire lock on {}. Another instance may be running.",
-                    self.lock_path.display()
-                );
-                // TODO(b/487343471): Known race here where we may read an old version of the
-                // ini file. We need some sort of "ready" flag to indicate when
-                // the primary daemon has written its ini file and it can be
-                // read.
+                let init_lock_result =
+                    OpenOptions::new().read(true).write(true).truncate(false).open(&init_lock_path);
 
-                self.read_config().map(IniFileAccess::Reader)
+                match init_lock_result {
+                    Ok(init_lock) => match init_lock.try_lock() {
+                        Ok(()) => {
+                            // Initialization done, we can read
+                            drop(init_lock);
+                            self.read_config().map(IniFileAccess::Reader)
+                        }
+                        Err(TryLockError::WouldBlock) => Ok(IniFileAccess::Initializing),
+                        Err(TryLockError::Error(e)) => Err(e),
+                    },
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                        // Owner hasn't created the init lock file yet
+                        Ok(IniFileAccess::Initializing)
+                    }
+                    Err(e) => Err(e),
+                }
             }
             Err(TryLockError::Error(e)) => Err(e),
         }
@@ -232,11 +310,6 @@ impl IniFile {
 
         Ok(config)
     }
-
-    /// Returns a reference to the path of the INI file.
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
 }
 
 #[cfg(test)]
@@ -251,10 +324,10 @@ mod tests {
         let ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
 
         match ini_file.try_acquire() {
-            Ok(IniFileAccess::Writer(mut guard)) => {
+            Ok(IniFileAccess::Writer(guard)) => {
                 let mut data = HashMap::new();
                 data.insert("grpc.port".to_string(), "8554".to_string());
-                guard.write(&data).unwrap();
+                let _initialized_guard = guard.write(&data).unwrap();
 
                 let ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
                 match ini_file2.try_acquire() {

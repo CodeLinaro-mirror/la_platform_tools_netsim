@@ -6,13 +6,10 @@ use crate::{
     types::{ExecutionResult, HandledCommand},
 };
 
-#[allow(dead_code)]
-pub const MODE_ENABLE: u8 = 1;
-#[allow(dead_code)]
-pub const MODE_QUERY: u8 = 2;
+pub const _MODE_ENABLE: u8 = 1;
+pub const _MODE_QUERY: u8 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub struct CallForwardingInfo {
     pub mode: u8,
     pub number: String,
@@ -25,10 +22,6 @@ pub struct SupService {
 }
 
 impl SupService {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     // --- Pure command handlers ---
 
     fn handle_set_facility_lock(&self) -> ExecutionResult {

@@ -1,15 +1,10 @@
 // Copyright 2025-2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::chip::WifiMode;
+use netsim_model::WifiMode;
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::{
-        frame::{FrameControl, MacHeader3Addr, SequenceControl},
-        management_subtype,
-    },
+    management_subtype, FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl,
 };
-use tokio;
 use tracing::info;
 use zerocopy::IntoBytes;
 
@@ -266,7 +261,7 @@ async fn test_probe_response_ssid_mismatch() {
         if let Ok(Some(msg)) =
             tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+            if let Ok(f) = Ieee80211::decode(&msg) {
                 if f.stype() == management_subtype::BEACON {
                     continue;
                 }
@@ -322,7 +317,7 @@ async fn test_probe_response_bssid_mismatch() {
         if let Ok(Some(msg)) =
             tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+            if let Ok(f) = Ieee80211::decode(&msg) {
                 if f.stype() == management_subtype::BEACON {
                     continue;
                 }
@@ -359,7 +354,7 @@ async fn test_create_ap_with_country_and_tim() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: netsim_model::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;
@@ -430,7 +425,7 @@ async fn test_hidden_ssid() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: netsim_model::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;
@@ -482,7 +477,7 @@ async fn test_hidden_ssid() {
     frame.push(0);
     frame.push(0);
 
-    let src_id = netsim_model::chip::ChipId(123);
+    let src_id = netsim_model::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Wildcard Probe");
 
     // Drain rx for a moment to ensure NO Probe Resp (0x50)
@@ -491,7 +486,7 @@ async fn test_hidden_ssid() {
         if let Ok(Some(msg)) =
             tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+            if let Ok(f) = Ieee80211::decode(&msg) {
                 if f.stype() == management_subtype::BEACON {
                     continue;
                 }
@@ -539,7 +534,7 @@ async fn test_wmm_ie_presence() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: netsim_model::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;

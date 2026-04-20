@@ -3,7 +3,7 @@
 
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
-use netsim_packets::ieee80211::Ieee80211;
+use netsim_packets::Ieee80211;
 use tracing::{debug, info, warn};
 
 use crate::ap_actor::{ApActor, ApId, WIFI_STREAM_ID};

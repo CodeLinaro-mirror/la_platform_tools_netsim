@@ -20,10 +20,7 @@ use capture_api::{
     CaptureCreate, CaptureSender,
 };
 use futures::{SinkExt, StreamExt};
-use netsim_model::{
-    chip::{PacketSink, PacketStream},
-    ChipId, ChipKind,
-};
+use netsim_model::{ChipId, ChipKind, PacketSink, PacketStream};
 use netsim_proto::protobuf::Enum;
 use tracing::warn;
 
@@ -121,9 +118,7 @@ pub async fn create_capture_and_wrap_streams(
             let out_stream: PacketStream =
                 Box::new(wrapped_stream.filter_map(|item| futures::future::ready(Some(item))));
 
-            let out_sink: PacketSink = Box::pin(
-                wrapped_sink.sink_map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
-            );
+            let out_sink: PacketSink = Box::pin(wrapped_sink.sink_map_err(std::io::Error::other));
 
             (Some(out_stream), Some(out_sink), Some(stats))
         }
@@ -144,7 +139,7 @@ pub async fn create_capture_and_wrap_streams(
 /// for both counts and bytes, distributing them evenly (or to the first entry)
 /// as a best-effort.
 pub fn distribute_stream_stats(
-    radio_stats_list: &mut [netsim_model::stats::NetsimRadioStats],
+    radio_stats_list: &mut [netsim_model::NetsimRadioStats],
     stream_stats: &StreamStats,
 ) {
     if radio_stats_list.is_empty() {
@@ -210,9 +205,7 @@ fn saturate_cast(val: u64) -> i32 {
 }
 
 /// Converts internal Model stats to Proto stats for persistence/RPC.
-pub fn to_proto_stats(
-    m: netsim_model::stats::NetsimRadioStats,
-) -> netsim_proto::stats::NetsimRadioStats {
+pub fn to_proto_stats(m: netsim_model::NetsimRadioStats) -> netsim_proto::stats::NetsimRadioStats {
     let mut p = netsim_proto::stats::NetsimRadioStats::new();
     p.set_device_id(m.id);
     // Convert RadioKind to i32 for proto
@@ -235,7 +228,7 @@ pub fn to_proto_stats(
 /// Used for fallback when the actor is not reporting stats.
 pub fn stream_to_proto_stats(
     device_id: u32,
-    kind: netsim_model::stats::RadioKind,
+    kind: netsim_model::RadioKind,
     duration_secs: u64,
     stream_stats: &StreamStats,
 ) -> netsim_proto::stats::NetsimRadioStats {
@@ -247,11 +240,11 @@ pub fn stream_to_proto_stats(
 /// Used for fallback when the actor is not reporting stats.
 pub fn stream_to_model_stats(
     device_id: u32,
-    kind: netsim_model::stats::RadioKind,
+    kind: netsim_model::RadioKind,
     duration_secs: u64,
     stream_stats: &StreamStats,
-) -> netsim_model::stats::NetsimRadioStats {
-    let mut stats = netsim_model::stats::NetsimRadioStats::default();
+) -> netsim_model::NetsimRadioStats {
+    let mut stats = netsim_model::NetsimRadioStats::default();
     stats.id = device_id;
     stats.name = "".to_string(); // or derive from kind?
     stats.kind = kind;
@@ -265,7 +258,7 @@ pub fn stream_to_model_stats(
 
 pub fn to_proto_device_stats(
     device_id: u32,
-    info: &netsim_model::device::DeviceInfo,
+    info: &netsim_model::DeviceInfo,
 ) -> netsim_proto::stats::NetsimDeviceStats {
     let mut stats = netsim_proto::stats::NetsimDeviceStats::new();
     stats.set_device_id(device_id);

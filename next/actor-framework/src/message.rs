@@ -42,34 +42,11 @@ pub type Response<R, E> = oneshot::Sender<Result<R, E>>;
 /// a "User Create" payload to a "Product" actor.
 #[derive(Debug)]
 pub enum ResourceRequest<T: ActorService> {
-    Create {
-        params: T::Create,
-        id: Option<T::Id>,
-        respond_to: Response<T::Id, T::Error>,
-    },
-    Get {
-        id: T::Id,
-        respond_to: Response<Option<T::Entity>, T::Error>,
-    },
-    Update {
-        id: T::Id,
-        update: T::Update,
-        respond_to: Response<T::Entity, T::Error>,
-    },
-    #[allow(dead_code)]
-    Delete {
-        id: T::Id,
-        respond_to: Response<(), T::Error>,
-    },
-    Action {
-        id: Option<T::Id>,
-        action: T::Action,
-        respond_to: Response<T::ActionResult, T::Error>,
-    },
-    List {
-        respond_to: Response<Vec<T::Entity>, T::Error>,
-    },
-    Shutdown {
-        respond_to: Response<(), T::Error>,
-    },
+    Create { params: T::Create, id: Option<T::Id>, respond_to: Response<T::Id, T::Error> },
+    Get { id: T::Id, respond_to: Response<Option<T::Entity>, T::Error> },
+    Update { id: T::Id, update: T::Update, respond_to: Response<T::Entity, T::Error> },
+    Delete { id: T::Id, respond_to: Response<(), T::Error> },
+    Action { id: Option<T::Id>, action: T::Action, respond_to: Response<T::ActionResult, T::Error> },
+    List { respond_to: Response<Vec<T::Entity>, T::Error> },
+    Shutdown { respond_to: Response<(), T::Error> },
 }

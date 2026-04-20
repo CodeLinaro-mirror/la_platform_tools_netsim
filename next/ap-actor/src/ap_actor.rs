@@ -4,11 +4,9 @@
 use std::collections::HashMap;
 
 use netsim_model::{
-    ap::{DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID},
-    chip::{ApCreate, ApUpdate as ModelApUpdate, WifiMode},
-    device::Position,
+    ApCreate, ApUpdate as ModelApUpdate, Position, WifiMode, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID,
 };
-use netsim_packets::ethernet::MacAddr;
+use netsim_packets::MacAddr;
 use serde::{Deserialize, Serialize};
 
 use crate::{ieee802_11::Ieee80211Manager, shared, wpa_auth};
@@ -72,6 +70,19 @@ pub struct ApConfig {
 
 fn default_bssid() -> MacAddr {
     DEFAULT_WIFI_BSSID.parse().expect("DEFAULT_WIFI_BSSID is a valid MAC address")
+}
+
+/// Computes the unique BSSID for an AP based on its ID offset.
+pub fn compute_ap_bssid(id: ApId) -> MacAddr {
+    let mut mac = default_bssid();
+    let offset_id = (id.0 as u16) + 1;
+    mac.bytes[4..6].copy_from_slice(&offset_id.to_be_bytes());
+    mac
+}
+
+/// Returns the expected BSSID for the Built-in Default AP (ID 0).
+pub fn expected_default_ap_bssid() -> MacAddr {
+    compute_ap_bssid(ApId(0))
 }
 
 fn default_ftm_responder_enabled() -> bool {
@@ -194,7 +205,7 @@ pub enum ApReq {
         beacon_interval: std::time::Duration,
     },
     Disconnect {
-        mac: netsim_packets::ethernet::MacAddr,
+        mac: MacAddr,
     },
 }
 
@@ -228,7 +239,6 @@ pub struct ApActor {
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct ApState {
     pub id: ApId,
     pub config: ApConfig,
@@ -257,10 +267,7 @@ impl ApState {
     pub fn new(id: ApId, mut config: ApConfig) -> Self {
         let default_mac = default_bssid();
         if config.bssid.bytes == [0; 6] || config.bssid == default_mac {
-            let mut base_mac = default_mac;
-            let offset_id = (id.0 as u16) + 1; // Shift by 1 so the default AP (id 0) gets .01 suffix
-            base_mac.bytes[4..6].copy_from_slice(&offset_id.to_be_bytes());
-            config.bssid = base_mac;
+            config.bssid = compute_ap_bssid(id);
         }
 
         Self {

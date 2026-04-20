@@ -1,7 +1,7 @@
 // Copyright (C) 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::device::Pose;
+use netsim_model::Pose;
 
 use crate::world::World;
 
@@ -184,7 +184,7 @@ async fn test_wifi_radio_stats_persistence() {
         world.current_device_id = Some(device_id);
 
         // And given generic radio stats for this chip are primed
-        world.given_radio_stats_primed(netsim_model::stats::RadioKind::Wifi, 100, 200).await;
+        world.given_radio_stats_primed(netsim_model::RadioKind::Wifi, 100, 200).await;
 
         // When I wait for stats to settle
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -328,17 +328,17 @@ async fn test_bluetooth_dual_mode_persistence() {
             let mut stats_vec = world.radio_stats.lock().unwrap();
 
             // BLE Stats
-            let mut stats_ble = netsim_model::stats::NetsimRadioStats::default();
+            let mut stats_ble = netsim_model::NetsimRadioStats::default();
             stats_ble.id = chip_id;
-            stats_ble.kind = netsim_model::stats::RadioKind::BluetoothLowEnergy;
+            stats_ble.kind = netsim_model::RadioKind::BluetoothLowEnergy;
             stats_ble.tx_bytes = 1000;
             stats_ble.rx_bytes = 2000;
             stats_vec.push(stats_ble);
 
             // Classic Stats
-            let mut stats_classic = netsim_model::stats::NetsimRadioStats::default();
+            let mut stats_classic = netsim_model::NetsimRadioStats::default();
             stats_classic.id = chip_id;
-            stats_classic.kind = netsim_model::stats::RadioKind::BluetoothClassic;
+            stats_classic.kind = netsim_model::RadioKind::BluetoothClassic;
             stats_classic.tx_bytes = 3000;
             stats_classic.rx_bytes = 4000;
             stats_vec.push(stats_classic);
@@ -408,7 +408,7 @@ async fn test_bluetooth_fallback_persistence() {
         let device = world.client.get(device_id).await.unwrap().unwrap();
         let chip = &device.chips[0];
         // Ensure it is BLUETOOTH kind
-        assert_eq!(chip.kind, netsim_model::chip::ChipKind::BLUETOOTH);
+        assert_eq!(chip.kind, netsim_model::ChipKind::BLUETOOTH);
 
         // Send Packets (to populate StreamStats)
         // We do NOT prime `radio_stats`, so client.read_statistics() returns empty vec.
@@ -486,32 +486,6 @@ async fn test_beacon_stats_persistence() {
         let mut world = World::new_with_stats(path.clone(), None).await;
 
         // Add Beacon Chip
-        let chip_config = netsim_model::chip::ChipConfig {
-            name: "beacon-1".to_string(),
-            manufacturer: "Netsim".to_string(),
-            product_name: "Beacon".to_string(),
-            chip_kind_params: netsim_model::chip::ChipKindParams::Bluetooth(
-                netsim_model::chip::BluetoothCreate {
-                    address: "00:00:00:00:00:01".to_string(),
-                    bt_properties: Default::default(),
-                    mode: netsim_model::chip::BluetoothMode::Beacon(Box::new(
-                        netsim_model::chip::BeaconParams {
-                            ble_beacon: netsim_model::bluetooth::beacon::BleBeacon {
-                                address: "00:00:00:00:00:01".to_string(),
-                                settings: Some(
-                                    netsim_model::bluetooth::beacon::AdvertiseSettings {
-                                        scannable: true,
-                                        timeout: 1000,
-                                        ..Default::default()
-                                    },
-                                ),
-                                ..Default::default()
-                            },
-                        },
-                    )),
-                },
-            ),
-        };
 
         let device_create = device_api::DeviceCreate {
             device_config: device_api::DeviceConfig::new(
@@ -520,27 +494,26 @@ async fn test_beacon_stats_persistence() {
                 Pose::default(),
                 false,
             ),
-            chip: chip_config.into(),
+            chip: device_api::DeviceChipCreate {
+                name: "beacon-1".to_string(),
+                manufacturer: "Netsim".to_string(),
+                product_name: "Beacon".to_string(),
+                chip: device_api::ChipCreateVariant::Beacon(netsim_model::BleBeacon {
+                    address: "00:00:00:00:00:01".to_string(),
+                    settings: Some(netsim_model::AdvertiseSettings {
+                        scannable: true,
+                        timeout: 1000,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+            },
         };
 
         let device_id = world.client.create_device(device_create).await.unwrap();
         world.current_device_id = Some(device_id);
 
         // Add Scanner Device
-        let scanner_config = netsim_model::chip::ChipConfig {
-            name: "scanner-1".to_string(),
-            manufacturer: "Netsim".to_string(),
-            product_name: "Scanner".to_string(),
-            chip_kind_params: netsim_model::chip::ChipKindParams::Bluetooth(
-                netsim_model::chip::BluetoothCreate {
-                    address: "00:00:00:00:00:02".to_string(),
-                    bt_properties: Default::default(),
-                    mode: netsim_model::chip::BluetoothMode::Scanner(
-                        netsim_model::chip::ScannerParams { active: false },
-                    ),
-                },
-            ),
-        };
 
         let scanner_create = device_api::DeviceCreate {
             device_config: device_api::DeviceConfig::new(
@@ -549,7 +522,18 @@ async fn test_beacon_stats_persistence() {
                 Pose::default(),
                 false,
             ),
-            chip: scanner_config.into(),
+            chip: device_api::DeviceChipCreate {
+                name: "scanner-1".to_string(),
+                manufacturer: "Netsim".to_string(),
+                product_name: "Scanner".to_string(),
+                chip: device_api::ChipCreateVariant::Bluetooth(netsim_model::BluetoothCreate {
+                    address: "00:00:00:00:00:02".to_string(),
+                    bt_properties: Default::default(),
+                    mode: netsim_model::BluetoothMode::Scanner(netsim_model::ScannerParams {
+                        active: false,
+                    }),
+                }),
+            },
         };
         let scanner_id = world.client.create_device(scanner_create).await.unwrap();
 
@@ -563,16 +547,16 @@ async fn test_beacon_stats_persistence() {
         {
             let mut stats_vec = world.radio_stats.lock().unwrap();
 
-            let mut beacon_stats = netsim_model::stats::NetsimRadioStats::default();
+            let mut beacon_stats = netsim_model::NetsimRadioStats::default();
             beacon_stats.id = beacon_chip_id;
-            beacon_stats.kind = netsim_model::stats::RadioKind::BluetoothLowEnergy;
+            beacon_stats.kind = netsim_model::RadioKind::BluetoothLowEnergy;
             beacon_stats.tx_count = 10;
             beacon_stats.tx_bytes = 100;
             stats_vec.push(beacon_stats);
 
-            let mut scanner_stats = netsim_model::stats::NetsimRadioStats::default();
+            let mut scanner_stats = netsim_model::NetsimRadioStats::default();
             scanner_stats.id = scanner_chip_id;
-            scanner_stats.kind = netsim_model::stats::RadioKind::BluetoothLowEnergy;
+            scanner_stats.kind = netsim_model::RadioKind::BluetoothLowEnergy;
             scanner_stats.rx_count = 10;
             scanner_stats.rx_bytes = 100;
             stats_vec.push(scanner_stats);

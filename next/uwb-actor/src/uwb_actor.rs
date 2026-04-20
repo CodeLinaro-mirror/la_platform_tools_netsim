@@ -8,7 +8,7 @@ use std::{
 };
 
 use device_actor::DeviceClient;
-use netsim_model::chip::{Chip, ChipId};
+use netsim_model::{Chip, ChipId};
 use pica::{Handle, Pica, PicaCommand, PicaEvent};
 use tokio::sync::{broadcast, mpsc};
 

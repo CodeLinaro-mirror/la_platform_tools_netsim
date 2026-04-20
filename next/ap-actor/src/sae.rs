@@ -149,7 +149,7 @@ impl SaeStateMachine {
         // Scalar (32 bytes). Pad if needed.
         if self.own_commit_scalar.len() < 32 {
             let pad = 32 - self.own_commit_scalar.len();
-            body.extend(std::iter::repeat(0).take(pad));
+            body.extend(std::iter::repeat_n(0, pad));
         }
         body.extend_from_slice(&self.own_commit_scalar);
 
@@ -318,7 +318,7 @@ impl SaeStateMachine {
 
     fn sha256_kdf(&self, key: &[u8], label: &str, context: &[u8], bits: usize) -> Vec<u8> {
         let mut out = Vec::new();
-        let buf_len = (bits + 7) / 8;
+        let buf_len = bits.div_ceil(8);
         let mut counter: u16 = 1;
         let mut pos = 0;
         let len_le = (bits as u16).to_le_bytes();
@@ -354,7 +354,7 @@ impl SaeStateMachine {
         // scounter (2 bytes LE)
         body.extend_from_slice(&self.scounter.to_le_bytes());
         // Confirm string (32 bytes)
-        body.extend(std::iter::repeat(0xAA).take(32));
+        body.extend(std::iter::repeat_n(0xAA, 32));
 
         if !self.peer_commit_scalar.is_empty() {
             let _ = self.process_commit();

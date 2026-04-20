@@ -10,18 +10,18 @@ pub mod json;
 pub mod util;
 pub mod wmm;
 
+#[allow(unused_imports)]
 pub use beacon::*;
+#[allow(unused_imports)]
 pub use eapol::*;
 pub use frame::*;
-pub use ie::*;
+pub use ie::tags::{
+    AKM_PSK, CIPHER_CCMP, EXTENDED_CAPABILITIES, EXTENDED_CAPABILITIES_FTM_RESPONDER_BIT,
+    EXTENDED_SUPPORTED_RATES, EXTENSION, HE_CAPABILITIES, RSN_VER, SUPPORTED_RATES_DEFAULT,
+};
+#[allow(unused_imports)]
 pub use json::*;
+#[allow(unused_imports)]
 pub use util::*;
 
 mod tests;
-
-/// Returns the raw bytes of the golden CCMP pcap file used for testing.
-/// This allows other crates (like hostapd-rs) to use the same test vector
-/// without path resolution issues.
-pub fn get_golden_ccmp_pcap() -> &'static [u8] {
-    include_bytes!("test_data/golden_ccmp.pcap")
-}

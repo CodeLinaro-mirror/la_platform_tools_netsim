@@ -40,26 +40,26 @@ pub fn write_wmm_param_element(buf: &mut Vec<u8>, uapsd: bool, param_set_count: 
 
     // AC_BE (Best Effort) - ACI 0
     // AIFSN: 3, ECWmin: 4, ECWmax: 10, TXOP: 0
-    body.push((0 << 5) | (0 << 4) | 3); // ACI=0, ACM=0, AIFSN=3
-    body.push((4 << 0) | (10 << 4)); // ECWmin=4, ECWmax=10
+    body.push(3); // ACI=0, ACM=0, AIFSN=3
+    body.push(4 | (10 << 4)); // ECWmin=4, ECWmax=10
     body.extend_from_slice(&0u16.to_le_bytes()); // TXOP Limit
 
     // AC_BK (Background) - ACI 1
     // AIFSN: 7, ECWmin: 4, ECWmax: 10, TXOP: 0
-    body.push((1 << 5) | (0 << 4) | 7); // ACI=1
-    body.push((4 << 0) | (10 << 4));
+    body.push((1 << 5) | 7); // ACI=1, ACM=0, AIFSN=7
+    body.push(4 | (10 << 4));
     body.extend_from_slice(&0u16.to_le_bytes());
 
     // AC_VI (Video) - ACI 2
     // AIFSN: 2, ECWmin: 3, ECWmax: 4, TXOP: 94 (approx 3ms)
-    body.push((2 << 5) | (0 << 4) | 2); // ACI=2
-    body.push((3 << 0) | (4 << 4));
+    body.push((2 << 5) | 2); // ACI=2, ACM=0, AIFSN=2
+    body.push(3 | (4 << 4));
     body.extend_from_slice(&94u16.to_le_bytes());
 
     // AC_VO (Voice) - ACI 3
     // AIFSN: 2, ECWmin: 2, ECWmax: 3, TXOP: 47 (approx 1.5ms)
-    body.push((3 << 5) | (0 << 4) | 2); // ACI=3
-    body.push((2 << 0) | (3 << 4));
+    body.push((3 << 5) | 2); // ACI=3, ACM=0, AIFSN=2
+    body.push(2 | (3 << 4));
     body.extend_from_slice(&47u16.to_le_bytes());
 
     write_ie(buf, crate::ieee80211::ie::tags::VENDOR_SPECIFIC, &body);

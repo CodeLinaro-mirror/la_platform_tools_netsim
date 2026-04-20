@@ -25,12 +25,12 @@ netsimd_rust_library(
         "--cfg=feature=\"local_ssl\"",
     ],
     deps = [
+        "//proto",
         "//rust/common:netsim_common",
         "//rust/hostapd-rs:netsim_hostapd_rs",
         "//rust/http-proxy:netsim_http_proxy",
         "//rust/libslirp-rs:netsim_libslirp_rs",
         "//rust/packets:netsim_packets",
-        "//rust/proto-cf",
         "@anyhow",
         "@bytes",
         "@c-ares//:ares",

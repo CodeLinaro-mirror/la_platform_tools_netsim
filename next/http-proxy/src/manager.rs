@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
+use libslirp_rs::{ProxyConnect, ProxyManager};
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 
@@ -38,7 +38,7 @@ use crate::{
 /// ```
 /// use std::net::SocketAddr;
 ///
-/// use libslirp_rs::libslirp::ProxyConnect;
+/// use libslirp_rs::ProxyConnect;
 ///
 /// struct MyProxyConnect;
 ///
@@ -54,7 +54,6 @@ use crate::{
 pub struct Manager {
     runtime: Arc<Runtime>,
     connector: Connector,
-    dns_manager: Arc<DnsManager>,
 }
 
 impl Manager {
@@ -67,11 +66,10 @@ impl Manager {
     pub fn new(proxy: &str, rx_proxy_bytes: mpsc::Receiver<Bytes>) -> Result<Self> {
         let config = ProxyConfig::from_string(proxy)?;
         let dns_manager = Arc::new(DnsManager::new());
-        let dns_manager_clone = dns_manager.clone();
 
         let _ = thread::Builder::new().name("Dns Manager".to_string()).spawn(move || {
             while let Ok(bytes) = rx_proxy_bytes.recv() {
-                dns_manager_clone.add_from_ethernet_slice(&bytes);
+                dns_manager.add_from_ethernet_slice(&bytes);
             }
         });
 
@@ -85,7 +83,6 @@ impl Manager {
         Ok(Self {
             runtime,
             connector: Connector::new(config.addr, config.username, config.password),
-            dns_manager,
         })
     }
 }

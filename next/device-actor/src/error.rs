@@ -7,7 +7,8 @@
 //! These errors cover issues arising from actor communication, invalid
 //! arguments, and other device-specific failure modes.
 
-use netsim_model::client_error::ClientError;
+use device_api::DeviceId;
+use netsim_model::ClientError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -20,9 +21,10 @@ pub enum DeviceError {
     ActorCommunicationError(#[from] ClientError),
     #[error("Chip kind not supported: {0}")]
     ChipKindNotSupported(String),
-    #[error("Multiple errors during reset: {chip_client_errors:?} {link_client_error:?}")]
+    #[error("Multiple errors during reset: {device_delete_errors:?} {chip_reset_errors:?} {link_client_error:?}")]
     ResetErrors {
-        chip_client_errors: Vec<(u32, ClientError)>,
+        device_delete_errors: Vec<(DeviceId, Self)>,
+        chip_reset_errors: Vec<(u32, ClientError)>,
         link_client_error: Option<ClientError>,
     },
 }

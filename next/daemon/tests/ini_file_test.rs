@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
-use daemon::ini_file::{IniFile, IniFileAccess};
+use daemon::{IniFile, IniFileAccess};
 
 /// Creates a unique temp directory for a test.
 fn create_temp_dir(test_name: &str) -> PathBuf {
@@ -22,12 +22,12 @@ fn test_ini_writer_reader_flow() {
 
     let ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
     match ini_file1.try_acquire() {
-        Ok(IniFileAccess::Writer(mut guard)) => {
+        Ok(IniFileAccess::Writer(guard)) => {
             let mut data = HashMap::new();
             data.insert("pid".to_string(), "12345".to_string());
             data.insert("grpc.port".to_string(), "8554".to_string());
             data.insert("uds.path".to_string(), "/tmp/netsim.sock".to_string());
-            guard.write(&data).unwrap();
+            let _initialized_guard = guard.write(&data).unwrap();
 
             let ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
             match ini_file2.try_acquire() {
@@ -36,13 +36,16 @@ fn test_ini_writer_reader_flow() {
                     assert_eq!(config.grpc_port, 8554);
                     assert_eq!(config.uds_path, Some("/tmp/netsim.sock".to_string()));
                 }
+                Ok(IniFileAccess::Initializing) => {
+                    panic!("Expected Reader access, got Initializing");
+                }
                 Err(e) => panic!("Expected Reader access, got Err: {}", e),
                 Ok(IniFileAccess::Writer(_)) => panic!("Expected Reader access, got Writer"),
             }
-            // guard is dropped here
         }
-        Err(e) => panic!("Expected Writer access, got Err: {}", e),
         Ok(IniFileAccess::Reader(_)) => panic!("Expected Writer access, got Reader"),
+        Ok(IniFileAccess::Initializing) => panic!("Expected Writer access, got Initializing"),
+        Err(e) => panic!("Expected Writer access, got Err: {}", e),
     }
     let _ = fs::remove_dir_all(&temp_dir);
 }
@@ -57,9 +60,13 @@ fn test_ini_reader_malformed_file() {
     let ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
     match ini_file1.try_acquire() {
         Ok(IniFileAccess::Writer(guard)) => {
-            fs::write(guard.path(), "pid=123\nmalformed_line\ngrpc.port=8554").unwrap();
+            let mut data = HashMap::new();
+            data.insert("grpc.port".to_string(), "8554".to_string());
+            let _initialized_guard = guard.write(&data).unwrap();
 
-            // Instance 2 attempts to acquire, fails lock, then fails to parse
+            // Mess up the file manually after it has been initialized
+            fs::write(temp_dir.join("netsim.ini"), "malformed_line").unwrap();
+
             let ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
             let result = ini_file2.try_acquire();
 
@@ -70,7 +77,9 @@ fn test_ini_reader_malformed_file() {
                 Ok(r) => panic!("Should have failed to read malformed INI, got {:?}", r),
             }
         }
-        _ => panic!("Instance 1 should be Writer"),
+        Ok(IniFileAccess::Reader(_)) => panic!("Instance 1 should be Writer, got Reader"),
+        Ok(IniFileAccess::Initializing) => panic!("Instance 1 should be Writer, got Initializing"),
+        Err(e) => panic!("Instance 1 should be Writer, got Err: {}", e),
     }
     let _ = fs::remove_dir_all(&temp_dir);
 }
@@ -81,10 +90,10 @@ fn test_ini_reader_missing_grpc_port() {
     let temp_dir = create_temp_dir("reader_missing_port");
     let ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
     match ini_file1.try_acquire() {
-        Ok(IniFileAccess::Writer(mut guard)) => {
+        Ok(IniFileAccess::Writer(guard)) => {
             let mut data = HashMap::new();
             data.insert("pid".to_string(), "12345".to_string());
-            guard.write(&data).unwrap(); // grpc.port is missing
+            let _initialized_guard = guard.write(&data).unwrap(); // grpc.port is missing
 
             let ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
             match ini_file2.try_acquire() {
@@ -95,7 +104,9 @@ fn test_ini_reader_missing_grpc_port() {
                 Ok(r) => panic!("Expected error for missing grpc.port, got {:?}", r),
             }
         }
-        _ => panic!("Instance 1 should be Writer"),
+        Ok(IniFileAccess::Reader(_)) => panic!("Instance 1 should be Writer, got Reader"),
+        Ok(IniFileAccess::Initializing) => panic!("Instance 1 should be Writer, got Initializing"),
+        Err(e) => panic!("Instance 1 should be Writer, got Err: {}", e),
     }
     let _ = fs::remove_dir_all(&temp_dir);
 }
@@ -112,8 +123,9 @@ fn test_ini_writer_no_file() {
         Ok(IniFileAccess::Writer(_)) => {
             // Success
         }
-        Err(e) => panic!("Expected Writer access as file does not exist, got Err: {}", e),
         Ok(IniFileAccess::Reader(_)) => panic!("Expected Writer access, got Reader"),
+        Ok(IniFileAccess::Initializing) => panic!("Expected Writer access, got Initializing"),
+        Err(e) => panic!("Expected Writer access as file does not exist, got Err: {}", e),
     }
     let _ = fs::remove_dir_all(&temp_dir);
 }

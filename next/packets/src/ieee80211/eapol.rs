@@ -25,7 +25,7 @@ impl EapolHeader {
 }
 
 /// Represents the EAPOL-Key Frame (used in WPA/WPA2/RSN).
-#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy)]
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy, Default)]
 #[repr(C, packed)]
 pub struct EapolKeyFrame {
     /// Key Descriptor Type (1 = RC4, 2 = RSN (WPA2), 254 = WPA).
@@ -51,24 +51,8 @@ pub struct EapolKeyFrame {
     // Data follows
 }
 
-impl Default for EapolKeyFrame {
-    fn default() -> Self {
-        Self {
-            descriptor_type: 0,
-            key_info: [0; 2],
-            key_len: [0; 2],
-            replay_counter: [0; 8],
-            key_nonce: [0; 32],
-            key_iv: [0; 16],
-            key_rsc: [0; 8],
-            key_id: [0; 8],
-            mic: [0; 16],
-            key_data_len: [0; 2],
-        }
-    }
-}
-
 impl EapolKeyFrame {
+    #[allow(clippy::too_many_arguments)]
     /// Creates a new EAPOL-Key frame with common defaults.
     pub fn new(
         descriptor_type: u8,
@@ -100,13 +84,13 @@ impl EapolKeyFrame {
 pub const EAPOL_VERSION: u8 = 1;
 /// EAPOL Packet Type: Key.
 pub const EAPOL_TYPE_KEY: u8 = 3;
+/// EAPOL Packet Type: EAPOL-Start (1).
+pub const EAPOL_TYPE_START: u8 = 1;
 /// Key Descriptor Type: RSN (WPA2).
 pub const EAPOL_KEY_DESC_TYPE_RSN: u8 = 2;
 
 /// EAPOL Packet Type: EAP-Packet (0).
 pub const EAPOL_TYPE_PACKET: u8 = 0;
-/// EAPOL Packet Type: EAPOL-Start (1).
-pub const EAPOL_TYPE_START: u8 = 1;
 
 /// EAP Code: Request (1).
 pub const EAP_CODE_REQUEST: u8 = 1;

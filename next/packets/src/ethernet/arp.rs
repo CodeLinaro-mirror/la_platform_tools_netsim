@@ -4,14 +4,8 @@
 //! Defines the ARP (Address Resolution Protocol) header.
 
 use zerocopy::{
-    byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
+    byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16,
 };
-
-use crate::utils::general::ParseResult;
-
-pub const ARP_OP_REQUEST: u16 = 1;
-pub const ARP_OP_REPLY: u16 = 2;
-pub const ARP_HW_ETHERNET: u16 = 1;
 
 /// Represents the ARP Packet for Ethernet and IPv4.
 #[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
@@ -35,10 +29,4 @@ pub struct ArpHeader {
     pub target_mac: [u8; 6],
     /// Target protocol address (IP).
     pub target_ip: [u8; 4],
-}
-
-impl ArpHeader {
-    pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, ArpHeader>> {
-        Ref::from_prefix(bytes).ok()
-    }
 }

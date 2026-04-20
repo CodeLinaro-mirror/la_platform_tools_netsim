@@ -80,7 +80,7 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use netsim_model::{client_error::ClientError, ChipId, ChipKind};
+use netsim_model::{ChipId, ChipKind, ClientError};
 use serde::{Deserialize, Serialize};
 
 #[async_trait]

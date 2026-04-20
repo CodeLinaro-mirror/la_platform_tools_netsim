@@ -4,10 +4,7 @@
 use actor_framework::{ActorService, DynContext};
 use futures::SinkExt;
 use modem_rs::ModemSink;
-use netsim_model::{
-    chip::{ChipCreate, ChipId, ChipRequest, ChipUpdate},
-    chip_error::ChipError,
-};
+use netsim_model::{ChipCreate, ChipError, ChipId, ChipRequest, ChipUpdate};
 use tracing::{error, info};
 
 use crate::{
@@ -22,7 +19,7 @@ impl ActorService for CellActor {
     type Action = ChipRequest;
     type ActionResult = ();
     type Error = CellError;
-    type Entity = netsim_model::chip::Chip;
+    type Entity = netsim_model::Chip;
     type TypedStream = modem_rs::HostEvent;
 
     async fn handle_create(
@@ -32,7 +29,7 @@ impl ActorService for CellActor {
         ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = id.ok_or_else(|| ChipError::InvalidArguments("missing chip id".into()))?;
-        let device_id = params.device_id;
+        let device_id = params.chip.device_id;
 
         if self.active_chips.contains_key(&chip_id) {
             return Err(CellError::Chip(ChipError::ChipExists(chip_id.0)));
@@ -96,11 +93,11 @@ impl ActorService for CellActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         if let Ok(info) = self.controller.get_modem_info(id.0) {
-            Ok(Some(netsim_model::chip::Chip {
-                kind: netsim_model::chip::ChipKind::CELLULAR,
+            Ok(Some(netsim_model::Chip {
+                kind: netsim_model::ChipKind::CELLULAR,
                 id: info.id,
                 name: format!("modem-{}", info.id),
-                variant: Some(netsim_model::chip::ChipVariant::Cell(netsim_model::cell::Cell {
+                variant: Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
                     state: if info.ringing { "ringing".to_string() } else { "idle".to_string() },
                 })),
                 ..Default::default()
@@ -133,21 +130,19 @@ impl ActorService for CellActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         let mut chips = Vec::new();
-        for (id, _state) in &self.active_chips {
+        for id in self.active_chips.keys() {
             if let Ok(info) = self.controller.get_modem_info(id.0) {
-                chips.push(netsim_model::chip::Chip {
-                    kind: netsim_model::chip::ChipKind::CELLULAR,
+                chips.push(netsim_model::Chip {
+                    kind: netsim_model::ChipKind::CELLULAR,
                     id: info.id,
                     name: format!("modem-{}", info.id),
-                    variant: Some(netsim_model::chip::ChipVariant::Cell(
-                        netsim_model::cell::Cell {
-                            state: if info.ringing {
-                                "ringing".to_string()
-                            } else {
-                                "idle".to_string()
-                            },
+                    variant: Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
+                        state: if info.ringing {
+                            "ringing".to_string()
+                        } else {
+                            "idle".to_string()
                         },
-                    )),
+                    })),
                     ..Default::default()
                 });
             }

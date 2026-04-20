@@ -1,7 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_packets::netlink::{nl80211::attr_id, NlAttrHdr};
+use netsim_packets::{attr_id, NlAttrHdr};
 use zerocopy::IntoBytes;
 
 #[test]
@@ -77,11 +77,11 @@ fn test_parse_multi_layer_packet() {
     packet.extend_from_slice(&tcp_header);
 
     // Parse using top-level parser
-    use netsim_packets::packet::frame::{parse, TransportPacket};
+    use netsim_packets::{parse, TransportPacket};
     let packet = parse(&packet).expect("Failed to parse packet");
 
     // Verify Ethernet
-    if let netsim_packets::ethernet::EthernetPacket::Untagged { frame, .. } = packet.ethernet {
+    if let netsim_packets::EthernetPacket::Untagged { frame, .. } = packet.ethernet {
         assert_eq!(frame.ethertype.get(), 0x0800);
     } else {
         panic!("Expected untagged Ethernet frame");
@@ -89,7 +89,7 @@ fn test_parse_multi_layer_packet() {
 
     // Verify IPv4
     let ip_packet = packet.ip.expect("Expected IP packet");
-    if let netsim_packets::packet::frame::IpPacket::V4(header, _) = ip_packet {
+    if let netsim_packets::IpPacket::V4(header, _) = ip_packet {
         assert_eq!(header.protocol, 6); // TCP
     } else {
         panic!("Expected IPv4 packet");

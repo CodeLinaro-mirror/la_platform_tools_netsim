@@ -1,0 +1,44 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+rust_library_host {
+    name: "libnetsim_next_packets",
+    crate_name: "netsim_packets",
+    stem: "libnetsim_packets",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+        "src/llc/test_data/llc_snap.pcap",
+        "src/llc/test_data/llc_snap.json",
+        "src/ieee80211/test_data/beacon.pcap",
+        "src/ieee80211/test_data/beacon.json",
+        "src/ieee80211/test_data/golden_ccmp.json",
+        "src/ieee80211/test_data/golden_ccmp.pcap",
+        "src/ethernet/test_data/arp.json",
+        "src/ethernet/test_data/arp.pcap",
+        "src/netlink/test_data/netlink.pcap",
+        "src/netlink/test_data/hwsim_cmd_frame.bin",
+        "src/netlink/test_data/netlink.json",
+        "src/icmp/test_data/icmpv6.json",
+        "src/icmp/test_data/icmpv6.pcap",
+        "src/icmp/test_data/icmp.pcap",
+        "src/icmp/test_data/icmp.json",
+        "src/transport/test_data/udp.json",
+        "src/transport/test_data/udp.pcap",
+        "src/transport/test_data/tcp.pcap",
+        "src/transport/test_data/tcp.json",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libhex",
+        "libnum_traits",
+        "libserde",
+        "libserde_json",
+        "libzerocopy",
+    ],
+    proc_macros: [
+        "libnum_derive",
+    ],
+}

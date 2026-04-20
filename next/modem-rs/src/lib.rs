@@ -12,7 +12,6 @@ pub mod modem_network;
 mod modem_network_simulator;
 mod network_service;
 mod parser;
-mod pdu;
 mod sim_service;
 mod sms_service;
 mod stk_service;
@@ -28,5 +27,5 @@ pub use config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimP
 pub use metrics::MetricsSnapshot;
 pub use modem::ModemEvent;
 pub use modem_network_simulator::{ModemNetworkSimulator, NetworkEvent, ScheduledEvent};
-pub use netsim_model::cell::RegistrationStatus;
+pub use netsim_model::RegistrationStatus;
 pub use types::{HostEvent, ModemError, ModemId, ModemSink, AT_ERROR, AT_OK};

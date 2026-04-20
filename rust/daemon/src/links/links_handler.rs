@@ -86,7 +86,7 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
-            r#"{"links": [{"senderId": 1, "receiverId": 2, "linkKind": "BLUETOOTH_LOW_ENERGY", "rssi": -50}]}"#
+            r#"{"links": [{"senderId": 1, "receiverId": 2, "linkKind": "BLUETOOTH_LOW_ENERGY", "rssi": -50, "kind": "UNSPECIFIED", "id": 0}]}"#
         );
     }
 

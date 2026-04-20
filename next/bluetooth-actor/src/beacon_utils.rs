@@ -16,7 +16,7 @@ const FLAGS_DATA: [u8; 3] = [0x02, AD_TYPE_FLAGS, 0x06];
 
 /// Helper to construct advertising data payload
 pub fn construct_data(
-    adv_data: &netsim_model::bluetooth::beacon::AdvertiseData,
+    adv_data: &netsim_model::AdvertiseData,
     device_name: &Option<String>,
 ) -> Vec<u8> {
     let mut data = Vec::new();
@@ -121,14 +121,14 @@ mod tests {
 
     #[test]
     fn test_construct_data_basic() {
-        let adv_data = netsim_model::bluetooth::beacon::AdvertiseData::default();
+        let adv_data = netsim_model::AdvertiseData::default();
         let data = construct_data(&adv_data, &None);
         assert_eq!(data, vec![0x02, 0x01, 0x06]);
     }
 
     #[test]
     fn test_construct_data_with_name() {
-        let mut adv_data = netsim_model::bluetooth::beacon::AdvertiseData::default();
+        let mut adv_data = netsim_model::AdvertiseData::default();
         adv_data.include_device_name = true;
         let data = construct_data(&adv_data, &Some("Test".to_string()));
         // Flags (3) + Name (2 + 4) = 9 bytes
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_construct_data_with_manufacturer_data() {
-        let mut adv_data = netsim_model::bluetooth::beacon::AdvertiseData::default();
+        let mut adv_data = netsim_model::AdvertiseData::default();
         adv_data.manufacturer_data = vec![0x01, 0x02];
         let data = construct_data(&adv_data, &None);
         // Flags (3) + Mfg (2 + 2) = 7 bytes
@@ -150,7 +150,7 @@ mod tests {
         // Remaining = 31 - 3 = 28 bytes
         // Name header = 2 bytes
         // Max name len = 26 bytes
-        let adv_data = netsim_model::bluetooth::beacon::AdvertiseData::default();
+        let adv_data = netsim_model::AdvertiseData::default();
         let long_name = "A".repeat(30);
         let data = construct_data(&adv_data, &Some(long_name));
         assert_eq!(data.len(), 31);
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_construct_data_with_tx_power_level() {
-        let mut adv_data = netsim_model::bluetooth::beacon::AdvertiseData::default();
+        let mut adv_data = netsim_model::AdvertiseData::default();
         adv_data.include_tx_power_level = true;
         let data = construct_data(&adv_data, &None);
         // Flags (3) + Tx Power (3) = 6 bytes
@@ -170,12 +170,12 @@ mod tests {
 
     #[test]
     fn test_construct_data_with_service_uuids() {
-        let mut adv_data = netsim_model::bluetooth::beacon::AdvertiseData::default();
-        adv_data.services.push(netsim_model::bluetooth::beacon::Service {
+        let mut adv_data = netsim_model::AdvertiseData::default();
+        adv_data.services.push(netsim_model::Service {
             uuid: "180D".to_string(), // Heart Rate Service 16-bit UUID
             data: vec![0xAB, 0xCD],
         });
-        adv_data.services.push(netsim_model::bluetooth::beacon::Service {
+        adv_data.services.push(netsim_model::Service {
             uuid: "180F".to_string(), // Battery Service 16-bit UUID
             data: vec![],
         });
@@ -188,12 +188,12 @@ mod tests {
 
     #[test]
     fn test_construct_data_with_invalid_service_uuid() {
-        let mut adv_data = netsim_model::bluetooth::beacon::AdvertiseData::default();
-        adv_data.services.push(netsim_model::bluetooth::beacon::Service {
+        let mut adv_data = netsim_model::AdvertiseData::default();
+        adv_data.services.push(netsim_model::Service {
             uuid: "180".to_string(), // Invalid odd-length string
             data: vec![],
         });
-        adv_data.services.push(netsim_model::bluetooth::beacon::Service {
+        adv_data.services.push(netsim_model::Service {
             uuid: "180D11".to_string(), // 3 bytes (invalid specification length)
             data: vec![],
         });

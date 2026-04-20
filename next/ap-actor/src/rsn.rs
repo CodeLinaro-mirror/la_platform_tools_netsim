@@ -1,7 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_packets::ieee80211::{tags, write_ie};
+use netsim_packets::{tags, write_ie};
 use zerocopy::{IntoBytes, LittleEndian, U16};
 
 use crate::ap_actor::ApConfig;

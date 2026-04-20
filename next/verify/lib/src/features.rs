@@ -28,6 +28,12 @@ pub struct Features<W: ?Sized> {
     tag_filter: Option<String>,
 }
 
+impl<W: ?Sized> Default for Features<W> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<W: ?Sized> Features<W> {
     pub fn new() -> Self {
         Self {
@@ -142,9 +148,9 @@ impl<W: ?Sized> Features<W> {
             }
 
             if scenario.examples.is_empty() {
-                self.run_scenario(&feature, &scenario, world).await;
+                self.run_scenario(&feature, scenario, world).await;
             } else {
-                self.run_scenario_outline(&feature, &scenario, world).await;
+                self.run_scenario_outline(&feature, scenario, world).await;
             }
         }
     }

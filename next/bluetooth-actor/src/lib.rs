@@ -45,47 +45,46 @@
 //! # Commands
 //!
 //! The actor processes commands sent via the `ChipClient`. The available
-//! commands are defined in the [`netsim_model::chip::ChipRequest`] enum. The
+//! commands are defined in the [`netsim_model::ChipRequest`] enum. The
 //! `ChipClient` provides a convenient method for each command variant.
 //!
 //! The following commands are supported:
-//! - [`Create`](netsim_model::chip::ChipClient::create): Creates a new
-//!   Bluetooth chip.
-//! - [`Read`](netsim_model::chip::ChipClient::read): Retrieves information
-//!   about a Bluetooth chip.
-//! - [`Update`](netsim_model::chip::ChipClient::update): Updates an existing
-//!   Bluetooth chip.
-//! - [`Delete`](netsim_model::chip::ChipClient::delete): Deletes a Bluetooth
+//! - [`Create`](netsim_model::ChipClient::create): Creates a new Bluetooth
 //!   chip.
-//! - [`Reset`](netsim_model::chip::ChipClient::reset): Resets a Bluetooth chip.
-//! - [`GetStatistics`](netsim_model::chip::ChipRequest::GetStatistics):
-//!   Retrieves statistics for all Bluetooth chips.
-//! - [`GetCountForTesting`](netsim_model::chip::ChipRequest::GetCountForTesting): Retrieves the total number of chips for testing purposes.
-//! - [`Shutdown`](netsim_model::chip::ChipClient::shutdown): Shuts down the
-//!   actor.
+//! - [`Read`](netsim_model::ChipClient::read): Retrieves information about a
+//!   Bluetooth chip.
+//! - [`Update`](netsim_model::ChipClient::update): Updates an existing
+//!   Bluetooth chip.
+//! - [`Delete`](netsim_model::ChipClient::delete): Deletes a Bluetooth chip.
+//! - [`Reset`](netsim_model::ChipClient::reset): Resets a Bluetooth chip.
+//! - [`GetStatistics`](netsim_model::ChipRequest::GetStatistics): Retrieves
+//!   statistics for all Bluetooth chips.
+//! - [`GetCountForTesting`](netsim_model::ChipRequest::GetCountForTesting):
+//!   Retrieves the total number of chips for testing purposes.
+//! - [`Shutdown`](netsim_model::ChipClient::shutdown): Shuts down the actor.
 //!
 //! # Chip Modes
 //!
 //! The actor can create chips in three different modes, configured via the
-//! [`netsim_model::chip::ChipCreate`] struct. The `mode` field within
-//! [`netsim_model::chip::BluetoothCreate`] determines the chip's behavior.
+//! [`netsim_model::ChipCreate`] struct. The `mode` field within
+//! [`netsim_model::BluetoothCreate`] determines the chip's behavior.
 //!
 //! ## Device Mode
 //!
 //! A standard Bluetooth controller that can be controlled by an external host,
 //! such as an Android Virtual Device or a Bumble test. This is configured
-//! using [`netsim_model::chip::BluetoothMode::Device`].
+//! using [`netsim_model::BluetoothMode::Device`].
 //!
 //! ## Beacon Mode
 //!
 //! A chip that repeatedly broadcasts advertisement packets. This is configured
-//! using [`netsim_model::chip::BluetoothMode::Beacon`] with
-//! [`netsim_model::chip::BeaconParams`].
+//! using [`netsim_model::BluetoothMode::Beacon`] with
+//! [`netsim_model::BeaconParams`].
 //!
 //! ## Scanner Mode
 //!
 //! A chip that listens for and captures all nearby Bluetooth packets. This is
-//! configured using [`netsim_model::chip::BluetoothMode::Scanner`].
+//! configured using [`netsim_model::BluetoothMode::Scanner`].
 //!
 //! # Features
 //!

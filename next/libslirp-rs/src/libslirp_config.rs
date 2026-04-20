@@ -9,7 +9,6 @@ use std::{
     path::PathBuf,
 };
 
-use tokio;
 use tracing::warn;
 
 use crate::libslirp_sys::{self, SLIRP_MAX_DNS_SERVERS};
@@ -137,18 +136,17 @@ impl Default for SlirpConfig {
 
 /// Struct to hold a "C" `SlirpConfig` and the Rust storage that is
 /// referenced by `SlirpConfig`.
-#[allow(dead_code)]
 pub struct SlirpConfigs {
     /// The "C" representation of the Slirp configuration.
     pub c_slirp_config: libslirp_sys::SlirpConfig,
 
     // fields that hold the managed storage for "C" struct.
-    c_bootfile: Option<CString>,
-    c_tftp_server_name: Option<CString>,
-    c_vdomainname: Option<CString>,
-    c_vhostname: Option<CString>,
-    c_tftp_path: Option<CString>,
-    c_host_dns: [libslirp_sys::sockaddr_storage; MAX_DNS_SERVERS],
+    _c_bootfile: Option<CString>,
+    _c_tftp_server_name: Option<CString>,
+    _c_vdomainname: Option<CString>,
+    _c_vhostname: Option<CString>,
+    _c_tftp_path: Option<CString>,
+    _c_host_dns: [libslirp_sys::sockaddr_storage; MAX_DNS_SERVERS],
     // TODO: add other fields
 }
 
@@ -329,12 +327,12 @@ impl SlirpConfigs {
         // referenced by the "C" struct.
         SlirpConfigs {
             c_slirp_config,
-            c_vhostname,
-            c_tftp_server_name,
-            c_bootfile,
-            c_vdomainname,
-            c_tftp_path,
-            c_host_dns,
+            _c_vhostname: c_vhostname,
+            _c_tftp_server_name: c_tftp_server_name,
+            _c_bootfile: c_bootfile,
+            _c_vdomainname: c_vdomainname,
+            _c_tftp_path: c_tftp_path,
+            _c_host_dns: c_host_dns,
         }
     }
 }

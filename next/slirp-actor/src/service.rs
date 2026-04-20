@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::{ActorService, DynContext};
-use libslirp_rs::libslirp::{LibSlirp, ProxyManager};
+use libslirp_rs::{LibSlirp, ProxyManager};
 
 use crate::{
     error::SlirpError,

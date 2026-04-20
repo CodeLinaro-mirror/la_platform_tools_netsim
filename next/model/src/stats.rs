@@ -15,9 +15,10 @@ pub struct InvalidPacket {
 }
 
 /// The kind of radio.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RadioKind {
+    #[default]
     Unspecified,
     BluetoothLowEnergy,
     BluetoothClassic,
@@ -25,12 +26,6 @@ pub enum RadioKind {
     Wifi,
     Uwb,
     Nfc,
-}
-
-impl Default for RadioKind {
-    fn default() -> Self {
-        Self::Unspecified
-    }
 }
 
 impl From<i32> for RadioKind {

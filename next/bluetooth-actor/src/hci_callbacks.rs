@@ -57,7 +57,7 @@ impl ControllerCallbacks for HciCallbacks {
 /// `rootcanal` (via `send_hci`) are sent to the `PacketSink` associated with
 /// the chip.
 pub async fn sink_loop(
-    mut sink: netsim_model::chip::PacketSink,
+    mut sink: netsim_model::PacketSink,
     mut receiver: tokio::sync::mpsc::Receiver<bytes::Bytes>,
     id: ChipId,
 ) -> ChipId {

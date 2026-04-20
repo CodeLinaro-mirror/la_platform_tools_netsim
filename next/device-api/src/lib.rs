@@ -71,16 +71,11 @@
 
 use std::fmt;
 
-// Re-export key data models from netsim-model for convenience.
-pub use netsim_model::device::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate};
-pub use netsim_model::device::{
-    api, Device, DeviceAddChip, DeviceConfig, DeviceId, Orientation, Position,
+pub use netsim_model::{
+    ChipCreateVariant, Device, DeviceAddChip, DeviceChipCreate, DeviceConfig, DeviceCreate,
+    DeviceId, DeviceUpdate, ListDeviceResponse, Orientation, PoseUpdate, Position,
 };
-use netsim_model::{
-    chip::{ChipId, PacketSink, PacketStream},
-    device::api::DeviceChipCreate,
-    stats::NetsimRadioStats,
-};
+use netsim_model::{ChipId, NetsimRadioStats, PacketSink, PacketStream};
 use serde::{Deserialize, Serialize};
 
 // Behavioral Contract
@@ -90,7 +85,7 @@ pub enum DeviceAction {
     GetRadioStats,
     NotifyChipRemoved(DeviceId, ChipId),
     AddChip {
-        chip_config: DeviceChipCreate,
+        chip_config: Box<DeviceChipCreate>,
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
     },
@@ -104,7 +99,7 @@ pub enum DeviceAction {
     /// conditions when multiple sources try to initialize the same device
     /// simultaneously.
     AddChipByGuid {
-        params: DeviceAddChip,
+        params: Box<DeviceAddChip>,
     },
     /// Deletes an internal device by ID.
     DeleteDevice(DeviceId),

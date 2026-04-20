@@ -1,10 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::{FrameControl, MacHeader3Addr, SequenceControl},
-};
+use netsim_packets::{FrameControl, MacAddr, MacHeader3Addr, SequenceControl};
 use tracing::info;
 use zerocopy::IntoBytes;
 

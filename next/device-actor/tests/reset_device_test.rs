@@ -85,7 +85,7 @@ async fn test_reset_re_enables_chips() {
     let world = World::new().await;
 
     // Given a running Device Actor with a chip
-    let id1 = world.when_add_chip("guid-1", "chip-1").await;
+    let (id1, _tx) = world.when_add_chip_with_stream("guid-1", "chip-1").await;
 
     // Disable the Bluetooth radios (le_state and classic_state)
     let chip_update = World::create_bluetooth_chip_update(Some(false), Some(false));
@@ -164,8 +164,7 @@ async fn test_reset_propagates_to_all_chip_actors() {
     );
     add_chip_params.device_config.pose.position = initial_pos.clone();
     add_chip_params.device_config.pose.orientation = initial_orient.clone();
-    add_chip_params.chip_config.chip_kind_params =
-        netsim_model::chip::ChipKindParams::Wifi(Default::default());
+    add_chip_params.chip.variant = Some(netsim_model::ChipVariant::Wifi(Default::default()));
     world.client.add_chip(add_chip_params).await.unwrap();
 
     // And the device's properties are modified
@@ -187,4 +186,34 @@ async fn test_reset_propagates_to_all_chip_actors() {
     world
         .then_all_chip_actors_position_and_orientation_match(device_id, initial_pos, initial_orient)
         .await;
+}
+
+// Scenario: Reset deletes internal devices and resets external devices
+//   Given an external device connected with GUID
+//   And an internal device created without GUID
+//   When the global reset RPC is called
+//   Then the external device should still exist
+//   And the internal device should have been deleted
+#[tokio::test]
+async fn test_reset_deletes_internal_devices_and_resets_external_devices() {
+    let world = World::new().await;
+
+    // Given an external device connected with GUID
+    let external_id = world.when_add_chip("external-guid", "external-chip").await;
+
+    // And an internal device created without GUID
+    let internal_id = world.when_create_device("internal-mock").await;
+
+    // Verify both exist before reset
+    world.then_device_exists(external_id).await;
+    world.then_device_exists(internal_id).await;
+
+    // When the global reset RPC is called
+    world.when_reset_is_called().await;
+
+    // Then the external device should still exist
+    world.then_device_exists(external_id).await;
+
+    // And the internal device should have been deleted
+    world.then_device_does_not_exist(internal_id).await;
 }

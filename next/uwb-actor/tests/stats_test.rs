@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::{chip::ChipClient, stats::NetsimRadioStats};
+use netsim_model::{ChipClient, NetsimRadioStats};
 
 use crate::world::World;
 
@@ -20,7 +20,7 @@ async fn test_read_statistics() {
     let mut expected_stat = NetsimRadioStats::default();
     expected_stat.name = format!("uwb_chip_{}", chip_id);
     expected_stat.id = chip_id;
-    expected_stat.kind = netsim_model::stats::RadioKind::Uwb;
+    expected_stat.kind = netsim_model::RadioKind::Uwb;
     let expected_stats = [expected_stat];
     assert_eq!(&*stats, &expected_stats[..]);
 }

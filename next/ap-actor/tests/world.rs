@@ -5,13 +5,10 @@ use std::time::Duration;
 
 use actor_framework::ResourceActor;
 use ap_actor::{ApActor, ApClient, ApConfig, SharedKeyStore};
-use netsim_model::chip::WifiMode;
+use netsim_model::WifiMode;
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::{
-        management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
-        FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
-    },
+    management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
+    FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl,
 };
 use tokio::sync::mpsc;
 use tracing::info;
@@ -100,7 +97,7 @@ impl ApWorld {
             mac_acl_mode: 0,
             mac_acl_list: vec![],
             ftm_responder_enabled: true,
-            position: netsim_model::device::Position::default(),
+            position: netsim_model::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
@@ -124,7 +121,7 @@ impl ApWorld {
             mac_acl_mode: 0,
             mac_acl_list: vec![],
             ftm_responder_enabled: true,
-            position: netsim_model::device::Position::default(),
+            position: netsim_model::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
@@ -226,11 +223,11 @@ impl ApWorld {
             match tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
                 Ok(Some(msg)) => {
                     if let Ok(frame) = Ieee80211::decode(&msg) {
-                        if frame.stype() == management_subtype::ASSOCIATION_RESPONSE {
-                            if frame.get_addr1() == dst_mac {
-                                // DA == Station
-                                return; // Success
-                            }
+                        if frame.stype() == management_subtype::ASSOCIATION_RESPONSE
+                            && frame.get_addr1() == dst_mac
+                        {
+                            // DA == Station
+                            return; // Success
                         }
                     }
                 }

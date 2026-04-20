@@ -16,22 +16,22 @@ use crate::llc::{LlcHeader, LlcSnapHeader, SnapHeader};
 /// A custom error type for JSON operations and conversions related to LLC/SNAP.
 #[derive(Debug)]
 pub enum JsonError {
-    SerdeJsonError(serde_json::Error),
+    SerdeJson(serde_json::Error),
     /// Indicates an error during conversion from a JSON representation to a
     /// zerocopy type.
-    HexParseError(String),
+    HexParse(String),
     /// Required field missing for conversion (e.g. OUI for SNAP).
-    ConversionError(String),
+    Conversion(String),
 }
 
 impl fmt::Display for JsonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            JsonError::SerdeJsonError(e) => {
+            JsonError::SerdeJson(e) => {
                 write!(f, "JSON serialization/deserialization error: {}", e)
             }
-            JsonError::HexParseError(s) => write!(f, "Hex parsing error: {}", s),
-            JsonError::ConversionError(s) => write!(f, "Conversion error: {}", s),
+            JsonError::HexParse(s) => write!(f, "Hex parsing error: {}", s),
+            JsonError::Conversion(s) => write!(f, "Conversion error: {}", s),
         }
     }
 }
@@ -40,13 +40,13 @@ impl std::error::Error for JsonError {}
 
 impl From<serde_json::Error> for JsonError {
     fn from(err: serde_json::Error) -> Self {
-        JsonError::SerdeJsonError(err)
+        JsonError::SerdeJson(err)
     }
 }
 
 impl From<ParseIntError> for JsonError {
     fn from(err: ParseIntError) -> Self {
-        JsonError::HexParseError(err.to_string())
+        JsonError::HexParse(err.to_string())
     }
 }
 
@@ -133,13 +133,13 @@ impl TryFrom<&JsonLlc> for LlcSnapHeader {
         let oui_str = fields
             .oui
             .as_deref()
-            .ok_or_else(|| JsonError::ConversionError("Missing llc.oui for SNAP".to_string()))?;
+            .ok_or_else(|| JsonError::Conversion("Missing llc.oui for SNAP".to_string()))?;
         let snap_pid_val = fields
             .snap_pid
-            .ok_or_else(|| JsonError::ConversionError("Missing llc.type for SNAP".to_string()))?;
+            .ok_or_else(|| JsonError::Conversion("Missing llc.type for SNAP".to_string()))?;
 
         if !oui_str.starts_with("0x") || oui_str.len() != 8 {
-            return Err(JsonError::HexParseError(format!(
+            return Err(JsonError::HexParse(format!(
                 "Invalid OUI format: {}, expected 0xXXXXXX",
                 oui_str
             )));
@@ -167,18 +167,6 @@ pub fn to_json_llc(header: &LlcHeader) -> serde_json::Value {
     serde_json::to_value(JsonLlc::from(header)).unwrap_or(serde_json::Value::Null)
 }
 
-/// Serializes an `LlcSnapHeader` to a JSON string.
-pub fn to_json_string(header: &LlcSnapHeader) -> Result<String, JsonError> {
-    let json_llc_layer = JsonLlc::from(header);
-    serde_json::to_string_pretty(&json_llc_layer).map_err(JsonError::from)
-}
-
-/// Deserializes an `LlcSnapHeader` from a JSON string.
-pub fn from_json_string(json_str: &str) -> Result<LlcSnapHeader, JsonError> {
-    let json_llc_layer: JsonLlc = serde_json::from_str(json_str)?;
-    LlcSnapHeader::try_from(&json_llc_layer)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,10 +185,12 @@ mod tests {
             ether_type::IPV4, // Using an EtherType for PID example
         );
 
-        let json_string = to_json_string(&original_header).unwrap();
+        let json_llc_layer = JsonLlc::from(&original_header);
+        let json_string = serde_json::to_string_pretty(&json_llc_layer).unwrap();
         println!("JSON: {}", json_string);
 
-        let deserialized_header = from_json_string(&json_string).unwrap();
+        let parsed_json_llc: JsonLlc = serde_json::from_str(&json_string).unwrap();
+        let deserialized_header = LlcSnapHeader::try_from(&parsed_json_llc).unwrap();
 
         assert_eq!(deserialized_header.llc.dsap, original_header.llc.dsap);
         assert_eq!(deserialized_header.llc.ssap, original_header.llc.ssap);
@@ -237,7 +227,10 @@ mod tests {
                 "llc.oui": "0x0080C", "llc.type": 2048, "llc.type.str": "IPv4"
             }
         }"#; // Invalid OUI length
-        assert!(from_json_string(json_str).is_err());
+        let json_llc_layer: Result<JsonLlc, _> = serde_json::from_str(json_str);
+        assert!(
+            json_llc_layer.is_err() || LlcSnapHeader::try_from(&json_llc_layer.unwrap()).is_err()
+        );
 
         // Test OUI format without "0x" prefix
         let json_str_no_prefix = r#"{
@@ -248,6 +241,9 @@ mod tests {
                 "llc.oui": "0080C2", "llc.type": 2048, "llc.type.str": "IPv4"
             }
         }"#;
-        assert!(from_json_string(json_str_no_prefix).is_err());
+        let json_llc_layer: Result<JsonLlc, _> = serde_json::from_str(json_str_no_prefix);
+        assert!(
+            json_llc_layer.is_err() || LlcSnapHeader::try_from(&json_llc_layer.unwrap()).is_err()
+        );
     }
 }
