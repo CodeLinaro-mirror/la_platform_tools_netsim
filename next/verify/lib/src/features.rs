@@ -7,11 +7,12 @@
 //! Rust. It defines the `Features` struct, which holds registered steps, and
 //! the logic to match regex patterns against test input.
 
-use std::path::Path;
+use std::{io::Write, path::Path};
 
 use anyhow::{bail, Context, Result};
 use gherkin::Feature;
 use regex::Regex;
+use termcolor::Color;
 
 use crate::step::{AsyncStep, StepContext, World};
 
@@ -184,7 +185,7 @@ impl<W: ?Sized> Features<W> {
             println!("  Background:{}{}", sep, bg.name);
             for step in &bg.steps {
                 let status = if self.is_match(&step.value) {
-                    "\x1b[32m# ok\x1b[0m"
+                    "\x1b[32m# OK\x1b[0m"
                 } else {
                     "\x1b[31m# UNDEFINED\x1b[0m"
                 };
@@ -205,7 +206,7 @@ impl<W: ?Sized> Features<W> {
                 println!("  Scenario: {}", scenario.name);
                 for step in &scenario.steps {
                     let status = if self.is_match(&step.value) {
-                        "\x1b[32m# ok\x1b[0m"
+                        "\x1b[32m# OK\x1b[0m"
                     } else {
                         "\x1b[31m# UNDEFINED\x1b[0m"
                     };
@@ -233,7 +234,7 @@ impl<W: ?Sized> Features<W> {
                             let value =
                                 crate::utils::apply_replacements(&step.value, &replacements);
                             let status = if self.is_match(&value) {
-                                "\x1b[32m# ok\x1b[0m"
+                                "\x1b[32m# OK\x1b[0m"
                             } else {
                                 "\x1b[31m# UNDEFINED\x1b[0m"
                             };
@@ -282,9 +283,7 @@ impl<W: ?Sized> Features<W> {
     where
         W: World,
     {
-        use std::io::Write;
-        print!("Scenario: {} ... ", scenario.name);
-        std::io::stdout().flush().unwrap();
+        println!("Scenario: {}", scenario.name);
 
         let start = std::time::Instant::now();
         world.reset().await;
@@ -311,11 +310,13 @@ impl<W: ?Sized> Features<W> {
         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
         match result {
             Ok(_) => {
-                println!("PASS ({:.1} ms)", elapsed);
+                print_status("PASS", Color::Green);
+                println!(" ({:.1} ms)", elapsed);
                 Ok(())
             }
             Err(e) => {
-                println!("FAIL ({:.1} ms)\n    Error: {}", elapsed, e);
+                print_status("FAIL", Color::Red);
+                println!(" ({:.1} ms)\n    Error: {}", elapsed, e);
                 Err(e)
             }
         }
@@ -352,7 +353,7 @@ impl<W: ?Sized> Features<W> {
                     .map(|(k, v)| format!("{}={}", k, v))
                     .collect::<Vec<_>>()
                     .join(", ");
-                use std::io::Write;
+
                 print!("Scenario Outline: {} [{}] ... ", scenario.name, desc);
                 std::io::stdout().flush().unwrap();
 
@@ -379,9 +380,13 @@ impl<W: ?Sized> Features<W> {
 
                 let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                 match result {
-                    Ok(_) => println!("PASS ({:.1} ms)", elapsed),
+                    Ok(_) => {
+                        print_status("PASS", Color::Green);
+                        println!(" ({:.1} ms)", elapsed);
+                    }
                     Err(e) => {
-                        println!("FAIL ({:.1} ms)\n    Error: {}", elapsed, e);
+                        print_status("FAIL", Color::Red);
+                        println!(" ({:.1} ms)\n    Error: {}", elapsed, e);
                         failed = true;
                     }
                 }
@@ -402,7 +407,21 @@ impl<W: ?Sized> Features<W> {
         for step in steps {
             let value = crate::utils::apply_replacements(&step.value, replacements);
             let table = step.table.as_ref().map(|t| apply_table_replacements(t, replacements));
-            self.run_with_context(&value, world, StepContext { table }).await?;
+
+            print!("    {} {} ... ", step.keyword, value);
+            std::io::stdout().flush().unwrap();
+
+            match self.run_with_context(&value, world, StepContext { table }).await {
+                Ok(_) => {
+                    print_status("PASS", Color::Green);
+                    println!();
+                }
+                Err(e) => {
+                    print_status("FAIL", Color::Red);
+                    println!();
+                    anyhow::bail!(e);
+                }
+            }
         }
         Ok(())
     }
@@ -427,6 +446,15 @@ impl<W: ?Sized> Features<W> {
         let content = std::fs::read_to_string(path).context("Failed to read feature file")?;
         self.execute_from_memory(&content, world).await
     }
+}
+
+fn print_status(label: &str, color: Color) {
+    use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let _ = stdout.set_color(ColorSpec::new().set_fg(Some(color)));
+    let _ = write!(&mut stdout, "{}", label);
+    let _ = stdout.reset();
 }
 
 fn apply_table_replacements(
