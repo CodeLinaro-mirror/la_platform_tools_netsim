@@ -365,55 +365,6 @@ def get_bazel_startup_options():
   return startup_options
 
 
-def configure_android_sdk():
-  """Determines and validates the Android SDK path, returning it."""
-  # Determine OS directory for prebuilt SDK
-  system = platform.system().lower()
-  os_map = {"darwin": "macosx", "linux": "linux", "windows": "windows"}
-  os_dir = os_map.get(system, system)
-
-  prebuilt_sdk_path = os.path.join(
-      AOSP_ROOT,
-      "prebuilts",
-      "android-emulator-build",
-      "system-images",
-      "android-sdk",
-      os_dir,
-  )
-
-  # Check if prebuilt SDK is available and valid
-  if os.path.isdir(prebuilt_sdk_path):
-    platforms_dir = os.path.join(prebuilt_sdk_path, "platforms")
-    build_tools_dir = os.path.join(prebuilt_sdk_path, "build-tools")
-    if os.path.isdir(platforms_dir) and os.path.isdir(build_tools_dir):
-      logging.info("Using prebuilt Android SDK at %s", prebuilt_sdk_path)
-      return prebuilt_sdk_path
-
-  logging.warning(
-      "Prebuilt Android SDK at %s not found or invalid. Falling back to"
-      " ANDROID_HOME.",
-      prebuilt_sdk_path,
-  )
-  # Fallback to environment variable
-  android_home = os.environ.get("ANDROID_HOME")
-  if android_home and os.path.isdir(android_home):
-    platforms_dir = os.path.join(android_home, "platforms")
-    build_tools_dir = os.path.join(android_home, "build-tools")
-    if os.path.isdir(platforms_dir) and os.path.isdir(build_tools_dir):
-      logging.info("Android SDK detected at %s via ANDROID_HOME.", android_home)
-      return android_home
-    else:
-      raise Exception(
-          "ANDROID_HOME is set at %s but does not appear to be a valid SDK"
-          " (missing platforms or build-tools)." % android_home
-      )
-  else:
-    raise Exception(
-        "No valid Android SDK found. Tried prebuilts at %s and ANDROID_HOME."
-        % prebuilt_sdk_path
-    )
-
-
 def get_bazel_build_configs(args, env):
   """Returns the bazel build configurations."""
   configs = ["release"]
@@ -424,27 +375,19 @@ def get_bazel_build_configs(args, env):
     configs.append("hermetic")
 
   build_configs = [f"--config={c}" for c in configs]
+  if platform.system().lower() == "windows":
+    # Force Static CRT linking to avoid ABI mismatches with the Emulator's prebuilt DLLs.
+    build_configs.append("--features=static_link_msvcrt")
   if not getattr(args, "enable_repo_cache", False):
     build_configs.append("--repo_contents_cache=")
-
-  # Configure Android SDK and update environment
-  env["ANDROID_HOME"] = configure_android_sdk()
-
   return build_configs
 
 
 def get_bazel_targets(args):
   """Returns the bazel targets."""
-  if args.bazel_targets:
-    return args.bazel_targets
-
-  targets = [
+  targets = args.bazel_targets or [
       "@netsim//:all",
       "@netsim//rust/...",
       "@netsim//next/...",
   ]
-
-  if platform.system() != "Windows":
-    targets.append("@netsim//next/verify/instrumentation/vbs:vbs")
-
   return targets
