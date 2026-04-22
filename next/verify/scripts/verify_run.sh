@@ -125,7 +125,7 @@ echo "3. Starting Netsim daemon"
 echo "================================================="
 
 BAZEL_BIN=$(bazel info bazel-bin 2>/dev/null || echo "$WORKSPACE_DIR/bazel-bin")
-BAZEL_OUT=$(realpath "$BAZEL_BIN/../..")
+BAZEL_OUT=$(dirname $(dirname "$BAZEL_BIN"))
 
 if [ -z "$NETSIMD_PATH" ]; then
   NETSIMD_BIN=$(find "$BAZEL_OUT" -path "*/daemon/daemon" -type f | head -n 1)

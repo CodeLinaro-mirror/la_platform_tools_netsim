@@ -198,6 +198,52 @@ impl TestContext {
         Ok(self.ap_client.as_ref().unwrap())
     }
 
+    /// Maps an orchestrator actor label (e.g., @avd:1 or @Beacon1) to a netsim
+    /// device name.
+    ///
+    /// For Android devices, it queries the AVD name via ADB.
+    /// For built-in devices like beacons, it queries the Netsim device list via
+    /// gRPC to find a matching name.
+    pub fn map_actor_to_netsim(&mut self, actor: &str) -> Result<String> {
+        // 1. Check if it's an Android VBS
+        if let Some(android) = self.android.get(actor) {
+            let adb_path = &android.adb_path;
+            let serial = android.serial.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Android device must have a serial for netsim mapping")
+            })?;
+
+            let mut cmd = std::process::Command::new(adb_path);
+            cmd.arg("-s").arg(serial).arg("shell").arg("getprop").arg("ro.boot.qemu.avd_name");
+
+            let output = cmd.output()?;
+            if output.status.success() {
+                let avd_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !avd_name.is_empty() {
+                    // Netsim replaces underscores with spaces in AVD names
+                    return Ok(avd_name.replace('_', " "));
+                }
+            }
+        }
+
+        // 2. For non-Android actors, query ListDevice from netsim to find a match.
+        // This supports built-in devices like beacons created during the test.
+        let client = self.get_or_create_grpc_client().context("got grpc client")?;
+        let resp = client
+            .list_device(&protobuf::well_known_types::empty::Empty::new())
+            .context("listed devices")?;
+
+        let stripped_actor = actor.strip_prefix('@').unwrap_or(actor);
+
+        if let Some(device) =
+            resp.devices.iter().find(|d| d.name == stripped_actor || d.name == actor)
+        {
+            return Ok(device.name.clone());
+        }
+
+        // Fail explicitly if the actor cannot be resolved to a valid Netsim device.
+        anyhow::bail!("Device '{}' not found in netsim", actor)
+    }
+
     // Helper to resolve generic actor lookups for the engine
     // Since we removed TestActor enum, we need to dispatch manually if needed
     // But for now, most steps are specific to an actor type.

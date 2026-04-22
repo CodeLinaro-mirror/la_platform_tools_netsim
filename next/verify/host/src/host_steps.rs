@@ -3,8 +3,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
-use features;
+use anyhow::Result;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, UdpSocket},
