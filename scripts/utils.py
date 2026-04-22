@@ -366,7 +366,12 @@ def get_bazel_startup_options():
 
 
 def configure_android_sdk():
-  """Determines and validates the Android SDK path, returning it."""
+  """Determines and validates the Android SDK path.
+
+  Returns:
+      tuple: (sdk_path, is_prebuilt) where is_prebuilt is True if using
+             in-repo prebuilts, False if using ANDROID_HOME.
+  """
   # Determine OS directory for prebuilt SDK
   system = platform.system().lower()
   os_map = {"darwin": "macosx", "linux": "linux", "windows": "windows"}
@@ -387,7 +392,7 @@ def configure_android_sdk():
     build_tools_dir = os.path.join(prebuilt_sdk_path, "build-tools")
     if os.path.isdir(platforms_dir) and os.path.isdir(build_tools_dir):
       logging.info("Using prebuilt Android SDK at %s", prebuilt_sdk_path)
-      return prebuilt_sdk_path
+      return prebuilt_sdk_path, True
 
   logging.warning(
       "Prebuilt Android SDK at %s not found or invalid. Falling back to"
@@ -401,7 +406,7 @@ def configure_android_sdk():
     build_tools_dir = os.path.join(android_home, "build-tools")
     if os.path.isdir(platforms_dir) and os.path.isdir(build_tools_dir):
       logging.info("Android SDK detected at %s via ANDROID_HOME.", android_home)
-      return android_home
+      return android_home, False
     else:
       raise Exception(
           "ANDROID_HOME is set at %s but does not appear to be a valid SDK"
@@ -428,7 +433,8 @@ def get_bazel_build_configs(args, env):
     build_configs.append("--repo_contents_cache=")
 
   # Configure Android SDK and update environment
-  env["ANDROID_HOME"] = configure_android_sdk()
+  sdk_path, _ = configure_android_sdk()
+  env["ANDROID_HOME"] = sdk_path
 
   return build_configs
 

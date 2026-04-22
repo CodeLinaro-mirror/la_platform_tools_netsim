@@ -13,6 +13,7 @@ from tasks.compile_install_task import CompileInstallTask
 from tasks.configure_task import ConfigureTask
 from tasks.install_emulator_task import InstallEmulatorTask
 from tasks.run_pytest_task import RunPyTestTask
+from tasks.run_verify_task import RunVerifyTask
 from tasks.task import Task
 from tasks.test_task import TestTask
 from tasks.zip_artifact_task import ZipArtifactTask
@@ -27,6 +28,7 @@ TASK_LIST = [
     "ZipArtifact",
     "InstallEmulator",
     "RunPyTest",
+    "RunVerify",
     "LocalRunAll",
 ]
 
@@ -50,6 +52,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
       "ZipArtifact": ZipArtifactTask(args),
       "InstallEmulator": InstallEmulatorTask(args),
       "RunPyTest": RunPyTestTask(args),
+      "RunVerify": RunVerifyTask(args, env),
   }
 
   # Enable all tasks for buidlbots
@@ -72,10 +75,11 @@ def get_tasks(args, env) -> Mapping[str, Task]:
       "compile": ["Build"],
       "compileinstall": ["CompileInstall"],
       "test": ["Test"],
-      "runtest": ["Test"],
+      "runtest": ["Test", "RunVerify"],
       "zipartifact": ["ZipArtifact"],
       "installemulator": ["InstallEmulator"],
       "runpytest": ["RunPyTest"],
+      "runverify": ["RunVerify"],
       "fullbuild": ["Configure", "Build", "InstallEmulator"],
       "localrunall": [
           "Configure",
@@ -83,6 +87,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
           "Test",
           "InstallEmulator",
           "RunPyTest",
+          "RunVerify",
       ],
   }
 

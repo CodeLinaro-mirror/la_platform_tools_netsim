@@ -233,6 +233,9 @@ def main():
   tasks.get("InstallEmulator").run()
   tasks.get("RunPyTest").run()
 
+  # Run Verify tests
+  tasks.get("RunVerify").run()
+
 
 if __name__ == "__main__":
   main()
