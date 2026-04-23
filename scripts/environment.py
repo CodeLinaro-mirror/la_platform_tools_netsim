@@ -110,7 +110,7 @@ class WindowsEnvironment(BaseEnvironment):
     Returns:
         Path: Path to the Visual Studio vcvars64.bat file.
     """
-    prgrfiles = Path(os.getenv("ProgramFiles(x86)", "C:\Program Files (x86)"))
+    prgrfiles = Path(os.getenv("ProgramFiles(x86)", r"C:\Program Files (x86)"))
     res = subprocess.check_output([
         str(
             prgrfiles / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"

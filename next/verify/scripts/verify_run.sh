@@ -191,7 +191,7 @@ if [ "$DRY_RUN" = false ]; then
   echo "4. Launching $NUM_EMULATORS Emulator(s) (logs in /tmp/emulator_*)"
   echo "================================================="
   for emu in "${SELECTED_EMULATORS[@]}"; do
-    "$EMULATOR_PATH" "$emu" -no-window -no-audio -no-snapshot > "/tmp/emulator_${emu#@}_e2e.log" 2>&1 &
+    "$EMULATOR_PATH" "$emu" -no-window -no-audio -no-snapshot -wipe-data > "/tmp/emulator_${emu#@}_e2e.log" 2>&1 &
     EMU_PIDS+=($!)
   done
 

@@ -64,6 +64,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
         "ZipArtifact",
         "InstallEmulator",
         "RunPyTest",
+        "RunVerify",
     ]:
       tasks[task_name].enable(True)
     return tasks
