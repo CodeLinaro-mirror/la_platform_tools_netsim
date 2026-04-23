@@ -57,7 +57,7 @@ open class VerifyInstrumentation : Instrumentation() {
   }
 
   private fun registerCoreSteps() {
-    registry?.register("When I fetch feature observables") { _ -> getCollectedObservables() }
+    registry?.register("fetch feature observables") { _ -> getCollectedObservables() }
   }
 
   @Volatile protected var controlOutputStream: java.io.DataOutputStream? = null

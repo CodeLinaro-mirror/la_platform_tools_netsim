@@ -620,7 +620,8 @@ pub mod steps {
                 .context("Android step execution failed")?
         };
         for (k, v) in vars {
-            w.set_variable(&k, v);
+            let prefixed_key = format!("{}:{}", actor, k);
+            w.set_variable(&prefixed_key, v);
         }
         Ok(())
     }
@@ -691,21 +692,94 @@ pub mod steps {
         generic_execution(w, "@avd:1".to_string(), step, 60).await
     }
 
-    #[step(r#"(?:@avd|@android)(?::(\S+))? (.*)"#)]
-    async fn generic_execution_step(
+    #[step(r#"((?:@avd|@android|@netsim)(?::\S+)?)\s*observes "([^"]+)" should be "([^"]+)""#)]
+    async fn then_observed_feature_should_be(
         w: &mut TestContext,
-        label: String,
-        step: String,
+        actor: String,
+        feature: String,
+        expected_value: String,
     ) -> Result<()> {
+        let actor = if actor.starts_with("@avd") && !actor.contains(":") {
+            format!("{}:1", actor)
+        } else {
+            actor
+        };
+        w.log_step(
+            &actor,
+            "THEN",
+            &format!("observes \"{}\" should be \"{}\"", feature, expected_value),
+        );
+        let prefixed_key = format!("{}:{}", actor, feature);
+        let actual_value = w.variables.get(&prefixed_key).ok_or_else(|| {
+            let keys: Vec<&String> = w.variables.keys().collect();
+            anyhow::anyhow!(
+                "Feature observable '{}' not found. Available observables: {:?}",
+                feature,
+                keys
+            )
+        })?;
+        anyhow::ensure!(
+            actual_value == &expected_value,
+            "Expected feature '{}' to be '{}', but got '{}'",
+            feature,
+            expected_value,
+            actual_value
+        );
+        Ok(())
+    }
+
+    #[step(
+        r#"((?:@avd|@android|@netsim)(?::\S+)?)\s*observes "([^"]+)" should be greater than (\d+)"#
+    )]
+    async fn then_observed_feature_should_be_greater_than(
+        w: &mut TestContext,
+        actor: String,
+        feature: String,
+        expected_min: i64,
+    ) -> Result<()> {
+        let actor = if actor.starts_with("@avd") && !actor.contains(":") {
+            format!("{}:1", actor)
+        } else {
+            actor
+        };
+        w.log_step(
+            &actor,
+            "THEN",
+            &format!("observes \"{}\" should be greater than {}", feature, expected_min),
+        );
+        let prefixed_key = format!("{}:{}", actor, feature);
+        let actual_value_str = w.variables.get(&prefixed_key).ok_or_else(|| {
+            let keys: Vec<&String> = w.variables.keys().collect();
+            anyhow::anyhow!(
+                "Feature observable '{}' not found. Available observables: {:?}",
+                feature,
+                keys
+            )
+        })?;
+        let actual_value = actual_value_str.parse::<i64>().context(format!(
+            "Failed to parse feature '{}' value '{}' as integer",
+            feature, actual_value_str
+        ))?;
+        anyhow::ensure!(
+            actual_value > expected_min,
+            "Expected feature '{}' to be greater than {}, but got {}",
+            feature,
+            expected_min,
+            actual_value
+        );
+        Ok(())
+    }
+
+    #[step(r#"(?:@avd|@android)(?::(\S+))? fetch feature observables"#)]
+    async fn fetch_observables_step(w: &mut TestContext, label: String) -> Result<()> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+        w.log_step(&actor, "->", "fetch feature observables");
 
-        let step = step.trim().to_string();
-        w.log_step(&actor, "->", &step);
-
-        if w.is_dry_run {
-            return Ok(());
+        if !w.is_dry_run {
+            generic_execution(w, actor, "fetch feature observables".to_string(), 60).await?;
         }
-        generic_execution(w, actor, step, 60).await
+
+        Ok(())
     }
 }
 
