@@ -7,8 +7,8 @@ Scenario: Roam between Open and Secured AP
   And @host starts a TCP echo server on "port_1"
   Then @android:1 sends 2KB TCP to {port_1}
   And @host receives all coordinated data
-
-  When @adb:1 connects to wifi "Coffee" with password "12345678"
+  When Netsim creates Wi-Fi Access Point "Secured_AP" with protocol "g" and password "12345678"
+  When @adb:1 connects to wifi "Secured_AP" with password "12345678"
   And @host starts a TCP echo server on "port_2"
   Then @android:1 sends 2KB TCP to {port_2}
   And @host receives all coordinated data
@@ -18,3 +18,4 @@ Scenario: Roam between Open and Secured AP
   And @host starts a TCP echo server on "port_3"
   Then @android:1 sends 2KB TCP to {port_3}
   And @host receives all coordinated data
+  When Netsim removes Wi-Fi Access Point "Secured_AP"

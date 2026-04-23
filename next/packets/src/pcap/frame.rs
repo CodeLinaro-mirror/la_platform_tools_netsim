@@ -99,7 +99,8 @@ impl<R: Read> LegacyPcapReader<R> {
     pub fn new(mut reader: R) -> io::Result<Self> {
         let mut header_buf = [0; std::mem::size_of::<PcapHeader>()];
         reader.read_exact(&mut header_buf)?;
-        let header = PcapHeader::read_from_bytes(&header_buf[..]).unwrap();
+        let header = PcapHeader::read_from_bytes(&header_buf[..])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
         // The magic number check is already done in PcapReader::new
         Ok(Self { reader, header })
     }
@@ -109,7 +110,8 @@ impl<R: Read> LegacyPcapReader<R> {
         if self.reader.read_exact(&mut header_buf).is_err() {
             return Ok(None);
         }
-        let header = PcapRecordHeader::read_from_bytes(&header_buf[..]).unwrap();
+        let header = PcapRecordHeader::read_from_bytes(&header_buf[..])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
         let mut data = vec![0; header.incl_len.get() as usize];
         self.reader.read_exact(&mut data)?;
         Ok(Some((header, data)))
@@ -126,7 +128,8 @@ impl<R: Read> PcapngReader<R> {
     pub fn new(mut reader: R) -> io::Result<Self> {
         let mut shb_buf = [0; std::mem::size_of::<SectionHeaderBlock>()];
         reader.read_exact(&mut shb_buf)?;
-        let shb = SectionHeaderBlock::read_from_bytes(&shb_buf[..]).unwrap();
+        let shb = SectionHeaderBlock::read_from_bytes(&shb_buf[..])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
         let swap_bytes = shb.byte_order_magic.get() == PCAPNG_MAGIC_NUMBER_SWAPPED;
         let block_total_length = if swap_bytes {
             shb.block_total_length.get().swap_bytes()
@@ -153,8 +156,18 @@ impl<R: Read> PcapngReader<R> {
                 return Ok(None);
             }
 
-            let block_type_raw = u32::from_le_bytes(block_header_buf[0..4].try_into().unwrap());
-            let block_len_raw = u32::from_le_bytes(block_header_buf[4..8].try_into().unwrap());
+            let block_type_raw = u32::from_le_bytes([
+                block_header_buf[0],
+                block_header_buf[1],
+                block_header_buf[2],
+                block_header_buf[3],
+            ]);
+            let block_len_raw = u32::from_le_bytes([
+                block_header_buf[4],
+                block_header_buf[5],
+                block_header_buf[6],
+                block_header_buf[7],
+            ]);
 
             let block_type =
                 if self.swap_bytes { block_type_raw.swap_bytes() } else { block_type_raw };
@@ -174,7 +187,8 @@ impl<R: Read> PcapngReader<R> {
                 full_epb_buf.extend_from_slice(&block_header_buf);
                 full_epb_buf.extend_from_slice(&rest_of_epb);
 
-                let epb = EnhancedPacketBlock::read_from_bytes(&full_epb_buf[..]).unwrap();
+                let epb = EnhancedPacketBlock::read_from_bytes(&full_epb_buf[..])
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
 
                 let captured_len = if self.swap_bytes {
                     epb.captured_len.get().swap_bytes()
@@ -224,7 +238,8 @@ impl<R: Read> PcapngReader<R> {
                 full_idb_buf.extend_from_slice(&block_header_buf);
                 full_idb_buf.extend_from_slice(&rest_of_idb);
 
-                let idb = InterfaceDescriptionBlock::read_from_bytes(&full_idb_buf[..]).unwrap();
+                let idb = InterfaceDescriptionBlock::read_from_bytes(&full_idb_buf[..])
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
                 let link_type = if self.swap_bytes {
                     idb.link_type.get().swap_bytes()
                 } else {

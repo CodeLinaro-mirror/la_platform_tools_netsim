@@ -28,6 +28,14 @@ class VbsInstrumentation : VerifyInstrumentation() {
         Log.i(TAG, msg)
       }
     }
+
+    registerObservable(
+      object : com.android.verify.core.FeatureObservable {
+        override fun getObservables(): Map<String, String> {
+          return mapOf("mock-feature" to "42")
+        }
+      }
+    )
   }
 
   override fun registerSteps() {

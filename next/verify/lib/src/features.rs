@@ -9,6 +9,7 @@
 
 use std::path::Path;
 
+use anyhow::{bail, Context, Result};
 use gherkin::Feature;
 use regex::Regex;
 
@@ -104,11 +105,16 @@ impl<W: ?Sized> Features<W> {
         self.register(pattern, step);
     }
 
-    pub async fn run(&self, text: &str, world: &mut W) {
-        self.run_with_context(text, world, StepContext::default()).await;
+    pub async fn run(&self, text: &str, world: &mut W) -> Result<()> {
+        self.run_with_context(text, world, StepContext::default()).await
     }
 
-    pub async fn run_with_context(&self, text: &str, world: &mut W, ctx: StepContext) {
+    pub async fn run_with_context(
+        &self,
+        text: &str,
+        world: &mut W,
+        ctx: StepContext,
+    ) -> Result<()> {
         // Dispatch to Global Registry
         for (regex, step) in &self.steps {
             if let Some(captures) = regex.captures(text) {
@@ -120,28 +126,29 @@ impl<W: ?Sized> Features<W> {
                         .skip(1)
                         .map(|m| m.map_or("", |m| m.as_str()).to_string())
                         .collect();
-                    step.call(world, args, ctx).await;
-                    return;
+                    return step.call(world, args, ctx).await;
                 }
             }
         }
 
-        panic!("No step definition found for: {}", text);
+        bail!("No step definition found for: {}", text)
     }
 
-    async fn run_hooks(&self, hooks: &[Box<dyn AsyncStep<W>>], world: &mut W) {
+    async fn run_hooks(&self, hooks: &[Box<dyn AsyncStep<W>>], world: &mut W) -> Result<()> {
         for hook in hooks {
-            hook.call(world, vec![], StepContext::default()).await;
+            hook.call(world, vec![], StepContext::default()).await?;
         }
+        Ok(())
     }
 
     /// Executes a Gherkin feature from a string.
-    pub async fn execute_from_memory(&self, content: &str, world: &mut W)
+    pub async fn execute_from_memory(&self, content: &str, world: &mut W) -> Result<()>
     where
         W: World,
     {
         let feature = Feature::parse(content, Default::default()).expect("Failed to parse feature");
 
+        let mut failed = false;
         for scenario in &feature.scenarios {
             if self.is_ignored(&feature.tags, &scenario.tags) {
                 println!("Scenario: {} ... SKIP", scenario.name);
@@ -151,12 +158,19 @@ impl<W: ?Sized> Features<W> {
                 continue;
             }
 
-            if scenario.examples.is_empty() {
-                self.run_scenario(&feature, scenario, world).await;
+            let res = if scenario.examples.is_empty() {
+                self.run_scenario(&feature, scenario, world).await
             } else {
-                self.run_scenario_outline(&feature, scenario, world).await;
+                self.run_scenario_outline(&feature, scenario, world).await
+            };
+            if res.is_err() {
+                failed = true;
             }
         }
+        if failed {
+            bail!("Some scenarios failed");
+        }
+        Ok(())
     }
 
     /// Parses a Gherkin feature and prints its matched scenarios and steps in
@@ -259,7 +273,12 @@ impl<W: ?Sized> Features<W> {
         true
     }
 
-    async fn run_scenario(&self, feature: &Feature, scenario: &gherkin::Scenario, world: &mut W)
+    async fn run_scenario(
+        &self,
+        feature: &Feature,
+        scenario: &gherkin::Scenario,
+        world: &mut W,
+    ) -> Result<()>
     where
         W: World,
     {
@@ -269,13 +288,37 @@ impl<W: ?Sized> Features<W> {
 
         let start = std::time::Instant::now();
         world.reset().await;
-        self.run_hooks(&self.before_hooks, world).await;
-        self.run_background(&feature.background, world).await;
-        self.run_steps(&scenario.steps, world, &[]).await;
-        self.run_hooks(&self.after_hooks, world).await;
+
+        let result = async {
+            self.run_hooks(&self.before_hooks, world).await?;
+            self.run_background(&feature.background, world).await?;
+            self.run_steps(&scenario.steps, world, &[]).await?;
+            Ok(())
+        }
+        .await;
+
+        let after_result = self.run_hooks(&self.after_hooks, world).await;
+
+        let result = match (result, after_result) {
+            (Ok(_), after) => after,
+            (Err(e), Err(ae)) => {
+                eprintln!("Warning: After-hook failed after scenario failure: {}", ae);
+                Err(e)
+            }
+            (Err(e), Ok(_)) => Err(e),
+        };
 
         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-        println!("PASS ({:.1} ms)", elapsed);
+        match result {
+            Ok(_) => {
+                println!("PASS ({:.1} ms)", elapsed);
+                Ok(())
+            }
+            Err(e) => {
+                println!("FAIL ({:.1} ms)\n    Error: {}", elapsed, e);
+                Err(e)
+            }
+        }
     }
 
     async fn run_scenario_outline(
@@ -283,9 +326,11 @@ impl<W: ?Sized> Features<W> {
         feature: &Feature,
         scenario: &gherkin::Scenario,
         world: &mut W,
-    ) where
+    ) -> Result<()>
+    where
         W: World,
     {
+        let mut failed = false;
         for example in &scenario.examples {
             let Some(table) = &example.table else { continue };
             if table.rows.is_empty() {
@@ -298,8 +343,6 @@ impl<W: ?Sized> Features<W> {
 
             for row in table.rows.iter().skip(1) {
                 world.reset().await;
-                self.run_hooks(&self.before_hooks, world).await;
-                self.run_background(&feature.background, world).await;
 
                 let replacements: Vec<(&str, &str)> =
                     headers.iter().zip(row.iter()).map(|(h, v)| (h.as_str(), v.as_str())).collect();
@@ -314,13 +357,40 @@ impl<W: ?Sized> Features<W> {
                 std::io::stdout().flush().unwrap();
 
                 let start = std::time::Instant::now();
-                self.run_steps(&scenario.steps, world, &replacements).await;
-                self.run_hooks(&self.after_hooks, world).await;
+
+                let result = async {
+                    self.run_hooks(&self.before_hooks, world).await?;
+                    self.run_background(&feature.background, world).await?;
+                    self.run_steps(&scenario.steps, world, &replacements).await?;
+                    Ok(())
+                }
+                .await;
+
+                let after_result = self.run_hooks(&self.after_hooks, world).await;
+
+                let result = match (result, after_result) {
+                    (Ok(_), after) => after,
+                    (Err(e), Err(ae)) => {
+                        eprintln!("Warning: After-hook failed after scenario failure: {}", ae);
+                        Err(e)
+                    }
+                    (Err(e), Ok(_)) => Err(e),
+                };
 
                 let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-                println!("PASS ({:.1} ms)", elapsed);
+                match result {
+                    Ok(_) => println!("PASS ({:.1} ms)", elapsed),
+                    Err(e) => {
+                        println!("FAIL ({:.1} ms)\n    Error: {}", elapsed, e);
+                        failed = true;
+                    }
+                }
             }
         }
+        if failed {
+            bail!("Some examples in outline failed");
+        }
+        Ok(())
     }
 
     async fn run_steps(
@@ -328,32 +398,34 @@ impl<W: ?Sized> Features<W> {
         steps: &[gherkin::Step],
         world: &mut W,
         replacements: &[(&str, &str)],
-    ) {
+    ) -> Result<()> {
         for step in steps {
             let value = crate::utils::apply_replacements(&step.value, replacements);
             let table = step.table.as_ref().map(|t| apply_table_replacements(t, replacements));
-            self.run_with_context(&value, world, StepContext { table }).await;
+            self.run_with_context(&value, world, StepContext { table }).await?;
         }
+        Ok(())
     }
 
-    async fn run_background(&self, bg: &Option<gherkin::Background>, world: &mut W) {
+    async fn run_background(&self, bg: &Option<gherkin::Background>, world: &mut W) -> Result<()> {
         if let Some(ref bg) = bg {
             // Suppress background trace prints to keep test output clean
             for step in &bg.steps {
                 let table =
                     step.table.clone().map(|t| t.rows.iter().map(|row| row.to_vec()).collect());
-                self.run_with_context(&step.value, world, StepContext { table }).await;
+                self.run_with_context(&step.value, world, StepContext { table }).await?;
             }
         }
+        Ok(())
     }
 
     /// Executes a Gherkin feature from a file.
-    pub async fn execute<P: AsRef<Path>>(&self, path: P, world: &mut W)
+    pub async fn execute<P: AsRef<Path>>(&self, path: P, world: &mut W) -> Result<()>
     where
         W: World,
     {
-        let content = std::fs::read_to_string(path).expect("Failed to read feature file");
-        self.execute_from_memory(&content, world).await;
+        let content = std::fs::read_to_string(path).context("Failed to read feature file")?;
+        self.execute_from_memory(&content, world).await
     }
 }
 

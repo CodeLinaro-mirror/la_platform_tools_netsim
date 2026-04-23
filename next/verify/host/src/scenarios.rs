@@ -34,8 +34,32 @@ async fn run_feature(
         return Ok(());
     }
 
-    features.execute_from_memory(content, ctx).await;
-    ctx.reset_actors().await?;
+    for is_retry in [false, true] {
+        if is_retry {
+            ctx.reset_actors(true).await?;
+            println!("INFO: Retrying feature in isolation...");
+        }
+
+        match features.execute_from_memory(content, ctx).await {
+            Ok(_) => {
+                if is_retry {
+                    println!("INFO: Feature succeeded on retry after hard reset.");
+                }
+                ctx.reset_actors(false).await?;
+                break;
+            }
+            Err(e) => {
+                if !is_retry {
+                    println!("WARN: Feature failed: {}. Attempting isolation recovery...", e);
+                } else {
+                    println!("ERROR: Feature failed again on retry: {}", e);
+                    // Reset actors again (hard) to be safe for next scenarios if keep_going is true
+                    ctx.reset_actors(true).await?;
+                    return Err(e);
+                }
+            }
+        }
+    }
     Ok(())
 }
 
@@ -64,10 +88,28 @@ pub async fn run_suite(
     // Sort for deterministic order
     entries.sort();
 
+    let mut error_messages = Vec::new();
+
     for path in entries {
         let filename = path.file_name().unwrap().to_string_lossy().into_owned();
         let content = std::fs::read_to_string(&path)?;
-        run_feature(&mut features, ctx, &filename, &content).await?;
+        match run_feature(&mut features, ctx, &filename, &content).await {
+            Ok(_) => {}
+            Err(e) => {
+                error_messages.push(format!("{}: {:?}", filename, e));
+                if !ctx.keep_going {
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    if !error_messages.is_empty() {
+        println!("\n--- Test Failures Summary ---");
+        for msg in &error_messages {
+            println!("{}", msg);
+        }
+        anyhow::bail!("Some specifications failed");
     }
 
     Ok(())

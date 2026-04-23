@@ -38,6 +38,7 @@ pub async fn run_android(
     verbose: bool,
     features: features::Features<TestContext>,
     spec_dir: Option<String>,
+    keep_going: bool,
 ) -> Result<()> {
     let host = HostWorld::new(dry_run);
     let adb = AdbWorld::new(android_home, apk_path, netsim_path.clone(), netsim_args);
@@ -53,6 +54,7 @@ pub async fn run_android(
         filter,
         is_dry_run: dry_run,
         is_verbose: verbose,
+        keep_going,
         variables: HashMap::new(),
         grpc_channel: None,
         grpc_client: None,
@@ -76,6 +78,7 @@ pub async fn list_scenarios(
         filter: None,
         is_dry_run: true,
         is_verbose: false,
+        keep_going: false,
         variables: HashMap::new(),
         grpc_channel: None,
         grpc_client: None,
@@ -98,6 +101,7 @@ pub struct TestContext {
     pub filter: Option<String>,
     pub is_dry_run: bool,
     pub is_verbose: bool,
+    pub keep_going: bool,
     pub variables: HashMap<String, String>,
     pub grpc_channel: Option<grpcio::Channel>,
     pub grpc_client: Option<netsim_proto::frontend_grpc::FrontendServiceClient>,
@@ -108,7 +112,7 @@ impl features::World for TestContext {
     fn reset(&mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
             // 1. Reset all host-side actors and the simulation environment
-            let _ = self.reset_actors().await;
+            let _ = self.reset_actors(false).await;
 
             // 2. Explicitly trigger Kotlin agent reset for each device
             let keys: Vec<String> = self.android.devices.keys().cloned().collect();
@@ -299,7 +303,7 @@ impl TestContext {
         Ok(())
     }
 
-    pub async fn reset_actors(&mut self) -> Result<()> {
+    pub async fn reset_actors(&mut self, hard: bool) -> Result<()> {
         if self.is_dry_run {
             return Ok(());
         }
@@ -312,7 +316,7 @@ impl TestContext {
         client.reset(&protobuf::well_known_types::empty::Empty::new())?;
 
         for agent in self.android.devices.values_mut() {
-            agent.reset_actor().await?;
+            agent.reset_actor(hard).await?;
         }
         Ok(())
     }

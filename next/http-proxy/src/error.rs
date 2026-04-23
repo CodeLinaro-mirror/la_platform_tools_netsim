@@ -26,11 +26,11 @@ pub enum Error {
     #[error("Malformed configuration string")]
     MalformedConfigString,
     /// The port number in the proxy configuration is invalid.
-    #[error("Invalid port number")]
-    InvalidPortNumber,
+    #[error("Invalid port number: {0}")]
+    InvalidPortNumber(#[source] Box<dyn std::error::Error + Send + Sync>),
     /// The host in the proxy configuration is invalid.
-    #[error("Invalid host")]
-    InvalidHost,
+    #[error("Invalid host: {0}")]
+    InvalidHost(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// A type alias for `Result` where the error type is this crate's `Error`.

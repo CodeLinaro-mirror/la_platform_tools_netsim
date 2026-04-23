@@ -3,7 +3,8 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use features;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, UdpSocket},
@@ -18,11 +19,17 @@ use crate::{
 
 #[step_module]
 pub mod steps {
+    use anyhow::{Context, Result};
+
     use super::*;
 
     #[step(r#"@host starts a (TCP|UDP) echo server on "(\w+)""#)]
-    pub async fn start_echo_server(w: &mut TestContext, proto: String, var_name: String) {
-        let port = w.host.start_server(0).await.expect("Failed to start server");
+    pub async fn start_echo_server(
+        w: &mut TestContext,
+        proto: String,
+        var_name: String,
+    ) -> Result<()> {
+        let port = w.host.start_server(0).await.context("Failed to start server")?;
         // Store full address (GatewayIP:Port) so usage {var} works directly
         let full_addr = format!("{}:{}", w.gateway_ip, port);
         w.log_step(
@@ -31,6 +38,7 @@ pub mod steps {
             &format!("starts {} echo server on '{}'", proto.to_uppercase(), var_name),
         );
         w.set_variable(&var_name, full_addr);
+        Ok(())
     }
 
     #[step(r#"@host receives (\d+)(KB|B|MB) (TCP|UDP) data(?: total)?"#)]
@@ -39,24 +47,26 @@ pub mod steps {
         size_val: usize,
         unit: String,
         proto: String,
-    ) {
+    ) -> Result<()> {
         let actor = "@host";
         w.log_step(actor, "THEN", &format!("Receives {}{} {} data", size_val, unit, proto));
+        Ok(())
     }
 
     #[step("@host receives all coordinated data")]
-    pub async fn host_receives_coordinated_data(w: &mut TestContext) {
+    pub async fn host_receives_coordinated_data(w: &mut TestContext) -> Result<()> {
         let actor = "@host";
         w.log_step(actor, "THEN", "Receives all coordinated data");
+        Ok(())
     }
 
     #[step(r#"@host advertises mDNS service (.+)"#)]
-    pub async fn host_advertises_mdns_service(w: &mut TestContext, service: String) {
+    pub async fn host_advertises_mdns_service(w: &mut TestContext, service: String) -> Result<()> {
         let actor = "@host";
         w.log_step(actor, "WHEN", &format!("Advertises mDNS service '{}'", service));
 
         if w.host.is_dry_run {
-            return;
+            return Ok(());
         }
 
         let mut name_bytes = Vec::new();
@@ -93,11 +103,12 @@ pub mod steps {
 
         let socket = tokio::net::UdpSocket::bind(("0.0.0.0", 0))
             .await
-            .expect("Failed to bind UDP socket for advertisement");
-        socket.set_multicast_loop_v4(true).expect("Failed to set multicast loop");
+            .context("Failed to bind UDP socket for advertisement")?;
+        socket.set_multicast_loop_v4(true).context("Failed to set multicast loop")?;
 
         let mdns_addr = "224.0.0.251:5353";
-        socket.send_to(&packet, mdns_addr).await.expect("Failed to send mDNS advertisement");
+        socket.send_to(&packet, mdns_addr).await.context("Failed to send mDNS advertisement")?;
+        Ok(())
     }
 }
 

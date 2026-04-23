@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use features::{assert_json_matches_table, table_to_struct, DataTable, Features};
-use netsim_packets::UdpHeader;
+use tracing_subscriber::fmt::try_init;
 use verify_macros::{step, step_module};
-use zerocopy::IntoBytes;
 
 /// # Example World
 ///
@@ -51,12 +50,29 @@ impl std::str::FromStr for TxPower {
     }
 }
 
+// NOTE: Using String for numeric fields because Gherkin tables provide strings,
+// and table_to_struct produces mixed types in JSON. Using String avoids the
+// need for custom flexible deserializers in this test mock.
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
+struct MockPacket {
+    #[serde(rename = "udp.srcport")]
+    src_port: String,
+    #[serde(rename = "udp.dstport")]
+    dst_port: String,
+    #[serde(rename = "udp.length")]
+    length: String,
+    #[serde(rename = "udp.checksum")]
+    checksum: String,
+}
+
 impl features::World for TestWorld {}
 
 impl TestWorld {}
 
 #[step_module]
 pub mod steps {
+    use anyhow::Result;
+
     use super::*;
 
     #[step(r"I reset the counter")]
@@ -163,24 +179,22 @@ pub mod steps {
     }
 
     #[step(r"I send a UDP packet with:")]
-    async fn when_send_packet(w: &mut TestWorld, table: DataTable) {
-        let json_header: netsim_packets::JsonUdpHeader =
-            table_to_struct(&table).expect("Failed to parse UdpHeader");
-        let header: UdpHeader =
-            json_header.try_into().expect("Failed to convert JsonUdpHeader to UdpHeader");
-        w.received_packets.push(header.as_bytes().to_vec());
+    async fn when_send_packet(w: &mut TestWorld, table: DataTable) -> anyhow::Result<()> {
+        let packet: MockPacket = table_to_struct(&table)
+            .map_err(|e| anyhow::anyhow!("Failed to parse MockPacket: {}", e))?;
+        w.received_packets.push(serde_json::to_vec(&packet)?);
         w.log.push("send_udp".to_string());
+        Ok(())
     }
 
     #[step(r"I receive a UDP packet matching:")]
-    async fn then_receive_packet(w: &mut TestWorld, table: DataTable) {
-        assert!(!w.received_packets.is_empty(), "No packets received");
+    async fn then_receive_packet(w: &mut TestWorld, table: DataTable) -> anyhow::Result<()> {
+        anyhow::ensure!(!w.received_packets.is_empty(), "No packets received");
         let last_packet = w.received_packets.last().unwrap();
-        let (header, _payload) =
-            UdpHeader::parse(last_packet.as_slice()).expect("Failed to parse UDP header");
-        let packet_json = netsim_packets::to_json(&header);
-        assert_json_matches_table(&packet_json, &table);
+        let packet: MockPacket = serde_json::from_slice(last_packet)?;
+        assert_json_matches_table(&packet, &table);
         w.log.push("check_udp".to_string());
+        Ok(())
     }
 
     #[step(r"I setup with default users:")]
@@ -209,22 +223,33 @@ pub mod steps {
             }
         }
     }
+
+    #[step(r"I fail with an error")]
+    async fn when_i_fail_with_an_error(_w: &mut TestWorld) -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("Intentional failure"))
+    }
 }
 
 fn before_helper<'a>(
     w: &'a mut TestWorld,
     _args: Vec<String>,
     _ctx: features::StepContext,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
-    Box::pin(steps::before_hook(w))
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+    Box::pin(async move {
+        steps::before_hook(w).await;
+        Ok(())
+    })
 }
 
 fn after_helper<'a>(
     w: &'a mut TestWorld,
     _args: Vec<String>,
     _ctx: features::StepContext,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
-    Box::pin(steps::after_hook(w))
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+    Box::pin(async move {
+        steps::after_hook(w).await;
+        Ok(())
+    })
 }
 
 fn setup_features_world() -> (Features<TestWorld>, TestWorld) {
@@ -250,19 +275,22 @@ async fn test_features_methods_success() {
     let (features, mut world) = setup_features_world();
     world.display = 999;
 
-    features.run("I reset the counter", &mut world).await;
-    features.run("I add 10", &mut world).await;
-    features.run("result is 10", &mut world).await;
+    features.run("I reset the counter", &mut world).await.unwrap();
+    features.run("I add 10", &mut world).await.unwrap();
+    features.run("result is 10", &mut world).await.unwrap();
 
     assert_eq!(world.log, vec!["reset", "add 10", "check 10"]);
 }
 
 #[tokio::test]
 async fn test_features_background() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
-    features.execute_from_memory(include_str!("features/background.feat"), &mut world).await;
+    features
+        .execute_from_memory(include_str!("features/background.feat"), &mut world)
+        .await
+        .unwrap();
 
     // Feature: Background Support
     // Background: reset_background
@@ -276,10 +304,10 @@ async fn test_features_background() {
 
 #[tokio::test]
 async fn test_features_outline() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
-    features.execute_from_memory(include_str!("features/outline.feat"), &mut world).await;
+    features.execute_from_memory(include_str!("features/outline.feat"), &mut world).await.unwrap();
 
     // Feature: Scenario Outline Support
     // Background: reset_outline
@@ -316,28 +344,28 @@ async fn test_features_outline() {
 async fn test_features_assertion_failure() {
     let (features, mut world) = setup_features_world();
 
-    features.run("I reset the counter", &mut world).await;
-    features.run("I add 10", &mut world).await;
+    features.run("I reset the counter", &mut world).await.unwrap();
+    features.run("I add 10", &mut world).await.unwrap();
     // This should panic
-    features.run("result is 9999", &mut world).await;
+    features.run("result is 9999", &mut world).await.unwrap();
 }
 
 #[tokio::test]
-#[should_panic(expected = "No step definition found for: I do not exist")]
 async fn test_features_missing_step() {
     let (features, mut world) = setup_features_world();
-    features.run("I do not exist", &mut world).await;
+    let err = features.run("I do not exist", &mut world).await.unwrap_err();
+    assert_eq!(err.to_string(), "No step definition found for: I do not exist");
 }
 
 #[tokio::test]
 async fn test_features_tags_filtering() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (mut features, mut world) = setup_features_world();
 
     // Set filter to @wip
     features.filter("@wip");
 
-    features.execute_from_memory(include_str!("features/tags.feat"), &mut world).await;
+    features.execute_from_memory(include_str!("features/tags.feat"), &mut world).await.unwrap();
 
     // Filtered execution (only Tagged scenario)
     // Before -> Background(reset_tags) -> Steps(add 100, check 100) -> After
@@ -347,12 +375,12 @@ async fn test_features_tags_filtering() {
 
 #[tokio::test]
 async fn test_features_data_table() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     let feature = include_str!("features/data_table.feat");
 
-    features.execute_from_memory(feature, &mut world).await;
+    features.execute_from_memory(feature, &mut world).await.unwrap();
 
     assert_eq!(
         world.log,
@@ -369,12 +397,12 @@ async fn test_features_data_table() {
 
 #[tokio::test]
 async fn test_features_types() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     let feature = include_str!("features/types.feat");
 
-    features.execute_from_memory(feature, &mut world).await;
+    features.execute_from_memory(feature, &mut world).await.unwrap();
 
     // Feature: Type Support
     // Scenario: Boolean and Float types
@@ -406,12 +434,12 @@ async fn test_features_types() {
 
 #[tokio::test]
 async fn test_features_enum() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (mut features, mut world) = setup_features_world();
 
     let feature_content = include_str!("features/enum.feat");
 
-    features.execute_from_memory(feature_content, &mut world).await;
+    features.execute_from_memory(feature_content, &mut world).await.unwrap();
 
     assert_eq!(world.log, vec!["before", "tx_power High", "tx_power Ultralow", "after"]);
     assert_eq!(world.tx_power, TxPower::Ultralow);
@@ -419,9 +447,9 @@ async fn test_features_enum() {
 
 #[tokio::test]
 async fn test_features_network() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
-    features.execute_from_memory(include_str!("features/network.feat"), &mut world).await;
+    features.execute_from_memory(include_str!("features/network.feat"), &mut world).await.unwrap();
 
     assert_eq!(
         world.log,
@@ -431,12 +459,13 @@ async fn test_features_network() {
 
 #[tokio::test]
 async fn test_features_background_table() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     features
         .execute_from_memory(include_str!("features/background_table.feature"), &mut world)
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(
         world.log,
@@ -453,22 +482,26 @@ async fn test_features_background_table() {
 
 #[tokio::test]
 async fn test_features_methods_success_file() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
     features
         .execute_from_memory(include_str!("features/methods_success.feature"), &mut world)
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(world.log, vec!["before", "reset", "add 10", "check 10", "after"]);
 }
 
 #[tokio::test]
 async fn test_features_outline_table() {
-    netsim_testing::logger::setup(None);
+    let _ = try_init();
     let (features, mut world) = setup_features_world();
 
-    features.execute_from_memory(include_str!("features/outline_table.feature"), &mut world).await;
+    features
+        .execute_from_memory(include_str!("features/outline_table.feature"), &mut world)
+        .await
+        .unwrap();
 
     assert_eq!(
         world.log,
@@ -480,4 +513,11 @@ async fn test_features_outline_table() {
             "check 10", "after"
         ]
     );
+}
+
+#[tokio::test]
+async fn test_features_result_error_propagation() {
+    let (features, mut world) = setup_features_world();
+    let result = features.run("I fail with an error", &mut world).await;
+    assert!(result.is_err());
 }

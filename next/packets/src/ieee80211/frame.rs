@@ -696,8 +696,12 @@ impl Ieee80211 {
         if packet.len() < 14 {
             return Err("Packet too short".into());
         }
-        let dst = MacAddress::new(packet[0..6].try_into().unwrap());
-        let src = MacAddress::new(packet[6..12].try_into().unwrap());
+        let dst = MacAddress::new(
+            packet[0..6].try_into().map_err(|e: std::array::TryFromSliceError| e.to_string())?,
+        );
+        let src = MacAddress::new(
+            packet[6..12].try_into().map_err(|e: std::array::TryFromSliceError| e.to_string())?,
+        );
         let ethertype = [packet[12], packet[13]];
         let payload = &packet[14..];
 

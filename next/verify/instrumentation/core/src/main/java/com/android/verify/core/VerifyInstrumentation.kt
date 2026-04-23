@@ -36,6 +36,26 @@ open class VerifyInstrumentation : Instrumentation() {
   private val TAG = "VerifyInstrumentation"
 
   @Volatile protected var registry: StepRegistry? = null
+
+  private val observables = java.util.concurrent.CopyOnWriteArrayList<FeatureObservable>()
+
+  fun registerObservable(observable: FeatureObservable) {
+    observables.add(observable)
+  }
+
+  /**
+   * Collects observables from all registered collectors. Note: This method is expected to be called
+   * infrequently (e.g., once per verification step), so the allocation of a new map on each call is
+   * acceptable.
+   */
+  fun getCollectedObservables(): Map<String, String> {
+    val result = mutableMapOf<String, String>()
+    for (obs in observables) {
+      result.putAll(obs.getObservables())
+    }
+    return result
+  }
+
   @Volatile protected var controlOutputStream: java.io.DataOutputStream? = null
   private val logExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
@@ -222,6 +242,14 @@ open class VerifyInstrumentation : Instrumentation() {
                 } catch (e: Exception) {
                   sendResponse(id, "Failure", e.message ?: "Unknown error", null)
                 }
+              } else if (type == "StartScenario") {
+                val id = json.optInt("id")
+                Log.i(TAG, "Starting scenario")
+                sendResponse(id, "Success", null, null)
+              } else if (type == "StopScenario") {
+                val id = json.optInt("id")
+                Log.i(TAG, "Stopping scenario, performing cleanup")
+                sendResponse(id, "Success", null, null)
               }
             }
           } catch (e: Exception) {

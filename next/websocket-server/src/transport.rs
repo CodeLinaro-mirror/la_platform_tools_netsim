@@ -61,9 +61,7 @@ pub(crate) async fn setup_virtual_chip(
     let packet_sink: PacketSink = Box::pin(futures::sink::unfold(
         sink_tx,
         |tx: mpsc::Sender<Bytes>, item: Bytes| async move {
-            tx.send(item).await.map_err(|_| {
-                io::Error::new(io::ErrorKind::BrokenPipe, "Failed to send to sink_tx")
-            })?;
+            tx.send(item).await.map_err(|err| io::Error::new(io::ErrorKind::BrokenPipe, err))?;
             Ok(tx)
         },
     ));

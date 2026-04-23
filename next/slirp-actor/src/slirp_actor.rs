@@ -11,7 +11,7 @@ use tracing::{info, warn};
 pub enum SlirpReq {
     SendPacket(bytes::Bytes),
     Register {
-        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
+        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
         sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
     },
 }

@@ -199,7 +199,7 @@ pub struct ApActorUpdate {
 
 pub enum ApReq {
     Register {
-        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
+        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
         sink: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
         shared_keys: std::sync::Arc<shared::SharedKeyStore>,
         beacon_interval: std::time::Duration,

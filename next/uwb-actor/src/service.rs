@@ -56,8 +56,11 @@ impl ActorService for UwbActor {
         // Wait for add to complete. This guarantees the chip exists by the time any
         // actions are performed on it.
         let handle = loop {
-            if let PicaEvent::Connected { handle, .. } =
-                self.pica_connect_events.recv().await.map_err(|_| UwbError::PicaShutdown)?
+            if let PicaEvent::Connected { handle, .. } = self
+                .pica_connect_events
+                .recv()
+                .await
+                .map_err(|err| UwbError::PicaShutdown(Box::new(err)))?
             {
                 break handle;
             }

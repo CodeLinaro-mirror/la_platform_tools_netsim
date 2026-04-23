@@ -20,8 +20,9 @@ pub use client::WifiClient;
 pub use error::WifiError;
 pub use ftm::handle_ftm_request;
 pub use gateway::GatewayTrait;
-pub use medium::{utils::create_hwsim_msg_from_frame, Medium};
-pub use stats::{Clock, MockClock, SystemClock};
+pub use medium::{types::Station, utils::create_hwsim_msg_from_frame, Medium};
+pub use slirp_gateway::SlirpGateway;
+pub use stats::{Clock, MockClock, SystemClock, WifiStats};
 #[cfg(target_os = "linux")]
 pub use tap_gateway::TapGateway;
 pub use wifi_actor::{WifiActor, WifiReq, WifiResponse};

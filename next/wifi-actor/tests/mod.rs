@@ -6,6 +6,7 @@ mod gateway_test;
 mod hwsim_helper;
 mod lifecycle_test;
 mod packet_routing_test;
+mod slirp_dual_mapping_test;
 mod stats_test;
 // mod veth_test; // Broken/Outdated
 mod world;

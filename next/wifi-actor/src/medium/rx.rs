@@ -95,6 +95,10 @@ impl Medium {
             if let Some(b) = bssid {
                 if !b.is_multicast() {
                     self.key_store.set_station_bssid(src_mac, b);
+                    // Also map hardware MAC (hwsim_addr) to ensure Slirp responses can be routed
+                    if let Some(hwsim_addr) = tx_state.frame.transmitter {
+                        self.key_store.set_station_bssid(hwsim_addr, b);
+                    }
                 }
             }
         }

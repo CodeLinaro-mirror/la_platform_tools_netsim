@@ -68,8 +68,10 @@ impl ProxyConfig {
     /// # Limitations
     /// * Usernames and passwords cannot contain `@` or `:`.
     pub fn from_string(config_string: &str) -> Result<ProxyConfig> {
-        let re = Regex::new(r"^(?:(?P<protocol>\w+)://)?(?:(?P<user>\w+):(?P<pass>\w+)@)?(?P<host>(?:[\w\.-]+|\[[^\]]+\])):(?P<port>\d+)$").unwrap();
-        let caps = re.captures(config_string).ok_or(Error::MalformedConfigString)?;
+        static RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+            Regex::new(r"^(?:(?P<protocol>\w+)://)?(?:(?P<user>\w+):(?P<pass>\w+)@)?(?P<host>(?:[\w\.-]+|\[[^\]]+\])):(?P<port>\d+)$").unwrap()
+        });
+        let caps = RE.captures(config_string).ok_or(Error::MalformedConfigString)?;
 
         let protocol =
             caps.name("protocol").map_or_else(|| "http".to_string(), |m| m.as_str().to_string());
@@ -89,13 +91,18 @@ impl ProxyConfig {
             .ok_or(Error::MalformedConfigString)?
             .as_str()
             .parse::<u16>()
-            .map_err(|_| Error::InvalidPortNumber)?;
+            .map_err(|err| Error::InvalidPortNumber(Box::new(err)))?;
 
         let host = (hostname, port)
             .to_socket_addrs()
-            .map_err(|_| Error::InvalidHost)?
+            .map_err(|err| Error::InvalidHost(Box::new(err)))?
             .next() // Take the first resolved address
-            .ok_or(Error::InvalidHost)?
+            .ok_or_else(|| {
+                Error::InvalidHost(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "No address found",
+                )))
+            })?
             .ip();
 
         Ok(ProxyConfig {
@@ -221,30 +228,53 @@ mod tests {
 
     #[test]
     fn parse_configuration_string_with_errors() {
+        let dummy_error = || Box::new(std::io::Error::new(std::io::ErrorKind::Other, "dummy"));
         let data = [
             ("http://", Error::MalformedConfigString),
             ("", Error::MalformedConfigString),
-            ("256.0.0.1:8080", Error::InvalidHost),
+            ("256.0.0.1:8080", Error::InvalidHost(dummy_error())),
             ("127.0.0.1:foo", Error::MalformedConfigString),
             ("127.0.0.1:-2", Error::MalformedConfigString),
-            ("127.0.0.1:100000", Error::InvalidPortNumber),
+            ("127.0.0.1:100000", Error::InvalidPortNumber(dummy_error())),
             ("127.0.0.1", Error::MalformedConfigString),
             ("http:127.0.0.1:8080", Error::MalformedConfigString),
             ("::1:8080", Error::MalformedConfigString),
             ("user@pass:127.0.0.1:8080", Error::MalformedConfigString),
             ("user@127.0.0.1:8080", Error::MalformedConfigString),
-            ("proxy.example.com:7000", Error::InvalidHost),
+            ("proxy.example.com:7000", Error::InvalidHost(dummy_error())),
             ("[::1}:7000", Error::MalformedConfigString),
         ];
 
         for (input, expected_error) in data {
             let result = ProxyConfig::from_string(input);
-            assert_eq!(
-                result.err().unwrap().to_string(),
-                expected_error.to_string(),
-                "Expected an error for input: {}",
-                input
-            );
+            let actual_error = result.err().unwrap();
+            match expected_error {
+                Error::InvalidHost(_) => {
+                    assert!(
+                        matches!(actual_error, Error::InvalidHost(_)),
+                        "Expected InvalidHost for input: {}, got {:?}",
+                        input,
+                        actual_error
+                    );
+                }
+                Error::InvalidPortNumber(_) => {
+                    assert!(
+                        matches!(actual_error, Error::InvalidPortNumber(_)),
+                        "Expected InvalidPortNumber for input: {}, got {:?}",
+                        input,
+                        actual_error
+                    );
+                }
+                _ => {
+                    assert_eq!(
+                        actual_error.to_string(),
+                        expected_error.to_string(),
+                        "Expected {} for input: {}",
+                        expected_error,
+                        input
+                    );
+                }
+            }
         }
     }
 }
