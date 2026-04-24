@@ -3,7 +3,6 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    io::Write,
     process::{Child, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -360,7 +359,6 @@ impl AndroidDevice {
             let msg = parts.next().unwrap_or("");
             println!("    {:<6} {} {}", "->", actor_tag, msg);
         }
-        let _ = std::io::stdout().flush();
     }
 
     pub fn launch_agent(&mut self) -> anyhow::Result<()> {

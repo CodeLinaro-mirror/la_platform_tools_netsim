@@ -119,7 +119,7 @@ impl features::World for TestContext {
                 if let Some(agent) = self.android.devices.get_mut(&key) {
                     // "resets world" is defined in LifecycleSteps.kt
                     if let Err(e) = agent.execute_step("resets world", 60).await {
-                        println!("WARN: Failed to reset world on {}: {}", key, e);
+                        eprintln!("WARN: Failed to reset world on {}: {}", key, e);
                     }
                 }
             }
@@ -325,7 +325,7 @@ impl TestContext {
 
         // Summary Line
         let tag = self.actor_tag(actor);
-        println!("    {:<6} {} - - - - - - - - - - - - - - - - - - - - - - - - -", "INFO", tag);
+        eprintln!("    {:<6} {} - - - - - - - - - - - - - - - - - - - - - - - - -", "INFO", tag);
         self.log_iperf_line(
             actor,
             Throughput { bytes: total_bytes, duration: total_duration },
@@ -363,7 +363,7 @@ impl TestContext {
             } else {
                 resolved
             };
-            println!("    {:<6} {} {}", prefix, tag, capitalized);
+            eprintln!("    {:<6} {} {}", prefix, tag, capitalized);
         }
     }
 
@@ -371,7 +371,7 @@ impl TestContext {
     pub fn log_info(&self, actor: &str, msg: &str) {
         if self.is_verbose {
             let tag = self.actor_tag(actor);
-            println!("INFO   {:<20} {}", tag, msg);
+            eprintln!("INFO   {:<20} {}", tag, msg);
         }
     }
 

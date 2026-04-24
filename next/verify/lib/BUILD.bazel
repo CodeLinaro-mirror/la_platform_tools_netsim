@@ -24,6 +24,7 @@ rust_library(
         "@regex",
         "@serde",
         "@serde_json",
+        "@termcolor",
     ],
 )
 

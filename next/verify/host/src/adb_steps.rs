@@ -97,25 +97,26 @@ impl AdbWorld {
                 let mut exec =
                     AndroidDevice::new(Some(serial.clone()), adb.clone(), self.apk_path.clone())?;
                 Self::identify_avd(&adb, &mut exec)?;
+                exec.set_silent(!is_verbose);
 
                 if launch_netsim {
                     // HARDCODED: Enable pcap for debugging as requested
                     let args = self.netsim_args.clone().unwrap_or_default() + " --pcap";
                     if let Err(e) = exec.launch_netsim(&self.netsim_path, &Some(args)) {
-                        println!("WARN   Failed to launch netsim: {}", e);
+                        eprintln!("WARN   Failed to launch netsim: {}", e);
                     }
                     launch_netsim = false;
                 }
 
                 if is_verbose {
-                    println!("INFO   @{} Installing vbs APK...", exec.get_label());
+                    eprintln!("INFO   @{} Installing vbs APK...", exec.get_label());
                 }
 
                 // Best effort uninstall to clear state
                 let _ = exec.uninstall_apk("com.android.verify.vbs");
 
                 if let Err(e) = exec.install_apk() {
-                    println!("WARN   Failed to install APK on {}: {}", serial, e);
+                    eprintln!("WARN   Failed to install APK on {}: {}", serial, e);
                     // Retry in next loop iteration
                     continue;
                 }
@@ -142,12 +143,12 @@ impl AdbWorld {
                     .status();
 
                 if let Err(e) = exec.setup_feedback().await {
-                    println!("WARN   Failed to setup feedback on {}: {}", serial, e);
+                    eprintln!("WARN   Failed to setup feedback on {}: {}", serial, e);
                     continue;
                 }
 
                 if is_verbose {
-                    println!(
+                    eprintln!(
                         "INFO   Waiting 5s for package registration on {}...",
                         exec.get_label()
                     );
@@ -155,15 +156,15 @@ impl AdbWorld {
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
                 if is_verbose {
-                    println!("INFO   @{} Launching VBS instrumentation...", exec.get_label());
+                    eprintln!("INFO   @{} Launching VBS instrumentation...", exec.get_label());
                 }
                 if let Err(e) = exec.launch_agent() {
-                    println!("WARN   Failed to launch VBS on {}: {}", serial, e);
+                    eprintln!("WARN   Failed to launch VBS on {}: {}", serial, e);
                     continue;
                 }
 
                 if let Err(e) = exec.wait_for_feedback().await {
-                    println!("WARN   Failed to connect to VBS on {}: {}", serial, e);
+                    eprintln!("WARN   Failed to connect to VBS on {}: {}", serial, e);
                     continue;
                 }
 
