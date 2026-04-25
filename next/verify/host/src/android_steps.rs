@@ -766,6 +766,29 @@ pub mod steps {
         Ok(())
     }
 
+    #[step(r#"(?:@avd|@android)(?::(\S+))? sets Wi-Fi to (enabled|disabled) via UI"#)]
+    async fn android_sets_wifi_state(
+        w: &mut TestContext,
+        label: String,
+        state: String,
+    ) -> Result<()> {
+        let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+        let step = format!("sets Wi-Fi to {} via UI", state);
+        generic_execution(w, actor, step, 60).await
+    }
+
+    #[step(r#"(?:@avd|@android)(?::(\S+))? Android Wi-Fi is disabled"#)]
+    async fn android_wifi_is_disabled(w: &mut TestContext, label: String) -> Result<()> {
+        let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+        generic_execution(w, actor, "Android Wi-Fi is disabled".to_string(), 60).await
+    }
+
+    #[step(r#"(?:@avd|@android)(?::(\S+))? Android Wi-Fi is enabled"#)]
+    async fn android_wifi_is_enabled(w: &mut TestContext, label: String) -> Result<()> {
+        let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
+        generic_execution(w, actor, "Android Wi-Fi is enabled".to_string(), 60).await
+    }
+
     #[step(r#"(?:@avd|@android)(?::(\S+))? fetch feature observables"#)]
     async fn fetch_observables_step(w: &mut TestContext, label: String) -> Result<()> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };

@@ -199,3 +199,26 @@ If you run the `verify` binary directly:
 Options:
 - `--android-home <PATH>`: Path to the Android SDK root.
 - `--apk-path <PATH>`: Path to the `vbs.apk`.
+
+---
+
+## UI Automator Steps Guidelines
+
+To add support for UI Automator in `verify` tests, follow these guidelines:
+
+### Abstraction Level
+
+- **Generic Steps**: Prefer generic steps for simple interactions to avoid writing new Kotlin functions for every minor UI interaction.
+    - Example: `When @android:N clicks on element with text "Label"`
+    - Example: `Then @android:N should see text "Label"`
+- **Specific Steps**: Use specific steps for complex UI flows or when generic steps lead to overly verbose feature files.
+    - Example: `When @android:N toggles Wi-Fi via Settings UI`
+
+### UI Flakiness
+
+- **Waiting**: Always use UI Automator's `wait` with `Until` conditions instead of static sleeps.
+- **Timeouts**: Use reasonable timeouts (e.g., 5 seconds) for finding objects.
+
+### Macros
+
+- If sequences of generic steps become repetitive, consider implementing a macro system in the Rust runner (e.g., in `Features::run_steps`) to allow reusability without adding Kotlin boilerplate.
