@@ -4,7 +4,7 @@
 use std::{collections::HashSet, process::Stdio};
 
 use anyhow::{self, bail, Context, Result};
-use tracing::{info, warn};
+use tracing::info;
 use verify_macros::{step, step_module};
 
 use crate::{

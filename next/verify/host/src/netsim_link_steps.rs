@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Context, Result};
-use features;
-use netsim_proto::{frontend, frontend_grpc::FrontendServiceClient};
-use protobuf::{well_known_types::empty, MessageField};
+use netsim_proto::frontend;
 use verify_macros::{step, step_module};
 
 use crate::orchestrator::TestContext;
@@ -25,11 +23,9 @@ pub mod steps {
         let resolved_sender = w.resolve_placeholders(&format!("@{}", sender));
         let resolved_receiver = w.resolve_placeholders(&format!("@{}", receiver));
         let sender_device =
-            w.netsim.map_actor_to_netsim(w, &resolved_sender).context("got sender device name")?;
-        let receiver_device = w
-            .netsim
-            .map_actor_to_netsim(w, &resolved_receiver)
-            .context("got receiver device name")?;
+            w.map_actor_to_netsim(&resolved_sender).context("got sender device name")?;
+        let receiver_device =
+            w.map_actor_to_netsim(&resolved_receiver).context("got receiver device name")?;
 
         w.log_step(
             "@netsim",
