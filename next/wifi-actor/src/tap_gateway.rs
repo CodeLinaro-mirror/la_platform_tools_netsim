@@ -5,7 +5,7 @@ use crate::error::WifiError;
 type WifiResult<T> = Result<T, WifiError>;
 
 #[cfg(target_os = "linux")]
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::fd::AsRawFd;
 use std::{
     collections::HashMap,
     sync::{
@@ -67,7 +67,7 @@ impl TapInterface {
             // SAFETY: The file descriptor was just successfully opened via
             // nix::fcntl::open, so it is valid and we are taking exclusive
             // ownership.
-            unsafe { OwnedFd::from_raw_fd(fd) }
+            fd
         };
 
         // Prepare ifreq
@@ -102,12 +102,12 @@ impl TapInterface {
             .map_err(|e| WifiError::Internal(Box::from(format!("Failed to TUNSETIFF: {}", e))))?;
 
         // Set non-blocking
-        let flags = nix::fcntl::fcntl(fd.as_raw_fd(), nix::fcntl::FcntlArg::F_GETFL)
+        let flags = nix::fcntl::fcntl(&fd, nix::fcntl::FcntlArg::F_GETFL)
             .map_err(|e| WifiError::Internal(Box::from(format!("Failed to get flags: {}", e))))?;
 
         let oflag = nix::fcntl::OFlag::from_bits_truncate(flags) | nix::fcntl::OFlag::O_NONBLOCK;
 
-        nix::fcntl::fcntl(fd.as_raw_fd(), nix::fcntl::FcntlArg::F_SETFL(oflag)).map_err(|e| {
+        nix::fcntl::fcntl(&fd, nix::fcntl::FcntlArg::F_SETFL(oflag)).map_err(|e| {
             WifiError::Internal(Box::from(format!("Failed to set non-blocking: {}", e)))
         })?;
 
