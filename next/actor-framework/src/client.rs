@@ -65,7 +65,7 @@ impl<T: ActorService> ResourceClient<T> {
         self.sender
             .send(ResourceRequest::Create { params, id, respond_to })
             .await
-            .map_err(|_| FrameworkError::ActorClosed)?;
+            .map_err(|err| FrameworkError::ActorClosed(Box::new(err)))?;
         response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
@@ -74,7 +74,7 @@ impl<T: ActorService> ResourceClient<T> {
         self.sender
             .send(ResourceRequest::Get { id, respond_to })
             .await
-            .map_err(|_| FrameworkError::ActorClosed)?;
+            .map_err(|err| FrameworkError::ActorClosed(Box::new(err)))?;
         response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
@@ -87,7 +87,7 @@ impl<T: ActorService> ResourceClient<T> {
         self.sender
             .send(ResourceRequest::Update { id, update, respond_to })
             .await
-            .map_err(|_| FrameworkError::ActorClosed)?;
+            .map_err(|err| FrameworkError::ActorClosed(Box::new(err)))?;
         response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
@@ -96,7 +96,7 @@ impl<T: ActorService> ResourceClient<T> {
         self.sender
             .send(ResourceRequest::Delete { id, respond_to })
             .await
-            .map_err(|_| FrameworkError::ActorClosed)?;
+            .map_err(|err| FrameworkError::ActorClosed(Box::new(err)))?;
         response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
@@ -109,7 +109,7 @@ impl<T: ActorService> ResourceClient<T> {
         self.sender
             .send(ResourceRequest::Action { id, action, respond_to })
             .await
-            .map_err(|_| FrameworkError::ActorClosed)?;
+            .map_err(|err| FrameworkError::ActorClosed(Box::new(err)))?;
         response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
@@ -119,7 +119,7 @@ impl<T: ActorService> ResourceClient<T> {
         self.sender
             .send(ResourceRequest::List { respond_to })
             .await
-            .map_err(|_| FrameworkError::ActorClosed)?;
+            .map_err(|err| FrameworkError::ActorClosed(Box::new(err)))?;
         response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
@@ -129,7 +129,7 @@ impl<T: ActorService> ResourceClient<T> {
         self.sender
             .send(ResourceRequest::Shutdown { respond_to })
             .await
-            .map_err(|_| FrameworkError::ActorClosed)?;
+            .map_err(|err| FrameworkError::ActorClosed(Box::new(err)))?;
         response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 }

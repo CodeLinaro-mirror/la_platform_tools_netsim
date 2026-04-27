@@ -36,7 +36,7 @@ pub trait AsyncStep<W: ?Sized>: Send + Sync {
         world: &'a mut W,
         args: Vec<String>,
         ctx: StepContext,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>;
 }
 
 impl<W, F> AsyncStep<W> for F
@@ -45,7 +45,7 @@ where
             &'a mut W,
             Vec<String>,
             StepContext,
-        ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
+        ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>
         + Send
         + Sync,
 {
@@ -54,7 +54,7 @@ where
         world: &'a mut W,
         args: Vec<String>,
         ctx: StepContext,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>> {
         self(world, args, ctx)
     }
 }

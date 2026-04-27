@@ -17,6 +17,8 @@ use crate::{
 pub enum HwsimError {
     /// Failed to parse a frame or attribute.
     Frame(String),
+    /// Failed to parse using zerocopy or other libraries.
+    ParseError(&'static str, Box<dyn std::error::Error + Send + Sync>),
     /// Other errors.
     Other(String),
 }
@@ -25,12 +27,20 @@ impl fmt::Display for HwsimError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             HwsimError::Frame(msg) => write!(f, "Frame error: {}", msg),
+            HwsimError::ParseError(msg, err) => write!(f, "Parse error ({}): {}", msg, err),
             HwsimError::Other(msg) => write!(f, "Other error: {}", msg),
         }
     }
 }
 
-impl std::error::Error for HwsimError {}
+impl std::error::Error for HwsimError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            HwsimError::ParseError(_, err) => Some(err.as_ref()),
+            _ => None,
+        }
+    }
+}
 
 /// Result type for Hwsim operations.
 pub type HwsimResult<T> = Result<T, HwsimError>;
@@ -289,14 +299,17 @@ impl HwsimAttrSet {
         let mut index: usize = 0;
         let mut builder = HwsimAttrSet::builder();
         while index < attributes.len() {
-            let nla_hdr = NlAttrHdr::decode_full(&attributes[index..index + 4])
-                .map_err(|_| HwsimError::Frame("Failed to decode NlAttrHdr".into()))?;
+            let nla_hdr = NlAttrHdr::decode_full(&attributes[index..index + 4]).map_err(|err| {
+                HwsimError::ParseError("Failed to decode NlAttrHdr", Box::from(err))
+            })?;
             let nla_len = nla_hdr.nla_len.get() as usize;
             let attr_type = num_traits::FromPrimitive::from_u16(nla_hdr.type_());
 
             match attr_type {
                 Some(HwsimAttrEnum::AddrTransmitter) => {
-                    let attr = zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrAddrTransmitter>::from_prefix(&attributes[index..index+nla_len]).map_err(|_| HwsimError::Frame("Failed to read AddrTransmitter".into()))?.0;
+                    let attr = zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrAddrTransmitter>::from_prefix(&attributes[index..index+nla_len]).map_err(|err| {
+                        HwsimError::ParseError("Failed to read AddrTransmitter", Box::from(err.to_string()))
+                    })?.0;
                     builder.transmitter(&attr.address);
                 }
                 Some(HwsimAttrEnum::AddrReceiver) => {
@@ -304,7 +317,12 @@ impl HwsimAttrSet {
                         zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrAddrReceiver>::from_prefix(
                             &attributes[index..index + nla_len],
                         )
-                        .map_err(|_| HwsimError::Frame("Failed to read AddrReceiver".into()))?
+                        .map_err(|err| {
+                            HwsimError::ParseError(
+                                "Failed to read AddrReceiver",
+                                Box::from(err.to_string()),
+                            )
+                        })?
                         .0;
                     builder.receiver(&attr.address);
                 }
@@ -317,7 +335,9 @@ impl HwsimAttrSet {
                     let attr = zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrFlags>::from_prefix(
                         &attributes[index..index + nla_len],
                     )
-                    .map_err(|_| HwsimError::Frame("Failed to read Flags".into()))?
+                    .map_err(|err| {
+                        HwsimError::ParseError("Failed to read Flags", Box::from(err.to_string()))
+                    })?
                     .0;
                     builder.flags(attr.flags);
                 }
@@ -326,7 +346,12 @@ impl HwsimAttrSet {
                         zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrRxRate>::from_prefix(
                             &attributes[index..index + nla_len],
                         )
-                        .map_err(|_| HwsimError::Frame("Failed to read RxRate".into()))?
+                        .map_err(|err| {
+                            HwsimError::ParseError(
+                                "Failed to read RxRate",
+                                Box::from(err.to_string()),
+                            )
+                        })?
                         .0;
                     builder.rx_rate(attr.rx_rate_idx);
                 }
@@ -335,7 +360,12 @@ impl HwsimAttrSet {
                         zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrSignal>::from_prefix(
                             &attributes[index..index + nla_len],
                         )
-                        .map_err(|_| HwsimError::Frame("Failed to read Signal".into()))?
+                        .map_err(|err| {
+                            HwsimError::ParseError(
+                                "Failed to read Signal",
+                                Box::from(err.to_string()),
+                            )
+                        })?
                         .0;
                     builder.signal(attr.signal);
                 }
@@ -344,7 +374,12 @@ impl HwsimAttrSet {
                         zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrCookie>::from_prefix(
                             &attributes[index..index + nla_len],
                         )
-                        .map_err(|_| HwsimError::Frame("Failed to read Cookie".into()))?
+                        .map_err(|err| {
+                            HwsimError::ParseError(
+                                "Failed to read Cookie",
+                                Box::from(err.to_string()),
+                            )
+                        })?
                         .0;
                     builder.cookie(attr.cookie);
                 }
@@ -352,7 +387,9 @@ impl HwsimAttrSet {
                     let attr = zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrFreq>::from_prefix(
                         &attributes[index..index + nla_len],
                     )
-                    .map_err(|_| HwsimError::Frame("Failed to read Freq".into()))?
+                    .map_err(|err| {
+                        HwsimError::ParseError("Failed to read Freq", Box::from(err.to_string()))
+                    })?
                     .0;
                     builder.freq(attr.freq);
                 }
@@ -363,7 +400,12 @@ impl HwsimAttrSet {
                         let mut rates = Vec::with_capacity(count);
                         for i in 0..count {
                             let rate = zerocopy::Ref::<&[u8], TxRate>::from_prefix(&data[i * 2..])
-                                .map_err(|_| HwsimError::Frame("Failed to read TxRate".into()))?
+                                .map_err(|err| {
+                                    HwsimError::ParseError(
+                                        "Failed to read TxRate",
+                                        Box::from(err.to_string()),
+                                    )
+                                })?
                                 .0;
                             rates.push(*rate);
                         }
@@ -378,8 +420,11 @@ impl HwsimAttrSet {
                         for i in 0..count {
                             let flag =
                                 zerocopy::Ref::<&[u8], TxRateFlag>::from_prefix(&data[i * 3..])
-                                    .map_err(|_| {
-                                        HwsimError::Frame("Failed to read TxRateFlag".into())
+                                    .map_err(|err| {
+                                        HwsimError::ParseError(
+                                            "Failed to read TxRateFlag",
+                                            Box::from(err.to_string()),
+                                        )
                                     })?
                                     .0;
                             flags.push(*flag);

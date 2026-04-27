@@ -31,6 +31,8 @@ enum RunnerMessage {
     ExecuteStep { id: i32, step: String },
     GetSteps { id: i32 },
     Quit { id: i32 },
+    StartScenario { id: i32 },
+    StopScenario { id: i32 },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -489,6 +491,24 @@ impl AndroidDevice {
         }
         anyhow::bail!("Internal error: did not receive Response message");
     }
+
+    pub async fn start_scenario(&mut self) -> anyhow::Result<()> {
+        let id = self.next_msg_id;
+        self.next_msg_id += 1;
+        let cmd = RunnerMessage::StartScenario { id };
+        self.send_message(&cmd).await?;
+        self.wait_for_response(id, 10).await?;
+        Ok(())
+    }
+
+    pub async fn stop_scenario(&mut self) -> anyhow::Result<()> {
+        let id = self.next_msg_id;
+        self.next_msg_id += 1;
+        let cmd = RunnerMessage::StopScenario { id };
+        self.send_message(&cmd).await?;
+        self.wait_for_response(id, 10).await?;
+        Ok(())
+    }
 }
 
 impl AndroidDevice {
@@ -508,7 +528,7 @@ impl AndroidDevice {
         Ok(Some(Throughput { bytes: params.payload_size, duration }))
     }
 
-    pub async fn reset_actor(&mut self) -> anyhow::Result<()> {
+    pub async fn hard_reset(&mut self) -> anyhow::Result<()> {
         let id = self.next_msg_id;
         self.next_msg_id += 1;
         let cmd = RunnerMessage::Quit { id };
@@ -533,6 +553,17 @@ impl AndroidDevice {
         self.wait_for_feedback().await
     }
 
+    pub async fn reset_actor(&mut self, hard: bool) -> anyhow::Result<()> {
+        if hard {
+            self.hard_reset().await?;
+        } else if let Err(e) = self.stop_scenario().await {
+            eprintln!("WARN Failed to stop scenario during reset: {}", e);
+            // Fallback to hard reset if soft reset fails
+            self.hard_reset().await?;
+        }
+        self.start_scenario().await
+    }
+
     pub fn get_label(&self) -> String {
         self.avd_name.clone().or(self.serial.clone()).unwrap_or_else(|| "Android".to_string())
     }
@@ -548,6 +579,8 @@ impl AndroidDevice {
 
 #[step_module]
 pub mod steps {
+    use anyhow::{Context, Result};
+
     use super::*;
 
     // Helper function
@@ -556,15 +589,15 @@ pub mod steps {
         actor: String,
         step: String,
         timeout_secs: u64,
-    ) {
+    ) -> Result<()> {
         let step = w.resolve_placeholders(&step);
         let vars = {
             let android = w
                 .get_android_actor_mut(&actor)
-                .expect("Actor not found or is not an Android Agent");
+                .context("Actor not found or is not an Android Agent")?;
 
             if android.steps.is_empty() {
-                android.get_steps().await.expect("Failed to fetch steps from Android");
+                android.get_steps().await.context("Failed to fetch steps from Android")?;
             }
 
             if !android.steps.iter().any(|re| {
@@ -574,14 +607,22 @@ pub mod steps {
                     false
                 }
             }) {
-                panic!("Step '{}' does not match any registered step on guest {}", step, actor);
+                anyhow::bail!(
+                    "Step '{}' does not match any registered step on guest {}",
+                    step,
+                    actor
+                );
             }
 
-            android.execute_step(&step, timeout_secs).await.expect("Android step execution failed")
+            android
+                .execute_step(&step, timeout_secs)
+                .await
+                .context("Android step execution failed")?
         };
         for (k, v) in vars {
             w.set_variable(&k, v);
         }
+        Ok(())
     }
 
     #[step(r#"(?:@avd|@android)(?::(\S+))? measures performance with (\d+) samples of (\d+)(KB|MB|B) (TCP|UDP) to (.*)"#)]
@@ -593,7 +634,7 @@ pub mod steps {
         unit: String,
         proto: String,
         target: String,
-    ) {
+    ) -> Result<()> {
         let proto = proto.to_lowercase();
         let payload_size = match unit.as_str() {
             "KB" => size_val * 1024,
@@ -609,53 +650,62 @@ pub mod steps {
             samples,
         )
         .await
-        .expect("Benchmark failed");
+        .context("Benchmark failed")?;
+        Ok(())
     }
 
     #[step(r#"Android connects to Wi-Fi SSID "([^"]+)""#)]
-    async fn android_connects_to_wifi(w: &mut TestContext, ssid: String) {
+    async fn android_connects_to_wifi(w: &mut TestContext, ssid: String) -> Result<()> {
         let step = format!("When Android connects to Wi-Fi SSID \"{}\"", ssid);
-        generic_execution(w, "@avd:1".to_string(), step, 120).await;
+        generic_execution(w, "@avd:1".to_string(), step, 120).await
     }
 
     #[step(r#"Android connects to Wi-Fi SSID "([^"]+)" with password "([^"]+)""#)]
-    async fn android_connects_to_secured_wifi(w: &mut TestContext, ssid: String, password: String) {
+    async fn android_connects_to_secured_wifi(
+        w: &mut TestContext,
+        ssid: String,
+        password: String,
+    ) -> Result<()> {
         let step = format!(
             "When Android connects to Wi-Fi SSID \"{}\" with password \"{}\"",
             ssid, password
         );
-        generic_execution(w, "@avd:1".to_string(), step, 120).await;
+        generic_execution(w, "@avd:1".to_string(), step, 120).await
     }
 
     #[step(r#"Android is connected to Wi-Fi SSID "([^"]+)""#)]
-    async fn android_is_connected_to_wifi(w: &mut TestContext, ssid: String) {
+    async fn android_is_connected_to_wifi(w: &mut TestContext, ssid: String) -> Result<()> {
         let step = format!("Then Android is connected to Wi-Fi SSID \"{}\"", ssid);
-        generic_execution(w, "@avd:1".to_string(), step, 60).await;
+        generic_execution(w, "@avd:1".to_string(), step, 60).await
     }
 
     #[step(r#"Wi-Fi device info shows SSID "([^"]+)""#)]
-    async fn wifi_device_info_shows_ssid(w: &mut TestContext, ssid: String) {
+    async fn wifi_device_info_shows_ssid(w: &mut TestContext, ssid: String) -> Result<()> {
         let step = format!("Then Wi-Fi device info shows SSID \"{}\"", ssid);
-        generic_execution(w, "@avd:1".to_string(), step, 60).await;
+        generic_execution(w, "@avd:1".to_string(), step, 60).await
     }
 
     #[step("Android releases Wi-Fi connection")]
-    async fn android_releases_wifi_connection(w: &mut TestContext) {
+    async fn android_releases_wifi_connection(w: &mut TestContext) -> Result<()> {
         let step = "When Android releases Wi-Fi connection".to_string();
-        generic_execution(w, "@avd:1".to_string(), step, 60).await;
+        generic_execution(w, "@avd:1".to_string(), step, 60).await
     }
 
     #[step(r#"(?:@avd|@android)(?::(\S+))? (.*)"#)]
-    async fn generic_execution_step(w: &mut TestContext, label: String, step: String) {
+    async fn generic_execution_step(
+        w: &mut TestContext,
+        label: String,
+        step: String,
+    ) -> Result<()> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
 
         let step = step.trim().to_string();
         w.log_step(&actor, "->", &step);
 
         if w.is_dry_run {
-            return;
+            return Ok(());
         }
-        generic_execution(w, actor, step, 60).await;
+        generic_execution(w, actor, step, 60).await
     }
 }
 

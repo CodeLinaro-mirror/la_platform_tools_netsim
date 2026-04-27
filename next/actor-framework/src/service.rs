@@ -65,7 +65,7 @@ pub trait ActorService: Send + Sync + 'static {
     type Update: Send + Sync + Debug;
 
     /// Enum representing resource-specific operations (e.g., `ReserveStock`).
-    type Action: Send + Debug;
+    type Action: Send + Sync + Debug;
 
     /// The result type returned by custom actions.
     type ActionResult: Send + Debug;

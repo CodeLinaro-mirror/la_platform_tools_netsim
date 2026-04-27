@@ -122,9 +122,9 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
     let packet_sink: netsim_model::PacketSink = Box::pin(futures::sink::unfold(
         sink_tx,
         |tx: tokio::sync::mpsc::Sender<bytes::Bytes>, item: bytes::Bytes| async move {
-            tx.send(item).await.map_err(|_| {
-                std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Failed to send to sink_tx")
-            })?;
+            tx.send(item)
+                .await
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::BrokenPipe, err))?;
             Ok(tx)
         },
     ));

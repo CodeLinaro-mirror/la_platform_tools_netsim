@@ -9,6 +9,8 @@ pub struct CalculatorWorld {
 
 #[step_module]
 pub mod steps {
+    use anyhow::Result;
+
     use super::*;
 
     #[step(r"the calculator is clear")]
@@ -49,5 +51,5 @@ async fn main() {
 
     let feature = include_str!("../features/calculator.feat");
 
-    features.execute_from_memory(feature, &mut world).await;
+    features.execute_from_memory(feature, &mut world).await.unwrap();
 }
