@@ -1,7 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Context, Result};
 use features::{self, DataTable, World};
 use netsim_proto::{access_point, frontend};
 use protobuf::{well_known_types::empty::Empty, MessageField};
@@ -19,7 +18,10 @@ impl NetsimWorld {
         Self
     }
 
-    pub async fn run_client(&mut self, _params: ClientParams) -> Result<Option<Throughput>> {
+    pub async fn run_client(
+        &mut self,
+        _params: ClientParams,
+    ) -> Result<Option<Throughput>, String> {
         Ok(None)
     }
 
@@ -36,73 +38,71 @@ pub mod steps {
 
     const DEFAULT_POSITION_DELTA: f32 = 0.001;
 
-    fn evaluate_condition(key: &str, actual: &str, expected: &str) -> Result<()> {
+    fn evaluate_condition(key: &str, actual: &str, expected: &str) -> Result<(), String> {
         if expected == "*" {
             return Ok(());
         }
         if expected.starts_with(">=") {
-            let exp_val = expected[2..].parse::<f64>().context("Parse expected value")?;
-            let act_val = actual.parse::<f64>().context("Parse actual value")?;
-            anyhow::ensure!(
-                act_val >= exp_val,
-                "Expected '{}' >= {}, but got {}",
-                key,
-                exp_val,
-                act_val
-            );
+            let exp_val =
+                expected[2..].parse::<f64>().map_err(|e| format!("Parse expected value: {}", e))?;
+            let act_val =
+                actual.parse::<f64>().map_err(|e| format!("Parse actual value: {}", e))?;
+            if !(act_val >= exp_val) {
+                return Err(format!("Expected '{}' >= {}, but got {}", key, exp_val, act_val));
+            }
         } else if expected.starts_with(">") {
-            let exp_val = expected[1..].parse::<f64>().context("Parse expected value")?;
-            let act_val = actual.parse::<f64>().context("Parse actual value")?;
-            anyhow::ensure!(
-                act_val > exp_val,
-                "Expected '{}' > {}, but got {}",
-                key,
-                exp_val,
-                act_val
-            );
+            let exp_val =
+                expected[1..].parse::<f64>().map_err(|e| format!("Parse expected value: {}", e))?;
+            let act_val =
+                actual.parse::<f64>().map_err(|e| format!("Parse actual value: {}", e))?;
+            if !(act_val > exp_val) {
+                return Err(format!("Expected '{}' > {}, but got {}", key, exp_val, act_val));
+            }
         } else if expected.starts_with("<=") {
-            let exp_val = expected[2..].parse::<f64>().context("Parse expected value")?;
-            let act_val = actual.parse::<f64>().context("Parse actual value")?;
-            anyhow::ensure!(
-                act_val <= exp_val,
-                "Expected '{}' <= {}, but got {}",
-                key,
-                exp_val,
-                act_val
-            );
+            let exp_val =
+                expected[2..].parse::<f64>().map_err(|e| format!("Parse expected value: {}", e))?;
+            let act_val =
+                actual.parse::<f64>().map_err(|e| format!("Parse actual value: {}", e))?;
+            if !(act_val <= exp_val) {
+                return Err(format!("Expected '{}' <= {}, but got {}", key, exp_val, act_val));
+            }
         } else if expected.starts_with("<") {
-            let exp_val = expected[1..].parse::<f64>().context("Parse expected value")?;
-            let act_val = actual.parse::<f64>().context("Parse actual value")?;
-            anyhow::ensure!(
-                act_val < exp_val,
-                "Expected '{}' < {}, but got {}",
-                key,
-                exp_val,
-                act_val
-            );
+            let exp_val =
+                expected[1..].parse::<f64>().map_err(|e| format!("Parse expected value: {}", e))?;
+            let act_val =
+                actual.parse::<f64>().map_err(|e| format!("Parse actual value: {}", e))?;
+            if !(act_val < exp_val) {
+                return Err(format!("Expected '{}' < {}, but got {}", key, exp_val, act_val));
+            }
         } else {
-            anyhow::ensure!(
-                actual.trim() == expected.trim(),
-                "Expected '{}' to be '{}', but got '{}'",
-                key,
-                expected,
-                actual
-            );
+            if actual.trim() != expected.trim() {
+                return Err(format!(
+                    "Expected '{}' to be '{}', but got '{}'",
+                    key, expected, actual
+                ));
+            }
         }
         Ok(())
     }
 
     #[step("@netsim is running")]
-    async fn netsim_running(w: &mut TestContext) -> Result<()> {
+    async fn netsim_running(w: &mut TestContext) -> Result<(), String> {
         w.log_step("@netsim", "GIVEN", "Is running");
         Ok(())
     }
 
     #[step(r#"@netsim moves @(\S+) to ([\d\.]+), ([\d\.]+), ([\d\.]+)"#)]
-    async fn netsim_move(w: &mut TestContext, actor: String, x: f32, y: f32, z: f32) -> Result<()> {
+    async fn netsim_move(
+        w: &mut TestContext,
+        actor: String,
+        x: f32,
+        y: f32,
+        z: f32,
+    ) -> Result<(), String> {
         let resolved_actor = w.resolve_placeholders(&format!("@{}", actor));
-        let netsim_device =
-            w.map_actor_to_netsim(&resolved_actor).context("got netsim device name")?;
+        let netsim_device = w
+            .map_actor_to_netsim(&resolved_actor)
+            .map_err(|e| format!("got netsim device name: {}", e))?;
 
         w.log_step(
             "@netsim",
@@ -113,13 +113,15 @@ pub mod steps {
             return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
-        let resp = client.list_device(&Empty::new()).context("listed devices")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
+        let resp =
+            client.list_device(&Empty::new()).map_err(|e| format!("listed devices: {}", e))?;
         let device = resp
             .devices
             .iter()
             .find(|d| d.name == netsim_device)
-            .ok_or_else(|| anyhow!("Device '{}' not found in netsim devices", netsim_device))?;
+            .ok_or_else(|| format!("Device '{}' not found in netsim devices", netsim_device))?;
 
         let mut req = frontend::PatchDeviceRequest::new();
         req.id = Some(device.id);
@@ -132,24 +134,28 @@ pub mod steps {
         fields.position = MessageField::some(pos);
         req.device = MessageField::some(fields);
 
-        client.patch_device(&req).context("patched device")?;
+        client.patch_device(&req).map_err(|e| format!("patched device: {}", e))?;
         Ok(())
     }
 
     #[step(r#"Netsim creates Wi-Fi Access Point "([^"]+)" with protocol "([^"]+)""#)]
-    async fn host_creates_ap(w: &mut TestContext, ssid: String, protocol: String) -> Result<()> {
+    async fn host_creates_ap(
+        w: &mut TestContext,
+        ssid: String,
+        protocol: String,
+    ) -> Result<(), String> {
         w.log_step("@netsim", "->", &format!("Creates AP '{}' with protocol '{}'", ssid, protocol));
 
         if w.is_dry_run {
             return Ok(());
         }
-        let client = w.get_or_create_ap_client().context("got ap client")?;
+        let client = w.get_or_create_ap_client().map_err(|e| format!("got ap client: {}", e))?;
         let mut ap = access_point::AccessPoint::new();
         ap.ssid = ssid;
         ap.hw_mode = protocol;
         let mut req = access_point::CreateAccessPointRequest::new();
         req.access_point = MessageField::some(ap);
-        client.create(&req).context("created AP")?;
+        client.create(&req).map_err(|e| format!("created AP: {}", e))?;
         Ok(())
     }
 
@@ -161,7 +167,7 @@ pub mod steps {
         ssid: String,
         protocol: String,
         password: String,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         w.log_step(
             "@netsim",
             "->",
@@ -171,57 +177,61 @@ pub mod steps {
         if w.is_dry_run {
             return Ok(());
         }
-        let client = w.get_or_create_ap_client().context("got ap client")?;
+        let client = w.get_or_create_ap_client().map_err(|e| format!("got ap client: {}", e))?;
         let mut ap = access_point::AccessPoint::new();
         ap.ssid = ssid;
         ap.hw_mode = protocol;
         ap.wpa_passphrase = password;
         let mut req = access_point::CreateAccessPointRequest::new();
         req.access_point = MessageField::some(ap);
-        client.create(&req).context("created secured AP")?;
+        client.create(&req).map_err(|e| format!("created secured AP: {}", e))?;
         Ok(())
     }
 
     #[step(r#"Wi-Fi Access Point "([^"]+)" in netsim has protocol "([^"]+)""#)]
-    async fn verify_ap_protocol(w: &mut TestContext, ssid: String, protocol: String) -> Result<()> {
+    async fn verify_ap_protocol(
+        w: &mut TestContext,
+        ssid: String,
+        protocol: String,
+    ) -> Result<(), String> {
         w.log_step("@netsim", "THEN", &format!("AP '{}' has protocol '{}'", ssid, protocol));
 
         if w.is_dry_run {
             return Ok(());
         }
 
-        let client = w.get_or_create_ap_client().context("got ap client")?;
+        let client = w.get_or_create_ap_client().map_err(|e| format!("got ap client: {}", e))?;
         let req = access_point::ListAccessPointsRequest::new();
-        let resp = client.list(&req).context("listed APs")?;
+        let resp = client.list(&req).map_err(|e| format!("listed APs: {}", e))?;
 
         let found = resp.access_points.iter().any(|ap| ap.ssid == ssid && ap.hw_mode == protocol);
 
         if !found {
-            anyhow::bail!("AP with SSID '{}' and protocol '{}' not found", ssid, protocol);
+            return Err(format!("AP with SSID '{}' and protocol '{}' not found", ssid, protocol));
         }
         Ok(())
     }
 
     #[step(r#"Netsim removes Wi-Fi Access Point "([^"]+)""#)]
-    async fn host_removes_ap(w: &mut TestContext, ssid: String) -> Result<()> {
+    async fn host_removes_ap(w: &mut TestContext, ssid: String) -> Result<(), String> {
         w.log_step("@netsim", "->", &format!("Removes AP '{}'", ssid));
 
         if w.is_dry_run {
             return Ok(());
         }
-        let client = w.get_or_create_ap_client().context("got ap client")?;
+        let client = w.get_or_create_ap_client().map_err(|e| format!("got ap client: {}", e))?;
         let req = access_point::ListAccessPointsRequest::new();
-        let resp = client.list(&req).context("listed APs")?;
+        let resp = client.list(&req).map_err(|e| format!("listed APs: {}", e))?;
 
         let ap = resp
             .access_points
             .iter()
             .find(|ap| ap.ssid == ssid)
-            .context(format!("AP with SSID '{}' not found", ssid))?;
+            .ok_or_else(|| format!("AP with SSID '{}' not found", ssid))?;
 
         let mut del_req = access_point::DeleteAccessPointRequest::new();
         del_req.id = ap.id;
-        client.delete(&del_req).context("deleted AP")?;
+        client.delete(&del_req).map_err(|e| format!("deleted AP: {}", e))?;
         Ok(())
     }
 
@@ -230,33 +240,32 @@ pub mod steps {
         w: &mut TestContext,
         key: String,
         expected_value: String,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         w.log_step(
             "@netsim",
             "THEN",
             &format!("observes \"{}\" should be \"{}\"", key, expected_value),
         );
         w.fetch_observables().await?;
-        let actual_value = w
-            .variables
-            .get(&key)
-            .ok_or_else(|| anyhow::anyhow!("Observable '{}' not found", key))?;
+        let actual_value =
+            w.variables.get(&key).ok_or_else(|| format!("Observable '{}' not found", key))?;
         evaluate_condition(&key, actual_value, &expected_value)?;
         Ok(())
     }
 
     #[step(r#"@netsim observes:?"#)]
-    async fn then_netsim_observes_table(w: &mut TestContext, table: DataTable) -> Result<()> {
+    async fn then_netsim_observes_table(
+        w: &mut TestContext,
+        table: DataTable,
+    ) -> Result<(), String> {
         w.log_step("@netsim", "THEN", "observes multiple fields");
         w.fetch_observables().await?;
         let expected_fields = features::vertical_table_to_map(&table);
 
         for (key, expected_value) in expected_fields {
             w.log_step("@netsim", "INFO", &format!("  | {} | {} |", key, expected_value));
-            let actual_value = w
-                .variables
-                .get(&key)
-                .ok_or_else(|| anyhow::anyhow!("Observable '{}' not found", key))?;
+            let actual_value =
+                w.variables.get(&key).ok_or_else(|| format!("Observable '{}' not found", key))?;
             evaluate_condition(&key, actual_value, &expected_value)?;
         }
         Ok(())
@@ -269,7 +278,7 @@ pub mod steps {
         x: f32,
         y: f32,
         z: f32,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         host_creates_beacon_with_address(w, name, "".to_string(), x, y, z).await
     }
 
@@ -281,7 +290,7 @@ pub mod steps {
         x: f32,
         y: f32,
         z: f32,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         w.log_step(
             "@netsim",
             "->",
@@ -292,7 +301,8 @@ pub mod steps {
             return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
 
         let mut pos = netsim_proto::model::Position::new();
         pos.x = x;
@@ -316,7 +326,7 @@ pub mod steps {
         let mut req = frontend::CreateDeviceRequest::new();
         req.device = MessageField::some(dev_create);
 
-        client.create_device(&req).context("created beacon device")?;
+        client.create_device(&req).map_err(|e| format!("created beacon device: {}", e))?;
         Ok(())
     }
 
@@ -327,10 +337,11 @@ pub mod steps {
         y: f32,
         z: f32,
         delta: f32,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         let resolved_actor = w.resolve_placeholders(&format!("@{}", actor));
-        let netsim_device =
-            w.map_actor_to_netsim(&resolved_actor).context("got netsim device name")?;
+        let netsim_device = w
+            .map_actor_to_netsim(&resolved_actor)
+            .map_err(|e| format!("got netsim device name: {}", e))?;
 
         w.log_step(
             "@netsim",
@@ -342,27 +353,23 @@ pub mod steps {
             return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
-        let resp = client.list_device(&Empty::new()).context("listed devices")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
+        let resp =
+            client.list_device(&Empty::new()).map_err(|e| format!("listed devices: {}", e))?;
         let device = resp
             .devices
             .iter()
             .find(|d| d.name == netsim_device)
-            .ok_or_else(|| anyhow!("Device '{}' not found in netsim devices", netsim_device))?;
+            .ok_or_else(|| format!("Device '{}' not found in netsim devices", netsim_device))?;
 
-        let pos = device.position.as_ref().context("device has position")?;
+        let pos = device.position.as_ref().ok_or_else(|| "device has position".to_string())?;
 
         if (pos.x - x).abs() > delta || (pos.y - y).abs() > delta || (pos.z - z).abs() > delta {
-            anyhow::bail!(
+            return Err(format!(
                 "Device '{}' position mismatch. Expected: {}, {}, {}. Actual: {}, {}, {}",
-                netsim_device,
-                x,
-                y,
-                z,
-                pos.x,
-                pos.y,
-                pos.z
-            );
+                netsim_device, x, y, z, pos.x, pos.y, pos.z
+            ));
         }
         Ok(())
     }
@@ -374,7 +381,7 @@ pub mod steps {
         x: f32,
         y: f32,
         z: f32,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         verify_device_position_impl(w, actor, x, y, z, DEFAULT_POSITION_DELTA).await
     }
 
@@ -388,26 +395,26 @@ pub mod steps {
         y: f32,
         z: f32,
         delta: f32,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         verify_device_position_impl(w, actor, x, y, z, delta).await
     }
 
     #[step(r#"Wi-Fi Access Point "([^"]+)" exists in netsim"#)]
-    async fn verify_ap_exists(w: &mut TestContext, ssid: String) -> Result<()> {
+    async fn verify_ap_exists(w: &mut TestContext, ssid: String) -> Result<(), String> {
         w.log_step("@netsim", "THEN", &format!("AP '{}' exists", ssid));
 
         if w.is_dry_run {
             return Ok(());
         }
 
-        let client = w.get_or_create_ap_client().context("got ap client")?;
+        let client = w.get_or_create_ap_client().map_err(|e| format!("got ap client: {}", e))?;
         let req = access_point::ListAccessPointsRequest::new();
-        let resp = client.list(&req).context("listed APs")?;
+        let resp = client.list(&req).map_err(|e| format!("listed APs: {}", e))?;
 
         let found = resp.access_points.iter().any(|ap| ap.ssid == ssid);
 
         if !found {
-            anyhow::bail!("AP with SSID '{}' not found", ssid);
+            return Err(format!("AP with SSID '{}' not found", ssid));
         }
         Ok(())
     }
@@ -420,7 +427,7 @@ pub mod steps {
         x: f32,
         y: f32,
         z: f32,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         w.log_step(
             "@netsim",
             "->",
@@ -434,7 +441,8 @@ pub mod steps {
             return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
 
         let mut pos = netsim_proto::model::Position::new();
         pos.x = x;
@@ -446,7 +454,7 @@ pub mod steps {
             "low" => netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseTxPower::LOW,
             "medium" => netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseTxPower::MEDIUM,
             "high" => netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseTxPower::HIGH,
-            _ => anyhow::bail!("Unknown Tx Power level: {}", tx_power),
+            _ => return Err(format!("Unknown Tx Power level: {}", tx_power)),
         };
 
         let mut settings = netsim_proto::model::chip::ble_beacon::AdvertiseSettings::new();
@@ -468,72 +476,79 @@ pub mod steps {
         let mut req = frontend::CreateDeviceRequest::new();
         req.device = MessageField::some(dev_create);
 
-        client.create_device(&req).context("created beacon device")?;
+        client.create_device(&req).map_err(|e| format!("created beacon device: {}", e))?;
         Ok(())
     }
 
     #[step(r#"Netsim version is "([^"]+)""#)]
-    async fn verify_netsim_version(w: &mut TestContext, expected_version: String) -> Result<()> {
+    async fn verify_netsim_version(
+        w: &mut TestContext,
+        expected_version: String,
+    ) -> Result<(), String> {
         w.log_step("@netsim", "THEN", &format!("Version is '{}'", expected_version));
 
         if w.is_dry_run {
             return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
         let resp = client
             .get_version(&protobuf::well_known_types::empty::Empty::new())
-            .context("got version")?;
+            .map_err(|e| format!("got version: {}", e))?;
 
         if resp.version != expected_version {
-            anyhow::bail!(
+            return Err(format!(
                 "Version mismatch. Expected: {}. Actual: {}",
-                expected_version,
-                resp.version
-            );
+                expected_version, resp.version
+            ));
         }
         Ok(())
     }
 
     #[step(r#"Netsim has at least (\d+) devices"#)]
-    async fn verify_netsim_device_count(w: &mut TestContext, expected_count: usize) -> Result<()> {
+    async fn verify_netsim_device_count(
+        w: &mut TestContext,
+        expected_count: usize,
+    ) -> Result<(), String> {
         w.log_step("@netsim", "THEN", &format!("Has at least {} devices", expected_count));
 
         if w.is_dry_run {
             return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
         let resp = client
             .list_device(&protobuf::well_known_types::empty::Empty::new())
-            .context("listed devices")?;
+            .map_err(|e| format!("listed devices: {}", e))?;
 
         if resp.devices.len() < expected_count {
-            anyhow::bail!(
+            return Err(format!(
                 "Device count too low. Expected at least: {}. Actual: {}",
                 expected_count,
                 resp.devices.len()
-            );
+            ));
         }
         Ok(())
     }
 
     #[step(r#"Wi-Fi Access Point "([^"]+)" does not exist in netsim"#)]
-    async fn verify_ap_does_not_exist(w: &mut TestContext, ssid: String) -> Result<()> {
+    async fn verify_ap_does_not_exist(w: &mut TestContext, ssid: String) -> Result<(), String> {
         w.log_step("@netsim", "THEN", &format!("AP '{}' does not exist", ssid));
 
         if w.is_dry_run {
             return Ok(());
         }
 
-        let client = w.get_or_create_ap_client().context("got ap client")?;
+        let client = w.get_or_create_ap_client().map_err(|e| format!("got ap client: {}", e))?;
         let req = access_point::ListAccessPointsRequest::new();
-        let resp = client.list(&req).context("listed APs")?;
+        let resp = client.list(&req).map_err(|e| format!("listed APs: {}", e))?;
 
         let found = resp.access_points.iter().any(|ap| ap.ssid == ssid);
 
         if found {
-            anyhow::bail!("AP with SSID '{}' found, but expected not to exist", ssid);
+            return Err(format!("AP with SSID '{}' found, but expected not to exist", ssid));
         }
         Ok(())
     }
