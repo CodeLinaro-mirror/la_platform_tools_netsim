@@ -21,12 +21,13 @@ DEPS = [
     "@futures",
     "@serde",
     "@serde_json",
+    "@thiserror",
     "@tokio",
     "@tokio-util",
 ]
 
 SELECT_DEPS = select({
-    "@bazel_tools//src/conditions:windows": ["@log"],
+    "@bazel_tools//src/conditions:windows": ["@tracing"],
     "//conditions:default": [],
 })
 

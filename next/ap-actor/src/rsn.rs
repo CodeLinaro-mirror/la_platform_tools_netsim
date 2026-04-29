@@ -6,7 +6,7 @@ use zerocopy::{IntoBytes, LittleEndian, U16};
 use crate::ap_actor::ApConfig;
 
 /// Builds the RSN Information Element (IE) for WPA2-PSK-CCMP.
-pub fn build_rsn_ie(config: &ApConfig) -> Vec<u8> {
+pub(crate) fn build_rsn_ie(config: &ApConfig) -> Vec<u8> {
     if config.wpa_passphrase.is_none() {
         return Vec::new(); // Open network, no RSN IE.
     }
@@ -40,7 +40,7 @@ pub fn build_rsn_ie(config: &ApConfig) -> Vec<u8> {
 /// Builds a GTK (Group Temporal Key) KDE (Key Data Encapsulation).
 /// Format: Type(0xDD) Len OUI(00 0F AC) DataType(1) KeyID/Tx/Rsvd(1) Rsvd(1)
 /// GTK(N)
-pub fn build_gtk_kde(gtk: &[u8], key_id: u8) -> Vec<u8> {
+pub(crate) fn build_gtk_kde(gtk: &[u8], key_id: u8) -> Vec<u8> {
     let mut kde = Vec::new();
     kde.push(0xDD); // Element ID: Vendor Specific
 

@@ -25,7 +25,7 @@ pub enum DeviceError {
     /// An internal error occurred within the device service. This typically
     /// indicates a bug or an inconsistent state.
     #[error("Internal error: {0}")]
-    Internal(String),
+    Internal(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl From<crate::client_error::ClientError> for DeviceError {
@@ -34,10 +34,7 @@ impl From<crate::client_error::ClientError> for DeviceError {
             crate::client_error::ClientError::Send(s) => DeviceError::ChipClient(s),
             crate::client_error::ClientError::Recv(s) => DeviceError::ChipClient(s),
             crate::client_error::ClientError::Chip(e) => DeviceError::Chip(e),
-            // A ChipClient should not produce a Device error.
-            crate::client_error::ClientError::Device(e) => DeviceError::Internal(format!(
-                "Invariant violated: ChipClient returned a DeviceError: {e:?}"
-            )),
+            crate::client_error::ClientError::Framework(e) => DeviceError::Internal(e),
         }
     }
 }

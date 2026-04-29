@@ -10,21 +10,25 @@ netsim_rust_library(
     proc_macro_deps = [
         "@async-trait",
     ],
+    test_deps = [
+        "//next/actor-framework:testing",
+    ],
     deps = [
+        "//next/ap-actor",
         "//next/device-actor",
         "//next/device-api",
         "//next/link-actor",
         "//next/link-api",
         "//next/model",
         "//next/packet-stream",
+        "//next/packets",
         "//proto",
-        "@anyhow",
         "@bytes",
         "@futures",
         "@grpcio",
-        "@log",
         "@protobuf-rust",
         "@tokio",
         "@tokio-stream",
+        "@tracing",
     ],
 )

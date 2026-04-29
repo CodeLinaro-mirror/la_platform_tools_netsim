@@ -38,10 +38,9 @@ pub struct Args {
 
     /// Redirect all TCP connections through the specified HTTP/HTTPS proxy.
     /// Can be one of the following:
-    ///     http://<server>:<port>
-    ///     http://<username>:<password>@<server>:<port>
+    ///     `http://<server>:<port>`
+    ///     `http://<username>:<password>@<server>:<port>`
     ///     (the 'http://' prefix can be omitted)
-    /// TODO: Not implemented yet
     #[arg(long, verbatim_doc_comment)]
     #[cfg_attr(not(feature = "cuttlefish"), arg(env = "http_proxy"))]
     pub http_proxy: Option<String>,
@@ -80,10 +79,17 @@ pub struct Args {
     #[arg(long, alias = "hci_port", env = "NETSIM_HCI_PORT")]
     pub hci_port: Option<u16>,
 
+    #[arg(long, env = "NETSIM_WS_PORT")]
+    pub ws_port: Option<u16>,
+
     /// DNS server for the host
     /// TODO: Not implemented yet
     #[arg(long, alias = "host-dns")]
     pub host_dns: Option<String>,
+
+    /// Forward mDNS packets from host to guest Wi-Fi medium
+    #[arg(long)]
+    pub forward_host_mdns: bool,
 
     /// Set the initial SSID for the default Access Point (defaults to
     /// 'AndroidWifi')

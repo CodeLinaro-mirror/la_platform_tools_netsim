@@ -279,11 +279,6 @@ impl AndroidDevice {
             let _verb = parts.next().unwrap_or("");
             let msg = parts.next().unwrap_or("");
             println!("    {:<6} {} {}", "->", actor_tag, msg);
-        } else if let Some(msg) = line.strip_prefix("INFO") {
-            let msg = msg.trim();
-            if !msg.starts_with('[') {
-                println!("    {:<6} {} {}", "INFO", actor_tag, msg);
-            }
         }
         let _ = std::io::stdout().flush();
     }
@@ -445,7 +440,8 @@ impl AndroidDevice {
     }
 }
 
-/// STEP: When (?:@avd|@android)(?::(\S+))? sends (\d+)(KB|B) (TCP|UDP) to (.*)
+/// STEP: When ^(?:@avd|@android)(?::(\S+))? sends (\d+)(KB|B) (TCP|UDP) to
+/// (.*)$
 async fn avd_sends_packet(
     w: &mut TestContext,
     label: String,
@@ -478,12 +474,11 @@ async fn avd_sends_packet(
     .expect("Client check failed");
 }
 
-/// STEP: When (?:@avd|@android)(?::(\S+))? (.*)
+/// STEP: When ^(?:@avd|@android)(?::(\S+))? (.*)$
 async fn generic_execution_step(w: &mut TestContext, label: String, step: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
 
     let step = step.trim().to_string();
-    println!("DEBUG: Sending step to agent: [{}]", step);
     w.log_step(&actor, "->", &step);
 
     if w.is_dry_run {
@@ -505,8 +500,8 @@ async fn generic_execution(w: &mut TestContext, actor: String, step: String) {
     }
 }
 
-/// STEP: Then (?:@avd|@android)(?::(\S+))? measures performance with (\d+)
-/// samples of (\d+)(KB|MB|B) (TCP|UDP) to (.*)
+/// STEP: Then ^(?:@avd|@android)(?::(\S+))? measures performance with (\d+)
+/// samples of (\d+)(KB|MB|B) (TCP|UDP) to (.*)$
 async fn performance_benchmark(
     w: &mut TestContext,
     label: String,

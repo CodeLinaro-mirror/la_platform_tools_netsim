@@ -26,7 +26,6 @@ DAEMON_SRCS = [
     "src/lib.rs",
     "src/logger.rs",
     "src/netsimd.rs",
-    "src/platform.rs",
     "src/version.rs",
 ]
 
@@ -46,11 +45,12 @@ DAEMON_DEPS = [
     "//next/packet-stream",
     "//next/slirp-actor",
     "//next/uwb-actor",
+    "//next/websocket-server",
     "//next/wifi-actor",
     "@clap",
     "@futures",
     "@grpcio",
-    "@log",
+    "@tracing",
     "@tokio",
 ]
 
@@ -82,6 +82,7 @@ netsim_rust_binary(
         "link-arg=-lc",
         "-Cforce-frame-pointers=yes",
     ],
+    tags = ["no-sandbox"],
     deps = [
         ":daemon-lib",
         "@tokio",

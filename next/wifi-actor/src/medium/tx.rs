@@ -3,11 +3,11 @@
 use std::collections::HashSet;
 
 use bytes::Bytes;
-use log::debug;
 use netsim_packets::{
     ieee80211::{FrameDirection, Ieee80211},
     netlink::{hwsim_frame::HwsimFrame, HwsimMsg},
 };
+use tracing::debug;
 
 use crate::{
     error::WifiError,
@@ -30,7 +30,8 @@ impl Medium {
         msg: &HwsimMsg,
         out_queue: &mut Vec<(u32, Bytes)>,
     ) -> WifiResult<()> {
-        let packet = msg.encode_to_vec().map_err(|e| WifiError::Frame(e.to_string()))?.into();
+        let packet =
+            msg.encode_to_vec().map_err(|e| WifiError::Internal(Box::from(e.to_string())))?.into();
         out_queue.push((client_id, packet));
         Ok(())
     }
@@ -104,7 +105,9 @@ impl Medium {
         let ieee80211 =
             Ieee80211::from_ieee8023_qos(packet, bssid, FrameDirection::FromAp, true, seq)
                 .map_err(|e| {
-                    WifiError::Frame(format!("Failed to process IEEE 802.3 response: {e}"))
+                    WifiError::Internal(Box::from(format!(
+                        "Failed to process IEEE 802.3 response: {e}"
+                    )))
                 })?;
         self.route_infra_packet(ieee80211, out_queue)
     }
@@ -122,7 +125,7 @@ impl Medium {
             return Ok(());
         }
         let ieee80211 = Ieee80211::decode_full(packet).map_err(|e| {
-            WifiError::Frame(format!("Failed to process IEEE 802.11 response: {e}"))
+            WifiError::Internal(Box::from(format!("Failed to process IEEE 802.11 response: {e}")))
         })?;
         self.route_infra_packet(ieee80211, out_queue)
     }
@@ -204,10 +207,10 @@ impl Medium {
 
         let targets = self.resolve_targets(&dest_addr);
         if targets.is_empty() && !dest_addr.is_multicast() {
-            return Err(WifiError::Transmission(format!(
+            return Err(WifiError::Internal(Box::from(format!(
                 "Dropped packet from {} to {}",
                 source.addr, dest_addr
-            )));
+            ))));
         }
 
         if dest_addr.is_multicast() {
@@ -223,14 +226,18 @@ impl Medium {
         let is_m2u_conversion = targets.len() > 1 || dest_addr.is_multicast();
 
         for dest in targets {
-            if dest.addr == source.addr {
+            // Drop unicast packets destined to the sender itself (invalid for hwsim)
+            // But ALLOW multicast packets to reach the sender (AP Reflection) if enabled
+            if dest.addr == source.addr
+                && (!dest_addr.is_multicast() || !self.simulate_ap_reflection)
+            {
                 continue;
             }
             let src_enabled = self.enabled(source.client_id)?;
             let dst_enabled = self.enabled(dest.client_id)?;
             if src_enabled && dst_enabled {
                 let mut target_frame = ieee80211.clone();
-                if is_m2u_conversion {
+                if is_m2u_conversion && dest.addr != source_addr {
                     let target_mac = netsim_packets::ieee80211::MacAddress::new(
                         dest.addr.try_into().unwrap_or([0; 6]),
                     );

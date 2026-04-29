@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use netsim_model::cell::RegistrationStatus;
+use tracing::error;
 
 use crate::{
     call_service::CallService,
@@ -247,7 +248,7 @@ impl ModemImpl {
                         }
                     }
                     ExecutionResult::Unhandled => {
-                        log::error!("Unhandled command: {:?}", command);
+                        error!("Unhandled command: {:?}", command);
                         effects.push(ModemEffect::Response(AT_ERROR.to_vec()));
                     }
                 }

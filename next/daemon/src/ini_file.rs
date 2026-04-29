@@ -21,7 +21,8 @@ use std::{
     str::FromStr,
 };
 
-use log::warn;
+use common::util::os_utils::get_discovery_directory;
+use tracing::{debug, warn};
 
 // --- INI File Management ---
 
@@ -32,38 +33,6 @@ const INI_FILENAME: &str = "netsim.ini";
 /// On Windows, locking the discovery file would mean it cannot be read by other
 /// processes hence the separation from [INI_FILENAME].
 const LOCK_FILENAME: &str = "netsim.ini.lock";
-
-struct DiscoveryDir {
-    root_env: &'static str,
-    subdir: &'static str,
-}
-
-#[cfg(target_os = "linux")]
-const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "XDG_RUNTIME_DIR", subdir: "" };
-#[cfg(target_os = "macos")]
-const DISCOVERY: DiscoveryDir =
-    DiscoveryDir { root_env: "HOME", subdir: "Library/Caches/TemporaryItems" };
-#[cfg(target_os = "windows")]
-const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "LOCALAPPDATA", subdir: "Temp" };
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-compile_error!("netsim only supports linux, Mac, and Windows");
-
-/// Get discovery directory for netsim
-pub fn get_discovery_directory() -> PathBuf {
-    // $TMPDIR is the temp directory on buildbots
-    if let Ok(test_env_p) = std::env::var("TMPDIR") {
-        return PathBuf::from(test_env_p);
-    }
-    let mut path = match std::env::var(DISCOVERY.root_env) {
-        Ok(env_p) => PathBuf::from(env_p),
-        Err(_) => {
-            warn!("No discovery env for {}, using /tmp", DISCOVERY.root_env);
-            PathBuf::from("/tmp")
-        }
-    };
-    path.push(DISCOVERY.subdir);
-    path
-}
 
 /// Parsed configuration from the INI file.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -104,10 +73,10 @@ impl Drop for IniFileGuard {
     fn drop(&mut self) {
         // Remove the INI file and lock file as part of cleanup.
         if let Err(err) = fs::remove_file(&self.path) {
-            log::warn!("Failed to remove {}: {err}", self.path.display());
+            warn!("Failed to remove {}: {err}", self.path.display());
         }
         if let Err(err) = fs::remove_file(&self.lock_path) {
-            log::warn!("Failed to remove {}: {err}", self.lock_path.display());
+            warn!("Failed to remove {}: {err}", self.lock_path.display());
         }
     }
 }
@@ -177,22 +146,22 @@ impl IniFile {
     /// containing '=', quotes, or escape sequences. Comments start with '#'
     /// or ';'.
     fn read_shared(&self) -> io::Result<HashMap<String, String>> {
-        log::debug!("read_shared called for {}", self.path.display());
+        debug!("read_shared called for {}", self.path.display());
         let mut data = HashMap::new();
         let content = fs::read_to_string(&self.path)?;
-        log::debug!("Content: {:#?}", content);
+        debug!("Content: {:#?}", content);
         for (line_num, line) in content.lines().enumerate() {
             let trimmed = line.trim();
-            log::debug!("Line {}: '{}'", line_num + 1, trimmed);
+            debug!("Line {}: '{}'", line_num + 1, trimmed);
             if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
-                log::debug!("  Skipping comment/empty");
+                debug!("  Skipping comment/empty");
                 continue;
             }
             if let Some((key, value)) = trimmed.split_once('=') {
                 let key = key.trim();
                 let value = value.trim();
                 if key.is_empty() {
-                    log::debug!("  Error: Empty key");
+                    debug!("  Error: Empty key");
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!(
@@ -202,17 +171,17 @@ impl IniFile {
                         ),
                     ));
                 }
-                log::debug!("  Parsed: {} = {}", key, value);
+                debug!("  Parsed: {} = {}", key, value);
                 data.insert(key.to_string(), value.to_string());
             } else {
-                log::debug!("  Error: Missing =");
+                debug!("  Error: Missing =");
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("Malformed line {} in INI file: Missing '=' '{}'", line_num + 1, line),
                 ));
             }
         }
-        log::debug!("read_shared success: {:?}", data);
+        debug!("read_shared success: {:?}", data);
         Ok(data)
     }
 

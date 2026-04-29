@@ -44,10 +44,10 @@ async fn test_grpc_frontend_lifecycle() {
 
     // Then the device list contains the new device
     let devices = world.when_list_devices().await;
-    assert!(devices.iter().any(|d| d.id == device_id && d.name == device_name));
+    assert!(devices.iter().any(|d| d.id == device_id && d.name == device_name), "Device missing");
 
-    // When I delete the chip (device)
-    world.when_delete_chip(device_id).await;
+    // When I delete the device
+    world.when_delete_device(device_id).await;
 
     // Then the device list does not contain the device
     let devices_after = world.when_list_devices().await;

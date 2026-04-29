@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use common::util::time_display::TimeDisplay;
-use log::error;
 use netsim_proto::{
     common::ChipKind,
     frontend,
@@ -31,6 +30,7 @@ use netsim_proto::{
     },
 };
 use protobuf::MessageField;
+use tracing::error;
 
 use crate::{
     args::{
@@ -105,9 +105,7 @@ impl Command {
             }
             Command::Devices(_) => GrpcRequest::ListDevice,
             Command::Reset => GrpcRequest::Reset,
-            Command::Gui => {
-                unimplemented!("get_request is not implemented for Gui Command.");
-            }
+
             Command::Capture(cmd) => match cmd {
                 Capture::List(_) => GrpcRequest::ListCapture,
                 Capture::Get(_) => {
@@ -117,9 +115,7 @@ impl Command {
                     unimplemented!("get_request not implemented for Capture Patch command. Use get_requests instead.")
                 }
             },
-            Command::Artifact => {
-                unimplemented!("get_request is not implemented for Artifact Command.");
-            }
+
             Command::Beacon(action) => match action {
                 Beacon::Create(kind) => match kind {
                     BeaconCreate::Ble(args) => {
@@ -179,15 +175,16 @@ impl Command {
                     GrpcRequest::DeleteChip(frontend::DeleteChipRequest { ..Default::default() })
                 }
             },
-            Command::Bumble => {
-                unimplemented!("get_request is not implemented for Bumble Command.");
-            }
             Command::Link(link_cmd) => match link_cmd {
                 Link::List => GrpcRequest::ListLink,
                 _ => {
                     unimplemented!("get_request not implemented for Link Patch/Delete/Create command. Use get_requests instead.")
                 }
             },
+            // These commands are intercepted early in main.rs and have no direct gRPC pipeline.
+            _ => {
+                unimplemented!("get_request is not implemented for this command.");
+            }
         }
     }
 
@@ -1020,6 +1017,7 @@ mod tests {
                 include_device_name: true,
                 include_tx_power_level: true,
                 manufacturer_data: Some(ParsableBytes(manufacturer_data.clone())),
+                uuids: vec![],
             },
             scan_response_data: BeaconBleScanResponseData { ..Default::default() },
         })));
@@ -1075,6 +1073,7 @@ mod tests {
                 include_device_name: true,
                 include_tx_power_level: true,
                 manufacturer_data: Some(ParsableBytes(manufacturer_data)),
+                uuids: vec![],
             },
             scan_response_data: BeaconBleScanResponseData { ..Default::default() },
         })));
@@ -1117,6 +1116,7 @@ mod tests {
                 scan_response_include_device_name: true,
                 scan_response_include_tx_power_level: true,
                 scan_response_manufacturer_data: Some(ParsableBytes(manufacturer_data)),
+                scan_response_uuids: vec![],
             },
             ..Default::default()
         })));
@@ -1162,6 +1162,7 @@ mod tests {
                 scan_response_include_device_name: true,
                 scan_response_include_tx_power_level: true,
                 scan_response_manufacturer_data: Some(ParsableBytes(manufacturer_data)),
+                scan_response_uuids: vec![],
             },
         })));
 

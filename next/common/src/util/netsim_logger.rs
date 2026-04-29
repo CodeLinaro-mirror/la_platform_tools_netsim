@@ -13,6 +13,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#[cfg(test)]
+use tracing::info;
 use tracing_log::LogTracer;
 use tracing_subscriber::EnvFilter;
 
@@ -110,7 +112,7 @@ where
 #[test]
 fn test_init_for_test() {
     init_for_test();
-    tracing::info!("Hello Netsim");
+    info!("Hello Netsim");
 }
 
 #[cfg(test)]
@@ -145,7 +147,7 @@ mod tests {
 
         tracing::subscriber::with_default(subscriber, || {
             LOG_BUFFER.lock().unwrap().clear();
-            tracing::info!("Test tracing message");
+            info!("Test tracing message");
             let output = String::from_utf8(LOG_BUFFER.lock().unwrap().clone()).unwrap();
             // Match pattern: netsim I MM-DD HH:MM:SS.sss netsim_logger.rs:LINE - Test
             // tracing message
@@ -153,7 +155,7 @@ mod tests {
             assert!(re.is_match(&output), "Output did not match legacy format: {}", output);
         });
 
-        // For log::info!, it uses the global dispatcher. If another test already
+        // For info!, it uses the global dispatcher. If another test already
         // initialized it, we might not capture it in LOG_BUFFER. We skip log
         // verification if initialization fails.
         let _ = LogTracer::init();
@@ -166,7 +168,7 @@ mod tests {
         // Try log verification but don't fail if buffer is empty (meaning global was
         // already set elsewhere)
         LOG_BUFFER.lock().unwrap().clear();
-        log::info!("Test log message");
+        info!("Test log message");
         let output = String::from_utf8(LOG_BUFFER.lock().unwrap().clone()).unwrap();
         if !output.is_empty() {
             let re = regex::Regex::new(r"netsim I \d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} netsim_logger\.rs:\d+ - Test log message").unwrap();
