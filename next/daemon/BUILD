@@ -87,6 +87,5 @@ netsim_rust_binary(
     tags = ["no-sandbox"],
     deps = [
         ":daemon-lib",
-        "@tokio",
     ],
 )

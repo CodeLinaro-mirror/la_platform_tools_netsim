@@ -65,22 +65,6 @@ pub enum StartUpMode {
     Client(NetsimConfig),
 }
 
-// Initialization for linux cuttlefish environment. Cuttelfish passes
-// open file descriptors to netsimd.
-
-#[cfg(all(target_os = "linux", feature = "cuttlefish"))]
-fn cuttlefish_init() {
-    use rustutils::inherited_fd;
-    // SAFETY: This function must be called before any other code that might take
-    // ownership of file descriptors. `init_once` takes ownership of all open
-    // file descriptors except for the stdio streams. Calling it after other
-    // parts of the program has already acquired ownership of file descriptors
-    // can lead to double-frees or other memory corruption issues.
-    unsafe {
-        inherited_fd::init_once().expect("inherited_fds");
-    }
-}
-
 async fn handle_new_connection(
     device_client: DeviceClient,
     _capture_client: CaptureClient,
@@ -290,9 +274,6 @@ impl NetsimDaemon {
             println!("Netsim version: {}", get_version());
             return Err(RunResult::ExitedNormally);
         }
-
-        #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
-        cuttlefish_init();
 
         logger::init("netsim", args.verbose);
 
@@ -815,6 +796,7 @@ async fn shutdown_signal() {
     }
 }
 
+#[tokio::main]
 pub async fn run() -> RunResult {
     match NetsimDaemon::new().await {
         Ok(StartUpMode::Owner(daemon, _ini_guard)) => daemon.run_daemon().await,
