@@ -429,6 +429,9 @@ def get_bazel_build_configs(args, env):
     configs.append("hermetic")
 
   build_configs = [f"--config={c}" for c in configs]
+  if platform.system().lower() == "windows":
+    # Force Static CRT linking to avoid ABI mismatches with the Emulator's prebuilt DLLs.
+    build_configs.append("--features=static_link_msvcrt")
   if not getattr(args, "enable_repo_cache", False):
     build_configs.append("--repo_contents_cache=")
 
