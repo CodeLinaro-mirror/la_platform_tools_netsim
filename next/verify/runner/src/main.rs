@@ -39,11 +39,23 @@ enum Commands {
         #[arg(long, help = "Continue running tests after a failure")]
         #[arg(default_value_t = false)]
         keep_going: bool,
+        #[arg(
+            long,
+            help = "Comma-separated list of tags to ignore",
+            default_value = "nyi,nyt,skip,ignore"
+        )]
+        ignore_tags: String,
     },
     /// List available test scenarios
     Scenarios {
         #[arg(long, help = "Directory containing feature files (specs)")]
         spec_dir: Option<String>,
+        #[arg(
+            long,
+            help = "Comma-separated list of tags to ignore",
+            default_value = "nyi,nyt,skip,ignore"
+        )]
+        ignore_tags: String,
     },
 }
 
@@ -71,6 +83,7 @@ async fn main() -> Result<(), String> {
             verbose,
             spec_dir,
             keep_going,
+            ignore_tags,
         } => {
             let resolved_android_home = match android_home
                 .or_else(|| std::env::var("ANDROID_HOME").ok())
@@ -114,17 +127,18 @@ async fn main() -> Result<(), String> {
                 features,
                 spec_dir,
                 keep_going,
+                Some(ignore_tags),
             )
             .await?;
         }
-        Commands::Scenarios { spec_dir } => {
+        Commands::Scenarios { spec_dir, ignore_tags } => {
             let mut features = Features::<TestContext>::new();
             adb_steps::register_steps(&mut features);
             android_steps::register_steps(&mut features);
             host_steps::register_steps(&mut features);
             netsim_steps::register_steps(&mut features);
             netsim_link_steps::register_steps(&mut features);
-            orchestrator::list_scenarios(features, spec_dir).await?;
+            orchestrator::list_scenarios(features, spec_dir, Some(ignore_tags)).await?;
         }
     }
 

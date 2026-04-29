@@ -34,9 +34,10 @@ pub async fn run_android(
     filter: Option<String>,
     dry_run: bool,
     verbose: bool,
-    features: features::Features<TestContext>,
+    mut features: features::Features<TestContext>,
     spec_dir: Option<String>,
     keep_going: bool,
+    ignore_tags: Option<String>,
 ) -> Result<(), String> {
     let host = HostWorld::new(dry_run);
     let adb = AdbWorld::new(android_home, apk_path, netsim_path.clone(), netsim_args);
@@ -58,14 +59,21 @@ pub async fn run_android(
         grpc_client: None,
         ap_client: None,
     };
+    if let Some(tags) = ignore_tags {
+        features.ignore_tags_str(&tags);
+    }
     scenarios::run_suite(&mut ctx, features, spec_dir).await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
 pub async fn list_scenarios(
-    features: features::Features<TestContext>,
+    mut features: features::Features<TestContext>,
     spec_dir: Option<String>,
+    ignore_tags: Option<String>,
 ) -> Result<(), String> {
+    if let Some(tags) = ignore_tags {
+        features.ignore_tags_str(&tags);
+    }
     let mut ctx = TestContext {
         android: AndroidWorld::new(),
         host: HostWorld::new(true),
