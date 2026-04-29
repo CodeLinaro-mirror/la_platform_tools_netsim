@@ -13,7 +13,6 @@ rust_binary(
     edition = "2021",
     deps = [
         "//next/verify/host:verify_host_lib",
-        "@anyhow",
         "@clap",
         "@tokio",
         "@tracing",
