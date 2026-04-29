@@ -1,7 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Context, Result};
 use netsim_proto::frontend;
 use verify_macros::{step, step_module};
 
@@ -19,13 +18,15 @@ pub mod steps {
         kind: String,
         rssi: i32,
         var_name: String,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         let resolved_sender = w.resolve_placeholders(&format!("@{}", sender));
         let resolved_receiver = w.resolve_placeholders(&format!("@{}", receiver));
-        let sender_device =
-            w.map_actor_to_netsim(&resolved_sender).context("got sender device name")?;
-        let receiver_device =
-            w.map_actor_to_netsim(&resolved_receiver).context("got receiver device name")?;
+        let sender_device = w
+            .map_actor_to_netsim(&resolved_sender)
+            .map_err(|e| format!("got sender device name: {}", e))?;
+        let receiver_device = w
+            .map_actor_to_netsim(&resolved_receiver)
+            .map_err(|e| format!("got receiver device name: {}", e))?;
 
         w.log_step(
             "@netsim",
@@ -41,11 +42,12 @@ pub mod steps {
             return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
 
         let (sender_id, receiver_id) =
             get_chip_ids(&client, &sender_device, &receiver_device, &kind)
-                .context("found chip ids")?;
+                .map_err(|e| format!("found chip ids: {}", e))?;
 
         let mut link = netsim_proto::model::Link::new();
         link.sender_id = sender_id;
@@ -56,35 +58,46 @@ pub mod steps {
         let mut req = frontend::CreateLinkRequest::new();
         req.link = protobuf::MessageField::some(link);
 
-        client.create_link(&req).context("created link")?;
+        client.create_link(&req).map_err(|e| format!("created link: {}", e))?;
 
-        let link_id =
-            find_link_id(&client, sender_id, receiver_id, &kind).context("found link id")?;
+        let link_id = find_link_id(&client, sender_id, receiver_id, &kind)
+            .ok_or_else(|| "found link id".to_string())?;
         w.variables.insert(var_name, link_id.to_string());
         Ok(())
     }
 
     #[step(r#"@netsim should list a link with RSSI (-?\d+)"#)]
-    async fn netsim_verify_link_rssi(w: &mut TestContext, expected_rssi: i32) -> Result<()> {
+    async fn netsim_verify_link_rssi(
+        w: &mut TestContext,
+        expected_rssi: i32,
+    ) -> Result<(), String> {
         w.log_step("@netsim", "THEN", &format!("Should list a link with RSSI {}", expected_rssi));
 
         if w.is_dry_run {
             return Ok(());
         }
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
         let links_resp = client
             .list_link(&protobuf::well_known_types::empty::Empty::new())
-            .context("listed links")?;
+            .map_err(|e| format!("listed links: {}", e))?;
 
         if !links_resp.links.iter().any(|link| link.rssi == expected_rssi) {
-            anyhow::bail!("Link with RSSI '{}' not found in ListLink response", expected_rssi);
+            return Err(format!(
+                "Link with RSSI '{}' not found in ListLink response",
+                expected_rssi
+            ));
         }
         Ok(())
     }
 
     #[step(r#"@netsim patches link (\S+) with RSSI (-?\d+)"#)]
-    async fn netsim_patch_link(w: &mut TestContext, link_var: String, rssi: i32) -> Result<()> {
+    async fn netsim_patch_link(
+        w: &mut TestContext,
+        link_var: String,
+        rssi: i32,
+    ) -> Result<(), String> {
         let resolved_link_id = w.resolve_placeholders(&link_var);
 
         w.log_step(
@@ -97,14 +110,19 @@ pub mod steps {
             return Ok(());
         }
 
-        let link_id = resolved_link_id.parse::<u32>().context("valid link id")?;
+        let link_id =
+            resolved_link_id.parse::<u32>().map_err(|e| format!("valid link id: {}", e))?;
 
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
         let links_resp = client
             .list_link(&protobuf::well_known_types::empty::Empty::new())
-            .context("listed links")?;
-        let existing_link =
-            links_resp.links.iter().find(|l| l.id == link_id).context("found existing link")?;
+            .map_err(|e| format!("listed links: {}", e))?;
+        let existing_link = links_resp
+            .links
+            .iter()
+            .find(|l| l.id == link_id)
+            .ok_or_else(|| "found existing link".to_string())?;
 
         let mut link = netsim_proto::model::Link::new();
         link.sender_id = existing_link.sender_id;
@@ -116,12 +134,12 @@ pub mod steps {
         req.link = protobuf::MessageField::some(link);
         req.id = link_id;
 
-        client.patch_link(&req).context("patched link")?;
+        client.patch_link(&req).map_err(|e| format!("patched link: {}", e))?;
         Ok(())
     }
 
     #[step(r#"@netsim deletes link (\S+)"#)]
-    async fn netsim_delete_link(w: &mut TestContext, link_var: String) -> Result<()> {
+    async fn netsim_delete_link(w: &mut TestContext, link_var: String) -> Result<(), String> {
         let resolved_link_id = w.resolve_placeholders(&link_var);
 
         w.log_step("@netsim", "->", &format!("Deletes link {}", resolved_link_id));
@@ -130,13 +148,15 @@ pub mod steps {
             return Ok(());
         }
 
-        let link_id = resolved_link_id.parse::<u32>().context("valid link id")?;
-        let client = w.get_or_create_grpc_client().context("got grpc client")?;
+        let link_id =
+            resolved_link_id.parse::<u32>().map_err(|e| format!("valid link id: {}", e))?;
+        let client =
+            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
 
         let mut req = frontend::DeleteLinkRequest::new();
         req.id = link_id;
 
-        client.delete_link(&req).context("deleted link")?;
+        client.delete_link(&req).map_err(|e| format!("deleted link: {}", e))?;
         Ok(())
     }
 
@@ -164,14 +184,14 @@ pub mod steps {
         sender_device: &str,
         receiver_device: &str,
         kind: &str,
-    ) -> Result<(u32, u32)> {
+    ) -> Result<(u32, u32), String> {
         let resp = client
             .list_device(&protobuf::well_known_types::empty::Empty::new())
-            .map_err(|e| anyhow!("gRPC error: {:?}", e))?;
+            .map_err(|e| format!("gRPC error: {:?}", e))?;
         let sender_id = find_chip_id(&resp, sender_device, kind)
-            .ok_or_else(|| anyhow!("Sender chip not found"))?;
+            .ok_or_else(|| "Sender chip not found".to_string())?;
         let receiver_id = find_chip_id(&resp, receiver_device, kind)
-            .ok_or_else(|| anyhow!("Receiver chip not found"))?;
+            .ok_or_else(|| "Receiver chip not found".to_string())?;
         Ok((sender_id, receiver_id))
     }
 

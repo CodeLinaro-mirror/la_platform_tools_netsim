@@ -114,7 +114,8 @@ async fn main() -> anyhow::Result<()> {
                 spec_dir,
                 keep_going,
             )
-            .await?;
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
         }
         Commands::Scenarios { spec_dir } => {
             let mut features = Features::<TestContext>::new();
@@ -123,7 +124,9 @@ async fn main() -> anyhow::Result<()> {
             host_steps::register_steps(&mut features);
             netsim_steps::register_steps(&mut features);
             netsim_link_steps::register_steps(&mut features);
-            orchestrator::list_scenarios(features, spec_dir).await?;
+            orchestrator::list_scenarios(features, spec_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
         }
     }
 

@@ -9,7 +9,6 @@
 
 use std::{io::Write, path::Path};
 
-use anyhow::{bail, Context, Result};
 use gherkin::Feature;
 use regex::Regex;
 use termcolor::Color;
@@ -106,7 +105,7 @@ impl<W: ?Sized> Features<W> {
         self.register(pattern, step);
     }
 
-    pub async fn run(&self, text: &str, world: &mut W) -> Result<()> {
+    pub async fn run(&self, text: &str, world: &mut W) -> Result<(), String> {
         self.run_with_context(text, world, StepContext::default()).await
     }
 
@@ -115,7 +114,7 @@ impl<W: ?Sized> Features<W> {
         text: &str,
         world: &mut W,
         ctx: StepContext,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         // Dispatch to Global Registry
         for (regex, step) in &self.steps {
             if let Some(captures) = regex.captures(text) {
@@ -132,10 +131,14 @@ impl<W: ?Sized> Features<W> {
             }
         }
 
-        bail!("No step definition found for: {}", text)
+        Err(format!("No step definition found for: {}", text))
     }
 
-    async fn run_hooks(&self, hooks: &[Box<dyn AsyncStep<W>>], world: &mut W) -> Result<()> {
+    async fn run_hooks(
+        &self,
+        hooks: &[Box<dyn AsyncStep<W>>],
+        world: &mut W,
+    ) -> Result<(), String> {
         for hook in hooks {
             hook.call(world, vec![], StepContext::default()).await?;
         }
@@ -143,7 +146,7 @@ impl<W: ?Sized> Features<W> {
     }
 
     /// Executes a Gherkin feature from a string.
-    pub async fn execute_from_memory(&self, content: &str, world: &mut W) -> Result<()>
+    pub async fn execute_from_memory(&self, content: &str, world: &mut W) -> Result<(), String>
     where
         W: World,
     {
@@ -169,7 +172,7 @@ impl<W: ?Sized> Features<W> {
             }
         }
         if failed {
-            bail!("Some scenarios failed");
+            return Err("Some scenarios failed".to_string());
         }
         Ok(())
     }
@@ -279,7 +282,7 @@ impl<W: ?Sized> Features<W> {
         feature: &Feature,
         scenario: &gherkin::Scenario,
         world: &mut W,
-    ) -> Result<()>
+    ) -> Result<(), String>
     where
         W: World,
     {
@@ -344,7 +347,7 @@ impl<W: ?Sized> Features<W> {
         feature: &Feature,
         scenario: &gherkin::Scenario,
         world: &mut W,
-    ) -> Result<()>
+    ) -> Result<(), String>
     where
         W: World,
     {
@@ -410,7 +413,7 @@ impl<W: ?Sized> Features<W> {
             }
         }
         if failed {
-            bail!("Some examples in outline failed");
+            return Err("Some examples in outline failed".to_string());
         }
         Ok(())
     }
@@ -420,7 +423,7 @@ impl<W: ?Sized> Features<W> {
         steps: &[gherkin::Step],
         world: &mut W,
         replacements: &[(&str, &str)],
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         for step in steps {
             let value = crate::utils::apply_replacements(&step.value, replacements);
             let table = step.table.as_ref().map(|t| apply_table_replacements(t, replacements));
@@ -436,14 +439,18 @@ impl<W: ?Sized> Features<W> {
                 Err(e) => {
                     print_status("FAIL", Color::Red);
                     println!();
-                    anyhow::bail!(e);
+                    return Err(e);
                 }
             }
         }
         Ok(())
     }
 
-    async fn run_background(&self, bg: &Option<gherkin::Background>, world: &mut W) -> Result<()> {
+    async fn run_background(
+        &self,
+        bg: &Option<gherkin::Background>,
+        world: &mut W,
+    ) -> Result<(), String> {
         if let Some(ref bg) = bg {
             // Suppress background trace prints to keep test output clean
             for step in &bg.steps {
@@ -456,11 +463,12 @@ impl<W: ?Sized> Features<W> {
     }
 
     /// Executes a Gherkin feature from a file.
-    pub async fn execute<P: AsRef<Path>>(&self, path: P, world: &mut W) -> Result<()>
+    pub async fn execute<P: AsRef<Path>>(&self, path: P, world: &mut W) -> Result<(), String>
     where
         W: World,
     {
-        let content = std::fs::read_to_string(path).context("Failed to read feature file")?;
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read feature file: {}", e))?;
         self.execute_from_memory(&content, world).await
     }
 }

@@ -12,7 +12,6 @@
 
 pub use std::collections::{HashMap, HashSet};
 
-use anyhow::{Context, Result};
 use protobuf::well_known_types::empty::Empty;
 
 use crate::{
@@ -38,7 +37,7 @@ pub async fn run_android(
     features: features::Features<TestContext>,
     spec_dir: Option<String>,
     keep_going: bool,
-) -> Result<()> {
+) -> Result<(), String> {
     let host = HostWorld::new(dry_run);
     let adb = AdbWorld::new(android_home, apk_path, netsim_path.clone(), netsim_args);
     let netsim = NetsimWorld::new();
@@ -59,14 +58,14 @@ pub async fn run_android(
         grpc_client: None,
         ap_client: None,
     };
-    scenarios::run_suite(&mut ctx, features, spec_dir).await?;
+    scenarios::run_suite(&mut ctx, features, spec_dir).await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
 pub async fn list_scenarios(
     features: features::Features<TestContext>,
     spec_dir: Option<String>,
-) -> Result<()> {
+) -> Result<(), String> {
     let mut ctx = TestContext {
         android: AndroidWorld::new(),
         host: HostWorld::new(true),
@@ -83,7 +82,7 @@ pub async fn list_scenarios(
         grpc_client: None,
         ap_client: None,
     };
-    scenarios::run_suite(&mut ctx, features, spec_dir).await?;
+    scenarios::run_suite(&mut ctx, features, spec_dir).await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -128,7 +127,7 @@ impl features::World for TestContext {
 
     fn fetch_observables(
         &mut self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + '_>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + '_>> {
         Box::pin(async move {
             // 1. Fetch from Kotlin agents (Android side)
             let keys: Vec<String> = self.android.devices.keys().cloned().collect();
@@ -138,8 +137,11 @@ impl features::World for TestContext {
                 } else {
                     let android = self
                         .get_android_actor_mut(&key)
-                        .ok_or_else(|| anyhow::anyhow!("Android actor '{}' not found", key))?;
-                    let vars = android.execute_step("fetch feature observables", 60).await?;
+                        .ok_or_else(|| format!("Android actor '{}' not found", key))?;
+                    let vars = android
+                        .execute_step("fetch feature observables", 60)
+                        .await
+                        .map_err(|e| e.to_string())?;
                     self.variables.extend(vars);
                 }
             }
@@ -148,9 +150,14 @@ impl features::World for TestContext {
             if self.is_dry_run {
                 self.variables.insert("connected-devices".to_string(), "1".to_string());
             } else {
-                let client = self.get_or_create_grpc_client().context("got grpc client")?;
-                let resp = client.list_device(&Empty::new()).context("listed devices")?;
-                let version_resp = client.get_version(&Empty::new()).context("got version")?;
+                let client = self
+                    .get_or_create_grpc_client()
+                    .map_err(|e| format!("got grpc client: {}", e))?;
+                let resp = client
+                    .list_device(&Empty::new())
+                    .map_err(|e| format!("listed devices: {}", e))?;
+                let version_resp =
+                    client.get_version(&Empty::new()).map_err(|e| format!("got version: {}", e))?;
                 self.variables
                     .insert("connected-devices".to_string(), resp.devices.len().to_string());
                 self.variables.insert("netsim-version".to_string(), version_resp.version);
@@ -162,12 +169,12 @@ impl features::World for TestContext {
 }
 
 impl TestContext {
-    pub fn get_or_create_channel(&mut self) -> Result<grpcio::Channel> {
+    pub fn get_or_create_channel(&mut self) -> Result<grpcio::Channel, String> {
         if self.grpc_channel.is_none() {
             let server = common::util::ini_file::get_server_address(
                 common::util::os_utils::get_instance(None),
             )
-            .ok_or_else(|| anyhow::anyhow!("Failed to get server address"))?;
+            .ok_or_else(|| "Failed to get server address".to_string())?;
             let channel =
                 grpcio::ChannelBuilder::new(std::sync::Arc::new(grpcio::EnvBuilder::new().build()))
                     .connect(&server);
@@ -178,7 +185,7 @@ impl TestContext {
 
     pub fn get_or_create_grpc_client(
         &mut self,
-    ) -> Result<&netsim_proto::frontend_grpc::FrontendServiceClient> {
+    ) -> Result<&netsim_proto::frontend_grpc::FrontendServiceClient, String> {
         if self.grpc_client.is_none() {
             let channel = self.get_or_create_channel()?;
             self.grpc_client =
@@ -189,7 +196,7 @@ impl TestContext {
 
     pub fn get_or_create_ap_client(
         &mut self,
-    ) -> Result<&netsim_proto::access_point_grpc::AccessPointServiceClient> {
+    ) -> Result<&netsim_proto::access_point_grpc::AccessPointServiceClient, String> {
         if self.ap_client.is_none() {
             let channel = self.get_or_create_channel()?;
             self.ap_client =
@@ -204,18 +211,18 @@ impl TestContext {
     /// For Android devices, it queries the AVD name via ADB.
     /// For built-in devices like beacons, it queries the Netsim device list via
     /// gRPC to find a matching name.
-    pub fn map_actor_to_netsim(&mut self, actor: &str) -> Result<String> {
+    pub fn map_actor_to_netsim(&mut self, actor: &str) -> Result<String, String> {
         // 1. Check if it's an Android VBS
         if let Some(android) = self.android.get(actor) {
             let adb_path = &android.adb_path;
             let serial = android.serial.as_ref().ok_or_else(|| {
-                anyhow::anyhow!("Android device must have a serial for netsim mapping")
+                "Android device must have a serial for netsim mapping".to_string()
             })?;
 
             let mut cmd = std::process::Command::new(adb_path);
             cmd.arg("-s").arg(serial).arg("shell").arg("getprop").arg("ro.boot.qemu.avd_name");
 
-            let output = cmd.output()?;
+            let output = cmd.output().map_err(|e| e.to_string())?;
             if output.status.success() {
                 let avd_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !avd_name.is_empty() {
@@ -227,10 +234,11 @@ impl TestContext {
 
         // 2. For non-Android actors, query ListDevice from netsim to find a match.
         // This supports built-in devices like beacons created during the test.
-        let client = self.get_or_create_grpc_client().context("got grpc client")?;
+        let client =
+            self.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
         let resp = client
             .list_device(&protobuf::well_known_types::empty::Empty::new())
-            .context("listed devices")?;
+            .map_err(|e| format!("listed devices: {}", e))?;
 
         let stripped_actor = actor.strip_prefix('@').unwrap_or(actor);
 
@@ -241,7 +249,7 @@ impl TestContext {
         }
 
         // Fail explicitly if the actor cannot be resolved to a valid Netsim device.
-        anyhow::bail!("Device '{}' not found in netsim", actor)
+        Err(format!("Device '{}' not found in netsim", actor))
     }
 
     // Helper to resolve generic actor lookups for the engine
@@ -275,24 +283,24 @@ impl TestContext {
         &mut self,
         actor: &str,
         mut params: ClientParams,
-    ) -> Result<Option<Throughput>> {
+    ) -> Result<Option<Throughput>, String> {
         if self.is_dry_run {
             return Ok(None);
         }
         params.target = self.resolve_placeholders(&params.target);
 
         if actor == "@host" {
-            return self.host.run_client(params).await;
+            return self.host.run_client(params).await.map_err(|e| e.to_string());
         } else if actor == "@adb" {
-            return self.adb.run_client(params).await;
+            return self.adb.run_client(params).await.map_err(|e| e.to_string());
         } else if actor == "@netsim" {
-            return self.netsim.run_client(params).await;
+            return self.netsim.run_client(params).await.map_err(|e| e.to_string());
         }
 
         if let Some(agent) = self.get_android_actor_mut(actor) {
-            agent.run_client(params).await
+            Ok(agent.run_client(params).await.map_err(|e| e.to_string())?)
         } else {
-            anyhow::bail!("Unknown actor: {}", actor)
+            Err(format!("Unknown actor: {}", actor))
         }
     }
 
@@ -302,7 +310,7 @@ impl TestContext {
         actor: &str,
         mut params: ClientParams,
         samples: usize,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         // Resolve target before cloning
         params.target = self.resolve_placeholders(&params.target);
         if self.is_dry_run {
@@ -325,7 +333,7 @@ impl TestContext {
                 } else {
                     let agent = self
                         .get_android_actor_mut(actor)
-                        .ok_or_else(|| anyhow::anyhow!("Unknown actor: {}", actor))?;
+                        .ok_or_else(|| format!("Unknown actor: {}", actor))?;
                     agent.set_silent(true);
                 }
             }
@@ -363,7 +371,7 @@ impl TestContext {
                 } else {
                     let agent = self
                         .get_android_actor_mut(actor)
-                        .ok_or_else(|| anyhow::anyhow!("Unknown actor: {}", actor))?;
+                        .ok_or_else(|| format!("Unknown actor: {}", actor))?;
                     agent.set_silent(false);
                 }
             }
@@ -380,20 +388,22 @@ impl TestContext {
         Ok(())
     }
 
-    pub async fn reset_actors(&mut self, hard: bool) -> Result<()> {
+    pub async fn reset_actors(&mut self, hard: bool) -> Result<(), String> {
         if self.is_dry_run {
             return Ok(());
         }
 
-        self.host.reset_actor().await?;
-        self.adb.reset_actor().await?;
+        self.host.reset_actor().await.map_err(|e| e.to_string())?;
+        self.adb.reset_actor().await.map_err(|e| e.to_string())?;
 
         // Reset netsim via gRPC
         let client = self.get_or_create_grpc_client()?;
-        client.reset(&protobuf::well_known_types::empty::Empty::new())?;
+        client
+            .reset(&protobuf::well_known_types::empty::Empty::new())
+            .map_err(|e| e.to_string())?;
 
         for agent in self.android.devices.values_mut() {
-            agent.reset_actor(hard).await?;
+            agent.reset_actor(hard).await.map_err(|e| e.to_string())?;
         }
         Ok(())
     }

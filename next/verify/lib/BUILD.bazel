@@ -19,7 +19,6 @@ rust_library(
     proc_macro_deps = [
     ],
     deps = [
-        "@anyhow",
         "@gherkin",
         "@regex",
         "@serde",
@@ -46,7 +45,6 @@ rust_test(
     deps = [
         ":lib",
         "//next/packets",
-        "@anyhow",
         "@bytes",
         "@futures",
         "@gherkin",

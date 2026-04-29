@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, UdpSocket},
@@ -18,8 +17,6 @@ use crate::{
 
 #[step_module]
 pub mod steps {
-    use anyhow::{Context, Result};
-
     use super::*;
 
     #[step(r#"@host starts a (TCP|UDP) echo server on "(\w+)""#)]
@@ -27,8 +24,9 @@ pub mod steps {
         w: &mut TestContext,
         proto: String,
         var_name: String,
-    ) -> Result<()> {
-        let port = w.host.start_server(0).await.context("Failed to start server")?;
+    ) -> Result<(), String> {
+        let port =
+            w.host.start_server(0).await.map_err(|e| format!("Failed to start server: {}", e))?;
         // Store full address (GatewayIP:Port) so usage {var} works directly
         let full_addr = format!("{}:{}", w.gateway_ip, port);
         w.log_step(
@@ -46,21 +44,24 @@ pub mod steps {
         size_val: usize,
         unit: String,
         proto: String,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         let actor = "@host";
         w.log_step(actor, "THEN", &format!("Receives {}{} {} data", size_val, unit, proto));
         Ok(())
     }
 
     #[step("@host receives all coordinated data")]
-    pub async fn host_receives_coordinated_data(w: &mut TestContext) -> Result<()> {
+    pub async fn host_receives_coordinated_data(w: &mut TestContext) -> Result<(), String> {
         let actor = "@host";
         w.log_step(actor, "THEN", "Receives all coordinated data");
         Ok(())
     }
 
     #[step(r#"@host advertises mDNS service (.+)"#)]
-    pub async fn host_advertises_mdns_service(w: &mut TestContext, service: String) -> Result<()> {
+    pub async fn host_advertises_mdns_service(
+        w: &mut TestContext,
+        service: String,
+    ) -> Result<(), String> {
         let actor = "@host";
         w.log_step(actor, "WHEN", &format!("Advertises mDNS service '{}'", service));
 
@@ -102,11 +103,16 @@ pub mod steps {
 
         let socket = tokio::net::UdpSocket::bind(("0.0.0.0", 0))
             .await
-            .context("Failed to bind UDP socket for advertisement")?;
-        socket.set_multicast_loop_v4(true).context("Failed to set multicast loop")?;
+            .map_err(|e| format!("Failed to bind UDP socket for advertisement: {}", e))?;
+        socket
+            .set_multicast_loop_v4(true)
+            .map_err(|e| format!("Failed to set multicast loop: {}", e))?;
 
         let mdns_addr = "224.0.0.251:5353";
-        socket.send_to(&packet, mdns_addr).await.context("Failed to send mDNS advertisement")?;
+        socket
+            .send_to(&packet, mdns_addr)
+            .await
+            .map_err(|e| format!("Failed to send mDNS advertisement: {}", e))?;
         Ok(())
     }
 }
@@ -123,11 +129,14 @@ pub struct HostWorld {
 }
 
 impl HostWorld {
-    pub async fn run_client(&mut self, _params: ClientParams) -> Result<Option<Throughput>> {
+    pub async fn run_client(
+        &mut self,
+        _params: ClientParams,
+    ) -> Result<Option<Throughput>, String> {
         Ok(None)
     }
 
-    pub async fn reset_actor(&mut self) -> Result<()> {
+    pub async fn reset_actor(&mut self) -> Result<(), String> {
         self.stop_server();
         Ok(())
     }
@@ -144,7 +153,7 @@ impl HostWorld {
         Self { server_token: None, last_port: None, is_dry_run: is_dry_run }
     }
 
-    pub async fn start_server(&mut self, port: u16) -> Result<u16> {
+    pub async fn start_server(&mut self, port: u16) -> Result<u16, String> {
         let assigned_port = if self.is_dry_run {
             if port == 0 {
                 12345
@@ -178,15 +187,15 @@ impl Drop for HostWorld {
 
 /// Runs an echo server (TCP and UDP) on the specified port.
 /// Returns the assigned port.
-async fn run_server(port: u16, token: CancellationToken) -> Result<u16> {
+async fn run_server(port: u16, token: CancellationToken) -> Result<u16, String> {
     let (tcp_listener, udp_socket, local_port) = loop {
-        let listener = TcpListener::bind(("0.0.0.0", port)).await?;
-        let p = listener.local_addr()?.port();
+        let listener = TcpListener::bind(("0.0.0.0", port)).await.map_err(|e| e.to_string())?;
+        let p = listener.local_addr().map_err(|e| e.to_string())?.port();
         match UdpSocket::bind(("0.0.0.0", p)).await {
             Ok(u) => break (listener, u, p),
             Err(e) => {
                 if port != 0 {
-                    return Err(e.into());
+                    return Err(e.to_string());
                 }
                 continue;
             }

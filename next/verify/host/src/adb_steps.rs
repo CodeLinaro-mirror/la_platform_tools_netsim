@@ -3,7 +3,6 @@
 
 use std::{collections::HashSet, process::Stdio};
 
-use anyhow::{self, bail, Context, Result};
 use tracing::info;
 use verify_macros::{step, step_module};
 
@@ -21,11 +20,14 @@ pub struct AdbWorld {
 }
 
 impl AdbWorld {
-    pub async fn run_client(&mut self, _params: ClientParams) -> Result<Option<Throughput>> {
+    pub async fn run_client(
+        &mut self,
+        _params: ClientParams,
+    ) -> Result<Option<Throughput>, String> {
         Ok(None)
     }
 
-    pub async fn reset_actor(&mut self) -> Result<()> {
+    pub async fn reset_actor(&mut self) -> Result<(), String> {
         Ok(())
     }
 
@@ -51,7 +53,7 @@ impl AdbWorld {
         mut known_serials: HashSet<String>,
         expected: usize,
         is_verbose: bool,
-    ) -> Result<Vec<AndroidDevice>> {
+    ) -> Result<Vec<AndroidDevice>, String> {
         let mut new_agents = Vec::new();
         let start = std::time::Instant::now();
         let adb = AndroidDevice::find_adb(self.android_home.as_deref());
@@ -67,17 +69,17 @@ impl AdbWorld {
             }
 
             if start.elapsed() > std::time::Duration::from_secs(120) {
-                bail!(
+                return Err(format!(
                     "Timeout waiting for devices. Expected {}, found {}. Waited 120s.",
                     expected,
                     known_serials.len()
-                );
+                ));
             }
 
             let out = std::process::Command::new(&adb)
                 .arg("devices")
                 .output()
-                .context("Failed to execute adb devices")?;
+                .map_err(|e| format!("Failed to execute adb devices: {}", e))?;
 
             for line in String::from_utf8_lossy(&out.stdout).lines().skip(1) {
                 if known_serials.len() >= expected {
@@ -176,8 +178,8 @@ impl AdbWorld {
         }
     }
 
-    fn identify_avd(adb: &str, exec: &mut AndroidDevice) -> Result<()> {
-        let serial = exec.serial.as_ref().context("Missing serial")?;
+    fn identify_avd(adb: &str, exec: &mut AndroidDevice) -> Result<(), String> {
+        let serial = exec.serial.as_ref().ok_or_else(|| "Missing serial".to_string())?;
         if let Ok(out) = std::process::Command::new(adb)
             .arg("-s")
             .arg(serial)
@@ -224,7 +226,7 @@ pub mod steps {
         check: impl Fn(&str) -> bool,
         success_msg: &str,
         timeout_msg: &str,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         for i in 0..30 {
             let mut cmd = android.adb_command();
             cmd.arg("shell").arg("cmd").arg("wifi").arg("status");
@@ -245,11 +247,11 @@ pub mod steps {
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
-        bail!("{}", timeout_msg)
+        Err(timeout_msg.to_string())
     }
 
     #[step(r#"@(\S+) has (\d+) attached device(?:s)?"#)]
-    async fn given_devices(w: &mut TestContext, actor: String, count: usize) -> Result<()> {
+    async fn given_devices(w: &mut TestContext, actor: String, count: usize) -> Result<(), String> {
         let actor = format!("@{}", actor);
         w.log_step(&actor, "GIVEN", &format!("Has {} or more attached devices", count));
         if w.is_dry_run {
@@ -273,8 +275,10 @@ pub mod steps {
         // We get adb agent as immutable ref here
         let adb_agent = &w.adb;
 
-        let new_agents =
-            adb_agent.discover(known, count, w.is_verbose).await.context("Discovery failed")?;
+        let new_agents = adb_agent
+            .discover(known, count, w.is_verbose)
+            .await
+            .map_err(|e| format!("Discovery failed: {}", e))?;
 
         for agent in new_agents {
             w.register_android_actor(agent);
@@ -287,7 +291,7 @@ pub mod steps {
         w: &mut TestContext,
         label: String,
         ssid: String,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
         w.log_step(&actor, "->", &format!("Connects to open WiFi network '{}'", ssid));
 
@@ -297,7 +301,7 @@ pub mod steps {
 
         let android = w
             .get_android_actor(&actor)
-            .context(format!("Actor {} not found or is not an Android VBS", actor))?;
+            .ok_or_else(|| format!("Actor {} not found or is not an Android VBS", actor))?;
 
         let mut connect_cmd = android.adb_command();
         connect_cmd
@@ -312,11 +316,11 @@ pub mod steps {
 
         let status = tokio::task::spawn_blocking(move || connect_cmd.status())
             .await
-            .context("tokio spawn failed")?
-            .context("Failed to execute adb shell cmd wifi")?;
+            .map_err(|e| format!("tokio spawn failed: {}", e))?
+            .map_err(|e| format!("Failed to execute adb shell cmd wifi: {}", e))?;
 
         if !status.success() {
-            bail!("Failed to connect to Wi-Fi network {}", ssid);
+            return Err(format!("Failed to connect to Wi-Fi network {}", ssid));
         }
 
         // Wait for Wi-Fi connection to show the SSID
@@ -336,7 +340,7 @@ pub mod steps {
         label: String,
         ssid: String,
         password: String,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
         w.log_step(&actor, "->", &format!("Connects to WiFi network '{}'", ssid));
 
@@ -346,7 +350,7 @@ pub mod steps {
 
         let android = w
             .get_android_actor(&actor)
-            .context(format!("Actor {} not found or is not an Android VBS", actor))?;
+            .ok_or_else(|| format!("Actor {} not found or is not an Android VBS", actor))?;
 
         let mut connect_cmd = android.adb_command();
         connect_cmd
@@ -362,11 +366,11 @@ pub mod steps {
 
         let status = tokio::task::spawn_blocking(move || connect_cmd.status())
             .await
-            .context("tokio spawn failed")?
-            .context("Failed to execute adb shell cmd wifi")?;
+            .map_err(|e| format!("tokio spawn failed: {}", e))?
+            .map_err(|e| format!("Failed to execute adb shell cmd wifi: {}", e))?;
 
         if !status.success() {
-            bail!("Failed to connect to Wi-Fi network {}", ssid);
+            return Err(format!("Failed to connect to Wi-Fi network {}", ssid));
         }
         // Wait for Wi-Fi connection to show the SSID
         poll_wifi_status(
@@ -384,7 +388,7 @@ pub mod steps {
         w: &mut TestContext,
         label: String,
         expected_ssid: String,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
         w.log_step(&actor, "<-", &format!("Verifies connected WiFi is '{}'", expected_ssid));
 
@@ -394,31 +398,34 @@ pub mod steps {
 
         let android = w
             .get_android_actor(&actor)
-            .context(format!("Actor {} not found or is not an Android VBS", actor))?;
+            .ok_or_else(|| format!("Actor {} not found or is not an Android VBS", actor))?;
 
         let mut cmd = android.adb_command();
         cmd.arg("shell").arg("cmd").arg("wifi").arg("status");
 
         let out = tokio::task::spawn_blocking(move || cmd.output())
             .await
-            .context("tokio spawn failed")?
-            .context("Failed to execute adb shell cmd wifi status")?;
+            .map_err(|e| format!("tokio spawn failed: {}", e))?
+            .map_err(|e| format!("Failed to execute adb shell cmd wifi status: {}", e))?;
 
         if !out.status.success() {
-            bail!("Failed to get wifi status on {}", actor);
+            return Err(format!("Failed to get wifi status on {}", actor));
         }
 
         let stdout = String::from_utf8_lossy(&out.stdout);
         tracing::info!("wifi status output: {}", stdout);
 
         if !stdout.contains(&expected_ssid) {
-            bail!("Expected SSID '{}' not found in wifi status: {}", expected_ssid, stdout);
+            return Err(format!(
+                "Expected SSID '{}' not found in wifi status: {}",
+                expected_ssid, stdout
+            ));
         }
         Ok(())
     }
 
     #[step(r#"(?:@adb)(?::(\S+))? disconnects from wifi"#)]
-    async fn adb_disconnects_wifi(w: &mut TestContext, label: String) -> Result<()> {
+    async fn adb_disconnects_wifi(w: &mut TestContext, label: String) -> Result<(), String> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
         w.log_step(&actor, "->", "Disconnects from WiFi");
 
@@ -428,7 +435,7 @@ pub mod steps {
 
         let android = w
             .get_android_actor(&actor)
-            .context(format!("Actor {} not found or is not an Android VBS", actor))?;
+            .ok_or_else(|| format!("Actor {} not found or is not an Android VBS", actor))?;
 
         // Disable Wi-Fi
         let mut disable_cmd = android.adb_command();
@@ -443,11 +450,11 @@ pub mod steps {
 
         let status = tokio::task::spawn_blocking(move || disable_cmd.status())
             .await
-            .context("tokio spawn failed")?
-            .context("Failed to execute svc wifi disable")?;
+            .map_err(|e| format!("tokio spawn failed: {}", e))?
+            .map_err(|e| format!("Failed to execute svc wifi disable: {}", e))?;
 
         if !status.success() {
-            bail!("Failed to disable Wi-Fi on {}", actor);
+            return Err(format!("Failed to disable Wi-Fi on {}", actor));
         }
 
         // Wait for Wi-Fi to actually turn off
@@ -471,11 +478,11 @@ pub mod steps {
 
         let status = tokio::task::spawn_blocking(move || enable_cmd.status())
             .await
-            .context("tokio spawn failed")?
-            .context("Failed to execute svc wifi enable")?;
+            .map_err(|e| format!("tokio spawn failed: {}", e))?
+            .map_err(|e| format!("Failed to execute svc wifi enable: {}", e))?;
 
         if !status.success() {
-            bail!("Failed to enable Wi-Fi on {}", actor);
+            return Err(format!("Failed to enable Wi-Fi on {}", actor));
         }
 
         // Wait for Wi-Fi to actually turn on and be ready
@@ -484,7 +491,11 @@ pub mod steps {
     }
 
     #[step(r#"(?:@adb)(?::(\S+))? forgets network "([^"]+)""#)]
-    async fn adb_forgets_network(w: &mut TestContext, label: String, ssid: String) -> Result<()> {
+    async fn adb_forgets_network(
+        w: &mut TestContext,
+        label: String,
+        ssid: String,
+    ) -> Result<(), String> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
         w.log_step(&actor, "->", &format!("Forgets network '{}'", ssid));
 
@@ -494,12 +505,14 @@ pub mod steps {
 
         let android = w
             .get_android_actor(&actor)
-            .context(format!("Actor {} not found or is not an Android VBS", actor))?;
+            .ok_or_else(|| format!("Actor {} not found or is not an Android VBS", actor))?;
 
         // 1. Get network list to find ID
         let mut list_cmd = android.adb_command();
         list_cmd.arg("shell").arg("cmd").arg("wifi").arg("list-networks");
-        let output = list_cmd.output().context("failed to execute cmd wifi list-networks")?;
+        let output = list_cmd
+            .output()
+            .map_err(|e| format!("failed to execute cmd wifi list-networks: {}", e))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         let mut network_id: Option<u32> = None;
@@ -516,7 +529,7 @@ pub mod steps {
         }
 
         let Some(network_id) = network_id else {
-            bail!("Network with SSID '{}' not found in saved networks", ssid);
+            return Err(format!("Network with SSID '{}' not found in saved networks", ssid));
         };
 
         // 2. Forget network
@@ -528,24 +541,26 @@ pub mod steps {
             .arg("forget-network")
             .arg(network_id.to_string());
 
-        let output = forget_cmd.output().context("failed to execute cmd wifi forget-network")?;
+        let output = forget_cmd
+            .output()
+            .map_err(|e| format!("failed to execute cmd wifi forget-network: {}", e))?;
         if !output.status.success() {
-            bail!(
+            return Err(format!(
                 "Failed to forget network on {}: {}",
                 actor,
                 String::from_utf8_lossy(&output.stderr)
-            );
+            ));
         }
         Ok(())
     }
 
     #[step(r#"(?:@adb)(?::(\S+))? disables cellular data"#)]
-    async fn adb_disables_cellular(w: &mut TestContext, label: String) -> Result<()> {
+    async fn adb_disables_cellular(w: &mut TestContext, label: String) -> Result<(), String> {
         let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
 
         let android = w
             .get_android_actor(&actor)
-            .context(format!("Actor {} not found or is not an Android VBS", actor))?;
+            .ok_or_else(|| format!("Actor {} not found or is not an Android VBS", actor))?;
 
         info!("{} Disabling Cellular Data...", actor);
 
@@ -564,11 +579,11 @@ pub mod steps {
 
         let status = tokio::task::spawn_blocking(move || svc_cmd.status())
             .await
-            .context("tokio spawn failed")?
-            .context("Failed to execute svc data disable")?;
+            .map_err(|e| format!("tokio spawn failed: {}", e))?
+            .map_err(|e| format!("Failed to execute svc data disable: {}", e))?;
 
         if !status.success() {
-            bail!("Failed to disable cellular data on {}", actor);
+            return Err(format!("Failed to disable cellular data on {}", actor));
         }
         Ok(())
     }
