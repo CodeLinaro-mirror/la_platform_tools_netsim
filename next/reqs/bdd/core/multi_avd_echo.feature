@@ -1,3 +1,5 @@
+# Copyright 2026 The Android Open Source Project
+
 Feature: Multi-AVD Echo
   Scenario: Chained Echo
     Given @adb has 2 attached devices

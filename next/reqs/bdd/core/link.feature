@@ -1,3 +1,5 @@
+# Copyright 2026 The Android Open Source Project
+
 @ignore
 Feature: Netsim Link Management
 

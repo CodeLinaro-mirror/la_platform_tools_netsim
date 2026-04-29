@@ -1,3 +1,5 @@
+# Copyright 2026 The Android Open Source Project
+
 Feature: Gateway Performance
   Scenario: Benchmark
     Given @adb has 1 attached device
