@@ -41,6 +41,18 @@ pub struct RunArgs {
     pub gateway_ip: Option<String>,
     #[arg(long, help = "Optional scenario filter (matches feature file name)")]
     pub filter: Option<String>,
+    #[arg(
+        long,
+        help = "Package name of the guest agent",
+        default_value = "com.android.verify.vbs"
+    )]
+    pub guest_package: String,
+    #[arg(
+        long,
+        help = "Instrumentation class of the guest agent",
+        default_value = "com.android.verify.vbs.VbsInstrumentation"
+    )]
+    pub guest_instrumentation: String,
     #[arg(long, help = "Simulation mode (no-op for orchestrator logic verification)")]
     #[arg(default_value_t = false)]
     pub dry_run: bool,
@@ -64,8 +76,14 @@ pub async fn run(
     mut features: features::Features<TestContext>,
 ) -> Result<(), String> {
     let host = HostWorld::new(args.dry_run);
-    let adb =
-        AdbWorld::new(args.android_home, args.apk_path, args.netsim_path.clone(), args.netsim_args);
+    let adb = AdbWorld::new(
+        args.android_home,
+        args.apk_path,
+        args.netsim_path.clone(),
+        args.netsim_args,
+        args.guest_package.clone(),
+        args.guest_instrumentation.clone(),
+    );
     let netsim = NetsimWorld::new();
 
     let mut ctx = TestContext {
@@ -84,6 +102,8 @@ pub async fn run(
         grpc_client: None,
         ap_client: None,
         netsim_cli_path: args.netsim_cli_path,
+        guest_package: args.guest_package,
+        guest_instrumentation: args.guest_instrumentation,
     };
     if let Some(tags) = args.ignore_tags {
         features.ignore_tags_str(&tags);
@@ -103,7 +123,14 @@ pub async fn list_scenarios(
     let mut ctx = TestContext {
         android: AndroidWorld::new(),
         host: HostWorld::new(true),
-        adb: AdbWorld::new(None, None, None, None),
+        adb: AdbWorld::new(
+            None,
+            None,
+            None,
+            None,
+            "com.android.verify.vbs".to_string(),
+            "com.android.verify.vbs.VbsInstrumentation".to_string(),
+        ),
         netsim: NetsimWorld::new(),
         target_ip: "10.0.2.2".to_string(),
         gateway_ip: "10.0.2.2".to_string(),
@@ -116,6 +143,8 @@ pub async fn list_scenarios(
         grpc_client: None,
         ap_client: None,
         netsim_cli_path: None,
+        guest_package: "com.android.verify.vbs".to_string(),
+        guest_instrumentation: "com.android.verify.vbs.VbsInstrumentation".to_string(),
     };
     scenarios::run_suite(&mut ctx, features, spec_dir).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -140,6 +169,8 @@ pub struct TestContext {
     pub grpc_client: Option<netsim_proto::frontend_grpc::FrontendServiceClient>,
     pub ap_client: Option<netsim_proto::access_point_grpc::AccessPointServiceClient>,
     pub netsim_cli_path: Option<String>,
+    pub guest_package: String,
+    pub guest_instrumentation: String,
 }
 
 impl features::World for TestContext {

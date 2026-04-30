@@ -1,0 +1,53 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+# Guest side (APK)
+kt_android_library(
+    name = "example3-lib",
+    testonly = True,
+    srcs = [
+        "src/main/java/com/android/verify/example3/CustomSteps.kt",
+        "src/main/java/com/android/verify/example3/Example3Instrumentation.kt",
+    ],
+    manifest = "AndroidManifest.xml",
+    tags = ["manual"],
+    deps = [
+        "//next/verify/instrumentation/core:verify-core-lib",
+        "@maven//:androidx_annotation_annotation",
+        "@maven//:androidx_test_monitor",
+        "@maven//:androidx_test_runner",
+        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+)
+
+android_binary(
+    name = "example3_apk",
+    testonly = True,
+    manifest = "AndroidManifest.xml",
+    tags = ["manual"],
+    deps = [":example3-lib"],
+)
+
+# Host side (Runner)
+rust_binary(
+    name = "custom_runner",
+    testonly = True,
+    srcs = ["src/main.rs"],
+    edition = "2021",
+    proc_macro_deps = [
+        "//next/verify/macros:verify_macros",
+    ],
+    deps = [
+        "//next/verify/host:verify_host_lib",
+        "//next/verify/lib",
+        "@clap",
+        "@tokio",
+    ],
+)

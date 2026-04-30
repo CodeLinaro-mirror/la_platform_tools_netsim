@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2026 The Android Open Source Project -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.android.verify.example3">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-sdk android:minSdkVersion="31" android:targetSdkVersion="34" />
+
+    <application
+        android:label="Verify Example 3">
+        <uses-library android:name="android.test.runner" />
+    </application>
+
+    <instrumentation
+        android:name="com.android.verify.example3.Example3Instrumentation"
+        android:targetPackage="com.android.verify.example3"
+        android:label="Verify Example 3 Instrumentation Runner" />
+</manifest>

@@ -17,6 +17,8 @@ pub struct AdbWorld {
     pub apk_path: Option<String>,
     pub netsim_path: Option<String>,
     pub netsim_args: Option<String>,
+    pub guest_package: String,
+    pub guest_instrumentation: String,
 }
 
 impl AdbWorld {
@@ -44,8 +46,17 @@ impl AdbWorld {
         apk_path: Option<String>,
         netsim_path: Option<String>,
         netsim_args: Option<String>,
+        guest_package: String,
+        guest_instrumentation: String,
     ) -> Self {
-        Self { android_home, apk_path, netsim_path, netsim_args }
+        Self {
+            android_home,
+            apk_path,
+            netsim_path,
+            netsim_args,
+            guest_package,
+            guest_instrumentation,
+        }
     }
 
     pub async fn discover(
@@ -96,8 +107,12 @@ impl AdbWorld {
                 }
 
                 // New device found
-                let mut exec =
-                    AndroidDevice::new(Some(serial.clone()), adb.clone(), self.apk_path.clone())?;
+                let mut exec = AndroidDevice::new(
+                    Some(serial.clone()),
+                    adb.clone(),
+                    self.apk_path.clone(),
+                    self.guest_instrumentation.clone(),
+                )?;
                 Self::identify_avd(&adb, &mut exec)?;
                 exec.set_silent(!is_verbose);
 
@@ -115,7 +130,7 @@ impl AdbWorld {
                 }
 
                 // Best effort uninstall to clear state
-                let _ = exec.uninstall_apk("com.android.verify.vbs");
+                let _ = exec.uninstall_apk(&self.guest_package);
 
                 if let Err(e) = exec.install_apk() {
                     eprintln!("WARN   Failed to install APK on {}: {}", serial, e);
@@ -129,7 +144,7 @@ impl AdbWorld {
                     .arg("shell")
                     .arg("appops")
                     .arg("set")
-                    .arg("com.android.verify.vbs")
+                    .arg(&self.guest_package)
                     .arg("WRITE_SETTINGS")
                     .arg("allow")
                     .status();
@@ -262,7 +277,12 @@ pub mod steps {
             for i in 0..(count - known.len()) {
                 let idx = known.len() + i;
                 let serial = format!("emulator-{}", 5554 + (idx * 2));
-                let agent = AndroidDevice::new(Some(serial), "mock_adb".to_string(), None)?;
+                let agent = AndroidDevice::new(
+                    Some(serial),
+                    "mock_adb".to_string(),
+                    None,
+                    w.guest_instrumentation.clone(),
+                )?;
                 w.register_android_actor(agent);
             }
             return Ok(());
