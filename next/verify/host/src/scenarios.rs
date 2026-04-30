@@ -14,8 +14,6 @@
 //! 2. **Usage**: Use curly braces (e.g., `to 10.0.2.2:{port}`) in subsequent
 //!    steps that consume the resolved value.
 
-use anyhow::Result;
-
 use crate::orchestrator::TestContext;
 
 async fn run_feature(
@@ -23,7 +21,7 @@ async fn run_feature(
     ctx: &mut TestContext,
     name: &str,
     content: &str,
-) -> Result<()> {
+) -> Result<(), String> {
     if let Some(f) = &ctx.filter {
         if !name.contains(f) {
             return Ok(());
@@ -67,19 +65,19 @@ pub async fn run_suite(
     ctx: &mut TestContext,
     mut features: features::Features<TestContext>,
     spec_dir: Option<String>,
-) -> Result<()> {
+) -> Result<(), String> {
     let dir_path = match spec_dir {
         Some(path) => path,
-        None => anyhow::bail!("No spec directory provided. Use --spec-dir."),
+        None => return Err("No spec directory provided. Use --spec-dir.".to_string()),
     };
     let dir = std::path::Path::new(&dir_path);
     if !dir.is_dir() {
-        anyhow::bail!("Features directory not found: {}", dir_path);
+        return Err(format!("Features directory not found: {}", dir_path));
     }
 
     let mut entries = Vec::new();
-    for entry in std::fs::read_dir(&dir)? {
-        let entry = entry?;
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
         if path.extension().map_or(false, |ext| ext == "feature") {
             entries.push(path);
@@ -92,7 +90,7 @@ pub async fn run_suite(
 
     for path in entries {
         let filename = path.file_name().unwrap().to_string_lossy().into_owned();
-        let content = std::fs::read_to_string(&path)?;
+        let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
         match run_feature(&mut features, ctx, &filename, &content).await {
             Ok(_) => {}
             Err(e) => {
@@ -109,7 +107,7 @@ pub async fn run_suite(
         for msg in &error_messages {
             println!("{}", msg);
         }
-        anyhow::bail!("Some specifications failed");
+        return Err("Some specifications failed".to_string());
     }
 
     Ok(())

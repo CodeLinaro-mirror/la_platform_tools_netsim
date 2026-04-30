@@ -55,7 +55,7 @@ use verify_host_lib::{
 };
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<(), String> {
     tracing_subscriber::fmt::init();
     let cli = Cli::parse();
 
@@ -77,20 +77,21 @@ async fn main() -> anyhow::Result<()> {
             {
                 Some(path) => path,
                 None => {
-                    anyhow::bail!(
-                        "ANDROID_HOME environment variable is not set. Please set it to your Android SDK path or pass it via --android-home."
-                    );
+                    return Err("ANDROID_HOME environment variable is not set. Please set it to your Android SDK path or pass it via --android-home.".to_string());
                 }
             };
             let p = std::path::Path::new(&resolved_android_home);
             if !p.is_dir() {
-                anyhow::bail!("ANDROID_HOME path is not a directory: {}", resolved_android_home);
+                return Err(format!(
+                    "ANDROID_HOME path is not a directory: {}",
+                    resolved_android_home
+                ));
             }
             if !p.join("platform-tools").join("adb").exists() && !p.join("adb").exists() {
-                anyhow::bail!(
+                return Err(format!(
                     "ANDROID_HOME does not point to a valid Android SDK (missing adb). Path: {}",
                     resolved_android_home
-                );
+                ));
             }
 
             let mut features = Features::<TestContext>::new();

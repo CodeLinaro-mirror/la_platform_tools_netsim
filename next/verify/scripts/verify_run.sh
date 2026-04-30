@@ -6,9 +6,32 @@
 # prior to invoking the bazel runner-e2e test suite.
 
 set -e
+set -o pipefail
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WORKSPACE_DIR="$( cd "$DIR/../../../../../" && pwd )"
+
+OS_NAME=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$OS_NAME" in
+  linux*) OS_NAME="linux" ;;
+  darwin*) OS_NAME="darwin" ;;
+  mingw*|cygwin*|msys*) OS_NAME="windows" ;;
+  *) echo "Unsupported OS: $OS_NAME"; exit 1 ;;
+esac
+
+bazel() {
+  local BAZEL_BINARY="bazel"
+  if [ "$OS_NAME" = "windows" ]; then
+    BAZEL_BINARY="bazel.exe"
+  fi
+
+  local bazel_path="$WORKSPACE_DIR/prebuilts/bazel/$OS_NAME-x86_64/$BAZEL_BINARY"
+  if [[ -x "$bazel_path" ]]; then
+    "$bazel_path" "$@"
+  else
+    command bazel "$@"
+  fi
+}
 
 export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-${ANDROID_SDK_HOME:-$HOME/Android/Sdk}}}"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
@@ -24,6 +47,8 @@ RUNNER_PATH=""
 APK_PATH=""
 CLI_PATH=""
 SPEC_DIR=
+EMULATOR_PATH="emulator"
+KEEP_GOING=false
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
@@ -31,12 +56,14 @@ while [[ "$#" -gt 0 ]]; do
     -n|--num-emulators) NUM_EMULATORS="$2"; shift ;;
     -f|--filter) TEST_FILTER="$2"; shift ;;
     -d|--dry-run) DRY_RUN=true ;;
+    -k|--keep-going) KEEP_GOING=true ;;
     --no-build) NO_BUILD=true ;;
     --netsimd-path) NETSIMD_PATH="$2"; shift ;;
     --runner-path) RUNNER_PATH="$2"; shift ;;
     --apk-path) APK_PATH="$2"; shift ;;
     --cli-path) CLI_PATH="$2"; shift ;;
     --spec-dir) SPEC_DIR="$2"; shift ;;
+    --emulator-path) EMULATOR_PATH="$2"; shift ;;
     -h|--help)
       echo "Usage: $0 [options]"
       echo "Options:"
@@ -44,12 +71,14 @@ while [[ "$#" -gt 0 ]]; do
       echo "  -f, --filter <regex>          Regex to filter tests to run"
       echo "  -d, --dry-run                 Simulation mode (does not start emulators, passes --dry-run to runner)"
       echo "  -v, --verbose                 Enable verbose test runner output"
+      echo "  -k, --keep-going              Continue running tests after a failure"
       echo "  --no-build                    Skip Bazel build step"
       echo "  --netsimd-path <path>         Path to netsimd binary"
       echo "  --runner-path <path>          Path to runner binary"
       echo "  --apk-path <path>             Path to vbs APK"
       echo "  --cli-path <path>             Path to netsim CLI binary"
       echo "  --spec-dir <path>             Directory containing feature files (specs)"
+      echo "  --emulator-path <path>        Path to emulator binary"
       exit 0
       ;;
     *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -125,7 +154,7 @@ echo "3. Starting Netsim daemon"
 echo "================================================="
 
 BAZEL_BIN=$(bazel info bazel-bin 2>/dev/null || echo "$WORKSPACE_DIR/bazel-bin")
-BAZEL_OUT=$(realpath "$BAZEL_BIN/../..")
+BAZEL_OUT=$(dirname $(dirname "$BAZEL_BIN"))
 
 if [ -z "$NETSIMD_PATH" ]; then
   NETSIMD_BIN=$(find "$BAZEL_OUT" -path "*/daemon/daemon" -type f | head -n 1)
@@ -162,7 +191,7 @@ if [ "$DRY_RUN" = false ]; then
   echo "4. Launching $NUM_EMULATORS Emulator(s) (logs in /tmp/emulator_*)"
   echo "================================================="
   for emu in "${SELECTED_EMULATORS[@]}"; do
-    emulator "$emu" -no-window -no-audio -no-snapshot > "/tmp/emulator_${emu#@}_e2e.log" 2>&1 &
+    "$EMULATOR_PATH" "$emu" -no-window -no-audio -no-snapshot > "/tmp/emulator_${emu#@}_e2e.log" 2>&1 &
     EMU_PIDS+=($!)
   done
 
@@ -220,14 +249,14 @@ echo "5. Running E2E Test Suite via Runner Binary"
 echo "================================================="
 
 if [ -z "$RUNNER_PATH" ]; then
-  RUNNER_PATH=$(find "$BAZEL_OUT" -path "*/verify/runner/runner" -type f | head -n 1)
+  RUNNER_PATH=$(find "$BAZEL_OUT" -path "*/verify/runner/runner" -type f -exec ls -t {} + | head -n 1)
   if [ -z "$RUNNER_PATH" ]; then
     RUNNER_PATH="$BAZEL_BIN/external/netsim+/next/verify/runner/runner"
   fi
 fi
 
 if [ -z "$APK_PATH" ]; then
-  APK_PATH=$(find "$BAZEL_OUT" -path "*/verify/instrumentation/vbs/vbs.apk" -type f | head -n 1)
+  APK_PATH=$(find "$BAZEL_OUT" -path "*/verify/instrumentation/vbs/vbs.apk" -type f -exec ls -t {} + | head -n 1)
   if [ -z "$APK_PATH" ]; then
     APK_PATH="$BAZEL_BIN/external/netsim+/next/verify/instrumentation/vbs/vbs.apk"
   fi
@@ -256,6 +285,10 @@ if [ -z "$SPEC_DIR" ]; then
   SPEC_DIR="$WORKSPACE_DIR/tools/netsim/next/tests/features"
 fi
 RUNNER_ARGS+=(--spec-dir "$SPEC_DIR")
+
+if [ "$KEEP_GOING" = true ]; then
+  RUNNER_ARGS+=(--keep-going)
+fi
 
 "$RUNNER_PATH" run \
   --android-home "$ANDROID_HOME" \
