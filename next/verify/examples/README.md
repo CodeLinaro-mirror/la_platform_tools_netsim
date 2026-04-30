@@ -9,6 +9,7 @@ The `verify` framework is designed to be extensible. You can add custom steps on
 ## Directory Structure
 
 - `01-basic/`: Demonstrates a minimal feature using standard VBS apk (Verify Bundled Steps).
+- `02-host-steps/`: Demonstrates how to add additional host-side step functions to your own host runner.
 
 ## Running Examples
 
@@ -18,6 +19,14 @@ This example uses the standard `verify` runner and does not require a custom bin
 To run it in dry-run mode:
 ```bash
 bazel run @netsim//next/verify/runner:runner -- run --dry-run --spec-dir $(pwd)/tools/netsim/next/verify/examples/01-basic/features
+```
+
+### Custom Host Steps Example (`02-host-steps`)
+This example demonstrates how to build and use a custom host runner with additional step functions.
+
+To run it in dry-run mode:
+```bash
+bazel run @netsim//next/verify/examples/02-host-steps:custom_host_runner -- --spec-dir $(pwd)/tools/netsim/next/verify/examples/02-host-steps/features --dry-run
 ```
 
 ## Adding New Examples
