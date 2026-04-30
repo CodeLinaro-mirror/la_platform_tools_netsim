@@ -1,6 +1,0 @@
-Feature: Simple Calculator
-  Scenario: Add two numbers
-    Given the calculator is clear
-    When I add 5
-    And I add 10
-    Then the display should be 15
