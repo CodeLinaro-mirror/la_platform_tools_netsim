@@ -71,7 +71,7 @@ fn perform_command(
         args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_))
         | args::Command::Link(_) => command.get_requests(&client),
         args::Command::Beacon(args::Beacon::Remove(_)) => {
-            Ok(vec![args::Command::Devices(args::Devices { continuous: false }).get_request()])
+            Ok(vec![args::Command::Devices(args::Devices::default()).get_request()])
         }
         _ => Ok(vec![command.get_request()]),
     }?;
