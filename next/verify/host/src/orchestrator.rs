@@ -29,6 +29,7 @@ pub async fn run_android(
     android_home: Option<String>,
     netsim_path: Option<String>,
     netsim_args: Option<String>,
+    netsim_cli_path: Option<String>,
     apk_path: Option<String>,
     gateway_ip: Option<String>,
     filter: Option<String>,
@@ -58,6 +59,7 @@ pub async fn run_android(
         grpc_channel: None,
         grpc_client: None,
         ap_client: None,
+        netsim_cli_path,
     };
     if let Some(tags) = ignore_tags {
         features.ignore_tags_str(&tags);
@@ -89,6 +91,7 @@ pub async fn list_scenarios(
         grpc_channel: None,
         grpc_client: None,
         ap_client: None,
+        netsim_cli_path: None,
     };
     scenarios::run_suite(&mut ctx, features, spec_dir).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -112,6 +115,7 @@ pub struct TestContext {
     pub grpc_channel: Option<grpcio::Channel>,
     pub grpc_client: Option<netsim_proto::frontend_grpc::FrontendServiceClient>,
     pub ap_client: Option<netsim_proto::access_point_grpc::AccessPointServiceClient>,
+    pub netsim_cli_path: Option<String>,
 }
 
 impl features::World for TestContext {

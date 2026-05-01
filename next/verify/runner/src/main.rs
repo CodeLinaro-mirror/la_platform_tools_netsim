@@ -25,6 +25,8 @@ enum Commands {
         netsim_path: Option<String>,
         #[arg(long, help = "Arguments to pass to netsim")]
         netsim_args: Option<String>,
+        #[arg(long, help = "Path to netsim CLI binary")]
+        netsim_cli_path: Option<String>,
         #[arg(long, help = "Gateway IP to connect to (defaults to 10.0.2.2)")]
         gateway_ip: Option<String>,
         #[arg(long, help = "Optional scenario filter (matches feature file name)")]
@@ -77,6 +79,7 @@ async fn main() -> Result<(), String> {
             apk_path,
             netsim_path,
             netsim_args,
+            netsim_cli_path,
             gateway_ip,
             filter,
             dry_run,
@@ -119,6 +122,7 @@ async fn main() -> Result<(), String> {
                 Some(resolved_android_home),
                 netsim_path,
                 netsim_args,
+                netsim_cli_path,
                 apk_path,
                 gateway_ip,
                 filter,
