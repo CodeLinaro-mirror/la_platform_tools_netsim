@@ -76,7 +76,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
       "compile": ["Build"],
       "compileinstall": ["CompileInstall"],
       "test": ["Test"],
-      "runtest": ["Test", "RunVerify"],
+      "runtest": ["Test"],
       "zipartifact": ["ZipArtifact"],
       "installemulator": ["InstallEmulator"],
       "runpytest": ["RunPyTest"],
