@@ -12,6 +12,7 @@
 
 pub use std::collections::{HashMap, HashSet};
 
+use clap::Args;
 use protobuf::well_known_types::empty::Empty;
 
 use crate::{
@@ -23,25 +24,48 @@ use crate::{
     types::{ClientParams, Throughput, LABEL_WIDTH},
 };
 
-/// Orchestrates Android integration tests by discovering devices and running
-/// the suite.
-pub async fn run_android(
-    android_home: Option<String>,
-    netsim_path: Option<String>,
-    netsim_args: Option<String>,
-    netsim_cli_path: Option<String>,
-    apk_path: Option<String>,
-    gateway_ip: Option<String>,
-    filter: Option<String>,
-    dry_run: bool,
-    verbose: bool,
+/// Standard arguments for running the test suite.
+#[derive(Args, Debug, Clone)]
+pub struct RunArgs {
+    #[arg(long, help = "Path to the Android SDK root, platform-tools, or adb binary")]
+    pub android_home: Option<String>,
+    #[arg(long, help = "Path to the vbs APK")]
+    pub apk_path: Option<String>,
+    #[arg(long, help = "Path to netsimd binary")]
+    pub netsim_path: Option<String>,
+    #[arg(long, help = "Arguments to pass to netsim")]
+    pub netsim_args: Option<String>,
+    #[arg(long, help = "Path to netsim CLI binary")]
+    pub netsim_cli_path: Option<String>,
+    #[arg(long, help = "Gateway IP to connect to (defaults to 10.0.2.2)")]
+    pub gateway_ip: Option<String>,
+    #[arg(long, help = "Optional scenario filter (matches feature file name)")]
+    pub filter: Option<String>,
+    #[arg(long, help = "Simulation mode (no-op for orchestrator logic verification)")]
+    #[arg(default_value_t = false)]
+    pub dry_run: bool,
+    #[arg(long, short, help = "Enable verbose output")]
+    pub verbose: bool,
+    #[arg(long, help = "Directory containing feature files (specs)")]
+    pub spec_dir: Option<String>,
+    #[arg(long, help = "Continue running tests after a failure")]
+    #[arg(default_value_t = false)]
+    pub keep_going: bool,
+    #[arg(
+        long,
+        help = "Comma-separated list of tags to ignore",
+        default_value = "nyi,nyt,skip,ignore"
+    )]
+    pub ignore_tags: Option<String>,
+}
+
+pub async fn run(
+    args: RunArgs,
     mut features: features::Features<TestContext>,
-    spec_dir: Option<String>,
-    keep_going: bool,
-    ignore_tags: Option<String>,
 ) -> Result<(), String> {
-    let host = HostWorld::new(dry_run);
-    let adb = AdbWorld::new(android_home, apk_path, netsim_path.clone(), netsim_args);
+    let host = HostWorld::new(args.dry_run);
+    let adb =
+        AdbWorld::new(args.android_home, args.apk_path, args.netsim_path.clone(), args.netsim_args);
     let netsim = NetsimWorld::new();
 
     let mut ctx = TestContext {
@@ -50,21 +74,21 @@ pub async fn run_android(
         adb,
         netsim,
         target_ip: "10.0.2.2".to_string(),
-        gateway_ip: gateway_ip.unwrap_or_else(|| "10.0.2.2".to_string()),
-        filter,
-        is_dry_run: dry_run,
-        is_verbose: verbose,
-        keep_going,
+        gateway_ip: args.gateway_ip.unwrap_or_else(|| "10.0.2.2".to_string()),
+        filter: args.filter,
+        is_dry_run: args.dry_run,
+        is_verbose: args.verbose,
+        keep_going: args.keep_going,
         variables: HashMap::new(),
         grpc_channel: None,
         grpc_client: None,
         ap_client: None,
-        netsim_cli_path,
+        netsim_cli_path: args.netsim_cli_path,
     };
-    if let Some(tags) = ignore_tags {
+    if let Some(tags) = args.ignore_tags {
         features.ignore_tags_str(&tags);
     }
-    scenarios::run_suite(&mut ctx, features, spec_dir).await.map_err(|e| e.to_string())?;
+    scenarios::run_suite(&mut ctx, features, args.spec_dir).await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
