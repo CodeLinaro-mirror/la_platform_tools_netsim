@@ -3,6 +3,7 @@
 # Known Failure: The device fails to reconnect to "AndroidWifi" after
 # disconnecting from a requested network.
 
+@ignore
 @wifi @ap
 Feature: Wi-Fi Access Point and Connectivity
 

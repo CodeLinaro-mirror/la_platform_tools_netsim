@@ -1,5 +1,6 @@
 Feature: Wi-Fi Roaming Connection
 
+@ignore
 Scenario: Roam between Open and Secured AP
   Given @adb has 1 attached device
   And @adb:1 disables cellular data

@@ -33,7 +33,7 @@ enum Commands {
 use verify_host_lib::{
     adb_steps, android_steps,
     features::Features,
-    host_steps, netsim_link_steps, netsim_steps,
+    host_steps, netsim_steps,
     orchestrator::{self, TestContext},
 };
 
@@ -74,7 +74,6 @@ async fn main() -> Result<(), String> {
             android_steps::register_steps(&mut features);
             host_steps::register_steps(&mut features);
             netsim_steps::register_steps(&mut features);
-            netsim_link_steps::register_steps(&mut features);
 
             orchestrator::run(args, features).await?;
         }
@@ -84,7 +83,6 @@ async fn main() -> Result<(), String> {
             android_steps::register_steps(&mut features);
             host_steps::register_steps(&mut features);
             netsim_steps::register_steps(&mut features);
-            netsim_link_steps::register_steps(&mut features);
             orchestrator::list_scenarios(features, spec_dir, Some(ignore_tags)).await?;
         }
     }

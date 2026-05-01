@@ -520,6 +520,15 @@ class VerifyManager:
       logging.error(f"vbs.apk not found at {self.apk_path}")
       return False
 
+    netsim_cli_bin = (
+        AOSP_ROOT
+        / "bazel-bin/external/netsim+/next/cli"
+        / binary_extension("netsim")
+    )
+    if not netsim_cli_bin.exists():
+      logging.error(f"netsim CLI binary not found at {netsim_cli_bin}")
+      return False
+
     logging.info("Running verify tests...")
     run(
         [
@@ -529,6 +538,8 @@ class VerifyManager:
             self.sdk_root,
             "--apk-path",
             self.apk_path,
+            "--netsim-cli-path",
+            netsim_cli_bin,
             "--spec-dir",
             self.spec_dir,
             "--keep-going",

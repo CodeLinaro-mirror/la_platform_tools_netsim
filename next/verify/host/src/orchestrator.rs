@@ -13,7 +13,6 @@
 pub use std::collections::{HashMap, HashSet};
 
 use clap::Args;
-use protobuf::well_known_types::empty::Empty;
 
 use crate::{
     adb_steps::AdbWorld,
@@ -80,9 +79,6 @@ pub async fn run(
         is_verbose: args.verbose,
         keep_going: args.keep_going,
         variables: HashMap::new(),
-        grpc_channel: None,
-        grpc_client: None,
-        ap_client: None,
         netsim_cli_path: args.netsim_cli_path,
     };
     if let Some(tags) = args.ignore_tags {
@@ -112,9 +108,6 @@ pub async fn list_scenarios(
         is_verbose: false,
         keep_going: false,
         variables: HashMap::new(),
-        grpc_channel: None,
-        grpc_client: None,
-        ap_client: None,
         netsim_cli_path: None,
     };
     scenarios::run_suite(&mut ctx, features, spec_dir).await.map_err(|e| e.to_string())?;
@@ -136,9 +129,6 @@ pub struct TestContext {
     pub is_verbose: bool,
     pub keep_going: bool,
     pub variables: HashMap<String, String>,
-    pub grpc_channel: Option<grpcio::Channel>,
-    pub grpc_client: Option<netsim_proto::frontend_grpc::FrontendServiceClient>,
-    pub ap_client: Option<netsim_proto::access_point_grpc::AccessPointServiceClient>,
     pub netsim_cli_path: Option<String>,
 }
 
@@ -185,18 +175,22 @@ impl features::World for TestContext {
             // 2. Fetch from Netsim (Host side)
             if self.is_dry_run {
                 self.variables.insert("connected-devices".to_string(), "1".to_string());
+                self.variables.insert("netsim-version".to_string(), "0.0.1-mock".to_string());
             } else {
-                let client = self
-                    .get_or_create_grpc_client()
-                    .map_err(|e| format!("got grpc client: {}", e))?;
-                let resp = client
-                    .list_device(&Empty::new())
-                    .map_err(|e| format!("listed devices: {}", e))?;
-                let version_resp =
-                    client.get_version(&Empty::new()).map_err(|e| format!("got version: {}", e))?;
-                self.variables
-                    .insert("connected-devices".to_string(), resp.devices.len().to_string());
-                self.variables.insert("netsim-version".to_string(), version_resp.version);
+                // Fetch devices
+                let devices_output = self.run_netsim_command(&["devices", "--json"])?;
+                let devices_json: serde_json::Value =
+                    serde_json::from_slice(&devices_output.stdout)
+                        .map_err(|e| format!("Failed to parse netsim devices JSON: {}", e))?;
+                let devices_count =
+                    devices_json["devices"].as_array().map(|a| a.len()).unwrap_or(0);
+                self.variables.insert("connected-devices".to_string(), devices_count.to_string());
+
+                // Fetch version
+                let version_output = self.run_netsim_command(&["version"])?;
+                let version_str = String::from_utf8_lossy(&version_output.stdout);
+                let version = version_str.trim_start_matches("Netsim version: ").trim().to_string();
+                self.variables.insert("netsim-version".to_string(), version);
             }
 
             Ok(())
@@ -205,42 +199,22 @@ impl features::World for TestContext {
 }
 
 impl TestContext {
-    pub fn get_or_create_channel(&mut self) -> Result<grpcio::Channel, String> {
-        if self.grpc_channel.is_none() {
-            let server = common::util::ini_file::get_server_address(
-                common::util::os_utils::get_instance(None),
-            )
-            .ok_or_else(|| "Failed to get server address".to_string())?;
-            let channel =
-                grpcio::ChannelBuilder::new(std::sync::Arc::new(grpcio::EnvBuilder::new().build()))
-                    .connect(&server);
-            self.grpc_channel = Some(channel);
+    pub fn run_netsim_command(&self, args: &[&str]) -> Result<std::process::Output, String> {
+        let mut cmd = if let Some(path) = &self.netsim_cli_path {
+            std::process::Command::new(path)
+        } else {
+            std::process::Command::new("netsim")
+        };
+        cmd.args(args);
+        let output = cmd.output().map_err(|e| format!("Failed to run netsim command: {}", e))?;
+        if !output.status.success() {
+            return Err(format!(
+                "netsim command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
-        Ok(self.grpc_channel.as_ref().unwrap().clone())
+        Ok(output)
     }
-
-    pub fn get_or_create_grpc_client(
-        &mut self,
-    ) -> Result<&netsim_proto::frontend_grpc::FrontendServiceClient, String> {
-        if self.grpc_client.is_none() {
-            let channel = self.get_or_create_channel()?;
-            self.grpc_client =
-                Some(netsim_proto::frontend_grpc::FrontendServiceClient::new(channel));
-        }
-        Ok(self.grpc_client.as_ref().unwrap())
-    }
-
-    pub fn get_or_create_ap_client(
-        &mut self,
-    ) -> Result<&netsim_proto::access_point_grpc::AccessPointServiceClient, String> {
-        if self.ap_client.is_none() {
-            let channel = self.get_or_create_channel()?;
-            self.ap_client =
-                Some(netsim_proto::access_point_grpc::AccessPointServiceClient::new(channel));
-        }
-        Ok(self.ap_client.as_ref().unwrap())
-    }
-
     /// Maps an orchestrator actor label (e.g., @avd:1 or @Beacon1) to a netsim
     /// device name.
     ///
@@ -268,24 +242,12 @@ impl TestContext {
             }
         }
 
-        // 2. For non-Android actors, query ListDevice from netsim to find a match.
-        // This supports built-in devices like beacons created during the test.
-        let client =
-            self.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
-        let resp = client
-            .list_device(&protobuf::well_known_types::empty::Empty::new())
-            .map_err(|e| format!("listed devices: {}", e))?;
-
+        // 2. For non-Android actors, fallback to returning the name directly when gRPC
+        //    is disabled.
+        // TODO(b/508335216): Refactor to use CLI state queries when supported.
+        // This assumes the actor name matches the netsim device name.
         let stripped_actor = actor.strip_prefix('@').unwrap_or(actor);
-
-        if let Some(device) =
-            resp.devices.iter().find(|d| d.name == stripped_actor || d.name == actor)
-        {
-            return Ok(device.name.clone());
-        }
-
-        // Fail explicitly if the actor cannot be resolved to a valid Netsim device.
-        Err(format!("Device '{}' not found in netsim", actor))
+        Ok(stripped_actor.to_string())
     }
 
     // Helper to resolve generic actor lookups for the engine
@@ -432,11 +394,8 @@ impl TestContext {
         self.host.reset_actor().await.map_err(|e| e.to_string())?;
         self.adb.reset_actor().await.map_err(|e| e.to_string())?;
 
-        // Reset netsim via gRPC
-        let client = self.get_or_create_grpc_client()?;
-        client
-            .reset(&protobuf::well_known_types::empty::Empty::new())
-            .map_err(|e| e.to_string())?;
+        // Reset netsim via CLI
+        self.run_netsim_command(&["reset"])?;
 
         for agent in self.android.devices.values_mut() {
             agent.reset_actor(hard).await.map_err(|e| e.to_string())?;

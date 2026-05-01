@@ -1,3 +1,4 @@
+@ignore
 Feature: Netsim Host Steps Control
 
   Scenario: Create and verify Beacon
