@@ -7,12 +7,13 @@ package com.android.verify.example3
 import android.os.Bundle
 import android.util.Log
 import com.android.verify.core.VerifyInstrumentation
+import com.android.verify.core.registerStepsFromScanning
 
 /**
  * Example instrumentation for custom guest steps.
  *
- * This example explicitly registers step classes instead of relying on fragile runtime reflection
- * scanning. This is the recommended approach for custom APKs.
+ * This example registers standard steps from vbs-lib via scanning, and explicitly registers its own
+ * custom steps to avoid discovery issues.
  */
 class Example3Instrumentation : VerifyInstrumentation() {
   private val TAG = "Example3Instrumentation"
@@ -25,8 +26,10 @@ class Example3Instrumentation : VerifyInstrumentation() {
   override fun registerSteps() {
     val r = registry ?: return
 
-    // Explicitly register the class containing custom steps.
-    // This avoids fragile reflection scanning of the dex file.
+    // 1. Scan for standard steps in vbs-lib (package com.android.verify.vbs)
+    r.registerStepsFromScanning("com.android.verify.vbs") { it.endsWith("StepsKt") }
+
+    // 2. Explicitly register the class containing custom steps.
     // We use Class.forName because Kotlin top-level functions are compiled into a class
     // named after the file with "Kt" suffix, which is not directly accessible as a type in Kotlin.
     try {

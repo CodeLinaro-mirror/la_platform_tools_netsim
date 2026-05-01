@@ -19,6 +19,7 @@ kt_android_library(
     tags = ["manual"],
     deps = [
         "//next/verify/instrumentation/core:verify-core-lib",
+        "//next/verify/instrumentation/vbs:vbs-lib",
         "@maven//:androidx_annotation_annotation",
         "@maven//:androidx_test_monitor",
         "@maven//:androidx_test_runner",

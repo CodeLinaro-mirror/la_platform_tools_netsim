@@ -5,17 +5,23 @@
 package com.android.verify.example3
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.android.verify.core.Step
 
-/**
- * Custom steps for Example 3.
- *
- * NOTE: We are only showing a trivial Log.i step here because privileged steps (like checking WiFi
- * state) failed to be discovered by the reflection scanner in this standalone APK setup. See
- * b/508641214 for tracking the enhancement to use standard steps and resolve discovery issues.
- */
+/** Custom steps for Example 3. */
 @Step("Android says hello to \"([^\"]+)\"")
 fun sayHello(context: Context, args: List<String>) {
   val name = args[0]
   android.util.Log.i("CustomSteps", "Hello, $name!")
+}
+
+@Step("Android checks wifi is connected")
+fun checkWifiConnected(context: Context, args: List<String>) {
+  val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+  val activeNetwork = cm.activeNetwork
+  val capabilities = cm.getNetworkCapabilities(activeNetwork)
+  val isConnected = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+  check(isConnected) { "Wifi is not connected!" }
+  android.util.Log.i("CustomSteps", "Wifi is connected!")
 }

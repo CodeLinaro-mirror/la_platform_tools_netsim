@@ -5,3 +5,6 @@ Feature: Custom Host Steps Example
 
   Scenario: Host says hello
     When Host says hello to "World"
+
+  Scenario: Host checks devices
+    Given Host checks for devices

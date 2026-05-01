@@ -49,6 +49,23 @@ pub mod custom_steps {
     ) -> Result<(), String> {
         execute_guest_step_helper(w, actor, name).await
     }
+
+    #[step(r#"@(\S+) checks wifi is connected"#)]
+    async fn android_checks_wifi_connected(
+        w: &mut TestContext,
+        actor: String,
+    ) -> Result<(), String> {
+        let step = "Android checks wifi is connected".to_string();
+        if w.is_dry_run {
+            println!("DRY-RUN: Forwarding step to guest: {}", step);
+            return Ok(());
+        }
+        let android = w
+            .get_android_actor_mut(&format!("@{}", actor))
+            .ok_or_else(|| format!("Actor @{} not found", actor))?;
+        android.execute_step(&step, 60).await.map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 #[tokio::main]
@@ -57,6 +74,7 @@ async fn main() -> std::result::Result<(), String> {
 
     let mut features = Features::<TestContext>::new();
     verify_host_lib::adb_steps::register_steps(&mut features);
+    verify_host_lib::android_steps::register_steps(&mut features);
     custom_steps::register_steps(&mut features);
 
     orchestrator::run(cli.args, features).await?;

@@ -49,7 +49,7 @@ pub struct RunArgs {
     #[arg(
         long,
         help = "Instrumentation class of the guest agent",
-        default_value = "com.android.verify.vbs.VbsInstrumentation"
+        default_value = "com.android.verify.vbs/com.android.verify.vbs.VbsInstrumentation"
     )]
     pub guest_instrumentation: String,
     #[arg(long, help = "Simulation mode (no-op for orchestrator logic verification)")]
@@ -125,7 +125,7 @@ pub async fn list_scenarios(
             None,
             None,
             "com.android.verify.vbs".to_string(),
-            "com.android.verify.vbs.VbsInstrumentation".to_string(),
+            "com.android.verify.vbs/com.android.verify.vbs.VbsInstrumentation".to_string(),
         ),
         netsim: NetsimWorld::new(),
         target_ip: "10.0.2.2".to_string(),
@@ -137,7 +137,8 @@ pub async fn list_scenarios(
         variables: HashMap::new(),
         netsim_cli_path: None,
         guest_package: "com.android.verify.vbs".to_string(),
-        guest_instrumentation: "com.android.verify.vbs.VbsInstrumentation".to_string(),
+        guest_instrumentation: "com.android.verify.vbs/com.android.verify.vbs.VbsInstrumentation"
+            .to_string(),
     };
     scenarios::run_suite(&mut ctx, features, spec_dir).await.map_err(|e| e.to_string())?;
     Ok(())
