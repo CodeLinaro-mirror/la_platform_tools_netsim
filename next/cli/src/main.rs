@@ -80,23 +80,23 @@ fn perform_command(
     for (i, req) in requests.iter().enumerate() {
         let result = match command {
             // Continuous option sends the gRPC call every second
-            args::Command::Devices(ref cmd) if cmd.continuous => {
+            &mut args::Command::Devices(ref cmd) if cmd.continuous => {
                 continuous_perform_command(command, &client, req, verbose)?;
                 unreachable!("Continuous command should loop forever until error");
             }
-            args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
+            &mut args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
                 continuous_perform_command(command, &client, req, verbose)?;
                 unreachable!("Continuous command should loop forever until error");
             }
             // Get Capture use streaming gRPC reader request
-            args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
+            args::Command::Capture(args::Capture::Get(cmd)) => {
                 let GrpcRequest::GetCapture(request) = req else {
                     return Err(format!("Expected GetCaptureRequest. Got: {req:?}").into());
                 };
                 perform_streaming_request(&client, cmd, request, &cmd.filenames[i].to_owned())?;
                 Ok(None)
             }
-            args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
+            &mut args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
                 let response = grpc_client::send_grpc(&client, &GrpcRequest::ListDevice)?;
                 let GrpcResponse::ListDevice(response) = response else {
                     return Err(format!("Expected ListDeviceResponse. Got: {response:?}").into());
