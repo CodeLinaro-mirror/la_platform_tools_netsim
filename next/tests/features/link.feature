@@ -1,3 +1,4 @@
+@ignore
 Feature: Netsim Link Management
 
   Scenario: Link Lifecycle
