@@ -3,7 +3,7 @@
 
 use actor_framework::{ActorService, DynContext};
 use futures::{SinkExt, StreamExt};
-use netsim_model::{Chip, ChipId, ChipVariant, Radio, Wifi};
+use netsim_model::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -93,25 +93,35 @@ impl ActorService for WifiActor {
         update: Self::Update,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        if let Some(chip) = self.active_chips.get_mut(&id) {
-            // Apply update to chip
-            update.apply(chip);
+        let chip = self
+            .active_chips
+            .get_mut(&id)
+            .ok_or_else(|| WifiError::Internal(Box::from(format!("Chip {} not found", id))))?;
 
-            self.medium.set_enabled(
-                id.0,
-                chip.enabled
-                    && matches!(
-                        chip.variant,
-                        Some(ChipVariant::Wifi(Wifi {
-                            radio: Radio { state: Some(true) | None, .. }
-                        }))
-                    ),
-            );
+        // Apply update to chip
+        update.apply(chip);
 
-            Ok(chip.clone())
-        } else {
-            Err(WifiError::Internal(Box::from(format!("Chip {} not found", id))))
+        // Enable medium if either radio state or chip enabled state is set to true in
+        // the update.
+        if let Some(ChipVariantUpdate::Wifi(WifiUpdate {
+            radio: RadioUpdate { state: Some(state) },
+        })) = &update.variant
+        {
+            self.medium.set_enabled(id.0, *state);
         }
+        if let Some(enabled) = update.enabled {
+            self.medium.set_enabled(id.0, enabled);
+        }
+
+        // Synchronize the chip struct's state with the actual medium state.
+        if let Ok(enabled) = self.medium.enabled(id.0) {
+            if let Some(ChipVariant::Wifi(ref mut radio)) = chip.variant {
+                radio.radio.state = Some(enabled);
+            }
+            chip.enabled = enabled;
+        }
+
+        Ok(chip.clone())
     }
 
     async fn handle_delete(

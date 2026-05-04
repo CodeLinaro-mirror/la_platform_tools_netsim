@@ -75,6 +75,91 @@ The host-side Rust code follows a similar pattern:
 
 ---
 
+## Feature Observables
+
+`verify` supports counting and verifying features during a scenario. This is useful for cross-validating test effectiveness and telemetry correctness.
+
+### Guest-side (Android)
+
+To expose feature counters on the Android guest:
+
+1.  **Implement `FeatureObservable`**: Create a class that implements the interface and returns a map of counters.
+    ```kotlin
+    import com.android.verify.core.FeatureObservable
+
+    class MyFeatureCounters : FeatureObservable {
+        var wifiP2pConnections = 0
+        override fun getObservables(): Map<String, String> {
+            return mapOf("wifi-p2p-connections" to wifiP2pConnections.toString())
+        }
+    }
+    ```
+
+2.  **Register in your Instrumentation**:
+    ```kotlin
+    class MyInstrumentation : VerifyInstrumentation() {
+        private val myCounters = MyFeatureCounters()
+        override fun onCreate(arguments: Bundle) {
+            super.onCreate(arguments)
+            registerObservable(myCounters)
+        }
+    }
+    ```
+
+### Host-side
+
+On the host, you can verify these counters using Gherkin steps:
+
+```gherkin
+  Scenario: Verify P2P connection count
+    Then @avd observes "wifi-p2p-connections" should be "1"
+```
+
+### Host-side (gRPC)
+
+You can also query `netsimd` directly via gRPC to check for host-side observables, such as the number of connected devices and version:
+
+```gherkin
+  Scenario: Verify connected device count
+    Then @netsim observes "connected-devices" should be ">=1"
+```
+
+You can also use Data Tables to assert on multiple observables at once, and use operators like `>=` or `*` (wildcard for existence):
+
+```gherkin
+  Scenario: Verify device count and valid version
+    Then @netsim observes:
+      | connected-devices | >=1     |
+      | netsim-version    | *       |
+```
+
+This step uses the `ListDevice` gRPC call to count the devices registered in `netsimd`.
+
+### Supported Operators for Observables
+
+When asserting on observables (either via single line or Data Table), you can use the following operators in the expected value string:
+
+- **`*`**: Wildcard. Asserts that the key exists (any value is acceptable).
+- **`>=N`**: Asserts that the value parsed as a number is greater than or equal to N.
+- **`>N`**: Asserts that the value parsed as a number is greater than N.
+- **`<=N`**: Asserts that the value parsed as a number is less than or equal to N.
+- **`<N`**: Asserts that the value parsed as a number is less than N.
+- **Plain String**: Asserts exact string equality.
+
+### Ergonomic Tags for Automatic Verification
+
+To reduce boilerplate, you can tag a scenario with `@verify_observed:<feature_name>`. The framework will automatically verify that the feature was observed (count > 0) at the end of the scenario.
+
+```gherkin
+  @verify_observed:wifi-p2p-connections
+  Scenario: Verify P2P connection count with tags
+    When @avd fetch feature observables
+```
+
+This removes the need to add an explicit `Then` step for verification.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -114,3 +199,26 @@ If you run the `verify` binary directly:
 Options:
 - `--android-home <PATH>`: Path to the Android SDK root.
 - `--apk-path <PATH>`: Path to the `vbs.apk`.
+
+---
+
+## UI Automator Steps Guidelines
+
+To add support for UI Automator in `verify` tests, follow these guidelines:
+
+### Abstraction Level
+
+- **Generic Steps**: Prefer generic steps for simple interactions to avoid writing new Kotlin functions for every minor UI interaction.
+    - Example: `When @android:N clicks on element with text "Label"`
+    - Example: `Then @android:N should see text "Label"`
+- **Specific Steps**: Use specific steps for complex UI flows or when generic steps lead to overly verbose feature files.
+    - Example: `When @android:N toggles Wi-Fi via Settings UI`
+
+### UI Flakiness
+
+- **Waiting**: Always use UI Automator's `wait` with `Until` conditions instead of static sleeps.
+- **Timeouts**: Use reasonable timeouts (e.g., 5 seconds) for finding objects.
+
+### Macros
+
+- If sequences of generic steps become repetitive, consider implementing a macro system in the Rust runner (e.g., in `Features::run_steps`) to allow reusability without adding Kotlin boilerplate.

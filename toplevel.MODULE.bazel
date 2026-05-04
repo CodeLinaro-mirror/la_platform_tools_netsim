@@ -26,6 +26,7 @@ maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 maven.install(
     artifacts = [
         "androidx.core.uwb:uwb:1.0.0-alpha05",
+        "androidx.test.uiautomator:uiautomator:2.3.0",
         "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3",
         "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3",
     ],

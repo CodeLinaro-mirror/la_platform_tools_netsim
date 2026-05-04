@@ -107,7 +107,7 @@ pub fn step_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 };
 
                 wrappers.push(quote! {
-                    fn #wrapper_name(w: &mut #world_t, #[allow(unused_variables)] args: Vec<String>, #[allow(unused_variables)] ctx: ::features::StepContext) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+                    fn #wrapper_name(w: &mut #world_t, #[allow(unused_variables)] args: Vec<String>, #[allow(unused_variables)] ctx: ::features::StepContext) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + '_>> {
                         #wrapper_body
                     }
                 });

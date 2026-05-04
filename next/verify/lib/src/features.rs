@@ -7,11 +7,11 @@
 //! Rust. It defines the `Features` struct, which holds registered steps, and
 //! the logic to match regex patterns against test input.
 
-use std::path::Path;
+use std::{io::Write, path::Path};
 
-use anyhow::{bail, Context, Result};
 use gherkin::Feature;
 use regex::Regex;
+use termcolor::Color;
 
 use crate::step::{AsyncStep, StepContext, World};
 
@@ -105,7 +105,7 @@ impl<W: ?Sized> Features<W> {
         self.register(pattern, step);
     }
 
-    pub async fn run(&self, text: &str, world: &mut W) -> Result<()> {
+    pub async fn run(&self, text: &str, world: &mut W) -> Result<(), String> {
         self.run_with_context(text, world, StepContext::default()).await
     }
 
@@ -114,7 +114,7 @@ impl<W: ?Sized> Features<W> {
         text: &str,
         world: &mut W,
         ctx: StepContext,
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         // Dispatch to Global Registry
         for (regex, step) in &self.steps {
             if let Some(captures) = regex.captures(text) {
@@ -131,10 +131,14 @@ impl<W: ?Sized> Features<W> {
             }
         }
 
-        bail!("No step definition found for: {}", text)
+        Err(format!("No step definition found for: {}", text))
     }
 
-    async fn run_hooks(&self, hooks: &[Box<dyn AsyncStep<W>>], world: &mut W) -> Result<()> {
+    async fn run_hooks(
+        &self,
+        hooks: &[Box<dyn AsyncStep<W>>],
+        world: &mut W,
+    ) -> Result<(), String> {
         for hook in hooks {
             hook.call(world, vec![], StepContext::default()).await?;
         }
@@ -142,7 +146,7 @@ impl<W: ?Sized> Features<W> {
     }
 
     /// Executes a Gherkin feature from a string.
-    pub async fn execute_from_memory(&self, content: &str, world: &mut W) -> Result<()>
+    pub async fn execute_from_memory(&self, content: &str, world: &mut W) -> Result<(), String>
     where
         W: World,
     {
@@ -168,7 +172,7 @@ impl<W: ?Sized> Features<W> {
             }
         }
         if failed {
-            bail!("Some scenarios failed");
+            return Err("Some scenarios failed".to_string());
         }
         Ok(())
     }
@@ -184,7 +188,7 @@ impl<W: ?Sized> Features<W> {
             println!("  Background:{}{}", sep, bg.name);
             for step in &bg.steps {
                 let status = if self.is_match(&step.value) {
-                    "\x1b[32m# ok\x1b[0m"
+                    "\x1b[32m# OK\x1b[0m"
                 } else {
                     "\x1b[31m# UNDEFINED\x1b[0m"
                 };
@@ -205,7 +209,7 @@ impl<W: ?Sized> Features<W> {
                 println!("  Scenario: {}", scenario.name);
                 for step in &scenario.steps {
                     let status = if self.is_match(&step.value) {
-                        "\x1b[32m# ok\x1b[0m"
+                        "\x1b[32m# OK\x1b[0m"
                     } else {
                         "\x1b[31m# UNDEFINED\x1b[0m"
                     };
@@ -233,7 +237,7 @@ impl<W: ?Sized> Features<W> {
                             let value =
                                 crate::utils::apply_replacements(&step.value, &replacements);
                             let status = if self.is_match(&value) {
-                                "\x1b[32m# ok\x1b[0m"
+                                "\x1b[32m# OK\x1b[0m"
                             } else {
                                 "\x1b[31m# UNDEFINED\x1b[0m"
                             };
@@ -278,13 +282,11 @@ impl<W: ?Sized> Features<W> {
         feature: &Feature,
         scenario: &gherkin::Scenario,
         world: &mut W,
-    ) -> Result<()>
+    ) -> Result<(), String>
     where
         W: World,
     {
-        use std::io::Write;
-        print!("Scenario: {} ... ", scenario.name);
-        std::io::stdout().flush().unwrap();
+        println!("Scenario: {}", scenario.name);
 
         let start = std::time::Instant::now();
         world.reset().await;
@@ -293,6 +295,23 @@ impl<W: ?Sized> Features<W> {
             self.run_hooks(&self.before_hooks, world).await?;
             self.run_background(&feature.background, world).await?;
             self.run_steps(&scenario.steps, world, &[]).await?;
+
+            // Automatic verification based on tags
+
+            let mut observables_fetched = false;
+            for tag in &scenario.tags {
+                let tag_str = tag.strip_prefix("@").unwrap_or(tag);
+                if let Some(feature_name) = tag_str.strip_prefix("verify_observed:") {
+                    if !observables_fetched {
+                        world.fetch_observables().await?;
+                        observables_fetched = true;
+                    }
+                    let verify_step =
+                        format!("@netsim observes \"{}\" should be \">0\"", feature_name);
+                    self.run_with_context(&verify_step, world, StepContext::default()).await?;
+                }
+            }
+
             Ok(())
         }
         .await;
@@ -311,11 +330,13 @@ impl<W: ?Sized> Features<W> {
         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
         match result {
             Ok(_) => {
-                println!("PASS ({:.1} ms)", elapsed);
+                print_status("PASS", Color::Green);
+                println!(" ({:.1} ms)", elapsed);
                 Ok(())
             }
             Err(e) => {
-                println!("FAIL ({:.1} ms)\n    Error: {}", elapsed, e);
+                print_status("FAIL", Color::Red);
+                println!(" ({:.1} ms)\n    Error: {}", elapsed, e);
                 Err(e)
             }
         }
@@ -326,7 +347,7 @@ impl<W: ?Sized> Features<W> {
         feature: &Feature,
         scenario: &gherkin::Scenario,
         world: &mut W,
-    ) -> Result<()>
+    ) -> Result<(), String>
     where
         W: World,
     {
@@ -352,7 +373,7 @@ impl<W: ?Sized> Features<W> {
                     .map(|(k, v)| format!("{}={}", k, v))
                     .collect::<Vec<_>>()
                     .join(", ");
-                use std::io::Write;
+
                 print!("Scenario Outline: {} [{}] ... ", scenario.name, desc);
                 std::io::stdout().flush().unwrap();
 
@@ -379,16 +400,20 @@ impl<W: ?Sized> Features<W> {
 
                 let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                 match result {
-                    Ok(_) => println!("PASS ({:.1} ms)", elapsed),
+                    Ok(_) => {
+                        print_status("PASS", Color::Green);
+                        println!(" ({:.1} ms)", elapsed);
+                    }
                     Err(e) => {
-                        println!("FAIL ({:.1} ms)\n    Error: {}", elapsed, e);
+                        print_status("FAIL", Color::Red);
+                        println!(" ({:.1} ms)\n    Error: {}", elapsed, e);
                         failed = true;
                     }
                 }
             }
         }
         if failed {
-            bail!("Some examples in outline failed");
+            return Err("Some examples in outline failed".to_string());
         }
         Ok(())
     }
@@ -398,16 +423,34 @@ impl<W: ?Sized> Features<W> {
         steps: &[gherkin::Step],
         world: &mut W,
         replacements: &[(&str, &str)],
-    ) -> Result<()> {
+    ) -> Result<(), String> {
         for step in steps {
             let value = crate::utils::apply_replacements(&step.value, replacements);
             let table = step.table.as_ref().map(|t| apply_table_replacements(t, replacements));
-            self.run_with_context(&value, world, StepContext { table }).await?;
+
+            print!("    {} {} ... ", step.keyword, value);
+            std::io::stdout().flush().unwrap();
+
+            match self.run_with_context(&value, world, StepContext { table }).await {
+                Ok(_) => {
+                    print_status("PASS", Color::Green);
+                    println!();
+                }
+                Err(e) => {
+                    print_status("FAIL", Color::Red);
+                    println!();
+                    return Err(e);
+                }
+            }
         }
         Ok(())
     }
 
-    async fn run_background(&self, bg: &Option<gherkin::Background>, world: &mut W) -> Result<()> {
+    async fn run_background(
+        &self,
+        bg: &Option<gherkin::Background>,
+        world: &mut W,
+    ) -> Result<(), String> {
         if let Some(ref bg) = bg {
             // Suppress background trace prints to keep test output clean
             for step in &bg.steps {
@@ -420,13 +463,23 @@ impl<W: ?Sized> Features<W> {
     }
 
     /// Executes a Gherkin feature from a file.
-    pub async fn execute<P: AsRef<Path>>(&self, path: P, world: &mut W) -> Result<()>
+    pub async fn execute<P: AsRef<Path>>(&self, path: P, world: &mut W) -> Result<(), String>
     where
         W: World,
     {
-        let content = std::fs::read_to_string(path).context("Failed to read feature file")?;
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read feature file: {}", e))?;
         self.execute_from_memory(&content, world).await
     }
+}
+
+fn print_status(label: &str, color: Color) {
+    use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let _ = stdout.set_color(ColorSpec::new().set_fg(Some(color)));
+    let _ = write!(&mut stdout, "{}", label);
+    let _ = stdout.reset();
 }
 
 fn apply_table_replacements(

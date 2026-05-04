@@ -71,8 +71,6 @@ impl TestWorld {}
 
 #[step_module]
 pub mod steps {
-    use anyhow::Result;
-
     use super::*;
 
     #[step(r"I reset the counter")]
@@ -179,19 +177,21 @@ pub mod steps {
     }
 
     #[step(r"I send a UDP packet with:")]
-    async fn when_send_packet(w: &mut TestWorld, table: DataTable) -> anyhow::Result<()> {
-        let packet: MockPacket = table_to_struct(&table)
-            .map_err(|e| anyhow::anyhow!("Failed to parse MockPacket: {}", e))?;
-        w.received_packets.push(serde_json::to_vec(&packet)?);
+    async fn when_send_packet(w: &mut TestWorld, table: DataTable) -> Result<(), String> {
+        let packet: MockPacket =
+            table_to_struct(&table).map_err(|e| format!("Failed to parse MockPacket: {}", e))?;
+        w.received_packets.push(serde_json::to_vec(&packet).map_err(|e| e.to_string())?);
         w.log.push("send_udp".to_string());
         Ok(())
     }
 
     #[step(r"I receive a UDP packet matching:")]
-    async fn then_receive_packet(w: &mut TestWorld, table: DataTable) -> anyhow::Result<()> {
-        anyhow::ensure!(!w.received_packets.is_empty(), "No packets received");
+    async fn then_receive_packet(w: &mut TestWorld, table: DataTable) -> Result<(), String> {
+        if w.received_packets.is_empty() {
+            return Err("No packets received".to_string());
+        }
         let last_packet = w.received_packets.last().unwrap();
-        let packet: MockPacket = serde_json::from_slice(last_packet)?;
+        let packet: MockPacket = serde_json::from_slice(last_packet).map_err(|e| e.to_string())?;
         assert_json_matches_table(&packet, &table);
         w.log.push("check_udp".to_string());
         Ok(())
@@ -225,8 +225,8 @@ pub mod steps {
     }
 
     #[step(r"I fail with an error")]
-    async fn when_i_fail_with_an_error(_w: &mut TestWorld) -> anyhow::Result<()> {
-        Err(anyhow::anyhow!("Intentional failure"))
+    async fn when_i_fail_with_an_error(_w: &mut TestWorld) -> Result<(), String> {
+        Err("Intentional failure".to_string())
     }
 }
 
@@ -234,7 +234,7 @@ fn before_helper<'a>(
     w: &'a mut TestWorld,
     _args: Vec<String>,
     _ctx: features::StepContext,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
     Box::pin(async move {
         steps::before_hook(w).await;
         Ok(())
@@ -245,7 +245,7 @@ fn after_helper<'a>(
     w: &'a mut TestWorld,
     _args: Vec<String>,
     _ctx: features::StepContext,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
     Box::pin(async move {
         steps::after_hook(w).await;
         Ok(())
