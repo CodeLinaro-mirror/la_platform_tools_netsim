@@ -4,7 +4,7 @@
 # disconnecting from a requested network.
 
 @ignore
-@wifi @ap
+@epic:wifi @feature:wifi_ap @wifi @ap
 Feature: Wi-Fi Access Point and Connectivity
 
   Background:

@@ -49,6 +49,7 @@ CLI_PATH=""
 SPEC_DIR=
 EMULATOR_PATH="emulator"
 KEEP_GOING=false
+IGNORE_TAGS_SET=false
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
@@ -63,6 +64,7 @@ while [[ "$#" -gt 0 ]]; do
     --apk-path) APK_PATH="$2"; shift ;;
     --cli-path) CLI_PATH="$2"; shift ;;
     --spec-dir) SPEC_DIR="$2"; shift ;;
+    --ignore-tags) IGNORE_TAGS="$2"; IGNORE_TAGS_SET=true; shift ;;
     --emulator-path) EMULATOR_PATH="$2"; shift ;;
     -h|--help)
       echo "Usage: $0 [options]"
@@ -78,6 +80,7 @@ while [[ "$#" -gt 0 ]]; do
       echo "  --apk-path <path>             Path to vbs APK"
       echo "  --cli-path <path>             Path to netsim CLI binary"
       echo "  --spec-dir <path>             Directory containing feature files (specs)"
+      echo "  --ignore-tags <tags>          Comma-separated list of tags to ignore"
       echo "  --emulator-path <path>        Path to emulator binary"
       exit 0
       ;;
@@ -282,9 +285,13 @@ if [ "$VERBOSE" = true ]; then
 fi
 
 if [ -z "$SPEC_DIR" ]; then
-  SPEC_DIR="$WORKSPACE_DIR/tools/netsim/next/tests/features"
+  SPEC_DIR="$WORKSPACE_DIR/tools/netsim/next/reqs/bdd"
 fi
 RUNNER_ARGS+=(--spec-dir "$SPEC_DIR")
+
+if [ "$IGNORE_TAGS_SET" = true ]; then
+  RUNNER_ARGS+=(--ignore-tags "$IGNORE_TAGS")
+fi
 
 if [ "$KEEP_GOING" = true ]; then
   RUNNER_ARGS+=(--keep-going)

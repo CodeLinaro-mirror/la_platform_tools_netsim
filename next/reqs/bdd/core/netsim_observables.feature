@@ -1,3 +1,5 @@
+# Copyright 2026 The Android Open Source Project
+
 Feature: Netsim Observables Verification
 
   Scenario: Verify connected device count

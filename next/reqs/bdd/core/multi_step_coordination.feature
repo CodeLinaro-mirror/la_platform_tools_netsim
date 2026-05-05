@@ -1,3 +1,5 @@
+# Copyright 2026 The Android Open Source Project
+
 Feature: Multi-step Coordination
   Scenario: Ping-Pong
     Given @adb has 1 attached device

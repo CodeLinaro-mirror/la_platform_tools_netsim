@@ -1,4 +1,7 @@
-@skip
+# Copyright 2026 The Android Open Source Project
+
+@epic:wifi @feature:wifi_auth
+@nyt
 Feature: Wi-Fi Authentication
 
 Scenario: Connect to Secured AP

@@ -1,3 +1,6 @@
+# Copyright 2026 The Android Open Source Project
+
+@epic:wifi @feature:wifi_roaming
 Feature: Wi-Fi Roaming Connection
 
 @ignore

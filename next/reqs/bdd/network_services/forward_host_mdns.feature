@@ -1,4 +1,6 @@
-@skip
+# Copyright 2026 The Android Open Source Project
+
+@nyt
 Feature: Host mDNS Forwarding
 
 Scenario: Guest discovers service advertised by host
