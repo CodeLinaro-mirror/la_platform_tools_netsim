@@ -144,11 +144,14 @@ pub struct Move {
     pub z: Option<f32>,
 }
 
-#[derive(Debug, Args, PartialEq)]
+#[derive(Debug, Args, PartialEq, Default)]
 pub struct Devices {
     /// Continuously print device(s) information every second
     #[arg(short, long)]
     pub continuous: bool,
+    /// Print device(s) information in JSON format
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Default)]

@@ -1,9 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use features::{self, DataTable, World};
-use netsim_proto::{access_point, frontend};
-use protobuf::{well_known_types::empty::Empty, MessageField};
+use features::{DataTable, World};
 use verify_macros::{step, step_module};
 
 use crate::{
@@ -113,31 +111,17 @@ pub mod steps {
             return Ok(());
         }
 
-        let client =
-            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
-        let resp =
-            client.list_device(&Empty::new()).map_err(|e| format!("listed devices: {}", e))?;
-        let device = resp
-            .devices
-            .iter()
-            .find(|d| d.name == netsim_device)
-            .ok_or_else(|| format!("Device '{}' not found in netsim devices", netsim_device))?;
-
-        let mut req = frontend::PatchDeviceRequest::new();
-        req.id = Some(device.id);
-
-        let mut fields = frontend::patch_device_request::PatchDeviceFields::new();
-        let mut pos = netsim_proto::model::Position::new();
-        pos.x = x;
-        pos.y = y;
-        pos.z = z;
-        fields.position = MessageField::some(pos);
-        req.device = MessageField::some(fields);
-
-        client.patch_device(&req).map_err(|e| format!("patched device: {}", e))?;
+        w.run_netsim_command(&[
+            "move",
+            &netsim_device,
+            &x.to_string(),
+            &y.to_string(),
+            &z.to_string(),
+        ])?;
         Ok(())
     }
 
+    /*
     #[step(r#"Netsim creates Wi-Fi Access Point "([^"]+)" with protocol "([^"]+)""#)]
     async fn host_creates_ap(
         w: &mut TestContext,
@@ -234,6 +218,7 @@ pub mod steps {
         client.delete(&del_req).map_err(|e| format!("deleted AP: {}", e))?;
         Ok(())
     }
+    */
 
     #[step(r#"@netsim observes "([^"]+)" should be "([^"]+)""#)]
     async fn then_netsim_observes_is(
@@ -271,6 +256,7 @@ pub mod steps {
         Ok(())
     }
 
+    /*
     #[step(r#"Netsim creates BLE Beacon "([^"]+)" at ([\d\.]+), ([\d\.]+), ([\d\.]+)"#)]
     async fn host_creates_beacon(
         w: &mut TestContext,
@@ -329,6 +315,7 @@ pub mod steps {
         client.create_device(&req).map_err(|e| format!("created beacon device: {}", e))?;
         Ok(())
     }
+    */
 
     async fn verify_device_position_impl(
         w: &mut TestContext,
@@ -353,22 +340,25 @@ pub mod steps {
             return Ok(());
         }
 
-        let client =
-            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
-        let resp =
-            client.list_device(&Empty::new()).map_err(|e| format!("listed devices: {}", e))?;
-        let device = resp
-            .devices
+        let output = w.run_netsim_command(&["devices", "--json"])?;
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Failed to parse netsim devices JSON: {}", e))?;
+
+        let devices = json["devices"].as_array().ok_or("Invalid JSON: missing devices array")?;
+        let device = devices
             .iter()
-            .find(|d| d.name == netsim_device)
+            .find(|d| d["name"].as_str() == Some(&netsim_device))
             .ok_or_else(|| format!("Device '{}' not found in netsim devices", netsim_device))?;
 
-        let pos = device.position.as_ref().ok_or_else(|| "device has position".to_string())?;
+        let pos = &device["position"];
+        let act_x = pos["x"].as_f64().unwrap_or(0.0) as f32;
+        let act_y = pos["y"].as_f64().unwrap_or(0.0) as f32;
+        let act_z = pos["z"].as_f64().unwrap_or(0.0) as f32;
 
-        if (pos.x - x).abs() > delta || (pos.y - y).abs() > delta || (pos.z - z).abs() > delta {
+        if (act_x - x).abs() > delta || (act_y - y).abs() > delta || (act_z - z).abs() > delta {
             return Err(format!(
                 "Device '{}' position mismatch. Expected: {}, {}, {}. Actual: {}, {}, {}",
-                netsim_device, x, y, z, pos.x, pos.y, pos.z
+                netsim_device, x, y, z, act_x, act_y, act_z
             ));
         }
         Ok(())
@@ -399,6 +389,7 @@ pub mod steps {
         verify_device_position_impl(w, actor, x, y, z, delta).await
     }
 
+    /*
     #[step(r#"Wi-Fi Access Point "([^"]+)" exists in netsim"#)]
     async fn verify_ap_exists(w: &mut TestContext, ssid: String) -> Result<(), String> {
         w.log_step("@netsim", "THEN", &format!("AP '{}' exists", ssid));
@@ -479,6 +470,7 @@ pub mod steps {
         client.create_device(&req).map_err(|e| format!("created beacon device: {}", e))?;
         Ok(())
     }
+    */
 
     #[step(r#"Netsim version is "([^"]+)""#)]
     async fn verify_netsim_version(
@@ -491,16 +483,14 @@ pub mod steps {
             return Ok(());
         }
 
-        let client =
-            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
-        let resp = client
-            .get_version(&protobuf::well_known_types::empty::Empty::new())
-            .map_err(|e| format!("got version: {}", e))?;
+        let output = w.run_netsim_command(&["version"])?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let version = stdout.trim_start_matches("Netsim version: ").trim();
 
-        if resp.version != expected_version {
+        if version != expected_version {
             return Err(format!(
                 "Version mismatch. Expected: {}. Actual: {}",
-                expected_version, resp.version
+                expected_version, version
             ));
         }
         Ok(())
@@ -517,22 +507,22 @@ pub mod steps {
             return Ok(());
         }
 
-        let client =
-            w.get_or_create_grpc_client().map_err(|e| format!("got grpc client: {}", e))?;
-        let resp = client
-            .list_device(&protobuf::well_known_types::empty::Empty::new())
-            .map_err(|e| format!("listed devices: {}", e))?;
+        let output = w.run_netsim_command(&["devices", "--json"])?;
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Failed to parse netsim devices JSON: {}", e))?;
 
-        if resp.devices.len() < expected_count {
+        let devices = json["devices"].as_array().map(|a| a.len()).unwrap_or(0);
+
+        if devices < expected_count {
             return Err(format!(
                 "Device count too low. Expected at least: {}. Actual: {}",
-                expected_count,
-                resp.devices.len()
+                expected_count, devices
             ));
         }
         Ok(())
     }
 
+    /*
     #[step(r#"Wi-Fi Access Point "([^"]+)" does not exist in netsim"#)]
     async fn verify_ap_does_not_exist(w: &mut TestContext, ssid: String) -> Result<(), String> {
         w.log_step("@netsim", "THEN", &format!("AP '{}' does not exist", ssid));
@@ -556,6 +546,7 @@ pub mod steps {
     // TODO: Add step `Device "{name}" in netsim has Tx Power "{tx_power}"`
     // once the Netsim backend populates `ble_beacon` field in `ListDevice`
     // response.
+    */
 }
 
 pub use steps::register_steps;

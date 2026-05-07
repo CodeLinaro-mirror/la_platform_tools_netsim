@@ -61,6 +61,50 @@ async fn run_feature(
     Ok(())
 }
 
+fn find_feature_files(
+    dir: &std::path::Path,
+    entries: &mut Vec<std::path::PathBuf>,
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+) {
+    let read_dir = match std::fs::read_dir(dir) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("WARN: Failed to read directory {:?}: {}", dir, e);
+            return;
+        }
+    };
+
+    for entry in read_dir {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("WARN: Failed to read entry: {}", e);
+                continue;
+            }
+        };
+        let path = entry.path();
+        let file_name = entry.file_name();
+        if file_name.as_encoded_bytes().starts_with(b".") {
+            continue;
+        }
+
+        if path.is_dir() {
+            let canonical = match path.canonicalize() {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("WARN: Failed to canonicalize path {:?}: {}", path, e);
+                    continue;
+                }
+            };
+            if visited.insert(canonical.clone()) {
+                find_feature_files(&path, entries, visited);
+            }
+        } else if path.is_file() && path.extension().map_or(false, |ext| ext == "feature") {
+            entries.push(path);
+        }
+    }
+}
+
 pub async fn run_suite(
     ctx: &mut TestContext,
     mut features: features::Features<TestContext>,
@@ -76,13 +120,9 @@ pub async fn run_suite(
     }
 
     let mut entries = Vec::new();
-    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "feature") {
-            entries.push(path);
-        }
-    }
+    let mut visited = std::collections::HashSet::new();
+    visited.insert(dir.canonicalize().map_err(|e| e.to_string())?);
+    find_feature_files(&dir, &mut entries, &mut visited);
     // Sort for deterministic order
     entries.sort();
 

@@ -759,9 +759,49 @@ mod tests {
     fn test_devices() {
         test_command(
             "netsim-cli devices",
-            Command::Devices(Devices { continuous: false }),
+            Command::Devices(Devices::default()),
             GrpcRequest::ListDevice,
         )
+    }
+
+    #[test]
+    fn test_devices_json_parsing() {
+        test_command(
+            "netsim-cli devices --json",
+            Command::Devices(Devices { continuous: false, json: true }),
+            GrpcRequest::ListDevice,
+        )
+    }
+
+    #[test]
+    fn test_devices_json_output_and_parsing() {
+        use protobuf_json_mapping::{parse_from_str, print_to_string};
+
+        let mut dev = DeviceProto::new();
+        dev.id = 1;
+        dev.name = "test_device".to_string();
+
+        let mut chip = ChipProto::new();
+        chip.id = 100;
+        chip.kind = ChipKind::BLUETOOTH.into();
+        dev.chips.push(chip);
+
+        let mut resp = ListDeviceResponse::new();
+        resp.devices.push(dev);
+
+        let json_str = print_to_string(&resp).unwrap();
+
+        // Verify it contains expected data
+        assert!(json_str.contains("test_device"));
+        assert!(json_str.contains("100")); // Check for chip ID
+
+        // Parse it back
+        let parsed_resp: ListDeviceResponse = parse_from_str(&json_str).unwrap();
+
+        assert_eq!(parsed_resp.devices.len(), 1);
+        assert_eq!(parsed_resp.devices[0].name, "test_device");
+        assert_eq!(parsed_resp.devices[0].chips.len(), 1);
+        assert_eq!(parsed_resp.devices[0].chips[0].id, 100);
     }
 
     #[test]

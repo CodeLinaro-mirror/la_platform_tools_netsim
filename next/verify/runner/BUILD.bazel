@@ -10,6 +10,9 @@ rust_binary(
     name = "runner",
     testonly = True,
     srcs = ["src/main.rs"],
+    data = [
+        "//next/cli:netsim",
+    ],
     edition = "2021",
     deps = [
         "//next/verify/host:verify_host_lib",

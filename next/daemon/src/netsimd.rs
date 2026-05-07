@@ -299,7 +299,10 @@ impl NetsimDaemon {
         info!("netsim startup");
 
         // enable Rust backtrace by setting env RUST_BACKTRACE=full
-        env::set_var("RUST_BACKTRACE", "full");
+        // SAFETY: Single-threaded initialization code. Caller must guarantee this.
+        unsafe {
+            env::set_var("RUST_BACKTRACE", "full");
+        }
 
         // Log where netsim artifacts are located
         info!("Artifacts: {:?}", netsimd_temp_dir());

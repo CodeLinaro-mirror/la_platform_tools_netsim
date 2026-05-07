@@ -5,6 +5,6 @@ exports_files(["rustfmt_stable.toml"])
 
 filegroup(
     name = "features",
-    srcs = glob(["tests/features/*.feature"]),
+    srcs = glob(["reqs/bdd/**/*.feature"]),
     visibility = ["//visibility:public"],
 )

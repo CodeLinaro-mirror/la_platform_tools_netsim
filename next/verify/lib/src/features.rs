@@ -27,6 +27,7 @@ pub struct Features<W: ?Sized> {
     before_hooks: Vec<Box<dyn AsyncStep<W>>>,
     after_hooks: Vec<Box<dyn AsyncStep<W>>>,
     tag_filter: Option<String>,
+    ignored_tags: Option<std::collections::HashSet<String>>,
 }
 
 impl<W: ?Sized> Default for Features<W> {
@@ -37,11 +38,15 @@ impl<W: ?Sized> Default for Features<W> {
 
 impl<W: ?Sized> Features<W> {
     pub fn new() -> Self {
+        let mut set = std::collections::HashSet::new();
+        set.insert("skip".to_string());
+        set.insert("ignore".to_string());
         Self {
             steps: Vec::new(),
             before_hooks: Vec::new(),
             after_hooks: Vec::new(),
             tag_filter: None,
+            ignored_tags: Some(set),
         }
     }
 
@@ -49,6 +54,22 @@ impl<W: ?Sized> Features<W> {
     /// feature with this tag) will be executed.
     pub fn filter(&mut self, tag: &str) {
         self.tag_filter = Some(tag.to_string());
+    }
+
+    /// Sets tags to ignore. Scenarios with any of these tags will be skipped.
+    pub fn ignore_tags(&mut self, tags: &[&str]) {
+        let set = self.ignored_tags.get_or_insert_with(std::collections::HashSet::new);
+        for tag in tags {
+            let t = tag.strip_prefix("@").unwrap_or(tag);
+            set.insert(t.to_string());
+        }
+    }
+
+    /// Sets tags to ignore from a comma-separated string.
+    pub fn ignore_tags_str(&mut self, tags: &str) {
+        let tags_vec: Vec<&str> =
+            tags.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        self.ignore_tags(&tags_vec);
     }
 
     /// Registers a step with a regex pattern.
@@ -262,8 +283,16 @@ impl<W: ?Sized> Features<W> {
     }
 
     fn is_ignored(&self, feature_tags: &[String], scenario_tags: &[String]) -> bool {
-        feature_tags.iter().any(|t| t == "skip" || t == "ignore")
-            || scenario_tags.iter().any(|t| t == "skip" || t == "ignore")
+        if let Some(ignored) = &self.ignored_tags {
+            let check_tags = |tags: &[String]| {
+                tags.iter().any(|t| {
+                    let t_str = t.strip_prefix("@").unwrap_or(t);
+                    ignored.contains(t_str)
+                })
+            };
+            return check_tags(feature_tags) || check_tags(scenario_tags);
+        }
+        false
     }
 
     fn matches_filter(&self, feature_tags: &[String], scenario_tags: &[String]) -> bool {

@@ -17,11 +17,8 @@ rust_library(
     deps = [
         "//next/common",
         "//next/verify/lib",
-        "//proto",
         "@clap",
         "@futures",
-        "@grpcio",
-        "@protobuf-rust",
         "@regex",
         "@serde",
         "@serde_json",

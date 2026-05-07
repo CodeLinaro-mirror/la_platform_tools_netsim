@@ -6,6 +6,7 @@ use std::cmp::max;
 use common::util::time_display::TimeDisplay;
 use netsim_proto::{common::ChipKind, frontend, model};
 use protobuf::MessageField;
+use protobuf_json_mapping::print_to_string;
 
 use crate::{
     args::{self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, OnOffState},
@@ -51,13 +52,20 @@ impl args::Command {
                     )
                 }
             }
-            Command::Devices(_) => {
+            Command::Devices(cmd) => {
                 let GrpcResponse::ListDevice(res) = response else {
                     return Err(
                         format!("Expected to print ListDeviceResponse. Got: {response:?}").into()
                     );
                 };
-                println!("{}", Displayer::new(res.clone(), verbose));
+                if cmd.json {
+                    let json = print_to_string(res).map_err(|e| {
+                        crate::error::Error::from(format!("JSON mapping error: {e}"))
+                    })?;
+                    println!("{json}");
+                } else {
+                    println!("{}", Displayer::new(res.clone(), verbose));
+                }
             }
             Command::Reset => {
                 if verbose {
