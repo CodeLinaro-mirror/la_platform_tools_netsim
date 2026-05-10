@@ -13,9 +13,9 @@ netsim_rust_library(
         "//next/model",
         "@bytes",
         "@futures",
-        "@log",
         "@tokio",
         "@tokio-stream",
         "@tokio-util",
+        "@tracing",
     ],
 )

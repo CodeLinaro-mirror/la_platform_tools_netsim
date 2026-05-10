@@ -2,6 +2,7 @@
 
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
+use tracing::{error, info};
 
 use crate::wifi_actor::WifiActor;
 
@@ -11,9 +12,12 @@ pub const SLIRP_ID: ChipId = ChipId(u32::MAX - 1);
 /// Stream ID for AP downlink messages in the typed_stream map
 const AP_SUBSCRIPTION_ID: usize = 0;
 
+/// Stream ID for mDNS packets from host
+const MDNS_SUBSCRIPTION_ID: usize = 1;
+
 impl ActorLifecycle for WifiActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
-        log::info!("WifiActor started");
+        info!("WifiActor started");
 
         if let Some(ap_client) = &self.ap_client {
             // Uplink: Wifi -> AP (Wifi writes to tx, AP reads from rx)
@@ -34,9 +38,19 @@ impl ActorLifecycle for WifiActor {
                 )
                 .await
             {
-                log::error!("Failed to register with AP client: {}", e);
+                error!("Failed to register with AP client: {}", e);
             }
             self.to_ap = Some(ap_uplink_tx);
+        }
+        if self.forward_host_mdns {
+            let (mdns_tx, mdns_rx) = create_channel_stream();
+            ctx.add_typed_stream(MDNS_SUBSCRIPTION_ID, mdns_rx);
+
+            tokio::spawn(async move {
+                if let Err(e) = crate::mdns_forwarder::run_mdns_forwarder(mdns_tx).await {
+                    tracing::error!("mDNS Forwarder failed: {}", e);
+                }
+            });
         }
 
         // Initialize Gateway
@@ -44,7 +58,7 @@ impl ActorLifecycle for WifiActor {
     }
 
     async fn on_shutdown(&mut self) {
-        log::info!("WifiActor stopped");
+        info!("WifiActor stopped");
     }
 
     async fn on_stream(
@@ -68,18 +82,18 @@ impl ActorLifecycle for WifiActor {
     }
 
     async fn on_stream_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
-        log::info!("Stream closed for chip {id}");
+        info!("Stream closed for chip {id}");
         ctx.abort(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {
-            log::error!("Failed to delete chip {id} after stream closed: {e}");
+            error!("Failed to delete chip {id} after stream closed: {e}");
         }
     }
 
     async fn on_task_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
-        log::info!("Sink task closed for chip {id}");
+        info!("Sink task closed for chip {id}");
         ctx.remove_stream(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {
-            log::error!("Failed to delete chip {id} after sink task closed: {e}");
+            error!("Failed to delete chip {id} after sink task closed: {e}");
         }
     }
 
@@ -89,7 +103,7 @@ impl ActorLifecycle for WifiActor {
         packet: bytes::Bytes,
         _ctx: &mut DynContext<Self>,
     ) {
-        if id == AP_SUBSCRIPTION_ID {
+        if id == AP_SUBSCRIPTION_ID || id == MDNS_SUBSCRIPTION_ID {
             self.process_ap_packet(packet);
         }
     }

@@ -3,7 +3,8 @@
 use actor_framework::{ActorService, DynContext};
 use futures::{SinkExt, StreamExt};
 use netsim_model::{
-    chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate},
+    chip::{Chip, ChipId, ChipVariant, Radio},
+    wifi::Wifi,
     ChipKind,
 };
 use tokio::sync::mpsc;
@@ -31,15 +32,17 @@ impl ActorService for WifiActor {
     ) -> Result<Self::Id, Self::Error> {
         let id = id.ok_or_else(|| WifiError::Internal("missing chip id".into()))?;
         if self.active_chips.contains_key(&id) {
-            return Err(WifiError::Internal(format!("Chip {} already exists", id)));
+            return Err(WifiError::Internal(Box::from(format!("Chip {} already exists", id))));
         }
 
         let stream = params
             .packet_stream
             .take()
-            .ok_or(WifiError::Internal("Missing PacketStream".into()))?;
-        let sink =
-            params.packet_sink.take().ok_or(WifiError::Internal("Missing PacketSink".into()))?;
+            .ok_or(WifiError::Internal(Box::from("Missing PacketStream")))?;
+        let sink = params
+            .packet_sink
+            .take()
+            .ok_or(WifiError::Internal(Box::from("Missing PacketSink")))?;
 
         // Spawn sink task
         let (tx, mut rx) = mpsc::unbounded_channel::<bytes::Bytes>();
@@ -101,28 +104,23 @@ impl ActorService for WifiActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(chip) = self.active_chips.get_mut(&id) {
-            if let Some(ChipVariantUpdate::Wifi(WifiUpdate {
-                radio: RadioUpdate { state: Some(state) },
-            })) = update.variant
-            {
-                self.medium.set_enabled(id.0, state);
-            }
-            if let Some(enabled) = update.enabled {
-                self.medium.set_enabled(id.0, enabled);
-            }
-            if let Some(pos) = update.position {
-                chip.position = pos;
-            }
-            // Update the chip state properly
-            if let Ok(enabled) = self.medium.enabled(id.0) {
-                if let Some(ChipVariant::Wifi(ref mut radio)) = chip.variant {
-                    radio.radio.state = Some(enabled);
-                }
-                chip.enabled = enabled;
-            }
+            // Apply update to chip
+            update.apply(chip);
+
+            self.medium.set_enabled(
+                id.0,
+                chip.enabled
+                    && matches!(
+                        chip.variant,
+                        Some(ChipVariant::Wifi(Wifi {
+                            radio: Radio { state: Some(true) | None, .. }
+                        }))
+                    ),
+            );
+
             Ok(chip.clone())
         } else {
-            Err(WifiError::Internal(format!("Chip {} not found", id)))
+            Err(WifiError::Internal(Box::from(format!("Chip {} not found", id))))
         }
     }
 

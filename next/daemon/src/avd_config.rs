@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use log::{info, warn};
+use tracing::{info, warn};
 
 // This struct matches the top-level configuration.
 #[derive(Debug, Default, PartialEq)]

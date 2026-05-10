@@ -203,7 +203,7 @@ impl From<&ChipKindParams> for ChipKind {
             ChipKindParams::Wifi(_) => ChipKind::WIFI,
             ChipKindParams::Uwb(_) => ChipKind::UWB,
             ChipKindParams::Cell(_) => ChipKind::CELLULAR,
-            ChipKindParams::Ap(_) => ChipKind::AP,
+            ChipKindParams::Ap(_) => ChipKind::WIFI,
         }
     }
 }
@@ -227,7 +227,7 @@ pub use crate::{
     ap::{Ap, ApCreate, ApUpdate, WifiMode},
     bluetooth::{
         beacon::BleBeacon, BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode,
-        BluetoothUpdate, DeviceParams, ScannerParams,
+        BluetoothUpdate, DeviceParams, ScannerParams, SnifferParams,
     },
     cell::{Cell, CellCreate},
     uwb::{Uwb, UwbCreate, UwbUpdate},
@@ -322,7 +322,6 @@ pub enum ChipVariant {
     Wifi(crate::wifi::Wifi),
     Uwb(crate::uwb::Uwb),
     Cell(crate::cell::Cell),
-    Ap(crate::ap::Ap),
 }
 
 impl From<ChipKind> for ChipVariant {
@@ -335,10 +334,6 @@ impl From<ChipKind> for ChipVariant {
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),
             ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell { state: "unknown".into() }),
-            ChipKind::AP => ChipVariant::Ap(crate::ap::Ap {
-                config: Default::default(),
-                associations: Vec::new(),
-            }),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
             // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
             // types.
@@ -366,6 +361,52 @@ pub struct ChipUpdate {
     pub enabled: Option<bool>,
 }
 
+impl ChipUpdate {
+    /// Replaces the fields on `Chip` with the fields on `ChipUpdate` if they
+    /// are `Some`.
+    pub fn apply(&self, chip: &mut Chip) {
+        let ChipUpdate {
+            id,
+            name,
+            manufacturer,
+            product_name,
+            position,
+            orientation,
+            variant,
+            links,
+            enabled,
+        } = self;
+
+        if let Some(id) = id {
+            chip.id = (*id).into();
+        }
+        if let Some(name) = name {
+            chip.name = Some(name.clone());
+        }
+        if let Some(manufacturer) = manufacturer {
+            chip.manufacturer = Some(manufacturer.clone());
+        }
+        if let Some(product_name) = product_name {
+            chip.product_name = Some(product_name.clone());
+        }
+        if let Some(position) = position {
+            chip.position = *position;
+        }
+        if let Some(orientation) = orientation {
+            chip.orientation = *orientation;
+        }
+        if let Some(enabled) = enabled {
+            chip.enabled = *enabled;
+        }
+        if let Some(links) = links {
+            chip.links = links.clone();
+        }
+        if let (Some(update_variant), Some(chip_variant)) = (variant, &mut chip.variant) {
+            update_variant.apply(chip_variant);
+        }
+    }
+}
+
 /// Generic radio chip update (Bluetooth, Wi-Fi, UWB).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct RadioUpdate {
@@ -386,7 +427,6 @@ pub enum ChipVariantUpdate {
     Bluetooth(crate::bluetooth::BluetoothUpdate),
     Wifi(crate::wifi::WifiUpdate),
     Uwb(crate::uwb::UwbUpdate),
-    Ap(crate::ap::ApUpdate),
 }
 
 impl ChipVariantUpdate {
@@ -395,7 +435,23 @@ impl ChipVariantUpdate {
             ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
             ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
             ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
-            ChipVariantUpdate::Ap(_) => ChipKind::AP,
+        }
+    }
+
+    pub fn apply(&self, variant: &mut ChipVariant) {
+        match (self, variant) {
+            (ChipVariantUpdate::Bluetooth(update), ChipVariant::Bluetooth(bt)) => {
+                update.apply(bt);
+            }
+            (ChipVariantUpdate::Wifi(update), ChipVariant::Wifi(wifi)) => {
+                update.apply(wifi);
+            }
+            (ChipVariantUpdate::Uwb(update), ChipVariant::Uwb(uwb)) => {
+                update.apply(uwb);
+            }
+            (u, v) => {
+                tracing::warn!("ChipVariantUpdate mismatch with ChipVariant: {:?} vs {:?}", u, v);
+            }
         }
     }
 }

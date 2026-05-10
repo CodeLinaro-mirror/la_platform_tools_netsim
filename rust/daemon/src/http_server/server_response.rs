@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(mismatched_lifetime_syntaxes)]
+
 //! Server Response Writer module for micro HTTP server.
 //!
 //! This module implements a basic response writer that can pass

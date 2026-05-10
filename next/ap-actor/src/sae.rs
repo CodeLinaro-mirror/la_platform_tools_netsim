@@ -1,12 +1,12 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use log::{error, info};
+use tracing::{error, info};
 
 use crate::ffi;
 
 /// SAE Finite Field Cryptography (FFC) or Elliptic Curve Cryptography (ECC)
 /// Group
-pub enum SaeGroup {
+pub(crate) enum SaeGroup {
     EccP256 = 19,
 }
 

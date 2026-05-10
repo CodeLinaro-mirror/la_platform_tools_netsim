@@ -120,6 +120,7 @@ mod actor_service;
 mod lifecycle; // Added
 mod ranging;
 mod scanner;
+mod sniffer; // Added
 mod utils;
 
 /// Utilities for Bluetooth Beacons and advertising data

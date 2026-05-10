@@ -55,9 +55,14 @@ impl From<(&Position, &Orientation)> for Pose {
     }
 }
 
+use crate::UwbError;
+
 /// UWB Ranging Model for computing range, azimuth, and elevation.
 /// The ranging model is adapted from https://github.com/google/pica.
-pub fn compute_range_azimuth_elevation(a: &Pose, b: &Pose) -> anyhow::Result<(f32, i16, i8)> {
+pub(crate) fn compute_range_azimuth_elevation(
+    a: &Pose,
+    b: &Pose,
+) -> Result<(f32, i16, i8), UwbError> {
     let delta = b.position - a.position;
     let distance = delta.length().clamp(0.0, u16::MAX as f32);
     let direction = a.orientation.mul_vec3(delta);
@@ -65,10 +70,10 @@ pub fn compute_range_azimuth_elevation(a: &Pose, b: &Pose) -> anyhow::Result<(f3
     let elevation = elevation(direction).to_degrees().round();
 
     if !(-180. ..=180.).contains(&azimuth) {
-        return Err(anyhow::anyhow!("azimuth is not between -180 and 180. value: {azimuth}"));
+        return Err(UwbError::InvalidAzimuth(azimuth));
     }
     if !(-90. ..=90.).contains(&elevation) {
-        return Err(anyhow::anyhow!("elevation is not between -90 and 90. value: {elevation}"));
+        return Err(UwbError::InvalidElevation(elevation));
     }
     Ok((distance, azimuth as i16, elevation as i8))
 }

@@ -112,5 +112,5 @@ This crate is intended to be built as part of the larger `netsim` project.
 To run the tests for this crate, use the following command from the root of the `netsim` project:
 
 ```bash
-./scripts/build_tools.py --task runtest --crate netsim-rootcanal-rs
+./scripts/build_tools.py --task test --crate netsim-rootcanal-rs
 ```

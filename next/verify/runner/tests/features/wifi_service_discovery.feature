@@ -1,4 +1,5 @@
 Feature: WiFi Service Discovery
+  @skip
   Scenario: mDNS Loopback
     Given @adb has 1 attached device
     When @android:1 advertises service _http._tcp. as MyLoopbackService

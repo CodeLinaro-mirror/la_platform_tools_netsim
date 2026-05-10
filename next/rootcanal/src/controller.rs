@@ -15,7 +15,7 @@ use std::{
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
-use log::warn;
+use tracing::warn;
 
 use crate::{
     ffi,

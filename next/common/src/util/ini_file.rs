@@ -23,7 +23,7 @@ use std::{
     path::PathBuf,
 };
 
-use log::error;
+use tracing::error;
 
 use super::os_utils::get_discovery_directory;
 

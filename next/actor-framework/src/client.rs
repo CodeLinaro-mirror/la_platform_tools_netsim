@@ -39,7 +39,7 @@ impl<T: ActorService> ResourceClient<T> {
         Self { sender }
     }
 
-    pub async fn create(&self, params: T::Create) -> Result<T::Id, FrameworkError> {
+    pub async fn create(&self, params: T::Create) -> Result<T::Id, FrameworkError<T::Error>> {
         self.create_internal(params, None).await
     }
 
@@ -47,7 +47,7 @@ impl<T: ActorService> ResourceClient<T> {
         &self,
         id: T::Id,
         params: T::Create,
-    ) -> Result<T::Id, FrameworkError> {
+    ) -> Result<T::Id, FrameworkError<T::Error>> {
         self.create_internal(params, Some(id)).await
     }
 
@@ -55,7 +55,7 @@ impl<T: ActorService> ResourceClient<T> {
         &self,
         params: T::Create,
         id: Option<T::Id>,
-    ) -> Result<T::Id, FrameworkError> {
+    ) -> Result<T::Id, FrameworkError<T::Error>> {
         let (respond_to, response) = oneshot::channel();
         // Construct the Create message with or without ID depending on message.rs
         // availability.
@@ -63,68 +63,72 @@ impl<T: ActorService> ResourceClient<T> {
             .send(ResourceRequest::Create { params, id, respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
-        response.await.map_err(|_| FrameworkError::ActorDropped)?
+        response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
-    pub async fn get(&self, id: T::Id) -> Result<Option<T::Entity>, FrameworkError> {
+    pub async fn get(&self, id: T::Id) -> Result<Option<T::Entity>, FrameworkError<T::Error>> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::Get { id, respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
-        response.await.map_err(|_| FrameworkError::ActorDropped)?
+        response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
-    pub async fn update(&self, id: T::Id, update: T::Update) -> Result<T::Entity, FrameworkError> {
+    pub async fn update(
+        &self,
+        id: T::Id,
+        update: T::Update,
+    ) -> Result<T::Entity, FrameworkError<T::Error>> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::Update { id, update, respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
-        response.await.map_err(|_| FrameworkError::ActorDropped)?
+        response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
     #[allow(dead_code)]
-    pub async fn delete(&self, id: T::Id) -> Result<(), FrameworkError> {
+    pub async fn delete(&self, id: T::Id) -> Result<(), FrameworkError<T::Error>> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::Delete { id, respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
-        response.await.map_err(|_| FrameworkError::ActorDropped)?
+        response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
     pub async fn perform_action(
         &self,
         id: Option<T::Id>,
         action: T::Action,
-    ) -> Result<T::ActionResult, FrameworkError> {
+    ) -> Result<T::ActionResult, FrameworkError<T::Error>> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::Action { id, action, respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
-        response.await.map_err(|_| FrameworkError::ActorDropped)?
+        response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
     /// List all entities.
-    pub async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError> {
+    pub async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError<T::Error>> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::List { respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
-        response.await.map_err(|_| FrameworkError::ActorDropped)?
+        response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 
     /// Shut down the actor.
-    pub async fn shutdown(&self) -> Result<(), FrameworkError> {
+    pub async fn shutdown(&self) -> Result<(), FrameworkError<T::Error>> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::Shutdown { respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
-        response.await.map_err(|_| FrameworkError::ActorDropped)?
+        response.await.map_err(FrameworkError::ActorDropped)?.map_err(FrameworkError::ServiceError)
     }
 }
 
@@ -134,49 +138,65 @@ impl<T: ActorService> ResourceClient<T> {
 #[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait ActorClient<T: ActorService>: Send + Sync {
-    async fn create(&self, params: T::Create) -> Result<T::Id, FrameworkError>;
-    async fn create_with_id(&self, id: T::Id, params: T::Create) -> Result<T::Id, FrameworkError>;
-    async fn get(&self, id: T::Id) -> Result<Option<T::Entity>, FrameworkError>;
-    async fn update(&self, id: T::Id, update: T::Update) -> Result<T::Entity, FrameworkError>;
-    async fn delete(&self, id: T::Id) -> Result<(), FrameworkError>;
+    async fn create(&self, params: T::Create) -> Result<T::Id, FrameworkError<T::Error>>;
+    async fn create_with_id(
+        &self,
+        id: T::Id,
+        params: T::Create,
+    ) -> Result<T::Id, FrameworkError<T::Error>>;
+    async fn get(&self, id: T::Id) -> Result<Option<T::Entity>, FrameworkError<T::Error>>;
+    async fn update(
+        &self,
+        id: T::Id,
+        update: T::Update,
+    ) -> Result<T::Entity, FrameworkError<T::Error>>;
+    async fn delete(&self, id: T::Id) -> Result<(), FrameworkError<T::Error>>;
     async fn perform_action(
         &self,
         id: Option<T::Id>,
         action: T::Action,
-    ) -> Result<T::ActionResult, FrameworkError>;
-    async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError>;
-    async fn shutdown(&self) -> Result<(), FrameworkError>;
+    ) -> Result<T::ActionResult, FrameworkError<T::Error>>;
+    async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError<T::Error>>;
+    async fn shutdown(&self) -> Result<(), FrameworkError<T::Error>>;
     fn clone_box(&self) -> Box<dyn ActorClient<T>>;
 }
 
 #[async_trait::async_trait]
 impl<T: ActorService + Send + Sync> ActorClient<T> for ResourceClient<T> {
-    async fn create(&self, params: T::Create) -> Result<T::Id, FrameworkError> {
+    async fn create(&self, params: T::Create) -> Result<T::Id, FrameworkError<T::Error>> {
         self.create(params).await
     }
-    async fn create_with_id(&self, id: T::Id, params: T::Create) -> Result<T::Id, FrameworkError> {
+    async fn create_with_id(
+        &self,
+        id: T::Id,
+        params: T::Create,
+    ) -> Result<T::Id, FrameworkError<T::Error>> {
         self.create_with_id(id, params).await
     }
-    async fn get(&self, id: T::Id) -> Result<Option<T::Entity>, FrameworkError> {
+    async fn get(&self, id: T::Id) -> Result<Option<T::Entity>, FrameworkError<T::Error>> {
         self.get(id).await
     }
-    async fn update(&self, id: T::Id, update: T::Update) -> Result<T::Entity, FrameworkError> {
+    async fn update(
+        &self,
+        id: T::Id,
+        update: T::Update,
+    ) -> Result<T::Entity, FrameworkError<T::Error>> {
         self.update(id, update).await
     }
-    async fn delete(&self, id: T::Id) -> Result<(), FrameworkError> {
+    async fn delete(&self, id: T::Id) -> Result<(), FrameworkError<T::Error>> {
         self.delete(id).await
     }
     async fn perform_action(
         &self,
         id: Option<T::Id>,
         action: T::Action,
-    ) -> Result<T::ActionResult, FrameworkError> {
+    ) -> Result<T::ActionResult, FrameworkError<T::Error>> {
         self.perform_action(id, action).await
     }
-    async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError> {
+    async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError<T::Error>> {
         self.list().await
     }
-    async fn shutdown(&self) -> Result<(), FrameworkError> {
+    async fn shutdown(&self) -> Result<(), FrameworkError<T::Error>> {
         self.shutdown().await
     }
     fn clone_box(&self) -> Box<dyn ActorClient<T>> {

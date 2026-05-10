@@ -1,3 +1,5 @@
+use tracing::debug;
+
 use crate::{
     parser::Command,
     types::{CommandAction, ExecutionResult, HandledCommand, ModemId, AT_OK},
@@ -67,14 +69,14 @@ impl CallService {
     }
 
     pub fn receive_hold(&mut self) {
-        log::debug!("[CallService] Receiving hold");
+        debug!("[CallService] Receiving hold");
         if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Active) {
             call.state = CallState::Held;
         }
     }
 
     pub fn receive_resume(&mut self) {
-        log::debug!("[CallService] Receiving resume");
+        debug!("[CallService] Receiving resume");
         if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Held) {
             call.state = CallState::Active;
         }
@@ -109,28 +111,28 @@ impl CallService {
     }
 
     pub fn connect(&mut self, _modem_id: ModemId, peer_id: ModemId) -> Option<Vec<u8>> {
-        log::debug!("[CallService] Connecting to peer {}", peer_id);
-        log::debug!("[CallService] Calls before connect: {:?}", self.calls);
+        debug!("[CallService] Connecting to peer {}", peer_id);
+        debug!("[CallService] Calls before connect: {:?}", self.calls);
         if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Dialing) {
             call.state = CallState::Active;
             call.peer_id = Some(peer_id);
             return Some(AT_OK.to_vec());
         }
-        log::debug!("[CallService] Calls after connect: {:?}", self.calls);
+        debug!("[CallService] Calls after connect: {:?}", self.calls);
         None
     }
 
     // --- Pure command handlers ---
 
     pub fn handle_dial(&mut self, number: &[u8]) -> ExecutionResult {
-        log::debug!("[CallService] Dialing number: {}", String::from_utf8_lossy(number));
+        debug!("[CallService] Dialing number: {}", String::from_utf8_lossy(number));
         if number == b"911" {
             return ExecutionResult::Handled(HandledCommand::ok_with_action(
                 CommandAction::InitiateEmergencyCall,
             ));
         }
 
-        log::debug!("[CallService] Calls before dial: {:?}", self.calls);
+        debug!("[CallService] Calls before dial: {:?}", self.calls);
         if self.calls.iter().any(|c| c.state == CallState::Dialing) {
             return ExecutionResult::Handled(HandledCommand::default()); // No response, just ignore
         }
@@ -152,7 +154,7 @@ impl CallService {
             number: number_str.clone(),
             peer_id: None,
         });
-        log::debug!("[CallService] Calls after dial: {:?}", self.calls);
+        debug!("[CallService] Calls after dial: {:?}", self.calls);
 
         let action = if did_hold {
             CommandAction::InitiateCallAndHold(number_str)
@@ -164,11 +166,11 @@ impl CallService {
     }
 
     pub fn handle_answer(&mut self, id: ModemId) -> ExecutionResult {
-        log::debug!("[CallService] Answering call");
-        log::debug!("[CallService] Calls before answer: {:?}", self.calls);
+        debug!("[CallService] Answering call");
+        debug!("[CallService] Calls before answer: {:?}", self.calls);
         if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Alerting) {
             call.state = CallState::Active;
-            log::debug!("[CallService] Calls after answer: {:?}", self.calls);
+            debug!("[CallService] Calls after answer: {:?}", self.calls);
             return ExecutionResult::Handled(HandledCommand::ok_with_action(
                 CommandAction::AnswerCall(id),
             ));
@@ -185,8 +187,8 @@ impl CallService {
     }
 
     pub fn handle_call_hold(&mut self, op: u8) -> ExecutionResult {
-        log::debug!("[CallService] Call hold operation: {}", op);
-        log::debug!("[CallService] Calls before hold op: {:?}", self.calls);
+        debug!("[CallService] Call hold operation: {}", op);
+        debug!("[CallService] Calls before hold op: {:?}", self.calls);
         if op == 2 {
             let active_pos = self.calls.iter().position(|c| c.state == CallState::Active);
             let held_pos = self.calls.iter().position(|c| c.state == CallState::Held);
@@ -196,7 +198,7 @@ impl CallService {
                 let held_peer = self.calls[hp].peer_id;
                 self.calls[ap].state = CallState::Held;
                 self.calls[hp].state = CallState::Active;
-                log::debug!("[CallService] Calls after hold op: {:?}", self.calls);
+                debug!("[CallService] Calls after hold op: {:?}", self.calls);
                 if let (Some(active_peer), Some(held_peer)) = (active_peer, held_peer) {
                     return ExecutionResult::Handled(HandledCommand::ok_with_action(
                         CommandAction::SwapCalls(active_peer, held_peer),
@@ -220,7 +222,7 @@ impl CallService {
                 call.number,
                 129 // TODO: Handle number type
             );
-            log::debug!("[CallService] Query current calls response: {}", response);
+            debug!("[CallService] Query current calls response: {}", response);
             responses.push(response);
         }
         responses.push("OK\r\n".to_string());

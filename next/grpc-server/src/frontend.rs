@@ -4,6 +4,7 @@ use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
+use netsim_model::client_error::ClientError;
 use netsim_proto::{
     empty::Empty,
     frontend::{ListDeviceResponse, ListLinkResponse},
@@ -49,7 +50,7 @@ impl FrontendClient {
         let id = client
             .create(create)
             .await
-            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))?;
+            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?;
 
         let mut response = netsim_proto::frontend::CreateLinkResponse::new();
         let mut response_link = crate::frontend_converter::to_proto_link(link);
@@ -77,7 +78,7 @@ impl FrontendClient {
         client
             .update(LinkId(req.id), update)
             .await
-            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))
+            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
     }
 
     async fn handle_delete_link(
@@ -88,7 +89,7 @@ impl FrontendClient {
             client
                 .delete(LinkId(req.id))
                 .await
-                .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))?;
+                .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?;
             return Ok(());
         }
 
@@ -228,10 +229,17 @@ impl FrontendClient {
 
         let name_opt = req.device.name.as_deref();
         client.patch(req.id, name_opt, update).await.map_err(|e| match e {
-            DeviceError::NotFound(_) | DeviceError::DeviceNotFound(_) => RpcStatus::with_message(
-                RpcStatusCode::NOT_FOUND,
-                format!("Device not found or patch failed: {}", e),
-            ),
+            ClientError::Framework(ref framework)
+                if matches!(
+                    framework.downcast_ref::<DeviceError>(),
+                    Some(DeviceError::NotFound(_) | DeviceError::DeviceNotFound(_))
+                ) =>
+            {
+                RpcStatus::with_message(
+                    RpcStatusCode::NOT_FOUND,
+                    format!("Device not found or patch failed: {}", e),
+                )
+            }
             _ => RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,
                 format!("Failed to patch device: {}", e),
@@ -239,11 +247,21 @@ impl FrontendClient {
         })
     }
 
+    #[deprecated(note = "Use handle_delete_device instead")]
+    #[allow(deprecated)]
     async fn handle_delete_chip(
-        client: DeviceClient,
-        req: netsim_proto::frontend::DeleteChipRequest,
+        _client: DeviceClient,
+        _req: netsim_proto::frontend::DeleteChipRequest,
     ) -> Result<(), RpcStatus> {
-        client.delete(device_api::DeviceId(req.id)).await.map_err(|e| {
+        Err(RpcStatus::new(RpcStatusCode::UNIMPLEMENTED))
+    }
+
+    async fn handle_delete_device(
+        client: DeviceClient,
+        req: netsim_proto::frontend::DeleteDeviceRequest,
+    ) -> Result<(), RpcStatus> {
+        let device_id = device_api::DeviceId(req.id);
+        client.delete_device(device_id).await.map_err(|e| {
             RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,
                 format!("Failed to delete device: {}", e),
@@ -273,6 +291,19 @@ async fn reply<T>(sink: UnarySink<T>, res: Result<T, RpcStatus>) {
 }
 
 impl FrontendService for FrontendClient {
+    fn delete_device(
+        &mut self,
+        ctx: RpcContext,
+        _req: netsim_proto::frontend::DeleteDeviceRequest,
+        sink: UnarySink<Empty>,
+    ) {
+        let client = self.device_client.clone();
+        ctx.spawn(async move {
+            let res = Self::handle_delete_device(client, _req).await.map(|_| Empty::new());
+            reply(sink, res).await;
+        });
+    }
+
     fn get_version(
         &mut self,
         ctx: RpcContext,
@@ -337,6 +368,7 @@ impl FrontendService for FrontendClient {
         });
     }
 
+    #[allow(deprecated)]
     fn delete_chip(
         &mut self,
         ctx: RpcContext,
@@ -400,11 +432,25 @@ impl FrontendService for FrontendClient {
 
 #[cfg(test)]
 mod tests {
+    use actor_framework::MockActorClient;
+    use device_actor::DeviceActor;
     use link_api::{Link, LinkId, MockLinkClient};
     use netsim_model::{ChipId, ChipKind};
     use protobuf::EnumOrUnknown;
 
     use super::*;
+
+    #[tokio::test]
+    #[allow(deprecated)]
+    async fn test_handle_delete_chip() {
+        let mock_client = MockActorClient::<DeviceActor>::new();
+        let client = DeviceClient::new(Box::new(mock_client));
+        let mut req = netsim_proto::frontend::DeleteChipRequest::new();
+        req.id = 3;
+
+        let res = FrontendClient::handle_delete_chip(client, req).await;
+        assert_eq!(res.unwrap_err().code(), RpcStatusCode::UNIMPLEMENTED);
+    }
 
     #[tokio::test]
     async fn test_create_link() {
