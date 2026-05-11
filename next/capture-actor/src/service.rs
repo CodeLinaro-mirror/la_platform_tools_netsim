@@ -145,9 +145,11 @@ impl CaptureActor {
             ChipKind::UWB => UwbPcapWriter::new(&filepath).await?,
             ChipKind::WIFI => crate::wifi_pcap::WifiPcapWriter::new(&filepath).await?,
             // Fallback
-            ChipKind::UNSPECIFIED | ChipKind::NFC | ChipKind::CELLULAR => {
-                BluetoothH4Writer::new(&filepath).await?
-            }
+            ChipKind::UNSPECIFIED
+            | ChipKind::NFC
+            | ChipKind::CELLULAR
+            | ChipKind::CELLULAR_DATA
+            | ChipKind::ETHERNET => BluetoothH4Writer::new(&filepath).await?,
         };
         Ok(writer)
     }

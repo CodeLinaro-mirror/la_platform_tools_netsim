@@ -44,6 +44,8 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
         // Map unknown/new types to UNSPECIFIED for now
         ApiChipKind::NFC => ProtoChipKind::NFC,
         ApiChipKind::CELLULAR => ProtoChipKind::CELLULAR,
+        ApiChipKind::CELLULAR_DATA => ProtoChipKind::CELLULAR_DATA,
+        ApiChipKind::ETHERNET => ProtoChipKind::ETHERNET,
         ApiChipKind::UNSPECIFIED => ProtoChipKind::UNSPECIFIED,
     }
 }
@@ -217,6 +219,8 @@ pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
         ProtoChipKind::BLUETOOTH_BEACON => Some(ApiChipKind::BLUETOOTH),
         ProtoChipKind::NFC => Some(ApiChipKind::NFC),
         ProtoChipKind::CELLULAR => Some(ApiChipKind::CELLULAR),
+        ProtoChipKind::CELLULAR_DATA => Some(ApiChipKind::CELLULAR_DATA),
+        ProtoChipKind::ETHERNET => Some(ApiChipKind::ETHERNET),
         _ => None,
     }
 }
