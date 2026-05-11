@@ -162,7 +162,7 @@ async fn test_downlink_data_flow_stub() {
 }
 
 // ============================================================================
-// Feature: Access Point Association & Authentication
+// Feature: Access Point Connectivity (Infrastructure)
 // ============================================================================
 
 // Scenario: A Station (Chip) sends a management frame (Assoc Req) to the AP
@@ -421,6 +421,9 @@ async fn test_p2p_transparent_proxy() {
 
 // Scenario: Verify that broadcast frames are converted to unicast (M2U)
 // on an open network and delivered unencrypted.
+//
+// Note: This test uses a placeholder payload which is not recognized as a real
+// DHCP packet. Thus, M2U optimization should apply and convert it to unicast.
 #[tokio::test]
 async fn test_open_network_m2u() {
     let mut world = World::new().await;
@@ -428,7 +431,7 @@ async fn test_open_network_m2u() {
     let _rx = world.given_a_chip(1).await;
     let rx_mac = world.chips[0].mac;
 
-    tracing::info!("Injecting Broadcast DHCPOFFER from Infra on Open Network...");
+    tracing::info!("Injecting Broadcast DHCPOFFER (Placeholder) from Infra on Open Network...");
     world.when_infra_transmits_multicast("DHCPOFFER").await;
 
     let chip = &mut world.chips[0];
@@ -443,20 +446,111 @@ async fn test_open_network_m2u() {
                         let dst_mac = &eth[0..6];
                         tracing::info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
 
-                        // For Open Networks, M2U should succeed and deliver as UNICAST
+                        // For Open Networks, normal multicast (non-DHCP) should be M2U'd to unicast
                         if dst_mac == rx_mac {
-                            tracing::info!("CORRECT: DHCPOFFER was converted to UNICAST on Open Network");
+                            tracing::info!("CORRECT: Placeholder DHCPOFFER was converted to UNICAST on Open Network");
                             return;
                         }
 
                         if dst_mac == [0xFF; 6] {
-                             panic!("FAILED: DHCPOFFER remained BROADCAST on Open Network");
+                             panic!("FAILED: Placeholder DHCPOFFER remained BROADCAST on Open Network");
                         }
                     }
                 }
             }
             _ = &mut timeout => {
                 panic!("Timeout waiting for DHCPOFFER");
+            }
+        }
+    }
+}
+
+// Scenario: Verify that real DHCP broadcast frames remain broadcast
+// on an open network to ensure compatibility with guest DHCP clients.
+#[tokio::test]
+async fn test_open_network_dhcp() {
+    let mut world = World::new().await;
+    world.given_an_ap().await; // Creates Open AP by default
+    let _rx = world.given_a_chip(1).await;
+    let rx_mac = world.chips[0].mac;
+
+    tracing::info!("Injecting Real DHCP DHCPOFFER from Infra on Open Network...");
+
+    // Construct a real placeholder DHCP packet (with IP/UDP headers)
+    // Ethernet: 14, IP: 20, UDP: 8
+    let src_mac = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00]; // AP
+    let dst_mac = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]; // Broadcast
+
+    let mut eth = Vec::new();
+    eth.extend_from_slice(&dst_mac); // DA
+    eth.extend_from_slice(&src_mac); // SA
+    eth.extend_from_slice(&[0x08, 0x00]); // EtherType IPv4
+
+    // IP Header (20 bytes)
+    let ip_hdr = [
+        0x45, 0x00, 0x00, 0x2D, // Ver/IHL/TOS/Len (45 bytes total)
+        0x00, 0x00, 0x00, 0x00, // ID/Flags/Frag
+        0x40, 0x11, 0x00, 0x00, // TTL/Protocol(17)/Checksum
+        0x00, 0x00, 0x00, 0x00, // Src IP
+        0xFF, 0xFF, 0xFF, 0xFF, // Dst IP (Broadcast)
+    ];
+    eth.extend_from_slice(&ip_hdr);
+
+    // UDP Header (8 bytes)
+    let udp_hdr = [
+        0x00, 0x43, // Src Port 67
+        0x00, 0x44, // Dst Port 68
+        0x00, 0x11, // Length (17 bytes)
+        0x00, 0x00, // Checksum
+    ];
+    eth.extend_from_slice(&udp_hdr);
+    eth.extend_from_slice(b"DHCPOFFER"); // Payload
+
+    if eth.len() < 60 {
+        eth.resize(60, 0);
+    }
+
+    let bssid = netsim_packets::MacAddress::new(src_mac);
+    let ieee80211 = netsim_packets::Ieee80211::from_ieee8023_qos(
+        &eth,
+        bssid,
+        netsim_packets::FrameDirection::FromAp,
+        true,
+        100,
+    )
+    .unwrap();
+    let bytes = ieee80211.encode_to_vec().unwrap();
+
+    // Inject directly into AP injector to bypass
+    // world.when_infra_transmits_multicast payload helper
+    world.ap_injector.send(bytes::Bytes::from(bytes)).expect("Failed to inject DHCP packet");
+
+    let chip = &mut world.chips[0];
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
+    tokio::pin!(timeout);
+
+    loop {
+        tokio::select! {
+            Some(bytes) = chip.stream_rx.recv() => {
+                if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
+                    if eth.windows(9).any(|w| w == b"DHCPOFFER") {
+                        let dst_mac = &eth[0..6];
+                        tracing::info!("Received DHCP DHCPOFFER with dst_mac: {:02X?}", dst_mac);
+
+                        // For Open Networks, DHCP should remain broadcast
+                        if dst_mac == [0xFF; 6] {
+                            tracing::info!("CORRECT: DHCP DHCPOFFER remained BROADCAST on Open Network");
+                            return;
+                        }
+
+                        if dst_mac == rx_mac {
+                             panic!("FAILED: DHCP DHCPOFFER was converted to UNICAST on Open Network");
+                        }
+                    }
+                }
+            }
+            _ = &mut timeout => {
+                panic!("Timeout waiting for DHCP DHCPOFFER");
             }
         }
     }

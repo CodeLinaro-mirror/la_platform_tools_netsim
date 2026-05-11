@@ -42,7 +42,7 @@ pub struct SharedKeyStore {
     pub station_bssids: Arc<RwLock<HashMap<MacAddress, MacAddress>>>,
     // Map of Station Address -> SessionKeys
     pub sessions: Arc<RwLock<HashMap<MacAddress, Arc<SessionKeys>>>>,
-    pub gtk: Arc<RwLock<Option<[u8; 16]>>>,
+    pub gtks: Arc<RwLock<HashMap<MacAddress, [u8; 16]>>>,
     pub gtk_tx_pn: Arc<AtomicU64>,
 }
 
@@ -52,7 +52,7 @@ impl Default for SharedKeyStore {
             bssids: Arc::new(RwLock::new(std::collections::HashSet::new())),
             station_bssids: Arc::new(RwLock::new(HashMap::new())),
             sessions: Arc::new(RwLock::new(HashMap::new())),
-            gtk: Arc::new(RwLock::new(None)),
+            gtks: Arc::new(RwLock::new(HashMap::new())),
             gtk_tx_pn: Arc::new(AtomicU64::new(1)),
         }
     }
@@ -84,12 +84,12 @@ impl SharedKeyStore {
         sessions.insert(sta_addr, Arc::new(SessionKeys { tk, tx_pn: AtomicU64::new(1) }));
     }
 
-    pub fn get_gtk(&self) -> Option<[u8; 16]> {
-        *self.gtk.read().unwrap()
+    pub fn get_gtk(&self, bssid: &MacAddress) -> Option<[u8; 16]> {
+        self.gtks.read().unwrap().get(bssid).copied()
     }
 
-    pub fn set_gtk(&self, gtk: [u8; 16]) {
-        *self.gtk.write().unwrap() = Some(gtk);
+    pub fn set_gtk(&self, bssid: MacAddress, gtk: [u8; 16]) {
+        self.gtks.write().unwrap().insert(bssid, gtk);
     }
 
     pub fn remove_session(&self, sta_addr: &MacAddress) {
@@ -102,8 +102,9 @@ impl SharedKeyStore {
         let is_group = dest.is_multicast() || dest.is_broadcast();
 
         let (tk, pn, key_id) = if is_group {
-            let gtk_opt = self.gtk.read().ok()?;
-            let gtk = gtk_opt.as_ref()?;
+            let bssid = ieee80211.get_bssid()?;
+            let gtks = self.gtks.read().ok()?;
+            let gtk = gtks.get(&bssid)?;
             let pn = self.gtk_tx_pn.fetch_add(1, Ordering::SeqCst);
             (gtk.to_vec(), pn, 1) // KeyID 1
         } else {
