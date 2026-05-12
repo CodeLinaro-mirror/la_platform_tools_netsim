@@ -12,7 +12,6 @@ from mobly import utils
 from mobly.controllers import android_device
 from mobly.snippet import callback_event
 
-
 # Number of seconds for the target to stay BLE advertising.
 ADVERTISING_TIME = 120
 # Number of seconds for the target to start BLE advertising.

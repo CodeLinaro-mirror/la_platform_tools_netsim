@@ -16,41 +16,24 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Run e2e tests
-    Run {
-        #[arg(long, help = "Path to the Android SDK root, platform-tools, or adb binary")]
-        android_home: Option<String>,
-        #[arg(long, help = "Path to the vbs APK")]
-        apk_path: Option<String>,
-        #[arg(long, help = "Path to netsimd binary")]
-        netsim_path: Option<String>,
-        #[arg(long, help = "Arguments to pass to netsim")]
-        netsim_args: Option<String>,
-        #[arg(long, help = "Gateway IP to connect to (defaults to 10.0.2.2)")]
-        gateway_ip: Option<String>,
-        #[arg(long, help = "Optional scenario filter (matches feature file name)")]
-        filter: Option<String>,
-        #[arg(long, help = "Simulation mode (no-op for orchestrator logic verification)")]
-        #[arg(default_value_t = false)]
-        dry_run: bool,
-        #[arg(long, short, help = "Enable verbose output")]
-        verbose: bool,
-        #[arg(long, help = "Directory containing feature files (specs)")]
-        spec_dir: Option<String>,
-        #[arg(long, help = "Continue running tests after a failure")]
-        #[arg(default_value_t = false)]
-        keep_going: bool,
-    },
+    Run(verify_host_lib::orchestrator::RunArgs),
     /// List available test scenarios
     Scenarios {
         #[arg(long, help = "Directory containing feature files (specs)")]
         spec_dir: Option<String>,
+        #[arg(
+            long,
+            help = "Comma-separated list of tags to ignore",
+            default_value = "nyi,nyt,skip,ignore"
+        )]
+        ignore_tags: String,
     },
 }
 
 use verify_host_lib::{
     adb_steps, android_steps,
     features::Features,
-    host_steps, netsim_link_steps, netsim_steps,
+    host_steps, netsim_steps,
     orchestrator::{self, TestContext},
 };
 
@@ -60,19 +43,10 @@ async fn main() -> Result<(), String> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Run {
-            android_home,
-            apk_path,
-            netsim_path,
-            netsim_args,
-            gateway_ip,
-            filter,
-            dry_run,
-            verbose,
-            spec_dir,
-            keep_going,
-        } => {
-            let resolved_android_home = match android_home
+        Commands::Run(mut args) => {
+            let resolved_android_home = match args
+                .android_home
+                .clone()
                 .or_else(|| std::env::var("ANDROID_HOME").ok())
             {
                 Some(path) => path,
@@ -93,38 +67,23 @@ async fn main() -> Result<(), String> {
                     resolved_android_home
                 ));
             }
+            args.android_home = Some(resolved_android_home);
 
             let mut features = Features::<TestContext>::new();
             adb_steps::register_steps(&mut features);
             android_steps::register_steps(&mut features);
             host_steps::register_steps(&mut features);
             netsim_steps::register_steps(&mut features);
-            netsim_link_steps::register_steps(&mut features);
 
-            // Orchestrate Android integration tests
-            orchestrator::run_android(
-                Some(resolved_android_home),
-                netsim_path,
-                netsim_args,
-                apk_path,
-                gateway_ip,
-                filter,
-                dry_run,
-                verbose,
-                features,
-                spec_dir,
-                keep_going,
-            )
-            .await?;
+            orchestrator::run(args, features).await?;
         }
-        Commands::Scenarios { spec_dir } => {
+        Commands::Scenarios { spec_dir, ignore_tags } => {
             let mut features = Features::<TestContext>::new();
             adb_steps::register_steps(&mut features);
             android_steps::register_steps(&mut features);
             host_steps::register_steps(&mut features);
             netsim_steps::register_steps(&mut features);
-            netsim_link_steps::register_steps(&mut features);
-            orchestrator::list_scenarios(features, spec_dir).await?;
+            orchestrator::list_scenarios(features, spec_dir, Some(ignore_tags)).await?;
         }
     }
 

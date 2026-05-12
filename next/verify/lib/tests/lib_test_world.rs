@@ -374,6 +374,22 @@ async fn test_features_tags_filtering() {
 }
 
 #[tokio::test]
+async fn test_features_tags_ignoring() {
+    let _ = try_init();
+    let (mut features, mut world) = setup_features_world();
+
+    // Set ignore tags to @wip
+    features.ignore_tags(&["wip"]);
+
+    features.execute_from_memory(include_str!("features/tags.feat"), &mut world).await.unwrap();
+
+    // Ignored execution (only Untagged scenario)
+    // Before -> Background(reset_tags) -> Steps(add 1, check 1) -> After
+
+    assert_eq!(world.log, vec!["before", "reset_tags", "add 1", "check 1", "after"]);
+}
+
+#[tokio::test]
 async fn test_features_data_table() {
     let _ = try_init();
     let (features, mut world) = setup_features_world();

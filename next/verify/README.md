@@ -115,16 +115,22 @@ On the host, you can verify these counters using Gherkin steps:
     Then @avd observes "wifi-p2p-connections" should be "1"
 ```
 
-### Host-side (gRPC)
+### Host-side (gRPC) [DISABLED]
 
-You can also query `netsimd` directly via gRPC to check for host-side observables, such as the number of connected devices and version:
+> [!WARNING]
+> Host-side observables via gRPC have been disabled to remove the `grpcio` dependency for Google3.
+> We are transitioning to use direct calls to the `netsim` CLI binary.
+> Scenarios using `@netsim observes` will not work with real data until CLI support for state queries is added.
+> Tracked in [b/508335216](http://b/508335216).
+
+Previously, you could query `netsimd` directly via gRPC to check for host-side observables, such as the number of connected devices and version:
 
 ```gherkin
   Scenario: Verify connected device count
     Then @netsim observes "connected-devices" should be ">=1"
 ```
 
-You can also use Data Tables to assert on multiple observables at once, and use operators like `>=` or `*` (wildcard for existence):
+You could also use Data Tables to assert on multiple observables at once, and use operators like `>=` or `*` (wildcard for existence):
 
 ```gherkin
   Scenario: Verify device count and valid version
@@ -133,7 +139,7 @@ You can also use Data Tables to assert on multiple observables at once, and use 
       | netsim-version    | *       |
 ```
 
-This step uses the `ListDevice` gRPC call to count the devices registered in `netsimd`.
+This step used the `ListDevice` gRPC call to count the devices registered in `netsimd`.
 
 ### Supported Operators for Observables
 

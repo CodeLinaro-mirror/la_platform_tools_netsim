@@ -458,5 +458,6 @@ def get_bazel_targets(args):
 
   if system == "Linux" or (system == "Darwin" and machine == "arm64"):
     targets.append("@netsim//next/verify/instrumentation/vbs:vbs")
+    targets.append("@netsim//next/verify/examples/03-guest-steps:example3_apk")
 
   return targets

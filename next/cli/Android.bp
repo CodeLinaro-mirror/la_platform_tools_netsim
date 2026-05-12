@@ -21,6 +21,7 @@ rust_binary_host {
         "libnetsim_next_packets",
         "libnetsim_proto",
         "libprotobuf",
+        "libprotobuf_json_mapping",
         "libserde",
         "libserde_json",
         "libtracing",
