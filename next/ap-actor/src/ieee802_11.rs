@@ -497,11 +497,12 @@ impl Ieee80211Manager {
         // Init WPA if configured
         if let Some(passphrase) = &ap.config.wpa_passphrase {
             let rsn_ie = crate::rsn::build_rsn_ie(&ap.config);
-            let global_gtk = shared_keys.get_gtk().unwrap_or_else(|| {
+            let bssid = ap.config.bssid;
+            let global_gtk = shared_keys.get_gtk(&bssid).unwrap_or_else(|| {
                 let gtk_bytes = crate::ffi::RandBytes(16);
                 let mut new_gtk = [0u8; 16];
                 new_gtk.copy_from_slice(&gtk_bytes);
-                shared_keys.set_gtk(new_gtk);
+                shared_keys.set_gtk(bssid, new_gtk);
                 new_gtk
             });
 
