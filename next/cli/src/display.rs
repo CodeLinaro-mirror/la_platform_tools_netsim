@@ -137,7 +137,12 @@ impl fmt::Display for Displayer<&model::Chip> {
             _ => {
                 if self.verbose {
                     writeln!(f)?;
-                    write!(f, "{:indent$}Unknown chip", "")?
+                    write!(
+                        f,
+                        "{:indent$}Unknown chip (Kind: {:?})",
+                        "",
+                        self.value.kind.enum_value_or_default()
+                    )?
                 }
             }
         }

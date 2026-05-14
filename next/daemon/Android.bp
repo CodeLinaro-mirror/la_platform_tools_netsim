@@ -32,7 +32,6 @@ rust_library_host {
         "libnetsim_next_websocket_server",
         "libtokio",
         "libtracing",
-        "librustutils",
     ],
 }
 
@@ -46,7 +45,7 @@ rust_binary_host {
     features: ["cuttlefish"],
     lints: "none",
     rustlibs: [
+        "libcommand_fds",
         "libnetsim_next_daemon_lib",
-        "libtokio",
     ],
 }

@@ -35,6 +35,10 @@ fn chip_kind_to_proto(chip_kind: ArgsChipKind) -> ChipKind {
         ArgsChipKind::Bluetooth => ChipKind::BLUETOOTH,
         ArgsChipKind::Wifi => ChipKind::WIFI,
         ArgsChipKind::Uwb => ChipKind::UWB,
+        ArgsChipKind::Nfc => ChipKind::NFC,
+        ArgsChipKind::Cellular => ChipKind::CELLULAR,
+        ArgsChipKind::CellularData => ChipKind::CELLULAR_DATA,
+        ArgsChipKind::Ethernet => ChipKind::ETHERNET,
     }
 }
 

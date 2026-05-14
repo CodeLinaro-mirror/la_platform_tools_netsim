@@ -89,6 +89,10 @@ pub enum RadioType {
     Classic,
     Wifi,
     Uwb,
+    Nfc,
+    Cellular,
+    CellularData,
+    Ethernet,
 }
 
 impl fmt::Display for RadioType {
@@ -98,6 +102,10 @@ impl fmt::Display for RadioType {
             RadioType::Classic => write!(f, "CLASSIC"),
             RadioType::Wifi => write!(f, "WIFI"),
             RadioType::Uwb => write!(f, "UWB"),
+            RadioType::Nfc => write!(f, "NFC"),
+            RadioType::Cellular => write!(f, "CELLULAR"),
+            RadioType::CellularData => write!(f, "CELLULAR_DATA"),
+            RadioType::Ethernet => write!(f, "ETHERNET"),
         }
     }
 }
@@ -108,6 +116,10 @@ pub enum ChipKind {
     Bluetooth,
     Wifi,
     Uwb,
+    Nfc,
+    Cellular,
+    CellularData,
+    Ethernet,
 }
 
 impl fmt::Display for ChipKind {
@@ -116,6 +128,10 @@ impl fmt::Display for ChipKind {
             ChipKind::Bluetooth => write!(f, "BLUETOOTH"),
             ChipKind::Wifi => write!(f, "WIFI"),
             ChipKind::Uwb => write!(f, "UWB"),
+            ChipKind::Nfc => write!(f, "NFC"),
+            ChipKind::Cellular => write!(f, "CELLULAR"),
+            ChipKind::CellularData => write!(f, "CELLULAR_DATA"),
+            ChipKind::Ethernet => write!(f, "ETHERNET"),
         }
     }
 }
