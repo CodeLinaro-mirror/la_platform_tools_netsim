@@ -1,18 +1,27 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
-use libslirp_rs::{lookup_host_dns, LibSlirp, SlirpConfig};
+#[rustfmt::skip]
+use libslirp_rs::{LibSlirp, SlirpConfig, lookup_host_dns};
 use netsim_model::{PacketSink, PacketStream};
+use netsim_packets::MacAddress;
 use tokio::sync::mpsc as tokio_mpsc;
 use tracing::{info, warn};
+
+pub type ClientId = u32;
 
 pub enum SlirpReq {
     SendPacket(bytes::Bytes),
     Register {
+        client_id: ClientId,
         stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
         sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
+        notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
+    },
+    Unregister {
+        client_id: ClientId,
     },
 }
 
@@ -20,7 +29,12 @@ impl std::fmt::Debug for SlirpReq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SlirpReq::SendPacket(_) => write!(f, "SlirpReq::SendPacket(...)"),
-            SlirpReq::Register { .. } => write!(f, "SlirpReq::Register {{ ... }}"),
+            SlirpReq::Register { client_id, .. } => {
+                write!(f, "SlirpReq::Register {{ client_id: {client_id}, ... }}")
+            }
+            SlirpReq::Unregister { client_id } => {
+                write!(f, "SlirpReq::Unregister {{ client_id: {client_id} }}")
+            }
         }
     }
 }
@@ -39,10 +53,17 @@ impl fmt::Debug for SlirpCreate {
     }
 }
 
+pub struct ClientInfo {
+    pub sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
+    pub notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
+}
+
 pub struct SlirpActor {
     pub(crate) libslirp: Option<LibSlirp>,
     pub(crate) config: SlirpConfig,
     pub(crate) http_proxy: Option<String>,
+    pub(crate) clients: HashMap<ClientId, ClientInfo>,
+    pub(crate) mac_table: HashMap<MacAddress, ClientId>,
 }
 
 #[derive(Clone, Debug)]
@@ -62,7 +83,13 @@ impl SlirpActor {
                 Err(e) => warn!("Failed to resolve host-dns '{}': {}", host_dns_str, e),
             }
         }
-        Self { libslirp: None, config, http_proxy }
+        Self {
+            libslirp: None,
+            config,
+            http_proxy,
+            clients: HashMap::new(),
+            mac_table: HashMap::new(),
+        }
     }
 }
 

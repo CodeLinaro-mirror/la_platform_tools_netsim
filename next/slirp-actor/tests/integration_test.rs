@@ -12,7 +12,12 @@ impl Context<SlirpActor> for MockContext {
     fn set_interval(&mut self, _duration: std::time::Duration) {}
     fn add_stream(&mut self, _id: u32, _stream: BoxStream) {}
     fn remove_stream(&mut self, _id: u32) {}
-    fn add_typed_stream(&mut self, _id: usize, _stream: actor_framework::BoxTypedStream<()>) {}
+    fn add_typed_stream(
+        &mut self,
+        _id: usize,
+        _stream: actor_framework::BoxTypedStream<bytes::Bytes>,
+    ) {
+    }
     fn remove_typed_stream(&mut self, _id: usize) {}
     fn spawn(&mut self, _id: u32, _task: BoxFuture<'static, u32>) {}
     fn abort(&mut self, _id: u32) {}
@@ -38,7 +43,13 @@ async fn test_slirp_actor_lifecycle() {
     let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
     use tokio_stream::StreamExt;
     let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
-    let _ = actor.handle_action(None, SlirpReq::Register { stream, sink: tx_out }, &mut ctx).await;
+    let _ = actor
+        .handle_action(
+            None,
+            SlirpReq::Register { client_id: 0, stream, sink: tx_out, notifier: None },
+            &mut ctx,
+        )
+        .await;
 
     // When I start the actor
     actor.on_start(&mut ctx).await;

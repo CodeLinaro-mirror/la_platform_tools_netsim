@@ -18,6 +18,7 @@ netsim_rust_library(
         "//next/http-proxy",
         "//next/libslirp-rs",
         "//next/model",
+        "//next/packets",
         "@bytes",
         "@thiserror",
         "@tokio",
