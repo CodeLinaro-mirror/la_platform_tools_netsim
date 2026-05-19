@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 use crate::{
     bt_pcap::BluetoothH4Writer, capture_actor::CaptureActor, error::CaptureError,
-    uwb_pcap::UwbPcapWriter, writer::CaptureWriter,
+    ethernet_pcap::EthernetPcapWriter, uwb_pcap::UwbPcapWriter, writer::CaptureWriter,
 };
 
 /// Entity representing a packet capture for a specific chip.
@@ -144,12 +144,13 @@ impl CaptureActor {
             ChipKind::BLUETOOTH => BluetoothH4Writer::new(&filepath).await?,
             ChipKind::UWB => UwbPcapWriter::new(&filepath).await?,
             ChipKind::WIFI => crate::wifi_pcap::WifiPcapWriter::new(&filepath).await?,
+            ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => {
+                EthernetPcapWriter::new(&filepath).await?
+            }
             // Fallback
-            ChipKind::UNSPECIFIED
-            | ChipKind::NFC
-            | ChipKind::CELLULAR
-            | ChipKind::CELLULAR_DATA
-            | ChipKind::ETHERNET => BluetoothH4Writer::new(&filepath).await?,
+            ChipKind::UNSPECIFIED | ChipKind::NFC | ChipKind::CELLULAR => {
+                BluetoothH4Writer::new(&filepath).await?
+            }
         };
         Ok(writer)
     }

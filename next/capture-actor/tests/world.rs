@@ -15,6 +15,7 @@ use bytes::Bytes;
 use capture_actor::{CaptureActor, CaptureClient, CaptureError};
 use capture_api::{CaptureCreate, CaptureInfo, CaptureSender, Direction};
 use netsim_model::{ChipId, ChipKind, ClientError};
+use netsim_packets::PcapHeader;
 
 static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -153,6 +154,40 @@ impl World {
                 }
             }
             None
+        })
+        .await;
+    }
+
+    pub async fn then_capture_file_has_dlt(&self, expected_dlt: u32) {
+        self.poll_until(|| async {
+            // Safely open directory, retry if not created yet
+            let dir_entries = std::fs::read_dir(&self.temp_dir).ok()?;
+
+            let mut paths = Vec::new();
+            for entry in dir_entries {
+                paths.push(entry.ok()?.path());
+            }
+
+            // Expect exactly one capture file
+            if paths.len() != 1 {
+                return None;
+            }
+
+            // Safely read file, retry if locked/being written
+            let bytes = std::fs::read(&paths[0]).ok()?;
+            if bytes.len() < 24 {
+                return None;
+            }
+
+            // Safely parse header
+            use zerocopy::FromBytes;
+            let (header, _) = PcapHeader::read_from_prefix(&bytes).ok()?;
+
+            if header.magic_number.get() == 0xa1b2c3d4 && header.network.get() == expected_dlt {
+                Some(())
+            } else {
+                None
+            }
         })
         .await;
     }
