@@ -32,9 +32,8 @@ from utils import (
 class CompileInstallTask(Task):
 
   BINARIES = {
-      "netsim": "netsim",
+      "netsim": "next/cli/netsim",
       "netsimd": "netsimd",
-      "netsimx": "next/cli/netsim",
       "netsimdx": "next/daemon/daemon",
   }
 

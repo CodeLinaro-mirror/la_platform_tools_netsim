@@ -388,6 +388,8 @@ impl args::Command {
             ChipKind::BLUETOOTH_BEACON => "BLUETOOTH_BEACON",
             ChipKind::NFC => "NFC",
             ChipKind::CELLULAR => "CELLULAR",
+            ChipKind::CELLULAR_DATA => "CELLULAR_DATA",
+            ChipKind::ETHERNET => "ETHERNET",
         }
         .into()
     }
