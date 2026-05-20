@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::BufReader;
+use std::io::prelude::*;
 use std::path::PathBuf;
 
 use log::error;
@@ -159,13 +159,9 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
     if let Err(err) = ini_file.read() {
         error!("Error reading ini file: {err:?}");
     }
-    ini_file.get("grpc.port").map(|s: &str| {
-        if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("localhost:{s}")
-        }
-    })
+    ini_file
+        .get("grpc.port")
+        .map(|s: &str| if s.contains(':') { s.to_string() } else { format!("localhost:{s}") })
 }
 
 #[cfg(test)]
@@ -175,8 +171,8 @@ mod tests {
     use std::path::PathBuf;
     use std::{env, time::SystemTime};
 
-    use super::get_ini_filepath;
     use super::IniFile;
+    use super::get_ini_filepath;
 
     use crate::tests::ENV_MUTEX;
 

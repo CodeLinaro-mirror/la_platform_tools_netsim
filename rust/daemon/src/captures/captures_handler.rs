@@ -33,8 +33,8 @@ use crate::wifi::radiotap;
 
 use anyhow::anyhow;
 
-use super::pcap_util::{append_record, append_record_pcapng, wrap_bt_packet, PacketDirection};
 use super::PCAP_MIME_TYPE;
+use super::pcap_util::{PacketDirection, append_record, append_record_pcapng, wrap_bt_packet};
 
 /// Max Chunk length of capture file during get_capture
 pub const CHUNK_LEN: usize = 1024;

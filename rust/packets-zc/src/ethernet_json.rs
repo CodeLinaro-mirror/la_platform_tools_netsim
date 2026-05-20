@@ -105,7 +105,7 @@ pub fn parse_ethernet_header(ethernet_frame: &EthernetFrame, n: usize) -> Ethern
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ethernet::{ether_type, MacAddr};
+    use crate::ethernet::{MacAddr, ether_type};
     use zerocopy::IntoBytes;
 
     #[test]

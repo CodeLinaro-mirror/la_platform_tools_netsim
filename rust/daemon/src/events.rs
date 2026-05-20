@@ -4,7 +4,7 @@
 //! A module with mpmc channels for distributing global events.
 
 use netsim_proto::common::ChipKind;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 
 use crate::devices::chip::ChipIdentifier;
 use crate::devices::device::DeviceIdentifier;

@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::io::Write;
 
-use protobuf::descriptor::*;
-use protobuf::plugin::{code_generator_response, CodeGeneratorRequest, CodeGeneratorResponse};
 use protobuf::Message;
+use protobuf::descriptor::*;
+use protobuf::plugin::{CodeGeneratorRequest, CodeGeneratorResponse, code_generator_response};
 
 struct CodeWriter<'a> {
     writer: &'a mut (dyn Write + 'a),
@@ -146,7 +146,7 @@ impl<'a> CodeWriter<'a> {
     }
 }
 
-use super::util::{self, fq_grpc, to_snake_case, MethodType};
+use super::util::{self, MethodType, fq_grpc, to_snake_case};
 
 struct MethodGen<'a> {
     proto: &'a MethodDescriptorProto,

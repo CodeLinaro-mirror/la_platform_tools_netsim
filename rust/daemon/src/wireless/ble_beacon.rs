@@ -9,7 +9,7 @@ use bytes::Bytes;
 use log::{error, info};
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
-use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
+use netsim_proto::stats::{NetsimRadioStats as ProtoRadioStats, netsim_radio_stats};
 
 #[cfg(not(test))]
 use crate::ffi::ffi_bluetooth;

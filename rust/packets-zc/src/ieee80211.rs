@@ -10,7 +10,7 @@
 use crate::ethernet::MacAddr;
 use core::fmt;
 use zerocopy::byteorder::LittleEndian; // IEEE 802.11 fields are typically little-endian
-use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16};
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, U16, Unaligned};
 
 /// Represents the 2-byte Frame Control field in an 802.11 header.
 ///

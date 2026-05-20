@@ -420,7 +420,11 @@ mod tests {
         assert_eq!(link_manager.get_rssi(chip2, chip3, phy_ble), Some(-70));
 
         link_manager.delete_link_for_chip(ChipIdentifier(99));
-        assert_eq!(link_manager.list().len(), 2, "Removing RSSI's for a chip not involved should not change link count (should be 2: C2->C3 and *,*)");
+        assert_eq!(
+            link_manager.list().len(),
+            2,
+            "Removing RSSI's for a chip not involved should not change link count (should be 2: C2->C3 and *,*)"
+        );
 
         link_manager.reset();
         link_manager.set_rssi(chip1, chip2, phy_ble, -50);

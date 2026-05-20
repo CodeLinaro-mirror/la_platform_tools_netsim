@@ -3,11 +3,11 @@
 
 use netsim_packets::link_layer::LegacyAdvertisingType;
 use netsim_proto::model::chip::ble_beacon::{
+    AdvertiseSettings as AdvertiseSettingsProto,
     advertise_settings::{
         AdvertiseMode as Mode, AdvertiseTxPower as Level, Interval as IntervalProto,
         Tx_power as TxPowerProto,
     },
-    AdvertiseSettings as AdvertiseSettingsProto,
 };
 
 use std::time::Duration;

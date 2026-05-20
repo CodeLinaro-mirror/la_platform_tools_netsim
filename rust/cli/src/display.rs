@@ -362,11 +362,7 @@ pub struct LinkChipIdDisplay(pub u32);
 
 impl fmt::Display for LinkChipIdDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0 == 0 {
-            write!(f, "ALL")
-        } else {
-            write!(f, "{}", self.0)
-        }
+        if self.0 == 0 { write!(f, "ALL") } else { write!(f, "{}", self.0) }
     }
 }
 

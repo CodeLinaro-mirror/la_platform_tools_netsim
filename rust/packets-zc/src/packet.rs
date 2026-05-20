@@ -9,10 +9,10 @@
 //! The main entry point is the `parse` function, which takes a raw byte
 //! slice and returns an `Option<Packet>`. The `Packet` struct contains
 
-use crate::ethernet::{ether_type, EthernetPacket};
+use crate::ethernet::{EthernetPacket, ether_type};
 use crate::icmp::IcmpHeader;
 use crate::icmpv6::Icmpv6Header;
-use crate::ip::{Ipv4Header, Ipv6Header, Ipv6HopByHopHeader, IP_P_HOPOPTS, IP_P_ICMP, IP_P_ICMPV6};
+use crate::ip::{IP_P_HOPOPTS, IP_P_ICMP, IP_P_ICMPV6, Ipv4Header, Ipv6Header, Ipv6HopByHopHeader};
 use zerocopy::Ref;
 
 /// Represents the IP layer of a packet, supporting both IPv4 and IPv6.
@@ -135,7 +135,7 @@ mod tests {
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
         bytes.extend_from_slice(&[192, 168, 0, 1]); // Src Addr
         bytes.extend_from_slice(&[192, 168, 0, 2]); // Dst Addr
-                                                    // ICMP
+        // ICMP
         bytes.extend_from_slice(&[8, 0]); // Type, Code
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Identifier
@@ -155,7 +155,7 @@ mod tests {
         bytes.extend_from_slice(&[IP_P_ICMPV6, 64]); // Next Header, Hop Limit
         bytes.extend_from_slice(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]); // Src
         bytes.extend_from_slice(&[0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]); // Dst
-                                                                                          // ICMPv6
+        // ICMPv6
         bytes.extend_from_slice(&[128, 0]); // Type, Code
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
         bytes.extend_from_slice(&[0, 0, 0, 0]); // Body

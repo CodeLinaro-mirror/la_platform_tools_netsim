@@ -5,8 +5,8 @@
 
 use crate::util::ParseResult;
 use zerocopy::{
-    byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
-    U32,
+    FromBytes, Immutable, IntoBytes, KnownLayout, Ref, U16, U32, Unaligned,
+    byteorder::NetworkEndian,
 };
 
 /// Represents the TCP header.
