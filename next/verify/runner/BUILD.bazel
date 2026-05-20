@@ -13,7 +13,7 @@ rust_binary(
     data = [
         "//next/cli:netsim",
     ],
-    edition = "2021",
+    edition = "2024",
     deps = [
         "//next/verify/host:verify_host_lib",
         "@clap",

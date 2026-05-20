@@ -11,7 +11,7 @@ netsim_rust_library(
     crate_features = [],
     crate_name = "device_actor",
     crate_root = "src/lib.rs",
-    edition = "2021",
+    edition = "2024",
     test_deps = [
         "@mockall",
         "@serde_json",

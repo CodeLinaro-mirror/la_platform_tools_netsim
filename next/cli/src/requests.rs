@@ -399,10 +399,10 @@ impl Command {
         device_name: Option<&str>,
         chip_kind: ChipKind,
     ) -> Result<Vec<u32>> {
-        if let Some(id) = chip_id {
-            if id != 0 {
-                return Ok(vec![id]);
-            }
+        if let Some(id) = chip_id
+            && id != 0
+        {
+            return Ok(vec![id]);
         }
 
         // Fetch devices to resolve name or get all chips
@@ -410,10 +410,10 @@ impl Command {
         if let GrpcResponse::ListDevice(response) = client.send_grpc(&GrpcRequest::ListDevice)? {
             for device in response.devices {
                 // Filter by device name if provided
-                if let Some(dev_name) = device_name {
-                    if device.name != dev_name {
-                        continue;
-                    }
+                if let Some(dev_name) = device_name
+                    && device.name != dev_name
+                {
+                    continue;
                 }
 
                 resolved_ids.extend(

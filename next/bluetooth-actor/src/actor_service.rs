@@ -72,10 +72,10 @@ impl ActorService for BluetoothActor {
             raw_address.parse().map_err(BluetoothError::AddressParse)?;
 
         let mut mode = bluetooth.mode.clone();
-        if let BluetoothMode::Beacon(ref mut beacon_params) = mode {
-            if beacon_params.ble_beacon.address.is_empty() {
-                beacon_params.ble_beacon.address = raw_address;
-            }
+        if let BluetoothMode::Beacon(ref mut beacon_params) = mode
+            && beacon_params.ble_beacon.address.is_empty()
+        {
+            beacon_params.ble_beacon.address = raw_address;
         }
 
         let mut chip = params.chip;

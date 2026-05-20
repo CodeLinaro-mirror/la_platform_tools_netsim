@@ -126,14 +126,14 @@ impl ModemImpl {
     pub fn trigger_incoming_pdu(&mut self, pdu: &str) -> Vec<ModemEffect> {
         // Calculate TPDU length
         let mut effects = Vec::new();
-        if let Ok(bytes) = hex::decode(pdu) {
-            if !bytes.is_empty() {
-                let sca_len = bytes[0] as usize;
-                if bytes.len() > 1 + sca_len {
-                    let tpdu_len = bytes.len() - 1 - sca_len;
-                    let response = format!("+CMT: ,{}\r\n{}\r\n", tpdu_len, pdu);
-                    effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-                }
+        if let Ok(bytes) = hex::decode(pdu)
+            && !bytes.is_empty()
+        {
+            let sca_len = bytes[0] as usize;
+            if bytes.len() > 1 + sca_len {
+                let tpdu_len = bytes.len() - 1 - sca_len;
+                let response = format!("+CMT: ,{}\r\n{}\r\n", tpdu_len, pdu);
+                effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
             }
         }
         effects

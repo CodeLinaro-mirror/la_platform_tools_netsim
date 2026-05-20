@@ -93,10 +93,10 @@ impl World {
     pub async fn then_capture_is_enabled(&self, chip_id: u32, expected_enabled: bool) {
         self.poll_until(|| async {
             let info = self.client.get_capture(ChipId(chip_id)).await.unwrap();
-            if let Some(info) = info {
-                if info.enabled == expected_enabled {
-                    return Some(());
-                }
+            if let Some(info) = info
+                && info.enabled == expected_enabled
+            {
+                return Some(());
             }
             None
         })
@@ -111,11 +111,11 @@ impl World {
     ) {
         self.poll_until(|| async {
             let info = self.client.get_capture(ChipId(chip_id)).await.unwrap();
-            if let Some(info) = info {
-                if info.records_written == expected_records && info.bytes_written == expected_bytes
-                {
-                    return Some(());
-                }
+            if let Some(info) = info
+                && info.records_written == expected_records
+                && info.bytes_written == expected_bytes
+            {
+                return Some(());
             }
             None
         })

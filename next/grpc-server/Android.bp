@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_grpc_server",
+    edition: "2024",
     crate_name: "grpc_server",
     stem: "libgrpc_server",
     crate_root: "src/lib.rs",

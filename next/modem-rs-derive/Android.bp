@@ -4,6 +4,7 @@ package {
 
 rust_proc_macro {
     name: "libnetsim_next_modem_rs_derive",
+    edition: "2024",
     crate_name: "modem_rs_derive",
     stem: "libmodem_rs_derive",
     crate_root: "src/lib.rs",

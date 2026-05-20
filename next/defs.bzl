@@ -463,7 +463,7 @@ def netsim_rust_library(
             compile_data = kwargs.get("compile_data", []),
             deps = [":testing"] + testing_deps + select_deps + test_deps,
             proc_macro_deps = kwargs.get("proc_macro_deps", []),
-            edition = kwargs.get("edition", "2021"),
+            edition = kwargs.get("edition", "2024"),
             testonly = True,
         )
 

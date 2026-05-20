@@ -4,7 +4,7 @@
 [package]
 name = "packet-stream"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Simplified cross-platform packet streaming framework - core library"
 repository = "https://github.com/schilit/packetstream"
 license = "MIT"

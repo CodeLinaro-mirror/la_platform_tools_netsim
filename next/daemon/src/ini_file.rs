@@ -108,18 +108,18 @@ impl Drop for IniFileUninitialized {
     fn drop(&mut self) {
         if let Some(file) = self.init_lock_file.take() {
             drop(file);
-            if let Err(err) = fs::remove_file(&self.init_lock_path) {
-                if err.kind() != io::ErrorKind::NotFound {
-                    warn!("Failed to remove {}: {err}", self.init_lock_path.display());
-                }
+            if let Err(err) = fs::remove_file(&self.init_lock_path)
+                && err.kind() != io::ErrorKind::NotFound
+            {
+                warn!("Failed to remove {}: {err}", self.init_lock_path.display());
             }
         }
         if let Some(file) = self.lock_file.take() {
             drop(file);
-            if let Err(err) = fs::remove_file(&self.lock_path) {
-                if err.kind() != io::ErrorKind::NotFound {
-                    warn!("Failed to remove {}: {err}", self.lock_path.display());
-                }
+            if let Err(err) = fs::remove_file(&self.lock_path)
+                && err.kind() != io::ErrorKind::NotFound
+            {
+                warn!("Failed to remove {}: {err}", self.lock_path.display());
             }
         }
     }

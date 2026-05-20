@@ -9,7 +9,7 @@ netsim_rust_library(
     name = "common",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "common",
-    edition = "2021",
+    edition = "2024",
     test_deps = [
         "@rand",
         "@regex",

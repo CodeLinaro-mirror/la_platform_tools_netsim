@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_rootcanal",
+    edition: "2024",
     crate_name: "rootcanal",
     stem: "librootcanal",
     crate_root: "src/lib.rs",

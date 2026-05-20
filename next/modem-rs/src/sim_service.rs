@@ -322,10 +322,10 @@ fn find_df<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a DedicatedFile> {
         return Some(df);
     }
     for file in &df.files {
-        if let SimFile::Df(df) = file {
-            if let Some(found) = find_df(df, id) {
-                return Some(found);
-            }
+        if let SimFile::Df(df) = file
+            && let Some(found) = find_df(df, id)
+        {
+            return Some(found);
         }
     }
     None

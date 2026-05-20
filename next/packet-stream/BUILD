@@ -36,7 +36,7 @@ netsim_rust_library(
     name = "packet-stream",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "packet_stream",
-    edition = "2021",
+    edition = "2024",
     enable_integration_test = False,
     proc_macro_deps = [
         "@async-trait",

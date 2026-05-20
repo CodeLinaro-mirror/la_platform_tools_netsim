@@ -22,16 +22,17 @@ impl ActorLifecycle for SlirpActor {
         let src_mac = frame.src_addr;
 
         // MAC Address Learning & Conflict Detection
-        if let Some(&existing_id) = self.mac_table.get(&src_mac) {
-            if existing_id != id && self.clients.contains_key(&existing_id) {
-                tracing::warn!(
-                    "SlirpActor: MAC conflict! Client {id} tried to claim {src_mac} owned by {existing_id}, disconnecting {id}"
-                );
-                // Disconnect the offending client `id`
-                self.clients.remove(&id);
-                ctx.remove_stream(id);
-                return;
-            }
+        if let Some(&existing_id) = self.mac_table.get(&src_mac)
+            && existing_id != id
+            && self.clients.contains_key(&existing_id)
+        {
+            tracing::warn!(
+                "SlirpActor: MAC conflict! Client {id} tried to claim {src_mac} owned by {existing_id}, disconnecting {id}"
+            );
+            // Disconnect the offending client `id`
+            self.clients.remove(&id);
+            ctx.remove_stream(id);
+            return;
         }
         self.mac_table.insert(src_mac, id);
 
@@ -44,10 +45,10 @@ impl ActorLifecycle for SlirpActor {
     async fn on_stream_closed(&mut self, id: u32, _ctx: &mut DynContext<Self>) {
         info!("SlirpActor: Client {id} disconnected");
         self.mac_table.retain(|_, v| *v != id);
-        if let Some(client) = self.clients.remove(&id) {
-            if let Some(notifier) = client.notifier {
-                let _ = notifier.send(netsim_model::ChipId(id));
-            }
+        if let Some(client) = self.clients.remove(&id)
+            && let Some(notifier) = client.notifier
+        {
+            let _ = notifier.send(netsim_model::ChipId(id));
         }
     }
 

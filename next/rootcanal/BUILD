@@ -13,7 +13,7 @@ netsim_rust_library(
     name = "rootcanal",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "rootcanal",
-    edition = "2021",
+    edition = "2024",
     enable_integration_test = False,
     visibility = ["//next:__subpackages__"],
     deps = [
@@ -29,7 +29,7 @@ rust_test_suite(
     name = "tests",
     size = "small",
     srcs = glob(["tests/**/*.rs"]),
-    edition = "2021",
+    edition = "2024",
     rustc_flags = [
         "-C",
         "link-arg=-lc",

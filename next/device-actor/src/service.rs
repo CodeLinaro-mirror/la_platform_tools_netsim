@@ -73,12 +73,13 @@ impl DeviceActor {
             if let Some(key) = self.idle_timer.take() {
                 ctx.cancel_timer(key);
             }
-        } else if self.has_seen_device && self.idle_timer.is_none() {
-            if let Some(timeout) = self.idle_timeout {
-                info!("DeviceActor: Scheduling idle shutdown in {:?}", timeout);
-                let key = ctx.run_later(timeout, Box::new(Self::on_idle_timeout));
-                self.idle_timer = Some(key);
-            }
+        } else if self.has_seen_device
+            && self.idle_timer.is_none()
+            && let Some(timeout) = self.idle_timeout
+        {
+            info!("DeviceActor: Scheduling idle shutdown in {:?}", timeout);
+            let key = ctx.run_later(timeout, Box::new(Self::on_idle_timeout));
+            self.idle_timer = Some(key);
         }
     }
 
@@ -102,10 +103,10 @@ impl DeviceActor {
         // It awaits the previous write task to ensure sequential writes without race
         // conditions.
         let task = tokio::spawn(async move {
-            if let Some(t) = previous_task {
-                if let Err(e) = t.await {
-                    warn!("DeviceActor: Previous stats write failed: {}", e);
-                }
+            if let Some(t) = previous_task
+                && let Err(e) = t.await
+            {
+                warn!("DeviceActor: Previous stats write failed: {}", e);
             }
 
             // Spawn blocking write for disk I/O
@@ -369,10 +370,10 @@ impl DeviceActor {
             self.link_client.notify_chip_removed(chip_id).await?;
         }
 
-        if let Some(internal_device) = self.devices.remove(&id) {
-            if let Some(guid) = &internal_device.guid {
-                self.guid_to_id.remove(guid);
-            }
+        if let Some(internal_device) = self.devices.remove(&id)
+            && let Some(guid) = &internal_device.guid
+        {
+            self.guid_to_id.remove(guid);
         }
         self.stats.update_device_count(self.devices.len(), false);
         self.update_idle_state(ctx);
@@ -448,26 +449,25 @@ impl DeviceActor {
             }
         };
 
-        if let Some(client) = self.chip_clients.get(&chip.kind) {
-            if let Ok(Ok(stats)) =
+        if let Some(client) = self.chip_clients.get(&chip.kind)
+            && let Ok(Ok(stats)) =
                 tokio::time::timeout(CHIP_READ_TIMEOUT, client.read_statistics()).await
-            {
-                let chip_stats: Vec<_> = stats
-                    .into_vec()
-                    .into_iter()
-                    .filter(|s| s.id == chip.id)
-                    .map(|mut s| {
-                        s.id = device_id.0;
-                        s.duration_secs =
-                            stream_stats.as_ref().map_or(0, |x| x.start_time.elapsed().as_secs());
-                        s
-                    })
-                    .collect();
+        {
+            let chip_stats: Vec<_> = stats
+                .into_vec()
+                .into_iter()
+                .filter(|s| s.id == chip.id)
+                .map(|mut s| {
+                    s.id = device_id.0;
+                    s.duration_secs =
+                        stream_stats.as_ref().map_or(0, |x| x.start_time.elapsed().as_secs());
+                    s
+                })
+                .collect();
 
-                if !chip_stats.is_empty() {
-                    archive_stats(chip_stats);
-                    return;
-                }
+            if !chip_stats.is_empty() {
+                archive_stats(chip_stats);
+                return;
             }
         }
 
@@ -710,10 +710,10 @@ impl DeviceActor {
         let stats_task = self.stats_write_task.take();
         if let Some(client) = self.self_client.clone() {
             tokio::spawn(async move {
-                if let Some(t) = stats_task {
-                    if let Err(e) = t.await {
-                        warn!("DeviceActor: Stats write failed during shutdown flush: {}", e);
-                    }
+                if let Some(t) = stats_task
+                    && let Err(e) = t.await
+                {
+                    warn!("DeviceActor: Stats write failed during shutdown flush: {}", e);
                 }
                 if let Err(e) = client.shutdown().await {
                     error!("DeviceActor: Failed to shutdown: {}", e);
@@ -880,10 +880,10 @@ impl ActorService for DeviceActor {
                 }
             }
 
-            if let Some(u) = specific_update {
-                if u.variant.is_some() {
-                    chip_update.variant = u.variant.clone();
-                }
+            if let Some(u) = specific_update
+                && u.variant.is_some()
+            {
+                chip_update.variant = u.variant.clone();
             }
 
             if chip_update.pose.position.is_some()
@@ -933,13 +933,13 @@ impl ActorService for DeviceActor {
             }
             DeviceAction::NotifyChipRemoved(device_id, chip_id) => {
                 // Verify ID match if provided
-                if let Some(id) = id {
-                    if id != device_id {
-                        return Err(DeviceError::NotFound(format!(
-                            "Device ID mismatch: {} vs {}",
-                            id, device_id
-                        )));
-                    }
+                if let Some(id) = id
+                    && id != device_id
+                {
+                    return Err(DeviceError::NotFound(format!(
+                        "Device ID mismatch: {} vs {}",
+                        id, device_id
+                    )));
                 }
 
                 self.perform_chip_removal(device_id, chip_id, ctx).await?;

@@ -20,7 +20,7 @@ netsim_rust_library(
     name = "model",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "netsim_model",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
         "@async-trait",
     ],

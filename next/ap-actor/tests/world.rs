@@ -222,13 +222,12 @@ impl ApWorld {
         while start.elapsed() < Duration::from_secs(2) {
             match tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
                 Ok(Some(msg)) => {
-                    if let Ok(frame) = Ieee80211::decode(&msg) {
-                        if frame.stype() == management_subtype::ASSOCIATION_RESPONSE
-                            && frame.get_addr1() == dst_mac
-                        {
-                            // DA == Station
-                            return; // Success
-                        }
+                    if let Ok(frame) = Ieee80211::decode(&msg)
+                        && frame.stype() == management_subtype::ASSOCIATION_RESPONSE
+                        && frame.get_addr1() == dst_mac
+                    {
+                        // DA == Station
+                        return; // Success
                     }
                 }
                 _ => continue,

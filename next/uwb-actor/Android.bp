@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_uwb_actor",
+    edition: "2024",
     crate_name: "uwb_actor",
     stem: "libuwb_actor",
     crate_root: "src/lib.rs",

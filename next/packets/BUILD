@@ -13,7 +13,7 @@ netsim_rust_library(
         "src/**/test_data/**",
     ]),
     crate_name = "netsim_packets",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
         "@num-derive",
     ],
@@ -42,7 +42,7 @@ rust_test(
 rust_test(
     name = "tests",
     srcs = ["tests/integration_tests.rs"],
-    edition = "2021",
+    edition = "2024",
     deps = [
         ":packets",
         "@num-traits",

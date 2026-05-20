@@ -26,13 +26,13 @@ impl ActorLifecycle for ApActor {
                 // Process asynchronous delayed queues initially
                 while let Some((time, _)) = ap.delayed_frames.front() {
                     if now >= *time {
-                        if let Some((_, frame)) = ap.delayed_frames.pop_front() {
-                            if sink.send(frame).is_err() {
-                                warn!("Sink closed while transmitting delayed frame");
-                                ctx.shutdown();
-                                self.sink = None;
-                                return;
-                            }
+                        if let Some((_, frame)) = ap.delayed_frames.pop_front()
+                            && sink.send(frame).is_err()
+                        {
+                            warn!("Sink closed while transmitting delayed frame");
+                            ctx.shutdown();
+                            self.sink = None;
+                            return;
                         }
                     } else {
                         break;
@@ -80,22 +80,20 @@ impl ActorLifecycle for ApActor {
         if !dest.is_broadcast()
             && ieee_frame.stype() == management_subtype::AUTHENTICATION
             && msg.len() >= 24 + 6
+            && let Ok((auth_fields, _)) = AuthenticationFixedFields::read_from_prefix(&msg[24..])
+            && auth_fields.sequence.get() == 1
         {
-            if let Ok((auth_fields, _)) = AuthenticationFixedFields::read_from_prefix(&msg[24..]) {
-                if auth_fields.sequence.get() == 1 {
-                    let src = ieee_frame.get_source();
-                    let mut aps_to_clear = Vec::new();
-                    for (id, ap) in self.aps.iter() {
-                        if ap.config.bssid != dest && ap.associations.contains(&src) {
-                            aps_to_clear.push(*id);
-                        }
-                    }
-                    for id in aps_to_clear {
-                        if let Some(ap) = self.aps.get_mut(&id) {
-                            ap.clear_station_state(&src);
-                            self.shared_keys.remove_session(&src);
-                        }
-                    }
+            let src = ieee_frame.get_source();
+            let mut aps_to_clear = Vec::new();
+            for (id, ap) in self.aps.iter() {
+                if ap.config.bssid != dest && ap.associations.contains(&src) {
+                    aps_to_clear.push(*id);
+                }
+            }
+            for id in aps_to_clear {
+                if let Some(ap) = self.aps.get_mut(&id) {
+                    ap.clear_station_state(&src);
+                    self.shared_keys.remove_session(&src);
                 }
             }
         }
