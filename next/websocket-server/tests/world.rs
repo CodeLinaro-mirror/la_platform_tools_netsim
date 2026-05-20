@@ -4,8 +4,8 @@
 use std::{
     net::TcpStream as StdTcpStream,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
     time::Duration,
 };

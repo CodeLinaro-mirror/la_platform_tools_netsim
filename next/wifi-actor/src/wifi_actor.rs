@@ -19,7 +19,7 @@ use crate::tap_gateway::TapGateway;
 use crate::{
     error::WifiError,
     gateway::GatewayTrait,
-    medium::{tx_packet_state::InfraTarget, Medium},
+    medium::{Medium, tx_packet_state::InfraTarget},
     slirp_gateway::SlirpGateway,
 };
 

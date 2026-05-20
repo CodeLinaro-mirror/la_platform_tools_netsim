@@ -74,11 +74,7 @@ pub fn get_instance(instance_flag: Option<u16>) -> u16 {
 ///
 /// `hci_port_flag` comes from cli args or the `NETSIM_HCI_PORT` env var.
 pub fn get_hci_port(hci_port_flag: u32, instance: u16) -> u32 {
-    if hci_port_flag != 0 {
-        hci_port_flag
-    } else {
-        DEFAULT_HCI_PORT + (instance as u32)
-    }
+    if hci_port_flag != 0 { hci_port_flag } else { DEFAULT_HCI_PORT + (instance as u32) }
 }
 
 /// Get the netsim instance name used for log filename creation

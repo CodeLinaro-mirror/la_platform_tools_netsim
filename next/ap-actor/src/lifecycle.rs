@@ -3,7 +3,7 @@
 
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
-use netsim_packets::{management_subtype, AuthenticationFixedFields, Ieee80211};
+use netsim_packets::{AuthenticationFixedFields, Ieee80211, management_subtype};
 use tracing::{debug, info, warn};
 use zerocopy::FromBytes;
 

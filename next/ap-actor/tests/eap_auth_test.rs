@@ -4,13 +4,13 @@
 use netsim_packets::{
     ethernet::MacAddr,
     ieee80211::{
-        eapol::{
-            EapHeader, EapolHeader, EAPOL_TYPE_PACKET, EAPOL_TYPE_START, EAP_CODE_REQUEST,
-            EAP_CODE_RESPONSE, EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
-        },
         FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
+        eapol::{
+            EAP_CODE_REQUEST, EAP_CODE_RESPONSE, EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
+            EAPOL_TYPE_PACKET, EAPOL_TYPE_START, EapHeader, EapolHeader,
+        },
     },
-    llc::{control_field, sap, LlcSnapHeader},
+    llc::{LlcSnapHeader, control_field, sap},
 };
 use zerocopy::{IntoBytes, U16};
 

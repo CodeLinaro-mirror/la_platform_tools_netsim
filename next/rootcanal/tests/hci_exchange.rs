@@ -17,7 +17,7 @@ use rootcanal::{
 };
 use tokio::{
     sync::mpsc,
-    time::{sleep, timeout, Duration},
+    time::{Duration, sleep, timeout},
 };
 use tracing::error;
 

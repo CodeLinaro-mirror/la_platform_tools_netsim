@@ -10,7 +10,7 @@
 use core::fmt;
 
 use zerocopy::byteorder::LittleEndian; // IEEE 802.11 fields are typically little-endian
-use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16};
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, U16, Unaligned};
 
 use crate::ethernet::MacAddr;
 pub use crate::ethernet::MacAddr as MacAddress;
@@ -488,11 +488,7 @@ impl Ieee80211 {
 
     pub fn get_payload(&self) -> Vec<u8> {
         let offset = self.hdr_length();
-        if offset < self.bytes.len() {
-            self.bytes[offset..].to_vec()
-        } else {
-            Vec::new()
-        }
+        if offset < self.bytes.len() { self.bytes[offset..].to_vec() } else { Vec::new() }
     }
 
     pub fn get_aad(&self) -> Vec<u8> {
@@ -586,11 +582,7 @@ impl Ieee80211 {
     }
 
     pub fn get_destination(&self) -> MacAddress {
-        if self.is_to_ds() {
-            self.get_addr3()
-        } else {
-            self.get_addr1()
-        }
+        if self.is_to_ds() { self.get_addr3() } else { self.get_addr1() }
     }
 
     pub fn set_destination(&mut self, addr: &MacAddress) {
@@ -654,11 +646,7 @@ impl Ieee80211 {
             return Ok(false);
         }
         let llc = &self.bytes[offset..offset + 8];
-        if llc == [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8E] {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        if llc == [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8E] { Ok(true) } else { Ok(false) }
     }
 
     pub fn is_qos_data(&self) -> bool {
@@ -966,7 +954,7 @@ mod tests {
     use zerocopy::Ref;
 
     use super::*;
-    use crate::ieee80211::{data_subtype, frame_type, management_subtype, BeaconFrameHeader};
+    use crate::ieee80211::{BeaconFrameHeader, data_subtype, frame_type, management_subtype};
 
     #[test]
     fn test_struct_sizes() {

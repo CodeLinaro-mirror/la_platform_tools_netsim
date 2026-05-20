@@ -7,8 +7,8 @@ use actor_framework::ResourceActor;
 use ap_actor::{ApActor, ApClient, ApConfig, SharedKeyStore};
 use netsim_model::WifiMode;
 use netsim_packets::{
-    management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
-    FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl,
+    AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
+    MacAddr, MacHeader3Addr, SequenceControl, management_subtype,
 };
 use tokio::sync::mpsc;
 use tracing::info;

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     fs::read_to_string,
     path::PathBuf,
 };
@@ -126,13 +126,9 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
             error!("Error parsing ini file: {err}");
         })
         .ok()?;
-    ini_map.get("grpc.port").map(|s| {
-        if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("localhost:{s}")
-        }
-    })
+    ini_map
+        .get("grpc.port")
+        .map(|s| if s.contains(':') { s.to_string() } else { format!("localhost:{s}") })
 }
 
 #[cfg(test)]
@@ -176,7 +172,7 @@ mod tests {
     }
     #[test]
     fn test_parse_ini_strict() {
-        use super::{parse_ini, IniParseErrorKind, IniParserOptions};
+        use super::{IniParseErrorKind, IniParserOptions, parse_ini};
 
         // Test empty key
         let content = "=value";

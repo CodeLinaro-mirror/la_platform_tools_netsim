@@ -28,4 +28,4 @@ pub use metrics::MetricsSnapshot;
 pub use modem::ModemEvent;
 pub use modem_network_simulator::{ModemNetworkSimulator, NetworkEvent, ScheduledEvent};
 pub use netsim_model::RegistrationStatus;
-pub use types::{HostEvent, ModemError, ModemId, ModemSink, AT_ERROR, AT_OK};
+pub use types::{AT_ERROR, AT_OK, HostEvent, ModemError, ModemId, ModemSink};

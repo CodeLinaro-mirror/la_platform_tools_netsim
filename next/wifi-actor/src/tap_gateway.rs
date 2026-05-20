@@ -9,8 +9,8 @@ use std::os::fd::AsRawFd;
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicU16, Ordering},
         Arc,
+        atomic::{AtomicU16, Ordering},
     },
 };
 

@@ -42,7 +42,9 @@ impl ActorLifecycle for CaptureActor {
             if let Err(err) = writer.write_packet(timestamp, direction, &bytes).await {
                 if !entity.has_warned_on_write {
                     entity.has_warned_on_write = true;
-                    error!("Packet capture write failed for chip {chip_id}: {err}. Further errors for this chip will be suppressed.");
+                    error!(
+                        "Packet capture write failed for chip {chip_id}: {err}. Further errors for this chip will be suppressed."
+                    );
                 }
             }
         }

@@ -8,9 +8,10 @@ use tracing::debug;
 use crate::{
     error::WifiError,
     medium::{
+        WifiResult,
         core::Medium,
         tx_packet_state::{InfraTarget, TxPacketState},
-        utils, WifiResult,
+        utils,
     },
 };
 

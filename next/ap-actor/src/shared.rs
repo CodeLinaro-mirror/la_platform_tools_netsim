@@ -4,16 +4,16 @@
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, RwLock,
+        atomic::{AtomicU64, Ordering},
     },
 };
 
 use aes::Aes128;
 use ccm::{
-    aead::{Aead, KeyInit, Payload},
-    consts::{U13, U8},
     Ccm,
+    aead::{Aead, KeyInit, Payload},
+    consts::{U8, U13},
 };
 use netsim_packets::{CcmpHeader, Ieee80211, MacAddress};
 use tracing::error;
@@ -123,7 +123,7 @@ impl SharedKeyStore {
         let mut nonce = [0u8; 13];
         nonce[0] = 0; // Priority (0)
         nonce[1..7].copy_from_slice(&ieee80211.get_addr2().bytes); // A2 (Src/BSSID)
-                                                                   // PN (6 bytes)
+        // PN (6 bytes)
         let pn_bytes = pn.to_le_bytes();
         // CCMP Nonce: Priority(1) || A2(6) || PN(6)
 

@@ -46,7 +46,7 @@ impl Decoder for H4Codec {
                     return Ok(None);
                 }
                 0 // This branch is practically unreachable if recover returns
-                  // usize::MAX - 1
+                // usize::MAX - 1
             }
         };
 

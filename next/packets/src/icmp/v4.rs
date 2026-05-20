@@ -5,7 +5,7 @@
 //! using `zerocopy`.
 
 use zerocopy::{
-    byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
+    FromBytes, Immutable, IntoBytes, KnownLayout, Ref, U16, Unaligned, byteorder::NetworkEndian,
 };
 
 use crate::utils::general::ParseResult;

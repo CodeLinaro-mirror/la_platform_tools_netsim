@@ -19,7 +19,7 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use tokio::sync::oneshot;
 use tokio_stream::{StreamMap, StreamNotifyClose};
-use tokio_util::time::{delay_queue, DelayQueue};
+use tokio_util::time::{DelayQueue, delay_queue};
 
 use crate::{ActorService, BoxStream, BoxTypedStream};
 

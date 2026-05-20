@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use netsim_packets::{
-    EapolHeader, EapolKeyFrame, MacAddr, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
+    EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION, EapolHeader, EapolKeyFrame, MacAddr,
 };
 use tracing::{info, warn};
 use zerocopy::{FromBytes, IntoBytes};
 
 use crate::{
-    ffi::{AesWrap, DigestType, Hmac},
     ApError,
+    ffi::{AesWrap, DigestType, Hmac},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]

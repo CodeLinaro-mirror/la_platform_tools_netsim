@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use modem_rs::{test_utils::MockModemHandler, time::MockClock, ModemId, ModemNetworkSimulator};
+use modem_rs::{ModemId, ModemNetworkSimulator, test_utils::MockModemHandler, time::MockClock};
 
 /// The BDD World for Modem-rs tests.
 pub struct World {

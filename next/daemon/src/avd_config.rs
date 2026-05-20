@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use common::util::ini_file::{parse_ini, IniParserOptions};
+use common::util::ini_file::{IniParserOptions, parse_ini};
 use tracing::{info, warn};
 
 // This struct matches the top-level configuration.

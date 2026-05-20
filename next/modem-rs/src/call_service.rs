@@ -5,7 +5,7 @@ use tracing::debug;
 
 use crate::{
     parser::Command,
-    types::{CommandAction, ExecutionResult, HandledCommand, ModemId, AT_OK},
+    types::{AT_OK, CommandAction, ExecutionResult, HandledCommand, ModemId},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]

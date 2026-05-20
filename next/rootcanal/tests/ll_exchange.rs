@@ -22,7 +22,7 @@ use rootcanal::{
 };
 use tokio::{
     sync::mpsc,
-    time::{sleep, Duration},
+    time::{Duration, sleep},
 };
 use tracing::error;
 

@@ -6,7 +6,7 @@
 # Any changes here _must not_ conflict with the upstream in
 # build/soong/scripts/rustfmt.toml
 
-edition = "2021"
+edition = "2024"
 use_small_heuristics = "Max"
 newline_style = "Unix"
 

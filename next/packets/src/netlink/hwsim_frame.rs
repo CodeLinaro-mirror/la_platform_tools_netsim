@@ -7,9 +7,9 @@ use crate::{
     ethernet::MacAddr,
     ieee80211::Ieee80211,
     netlink::{
+        TxRate,
         hwsim_attr_set::{HwsimAttrSet, HwsimError},
         mac80211_hwsim::{HwsimCmd, HwsimMsg},
-        TxRate,
     },
 };
 

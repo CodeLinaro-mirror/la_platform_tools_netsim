@@ -15,8 +15,8 @@ use netsim_model::{
 use tokio::sync::mpsc;
 
 // Helper to create a dummy PacketStream and PacketSink
-fn create_dummy_stream_sink(
-) -> (PacketStream, PacketSink, fmpsc::Sender<Bytes>, fmpsc::Receiver<Bytes>) {
+fn create_dummy_stream_sink()
+-> (PacketStream, PacketSink, fmpsc::Sender<Bytes>, fmpsc::Receiver<Bytes>) {
     let (stream_tx, stream_rx) = fmpsc::channel::<Bytes>(64);
     let (sink_tx, sink_rx) = fmpsc::channel::<Bytes>(64);
 

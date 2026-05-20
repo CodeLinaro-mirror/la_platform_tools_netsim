@@ -8,10 +8,10 @@ use netsim_packets::{HwsimFrame, MacAddress};
 use tracing::{info, warn};
 
 use crate::{
+    DebugArgs,
     error::WifiError,
     medium::types::{Client, Station, WifiResult},
     stats::WifiStats,
-    DebugArgs,
 };
 
 pub struct Medium {

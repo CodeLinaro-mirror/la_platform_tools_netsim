@@ -10,7 +10,7 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use zerocopy::{byteorder::LittleEndian, U16};
+use zerocopy::{U16, byteorder::LittleEndian};
 
 use crate::ieee80211::util as ieee80211_util; // For address interpretation
 use crate::{

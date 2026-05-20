@@ -4,7 +4,7 @@
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashMap, VecDeque},
-    sync::{atomic::Ordering as AtomicOrdering, Arc},
+    sync::{Arc, atomic::Ordering as AtomicOrdering},
     time::{Duration, Instant},
 };
 
@@ -18,7 +18,7 @@ use crate::{
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
     time::{Clock, SystemClock},
-    types::{CommandAction, HostEvent, ModemError, ModemId, ModemSink, AT_OK},
+    types::{AT_OK, CommandAction, HostEvent, ModemError, ModemId, ModemSink},
 };
 
 #[derive(Debug)]
@@ -447,11 +447,7 @@ impl ModemNetworkSimulator {
 
         let next_duration = self.event_queue.peek().map(|e| {
             let when = e.0.when;
-            if when > now {
-                when - now
-            } else {
-                Duration::ZERO
-            }
+            if when > now { when - now } else { Duration::ZERO }
         });
 
         (events, next_duration)

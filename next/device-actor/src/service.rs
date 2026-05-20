@@ -4,8 +4,8 @@
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
 };
 
@@ -25,7 +25,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     device_actor::DeviceActor,
     error::DeviceError,
-    utils::{create_capture_and_wrap_streams, to_proto_stats, StreamStats},
+    utils::{StreamStats, create_capture_and_wrap_streams, to_proto_stats},
 };
 
 const CHIP_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(50);

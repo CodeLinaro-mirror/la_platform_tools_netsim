@@ -155,11 +155,7 @@ impl HostWorld {
 
     pub async fn start_server(&mut self, port: u16) -> Result<u16, String> {
         let assigned_port = if self.is_dry_run {
-            if port == 0 {
-                12345
-            } else {
-                port
-            }
+            if port == 0 { 12345 } else { port }
         } else {
             self.stop_server();
             let token = CancellationToken::new();

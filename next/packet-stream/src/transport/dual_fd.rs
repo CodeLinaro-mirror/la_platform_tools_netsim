@@ -11,7 +11,7 @@ use std::{
 
 use async_trait::async_trait;
 use command_fds::inherited::take_fd_ownership;
-use futures::{stream::StreamExt, SinkExt};
+use futures::{SinkExt, stream::StreamExt};
 use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use serde::{Deserialize, Serialize};
 use tokio::{

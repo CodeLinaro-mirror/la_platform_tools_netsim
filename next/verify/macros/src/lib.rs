@@ -5,7 +5,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Attribute, FnArg, ItemMod, LitStr, Pat, Type};
+use syn::{Attribute, FnArg, ItemMod, LitStr, Pat, Type, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn step_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -14,7 +14,9 @@ pub fn step_module(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mod_vis = &input.vis;
 
     let Some((_, items)) = &input.content else {
-        panic!("step_module expected a module declaration with a body (e.g., `pub mod steps {{ ... }}`)");
+        panic!(
+            "step_module expected a module declaration with a body (e.g., `pub mod steps {{ ... }}`)"
+        );
     };
 
     let mut wrappers = Vec::new();

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use modem_rs_derive::CommandParser;
-use nom::{bytes::complete::tag, IResult};
+use nom::{IResult, bytes::complete::tag};
 
 use crate::types::Parsable;
 

@@ -452,11 +452,11 @@ mod tests {
         assert_eq!(result.len(), MAX_DNS_SERVERS);
         for i in 0..dns.len() {
             assert_ne!(result[i].ss_family, 0); // Converted addresses should
-                                                // have a non-zero family
+            // have a non-zero family
         }
         for i in dns.len()..MAX_DNS_SERVERS {
             assert_eq!(result[i].ss_family, 0); // Remaining entries should be
-                                                // default
+            // default
         }
     }
 

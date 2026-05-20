@@ -85,7 +85,7 @@ fn execute_sniff(args: &BleSniff, client: &BleServiceClient, verbose: bool) -> R
         file.write_all(&0u32.to_ne_bytes())?; // timezone
         file.write_all(&0u32.to_ne_bytes())?; // sigfigs
         file.write_all(&65535u32.to_ne_bytes())?; // snaplen
-                                                  // 255 = LINKTYPE_BLUETOOTH_BREDR_BB, 251 = LINKTYPE_BLUETOOTH_LE_LL
+        // 255 = LINKTYPE_BLUETOOTH_BREDR_BB, 251 = LINKTYPE_BLUETOOTH_LE_LL
         let link_type_val = match args.link_type {
             crate::ble::args::LinkTypeOption::Bredr => 255u32,
             crate::ble::args::LinkTypeOption::Le => 251u32,

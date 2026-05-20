@@ -4,13 +4,13 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use netsim_proto::{
     common as proto_common,
-    hci_packet::{hcipacket::PacketType, HCIPacket},
+    hci_packet::{HCIPacket, hcipacket::PacketType},
     packet_streamer::{self, PacketRequest, PacketResponse},
     startup as proto_startup,
 };
 use packet_stream::{
-    error::{PacketStreamError, Result},
     Chip, ChipInfo, ChipKind, DeviceInfo,
+    error::{PacketStreamError, Result},
 };
 use protobuf::Enum;
 

@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     env, io,
     path::PathBuf,
-    sync::{atomic::AtomicU32, Arc},
+    sync::{Arc, atomic::AtomicU32},
     time::Duration,
 };
 
@@ -18,16 +18,16 @@ use common::{
 };
 use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
-use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
+use futures::{FutureExt, SinkExt, StreamExt, pin_mut};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    set_if_some, BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams,
-    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, Pose,
+    BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams, PacketSink as ApiPacketSink,
+    PacketStream as ApiPacketStream, Pose, set_if_some,
 };
 use packet_stream::{
-    transport::traits::{PacketSink, PacketStream},
     StreamAddress, Streams,
+    transport::traits::{PacketSink, PacketStream},
 };
 #[cfg(not(feature = "cuttlefish"))]
 use slirp_actor::SlirpClient;
@@ -293,11 +293,7 @@ impl NetsimDaemon {
         // Resolve TAP configuration early to validate permissions/availability.
         #[cfg(target_os = "linux")]
         let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
-            if args.wifi.wifi_cvd_tap {
-                Some("cvd-etap-%02d".to_string())
-            } else {
-                None
-            }
+            if args.wifi.wifi_cvd_tap { Some("cvd-etap-%02d".to_string()) } else { None }
         });
 
         // Pre-check TAP permissions if configured.
@@ -474,11 +470,7 @@ impl NetsimDaemon {
         // pooling. If --wifi-tap is set, it overrides everything.
         #[cfg(target_os = "linux")]
         let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
-            if args.wifi.wifi_cvd_tap {
-                Some("cvd-etap-%02d".to_string())
-            } else {
-                None
-            }
+            if args.wifi.wifi_cvd_tap { Some("cvd-etap-%02d".to_string()) } else { None }
         });
         #[cfg(not(target_os = "linux"))]
         let wifi_tap: Option<String> = None;

@@ -7,9 +7,9 @@
 use std::fmt::Write;
 
 #[cfg(test)]
-use crate::ieee80211::management_subtype;
-#[cfg(test)]
 use crate::ieee80211::FrameControl;
+#[cfg(test)]
+use crate::ieee80211::management_subtype;
 use crate::{ethernet::MacAddr, ieee80211::MacHeader3Addr};
 
 /// Converts a FrameControl field to a human-readable string.
@@ -134,22 +134,14 @@ pub fn get_transmitter_address(header: &MacHeader3Addr) -> MacAddr {
 /// - If ToDS is set, DA is Addr3.
 /// - Otherwise (ToDS is not set), DA is Addr1.
 pub fn get_destination_address(header: &MacHeader3Addr) -> MacAddr {
-    if header.frame_control.to_ds() {
-        header.addr3
-    } else {
-        header.addr1
-    }
+    if header.frame_control.to_ds() { header.addr3 } else { header.addr1 }
 }
 
 /// Gets the Source Address (SA) from a 3-address MAC header.
 /// - If FromDS is set, SA is Addr3.
 /// - Otherwise (FromDS is not set), SA is Addr2.
 pub fn get_source_address(header: &MacHeader3Addr) -> MacAddr {
-    if header.frame_control.from_ds() {
-        header.addr3
-    } else {
-        header.addr2
-    }
+    if header.frame_control.from_ds() { header.addr3 } else { header.addr2 }
 }
 
 /// Gets the BSSID from a 3-address MAC header.
@@ -175,7 +167,7 @@ mod tests {
 
     use super::*;
     use crate::ieee80211::{
-        data_subtype, frame_type, FrameControl, MacHeader3Addr, SequenceControl,
+        FrameControl, MacHeader3Addr, SequenceControl, data_subtype, frame_type,
     };
 
     fn create_header(

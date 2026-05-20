@@ -20,7 +20,7 @@ use crate::{
     host_steps::HostWorld,
     netsim_steps::NetsimWorld,
     scenarios,
-    types::{ClientParams, Throughput, LABEL_WIDTH},
+    types::{ClientParams, LABEL_WIDTH, Throughput},
 };
 
 /// Standard arguments for running the test suite.

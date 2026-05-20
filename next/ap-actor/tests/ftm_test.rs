@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use netsim_model::WifiMode;
-use netsim_packets::{category, management_subtype, public_action, Ieee80211, MacAddr};
+use netsim_packets::{Ieee80211, MacAddr, category, management_subtype, public_action};
 use zerocopy::IntoBytes;
 
 use crate::world;
@@ -100,9 +100,9 @@ async fn test_ftm_ranging_exchange() {
                 && msg[24] == category::PUBLIC
                 && msg[25] == public_action::FINE_TIMING_MEASUREMENT
                 && msg != ftm_1 // Ensure it's a new frame (though strictly
-                                // recv_frame doesn't buffer past, it drains)
-                                // Actually recv_frame consumes from rx, so
-                                // calling it again yields the next one.
+            // recv_frame doesn't buffer past, it drains)
+            // Actually recv_frame consumes from rx, so
+            // calling it again yields the next one.
         })
         .await;
 

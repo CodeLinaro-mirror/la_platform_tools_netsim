@@ -17,7 +17,7 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    types::{CommandAction, ExecutionResult, ModemId, AT_ERROR, AT_OK},
+    types::{AT_ERROR, AT_OK, CommandAction, ExecutionResult, ModemId},
 };
 
 /// Represents a single modem device.
@@ -213,8 +213,8 @@ impl ModemImpl {
                 Some(ExecutionResult::Handled(crate::types::HandledCommand::ok()))
             } else {
                 None // Waiting for more data? Or just ignore for now if
-                     // incomplete? The emulator usually
-                     // sends full line/buffer.
+                // incomplete? The emulator usually
+                // sends full line/buffer.
             }
         } else {
             None

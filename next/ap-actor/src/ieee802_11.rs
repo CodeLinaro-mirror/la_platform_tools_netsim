@@ -4,14 +4,14 @@
 use actor_framework::DynContext;
 use netsim_model::{ChipId, WifiMode};
 use netsim_packets::{
-    control_field, management_subtype, sap, tags, write_ie, write_wmm_param_element,
     AssociationResponseFixedFields, AuthenticationFixedFields, BeaconFixedFields,
     BeaconFrameHeader, FrameControl, IeIterator, Ieee80211, LlcSnapHeader, MacHeader3Addr,
+    control_field, management_subtype, sap, tags, write_ie, write_wmm_param_element,
 };
 use tracing::{debug, error, info, warn};
 use zerocopy::{FromBytes, IntoBytes, U16};
 
-use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApActor, ApError, ApState};
+use crate::{ApActor, ApError, ApState, sae::SaeStateMachine, shared::SharedKeyStore};
 
 /// Handles 802.11 Management Frames
 #[derive(Clone, Debug)]

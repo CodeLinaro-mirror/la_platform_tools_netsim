@@ -10,7 +10,7 @@ use packet_stream::{Chip, ChipInfo, ChipKind, DeviceInfo, Streams, TransportType
 use tokio::{
     io::AsyncWriteExt,
     net::TcpStream,
-    time::{timeout, Duration},
+    time::{Duration, timeout},
 };
 
 /// Helper to create test chip info

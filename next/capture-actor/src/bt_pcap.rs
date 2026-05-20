@@ -7,7 +7,7 @@
 
 use std::{io::Result, path::Path};
 
-use crate::writer::{CaptureWriter, PcapWriter, DLT_BLUETOOTH_H4};
+use crate::writer::{CaptureWriter, DLT_BLUETOOTH_H4, PcapWriter};
 
 /// PCAP writer for Bluetooth H4 packets.
 pub struct BluetoothH4Writer;

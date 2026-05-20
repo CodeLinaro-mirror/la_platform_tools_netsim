@@ -1,7 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_packets::{management_subtype, MacAddr};
+use netsim_packets::{MacAddr, management_subtype};
 use tracing::info;
 
 use crate::world::ApWorld;

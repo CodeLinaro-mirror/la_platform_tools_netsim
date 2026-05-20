@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::{
     config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
     parser::{Command, QuotedString},
-    types::{ExecutionResult, HandledCommand, AT_ERROR, AT_OK, DEFAULT_PIN},
+    types::{AT_ERROR, AT_OK, DEFAULT_PIN, ExecutionResult, HandledCommand},
 };
 
 const DEFAULT_PUK: &str = "12345678";

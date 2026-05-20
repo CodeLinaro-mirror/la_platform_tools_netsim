@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use modem_rs::{
-    parser::{parse_raw_data, parse_until_semicolon, QuotedString},
+    parser::{QuotedString, parse_raw_data, parse_until_semicolon},
     types::Parsable,
 };
 use modem_rs_derive::CommandParser;

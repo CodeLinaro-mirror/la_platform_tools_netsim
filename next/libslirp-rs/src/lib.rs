@@ -17,4 +17,4 @@ mod libslirp_config;
 pub mod libslirp_sys;
 
 pub use libslirp::{LibSlirp, ProxyConnect, ProxyManager};
-pub use libslirp_config::{lookup_host_dns, SlirpConfig};
+pub use libslirp_config::{SlirpConfig, lookup_host_dns};

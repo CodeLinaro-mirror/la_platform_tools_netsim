@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use crate::{
     modem::ModemImpl,
     parser::{Command, QuotedString},
-    types::{ExecutionResult, HandledCommand, DEFAULT_IP_ADDRESS},
+    types::{DEFAULT_IP_ADDRESS, ExecutionResult, HandledCommand},
 };
 
 #[derive(Debug, Clone, Default)]

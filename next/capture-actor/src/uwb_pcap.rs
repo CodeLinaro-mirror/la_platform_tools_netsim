@@ -3,7 +3,7 @@
 
 use std::{io, path::Path};
 
-use crate::writer::{CaptureWriter, PcapWriter, DLT_FIRA_UCI};
+use crate::writer::{CaptureWriter, DLT_FIRA_UCI, PcapWriter};
 
 /// PCAP writer for UWB UCI packets.
 pub struct UwbPcapWriter;

@@ -1,7 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_packets::{attr_id, NlAttrHdr};
+use netsim_packets::{NlAttrHdr, attr_id};
 use zerocopy::IntoBytes;
 
 #[test]
@@ -77,7 +77,7 @@ fn test_parse_multi_layer_packet() {
     packet.extend_from_slice(&tcp_header);
 
     // Parse using top-level parser
-    use netsim_packets::{parse, TransportPacket};
+    use netsim_packets::{TransportPacket, parse};
     let packet = parse(&packet).expect("Failed to parse packet");
 
     // Verify Ethernet

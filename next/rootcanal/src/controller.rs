@@ -10,8 +10,8 @@ pub type Id = u32;
 use std::{
     ffi::{c_int, c_void},
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, Mutex, Weak,
+        atomic::{AtomicU64, Ordering},
     },
 };
 

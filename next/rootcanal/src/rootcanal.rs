@@ -235,11 +235,7 @@ mod tests {
             tx_power: i32,
         ) -> Option<i32> {
             self.packets_sent.fetch_add(1, Ordering::Relaxed);
-            if self.drop_packet {
-                None
-            } else {
-                Some(tx_power)
-            }
+            if self.drop_packet { None } else { Some(tx_power) }
         }
     }
 

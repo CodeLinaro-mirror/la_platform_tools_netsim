@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use features::{assert_json_matches_table, table_to_struct, DataTable, Features};
+use features::{DataTable, Features, assert_json_matches_table, table_to_struct};
 use tracing_subscriber::fmt::try_init;
 use verify_macros::{step, step_module};
 
