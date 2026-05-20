@@ -7,10 +7,12 @@
 //! Transport abstraction layer for packet streaming.
 
 // Public API modules
-#[cfg(all(unix, feature = "dual_fd"))]
+#[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 pub mod dual_fd;
+pub mod h4;
 pub mod traits;
 pub mod types;
+pub mod uci;
 
 // Platform-specific socket implementations
 #[cfg(unix)]
@@ -25,15 +27,17 @@ pub(crate) mod adapters;
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-#[cfg(all(unix, feature = "dual_fd"))]
+#[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 pub use dual_fd::{DualFdConfig, DualFdListener};
 use futures::{SinkExt, StreamExt};
+pub use h4::H4Codec;
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 #[cfg(windows)]
 use tracing::warn;
 use traits::{PacketSink, PacketStream, TransportListener};
 pub use types::{ListenerConfig, TransportType};
+pub use uci::UciCodec;
 
 use crate::{
     error::{PacketStreamError, Result, SocketError},
@@ -226,7 +230,7 @@ pub enum Listener {
     Tcp(adapters::TcpTransportListener),
     #[cfg(unix)]
     Uds(adapters::UdsTransportListener),
-    #[cfg(all(unix, feature = "dual_fd"))]
+    #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
     DualFd(DualFdListener),
 }
 
@@ -237,7 +241,7 @@ impl TransportListener for Listener {
             Listener::Tcp(l) => l.accept().await,
             #[cfg(unix)]
             Listener::Uds(l) => l.accept().await,
-            #[cfg(all(unix, feature = "dual_fd"))]
+            #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
             Listener::DualFd(l) => l.accept().await,
         }
     }
@@ -247,7 +251,7 @@ impl TransportListener for Listener {
             Listener::Tcp(l) => l.local_addr(),
             #[cfg(unix)]
             Listener::Uds(l) => l.local_addr(),
-            #[cfg(all(unix, feature = "dual_fd"))]
+            #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
             Listener::DualFd(l) => l.local_addr(),
         }
     }
@@ -257,7 +261,7 @@ impl TransportListener for Listener {
             Listener::Tcp(l) => l.shutdown().await,
             #[cfg(unix)]
             Listener::Uds(l) => l.shutdown().await,
-            #[cfg(all(unix, feature = "dual_fd"))]
+            #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
             Listener::DualFd(l) => l.shutdown().await,
         }
     }

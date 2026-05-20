@@ -14,6 +14,7 @@ netsim_rust_library(
         "//next/device-actor",
         "//next/device-api",
         "//next/model",
+        "//next/packet-stream",
         "@bytes",
         "@futures",
         "@tokio",

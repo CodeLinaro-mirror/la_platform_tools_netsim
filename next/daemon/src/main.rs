@@ -11,9 +11,11 @@ fn main() {
     // SAFETY: This is the first line of the main function before anything opens
     // files or otherwise, takes ownership of any file descriptors.
     #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
-    unsafe {
-        init_inherited_fds();
+    if let Err(e) = unsafe { init_inherited_fds() } {
+        eprintln!("Failed to initialize inherited FDs: {}", e);
+        process::exit(1);
     }
+
     match run() {
         RunResult::ExitedNormally => process::exit(0),
         RunResult::InitializationError(e) => {

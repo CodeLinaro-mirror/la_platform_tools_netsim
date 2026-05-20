@@ -25,12 +25,8 @@ DEPS = [
     "@thiserror",
     "@tokio",
     "@tokio-util",
+    "@tracing",
 ]
-
-SELECT_DEPS = select({
-    "@bazel_tools//src/conditions:windows": ["@tracing"],
-    "//conditions:default": [],
-})
 
 netsim_rust_library(
     name = "packet-stream",
@@ -41,6 +37,5 @@ netsim_rust_library(
     proc_macro_deps = [
         "@async-trait",
     ],
-    select_deps = SELECT_DEPS,
     deps = DEPS,
 )

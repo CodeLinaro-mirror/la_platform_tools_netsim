@@ -17,7 +17,6 @@ rust_library_host {
         "libbytes",
         "libfutures",
         "libnetsim_next_types",
-        "libnetsim_proto",
         "libserde",
         "libthiserror",
         "libtokio",

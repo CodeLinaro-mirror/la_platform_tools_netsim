@@ -15,6 +15,7 @@ rust_library_host {
     lints: "none",
     rustlibs: [
         "libbytes",
+        "libcommand_fds",
         "libfutures",
         "libnetsim_next_types",
         "libserde",
@@ -22,6 +23,7 @@ rust_library_host {
         "libthiserror",
         "libtokio",
         "libtokio_util",
+        "libtracing",
     ],
     proc_macros: [
         "libasync_trait",

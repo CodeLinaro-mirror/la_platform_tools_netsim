@@ -71,7 +71,7 @@ pub use error::{PacketStreamError, ProtocolError, SocketError};
 pub use streams::{InitInfo, Streams};
 // Core streaming types - public API only (transport internals hidden)
 pub use transport::TransportType;
-#[cfg(all(unix, feature = "dual_fd"))]
+#[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 pub use transport::dual_fd::{ChipConfig, DeviceConfig, DualFdConfig};
 pub use transport::{
     CrossPlatformListener, CrossPlatformStream, ListenerConfig, SocketConfig, SocketType,
