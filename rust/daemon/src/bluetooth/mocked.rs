@@ -1,7 +1,7 @@
 // Copyright 2023 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::bluetooth::{get_beacon_chips, BeaconChip};
+use crate::bluetooth::{BeaconChip, get_beacon_chips};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use ::protobuf::MessageField;
@@ -11,9 +11,9 @@ use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::{BleBeacon, Bluetooth};
 use netsim_proto::model::chip_create::Chip as Builtin;
 use netsim_proto::model::{ChipCreate, DeviceCreate};
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::{collections::HashMap, ptr::null};
 
 static IDS: AtomicU32 = AtomicU32::new(0);

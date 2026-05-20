@@ -69,7 +69,7 @@ mod tests {
         bytes.extend_from_slice(&[0x00, 0x11, 0x22, 0x33, 0x44, 0x55]); // Dst
         bytes.extend_from_slice(&[0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB]); // Src
         bytes.extend_from_slice(&[0x08, 0x00]); // EtherType (IPv4)
-                                                // IPv4
+        // IPv4
         bytes.extend_from_slice(&[0x45, 0x00]); // Version, IHL, ToS
         bytes.extend_from_slice(&28u16.to_be_bytes()); // Total Length
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Identification
@@ -78,7 +78,7 @@ mod tests {
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
         bytes.extend_from_slice(&[192, 168, 0, 1]); // Src Addr
         bytes.extend_from_slice(&[192, 168, 0, 2]); // Dst Addr
-                                                    // ICMP
+        // ICMP
         bytes.extend_from_slice(&[8, 0]); // Type, Code
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Identifier

@@ -4,7 +4,7 @@
 //! Netsim daemon cxx libraries.
 
 use crate::bluetooth::chip::{
-    create_add_rust_device_result, AddRustDeviceResult, RustBluetoothChipCallbacks,
+    AddRustDeviceResult, RustBluetoothChipCallbacks, create_add_rust_device_result,
 };
 use crate::devices::devices_handler::get_rssi;
 use crate::wireless::{

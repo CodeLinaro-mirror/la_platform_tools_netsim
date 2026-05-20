@@ -26,19 +26,19 @@ use http::Request;
 use log::{info, warn};
 use netsim_common::util::proto_print_options::JSON_PRINT_OPTION;
 use netsim_proto::common::ChipKind as ProtoChipKind;
-use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
 use netsim_proto::frontend::CreateDeviceRequest;
 use netsim_proto::frontend::CreateDeviceResponse;
 use netsim_proto::frontend::DeleteChipRequest;
 use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::frontend::SubscribeDeviceRequest;
-use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
+use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Orientation as ProtoOrientation;
 use netsim_proto::model::PhyKind as ProtoPhyKind; // For ProtoPhyKind
 use netsim_proto::model::Position as ProtoPosition;
+use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
 use netsim_proto::startup::DeviceInfo as ProtoDeviceInfo;
 use netsim_proto::stats::{NetsimDeviceStats as ProtoDeviceStats, NetsimRadioStats};
 use protobuf::well_known_types::timestamp::Timestamp;
@@ -47,11 +47,11 @@ use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string;
 use protobuf_json_mapping::print_to_string_with_options;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 // The amount of seconds netsimd will wait until the first device has attached.
@@ -885,7 +885,9 @@ pub fn get_rssi(sender_id: u32, receiver_id: u32, link_kind_i32: i32, tx_power: 
         ChipIdentifier(receiver_id),
         link_kind,
     ) {
-        info!("Using RSSI override for sender {sender_id} and receiver {receiver_id}: {override_rssi}",);
+        info!(
+            "Using RSSI override for sender {sender_id} and receiver {receiver_id}: {override_rssi}",
+        );
         return override_rssi;
     }
 
@@ -1516,12 +1518,12 @@ mod tests {
             .unwrap()
     }
 
-    use netsim_proto::model::chip::{
-        ble_beacon::AdvertiseData, ble_beacon::AdvertiseSettings, BleBeacon, Chip,
-    };
-    use netsim_proto::model::chip_create::{BleBeaconCreate, Chip as BuiltChipProto};
     use netsim_proto::model::Chip as ChipProto;
     use netsim_proto::model::ChipCreate as ProtoChipCreate;
+    use netsim_proto::model::chip::{
+        BleBeacon, Chip, ble_beacon::AdvertiseData, ble_beacon::AdvertiseSettings,
+    };
+    use netsim_proto::model::chip_create::{BleBeaconCreate, Chip as BuiltChipProto};
     use protobuf::{EnumOrUnknown, MessageField};
 
     fn get_test_create_device_request(device_name: Option<String>) -> CreateDeviceRequest {

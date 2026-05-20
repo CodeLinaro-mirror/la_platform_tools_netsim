@@ -3,7 +3,7 @@
 
 use crate::rewriter;
 use crate::{Error, Result};
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use std::net::SocketAddr;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
@@ -97,7 +97,7 @@ fn base64_encode(src: &[u8]) -> Vec<u8> {
 mod tests {
     use super::*;
     use tokio::io::AsyncReadExt;
-    use tokio::net::{lookup_host, TcpListener};
+    use tokio::net::{TcpListener, lookup_host};
 
     #[tokio::test]
     async fn test_connect() -> Result<()> {

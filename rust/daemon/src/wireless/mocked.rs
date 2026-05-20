@@ -7,7 +7,7 @@ use crate::wireless::{WirelessChip, WirelessChipImpl};
 use bytes::Bytes;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
-use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
+use netsim_proto::stats::{NetsimRadioStats as ProtoRadioStats, netsim_radio_stats};
 use protobuf::EnumOrUnknown;
 
 /// Parameters for creating Mocked chips

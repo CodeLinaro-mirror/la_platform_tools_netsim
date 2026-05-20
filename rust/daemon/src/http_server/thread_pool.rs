@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
     thread,
 };
 
@@ -72,16 +72,19 @@ impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
         let thread = thread::Builder::new()
             .name("http_pool_{id}".to_string())
-            .spawn(move || loop {
-                let message = receiver.lock().expect("Failed to acquire lock on receiver").recv();
+            .spawn(move || {
+                loop {
+                    let message =
+                        receiver.lock().expect("Failed to acquire lock on receiver").recv();
 
-                match message {
-                    Ok(job) => {
-                        job();
-                    }
-                    Err(_) => {
-                        error!("Worker {id} disconnected; shutting down.");
-                        break;
+                    match message {
+                        Ok(job) => {
+                            job();
+                        }
+                        Err(_) => {
+                            error!("Worker {id} disconnected; shutting down.");
+                            break;
+                        }
                     }
                 }
             })

@@ -9,7 +9,7 @@ use bytes::Bytes;
 use http_proxy::Manager;
 pub use libslirp_rs::libslirp::LibSlirp;
 use libslirp_rs::libslirp::ProxyManager;
-use libslirp_rs::libslirp_config::{lookup_host_dns, SlirpConfig};
+use libslirp_rs::libslirp_config::{SlirpConfig, lookup_host_dns};
 use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
 use std::sync::mpsc;
 

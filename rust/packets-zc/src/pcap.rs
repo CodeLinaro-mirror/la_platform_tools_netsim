@@ -8,7 +8,7 @@
 
 use crate::pcapng::{EnhancedPacketBlock, SectionHeaderBlock};
 use std::io::{self, Read};
-use zerocopy::{byteorder::little_endian, FromBytes, IntoBytes};
+use zerocopy::{FromBytes, IntoBytes, byteorder::little_endian};
 
 pub const PCAP_MAGIC_NUMBER: u32 = 0xa1b2c3d4;
 pub const PCAPNG_MAGIC_NUMBER: u32 = 0x1A2B3C4D;
@@ -186,8 +186,8 @@ impl<R: Read> PcapngReader<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zerocopy::byteorder::{LittleEndian, U16, U32};
     use zerocopy::I32;
+    use zerocopy::byteorder::{LittleEndian, U16, U32};
 
     fn create_legacy_pcap_data() -> Vec<u8> {
         let mut data = Vec::new();

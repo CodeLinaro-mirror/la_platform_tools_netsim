@@ -9,7 +9,7 @@
 //! interpret these Netlink messages, allowing a user space daemon to control and interact with simulated WiFi hardware.
 
 use zerocopy::{
-    byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16,
+    FromBytes, Immutable, IntoBytes, KnownLayout, U16, Unaligned, byteorder::LittleEndian,
 };
 
 /// Attribute IDs used in Netlink messages for mac80211_hwsim.

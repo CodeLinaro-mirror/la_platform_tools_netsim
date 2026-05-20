@@ -5,7 +5,7 @@
 
 use crate::ethernet::MacAddr;
 use crate::ieee80211::{
-    data_subtype, frame_type, management_subtype, FrameControl, MacHeader3Addr,
+    FrameControl, MacHeader3Addr, data_subtype, frame_type, management_subtype,
 };
 use std::fmt::Write;
 
@@ -123,22 +123,14 @@ pub fn get_transmitter_address(header: &MacHeader3Addr) -> MacAddr {
 /// - If ToDS is set, DA is Addr3.
 /// - Otherwise (ToDS is not set), DA is Addr1.
 pub fn get_destination_address(header: &MacHeader3Addr) -> MacAddr {
-    if header.frame_control.to_ds() {
-        header.addr3
-    } else {
-        header.addr1
-    }
+    if header.frame_control.to_ds() { header.addr3 } else { header.addr1 }
 }
 
 /// Gets the Source Address (SA) from a 3-address MAC header.
 /// - If FromDS is set, SA is Addr3.
 /// - Otherwise (FromDS is not set), SA is Addr2.
 pub fn get_source_address(header: &MacHeader3Addr) -> MacAddr {
-    if header.frame_control.from_ds() {
-        header.addr3
-    } else {
-        header.addr2
-    }
+    if header.frame_control.from_ds() { header.addr3 } else { header.addr2 }
 }
 
 /// Gets the BSSID from a 3-address MAC header.

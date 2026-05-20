@@ -8,7 +8,7 @@ use crate::grpc_server::avd_config::{get_or_create_bluetooth_mac, set_bluetooth_
 use crate::transport::grpc::RustGrpcTransport;
 use crate::wireless;
 use crate::wireless::packet::{register_transport, unregister_transport};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use bytes::Bytes;
 use futures_util::{FutureExt as _, TryFutureExt as _, TryStreamExt as _};
 use log::{info, warn};

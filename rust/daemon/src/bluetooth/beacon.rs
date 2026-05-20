@@ -5,13 +5,13 @@ use super::advertise_data::{AdvertiseData, AdvertiseDataBuilder};
 use super::advertise_settings::{
     AdvertiseMode, AdvertiseSettings, AdvertiseSettingsBuilder, TxPowerLevel,
 };
-use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
+use super::chip::{RustBluetoothChipCallbacks, rust_bluetooth_add};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::devices_handler::add_chip;
 use crate::ffi::ffi_bluetooth;
 use crate::wireless;
-use cxx::{let_cxx_string, UniquePtr};
+use cxx::{UniquePtr, let_cxx_string};
 use log::{error, info, warn};
 use netsim_packets::link_layer::{
     Address, AddressType, LeLegacyAdvertisingPdu, LeScanResponse, PacketType,
@@ -19,8 +19,8 @@ use netsim_packets::link_layer::{
 use netsim_proto::common::ChipKind;
 use netsim_proto::model::chip::Bluetooth;
 use netsim_proto::model::chip::{
-    ble_beacon::AdvertiseData as AdvertiseDataProto,
-    ble_beacon::AdvertiseSettings as AdvertiseSettingsProto, BleBeacon as BleBeaconProto,
+    BleBeacon as BleBeaconProto, ble_beacon::AdvertiseData as AdvertiseDataProto,
+    ble_beacon::AdvertiseSettings as AdvertiseSettingsProto,
 };
 use netsim_proto::model::chip_create::{
     BleBeaconCreate as BleBeaconCreateProto, Chip as BuiltinProto,
@@ -45,8 +45,8 @@ static BT_CHIPS: OnceLock<
     RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi_bluetooth::RustBluetoothChip>>>>,
 > = OnceLock::new();
 
-fn get_bt_chips(
-) -> &'static RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi_bluetooth::RustBluetoothChip>>>> {
+fn get_bt_chips()
+-> &'static RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi_bluetooth::RustBluetoothChip>>>> {
     BT_CHIPS.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
@@ -399,8 +399,8 @@ pub mod tests {
     use std::thread;
 
     use netsim_proto::model::chip::ble_beacon::{
-        advertise_settings::{AdvertiseTxPower as AdvertiseTxPowerProto, Tx_power as TxPowerProto},
         AdvertiseData as AdvertiseDataProto,
+        advertise_settings::{AdvertiseTxPower as AdvertiseTxPowerProto, Tx_power as TxPowerProto},
     };
 
     use super::*;

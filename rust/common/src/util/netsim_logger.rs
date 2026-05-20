@@ -12,7 +12,7 @@ use log::{Level, Record};
 use std::{
     ffi::OsStr,
     io::Write,
-    path::{Path, MAIN_SEPARATOR},
+    path::{MAIN_SEPARATOR, Path},
 };
 
 use crate::util::time_display::log_current_time;
