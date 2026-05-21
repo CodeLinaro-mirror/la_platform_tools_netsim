@@ -10,11 +10,12 @@ use std::{io, path::Path, time::SystemTime};
 
 use async_trait::async_trait;
 use capture_api::Direction;
+use netsim_packets::{PcapHeader, PcapRecordHeader};
 use tokio::{
     fs::File,
     io::{AsyncWriteExt, BufWriter},
 };
-use zerocopy::{FromBytes, Immutable, IntoBytes};
+use zerocopy::{I32, IntoBytes, U16, U32};
 
 /// Trait for writing packet captures.
 ///
@@ -44,27 +45,6 @@ pub trait CaptureWriter: Send + Sync {
     fn get_stats(&self) -> (u64, u64); // (records, bytes)
 }
 
-#[derive(IntoBytes, FromBytes, Immutable, Copy, Clone, Debug)]
-#[repr(C)]
-struct PcapGlobalHeader {
-    magic_number: u32,
-    version_major: u16,
-    version_minor: u16,
-    thiszone: i32,
-    sigfigs: u32,
-    snaplen: u32,
-    network: u32,
-}
-
-#[derive(IntoBytes, FromBytes, Immutable, Copy, Clone, Debug)]
-#[repr(C)]
-struct PcapRecordHeader {
-    ts_sec: u32,
-    ts_usec: u32,
-    incl_len: u32,
-    orig_len: u32,
-}
-
 /// Generic PCAP writer.
 ///
 /// Handles writing the PCAP global header and record headers.
@@ -85,14 +65,14 @@ impl PcapWriter {
         let file = File::create(path).await?;
         let mut writer = BufWriter::new(file);
 
-        let header = PcapGlobalHeader {
-            magic_number: 0xa1b2c3d4,
-            version_major: 2,
-            version_minor: 4,
-            thiszone: 0,
-            sigfigs: 0,
-            snaplen: 65535,
-            network,
+        let header = PcapHeader {
+            magic_number: U32::new(0xa1b2c3d4),
+            version_major: U16::new(2),
+            version_minor: U16::new(4),
+            thiszone: I32::new(0),
+            sigfigs: U32::new(0),
+            snaplen: U32::new(65535),
+            network: U32::new(network),
         };
 
         writer.write_all(header.as_bytes()).await?;
@@ -116,10 +96,10 @@ impl CaptureWriter for PcapWriter {
         let ts_usec = duration.subsec_micros() as u32;
 
         let header = PcapRecordHeader {
-            ts_sec,
-            ts_usec,
-            incl_len: data.len() as u32,
-            orig_len: data.len() as u32,
+            ts_sec: U32::new(ts_sec),
+            ts_usec: U32::new(ts_usec),
+            incl_len: U32::new(data.len() as u32),
+            orig_len: U32::new(data.len() as u32),
         };
 
         self.writer.write_all(header.as_bytes()).await?;
@@ -146,3 +126,5 @@ pub const DLT_BLUETOOTH_H4: u32 = 187;
 pub const DLT_FIRA_UCI: u32 = 299;
 // IEEE 802.11 Radiotap DLT is 127
 pub const DLT_IEEE802_11_RADIO: u32 = 127;
+// Ethernet DLT is 1
+pub const DLT_ETHERNET: u32 = 1;
