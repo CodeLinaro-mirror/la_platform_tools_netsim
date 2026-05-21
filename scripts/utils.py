@@ -43,25 +43,6 @@ TARGET_MAP = {
     "darwin_aarch64": "darwin-aarch64",
 }
 
-AVAILABLE = {
-    "windows_msvc-x86_64": "toolchain-windows_msvc-x86_64.cmake",
-    "linux-x86_64": "toolchain-linux-x86_64.cmake",
-    "darwin-x86_64": "toolchain-darwin-x86_64.cmake",
-    "linux-aarch64": "toolchain-linux-aarch64.cmake",
-    "darwin-aarch64": "toolchain-darwin-aarch64.cmake",
-}
-
-CMAKE = shutil.which(
-    "cmake",
-    path=str(
-        AOSP_ROOT
-        / "prebuilts"
-        / "cmake"
-        / f"{platform.system().lower()}-x86"
-        / "bin"
-    ),
-)
-
 
 def rust_version() -> str:
   """Returns rust version"""
@@ -111,22 +92,9 @@ def binary_extension(filename):
   return filename
 
 
-def platform_to_cmake_target(target):
-  """Translates platform to cmake target"""
+def platform_to_target_name(target):
+  """Translates platform to target name"""
   return TARGET_MAP[target.lower().replace("-", "_")]
-
-
-def cmake_toolchain(target) -> str:
-  """Returns the path to the cmake toolchain file."""
-  return (
-      AOSP_ROOT
-      / "external"
-      / "qemu"
-      / "android"
-      / "build"
-      / "cmake"
-      / AVAILABLE[platform_to_cmake_target(target)]
-  )
 
 
 def is_presubmit(build_id):

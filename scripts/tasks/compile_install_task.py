@@ -16,15 +16,12 @@ import stat
 from tasks.task import Task
 from utils import (
     AOSP_ROOT,
-    CMAKE,
-    WINDOWS_TMP_OBJS_PATH,
     binary_extension,
     get_bazel_build_configs,
     get_bazel_path,
     get_bazel_startup_options,
     get_bazel_targets,
-    move_contents,
-    platform_to_cmake_target,
+    platform_to_target_name,
     run,
 )
 
@@ -91,9 +88,7 @@ class CompileInstallTask(Task):
     if not installed_files:
       logging.warning("No binaries found to track for size report.")
 
-    target_str = platform_to_cmake_target(
-        self.args.target or platform.system().lower()
-    )
+    target_str = platform_to_target_name(self.args.target or platform.system())
     dist_dir = Path(self.args.dist_dir).absolute()
     dist_dir.mkdir(exist_ok=True, parents=True)
 
@@ -103,11 +98,7 @@ class CompileInstallTask(Task):
       json.dump(installed_files, f, indent=2)
 
   def do_run(self):
-    if self.args.cmake:
-      res = self._run_cmake()
-    else:
-      res = self._run_bazel()
-
+    res = self._run_bazel()
     if res:
       self._generate_installed_files_json()
     return res
@@ -169,40 +160,4 @@ class CompileInstallTask(Task):
     except shutil.Error as e:
       logging.error(f"Error copying artifacts: {e}")
       raise e
-    return True
-
-  def _run_cmake(self):
-    # Strip for non-Windows builds
-    target = "install"
-    if platform.system() != "Windows":
-      target += "/strip"
-
-    # Build
-    if platform.system() == "Windows":
-      try:
-        # Use mkdir() with parents=True and exist_ok=True
-        WINDOWS_TMP_OBJS_PATH.mkdir(parents=True, exist_ok=True)
-        print(
-            f"Directory '{WINDOWS_TMP_OBJS_PATH}' ensured (created or already"
-            " exists)."
-        )
-
-      except OSError as e:
-        # Catch potential OS errors (like permission issues)
-        print(f"Error creating directory '{WINDOWS_TMP_OBJS_PATH}': {e}")
-      run(
-          [CMAKE, "--build", WINDOWS_TMP_OBJS_PATH, "--target", target],
-          self.env,
-          "bld",
-      )
-      move_contents(
-          WINDOWS_TMP_OBJS_PATH,
-          self.out,
-      )
-    else:
-      run(
-          [CMAKE, "--build", self.out, "--target", target],
-          self.env,
-          "bld",
-      )
     return True
