@@ -299,13 +299,10 @@ impl NetsimDaemon {
         // Pre-check TAP permissions if configured.
         // We do this BEFORE redirection so the user can see the error in the console.
         #[cfg(all(target_os = "linux", not(feature = "cuttlefish")))]
-        if let Some(ref tap_config) = wifi_tap {
-            if let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config) {
-                return Err(RunResult::InitializationError(format!(
-                    "TAP configuration failed: {}",
-                    e
-                )));
-            }
+        if let Some(ref tap_config) = wifi_tap
+            && let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config)
+        {
+            return Err(RunResult::InitializationError(format!("TAP configuration failed: {}", e)));
         }
 
         if !args.logtostderr {
@@ -619,10 +616,10 @@ impl NetsimDaemon {
         let link_fut = self.link_client.shutdown();
         #[cfg(not(feature = "cuttlefish"))]
         let slirp_fut = async {
-            if let Some(slirp) = &self.slirp_client {
-                if let Err(e) = slirp.shutdown().await {
-                    warn!("SlirpActor shutdown error: {}", e);
-                }
+            if let Some(slirp) = &self.slirp_client
+                && let Err(e) = slirp.shutdown().await
+            {
+                warn!("SlirpActor shutdown error: {}", e);
             }
         };
         #[cfg(feature = "cuttlefish")]

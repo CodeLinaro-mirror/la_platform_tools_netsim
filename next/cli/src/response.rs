@@ -182,19 +182,18 @@ impl args::Command {
 
             Command::Link(link_cmd) => match link_cmd {
                 Link::Create(_) => {
-                    if verbose {
-                        if let GrpcResponse::CreateLink(frontend::CreateLinkResponse {
+                    if verbose
+                        && let GrpcResponse::CreateLink(frontend::CreateLinkResponse {
                             link: MessageField(Some(match_link)),
                             ..
                         }) = response
-                        {
-                            println!(
-                                "Successfully created link (Sender: {}, Receiver: {}, Type: {:?})",
-                                LinkChipIdDisplay(match_link.sender_id),
-                                LinkChipIdDisplay(match_link.receiver_id),
-                                match_link.kind
-                            );
-                        }
+                    {
+                        println!(
+                            "Successfully created link (Sender: {}, Receiver: {}, Type: {:?})",
+                            LinkChipIdDisplay(match_link.sender_id),
+                            LinkChipIdDisplay(match_link.receiver_id),
+                            match_link.kind
+                        );
                     }
                 }
                 Link::List => {
@@ -207,29 +206,27 @@ impl args::Command {
                     println!("{}", Displayer::new(res.clone(), verbose));
                 }
                 Link::Patch(args) => {
-                    if let Some(rssi) = args.rssi {
-                        if verbose {
-                            // fall back to args (wildcards)
-                            let (sender, receiver) = match request {
-                                Some(GrpcRequest::PatchLink(req)) => {
-                                    match &req.link.clone().into_option() {
-                                        Some(link) => {
-                                            (Some(link.sender_id), Some(link.receiver_id))
-                                        }
-                                        None => (args.sender, args.receiver),
-                                    }
+                    if let Some(rssi) = args.rssi
+                        && verbose
+                    {
+                        // fall back to args (wildcards)
+                        let (sender, receiver) = match request {
+                            Some(GrpcRequest::PatchLink(req)) => {
+                                match &req.link.clone().into_option() {
+                                    Some(link) => (Some(link.sender_id), Some(link.receiver_id)),
+                                    None => (args.sender, args.receiver),
                                 }
-                                _ => (args.sender, args.receiver),
-                            };
+                            }
+                            _ => (args.sender, args.receiver),
+                        };
 
-                            println!(
-                                "Successfully patched RSSI for link (Sender: {}, Receiver: {}, Type: {}) to {}.",
-                                LinkChipIdDisplay(sender.unwrap_or(0)),
-                                LinkChipIdDisplay(receiver.unwrap_or(0)),
-                                args.chip_kind,
-                                rssi
-                            );
-                        }
+                        println!(
+                            "Successfully patched RSSI for link (Sender: {}, Receiver: {}, Type: {}) to {}.",
+                            LinkChipIdDisplay(sender.unwrap_or(0)),
+                            LinkChipIdDisplay(receiver.unwrap_or(0)),
+                            args.chip_kind,
+                            rssi
+                        );
                     }
                 }
                 Link::Delete(args) => {

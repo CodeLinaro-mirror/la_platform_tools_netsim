@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_daemon_lib",
+    edition: "2024",
     crate_name: "daemon",
     stem: "libdaemon",
     crate_root: "src/lib.rs",
@@ -37,6 +38,7 @@ rust_library_host {
 
 rust_binary_host {
     name: "netsim_next_daemon",
+    edition: "2024",
     stem: "netsim_next_daemon",
     crate_root: "src/main.rs",
     srcs: [

@@ -4,6 +4,7 @@
 fn main() {
     cxx_build::bridge("src/ffi.rs")
         .file("src/crypto_ffi.cc")
+        .include("src")
         .flag_if_supported("-std=c++17")
         .compile("hostap_crypto");
 

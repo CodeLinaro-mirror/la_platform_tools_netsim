@@ -61,22 +61,22 @@ pub fn parse_ini(
             }
 
             let entry = map.entry(key.to_string());
-            if options.strict {
-                if let Entry::Occupied(ref occupied) = entry {
-                    let existing_value = occupied.get();
-                    if existing_value != value {
-                        let column_number = line.find(key).unwrap_or(0) + 1;
-                        return Err(IniParseError {
-                            line_number,
-                            column_number,
-                            kind: IniParseErrorKind::DuplicateKey {
-                                key: key.to_string(),
-                                existing_value: existing_value.to_string(),
-                                new_value: value.to_string(),
-                            },
-                            line_content: line.to_string(),
-                        });
-                    }
+            if options.strict
+                && let Entry::Occupied(ref occupied) = entry
+            {
+                let existing_value = occupied.get();
+                if existing_value != value {
+                    let column_number = line.find(key).unwrap_or(0) + 1;
+                    return Err(IniParseError {
+                        line_number,
+                        column_number,
+                        kind: IniParseErrorKind::DuplicateKey {
+                            key: key.to_string(),
+                            existing_value: existing_value.to_string(),
+                            new_value: value.to_string(),
+                        },
+                        line_content: line.to_string(),
+                    });
                 }
             }
             entry.insert_entry(value.to_string());
@@ -164,7 +164,10 @@ mod tests {
         let _locked = ENV_MUTEX.lock();
 
         // Test with TMPDIR variable
-        std::env::set_var("TMPDIR", "/tmpdir");
+        // SAFETY: Serialized via ENV_MUTEX.
+        unsafe {
+            std::env::set_var("TMPDIR", "/tmpdir");
+        }
 
         // Test get_netsim_ini_filepath
         assert_eq!(get_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));

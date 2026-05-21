@@ -52,23 +52,15 @@ impl TapInterface {
 
     pub fn new(if_name: &str) -> WifiResult<Self> {
         // Open /dev/net/tun
-        // Use a block to constrain the raw file descriptor's scope
-        let fd = {
-            // O_RDWR is required. O_NONBLOCK is set later.
-            let fd = nix::fcntl::open(
-                "/dev/net/tun",
-                nix::fcntl::OFlag::O_RDWR,
-                nix::sys::stat::Mode::empty(),
-            )
-            .map_err(|e| {
-                WifiError::Internal(Box::from(format!("Failed to open /dev/net/tun: {}", e)))
-            })?;
-
-            // SAFETY: The file descriptor was just successfully opened via
-            // nix::fcntl::open, so it is valid and we are taking exclusive
-            // ownership.
-            fd
-        };
+        // O_RDWR is required. O_NONBLOCK is set later.
+        let fd = nix::fcntl::open(
+            "/dev/net/tun",
+            nix::fcntl::OFlag::O_RDWR,
+            nix::sys::stat::Mode::empty(),
+        )
+        .map_err(|e| {
+            WifiError::Internal(Box::from(format!("Failed to open /dev/net/tun: {}", e)))
+        })?;
 
         // Prepare ifreq
         // SAFETY: `libc::ifreq` is a C struct that is safe to zero-initialize.
@@ -401,7 +393,7 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
     pub fn add(
         &mut self,
         chip_id: ChipId,
-    ) -> WifiResult<impl futures::Stream<Item = bytes::Bytes>> {
+    ) -> WifiResult<impl futures::Stream<Item = bytes::Bytes> + use<>> {
         // Allocate TAP
         let (index, if_name) = self
             .allocate_next_tap()
@@ -506,14 +498,12 @@ pub fn convert_8023_to_80211(
     seq: u16,
 ) -> Option<bytes::Bytes> {
     use netsim_packets::{FrameDirection, Ieee80211};
-    if let Some(bssid) = bssid {
-        if let Ok(ieee80211) =
+    if let Some(bssid) = bssid
+        && let Ok(ieee80211) =
             Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
-        {
-            if let Ok(bytes) = ieee80211.encode_to_vec() {
-                return Some(bytes::Bytes::from(bytes));
-            }
-        }
+        && let Ok(bytes) = ieee80211.encode_to_vec()
+    {
+        return Some(bytes::Bytes::from(bytes));
     }
     None
 }

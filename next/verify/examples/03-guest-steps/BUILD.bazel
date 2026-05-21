@@ -41,7 +41,7 @@ rust_binary(
     name = "custom_runner",
     testonly = True,
     srcs = ["src/main.rs"],
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
         "//next/verify/macros:verify_macros",
     ],

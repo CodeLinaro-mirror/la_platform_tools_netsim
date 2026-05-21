@@ -50,10 +50,10 @@ pub fn to_json(packet: &Packet, packet_len: usize) -> Value {
             crate::packet::LlcPacket::Llc(header, _) => llc_json::to_json_llc(header),
             crate::packet::LlcPacket::LlcSnap(header, _) => llc_json::to_json_snap(header),
         };
-        if let Some(obj) = llc_val.as_object() {
-            if let Some(inner) = obj.get("llc") {
-                layers.insert("llc".to_string(), inner.clone());
-            }
+        if let Some(obj) = llc_val.as_object()
+            && let Some(inner) = obj.get("llc")
+        {
+            layers.insert("llc".to_string(), inner.clone());
         }
     }
 

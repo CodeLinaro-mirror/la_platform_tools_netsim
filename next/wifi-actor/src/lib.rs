@@ -41,3 +41,4 @@ pub fn new() -> (ResourceActor<WifiActor>, WifiClient) {
     let (runner, client) = ResourceActor::new(32);
     (runner, WifiClient::new(client))
 }
+// Touch to force clippy rerun

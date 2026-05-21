@@ -9,7 +9,7 @@ netsim_rust_library(
     name = "slirp-actor",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "slirp_actor",
-    edition = "2021",
+    edition = "2024",
     test_deps = [
         "@futures",
     ],

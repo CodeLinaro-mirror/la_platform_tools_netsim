@@ -59,10 +59,10 @@ pub struct World {
 impl Drop for World {
     fn drop(&mut self) {
         self._actor_task.abort();
-        if let Some(path) = &self.stats_file_to_cleanup {
-            if path.exists() {
-                let _ = std::fs::remove_file(path);
-            }
+        if let Some(path) = &self.stats_file_to_cleanup
+            && path.exists()
+        {
+            let _ = std::fs::remove_file(path);
         }
     }
 }
@@ -336,14 +336,14 @@ impl World {
                 if let Some(orient) = &patch.pose.orientation {
                     chip.pose.orientation = *orient;
                 }
-                if let Some(netsim_model::ChipVariantUpdate::Bluetooth(bt_update)) = patch.variant {
-                    if let Some(netsim_model::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
-                        if let Some(s) = bt_update.low_energy.state {
-                            bt.low_energy.state = Some(s);
-                        }
-                        if let Some(s) = bt_update.classic.state {
-                            bt.classic.state = Some(s);
-                        }
+                if let Some(netsim_model::ChipVariantUpdate::Bluetooth(bt_update)) = patch.variant
+                    && let Some(netsim_model::ChipVariant::Bluetooth(bt)) = &mut chip.variant
+                {
+                    if let Some(s) = bt_update.low_energy.state {
+                        bt.low_energy.state = Some(s);
+                    }
+                    if let Some(s) = bt_update.classic.state {
+                        bt.classic.state = Some(s);
                     }
                 }
                 Ok(chip.clone())
@@ -759,15 +759,14 @@ impl World {
         let mut last_content = String::new();
         // Wait up to 5 seconds
         for _ in 0..Self::STATS_RW_RETRIES {
-            if path.exists() {
-                if let Ok(c) = std::fs::read_to_string(path) {
-                    if !c.is_empty() {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&c) {
-                            return json;
-                        }
-                        last_content = c;
-                    }
+            if path.exists()
+                && let Ok(c) = std::fs::read_to_string(path)
+                && !c.is_empty()
+            {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&c) {
+                    return json;
                 }
+                last_content = c;
             }
             tokio::time::sleep(Self::STATS_RETRY_INTERVAL).await;
         }
@@ -812,14 +811,14 @@ impl World {
         for _ in 0..Self::STATS_ABSENT_RETRIES {
             if path.exists() {
                 let content = std::fs::read_to_string(path).unwrap_or_default();
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(radio_stats) = json["radio_stats"].as_array() {
-                        for s in radio_stats {
-                            let id = s["device_id"].as_u64().unwrap_or(0);
-                            let tx_count = s["tx_count"].as_u64().unwrap_or(0);
-                            if id == device_id.0 as u64 && tx_count > 0 {
-                                found_any = true;
-                            }
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+                    && let Some(radio_stats) = json["radio_stats"].as_array()
+                {
+                    for s in radio_stats {
+                        let id = s["device_id"].as_u64().unwrap_or(0);
+                        let tx_count = s["tx_count"].as_u64().unwrap_or(0);
+                        if id == device_id.0 as u64 && tx_count > 0 {
+                            found_any = true;
                         }
                     }
                 }
@@ -864,72 +863,72 @@ impl World {
             }
             last_content = content.clone();
 
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(radio_stats) = json["radio_stats"].as_array() {
-                    for s in radio_stats {
-                        let id = s["device_id"].as_u64().unwrap_or(0);
-                        if id != device_id.0 as u64 {
-                            continue;
-                        }
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(radio_stats) = json["radio_stats"].as_array()
+            {
+                for s in radio_stats {
+                    let id = s["device_id"].as_u64().unwrap_or(0);
+                    if id != device_id.0 as u64 {
+                        continue;
+                    }
 
-                        // Check match criteria
-                        let tx_bytes = s["tx_bytes"].as_u64();
-                        let rx_bytes = s["rx_bytes"].as_u64();
-                        let tx_count = s["tx_count"].as_u64();
-                        let rx_count = s["rx_count"].as_u64();
+                    // Check match criteria
+                    let tx_bytes = s["tx_bytes"].as_u64();
+                    let rx_bytes = s["rx_bytes"].as_u64();
+                    let tx_count = s["tx_count"].as_u64();
+                    let rx_count = s["rx_count"].as_u64();
 
-                        let mut matches = true;
+                    let mut matches = true;
 
-                        if let Some(expected) = expected_kind {
-                            let k_str = s["kind"].as_str();
-                            let k_num = s["kind"].as_u64();
+                    if let Some(expected) = expected_kind {
+                        let k_str = s["kind"].as_str();
+                        let k_num = s["kind"].as_u64();
 
-                            // Normalize actual kind to string if possible, or keep as is
-                            let actual_kind_match = match (k_str, k_num) {
-                                (Some(s), _) => s.eq_ignore_ascii_case(expected),
-                                (_, Some(n)) => {
-                                    // strictly match known numbers
-                                    let mapped = match n {
-                                        1 => "BLUETOOTH_LOW_ENERGY",
-                                        2 => "BLUETOOTH_CLASSIC",
-                                        4 => "WIFI",
-                                        5 => "UWB",
-                                        _ => "UNSPECIFIED",
-                                    };
-                                    mapped.eq_ignore_ascii_case(expected)
-                                }
-                                _ => false,
-                            };
-                            if !actual_kind_match {
-                                matches = false;
+                        // Normalize actual kind to string if possible, or keep as is
+                        let actual_kind_match = match (k_str, k_num) {
+                            (Some(s), _) => s.eq_ignore_ascii_case(expected),
+                            (_, Some(n)) => {
+                                // strictly match known numbers
+                                let mapped = match n {
+                                    1 => "BLUETOOTH_LOW_ENERGY",
+                                    2 => "BLUETOOTH_CLASSIC",
+                                    4 => "WIFI",
+                                    5 => "UWB",
+                                    _ => "UNSPECIFIED",
+                                };
+                                mapped.eq_ignore_ascii_case(expected)
                             }
+                            _ => false,
+                        };
+                        if !actual_kind_match {
+                            matches = false;
                         }
+                    }
 
-                        if let Some(expected) = expected_tx_bytes {
-                            if tx_bytes != Some(expected) {
-                                matches = false;
-                            }
-                        }
-                        if let Some(expected) = expected_rx_bytes {
-                            if rx_bytes != Some(expected) {
-                                matches = false;
-                            }
-                        }
-                        if let Some(expected) = expected_tx_count {
-                            if tx_count != Some(expected) {
-                                matches = false;
-                            }
-                        }
-                        if let Some(expected) = expected_rx_count {
-                            if rx_count != Some(expected) {
-                                matches = false;
-                            }
-                        }
+                    if let Some(expected) = expected_tx_bytes
+                        && tx_bytes != Some(expected)
+                    {
+                        matches = false;
+                    }
+                    if let Some(expected) = expected_rx_bytes
+                        && rx_bytes != Some(expected)
+                    {
+                        matches = false;
+                    }
+                    if let Some(expected) = expected_tx_count
+                        && tx_count != Some(expected)
+                    {
+                        matches = false;
+                    }
+                    if let Some(expected) = expected_rx_count
+                        && rx_count != Some(expected)
+                    {
+                        matches = false;
+                    }
 
-                        if matches {
-                            found = true;
-                            break;
-                        }
+                    if matches {
+                        found = true;
+                        break;
                     }
                 }
             }

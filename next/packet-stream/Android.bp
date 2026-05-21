@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_packet_stream",
+    edition: "2024",
     crate_name: "packet_stream",
     stem: "libpacket_stream",
     crate_root: "src/lib.rs",

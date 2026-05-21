@@ -75,15 +75,15 @@ impl Ieee80211Manager {
         write_ie(body, tags::DS_PARAMETER_SET, &[ap.config.channel]);
 
         // Country IE (Tag 7)
-        if let Some(cc) = &ap.config.country_code {
-            if cc.len() >= 2 {
-                let mut country_body = Vec::new();
-                country_body.extend_from_slice(cc.as_bytes());
-                // First Channel Number, Number of Channels, Max Transmit Power Level
-                // Simple default: Start at 1, cover 13 channels, Max Power 20dBm
-                country_body.extend_from_slice(&[1, 13, 20]);
-                write_ie(body, tags::COUNTRY, &country_body);
-            }
+        if let Some(cc) = &ap.config.country_code
+            && cc.len() >= 2
+        {
+            let mut country_body = Vec::new();
+            country_body.extend_from_slice(cc.as_bytes());
+            // First Channel Number, Number of Channels, Max Transmit Power Level
+            // Simple default: Start at 1, cover 13 channels, Max Power 20dBm
+            country_body.extend_from_slice(&[1, 13, 20]);
+            write_ie(body, tags::COUNTRY, &country_body);
         }
 
         // TIM IE (Tag 5)

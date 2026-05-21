@@ -1526,7 +1526,7 @@ fn bindgen_test_layout_fd_set() {
         concat!("Offset of field: ", stringify!(fd_set), "::", stringify!(fds_bits))
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn __darwin_check_fd_set_overflow(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_void,
@@ -1975,42 +1975,42 @@ fn bindgen_test_layout_sf_hdtr() {
         concat!("Offset of field: ", stringify!(sf_hdtr), "::", stringify!(trl_cnt))
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn accept(
         arg1: ::std::os::raw::c_int,
         arg2: *mut sockaddr,
         arg3: *mut socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn bind(
         arg1: ::std::os::raw::c_int,
         arg2: *const sockaddr,
         arg3: socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn connect(
         arg1: ::std::os::raw::c_int,
         arg2: *const sockaddr,
         arg3: socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn getpeername(
         arg1: ::std::os::raw::c_int,
         arg2: *mut sockaddr,
         arg3: *mut socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn getsockname(
         arg1: ::std::os::raw::c_int,
         arg2: *mut sockaddr,
         arg3: *mut socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn getsockopt(
         arg1: ::std::os::raw::c_int,
         arg2: ::std::os::raw::c_int,
@@ -2019,13 +2019,13 @@ extern "C" {
         arg5: *mut socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn listen(
         arg1: ::std::os::raw::c_int,
         arg2: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn recv(
         arg1: ::std::os::raw::c_int,
         arg2: *mut ::std::os::raw::c_void,
@@ -2033,7 +2033,7 @@ extern "C" {
         arg4: ::std::os::raw::c_int,
     ) -> isize;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn recvfrom(
         arg1: ::std::os::raw::c_int,
         arg2: *mut ::std::os::raw::c_void,
@@ -2043,14 +2043,14 @@ extern "C" {
         arg6: *mut socklen_t,
     ) -> isize;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn recvmsg(
         arg1: ::std::os::raw::c_int,
         arg2: *mut msghdr,
         arg3: ::std::os::raw::c_int,
     ) -> isize;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn send(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_void,
@@ -2058,14 +2058,14 @@ extern "C" {
         arg4: ::std::os::raw::c_int,
     ) -> isize;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn sendmsg(
         arg1: ::std::os::raw::c_int,
         arg2: *const msghdr,
         arg3: ::std::os::raw::c_int,
     ) -> isize;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn sendto(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_void,
@@ -2075,7 +2075,7 @@ extern "C" {
         arg6: socklen_t,
     ) -> isize;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn setsockopt(
         arg1: ::std::os::raw::c_int,
         arg2: ::std::os::raw::c_int,
@@ -2084,23 +2084,23 @@ extern "C" {
         arg5: socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn shutdown(
         arg1: ::std::os::raw::c_int,
         arg2: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn sockatmark(arg1: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn socket(
         arg1: ::std::os::raw::c_int,
         arg2: ::std::os::raw::c_int,
         arg3: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn socketpair(
         arg1: ::std::os::raw::c_int,
         arg2: ::std::os::raw::c_int,
@@ -2108,7 +2108,7 @@ extern "C" {
         arg4: *mut ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn sendfile(
         arg1: ::std::os::raw::c_int,
         arg2: ::std::os::raw::c_int,
@@ -2118,10 +2118,10 @@ extern "C" {
         arg6: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn pfctlinput(arg1: ::std::os::raw::c_int, arg2: *mut sockaddr);
 }
-extern "C" {
+unsafe extern "C" {
     pub fn connectx(
         arg1: ::std::os::raw::c_int,
         arg2: *const sa_endpoints_t,
@@ -2133,7 +2133,7 @@ extern "C" {
         arg8: *mut sae_connid_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn disconnectx(
         arg1: ::std::os::raw::c_int,
         arg2: sae_associd_t,
@@ -2465,7 +2465,7 @@ fn bindgen_test_layout___msfilterreq() {
         concat!("Offset of field: ", stringify!(__msfilterreq), "::", stringify!(msfr_srcs))
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn setipv4sourcefilter(
         arg1: ::std::os::raw::c_int,
         arg2: in_addr,
@@ -2475,7 +2475,7 @@ extern "C" {
         arg6: *mut in_addr,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn getipv4sourcefilter(
         arg1: ::std::os::raw::c_int,
         arg2: in_addr,
@@ -2485,7 +2485,7 @@ extern "C" {
         arg6: *mut in_addr,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn setsourcefilter(
         arg1: ::std::os::raw::c_int,
         arg2: u32,
@@ -2496,7 +2496,7 @@ extern "C" {
         arg7: *mut sockaddr_storage,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn getsourcefilter(
         arg1: ::std::os::raw::c_int,
         arg2: u32,
@@ -2678,22 +2678,22 @@ fn bindgen_test_layout_sockaddr_in6() {
         concat!("Offset of field: ", stringify!(sockaddr_in6), "::", stringify!(sin6_scope_id))
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub static in6addr_any: in6_addr;
 }
-extern "C" {
+unsafe extern "C" {
     pub static in6addr_loopback: in6_addr;
 }
-extern "C" {
+unsafe extern "C" {
     pub static in6addr_nodelocal_allnodes: in6_addr;
 }
-extern "C" {
+unsafe extern "C" {
     pub static in6addr_linklocal_allnodes: in6_addr;
 }
-extern "C" {
+unsafe extern "C" {
     pub static in6addr_linklocal_allrouters: in6_addr;
 }
-extern "C" {
+unsafe extern "C" {
     pub static in6addr_linklocal_allv2routers: in6_addr;
 }
 #[repr(C)]
@@ -2789,17 +2789,17 @@ fn bindgen_test_layout_ip6_mtuinfo() {
         concat!("Offset of field: ", stringify!(ip6_mtuinfo), "::", stringify!(ip6m_mtu))
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_option_space(arg1: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_option_init(
         arg1: *mut ::std::os::raw::c_void,
         arg2: *mut *mut cmsghdr,
         arg3: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_option_append(
         arg1: *mut cmsghdr,
         arg2: *const __uint8_t,
@@ -2807,7 +2807,7 @@ extern "C" {
         arg4: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_option_alloc(
         arg1: *mut cmsghdr,
         arg2: ::std::os::raw::c_int,
@@ -2815,60 +2815,60 @@ extern "C" {
         arg4: ::std::os::raw::c_int,
     ) -> *mut __uint8_t;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_option_next(
         arg1: *const cmsghdr,
         arg2: *mut *mut __uint8_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_option_find(
         arg1: *const cmsghdr,
         arg2: *mut *mut __uint8_t,
         arg3: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rthdr_space(arg1: ::std::os::raw::c_int, arg2: ::std::os::raw::c_int) -> usize;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rthdr_init(
         arg1: *mut ::std::os::raw::c_void,
         arg2: ::std::os::raw::c_int,
     ) -> *mut cmsghdr;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rthdr_add(
         arg1: *mut cmsghdr,
         arg2: *const in6_addr,
         arg3: ::std::os::raw::c_uint,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rthdr_lasthop(
         arg1: *mut cmsghdr,
         arg2: ::std::os::raw::c_uint,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rthdr_segments(arg1: *const cmsghdr) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rthdr_getaddr(arg1: *mut cmsghdr, arg2: ::std::os::raw::c_int) -> *mut in6_addr;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rthdr_getflags(
         arg1: *const cmsghdr,
         arg2: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_opt_init(
         arg1: *mut ::std::os::raw::c_void,
         arg2: socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_opt_append(
         arg1: *mut ::std::os::raw::c_void,
         arg2: socklen_t,
@@ -2879,14 +2879,14 @@ extern "C" {
         arg7: *mut *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_opt_finish(
         arg1: *mut ::std::os::raw::c_void,
         arg2: socklen_t,
         arg3: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_opt_set_val(
         arg1: *mut ::std::os::raw::c_void,
         arg2: ::std::os::raw::c_int,
@@ -2894,7 +2894,7 @@ extern "C" {
         arg4: socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_opt_next(
         arg1: *mut ::std::os::raw::c_void,
         arg2: socklen_t,
@@ -2904,7 +2904,7 @@ extern "C" {
         arg6: *mut *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_opt_find(
         arg1: *mut ::std::os::raw::c_void,
         arg2: socklen_t,
@@ -2914,7 +2914,7 @@ extern "C" {
         arg6: *mut *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_opt_get_val(
         arg1: *mut ::std::os::raw::c_void,
         arg2: ::std::os::raw::c_int,
@@ -2922,10 +2922,10 @@ extern "C" {
         arg4: socklen_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rth_space(arg1: ::std::os::raw::c_int, arg2: ::std::os::raw::c_int) -> socklen_t;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rth_init(
         arg1: *mut ::std::os::raw::c_void,
         arg2: socklen_t,
@@ -2933,46 +2933,46 @@ extern "C" {
         arg4: ::std::os::raw::c_int,
     ) -> *mut ::std::os::raw::c_void;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rth_add(
         arg1: *mut ::std::os::raw::c_void,
         arg2: *const in6_addr,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rth_reverse(
         arg1: *const ::std::os::raw::c_void,
         arg2: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rth_segments(arg1: *const ::std::os::raw::c_void) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet6_rth_getaddr(
         arg1: *const ::std::os::raw::c_void,
         arg2: ::std::os::raw::c_int,
     ) -> *mut in6_addr;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn bindresvport(
         arg1: ::std::os::raw::c_int,
         arg2: *mut sockaddr_in,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn bindresvport_sa(
         arg1: ::std::os::raw::c_int,
         arg2: *mut sockaddr,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_addr(arg1: *const ::std::os::raw::c_char) -> in_addr_t;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_ntoa(arg1: in_addr) -> *mut ::std::os::raw::c_char;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_ntop(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_void,
@@ -2980,21 +2980,21 @@ extern "C" {
         arg4: socklen_t,
     ) -> *const ::std::os::raw::c_char;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_pton(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_char,
         arg3: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn ascii2addr(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_char,
         arg3: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn addr2ascii(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_void,
@@ -3002,25 +3002,25 @@ extern "C" {
         arg4: *mut ::std::os::raw::c_char,
     ) -> *mut ::std::os::raw::c_char;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_aton(
         arg1: *const ::std::os::raw::c_char,
         arg2: *mut in_addr,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_lnaof(arg1: in_addr) -> in_addr_t;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_makeaddr(arg1: in_addr_t, arg2: in_addr_t) -> in_addr;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_netof(arg1: in_addr) -> in_addr_t;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_network(arg1: *const ::std::os::raw::c_char) -> in_addr_t;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_net_ntop(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_void,
@@ -3029,7 +3029,7 @@ extern "C" {
         arg5: __darwin_size_t,
     ) -> *mut ::std::os::raw::c_char;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_net_pton(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_char,
@@ -3037,21 +3037,21 @@ extern "C" {
         arg4: __darwin_size_t,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_neta(
         arg1: in_addr_t,
         arg2: *mut ::std::os::raw::c_char,
         arg3: __darwin_size_t,
     ) -> *mut ::std::os::raw::c_char;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_nsap_addr(
         arg1: *const ::std::os::raw::c_char,
         arg2: *mut ::std::os::raw::c_uchar,
         arg3: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_uint;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn inet_nsap_ntoa(
         arg1: ::std::os::raw::c_int,
         arg2: *const ::std::os::raw::c_uchar,
@@ -3468,14 +3468,14 @@ fn bindgen_test_layout_SlirpConfig() {
         concat!("Offset of field: ", stringify!(SlirpConfig), "::", stringify!(host_dns))
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_new(
         cfg: *const SlirpConfig,
         callbacks: *const SlirpCb,
         opaque: *mut ::std::os::raw::c_void,
     ) -> *mut Slirp;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_init(
         restricted: ::std::os::raw::c_int,
         in_enabled: bool,
@@ -3499,10 +3499,10 @@ extern "C" {
         opaque: *mut ::std::os::raw::c_void,
     ) -> *mut Slirp;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_cleanup(slirp: *mut Slirp);
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_pollfds_fill(
         slirp: *mut Slirp,
         timeout: *mut u32,
@@ -3510,7 +3510,7 @@ extern "C" {
         opaque: *mut ::std::os::raw::c_void,
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_pollfds_poll(
         slirp: *mut Slirp,
         select_error: ::std::os::raw::c_int,
@@ -3518,17 +3518,17 @@ extern "C" {
         opaque: *mut ::std::os::raw::c_void,
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_input(slirp: *mut Slirp, pkt: *const u8, pkt_len: ::std::os::raw::c_int);
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_handle_timer(
         slirp: *mut Slirp,
         id: SlirpTimerId,
         cb_opaque: *mut ::std::os::raw::c_void,
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_add_hostfwd(
         slirp: *mut Slirp,
         is_udp: ::std::os::raw::c_int,
@@ -3538,7 +3538,7 @@ extern "C" {
         guest_port: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_remove_hostfwd(
         slirp: *mut Slirp,
         is_udp: ::std::os::raw::c_int,
@@ -3546,7 +3546,7 @@ extern "C" {
         host_port: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_add_hostxfwd(
         slirp: *mut Slirp,
         haddr: *const sockaddr,
@@ -3556,7 +3556,7 @@ extern "C" {
         flags: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_remove_hostxfwd(
         slirp: *mut Slirp,
         haddr: *const sockaddr,
@@ -3564,7 +3564,7 @@ extern "C" {
         flags: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_add_exec(
         slirp: *mut Slirp,
         cmdline: *const ::std::os::raw::c_char,
@@ -3572,7 +3572,7 @@ extern "C" {
         guest_port: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_add_unix(
         slirp: *mut Slirp,
         unixsock: *const ::std::os::raw::c_char,
@@ -3580,7 +3580,7 @@ extern "C" {
         guest_port: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_add_guestfwd(
         slirp: *mut Slirp,
         write_cb: SlirpWriteCb,
@@ -3589,14 +3589,14 @@ extern "C" {
         guest_port: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_socket_can_recv(
         slirp: *mut Slirp,
         guest_addr: in_addr,
         guest_port: ::std::os::raw::c_int,
     ) -> usize;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_socket_recv(
         slirp: *mut Slirp,
         guest_addr: in_addr,
@@ -3605,30 +3605,30 @@ extern "C" {
         size: ::std::os::raw::c_int,
     );
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_remove_guestfwd(
         slirp: *mut Slirp,
         guest_addr: in_addr,
         guest_port: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_connection_info(slirp: *mut Slirp) -> *mut ::std::os::raw::c_char;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_neighbor_info(slirp: *mut Slirp) -> *mut ::std::os::raw::c_char;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_state_save(
         s: *mut Slirp,
         write_cb: SlirpWriteCb,
         opaque: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_state_version() -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_state_load(
         s: *mut Slirp,
         version_id: ::std::os::raw::c_int,
@@ -3636,7 +3636,7 @@ extern "C" {
         opaque: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int;
 }
-extern "C" {
+unsafe extern "C" {
     pub fn slirp_version_string() -> *const ::std::os::raw::c_char;
 }
 pub type __builtin_va_list = *mut ::std::os::raw::c_char;

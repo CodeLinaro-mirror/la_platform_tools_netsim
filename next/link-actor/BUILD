@@ -19,7 +19,7 @@ netsim_rust_library(
     crate_features = [],
     crate_name = "link_actor",
     crate_root = "src/lib.rs",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
         "@async-trait",
     ],

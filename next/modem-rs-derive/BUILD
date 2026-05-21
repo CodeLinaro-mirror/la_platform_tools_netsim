@@ -27,7 +27,7 @@ rust_proc_macro(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "modem_rs_derive",
     crate_root = "src/lib.rs",
-    edition = "2021",
+    edition = "2024",
     deps = [
         "@nom",
         "@proc-macro2",

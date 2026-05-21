@@ -7,7 +7,7 @@ netsim_rust_library(
     name = "types",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "netsim_types",
-    edition = "2021",
+    edition = "2024",
     visibility = ["//visibility:public"],
     deps = [
         "@serde",

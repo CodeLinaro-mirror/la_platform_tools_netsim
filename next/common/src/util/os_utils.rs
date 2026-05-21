@@ -147,8 +147,11 @@ pub mod tests {
     fn test_get_discovery_directory() {
         let _locked = ENV_MUTEX.lock();
         // Remove all environment variable
-        std::env::remove_var(DISCOVERY.root_env);
-        std::env::remove_var("TMPDIR");
+        // SAFETY: Serialized via ENV_MUTEX.
+        unsafe {
+            std::env::remove_var(DISCOVERY.root_env);
+            std::env::remove_var("TMPDIR");
+        }
 
         // Test with no environment variables
         let actual = get_discovery_directory();
@@ -157,26 +160,39 @@ pub mod tests {
         assert_eq!(actual, expected);
 
         // Test with root_env variable
-        std::env::set_var(DISCOVERY.root_env, "/netsim-test");
+        // SAFETY: Serialized via ENV_MUTEX.
+        unsafe {
+            std::env::set_var(DISCOVERY.root_env, "/netsim-test");
+        }
         let actual = get_discovery_directory();
         let mut expected = PathBuf::from("/netsim-test");
         expected.push(DISCOVERY.subdir);
         assert_eq!(actual, expected);
 
         // Test with TMPDIR variable
-        std::env::set_var("TMPDIR", "/tmpdir");
+        // SAFETY: Serialized via ENV_MUTEX.
+        unsafe {
+            std::env::set_var("TMPDIR", "/tmpdir");
+        }
         assert_eq!(get_discovery_directory(), PathBuf::from("/tmpdir"));
     }
 
     #[test]
     fn test_get_instance_and_instance_name() {
+        let _locked = ENV_MUTEX.lock();
         // Set NETSIM_INSTANCE environment variable
-        std::env::set_var("NETSIM_INSTANCE", "100");
+        // SAFETY: Serialized via ENV_MUTEX.
+        unsafe {
+            std::env::set_var("NETSIM_INSTANCE", "100");
+        }
         assert_eq!(get_instance(Some(0)), 100);
         assert_eq!(get_instance(Some(1)), 100);
 
         // Remove NETSIM_INSTANCE environment variable
-        std::env::remove_var("NETSIM_INSTANCE");
+        // SAFETY: Serialized via ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("NETSIM_INSTANCE");
+        }
         assert_eq!(get_instance(None), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(0)), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(1)), 1);

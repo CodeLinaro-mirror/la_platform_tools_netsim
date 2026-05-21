@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_device_api",
+    edition: "2024",
     crate_name: "device_api",
     stem: "libdevice_api",
     crate_root: "src/lib.rs",
