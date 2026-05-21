@@ -113,7 +113,7 @@ def binary_extension(filename):
 
 def platform_to_cmake_target(target):
   """Translates platform to cmake target"""
-  return TARGET_MAP[target.replace("-", "_")]
+  return TARGET_MAP[target.lower().replace("-", "_")]
 
 
 def cmake_toolchain(target) -> str:
@@ -125,7 +125,7 @@ def cmake_toolchain(target) -> str:
       / "android"
       / "build"
       / "cmake"
-      / AVAILABLE[TARGET_MAP[target.replace("-", "_")]]
+      / AVAILABLE[platform_to_cmake_target(target)]
   )
 
 
