@@ -103,6 +103,8 @@ impl ActorService for ApActor {
                 }
                 ap_state.sae_sessions.remove(&mac);
                 ap_state.eap_sessions.remove(&mac);
+                self.shared_keys.remove_session(&mac);
+                self.shared_keys.remove_station_bssid(&mac);
 
                 // Send Deauth Frame
                 if let Some(sink) = &self.sink {
@@ -128,7 +130,28 @@ impl ActorService for ApActor {
         id: Self::Id,
         _: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        if self.aps.remove(&id).is_some() {
+        if let Some(state) = self.aps.remove(&id) {
+            let bssid = state.config.bssid;
+            self.shared_keys.bssids.write().unwrap().remove(&bssid);
+            self.shared_keys.gtks.write().unwrap().remove(&bssid);
+
+            // Find and remove all stations associated with the deleted BSSID
+            let mut station_bssids = self.shared_keys.station_bssids.write().unwrap();
+            let mut stations_to_remove = Vec::new();
+            station_bssids.retain(|sta, v| {
+                let matched = *v == bssid;
+                if matched {
+                    stations_to_remove.push(*sta);
+                }
+                !matched
+            });
+
+            // Remove their session keys
+            let mut sessions = self.shared_keys.sessions.write().unwrap();
+            for sta in &stations_to_remove {
+                sessions.remove(sta);
+            }
+
             info!("Deleted AP with ID: {}", id);
         } else {
             warn!("Attempted to delete non-existent AP with ID: {}", id);
@@ -182,6 +205,8 @@ impl ActorService for ApActor {
                     }
                     ap_state.sae_sessions.remove(&mac);
                     ap_state.eap_sessions.remove(&mac);
+                    self.shared_keys.remove_session(&mac);
+                    self.shared_keys.remove_station_bssid(&mac);
 
                     // Send Deauth Frame
                     if let Some(sink) = &self.sink {

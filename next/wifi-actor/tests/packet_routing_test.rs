@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use bytes::Bytes;
+use netsim_packets::FrameDirection;
 use tracing::info;
 
 use crate::world::World;
@@ -340,21 +342,21 @@ async fn test_dhcp_m2u_race_condition() {
     loop {
         tokio::select! {
             Some(bytes) = chip.stream_rx.recv() => {
-                if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
-                    if eth.windows(9).any(|w| w == b"DHCPOFFER") {
-                        let dst_mac = &eth[0..6];
-                        info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
-
-                        // If it's the bug, it will be Unicast (rx_mac)
-                        if dst_mac == rx_mac {
-                            panic!("REPRODUCED: DHCPOFFER was incorrectly converted to UNENCRYPTED UNICAST (dst={:02X?})", dst_mac);
+                if let Some(ieee) = crate::hwsim_helper::unwrap_hwsim_to_ieee80211(&bytes) {
+                    if ieee.is_data() {
+                        if ieee.is_eapol().unwrap_or(false) {
+                            continue;
                         }
-
-                        // If it's correct, it should be Broadcast (at least if unencrypted)
-                        let broadcast = [0xFF; 6];
-                        if dst_mac == broadcast {
-                             info!("CORRECT: DHCPOFFER remained BROADCAST");
-                             return;
+                        if ieee.needs_decryption() {
+                            let dst = ieee.get_destination();
+                            let broadcast_mac = [0xFF; 6];
+                            if dst == netsim_packets::MacAddress::new(broadcast_mac) {
+                                tracing::info!("CORRECT: DHCPOFFER remained encrypted BROADCAST");
+                                return;
+                            }
+                            if dst == netsim_packets::MacAddress::new(rx_mac) {
+                                 panic!("REPRODUCED: DHCPOFFER was incorrectly M2U converted to UNICAST");
+                            }
                         }
                     }
                 }
@@ -419,13 +421,77 @@ async fn test_p2p_transparent_proxy() {
     }
 }
 
-// Scenario: Verify that broadcast frames are converted to unicast (M2U)
+// Scenario: Verify that mDNS multicast frames are converted to unicast (M2U)
 // on an open network and delivered unencrypted.
-//
-// Note: This test uses a placeholder payload which is not recognized as a real
-// DHCP packet. Thus, M2U optimization should apply and convert it to unicast.
 #[tokio::test]
-async fn test_open_network_m2u() {
+async fn test_open_network_mdns_m2u() {
+    let mut world = World::new().await;
+    world.given_an_ap().await; // Creates Open AP by default
+    let _rx = world.given_a_chip(1).await;
+    let rx_mac = world.chips[0].mac;
+
+    tracing::info!("Injecting mDNS Multicast packet from Infra on Open Network...");
+
+    let src_mac = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00]; // AP
+    let mdns_mac = [0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB]; // mDNS IPv4
+
+    let mut eth = Vec::new();
+    eth.extend_from_slice(&mdns_mac); // DA
+    eth.extend_from_slice(&src_mac); // SA
+    eth.extend_from_slice(&[0x08, 0x00]); // EtherType IPv4
+    eth.extend_from_slice(b"MDNSPACKET");
+
+    if eth.len() < 60 {
+        eth.resize(60, 0);
+    }
+
+    let bssid = netsim_packets::MacAddress::new(src_mac);
+    let ieee80211 = netsim_packets::Ieee80211::from_ieee8023_qos(
+        &eth,
+        bssid,
+        netsim_packets::FrameDirection::FromAp,
+        true,
+        100,
+    )
+    .unwrap();
+    let bytes = ieee80211.encode_to_vec().unwrap();
+    world.ap_injector.send(bytes::Bytes::from(bytes)).expect("Failed to inject mDNS packet");
+
+    let chip = &mut world.chips[0];
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
+    tokio::pin!(timeout);
+
+    loop {
+        tokio::select! {
+            Some(bytes) = chip.stream_rx.recv() => {
+                if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
+                    if eth.windows(10).any(|w| w == b"MDNSPACKET") {
+                        let dst_mac = &eth[0..6];
+                        tracing::info!("Received mDNS with dst_mac: {:02X?}", dst_mac);
+
+                        // mDNS should be M2U'd to unicast (rx_mac)
+                        if dst_mac == rx_mac {
+                            tracing::info!("CORRECT: mDNS was converted to UNICAST on Open Network");
+                            return;
+                        }
+
+                        if dst_mac == mdns_mac {
+                             panic!("FAILED: mDNS remained MULTICAST on Open Network");
+                        }
+                    }
+                }
+            }
+            _ = &mut timeout => {
+                panic!("Timeout waiting for mDNS packet");
+            }
+        }
+    }
+}
+
+// Scenario: Verify that non-whitelisted multicast frames (like a placeholder
+// DHCPOFFER) remain broadcast on an open network.
+#[tokio::test]
+async fn test_open_network_non_mdns_remains_broadcast() {
     let mut world = World::new().await;
     world.given_an_ap().await; // Creates Open AP by default
     let _rx = world.given_a_chip(1).await;
@@ -446,14 +512,14 @@ async fn test_open_network_m2u() {
                         let dst_mac = &eth[0..6];
                         tracing::info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
 
-                        // For Open Networks, normal multicast (non-DHCP) should be M2U'd to unicast
-                        if dst_mac == rx_mac {
-                            tracing::info!("CORRECT: Placeholder DHCPOFFER was converted to UNICAST on Open Network");
+                        // Non-whitelisted multicast must remain broadcast
+                        if dst_mac == [0xFF; 6] {
+                            tracing::info!("CORRECT: Placeholder DHCPOFFER remained BROADCAST on Open Network");
                             return;
                         }
 
-                        if dst_mac == [0xFF; 6] {
-                             panic!("FAILED: Placeholder DHCPOFFER remained BROADCAST on Open Network");
+                        if dst_mac == rx_mac {
+                             panic!("FAILED: Placeholder DHCPOFFER was converted to UNICAST on Open Network");
                         }
                     }
                 }
@@ -551,6 +617,161 @@ async fn test_open_network_dhcp() {
             }
             _ = &mut timeout => {
                 panic!("Timeout waiting for DHCP DHCPOFFER");
+            }
+        }
+    }
+}
+
+// Scenario: Verify that DHCPv4, DHCPv6, and RA remain broadcast (encrypted with
+// GTK) on a secure network, while non-critical multicast (like mDNS) is
+// converted to unicast (M2U) and encrypted with PTK.
+#[tokio::test]
+async fn test_secure_network_dhcp_broadcast() {
+    let mut world = World::new().await;
+    world.given_a_secure_ap().await;
+    let _rx = world.given_a_chip(1).await;
+    let rx_mac = world.chips[0].mac;
+    let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+    // Trigger association to set GTK
+    world.when_chip_transmits_mgmt_to_ap(0).await;
+
+    // Wait for association response
+    let timeout_assoc = tokio::time::sleep(std::time::Duration::from_secs(3));
+    tokio::pin!(timeout_assoc);
+    loop {
+        tokio::select! {
+            Some(bytes) = world.chips[0].stream_rx.recv() => {
+                if let Some(ieee80211) = crate::hwsim_helper::unwrap_hwsim_to_ieee80211(&bytes) {
+                    if ieee80211.is_mgmt() && ieee80211.stype() == 1 {
+                        break;
+                    }
+                }
+            }
+            _ = &mut timeout_assoc => {
+                panic!("Timeout waiting for Association Response");
+            }
+        }
+    }
+
+    // Install PTK (Session Key) in the SharedKeyStore
+    let rx_mac_addr = netsim_packets::MacAddress::new(rx_mac);
+    let dummy_ptk = vec![0x11; 16];
+    world.shared_keys.add_session(rx_mac_addr, dummy_ptk);
+
+    // 1. Inject a DHCPv4 packet (critical multicast)
+    let mut eth_dhcp = Vec::new();
+    let broadcast_mac = [0xFF; 6];
+    eth_dhcp.extend_from_slice(&broadcast_mac);
+    eth_dhcp.extend_from_slice(&bssid);
+    eth_dhcp.extend_from_slice(&[0x08, 0x00]); // IPv4
+    let ip_hdr = [
+        0x45, 0x00, 0x00, 0x2D, 0x00, 0x00, 0x00, 0x00, 0x40, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+    ];
+    eth_dhcp.extend_from_slice(&ip_hdr);
+    let udp_hdr = [0x00, 0x43, 0x00, 0x44, 0x00, 0x11, 0x00, 0x00];
+    eth_dhcp.extend_from_slice(&udp_hdr);
+    eth_dhcp.extend_from_slice(b"DHCPOFFER");
+    if eth_dhcp.len() < 60 {
+        eth_dhcp.resize(60, 0);
+    }
+
+    let ieee_dhcp = netsim_packets::Ieee80211::from_ieee8023_qos(
+        &eth_dhcp,
+        netsim_packets::MacAddress::new(bssid),
+        FrameDirection::FromAp,
+        true,
+        101,
+    )
+    .unwrap();
+    world.ap_injector.send(Bytes::from(ieee_dhcp.encode_to_vec().unwrap())).unwrap();
+
+    // 2. Inject an IPv6 Router Advertisement (critical multicast)
+    let mut eth_ra = Vec::new();
+    let ra_mac = [0x33, 0x33, 0x00, 0x00, 0x00, 0x01];
+    eth_ra.extend_from_slice(&ra_mac);
+    eth_ra.extend_from_slice(&bssid);
+    eth_ra.extend_from_slice(&[0x86, 0xDD]); // IPv6
+    let ip6_hdr = [
+        0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x3A, 0x40, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, 0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+    ];
+    eth_ra.extend_from_slice(&ip6_hdr);
+    let icmp6_hdr = [134, 0, 0, 0, 0, 0, 0, 0]; // Type 134 (RA)
+    eth_ra.extend_from_slice(&icmp6_hdr);
+    if eth_ra.len() < 60 {
+        eth_ra.resize(60, 0);
+    }
+
+    let ieee_ra = netsim_packets::Ieee80211::from_ieee8023_qos(
+        &eth_ra,
+        netsim_packets::MacAddress::new(bssid),
+        FrameDirection::FromAp,
+        true,
+        102,
+    )
+    .unwrap();
+    world.ap_injector.send(Bytes::from(ieee_ra.encode_to_vec().unwrap())).unwrap();
+
+    // 3. Inject a non-DHCP multicast packet (mDNS) (should be M2U'd to unicast)
+    let mut eth_mdns = Vec::new();
+    let mdns_mac = [0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB];
+    eth_mdns.extend_from_slice(&mdns_mac);
+    eth_mdns.extend_from_slice(&bssid);
+    eth_mdns.extend_from_slice(&[0x08, 0x00]); // IPv4
+    eth_mdns.extend_from_slice(b"MDNSPACKET");
+    if eth_mdns.len() < 60 {
+        eth_mdns.resize(60, 0);
+    }
+
+    let ieee_mdns = netsim_packets::Ieee80211::from_ieee8023_qos(
+        &eth_mdns,
+        netsim_packets::MacAddress::new(bssid),
+        FrameDirection::FromAp,
+        true,
+        103,
+    )
+    .unwrap();
+    world.ap_injector.send(Bytes::from(ieee_mdns.encode_to_vec().unwrap())).unwrap();
+
+    let chip = &mut world.chips[0];
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
+    tokio::pin!(timeout);
+
+    let mut dhcp_verified = false;
+    let mut ra_verified = false;
+    let mut mdns_m2u_verified = false;
+
+    loop {
+        tokio::select! {
+            Some(bytes) = chip.stream_rx.recv() => {
+                if let Some(ieee) = crate::hwsim_helper::unwrap_hwsim_to_ieee80211(&bytes) {
+                    if ieee.is_data() {
+                        if ieee.is_eapol().unwrap_or(false) {
+                            continue;
+                        }
+                        if ieee.needs_decryption() {
+                            let dst = ieee.get_destination();
+                            if dst == netsim_packets::MacAddress::new(broadcast_mac) {
+                                tracing::info!("CORRECT: DHCP remained Broadcast");
+                                dhcp_verified = true;
+                            } else if dst == netsim_packets::MacAddress::new(ra_mac) {
+                                tracing::info!("CORRECT: RA remained Multicast");
+                                ra_verified = true;
+                            } else if dst == netsim_packets::MacAddress::new(rx_mac) {
+                                tracing::info!("CORRECT: mDNS was M2U'd to Unicast");
+                                mdns_m2u_verified = true;
+                            }
+                        }
+                    }
+                }
+                if dhcp_verified && ra_verified && mdns_m2u_verified {
+                    return;
+                }
+            }
+            _ = &mut timeout => {
+                panic!("Timeout: dhcp: {}, ra: {}, mdns: {}", dhcp_verified, ra_verified, mdns_m2u_verified);
             }
         }
     }

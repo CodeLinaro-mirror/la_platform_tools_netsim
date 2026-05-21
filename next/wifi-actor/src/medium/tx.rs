@@ -7,6 +7,13 @@ use bytes::Bytes;
 use netsim_packets::{FrameDirection, HwsimFrame, HwsimMsg, Ieee80211};
 use tracing::debug;
 
+const MAC_MDNS_IPV4: [u8; 6] = [0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB];
+const MAC_MDNS_IPV6: [u8; 6] = [0x33, 0x33, 0x00, 0x00, 0x00, 0xFB];
+
+fn is_m2u_candidate(dest_mac: &netsim_packets::MacAddress) -> bool {
+    dest_mac.bytes == MAC_MDNS_IPV4 || dest_mac.bytes == MAC_MDNS_IPV6
+}
+
 use crate::{
     error::WifiError,
     medium::{
@@ -176,7 +183,8 @@ impl Medium {
         let is_infra = ieee80211.is_from_ds()
             || ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
 
-        let is_m2u_conversion = is_infra && (targets.len() > 1 || dest_addr.is_multicast());
+        let is_m2u_conversion = is_infra
+            && (is_m2u_candidate(&dest_addr) || (!dest_addr.is_multicast() && targets.len() > 1));
 
         for dest in targets {
             if self.enabled(dest.client_id)? {
@@ -227,25 +235,10 @@ impl Medium {
         } else if original_frame.get_bssid().is_some_and(|b| self.key_store.get_gtk(&b).is_some())
             && original_frame.get_destination().is_multicast()
         {
-            // Secure network fallback
+            // Secure network fallback (keys not ready)
             Some(original_frame.clone())
-        } else if original_frame.get_destination().is_multicast() {
-            // Open network fallback:
-            // Check if it is a DHCP packet. DHCP requires L2 broadcast on Open networks
-            // to prevent compatibility issues with guest DHCP clients.
-            // Other multicast packets (like Router Advertisements or ARP) can be
-            // optimized to unicast (M2U) for better performance/reliability.
-            //
-            // Zero-allocation parsing is performed directly on raw frame bytes.
-            let is_dhcp = is_dhcp_packet(frame);
-
-            if is_dhcp {
-                Some(original_frame.clone()) // Fallback to broadcast
-            } else {
-                Some(frame.clone()) // Allow M2U (unicast)
-            }
         } else {
-            // Unicast flooding fallback
+            // Open network or fallback
             Some(frame.clone())
         }
     }
@@ -284,7 +277,8 @@ impl Medium {
             || ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
 
         // RESTRICT: Only run M2U optimizations for infrastructure networks
-        let is_m2u_conversion = is_infra && (targets.len() > 1 || dest_addr.is_multicast());
+        let is_m2u_conversion = is_infra
+            && (is_m2u_candidate(&dest_addr) || (!dest_addr.is_multicast() && targets.len() > 1));
 
         for dest in targets {
             // Drop unicast packets destined to the sender itself (invalid for hwsim)
@@ -343,47 +337,4 @@ impl Medium {
         }
         Ok(())
     }
-}
-
-/// Performs zero-allocation parsing on raw IEEE 802.11 frame bytes to identify
-/// DHCP traffic.
-///
-/// DHCP is identified by UDP protocol and destination or source port 67/68.
-fn is_dhcp_packet(ieee80211: &Ieee80211) -> bool {
-    let bytes = ieee80211.as_bytes();
-    let hdr_len = ieee80211.hdr_length();
-    if bytes.len() < hdr_len + 8 {
-        return false; // Too short for LLC/SNAP
-    }
-
-    let llc_snap = &bytes[hdr_len..hdr_len + 8];
-    if llc_snap[0..6] != [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00] {
-        return false; // Not LLC/SNAP
-    }
-
-    let ether_type = u16::from_be_bytes([llc_snap[6], llc_snap[7]]);
-    if ether_type != 0x0800 {
-        // TODO(b/504039691): Add support for DHCPv6 (IPv6 EtherType 0x86DD, UDP ports
-        // 546/547) if needed in the future.
-        return false; // Not IPv4
-    }
-
-    let ip_start = hdr_len + 8;
-    if bytes.len() < ip_start + 20 {
-        return false; // Too short for IP header
-    }
-    let ihl = (bytes[ip_start] & 0x0F) as usize * 4;
-    let protocol = bytes[ip_start + 9];
-    if protocol != 0x11 {
-        return false; // Not UDP
-    }
-
-    let udp_start = ip_start + ihl;
-    if bytes.len() < udp_start + 4 {
-        return false; // Too short for UDP ports
-    }
-    let dst_port = u16::from_be_bytes([bytes[udp_start + 2], bytes[udp_start + 3]]);
-    let src_port = u16::from_be_bytes([bytes[udp_start], bytes[udp_start + 1]]);
-
-    dst_port == 67 || dst_port == 68 || src_port == 67 || src_port == 68
 }
