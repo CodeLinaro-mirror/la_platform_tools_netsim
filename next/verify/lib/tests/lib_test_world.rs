@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use features::{assert_json_matches_table, table_to_struct, DataTable, Features};
+use features::{DataTable, Features, assert_json_matches_table, table_to_struct};
 use tracing_subscriber::fmt::try_init;
 use verify_macros::{step, step_module};
 
@@ -371,6 +371,22 @@ async fn test_features_tags_filtering() {
     // Before -> Background(reset_tags) -> Steps(add 100, check 100) -> After
 
     assert_eq!(world.log, vec!["before", "reset_tags", "add 100", "check 100", "after"]);
+}
+
+#[tokio::test]
+async fn test_features_tags_ignoring() {
+    let _ = try_init();
+    let (mut features, mut world) = setup_features_world();
+
+    // Set ignore tags to @wip
+    features.ignore_tags(&["wip"]);
+
+    features.execute_from_memory(include_str!("features/tags.feat"), &mut world).await.unwrap();
+
+    // Ignored execution (only Untagged scenario)
+    // Before -> Background(reset_tags) -> Steps(add 1, check 1) -> After
+
+    assert_eq!(world.log, vec!["before", "reset_tags", "add 1", "check 1", "after"]);
 }
 
 #[tokio::test]

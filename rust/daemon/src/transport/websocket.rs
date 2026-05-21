@@ -9,13 +9,13 @@ use http::Request;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
 use netsim_proto::startup::DeviceInfo as ProtoDeviceInfo;
-use tungstenite::{protocol::Role, Message, WebSocket};
+use tungstenite::{Message, WebSocket, protocol::Role};
 
 use crate::devices::chip;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::http_server::server_response::ResponseWritable;
 use crate::wireless;
-use crate::wireless::packet::{register_transport, unregister_transport, Response};
+use crate::wireless::packet::{Response, register_transport, unregister_transport};
 
 use super::h4;
 

@@ -11,7 +11,7 @@ use core::fmt;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use std::str::FromStr;
 use zerocopy::{
-    byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
+    FromBytes, Immutable, IntoBytes, KnownLayout, Ref, U16, Unaligned, byteorder::NetworkEndian,
 };
 
 /// Represents a 6-byte MAC address.

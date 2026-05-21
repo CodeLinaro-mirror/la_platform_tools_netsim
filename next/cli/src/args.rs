@@ -4,16 +4,16 @@
 use std::{fmt, iter, str::FromStr};
 
 use clap::{
-    builder::{PossibleValue, TypedValueParser},
     Args, Parser, Subcommand, ValueEnum,
+    builder::{PossibleValue, TypedValueParser},
 };
-use hex::{decode as hex_to_bytes, FromHexError};
+use hex::{FromHexError, decode as hex_to_bytes};
 use netsim_proto::model::chip::ble_beacon::{
+    AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
     advertise_settings::{
         AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
         Interval as IntervalProto, Tx_power as TxPowerProto,
     },
-    AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
 };
 
 #[derive(Debug, Parser)]
@@ -89,6 +89,10 @@ pub enum RadioType {
     Classic,
     Wifi,
     Uwb,
+    Nfc,
+    Cellular,
+    CellularData,
+    Ethernet,
 }
 
 impl fmt::Display for RadioType {
@@ -98,6 +102,10 @@ impl fmt::Display for RadioType {
             RadioType::Classic => write!(f, "CLASSIC"),
             RadioType::Wifi => write!(f, "WIFI"),
             RadioType::Uwb => write!(f, "UWB"),
+            RadioType::Nfc => write!(f, "NFC"),
+            RadioType::Cellular => write!(f, "CELLULAR"),
+            RadioType::CellularData => write!(f, "CELLULAR_DATA"),
+            RadioType::Ethernet => write!(f, "ETHERNET"),
         }
     }
 }
@@ -108,6 +116,10 @@ pub enum ChipKind {
     Bluetooth,
     Wifi,
     Uwb,
+    Nfc,
+    Cellular,
+    CellularData,
+    Ethernet,
 }
 
 impl fmt::Display for ChipKind {
@@ -116,6 +128,10 @@ impl fmt::Display for ChipKind {
             ChipKind::Bluetooth => write!(f, "BLUETOOTH"),
             ChipKind::Wifi => write!(f, "WIFI"),
             ChipKind::Uwb => write!(f, "UWB"),
+            ChipKind::Nfc => write!(f, "NFC"),
+            ChipKind::Cellular => write!(f, "CELLULAR"),
+            ChipKind::CellularData => write!(f, "CELLULAR_DATA"),
+            ChipKind::Ethernet => write!(f, "ETHERNET"),
         }
     }
 }
@@ -144,11 +160,14 @@ pub struct Move {
     pub z: Option<f32>,
 }
 
-#[derive(Debug, Args, PartialEq)]
+#[derive(Debug, Args, PartialEq, Default)]
 pub struct Devices {
     /// Continuously print device(s) information every second
     #[arg(short, long)]
     pub continuous: bool,
+    /// Print device(s) information in JSON format
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Default)]

@@ -16,10 +16,10 @@ use protobuf::MessageField;
 use protobuf_json_mapping::print_to_string;
 use std::fs::File;
 use std::io::Write;
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
+use std::sync::mpsc::Receiver;
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 

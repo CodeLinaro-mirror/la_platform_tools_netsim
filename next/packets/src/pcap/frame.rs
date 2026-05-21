@@ -9,7 +9,7 @@
 use std::io::{self, Read};
 
 use zerocopy::{
-    byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16, U32,
+    FromBytes, Immutable, IntoBytes, KnownLayout, U16, U32, Unaligned, byteorder::LittleEndian,
 };
 
 use crate::pcap::ng::{EnhancedPacketBlock, InterfaceDescriptionBlock, SectionHeaderBlock};

@@ -3,7 +3,7 @@
 
 use bytes::Bytes;
 use netsim_model::Position;
-use netsim_packets::{category, public_action, Ieee80211};
+use netsim_packets::{Ieee80211, category, public_action};
 use tracing::{debug, warn};
 use zerocopy::IntoBytes;
 
@@ -84,7 +84,7 @@ pub fn handle_ftm_request(
     body1.extend_from_slice(&[0u8; 6]); // TOD
     body1.extend_from_slice(&[0u8; 6]); // TOA
     body1.extend_from_slice(&[0u8; 6]); // TOD Error / etc
-                                        // body1.extend_from_slice(&[0u8; 6]); // TOA Error
+    // body1.extend_from_slice(&[0u8; 6]); // TOA Error
 
     responses.push(build_action(&body1));
 

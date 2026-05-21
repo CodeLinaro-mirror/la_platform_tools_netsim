@@ -5,7 +5,7 @@
 //!
 //! Helper functions for working with DataTables and JSON.
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::step::DataTable;
 

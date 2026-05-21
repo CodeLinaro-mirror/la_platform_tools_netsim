@@ -306,7 +306,9 @@ impl FrontendService for FrontendClient {
                 if self.link_manager.delete_rssi(sender_id, receiver_id, link_kind) {
                     sink.success(Empty::new())
                 } else {
-                    let msg = format!("Failed to delete link with sender: {sender_id}, receiver: {receiver_id}, link_kind: {link_kind:?}");
+                    let msg = format!(
+                        "Failed to delete link with sender: {sender_id}, receiver: {receiver_id}, link_kind: {link_kind:?}"
+                    );
                     warn!("{msg}");
                     sink.fail(RpcStatus::with_message(RpcStatusCode::NOT_FOUND, msg))
                 }

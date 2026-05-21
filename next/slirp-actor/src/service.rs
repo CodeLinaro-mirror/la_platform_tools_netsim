@@ -1,12 +1,13 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
+use std::collections::hash_map::Entry;
 
 use actor_framework::{ActorService, DynContext};
 use libslirp_rs::{LibSlirp, ProxyManager};
 
 use crate::{
     error::SlirpError,
-    slirp_actor::{SlirpActor, SlirpCreate, SlirpReq, SlirpStatus},
+    slirp_actor::{ClientInfo, SlirpActor, SlirpCreate, SlirpReq, SlirpStatus},
 };
 
 impl ActorService for SlirpActor {
@@ -17,7 +18,7 @@ impl ActorService for SlirpActor {
     type ActionResult = ();
     type Error = SlirpError;
     type Entity = SlirpStatus;
-    type TypedStream = ();
+    type TypedStream = bytes::Bytes;
 
     async fn handle_create(
         &mut self,
@@ -71,13 +72,16 @@ impl ActorService for SlirpActor {
                 if let Some(slirp) = &self.libslirp {
                     slirp.input(data);
                 } else {
-                    panic!("SlirpActor: SendPacket called before RegisterSink");
+                    panic!("SlirpActor: SendPacket called before Register");
                 }
             }
-            SlirpReq::Register { stream, sink } => {
-                if self.libslirp.is_some() {
-                    panic!("SlirpActor: Register called twice");
-                } else {
+            // Register a new Layer-2 client port (WiFi or Ethernet/Cellular).
+            // - WiFiActor: Registers a single L2 port representing the wireless gateway interface.
+            // - EthernetActor: Registers individual L2 ports representing each emulated guest
+            //   Ethernet or Cellular chip.
+            // Both actors exchange pre-formatted L2 802.3 Ethernet frames with the switch.
+            SlirpReq::Register { client_id, stream, sink, notifier } => {
+                if self.libslirp.is_none() {
                     let mut config = self.config.clone();
                     let mut proxy_manager = None;
                     let mut tx_proxy_bytes = None;
@@ -90,17 +94,35 @@ impl ActorService for SlirpActor {
                         proxy_manager = Some(Box::new(manager) as Box<dyn ProxyManager>);
                         tx_proxy_bytes = Some(tx);
                     }
+
+                    // Create internal downlink channel
+                    let (downlink_tx, downlink_rx) = tokio::sync::mpsc::unbounded_channel();
+
                     // Wrap tx in Box<dyn PacketSender>, effectively removing the bridge thread
                     let slirp =
-                        LibSlirp::new(config, Box::new(sink), proxy_manager, tx_proxy_bytes);
+                        LibSlirp::new(config, Box::new(downlink_tx), proxy_manager, tx_proxy_bytes);
                     self.libslirp = Some(slirp);
 
-                    // Add the stream to the context
-                    // We use 0 as the ID, or should we define a constant?
-                    // lifecycle.rs uses 0 for now as it ignores id.
-                    let stream_id = 0;
-                    ctx.add_stream(stream_id, stream);
+                    // Register internal downlink stream as a typed stream
+                    ctx.add_typed_stream(
+                        0,
+                        Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(downlink_rx)),
+                    );
                 }
+
+                if let Entry::Vacant(e) = self.clients.entry(client_id) {
+                    tracing::info!("SlirpActor: Registering client {client_id}");
+                    e.insert(ClientInfo { sink, notifier });
+                    ctx.add_stream(client_id, stream);
+                } else {
+                    tracing::warn!("SlirpActor: Register called twice for client {client_id}");
+                }
+            }
+            SlirpReq::Unregister { client_id } => {
+                tracing::info!("SlirpActor: Unregistering client {client_id}");
+                self.clients.remove(&client_id);
+                self.mac_table.retain(|_, v| *v != client_id);
+                ctx.remove_stream(client_id);
             }
         }
         Ok(())

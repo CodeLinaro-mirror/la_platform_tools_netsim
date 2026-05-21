@@ -180,8 +180,8 @@ def rust_doc_test(*args, **kwargs):
 
 SHARED_LIB_OVERRIDES = {"lib_rootcanal_ffi"}
 PLATFORM_RUSTLIBS = {
-    "daemon": ["librustutils"],
-    "daemon-lib": ["librustutils"],
+    "daemon": ["libcommand_fds"],
+    "daemon-lib": ["libcommand_fds"],
 }
 IGNORED_TARGETS = {
     "slirp-actor",

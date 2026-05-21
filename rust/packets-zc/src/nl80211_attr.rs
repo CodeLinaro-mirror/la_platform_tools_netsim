@@ -4,7 +4,7 @@
 //! Defines structures for parsing `nl80211` attributes.
 
 use zerocopy::{
-    byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16,
+    FromBytes, Immutable, IntoBytes, KnownLayout, U16, Unaligned, byteorder::LittleEndian,
 };
 
 /// Represents the Netlink attribute header.

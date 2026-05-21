@@ -171,27 +171,26 @@ impl Medium {
             }
         }
 
-        let is_m2u_conversion = (targets.len() > 1 || dest_addr.is_multicast())
-            && !self
-                .key_store
-                .bssids
-                .read()
-                .map_err(|e| WifiError::Internal(Box::from(format!("BSSIDs lock poisoned: {e}"))))?
-                .is_empty();
+        // Consider a frame as infra if it is coming from an AP (FromDS=1)
+        // OR if it aligns with a hosted AP in key_store.
+        let is_infra = ieee80211.is_from_ds()
+            || ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
+
+        let is_m2u_conversion = is_infra && (targets.len() > 1 || dest_addr.is_multicast());
 
         for dest in targets {
             if self.enabled(dest.client_id)? {
-                let frame_to_send = if is_m2u_conversion {
-                    let mut unicast_frame = ieee80211.clone();
+                let mut target_frame = ieee80211.clone();
+                if is_m2u_conversion {
                     let target_mac = netsim_packets::MacAddress::new(dest.addr.into());
-                    unicast_frame.set_destination(&target_mac);
+                    target_frame.set_destination(&target_mac);
+                }
 
-                    self.prepare_frame_for_delivery(&unicast_frame, &ieee80211, true)
-                        .unwrap_or(unicast_frame)
-                } else {
-                    self.prepare_frame_for_delivery(&ieee80211, &ieee80211, true)
-                        .unwrap_or_else(|| ieee80211.clone())
-                };
+                let frame_to_send =
+                    match self.prepare_frame_for_delivery(&target_frame, &ieee80211, is_infra) {
+                        Some(f) => f,
+                        None => continue,
+                    };
 
                 let msg = utils::create_hwsim_msg_from_frame(
                     &frame_to_send,
@@ -225,13 +224,28 @@ impl Medium {
                     None
                 }
             }
-        } else if self.key_store.get_gtk().is_some()
+        } else if original_frame.get_bssid().is_some_and(|b| self.key_store.get_gtk(&b).is_some())
             && original_frame.get_destination().is_multicast()
         {
             // Secure network fallback
             Some(original_frame.clone())
+        } else if original_frame.get_destination().is_multicast() {
+            // Open network fallback:
+            // Check if it is a DHCP packet. DHCP requires L2 broadcast on Open networks
+            // to prevent compatibility issues with guest DHCP clients.
+            // Other multicast packets (like Router Advertisements or ARP) can be
+            // optimized to unicast (M2U) for better performance/reliability.
+            //
+            // Zero-allocation parsing is performed directly on raw frame bytes.
+            let is_dhcp = is_dhcp_packet(frame);
+
+            if is_dhcp {
+                Some(original_frame.clone()) // Fallback to broadcast
+            } else {
+                Some(frame.clone()) // Allow M2U (unicast)
+            }
         } else {
-            // Open network or unicast flooding fallback
+            // Unicast flooding fallback
             Some(frame.clone())
         }
     }
@@ -264,8 +278,10 @@ impl Medium {
             self.wifi_stats.incr_wmedium_unicast_frames_tx();
         }
 
-        // Determine if this packet aligns with hosted infra
-        let is_infra = ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
+        // Consider a frame as infra if it is coming from an AP (FromDS=1)
+        // OR if it aligns with a hosted AP in key_store.
+        let is_infra = ieee80211.is_from_ds()
+            || ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
 
         // RESTRICT: Only run M2U optimizations for infrastructure networks
         let is_m2u_conversion = is_infra && (targets.len() > 1 || dest_addr.is_multicast());
@@ -327,4 +343,47 @@ impl Medium {
         }
         Ok(())
     }
+}
+
+/// Performs zero-allocation parsing on raw IEEE 802.11 frame bytes to identify
+/// DHCP traffic.
+///
+/// DHCP is identified by UDP protocol and destination or source port 67/68.
+fn is_dhcp_packet(ieee80211: &Ieee80211) -> bool {
+    let bytes = ieee80211.as_bytes();
+    let hdr_len = ieee80211.hdr_length();
+    if bytes.len() < hdr_len + 8 {
+        return false; // Too short for LLC/SNAP
+    }
+
+    let llc_snap = &bytes[hdr_len..hdr_len + 8];
+    if llc_snap[0..6] != [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00] {
+        return false; // Not LLC/SNAP
+    }
+
+    let ether_type = u16::from_be_bytes([llc_snap[6], llc_snap[7]]);
+    if ether_type != 0x0800 {
+        // TODO(b/504039691): Add support for DHCPv6 (IPv6 EtherType 0x86DD, UDP ports
+        // 546/547) if needed in the future.
+        return false; // Not IPv4
+    }
+
+    let ip_start = hdr_len + 8;
+    if bytes.len() < ip_start + 20 {
+        return false; // Too short for IP header
+    }
+    let ihl = (bytes[ip_start] & 0x0F) as usize * 4;
+    let protocol = bytes[ip_start + 9];
+    if protocol != 0x11 {
+        return false; // Not UDP
+    }
+
+    let udp_start = ip_start + ihl;
+    if bytes.len() < udp_start + 4 {
+        return false; // Too short for UDP ports
+    }
+    let dst_port = u16::from_be_bytes([bytes[udp_start + 2], bytes[udp_start + 3]]);
+    let src_port = u16::from_be_bytes([bytes[udp_start], bytes[udp_start + 1]]);
+
+    dst_port == 67 || dst_port == 68 || src_port == 67 || src_port == 68
 }

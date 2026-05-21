@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use common::util::time_display::TimeDisplay;
 use netsim_packets::{
-    parse_hci_event, GapDataType, HciEvent, LeAdvertisingEventType, LeMetaEvent, OwnAddressType,
+    GapDataType, HciEvent, LeAdvertisingEventType, LeMetaEvent, OwnAddressType, parse_hci_event,
 };
 use netsim_proto::ble_service::{ScanResponse, SniffResponse};
 use serde::Serialize;
@@ -172,8 +172,22 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
 fn format_128bit_uuid(uuid: &[u8]) -> String {
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        uuid[15], uuid[14], uuid[13], uuid[12], uuid[11], uuid[10], uuid[9], uuid[8],
-        uuid[7], uuid[6], uuid[5], uuid[4], uuid[3], uuid[2], uuid[1], uuid[0]
+        uuid[15],
+        uuid[14],
+        uuid[13],
+        uuid[12],
+        uuid[11],
+        uuid[10],
+        uuid[9],
+        uuid[8],
+        uuid[7],
+        uuid[6],
+        uuid[5],
+        uuid[4],
+        uuid[3],
+        uuid[2],
+        uuid[1],
+        uuid[0]
     )
 }
 

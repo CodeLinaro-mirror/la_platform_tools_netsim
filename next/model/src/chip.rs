@@ -16,7 +16,7 @@ use tokio::sync::oneshot;
 use crate::{
     chip_error::ChipError,
     client_error::ClientError,
-    device::{api::PoseUpdate, DeviceId, Pose},
+    device::{DeviceId, Pose, api::PoseUpdate},
     stats::NetsimRadioStats,
 };
 
@@ -153,7 +153,7 @@ impl fmt::Debug for ChipCreate {
 }
 
 pub use crate::{
-    bluetooth::{beacon::BleBeacon, BeaconParams, BluetoothCreate, BluetoothMode},
+    bluetooth::{BeaconParams, BluetoothCreate, BluetoothMode, beacon::BleBeacon},
     cell::CellCreate,
     uwb::{Uwb, UwbCreate},
     wifi::WifiCreate,

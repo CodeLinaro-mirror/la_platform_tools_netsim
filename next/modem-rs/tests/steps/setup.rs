@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use modem_rs::{
-    test_utils::MockModemHandler, DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo,
-    SimProfile,
+    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile,
+    test_utils::MockModemHandler,
 };
 
 use crate::world::World;

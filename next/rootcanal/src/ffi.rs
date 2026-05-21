@@ -15,7 +15,7 @@ use std::{
     os::raw::{c_char, c_int, c_void},
 };
 
-extern "C" {
+unsafe extern "C" {
     /// Creates a new Bluetooth controller.
     pub fn ffi_controller_new(
         address: *const uint8_t,

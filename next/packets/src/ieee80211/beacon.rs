@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use zerocopy::{
-    byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16,
+    FromBytes, Immutable, IntoBytes, KnownLayout, U16, Unaligned, byteorder::LittleEndian,
 };
 
 use crate::{

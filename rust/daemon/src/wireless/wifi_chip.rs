@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::devices::chip::ChipIdentifier;
-use crate::wireless::wifi_manager::WifiManager;
 use crate::wireless::WirelessChip;
+use crate::wireless::wifi_manager::WifiManager;
 use bytes::Bytes;
 use log::warn;
 use netsim_proto::model::Chip as ProtoChip;
-use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
-use std::sync::atomic::Ordering;
+use netsim_proto::stats::{NetsimRadioStats as ProtoRadioStats, netsim_radio_stats};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 /// Parameters for creating WifiChips
 /// allow(dead_code) due to not being used in unit tests

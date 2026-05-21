@@ -4,7 +4,7 @@
 use std::time::Instant;
 
 use netsim_proto::stats::NetsimStats as ProtoNetsimStats;
-use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
+use protobuf_json_mapping::{PrintOptions, print_to_string_with_options};
 
 const STATS_PRINT_OPTIONS: PrintOptions = PrintOptions {
     enum_values_int: false,

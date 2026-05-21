@@ -23,4 +23,4 @@ pub(crate) mod version;
 
 pub use args::{Args, ClapWifiMode};
 pub use ini_file::{IniFile, IniFileAccess, IniFileInitialized};
-pub use netsimd::{run, NetsimDaemon, RunResult, StartUpMode};
+pub use netsimd::{NetsimDaemon, RunResult, StartUpMode, run};

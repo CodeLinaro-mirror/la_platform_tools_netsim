@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     env, io,
     path::PathBuf,
-    sync::{atomic::AtomicU32, Arc},
+    sync::{Arc, atomic::AtomicU32},
     time::Duration,
 };
 
@@ -18,16 +18,16 @@ use common::{
 };
 use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
-use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
+use futures::{FutureExt, SinkExt, StreamExt, pin_mut};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    set_if_some, BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams,
-    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, Pose,
+    BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams, PacketSink as ApiPacketSink,
+    PacketStream as ApiPacketStream, Pose, set_if_some,
 };
 use packet_stream::{
-    transport::traits::{PacketSink, PacketStream},
     StreamAddress, Streams,
+    transport::traits::{PacketSink, PacketStream},
 };
 #[cfg(not(feature = "cuttlefish"))]
 use slirp_actor::SlirpClient;
@@ -63,22 +63,6 @@ fn init_error<E: std::fmt::Display>(e: E) -> RunResult {
 pub enum StartUpMode {
     Owner(NetsimDaemon, IniFileInitialized),
     Client(NetsimConfig),
-}
-
-// Initialization for linux cuttlefish environment. Cuttelfish passes
-// open file descriptors to netsimd.
-
-#[cfg(all(target_os = "linux", feature = "cuttlefish"))]
-fn cuttlefish_init() {
-    use rustutils::inherited_fd;
-    // SAFETY: This function must be called before any other code that might take
-    // ownership of file descriptors. `init_once` takes ownership of all open
-    // file descriptors except for the stdio streams. Calling it after other
-    // parts of the program has already acquired ownership of file descriptors
-    // can lead to double-frees or other memory corruption issues.
-    unsafe {
-        inherited_fd::init_once().expect("inherited_fds");
-    }
 }
 
 async fn handle_new_connection(
@@ -291,15 +275,15 @@ impl NetsimDaemon {
             return Err(RunResult::ExitedNormally);
         }
 
-        #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
-        cuttlefish_init();
-
         logger::init("netsim", args.verbose);
 
         info!("netsim startup");
 
         // enable Rust backtrace by setting env RUST_BACKTRACE=full
-        env::set_var("RUST_BACKTRACE", "full");
+        // SAFETY: Single-threaded initialization code. Caller must guarantee this.
+        unsafe {
+            env::set_var("RUST_BACKTRACE", "full");
+        }
 
         // Log where netsim artifacts are located
         info!("Artifacts: {:?}", netsimd_temp_dir());
@@ -309,23 +293,16 @@ impl NetsimDaemon {
         // Resolve TAP configuration early to validate permissions/availability.
         #[cfg(target_os = "linux")]
         let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
-            if args.wifi.wifi_cvd_tap {
-                Some("cvd-etap-%02d".to_string())
-            } else {
-                None
-            }
+            if args.wifi.wifi_cvd_tap { Some("cvd-etap-%02d".to_string()) } else { None }
         });
 
         // Pre-check TAP permissions if configured.
         // We do this BEFORE redirection so the user can see the error in the console.
         #[cfg(all(target_os = "linux", not(feature = "cuttlefish")))]
-        if let Some(ref tap_config) = wifi_tap {
-            if let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config) {
-                return Err(RunResult::InitializationError(format!(
-                    "TAP configuration failed: {}",
-                    e
-                )));
-            }
+        if let Some(ref tap_config) = wifi_tap
+            && let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config)
+        {
+            return Err(RunResult::InitializationError(format!("TAP configuration failed: {}", e)));
         }
 
         if !args.logtostderr {
@@ -490,11 +467,7 @@ impl NetsimDaemon {
         // pooling. If --wifi-tap is set, it overrides everything.
         #[cfg(target_os = "linux")]
         let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
-            if args.wifi.wifi_cvd_tap {
-                Some("cvd-etap-%02d".to_string())
-            } else {
-                None
-            }
+            if args.wifi.wifi_cvd_tap { Some("cvd-etap-%02d".to_string()) } else { None }
         });
         #[cfg(not(target_os = "linux"))]
         let wifi_tap: Option<String> = None;
@@ -643,10 +616,10 @@ impl NetsimDaemon {
         let link_fut = self.link_client.shutdown();
         #[cfg(not(feature = "cuttlefish"))]
         let slirp_fut = async {
-            if let Some(slirp) = &self.slirp_client {
-                if let Err(e) = slirp.shutdown().await {
-                    warn!("SlirpActor shutdown error: {}", e);
-                }
+            if let Some(slirp) = &self.slirp_client
+                && let Err(e) = slirp.shutdown().await
+            {
+                warn!("SlirpActor shutdown error: {}", e);
             }
         };
         #[cfg(feature = "cuttlefish")]
@@ -812,6 +785,7 @@ async fn shutdown_signal() {
     }
 }
 
+#[tokio::main]
 pub async fn run() -> RunResult {
     match NetsimDaemon::new().await {
         Ok(StartUpMode::Owner(daemon, _ini_guard)) => daemon.run_daemon().await,

@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    util::{into_raw_descriptor, ProxyConfig},
     Connector, DnsManager, Result,
+    util::{ProxyConfig, into_raw_descriptor},
 };
 use bytes::Bytes;
 use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
 use log::{debug, warn};
 use std::net::SocketAddr;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use tokio::runtime::Runtime;
 

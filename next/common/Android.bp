@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_common",
+    edition: "2024",
     crate_name: "common",
     stem: "libcommon",
     crate_root: "src/lib.rs",

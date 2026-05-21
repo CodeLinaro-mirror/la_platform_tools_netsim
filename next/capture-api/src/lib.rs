@@ -75,7 +75,7 @@ pub mod io;
 
 use std::{
     path::PathBuf,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
 };
 
 use async_trait::async_trait;

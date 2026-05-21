@@ -3,13 +3,13 @@
 
 use std::net::SocketAddr;
 
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
 };
 
-use crate::{rewriter, Error, Result};
+use crate::{Error, Result, rewriter};
 
 const HTTP_VERSION: &str = "1.1";
 
@@ -102,7 +102,7 @@ fn base64_encode(src: &[u8]) -> Vec<u8> {
 mod tests {
     use tokio::{
         io::AsyncReadExt,
-        net::{lookup_host, TcpListener},
+        net::{TcpListener, lookup_host},
     };
 
     use super::*;

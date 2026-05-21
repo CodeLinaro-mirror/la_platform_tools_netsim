@@ -132,8 +132,8 @@ fn h4_recovery<R: Read>(mut reader: R) -> Result<Packet, PacketError> {
 #[cfg(test)]
 mod tests {
     use super::PacketError;
-    use super::{h4_recovery, read_h4_packet};
     use super::{H4_ACL_TYPE, H4_CMD_TYPE, H4_EVT_TYPE, H4_ISO_TYPE, H4_SCO_TYPE};
+    use super::{h4_recovery, read_h4_packet};
     use std::io::{BufReader, Cursor};
 
     // Validate packet types

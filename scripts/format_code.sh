@@ -68,7 +68,7 @@ Clang_REGEX="\.(cc|h|proto|ts)$"
 
 # Rust
 Rust_CMD="$RUSTFMT --files-with-diff"
-Rust_DIRS="rust next"
+Rust_DIRS="rust next proto"
 Rust_EXTS="-name *.rs"
 Rust_REGEX="\.rs$"
 

@@ -3,7 +3,7 @@
 
 use std::{
     net::SocketAddr,
-    sync::{mpsc, Arc},
+    sync::{Arc, mpsc},
     thread,
 };
 
@@ -13,8 +13,8 @@ use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 
 use crate::{
-    util::{into_raw_descriptor, ProxyConfig},
     Connector, DnsManager, Result,
+    util::{ProxyConfig, into_raw_descriptor},
 };
 
 /// # Manager

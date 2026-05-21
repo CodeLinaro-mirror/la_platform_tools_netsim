@@ -8,7 +8,7 @@ use netsim_proto::model::Device as ProtoDevice;
 use pica::{Handle, RangingEstimator, RangingMeasurement};
 
 use crate::devices::{chip::ChipIdentifier, devices_handler::get_device};
-use crate::ranging::{compute_range_azimuth_elevation, Pose};
+use crate::ranging::{Pose, compute_range_azimuth_elevation};
 use crate::uwb::ranging_data::RangingDataSet;
 
 use std::collections::HashMap;
@@ -104,8 +104,8 @@ fn is_uwb_state_on(device: &ProtoDevice, chip_id: &ChipIdentifier) -> bool {
 mod tests {
     use super::*;
 
-    use netsim_proto::model::chip::Radio as ProtoRadio;
     use netsim_proto::model::Chip as ProtoChip;
+    use netsim_proto::model::chip::Radio as ProtoRadio;
 
     fn create_proto_device_with_uwb_chip(uwb_state: bool) -> (ProtoDevice, ChipIdentifier) {
         // Setting Radio State to true

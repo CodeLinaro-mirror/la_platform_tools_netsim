@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicU32, Arc},
+    sync::{Arc, atomic::AtomicU32},
 };
 
 use actor_framework::TimerKey;

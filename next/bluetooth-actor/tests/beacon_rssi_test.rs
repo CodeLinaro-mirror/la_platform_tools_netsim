@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use bluetooth_actor::beacon_utils::{
-    is_le_advertising_report, REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET,
+    REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET, is_le_advertising_report,
 };
 use netsim_model::Position;
 use netsim_packets::{

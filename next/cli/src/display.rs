@@ -7,7 +7,7 @@ use netsim_proto::{
     frontend::{ListDeviceResponse, ListLinkResponse},
     model::{
         self,
-        chip::ble_beacon::{advertise_settings, AdvertiseData, AdvertiseSettings},
+        chip::ble_beacon::{AdvertiseData, AdvertiseSettings, advertise_settings},
     },
 };
 use protobuf::MessageField;
@@ -137,7 +137,12 @@ impl fmt::Display for Displayer<&model::Chip> {
             _ => {
                 if self.verbose {
                     writeln!(f)?;
-                    write!(f, "{:indent$}Unknown chip", "")?
+                    write!(
+                        f,
+                        "{:indent$}Unknown chip (Kind: {:?})",
+                        "",
+                        self.value.kind.enum_value_or_default()
+                    )?
                 }
             }
         }
@@ -345,11 +350,7 @@ pub struct LinkChipIdDisplay(pub u32);
 
 impl fmt::Display for LinkChipIdDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0 == 0 {
-            write!(f, "ALL")
-        } else {
-            write!(f, "{}", self.0)
-        }
+        if self.0 == 0 { write!(f, "ALL") } else { write!(f, "{}", self.0) }
     }
 }
 

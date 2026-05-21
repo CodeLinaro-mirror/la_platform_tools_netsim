@@ -1,6 +1,12 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+// This file is currently disabled because all steps in it rely on gRPC for link
+// management. We are removing gRPC to eliminate the grpcio dependency for
+// Google3. These steps will be refactored to use the Netsim CLI once link
+// management is supported in the CLI. Tracked in b/508244289.
+
+/*
 use netsim_proto::frontend;
 use verify_macros::{step, step_module};
 
@@ -229,3 +235,4 @@ pub mod steps {
 }
 
 pub use steps::register_steps;
+*/

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     fs::read_to_string,
     path::PathBuf,
 };
@@ -61,22 +61,22 @@ pub fn parse_ini(
             }
 
             let entry = map.entry(key.to_string());
-            if options.strict {
-                if let Entry::Occupied(ref occupied) = entry {
-                    let existing_value = occupied.get();
-                    if existing_value != value {
-                        let column_number = line.find(key).unwrap_or(0) + 1;
-                        return Err(IniParseError {
-                            line_number,
-                            column_number,
-                            kind: IniParseErrorKind::DuplicateKey {
-                                key: key.to_string(),
-                                existing_value: existing_value.to_string(),
-                                new_value: value.to_string(),
-                            },
-                            line_content: line.to_string(),
-                        });
-                    }
+            if options.strict
+                && let Entry::Occupied(ref occupied) = entry
+            {
+                let existing_value = occupied.get();
+                if existing_value != value {
+                    let column_number = line.find(key).unwrap_or(0) + 1;
+                    return Err(IniParseError {
+                        line_number,
+                        column_number,
+                        kind: IniParseErrorKind::DuplicateKey {
+                            key: key.to_string(),
+                            existing_value: existing_value.to_string(),
+                            new_value: value.to_string(),
+                        },
+                        line_content: line.to_string(),
+                    });
                 }
             }
             entry.insert_entry(value.to_string());
@@ -126,13 +126,9 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
             error!("Error parsing ini file: {err}");
         })
         .ok()?;
-    ini_map.get("grpc.port").map(|s| {
-        if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("localhost:{s}")
-        }
-    })
+    ini_map
+        .get("grpc.port")
+        .map(|s| if s.contains(':') { s.to_string() } else { format!("localhost:{s}") })
 }
 
 #[cfg(test)]
@@ -168,7 +164,10 @@ mod tests {
         let _locked = ENV_MUTEX.lock();
 
         // Test with TMPDIR variable
-        std::env::set_var("TMPDIR", "/tmpdir");
+        // SAFETY: Serialized via ENV_MUTEX.
+        unsafe {
+            std::env::set_var("TMPDIR", "/tmpdir");
+        }
 
         // Test get_netsim_ini_filepath
         assert_eq!(get_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));
@@ -176,7 +175,7 @@ mod tests {
     }
     #[test]
     fn test_parse_ini_strict() {
-        use super::{parse_ini, IniParseErrorKind, IniParserOptions};
+        use super::{IniParseErrorKind, IniParserOptions, parse_ini};
 
         // Test empty key
         let content = "=value";

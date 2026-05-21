@@ -54,9 +54,9 @@ mod tests {
         ethernet::MacAddr,
         ieee80211::Ieee80211,
         netlink::{
+            TxRate,
             hwsim_attr_set::HwsimAttrSet,
             mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr},
-            TxRate,
         },
     };
 

@@ -8,7 +8,7 @@ use crate::devices::chip::{self, ChipIdentifier};
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::transport::h4;
 use crate::wireless;
-use crate::wireless::packet::{register_transport, unregister_transport, Response};
+use crate::wireless::packet::{Response, register_transport, unregister_transport};
 use bytes::Bytes;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
@@ -137,7 +137,11 @@ fn reader(mut tcp_rx: TcpStream, kind: ChipKind, chip_id: ChipIdentifier) -> std
                     return Ok(());
                 }
                 Err(e) => {
-                    error!("End socket reader connection with {}. Failed to reading hci control packet: {:?}",  &tcp_rx.peer_addr().unwrap(), e);
+                    error!(
+                        "End socket reader connection with {}. Failed to reading hci control packet: {:?}",
+                        &tcp_rx.peer_addr().unwrap(),
+                        e
+                    );
                     return Ok(());
                 }
             }

@@ -4,8 +4,8 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::SystemTime,
 };
@@ -85,11 +85,7 @@ impl World {
     pub async fn then_capture_is_none(&self, chip_id: u32) {
         self.poll_until(|| async {
             let info = self.client.get_capture(ChipId(chip_id)).await.unwrap();
-            if info.is_none() {
-                Some(())
-            } else {
-                None
-            }
+            if info.is_none() { Some(()) } else { None }
         })
         .await;
     }
@@ -97,10 +93,10 @@ impl World {
     pub async fn then_capture_is_enabled(&self, chip_id: u32, expected_enabled: bool) {
         self.poll_until(|| async {
             let info = self.client.get_capture(ChipId(chip_id)).await.unwrap();
-            if let Some(info) = info {
-                if info.enabled == expected_enabled {
-                    return Some(());
-                }
+            if let Some(info) = info
+                && info.enabled == expected_enabled
+            {
+                return Some(());
             }
             None
         })
@@ -115,11 +111,11 @@ impl World {
     ) {
         self.poll_until(|| async {
             let info = self.client.get_capture(ChipId(chip_id)).await.unwrap();
-            if let Some(info) = info {
-                if info.records_written == expected_records && info.bytes_written == expected_bytes
-                {
-                    return Some(());
-                }
+            if let Some(info) = info
+                && info.records_written == expected_records
+                && info.bytes_written == expected_bytes
+            {
+                return Some(());
             }
             None
         })
@@ -141,11 +137,7 @@ impl World {
         self.poll_until(|| async {
             let entries: Vec<_> =
                 std::fs::read_dir(&self.temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
-            if entries.len() == 1 {
-                Some(())
-            } else {
-                None
-            }
+            if entries.len() == 1 { Some(()) } else { None }
         })
         .await;
     }

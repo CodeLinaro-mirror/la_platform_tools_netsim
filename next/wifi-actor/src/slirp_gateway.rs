@@ -13,6 +13,7 @@ use tracing::{debug, warn};
 
 use crate::{
     gateway::GatewayTrait,
+    lifecycle::SLIRP_ID,
     medium::Medium,
     wifi_actor::{SlirpPendingRequest, WifiActor},
 };
@@ -165,13 +166,13 @@ impl GatewayTrait for SlirpGateway {
                 // Register with SlirpActor
                 let stream =
                     Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(uplink_rx));
-                if let Err(e) = client.register(stream, downlink_tx).await {
+                if let Err(e) = client.register(SLIRP_ID.0, stream, downlink_tx, None).await {
                     warn!("Failed to register with SlirpActor: {}", e);
                 }
 
                 // Add downlink stream to context
                 ctx.add_stream(
-                    crate::lifecycle::SLIRP_ID,
+                    SLIRP_ID,
                     Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(downlink_rx)),
                 );
             }

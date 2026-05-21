@@ -19,7 +19,7 @@ use crate::tap_gateway::TapGateway;
 use crate::{
     error::WifiError,
     gateway::GatewayTrait,
-    medium::{tx_packet_state::InfraTarget, Medium},
+    medium::{Medium, tx_packet_state::InfraTarget},
     slirp_gateway::SlirpGateway,
 };
 
@@ -204,24 +204,22 @@ impl WifiActor {
                                     if let (Some(initiator), Some(responder)) = (
                                         self.active_chips.get(&ChipId(chip_id)),
                                         self.active_chips.get(&ChipId(peer_id)),
+                                    ) && let Some(responses) = crate::ftm::handle_ftm_request(
+                                        &frame,
+                                        &initiator.pose.position,
+                                        &responder.pose.position,
                                     ) {
-                                        if let Some(responses) = crate::ftm::handle_ftm_request(
-                                            &frame,
-                                            &initiator.pose.position,
-                                            &responder.pose.position,
-                                        ) {
-                                            debug!(
-                                                "Simulated FTM Response from {} to {}",
-                                                peer_id, chip_id
-                                            );
-                                            for resp in responses {
-                                                self.out_queue.push((chip_id, resp));
-                                            }
-                                            // Suppress generic transmission.
-                                            // Act as a Hardware Offload/Medium Interception to
-                                            // ensure ONLY the simulated FTM response is sent.
-                                            return;
+                                        debug!(
+                                            "Simulated FTM Response from {} to {}",
+                                            peer_id, chip_id
+                                        );
+                                        for resp in responses {
+                                            self.out_queue.push((chip_id, resp));
                                         }
+                                        // Suppress generic transmission.
+                                        // Act as a Hardware Offload/Medium Interception to
+                                        // ensure ONLY the simulated FTM response is sent.
+                                        return;
                                     }
                                 }
                             }

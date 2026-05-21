@@ -8,16 +8,16 @@
 
 use std::{
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Instant,
 };
 
 use bytes::Bytes;
 use capture_api::{
-    io::{CapturedSink, CapturedStream},
     CaptureCreate, CaptureSender,
+    io::{CapturedSink, CapturedStream},
 };
 use futures::{SinkExt, StreamExt};
 use netsim_model::{ChipId, ChipKind, PacketSink, PacketStream};

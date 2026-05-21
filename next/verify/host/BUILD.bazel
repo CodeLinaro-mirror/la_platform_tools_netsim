@@ -9,7 +9,7 @@ rust_library(
     name = "verify_host_lib",
     testonly = True,
     srcs = glob(["src/**/*.rs"]),
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
         "@async-trait",
         "//next/verify/macros:verify_macros",
@@ -17,11 +17,8 @@ rust_library(
     deps = [
         "//next/common",
         "//next/verify/lib",
-        "//proto",
         "@clap",
         "@futures",
-        "@grpcio",
-        "@protobuf-rust",
         "@regex",
         "@serde",
         "@serde_json",

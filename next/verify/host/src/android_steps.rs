@@ -5,8 +5,8 @@ use std::{
     collections::{HashMap, HashSet},
     process::{Child, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -19,7 +19,7 @@ use verify_macros::{step, step_module};
 
 use crate::{
     orchestrator::TestContext,
-    types::{ClientParams, Throughput, LABEL_WIDTH},
+    types::{ClientParams, LABEL_WIDTH, Throughput},
 };
 
 // Protocol markers for Guest-Host communication (legacy)
@@ -137,6 +137,7 @@ pub struct AndroidDevice {
     pub silent: Arc<AtomicBool>,
     pub next_msg_id: i32,
     pub steps: Vec<regex::Regex>,
+    pub guest_instrumentation: String,
 }
 
 impl AndroidDevice {
@@ -176,6 +177,7 @@ impl AndroidDevice {
         serial: Option<String>,
         android_home: String,
         apk_path: Option<String>,
+        guest_instrumentation: String,
     ) -> Result<Self, String> {
         Ok(Self {
             adb_path: android_home,
@@ -190,6 +192,7 @@ impl AndroidDevice {
             silent: Arc::new(AtomicBool::new(false)),
             next_msg_id: 1,
             steps: Vec::new(),
+            guest_instrumentation,
         })
     }
 
@@ -388,7 +391,7 @@ impl AndroidDevice {
                 .arg("-e")
                 .arg("control_port")
                 .arg(&port_arg)
-                .arg("com.android.verify.vbs/com.android.verify.vbs.VbsInstrumentation")
+                .arg(&self.guest_instrumentation)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()

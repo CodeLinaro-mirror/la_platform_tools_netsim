@@ -116,6 +116,7 @@ impl DeviceInfo {
 /// This enumeration is used to distinguish between different types of simulated
 /// radios and to route packets to the correct handlers.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[allow(non_camel_case_types)]
 pub enum ChipKind {
     #[default]
     UNSPECIFIED,
@@ -124,4 +125,6 @@ pub enum ChipKind {
     UWB,
     NFC,
     CELLULAR,
+    CELLULAR_DATA,
+    ETHERNET,
 }

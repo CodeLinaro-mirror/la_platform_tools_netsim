@@ -4,7 +4,7 @@
 #![allow(clippy::empty_line_after_doc_comments)]
 
 use std::collections::HashMap;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{OnceLock, RwLock};
 use std::thread;
 

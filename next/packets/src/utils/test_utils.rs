@@ -121,15 +121,14 @@ fn compare_json_objects(netsim: &serde_json::Value, tshark: &serde_json::Value, 
                         // Validate specific fields
                         let fields_to_check = ["frame.len", "frame.cap_len", "frame.protocols"];
                         for field in fields_to_check {
-                            if let Some(n_val) = val.get(field) {
-                                if let Some(t_val) = t_frame.get(field) {
-                                    if !compare_values(n_val, t_val) {
-                                        panic!(
-                                            "Frame field mismatch: {} (netsim: {:?}, tshark: {:?})",
-                                            field, n_val, t_val
-                                        );
-                                    }
-                                }
+                            if let Some(n_val) = val.get(field)
+                                && let Some(t_val) = t_frame.get(field)
+                                && !compare_values(n_val, t_val)
+                            {
+                                panic!(
+                                    "Frame field mismatch: {} (netsim: {:?}, tshark: {:?})",
+                                    field, n_val, t_val
+                                );
                             }
                         }
                     }
@@ -186,18 +185,17 @@ fn compare_values(n_val: &serde_json::Value, t_val: &serde_json::Value) -> bool 
         (serde_json::Value::Number(n_num), serde_json::Value::String(t_str)) => {
             // Tshark often stores numbers as strings (e.g. "0")
             // Try to parse t_str as number or convert n_num to string
-            if let Ok(t_num) = t_str.parse::<f64>() {
-                if let Some(n_f64) = n_num.as_f64() {
-                    return (n_f64 - t_num).abs() < f64::EPSILON;
-                }
+            if let Ok(t_num) = t_str.parse::<f64>()
+                && let Some(n_f64) = n_num.as_f64()
+            {
+                return (n_f64 - t_num).abs() < f64::EPSILON;
             }
             // Handle hex strings (e.g. "0x0003")
-            if let Some(stripped) = t_str.strip_prefix("0x") {
-                if let Ok(t_int) = u64::from_str_radix(stripped, 16) {
-                    if let Some(n_u64) = n_num.as_u64() {
-                        return n_u64 == t_int;
-                    }
-                }
+            if let Some(stripped) = t_str.strip_prefix("0x")
+                && let Ok(t_int) = u64::from_str_radix(stripped, 16)
+                && let Some(n_u64) = n_num.as_u64()
+            {
+                return n_u64 == t_int;
             }
             // Fallback: compare as strings
             n_num.to_string() == *t_str

@@ -6,6 +6,7 @@ use std::cmp::max;
 use common::util::time_display::TimeDisplay;
 use netsim_proto::{common::ChipKind, frontend, model};
 use protobuf::MessageField;
+use protobuf_json_mapping::print_to_string;
 
 use crate::{
     args::{self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, OnOffState},
@@ -51,13 +52,20 @@ impl args::Command {
                     )
                 }
             }
-            Command::Devices(_) => {
+            Command::Devices(cmd) => {
                 let GrpcResponse::ListDevice(res) = response else {
                     return Err(
                         format!("Expected to print ListDeviceResponse. Got: {response:?}").into()
                     );
                 };
-                println!("{}", Displayer::new(res.clone(), verbose));
+                if cmd.json {
+                    let json = print_to_string(res).map_err(|e| {
+                        crate::error::Error::from(format!("JSON mapping error: {e}"))
+                    })?;
+                    println!("{json}");
+                } else {
+                    println!("{}", Displayer::new(res.clone(), verbose));
+                }
             }
             Command::Reset => {
                 if verbose {
@@ -91,102 +99,101 @@ impl args::Command {
                 }
             }
 
-            Command::Beacon(action) => {
-                match action {
-                    Beacon::Create(kind) => match kind {
-                        BeaconCreate::Ble(_) => {
-                            if !verbose {
-                                return Ok(());
-                            }
-                            let GrpcResponse::CreateDevice(res) = response else {
-                                return Err(format!(
-                                    "Expected to print CreateDeviceResponse. Got: {response:?}"
-                                )
-                                .into());
-                            };
-                            let device = &res.device;
-                            if device.chips.len() == 1 {
-                                println!(
-                                    "Created device '{}' with ble beacon chip '{}'",
-                                    device.name, device.chips[0].name
-                                );
-                            } else {
-                                return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
-                            }
-                        }
-                    },
-                    Beacon::Patch(kind) => match kind {
-                        BeaconPatch::Ble(args) => {
-                            if !verbose {
-                                return Ok(());
-                            }
-                            if let Some(advertise_mode) = &args.settings.advertise_mode {
-                                match advertise_mode {
-                                    args::Interval::Mode(mode) => {
-                                        println!("Set advertise mode to {mode:#?}")
-                                    }
-                                    args::Interval::Milliseconds(ms) => {
-                                        println!("Set advertise interval to {ms} ms")
-                                    }
-                                }
-                            }
-                            if let Some(tx_power_level) = &args.settings.tx_power_level {
-                                match tx_power_level {
-                                    args::TxPower::Level(level) => {
-                                        println!("Set transmit power level to {level:#?}")
-                                    }
-                                    args::TxPower::Dbm(dbm) => {
-                                        println!("Set transmit power level to {dbm} dBm")
-                                    }
-                                }
-                            }
-                            if args.settings.scannable {
-                                println!("Set scannable to true");
-                            }
-                            if let Some(timeout) = args.settings.timeout {
-                                println!("Set timeout to {timeout} ms");
-                            }
-                            if args.advertise_data.include_device_name {
-                                println!("Added the device's name to the advertise packet")
-                            }
-                            if args.advertise_data.include_tx_power_level {
-                                println!("Added the beacon's transmit power level to the advertise packet")
-                            }
-                            if args.advertise_data.manufacturer_data.is_some() {
-                                println!("Added manufacturer data to the advertise packet")
-                            }
-                            if args.settings.scannable {
-                                println!("Set scannable to true");
-                            }
-                            if let Some(timeout) = args.settings.timeout {
-                                println!("Set timeout to {timeout} ms");
-                            }
-                        }
-                    },
-                    Beacon::Remove(args) => {
+            Command::Beacon(action) => match action {
+                Beacon::Create(kind) => match kind {
+                    BeaconCreate::Ble(_) => {
                         if !verbose {
                             return Ok(());
                         }
-                        println!("Removed device '{}'", args.device_name)
+                        let GrpcResponse::CreateDevice(res) = response else {
+                            return Err(format!(
+                                "Expected to print CreateDeviceResponse. Got: {response:?}"
+                            )
+                            .into());
+                        };
+                        let device = &res.device;
+                        if device.chips.len() == 1 {
+                            println!(
+                                "Created device '{}' with ble beacon chip '{}'",
+                                device.name, device.chips[0].name
+                            );
+                        } else {
+                            return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
+                        }
                     }
+                },
+                Beacon::Patch(kind) => match kind {
+                    BeaconPatch::Ble(args) => {
+                        if !verbose {
+                            return Ok(());
+                        }
+                        if let Some(advertise_mode) = &args.settings.advertise_mode {
+                            match advertise_mode {
+                                args::Interval::Mode(mode) => {
+                                    println!("Set advertise mode to {mode:#?}")
+                                }
+                                args::Interval::Milliseconds(ms) => {
+                                    println!("Set advertise interval to {ms} ms")
+                                }
+                            }
+                        }
+                        if let Some(tx_power_level) = &args.settings.tx_power_level {
+                            match tx_power_level {
+                                args::TxPower::Level(level) => {
+                                    println!("Set transmit power level to {level:#?}")
+                                }
+                                args::TxPower::Dbm(dbm) => {
+                                    println!("Set transmit power level to {dbm} dBm")
+                                }
+                            }
+                        }
+                        if args.settings.scannable {
+                            println!("Set scannable to true");
+                        }
+                        if let Some(timeout) = args.settings.timeout {
+                            println!("Set timeout to {timeout} ms");
+                        }
+                        if args.advertise_data.include_device_name {
+                            println!("Added the device's name to the advertise packet")
+                        }
+                        if args.advertise_data.include_tx_power_level {
+                            println!(
+                                "Added the beacon's transmit power level to the advertise packet"
+                            )
+                        }
+                        if args.advertise_data.manufacturer_data.is_some() {
+                            println!("Added manufacturer data to the advertise packet")
+                        }
+                        if args.settings.scannable {
+                            println!("Set scannable to true");
+                        }
+                        if let Some(timeout) = args.settings.timeout {
+                            println!("Set timeout to {timeout} ms");
+                        }
+                    }
+                },
+                Beacon::Remove(args) => {
+                    if !verbose {
+                        return Ok(());
+                    }
+                    println!("Removed device '{}'", args.device_name)
                 }
-            }
+            },
 
             Command::Link(link_cmd) => match link_cmd {
                 Link::Create(_) => {
-                    if verbose {
-                        if let GrpcResponse::CreateLink(frontend::CreateLinkResponse {
+                    if verbose
+                        && let GrpcResponse::CreateLink(frontend::CreateLinkResponse {
                             link: MessageField(Some(match_link)),
                             ..
                         }) = response
-                        {
-                            println!(
-                                "Successfully created link (Sender: {}, Receiver: {}, Type: {:?})",
-                                LinkChipIdDisplay(match_link.sender_id),
-                                LinkChipIdDisplay(match_link.receiver_id),
-                                match_link.kind
-                            );
-                        }
+                    {
+                        println!(
+                            "Successfully created link (Sender: {}, Receiver: {}, Type: {:?})",
+                            LinkChipIdDisplay(match_link.sender_id),
+                            LinkChipIdDisplay(match_link.receiver_id),
+                            match_link.kind
+                        );
                     }
                 }
                 Link::List => {
@@ -199,28 +206,27 @@ impl args::Command {
                     println!("{}", Displayer::new(res.clone(), verbose));
                 }
                 Link::Patch(args) => {
-                    if let Some(rssi) = args.rssi {
-                        if verbose {
-                            // fall back to args (wildcards)
-                            let (sender, receiver) = match request {
-                                Some(GrpcRequest::PatchLink(req)) => {
-                                    match &req.link.clone().into_option() {
-                                        Some(link) => {
-                                            (Some(link.sender_id), Some(link.receiver_id))
-                                        }
-                                        None => (args.sender, args.receiver),
-                                    }
+                    if let Some(rssi) = args.rssi
+                        && verbose
+                    {
+                        // fall back to args (wildcards)
+                        let (sender, receiver) = match request {
+                            Some(GrpcRequest::PatchLink(req)) => {
+                                match &req.link.clone().into_option() {
+                                    Some(link) => (Some(link.sender_id), Some(link.receiver_id)),
+                                    None => (args.sender, args.receiver),
                                 }
-                                _ => (args.sender, args.receiver),
-                            };
+                            }
+                            _ => (args.sender, args.receiver),
+                        };
 
-                            println!(
-                                "Successfully patched RSSI for link (Sender: {}, Receiver: {}, Type: {}) to {}.",
-                                LinkChipIdDisplay(sender.unwrap_or(0)),
-                                LinkChipIdDisplay(receiver.unwrap_or(0)),
-                                args.chip_kind, rssi
-                            );
-                        }
+                        println!(
+                            "Successfully patched RSSI for link (Sender: {}, Receiver: {}, Type: {}) to {}.",
+                            LinkChipIdDisplay(sender.unwrap_or(0)),
+                            LinkChipIdDisplay(receiver.unwrap_or(0)),
+                            args.chip_kind,
+                            rssi
+                        );
                     }
                 }
                 Link::Delete(args) => {
@@ -333,7 +339,8 @@ impl args::Command {
         println!(
             "{}",
             if verbose {
-                format!("{id_hdr:id_width$} | {name_hdr:name_width$} | {chipkind_hdr:chipkind_width$} | {state_hdr:state_width$} | {time_hdr:time_width$} | {records_hdr:records_width$} | {size_hdr:size_width$} |",
+                format!(
+                    "{id_hdr:id_width$} | {name_hdr:name_width$} | {chipkind_hdr:chipkind_width$} | {state_hdr:state_width$} | {time_hdr:time_width$} | {records_hdr:records_width$} | {size_hdr:size_width$} |",
                 )
             } else {
                 format!(
@@ -346,15 +353,21 @@ impl args::Command {
             println!(
                 "{}",
                 if verbose {
-                    format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:time_width$} | {:records_width$} | {:size_width$} |",
+                    format!(
+                        "{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:time_width$} | {:records_width$} | {:size_width$} |",
                         capture.id.to_string(),
                         capture.device_name,
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        if capture.valid {Self::capture_state_to_string(capture.state)} else {"detached".to_string()},
+                        if capture.valid {
+                            Self::capture_state_to_string(capture.state)
+                        } else {
+                            "detached".to_string()
+                        },
                         TimeDisplay::new(
                             capture.timestamp.get_or_default().seconds,
                             capture.timestamp.get_or_default().nanos as u32,
-                        ).utc_display_hms(),
+                        )
+                        .utc_display_hms(),
                         capture.records,
                         capture.size,
                     )
@@ -363,7 +376,11 @@ impl args::Command {
                         "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:records_width$} |",
                         capture.device_name,
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        if capture.valid {Self::capture_state_to_string(capture.state)} else {"detached".to_string()},
+                        if capture.valid {
+                            Self::capture_state_to_string(capture.state)
+                        } else {
+                            "detached".to_string()
+                        },
                         capture.records,
                     )
                 }
@@ -380,6 +397,8 @@ impl args::Command {
             ChipKind::BLUETOOTH_BEACON => "BLUETOOTH_BEACON",
             ChipKind::NFC => "NFC",
             ChipKind::CELLULAR => "CELLULAR",
+            ChipKind::CELLULAR_DATA => "CELLULAR_DATA",
+            ChipKind::ETHERNET => "ETHERNET",
         }
         .into()
     }

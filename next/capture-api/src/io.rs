@@ -15,8 +15,8 @@
 use std::{
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     task::{Context, Poll},
 };
@@ -66,14 +66,14 @@ impl Stream for CapturedStream {
         use futures::StreamExt;
         match self.inner.poll_next_unpin(cx) {
             Poll::Ready(Some(bytes)) => {
-                if self.enabled.load(Ordering::SeqCst) {
-                    if let Some(sender) = &self.sender {
-                        let _ = sender.send((
-                            std::time::SystemTime::now(),
-                            crate::Direction::Received,
-                            bytes.clone(),
-                        ));
-                    }
+                if self.enabled.load(Ordering::SeqCst)
+                    && let Some(sender) = &self.sender
+                {
+                    let _ = sender.send((
+                        std::time::SystemTime::now(),
+                        crate::Direction::Received,
+                        bytes.clone(),
+                    ));
                 }
                 Poll::Ready(Some(bytes))
             }
@@ -122,14 +122,11 @@ impl Sink<Bytes> for CapturedSink {
 
     fn start_send(mut self: Pin<&mut Self>, item: Bytes) -> Result<(), Self::Error> {
         use futures::SinkExt;
-        if self.enabled.load(Ordering::SeqCst) {
-            if let Some(sender) = &self.sender {
-                let _ = sender.send((
-                    std::time::SystemTime::now(),
-                    crate::Direction::Sent,
-                    item.clone(),
-                ));
-            }
+        if self.enabled.load(Ordering::SeqCst)
+            && let Some(sender) = &self.sender
+        {
+            let _ =
+                sender.send((std::time::SystemTime::now(), crate::Direction::Sent, item.clone()));
         }
         self.inner.start_send_unpin(item)
     }

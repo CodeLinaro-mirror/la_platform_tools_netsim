@@ -4,7 +4,7 @@
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 
 fn main() {
     // Entry point for build_proto

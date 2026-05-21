@@ -6,15 +6,15 @@ use crate::ffi::ffi_bluetooth;
 use crate::wireless::{WirelessChip, WirelessChipImpl};
 
 use bytes::Bytes;
-use cxx::{let_cxx_string, CxxString, CxxVector};
+use cxx::{CxxString, CxxVector, let_cxx_string};
 use log::{error, info};
 use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
+use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::chip::Bluetooth as ProtoBluetooth;
 use netsim_proto::model::chip::Radio as ProtoRadio;
-use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::invalid_packet::Reason as InvalidPacketReason;
-use netsim_proto::stats::{netsim_radio_stats, InvalidPacket, NetsimRadioStats as ProtoRadioStats};
+use netsim_proto::stats::{InvalidPacket, NetsimRadioStats as ProtoRadioStats, netsim_radio_stats};
 use protobuf::{Enum, Message, MessageField};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};

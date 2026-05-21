@@ -3,8 +3,8 @@
 
 use base64::Engine;
 use http::{
-    header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE},
     Response, StatusCode,
+    header::{CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE},
 };
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 

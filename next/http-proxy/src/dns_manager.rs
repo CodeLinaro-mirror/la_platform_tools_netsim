@@ -41,17 +41,15 @@ impl DnsManager {
         // Check if the packet contains a UDP header
         // with source port from DNS server
         // and DNS answers with A/AAAA records
-        if let Some(TransportHeader::Udp(udp_header)) = &headers.transport {
-            // with source port from DNS server
-            if udp_header.source_port == Self::DNS_PORT {
-                if let PayloadSlice::Udp(payload) = headers.payload {
-                    // Add any A/AAAA domain names
-                    if let Ok(answers) = dns::parse_answers(payload) {
-                        for (ip_addr, name) in answers {
-                            self.map.lock().unwrap().insert(ip_addr, name.clone());
-                            debug!("Added {} ({}) to DNS cache", name, ip_addr);
-                        }
-                    }
+        if let Some(TransportHeader::Udp(udp_header)) = &headers.transport
+            && udp_header.source_port == Self::DNS_PORT
+            && let PayloadSlice::Udp(payload) = headers.payload
+        {
+            // Add any A/AAAA domain names
+            if let Ok(answers) = dns::parse_answers(payload) {
+                for (ip_addr, name) in answers {
+                    self.map.lock().unwrap().insert(ip_addr, name.clone());
+                    debug!("Added {} ({}) to DNS cache", name, ip_addr);
                 }
             }
         }

@@ -81,8 +81,8 @@
 use crate::libslirp_config;
 use crate::libslirp_config::SlirpConfigs;
 use crate::libslirp_sys::{
-    self, SlirpPollType, SlirpProxyConnectFunc, SlirpTimerId, SLIRP_POLL_ERR, SLIRP_POLL_HUP,
-    SLIRP_POLL_IN, SLIRP_POLL_OUT, SLIRP_POLL_PRI,
+    self, SLIRP_POLL_ERR, SLIRP_POLL_HUP, SLIRP_POLL_IN, SLIRP_POLL_OUT, SLIRP_POLL_PRI,
+    SlirpPollType, SlirpProxyConnectFunc, SlirpTimerId,
 };
 
 use bytes::Bytes;
@@ -90,7 +90,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use log::{debug, info, warn};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::{c_char, c_int, c_void, CStr};
+use std::ffi::{CStr, c_char, c_int, c_void};
 use std::io::{Read, Write};
 use std::mem::ManuallyDrop;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
@@ -685,11 +685,7 @@ impl CallbackContext {
 
 macro_rules! ternary {
     ($cond:expr, $true_expr:expr) => {
-        if $cond != 0 {
-            $true_expr
-        } else {
-            0
-        }
+        if $cond != 0 { $true_expr } else { 0 }
     };
 }
 
@@ -708,17 +704,17 @@ fn slirp_poll_thread(
 ) {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     use libc::{
-        nfds_t as OsPollFdsLenType, poll, pollfd, POLLERR as OS_POLL_ERR, POLLHUP as OS_POLL_HUP,
-        POLLIN as OS_POLL_IN, POLLNVAL as OS_POLL_NVAL, POLLOUT as OS_POLL_OUT,
-        POLLPRI as OS_POLL_PRI,
+        POLLERR as OS_POLL_ERR, POLLHUP as OS_POLL_HUP, POLLIN as OS_POLL_IN,
+        POLLNVAL as OS_POLL_NVAL, POLLOUT as OS_POLL_OUT, POLLPRI as OS_POLL_PRI,
+        nfds_t as OsPollFdsLenType, poll, pollfd,
     };
     #[cfg(target_os = "windows")]
     use winapi::{
         shared::minwindef::ULONG as OsPollFdsLenType,
         um::winsock2::{
-            WSAPoll as poll, POLLERR as OS_POLL_ERR, POLLHUP as OS_POLL_HUP,
-            POLLNVAL as OS_POLL_NVAL, POLLRDBAND as OS_POLL_PRI, POLLRDNORM as OS_POLL_IN,
-            POLLWRNORM as OS_POLL_OUT, SOCKET as FdType, WSAPOLLFD as pollfd,
+            POLLERR as OS_POLL_ERR, POLLHUP as OS_POLL_HUP, POLLNVAL as OS_POLL_NVAL,
+            POLLRDBAND as OS_POLL_PRI, POLLRDNORM as OS_POLL_IN, POLLWRNORM as OS_POLL_OUT,
+            SOCKET as FdType, WSAPOLLFD as pollfd, WSAPoll as poll,
         },
     };
     #[cfg(any(target_os = "linux", target_os = "macos"))]

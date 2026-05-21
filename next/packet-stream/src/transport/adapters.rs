@@ -8,7 +8,7 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
-use futures::{stream::StreamExt, SinkExt};
+use futures::{SinkExt, stream::StreamExt};
 use tokio::net::TcpListener;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 

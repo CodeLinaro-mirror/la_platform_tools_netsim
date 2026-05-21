@@ -10,8 +10,8 @@
 
 use crate::ethernet::MacAddr as EthernetMacAddr;
 use crate::ieee80211::MacHeader3Addr;
-use crate::nl80211::attr_id;
 use crate::nl80211::GenlMsgHdr;
+use crate::nl80211::attr_id;
 use crate::nl80211_attr::NlAttrHdr;
 use zerocopy::{FromBytes, IntoBytes, LittleEndian, Ref, U16, U32};
 

@@ -14,10 +14,10 @@ use std::{
 
 use async_trait::async_trait;
 use capture_api::Direction;
-use netsim_packets::{create_radiotap_packet, HwsimCmd, HwsimFrame, HwsimMsg};
+use netsim_packets::{HwsimCmd, HwsimFrame, HwsimMsg, create_radiotap_packet};
 use tracing::warn;
 
-use crate::writer::{CaptureWriter, PcapWriter, DLT_IEEE802_11_RADIO};
+use crate::writer::{CaptureWriter, DLT_IEEE802_11_RADIO, PcapWriter};
 
 /// PCAP writer for Wi-Fi packets.
 ///

@@ -3,7 +3,7 @@
 
 use netsim_model::WifiMode;
 use netsim_packets::{
-    management_subtype, FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl,
+    FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl, management_subtype,
 };
 use tracing::info;
 use zerocopy::IntoBytes;

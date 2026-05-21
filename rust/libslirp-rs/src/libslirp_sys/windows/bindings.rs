@@ -23248,11 +23248,11 @@ extern "C" {
 }
 extern "C" {
     pub fn _InterlockedIncrement16(Addend: *mut ::std::os::raw::c_short)
-        -> ::std::os::raw::c_short;
+    -> ::std::os::raw::c_short;
 }
 extern "C" {
     pub fn _InterlockedDecrement16(Addend: *mut ::std::os::raw::c_short)
-        -> ::std::os::raw::c_short;
+    -> ::std::os::raw::c_short;
 }
 extern "C" {
     pub fn _InterlockedCompareExchange16(
@@ -32877,8 +32877,8 @@ pub struct _PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY__bindgen_ty_1__bin
     pub _bitfield_1: __BindgenBitfieldUnit<[u8; 4usize]>,
 }
 #[test]
-fn bindgen_test_layout__PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY__bindgen_ty_1__bindgen_ty_1(
-) {
+fn bindgen_test_layout__PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY__bindgen_ty_1__bindgen_ty_1()
+ {
     assert_eq!(
         ::std::mem::size_of::<
             _PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY__bindgen_ty_1__bindgen_ty_1,
@@ -34458,8 +34458,8 @@ pub struct _PROCESS_MITIGATION_SIDE_CHANNEL_ISOLATION_POLICY__bindgen_ty_1__bind
     pub _bitfield_1: __BindgenBitfieldUnit<[u8; 4usize]>,
 }
 #[test]
-fn bindgen_test_layout__PROCESS_MITIGATION_SIDE_CHANNEL_ISOLATION_POLICY__bindgen_ty_1__bindgen_ty_1(
-) {
+fn bindgen_test_layout__PROCESS_MITIGATION_SIDE_CHANNEL_ISOLATION_POLICY__bindgen_ty_1__bindgen_ty_1()
+ {
     assert_eq!(
         ::std::mem::size_of::<
             _PROCESS_MITIGATION_SIDE_CHANNEL_ISOLATION_POLICY__bindgen_ty_1__bindgen_ty_1,
@@ -38178,8 +38178,8 @@ pub struct _SYSTEM_CPU_SET_INFORMATION__bindgen_ty_1__bindgen_ty_1__bindgen_ty_1
     pub _bitfield_1: __BindgenBitfieldUnit<[u8; 1usize]>,
 }
 #[test]
-fn bindgen_test_layout__SYSTEM_CPU_SET_INFORMATION__bindgen_ty_1__bindgen_ty_1__bindgen_ty_1__bindgen_ty_1(
-) {
+fn bindgen_test_layout__SYSTEM_CPU_SET_INFORMATION__bindgen_ty_1__bindgen_ty_1__bindgen_ty_1__bindgen_ty_1()
+ {
     assert_eq!(
         ::std::mem::size_of::<
             _SYSTEM_CPU_SET_INFORMATION__bindgen_ty_1__bindgen_ty_1__bindgen_ty_1__bindgen_ty_1,
@@ -56867,7 +56867,7 @@ pub type PRTL_UMS_SCHEDULER_ENTRY_POINT = ::std::option::Option<
 >;
 extern "C" {
     pub fn RtlCrc32(Buffer: *const ::std::os::raw::c_void, Size: usize, InitialCrc: DWORD)
-        -> DWORD;
+    -> DWORD;
 }
 extern "C" {
     pub fn RtlCrc64(
@@ -65237,7 +65237,7 @@ extern "C" {
 }
 extern "C" {
     pub fn AddVectoredExceptionHandler(First: ULONG, Handler: PVECTORED_EXCEPTION_HANDLER)
-        -> PVOID;
+    -> PVOID;
 }
 extern "C" {
     pub fn RemoveVectoredExceptionHandler(Handle: PVOID) -> ULONG;
@@ -65709,7 +65709,7 @@ extern "C" {
 }
 extern "C" {
     pub fn WaitForSingleObjectEx(hHandle: HANDLE, dwMilliseconds: DWORD, bAlertable: BOOL)
-        -> DWORD;
+    -> DWORD;
 }
 extern "C" {
     pub fn WaitForMultipleObjectsEx(
@@ -68392,7 +68392,7 @@ extern "C" {
 }
 extern "C" {
     pub fn SetThreadpoolStackInformation(ptpp: PTP_POOL, ptpsi: PTP_POOL_STACK_INFORMATION)
-        -> BOOL;
+    -> BOOL;
 }
 extern "C" {
     pub fn QueryThreadpoolStackInformation(
@@ -68861,7 +68861,7 @@ pub type PGET_MODULE_HANDLE_EXW = ::std::option::Option<
 >;
 extern "C" {
     pub fn GetModuleHandleExA(dwFlags: DWORD, lpModuleName: LPCSTR, phModule: *mut HMODULE)
-        -> BOOL;
+    -> BOOL;
 }
 extern "C" {
     pub fn GetModuleHandleExW(
@@ -71096,7 +71096,7 @@ extern "C" {
 }
 extern "C" {
     pub fn GetShortPathNameA(lpszLongPath: LPCSTR, lpszShortPath: LPSTR, cchBuffer: DWORD)
-        -> DWORD;
+    -> DWORD;
 }
 extern "C" {
     pub fn GetLongPathNameTransactedA(
@@ -72126,7 +72126,7 @@ extern "C" {
 }
 extern "C" {
     pub fn OpenFileMappingA(dwDesiredAccess: DWORD, bInheritHandle: BOOL, lpName: LPCSTR)
-        -> HANDLE;
+    -> HANDLE;
 }
 extern "C" {
     pub fn GetLogicalDriveStringsA(nBufferLength: DWORD, lpBuffer: LPSTR) -> DWORD;
@@ -73667,7 +73667,7 @@ extern "C" {
 }
 extern "C" {
     pub fn MoveFileExW(lpExistingFileName: LPCWSTR, lpNewFileName: LPCWSTR, dwFlags: DWORD)
-        -> BOOL;
+    -> BOOL;
 }
 extern "C" {
     pub fn MoveFileWithProgressA(
@@ -86454,7 +86454,7 @@ extern "C" {
 }
 extern "C" {
     pub fn ChoosePixelFormat(hdc: HDC, ppfd: *const PIXELFORMATDESCRIPTOR)
-        -> ::std::os::raw::c_int;
+    -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn CloseMetaFile(hdc: HDC) -> HMETAFILE;
@@ -89099,7 +89099,7 @@ extern "C" {
 }
 extern "C" {
     pub fn GetTextFaceA(hdc: HDC, c: ::std::os::raw::c_int, lpName: LPSTR)
-        -> ::std::os::raw::c_int;
+    -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn GetTextFaceW(
@@ -97319,7 +97319,7 @@ extern "C" {
 }
 extern "C" {
     pub fn SetDlgItemTextA(hDlg: HWND, nIDDlgItem: ::std::os::raw::c_int, lpString: LPCSTR)
-        -> BOOL;
+    -> BOOL;
 }
 extern "C" {
     pub fn SetDlgItemTextW(
@@ -99475,7 +99475,7 @@ extern "C" {
 }
 extern "C" {
     pub fn AppendMenuA(hMenu: HMENU, uFlags: UINT, uIDNewItem: UINT_PTR, lpNewItem: LPCSTR)
-        -> BOOL;
+    -> BOOL;
 }
 extern "C" {
     pub fn AppendMenuW(
@@ -100304,7 +100304,7 @@ extern "C" {
 }
 extern "C" {
     pub fn RedrawWindow(hWnd: HWND, lprcUpdate: *const RECT, hrgnUpdate: HRGN, flags: UINT)
-        -> BOOL;
+    -> BOOL;
 }
 extern "C" {
     pub fn LockWindowUpdate(hWndLock: HWND) -> BOOL;
@@ -103452,7 +103452,7 @@ extern "C" {
 }
 extern "C" {
     pub fn DisplayConfigGetDeviceInfo(requestPacket: *mut DISPLAYCONFIG_DEVICE_INFO_HEADER)
-        -> LONG;
+    -> LONG;
 }
 extern "C" {
     pub fn DisplayConfigSetDeviceInfo(setPacket: *mut DISPLAYCONFIG_DEVICE_INFO_HEADER) -> LONG;
@@ -104275,7 +104275,7 @@ extern "C" {
 }
 extern "C" {
     pub fn SetThreadDpiAwarenessContext(dpiContext: DPI_AWARENESS_CONTEXT)
-        -> DPI_AWARENESS_CONTEXT;
+    -> DPI_AWARENESS_CONTEXT;
 }
 extern "C" {
     pub fn GetThreadDpiAwarenessContext() -> DPI_AWARENESS_CONTEXT;
@@ -111116,7 +111116,7 @@ extern "C" {
 }
 extern "C" {
     pub fn WNetRestoreSingleConnectionW(hwndParent: HWND, lpDevice: LPCWSTR, fUseUI: BOOL)
-        -> DWORD;
+    -> DWORD;
 }
 extern "C" {
     pub fn WNetUseConnectionA(
@@ -116885,11 +116885,11 @@ extern "C" {
 }
 extern "C" {
     pub fn mmioInstallIOProcA(fccIOProc: FOURCC, pIOProc: LPMMIOPROC, dwFlags: DWORD)
-        -> LPMMIOPROC;
+    -> LPMMIOPROC;
 }
 extern "C" {
     pub fn mmioInstallIOProcW(fccIOProc: FOURCC, pIOProc: LPMMIOPROC, dwFlags: DWORD)
-        -> LPMMIOPROC;
+    -> LPMMIOPROC;
 }
 extern "C" {
     pub fn mmioOpenA(pszFileName: LPSTR, pmmioinfo: LPMMIOINFO, fdwOpen: DWORD) -> HMMIO;
@@ -119169,7 +119169,7 @@ extern "C" {
 }
 extern "C" {
     pub fn midiOutCachePatches(hmo: HMIDIOUT, uBank: UINT, pwpa: LPWORD, fuCache: UINT)
-        -> MMRESULT;
+    -> MMRESULT;
 }
 extern "C" {
     pub fn midiOutCacheDrumPatches(
@@ -119919,7 +119919,7 @@ extern "C" {
 }
 extern "C" {
     pub fn mixerMessage(hmx: HMIXER, uMsg: UINT, dwParam1: DWORD_PTR, dwParam2: DWORD_PTR)
-        -> DWORD;
+    -> DWORD;
 }
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
@@ -127488,7 +127488,7 @@ extern "C" {
 }
 extern "C" {
     pub fn I_RpcGetBufferWithObject(Message: *mut RPC_MESSAGE, ObjectUuid: *mut UUID)
-        -> RPC_STATUS;
+    -> RPC_STATUS;
 }
 extern "C" {
     pub fn I_RpcSendReceive(Message: *mut RPC_MESSAGE) -> RPC_STATUS;
@@ -127900,8 +127900,8 @@ extern "C" {
     ) -> RPC_STATUS;
 }
 extern "C" {
-    pub fn I_RpcServerInqAddressChangeFn(
-    ) -> ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>;
+    pub fn I_RpcServerInqAddressChangeFn()
+    -> ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>;
 }
 extern "C" {
     pub fn I_RpcServerSetAddressChangeFn(
@@ -128729,7 +128729,7 @@ extern "C" {
 }
 extern "C" {
     pub fn RpcNsEntryObjectInqNext(InquiryContext: RPC_NS_HANDLE, ObjUuid: *mut UUID)
-        -> RPC_STATUS;
+    -> RPC_STATUS;
 }
 extern "C" {
     pub fn RpcNsEntryObjectInqDone(InquiryContext: *mut RPC_NS_HANDLE) -> RPC_STATUS;
@@ -131082,7 +131082,7 @@ extern "C" {
 }
 extern "C" {
     pub fn ExtractAssociatedIconA(hInst: HINSTANCE, pszIconPath: LPSTR, piIcon: *mut WORD)
-        -> HICON;
+    -> HICON;
 }
 extern "C" {
     pub fn ExtractAssociatedIconW(
@@ -159171,7 +159171,7 @@ extern "C" {
 }
 extern "C" {
     pub fn I_RpcNsSendReceive(Message: PRPC_MESSAGE, Handle: *mut RPC_BINDING_HANDLE)
-        -> RPC_STATUS;
+    -> RPC_STATUS;
 }
 extern "C" {
     pub fn I_RpcNsRaiseException(Message: PRPC_MESSAGE, Status: RPC_STATUS);
@@ -162794,7 +162794,7 @@ extern "C" {
 }
 extern "C" {
     pub fn RpcSmDestroyClientContext(ContextHandle: *mut *mut ::std::os::raw::c_void)
-        -> RPC_STATUS;
+    -> RPC_STATUS;
 }
 extern "C" {
     pub fn RpcSmDisableAllocate() -> RPC_STATUS;
@@ -165308,8 +165308,8 @@ pub struct __MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000
     pub PolicyId: GUID,
 }
 #[test]
-fn bindgen_test_layout___MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_1(
-) {
+fn bindgen_test_layout___MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_1()
+ {
     const UNINIT : :: std :: mem :: MaybeUninit < __MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_1 > = :: std :: mem :: MaybeUninit :: uninit () ;
     let ptr = UNINIT.as_ptr();
     assert_eq ! (:: std :: mem :: size_of :: < __MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_1 > () , 24usize , concat ! ("Size of: " , stringify ! (__MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_1)));
@@ -165325,8 +165325,8 @@ pub struct __MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000
     pub PolicyId: GUID,
 }
 #[test]
-fn bindgen_test_layout___MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_2(
-) {
+fn bindgen_test_layout___MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_2()
+ {
     const UNINIT : :: std :: mem :: MaybeUninit < __MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_2 > = :: std :: mem :: MaybeUninit :: uninit () ;
     let ptr = UNINIT.as_ptr();
     assert_eq ! (:: std :: mem :: size_of :: < __MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_2 > () , 32usize , concat ! ("Size of: " , stringify ! (__MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_2)));
@@ -165335,8 +165335,8 @@ fn bindgen_test_layout___MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf
     assert_eq ! (unsafe { :: std :: ptr :: addr_of ! ((* ptr) . PolicyId) as usize - ptr as usize } , 16usize , concat ! ("Offset of field: " , stringify ! (__MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005__bindgen_ty_2) , "::" , stringify ! (PolicyId)));
 }
 #[test]
-fn bindgen_test_layout___MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005(
-) {
+fn bindgen_test_layout___MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005()
+ {
     const UNINIT: ::std::mem::MaybeUninit<
         __MIDL___MIDL_itf_wtypes_0000_0001_0001___MIDL___MIDL_itf_wtypes_0000_0001_0005,
     > = ::std::mem::MaybeUninit::uninit();
@@ -204450,11 +204450,11 @@ pub type LPCPROPSHEETHEADERA = LPCPROPSHEETHEADERA_V2;
 pub type LPCPROPSHEETHEADERW = LPCPROPSHEETHEADERW_V2;
 extern "C" {
     pub fn CreatePropertySheetPageA(constPropSheetPagePointer: LPCPROPSHEETPAGEA)
-        -> HPROPSHEETPAGE;
+    -> HPROPSHEETPAGE;
 }
 extern "C" {
     pub fn CreatePropertySheetPageW(constPropSheetPagePointer: LPCPROPSHEETPAGEW)
-        -> HPROPSHEETPAGE;
+    -> HPROPSHEETPAGE;
 }
 extern "C" {
     pub fn DestroyPropertySheetPage(arg1: HPROPSHEETPAGE) -> BOOL;
@@ -209710,7 +209710,7 @@ extern "C" {
 }
 extern "C" {
     pub fn ReadPrinter(hPrinter: HANDLE, pBuf: LPVOID, cbBuf: DWORD, pNoBytesRead: LPDWORD)
-        -> BOOL;
+    -> BOOL;
 }
 extern "C" {
     pub fn EndDocPrinter(hPrinter: HANDLE) -> BOOL;
@@ -212591,7 +212591,7 @@ extern "C" {
 }
 extern "C" {
     pub fn ldiv(_Numerator: ::std::os::raw::c_long, _Denominator: ::std::os::raw::c_long)
-        -> ldiv_t;
+    -> ldiv_t;
 }
 extern "C" {
     pub fn lldiv(
@@ -221755,7 +221755,7 @@ extern "C" {
 }
 extern "C" {
     pub fn CoLockObjectExternal(pUnk: LPUNKNOWN, fLock: BOOL, fLastUnlockReleases: BOOL)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn CoGetStandardMarshal(
@@ -226257,7 +226257,7 @@ extern "C" {
 }
 extern "C" {
     pub fn AsyncIAdviseSink_Finish_RemoteOnDataChange_Proxy(This: *mut AsyncIAdviseSink)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn AsyncIAdviseSink_Finish_RemoteOnDataChange_Stub(
@@ -226284,7 +226284,7 @@ extern "C" {
 }
 extern "C" {
     pub fn AsyncIAdviseSink_Finish_RemoteOnViewChange_Proxy(This: *mut AsyncIAdviseSink)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn AsyncIAdviseSink_Finish_RemoteOnViewChange_Stub(
@@ -229640,19 +229640,19 @@ extern "C" {
 }
 extern "C" {
     pub fn IBindCtx_SetBindOptions_Proxy(This: *mut IBindCtx, pbindopts: *mut BIND_OPTS)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn IBindCtx_SetBindOptions_Stub(This: *mut IBindCtx, pbindopts: *mut BIND_OPTS2)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn IBindCtx_GetBindOptions_Proxy(This: *mut IBindCtx, pbindopts: *mut BIND_OPTS)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn IBindCtx_GetBindOptions_Stub(This: *mut IBindCtx, pbindopts: *mut BIND_OPTS2)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn IEnumMoniker_Next_Proxy(
@@ -267242,7 +267242,7 @@ extern "C" {
 }
 extern "C" {
     pub fn CoInternetIsFeatureEnabled(FeatureEntry: INTERNETFEATURELIST, dwFlags: DWORD)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn CoInternetIsFeatureEnabledForUrl(
@@ -271747,7 +271747,7 @@ extern "C" {
 }
 extern "C" {
     pub fn DosDateTimeToVariantTime(wDosDate: USHORT, wDosTime: USHORT, pvtime: *mut DOUBLE)
-        -> INT;
+    -> INT;
 }
 extern "C" {
     pub fn VariantTimeToDosDateTime(
@@ -271949,7 +271949,7 @@ extern "C" {
 }
 extern "C" {
     pub fn VarUI1FromStr(strIn: LPCOLESTR, lcid: LCID, dwFlags: ULONG, pbOut: *mut BYTE)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn VarUI1FromDisp(pdispIn: *mut IDispatch, lcid: LCID, pbOut: *mut BYTE) -> HRESULT;
@@ -271995,7 +271995,7 @@ extern "C" {
 }
 extern "C" {
     pub fn VarI2FromStr(strIn: LPCOLESTR, lcid: LCID, dwFlags: ULONG, psOut: *mut SHORT)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn VarI2FromDisp(pdispIn: *mut IDispatch, lcid: LCID, psOut: *mut SHORT) -> HRESULT;
@@ -272316,14 +272316,14 @@ extern "C" {
 }
 extern "C" {
     pub fn VarBstrFromI8(i64In: LONG64, lcid: LCID, dwFlags: ULONG, pbstrOut: *mut BSTR)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn VarBstrFromR4(fltIn: FLOAT, lcid: LCID, dwFlags: ULONG, pbstrOut: *mut BSTR) -> HRESULT;
 }
 extern "C" {
     pub fn VarBstrFromR8(dblIn: DOUBLE, lcid: LCID, dwFlags: ULONG, pbstrOut: *mut BSTR)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn VarBstrFromCy(cyIn: CY, lcid: LCID, dwFlags: ULONG, pbstrOut: *mut BSTR) -> HRESULT;
@@ -272357,7 +272357,7 @@ extern "C" {
 }
 extern "C" {
     pub fn VarBstrFromUI2(uiIn: USHORT, lcid: LCID, dwFlags: ULONG, pbstrOut: *mut BSTR)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn VarBstrFromUI4(ulIn: ULONG, lcid: LCID, dwFlags: ULONG, pbstrOut: *mut BSTR) -> HRESULT;
@@ -272812,7 +272812,7 @@ extern "C" {
 }
 extern "C" {
     pub fn VarCmp(pvarLeft: LPVARIANT, pvarRight: LPVARIANT, lcid: LCID, dwFlags: ULONG)
-        -> HRESULT;
+    -> HRESULT;
 }
 extern "C" {
     pub fn VarDecAdd(pdecLeft: LPDECIMAL, pdecRight: LPDECIMAL, pdecResult: LPDECIMAL) -> HRESULT;
@@ -285103,7 +285103,7 @@ extern "C" {
 }
 extern "C" {
     pub fn WSARecvDisconnect(s: SOCKET, lpInboundDisconnectData: LPWSABUF)
-        -> ::std::os::raw::c_int;
+    -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn WSARecvFrom(

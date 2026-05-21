@@ -88,8 +88,8 @@ pub fn construct_data(
             if data.len() + add_len + 2 > MAX_AD_PAYLOAD_LEN {
                 let available = MAX_AD_PAYLOAD_LEN.saturating_sub(data.len() + 2);
                 add_len = (available / item_size) * item_size; // Fit as many
-                                                               // whole UUIDs as
-                                                               // possible
+                // whole UUIDs as
+                // possible
             }
             if add_len > 0 {
                 data.push((add_len + 1) as u8);

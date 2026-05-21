@@ -60,7 +60,7 @@ netsim_rust_library(
     name = "daemon-lib",
     srcs = DAEMON_SRCS,
     crate_name = "daemon",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [],
     select_deps = select({
         "//conditions:default": [],
@@ -78,7 +78,7 @@ netsim_rust_library(
 netsim_rust_binary(
     name = "daemon",
     srcs = ["src/main.rs"],
-    edition = "2021",
+    edition = "2024",
     rustc_flags = [
         "-C",
         "link-arg=-lc",
@@ -87,6 +87,5 @@ netsim_rust_binary(
     tags = ["no-sandbox"],
     deps = [
         ":daemon-lib",
-        "@tokio",
     ],
 )

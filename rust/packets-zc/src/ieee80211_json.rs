@@ -11,8 +11,8 @@ use crate::ieee80211::{FrameControl, MacHeader3Addr, SequenceControl};
 use crate::ieee80211_util; // For address interpretation
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use zerocopy::byteorder::LittleEndian;
 use zerocopy::U16;
+use zerocopy::byteorder::LittleEndian;
 
 /// A custom error type for JSON operations and conversions related to IEEE 802.11.
 #[derive(Debug)]

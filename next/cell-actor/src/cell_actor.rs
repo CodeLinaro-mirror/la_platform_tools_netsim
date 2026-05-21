@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use device_actor::DeviceClient;
-use modem_rs::{modem_network::ModemNetworkInterface, ModemNetworkSimulator};
+use modem_rs::{ModemNetworkSimulator, modem_network::ModemNetworkInterface};
 use netsim_model::ChipId;
 use tokio::sync::mpsc::UnboundedReceiver;
 

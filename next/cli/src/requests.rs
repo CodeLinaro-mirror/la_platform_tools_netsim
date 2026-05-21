@@ -9,13 +9,12 @@ use netsim_proto::{
         patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto,
     },
     model::{
-        self,
+        self, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto, Position,
         chip::{
             BleBeacon as Chip_Ble_Beacon, Bluetooth as Chip_Bluetooth, Chip as Chip_Type,
             Radio as Chip_Radio,
         },
-        chip_create, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
-        Position,
+        chip_create,
     },
 };
 use protobuf::MessageField;
@@ -35,6 +34,10 @@ fn chip_kind_to_proto(chip_kind: ArgsChipKind) -> ChipKind {
         ArgsChipKind::Bluetooth => ChipKind::BLUETOOTH,
         ArgsChipKind::Wifi => ChipKind::WIFI,
         ArgsChipKind::Uwb => ChipKind::UWB,
+        ArgsChipKind::Nfc => ChipKind::NFC,
+        ArgsChipKind::Cellular => ChipKind::CELLULAR,
+        ArgsChipKind::CellularData => ChipKind::CELLULAR_DATA,
+        ArgsChipKind::Ethernet => ChipKind::ETHERNET,
     }
 }
 
@@ -98,10 +101,14 @@ impl Command {
             Command::Capture(cmd) => match cmd {
                 Capture::List(_) => GrpcRequest::ListCapture,
                 Capture::Get(_) => {
-                    unimplemented!("get_request not implemented for Capture Get command. Use get_requests instead.")
+                    unimplemented!(
+                        "get_request not implemented for Capture Get command. Use get_requests instead."
+                    )
                 }
                 Capture::Patch(_) => {
-                    unimplemented!("get_request not implemented for Capture Patch command. Use get_requests instead.")
+                    unimplemented!(
+                        "get_request not implemented for Capture Patch command. Use get_requests instead."
+                    )
                 }
             },
 
@@ -167,7 +174,9 @@ impl Command {
             Command::Link(link_cmd) => match link_cmd {
                 Link::List => GrpcRequest::ListLink,
                 _ => {
-                    unimplemented!("get_request not implemented for Link Patch/Delete/Create command. Use get_requests instead.")
+                    unimplemented!(
+                        "get_request not implemented for Link Patch/Delete/Create command. Use get_requests instead."
+                    )
                 }
             },
             // These commands are intercepted early in main.rs and have no direct gRPC pipeline.
@@ -390,10 +399,10 @@ impl Command {
         device_name: Option<&str>,
         chip_kind: ChipKind,
     ) -> Result<Vec<u32>> {
-        if let Some(id) = chip_id {
-            if id != 0 {
-                return Ok(vec![id]);
-            }
+        if let Some(id) = chip_id
+            && id != 0
+        {
+            return Ok(vec![id]);
         }
 
         // Fetch devices to resolve name or get all chips
@@ -401,10 +410,10 @@ impl Command {
         if let GrpcResponse::ListDevice(response) = client.send_grpc(&GrpcRequest::ListDevice)? {
             for device in response.devices {
                 // Filter by device name if provided
-                if let Some(dev_name) = device_name {
-                    if device.name != dev_name {
-                        continue;
-                    }
+                if let Some(dev_name) = device_name
+                    && device.name != dev_name
+                {
+                    continue;
                 }
 
                 resolved_ids.extend(
@@ -450,28 +459,27 @@ mod tests {
     use netsim_proto::{
         common::ChipKind,
         frontend::{
-            patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto, CreateDeviceRequest,
-            CreateLinkRequest, ListDeviceResponse, ListLinkResponse, PatchDeviceRequest,
-            PatchLinkRequest,
+            CreateDeviceRequest, CreateLinkRequest, ListDeviceResponse, ListLinkResponse,
+            PatchDeviceRequest, PatchLinkRequest,
+            patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto,
         },
         model::{
-            self,
+            self, Chip as ChipProto, ChipCreate as ChipCreateProto, Device as DeviceProto,
+            DeviceCreate as DeviceCreateProto, Link as LinkProto, Position,
             chip::{
+                BleBeacon as BleBeaconProto, Bluetooth as Chip_Bluetooth, Chip as ChipKindProto,
+                Radio as Chip_Radio,
                 ble_beacon::{
+                    AdvertiseData as AdvertiseDataProto,
+                    AdvertiseSettings as AdvertiseSettingsProto,
                     advertise_settings::{
                         AdvertiseMode as AdvertiseModeProto,
                         AdvertiseTxPower as AdvertiseTxPowerProto, Interval as IntervalProto,
                         Tx_power as TxPowerProto,
                     },
-                    AdvertiseData as AdvertiseDataProto,
-                    AdvertiseSettings as AdvertiseSettingsProto,
                 },
-                BleBeacon as BleBeaconProto, Bluetooth as Chip_Bluetooth, Chip as ChipKindProto,
-                Radio as Chip_Radio,
             },
             chip_create::{BleBeaconCreate as BleBeaconCreateProto, Chip as ChipKindCreateProto},
-            Chip as ChipProto, ChipCreate as ChipCreateProto, Device as DeviceProto,
-            DeviceCreate as DeviceCreateProto, Link as LinkProto, Position,
         },
     };
     use protobuf::MessageField;
@@ -759,9 +767,49 @@ mod tests {
     fn test_devices() {
         test_command(
             "netsim-cli devices",
-            Command::Devices(Devices { continuous: false }),
+            Command::Devices(Devices::default()),
             GrpcRequest::ListDevice,
         )
+    }
+
+    #[test]
+    fn test_devices_json_parsing() {
+        test_command(
+            "netsim-cli devices --json",
+            Command::Devices(Devices { continuous: false, json: true }),
+            GrpcRequest::ListDevice,
+        )
+    }
+
+    #[test]
+    fn test_devices_json_output_and_parsing() {
+        use protobuf_json_mapping::{parse_from_str, print_to_string};
+
+        let mut dev = DeviceProto::new();
+        dev.id = 1;
+        dev.name = "test_device".to_string();
+
+        let mut chip = ChipProto::new();
+        chip.id = 100;
+        chip.kind = ChipKind::BLUETOOTH.into();
+        dev.chips.push(chip);
+
+        let mut resp = ListDeviceResponse::new();
+        resp.devices.push(dev);
+
+        let json_str = print_to_string(&resp).unwrap();
+
+        // Verify it contains expected data
+        assert!(json_str.contains("test_device"));
+        assert!(json_str.contains("100")); // Check for chip ID
+
+        // Parse it back
+        let parsed_resp: ListDeviceResponse = parse_from_str(&json_str).unwrap();
+
+        assert_eq!(parsed_resp.devices.len(), 1);
+        assert_eq!(parsed_resp.devices[0].name, "test_device");
+        assert_eq!(parsed_resp.devices[0].chips.len(), 1);
+        assert_eq!(parsed_resp.devices[0].chips[0].id, 100);
     }
 
     #[test]

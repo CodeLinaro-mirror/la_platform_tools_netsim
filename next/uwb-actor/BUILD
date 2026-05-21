@@ -26,7 +26,7 @@ netsim_rust_library(
     crate_features = ["testing"],
     crate_name = "uwb_actor",
     crate_root = "src/lib.rs",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
         "@async-trait",
     ],

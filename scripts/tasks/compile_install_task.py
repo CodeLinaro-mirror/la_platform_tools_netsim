@@ -4,6 +4,8 @@
 
 #
 
+import hashlib
+import json
 import logging
 import os
 from pathlib import Path
@@ -16,16 +18,24 @@ from utils import (
     AOSP_ROOT,
     CMAKE,
     WINDOWS_TMP_OBJS_PATH,
+    binary_extension,
     get_bazel_build_configs,
     get_bazel_path,
     get_bazel_startup_options,
     get_bazel_targets,
     move_contents,
+    platform_to_cmake_target,
     run,
 )
 
 
 class CompileInstallTask(Task):
+
+  BINARIES = {
+      "netsim": "next/cli/netsim",
+      "netsimd": "netsimd",
+      "netsimdx": "next/daemon/daemon",
+  }
 
   def __init__(self, args, env):
     super().__init__("CompileInstall")
@@ -50,10 +60,57 @@ class CompileInstallTask(Task):
     else:
       raise
 
+  def _generate_installed_files_json(self):
+    """Generates installed-files.json for size tracking."""
+    search_dir = self.out / "distribution" / "emulator"
+    if not search_dir.is_dir():
+      logging.warning(
+          f"Artifact directory not found: {search_dir}. Skipping JSON"
+          " generation."
+      )
+      return
+
+    installed_files = []
+    for bin_name in self.BINARIES:
+      actual_name = binary_extension(bin_name)
+      bin_path = search_dir / actual_name
+      if bin_path.is_file():
+        size = bin_path.stat().st_size
+
+        # Calculate SHA256
+        sha256_hash = hashlib.sha256()
+        with open(bin_path, "rb") as f:
+          while byte_block := f.read(4096):
+            sha256_hash.update(byte_block)
+        sha256 = sha256_hash.hexdigest()
+
+        installed_files.append(
+            {"Name": bin_name, "Size": size, "SHA256": sha256}
+        )
+
+    if not installed_files:
+      logging.warning("No binaries found to track for size report.")
+
+    target_str = platform_to_cmake_target(
+        self.args.target or platform.system().lower()
+    )
+    dist_dir = Path(self.args.dist_dir).absolute()
+    dist_dir.mkdir(exist_ok=True, parents=True)
+
+    json_fname = dist_dir / f"installed-files-{target_str}.json"
+    logging.info("Creating installed-files JSON: %s", json_fname)
+    with open(json_fname, "w", encoding="utf-8") as f:
+      json.dump(installed_files, f, indent=2)
+
   def do_run(self):
     if self.args.cmake:
-      return self._run_cmake()
-    return self._run_bazel()
+      res = self._run_cmake()
+    else:
+      res = self._run_bazel()
+
+    if res:
+      self._generate_installed_files_json()
+    return res
 
   def _run_bazel(self):
     bazel = get_bazel_path()
@@ -81,20 +138,9 @@ class CompileInstallTask(Task):
       dest_dir.mkdir(exist_ok=True, parents=True)
 
       # Copy netsim binaries
-      binaries = {
-          "netsim": "netsim",
-          "netsimd": "netsimd",
-          "netsimx": "next/cli/netsim",
-          "netsimdx": "next/daemon/daemon",
-      }
-
-      for binary, src in binaries.items():
-        if platform.system() == "Windows":
-          binary_name = f"{binary}.exe"
-          src_name = f"{src}.exe"
-        else:
-          binary_name = binary
-          src_name = src
+      for binary, src in self.BINARIES.items():
+        binary_name = binary_extension(binary)
+        src_name = binary_extension(src)
 
         src_file = search_dir / src_name
         logging.info(f"Copying {src_file} to {dest_dir}")

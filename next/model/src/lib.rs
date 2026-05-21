@@ -81,20 +81,20 @@ pub use crate::link::{Link, LinkId, LinkUpdate};
 // From stats.rs
 pub use crate::stats::{NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind};
 pub use crate::{
-    ap::{Ap, ApCreate, ApUpdate, WifiMode, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID},
+    ap::{Ap, ApCreate, ApUpdate, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID, WifiMode},
     bluetooth::{
+        BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode, BluetoothUpdate, Controller,
+        DeviceParams, ScannerParams, SnifferParams,
         beacon::{
             AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, Interval,
             Service, TxPower,
         },
-        BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode, BluetoothUpdate, Controller,
-        DeviceParams, ScannerParams, SnifferParams,
     },
     cell::{Cell, CellCreate, ModemAction, RegistrationStatus},
     chip::{
-        chip_kind_to_radio_kind, Chip, ChipClient, ChipCreate, ChipId, ChipRequest, ChipUpdate,
-        ChipVariant, ChipVariantUpdate, PacketSink, PacketStream, Radio, RadioChipClient,
-        RadioUpdate,
+        Chip, ChipClient, ChipCreate, ChipId, ChipRequest, ChipUpdate, ChipVariant,
+        ChipVariantUpdate, PacketSink, PacketStream, Radio, RadioChipClient, RadioUpdate,
+        chip_kind_to_radio_kind,
     },
     chip_error::ChipError,
     uwb::{Uwb, UwbCreate, UwbUpdate},

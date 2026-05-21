@@ -10,7 +10,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{stream::StreamExt, SinkExt};
+use command_fds::inherited::take_fd_ownership;
+use futures::{SinkExt, stream::StreamExt};
 use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -96,18 +97,17 @@ impl DualFdListener {
         self.pending_streams.clear();
         for device in &self.config.devices {
             for chip in &device.chips {
-                let in_fd =
-                    rustutils::inherited_fd::take_fd_ownership(chip.fd_in).map_err(|e| {
-                        PacketStreamError::Socket(crate::error::SocketError::AcceptFailed(
-                            e.to_string(),
-                        ))
-                    })?;
+                let in_fd = take_fd_ownership(chip.fd_in).map_err(|e| {
+                    PacketStreamError::Socket(crate::error::SocketError::AcceptFailed(
+                        e.to_string(),
+                    ))
+                })?;
                 let out_fd = chip.fd_out.ok_or_else(|| {
                     PacketStreamError::InvalidConfig(
                         "DualFdStream requires an output file descriptor.".to_string(),
                     )
                 })?;
-                let out_fd = rustutils::inherited_fd::take_fd_ownership(out_fd).map_err(|e| {
+                let out_fd = take_fd_ownership(out_fd).map_err(|e| {
                     PacketStreamError::Socket(crate::error::SocketError::AcceptFailed(
                         e.to_string(),
                     ))

@@ -44,7 +44,9 @@ pub fn handle_link_patch(
         PhyKind::try_from(patch_link_request.link.link_kind.enum_value_or_default()).unwrap();
     let rssi = patch_link_request.link.rssi as i8;
     link_manager.set_rssi(sender, receiver, link_kind, rssi);
-    Ok(format!("Successfully patched RSSI for link (Sender: {sender}, Receiver: {receiver}, Type: {link_kind:?}) to {rssi}."))
+    Ok(format!(
+        "Successfully patched RSSI for link (Sender: {sender}, Receiver: {receiver}, Type: {link_kind:?}) to {rssi}."
+    ))
 }
 
 pub fn handle_link_delete(
@@ -60,7 +62,9 @@ pub fn handle_link_delete(
     let link_kind =
         PhyKind::try_from(delete_link_request.link.link_kind.enum_value_or_default()).unwrap();
     link_manager.delete_rssi(sender, receiver, link_kind);
-    Ok(format!("Successfully deleted RSSI for link (Sender: {sender}, Receiver: {receiver}, Type: {link_kind:?})."))
+    Ok(format!(
+        "Successfully deleted RSSI for link (Sender: {sender}, Receiver: {receiver}, Type: {link_kind:?})."
+    ))
 }
 
 #[cfg(test)]

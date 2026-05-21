@@ -8,7 +8,7 @@
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use packet_stream::{Chip, ChipInfo, ChipKind, DeviceInfo, Streams, TransportType};
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 /// Helper to create test chip info for integration tests
 fn create_test_chip_info() -> ChipInfo {

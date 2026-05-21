@@ -69,10 +69,10 @@ pub mod types; // Core data types
 pub use error::{PacketStreamError, ProtocolError, SocketError};
 // Streams architecture re-exports - Streams is the only public entry point
 pub use streams::{InitInfo, Streams};
-#[cfg(all(unix, feature = "dual_fd"))]
-pub use transport::dual_fd::{ChipConfig, DeviceConfig, DualFdConfig};
 // Core streaming types - public API only (transport internals hidden)
 pub use transport::TransportType;
+#[cfg(all(unix, feature = "dual_fd"))]
+pub use transport::dual_fd::{ChipConfig, DeviceConfig, DualFdConfig};
 pub use transport::{
     CrossPlatformListener, CrossPlatformStream, ListenerConfig, SocketConfig, SocketType,
 };

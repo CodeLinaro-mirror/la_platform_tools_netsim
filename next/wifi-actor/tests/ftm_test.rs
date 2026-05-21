@@ -3,7 +3,7 @@
 
 use netsim_model::Position;
 use netsim_packets::{
-    category, public_action, FrameControl, Ieee80211, MacAddress, MacHeader3Addr, SequenceControl,
+    FrameControl, Ieee80211, MacAddress, MacHeader3Addr, SequenceControl, category, public_action,
 };
 use wifi_actor::handle_ftm_request;
 use zerocopy::IntoBytes;

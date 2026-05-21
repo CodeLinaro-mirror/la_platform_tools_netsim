@@ -4,6 +4,7 @@ package {
 
 rust_binary_host {
     name: "netsim_next_netsim",
+    edition: "2024",
     stem: "netsim_next_netsim",
     crate_root: "src/main.rs",
     srcs: [
@@ -21,6 +22,7 @@ rust_binary_host {
         "libnetsim_next_packets",
         "libnetsim_proto",
         "libprotobuf",
+        "libprotobuf_json_mapping",
         "libserde",
         "libserde_json",
         "libtracing",

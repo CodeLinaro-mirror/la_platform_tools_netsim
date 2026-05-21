@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use netsim_packets::{
-    category, public_action, FineTimingMeasurement, FrameControl, MacAddr, MacHeader3Addr,
+    FineTimingMeasurement, FrameControl, MacAddr, MacHeader3Addr, category, public_action,
 };
 use zerocopy::{IntoBytes, U16};
 
@@ -70,8 +70,8 @@ impl FtmResponder {
         // We report t1 and t4. The client (Station) will measure t2 and t3 locally.
 
         let t1_val: u64 = 1000000000000; // Arbitrary Start: 1000s in ps
-                                         // TODO: Calculate distance based on src/dest positions if available.
-                                         // For now, default to 5.0 meters.
+        // TODO: Calculate distance based on src/dest positions if available.
+        // For now, default to 5.0 meters.
         let dist_m = 5.0;
 
         // Speed of light approx 0.3m/ns

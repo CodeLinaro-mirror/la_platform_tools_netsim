@@ -156,14 +156,14 @@ pub fn new_test_beacon(idx: u32, interval: u64) {
     use crate::devices::devices_handler::create_device;
     use netsim_proto::common::ChipKind;
     use netsim_proto::frontend::CreateDeviceRequest;
+    use netsim_proto::model::ChipCreate as ChipCreateProto;
+    use netsim_proto::model::DeviceCreate as DeviceCreateProto;
     use netsim_proto::model::chip::ble_beacon::{
         AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
     };
     use netsim_proto::model::chip_create::{
         BleBeaconCreate as BleBeaconCreateProto, Chip as ChipProto,
     };
-    use netsim_proto::model::ChipCreate as ChipCreateProto;
-    use netsim_proto::model::DeviceCreate as DeviceCreateProto;
     use protobuf::MessageField;
 
     let beacon_proto = BleBeaconCreateProto {

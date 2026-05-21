@@ -25,8 +25,8 @@ pub async fn run(hci_port: u16, device_client: DeviceClient) {
         Ok(l) => l,
         Err(e) => {
             warn!(
-                    "Failed to bind to 127.0.0.1:{hci_port} in HCI socket server, trying [::1]:{hci_port}: {e}"
-                );
+                "Failed to bind to 127.0.0.1:{hci_port} in HCI socket server, trying [::1]:{hci_port}: {e}"
+            );
             match TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, hci_port))).await {
                 Ok(l) => l,
                 Err(e) => {

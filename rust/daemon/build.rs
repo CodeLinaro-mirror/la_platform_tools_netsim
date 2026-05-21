@@ -22,7 +22,9 @@ fn _all_archives_dependencies(objs_path: &str) {
                         let lib_name = &filename_str[3..filename.len() - 2];
                         // "rootcanal.configuration.ControllerFeatures" conflicting symbols
                         if lib_name == "librootcanal_config" {
-                            println!("cargo:warning=skip linking librootcanal_config to avoid conflicting symbols on rootcanal.configuration.ControllerFeatures");
+                            println!(
+                                "cargo:warning=skip linking librootcanal_config to avoid conflicting symbols on rootcanal.configuration.ControllerFeatures"
+                            );
                             continue;
                         }
                         println!("cargo:rustc-link-lib=static={lib_name}");

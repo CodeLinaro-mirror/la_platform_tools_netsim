@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::{
     config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
     parser::{Command, QuotedString},
-    types::{ExecutionResult, HandledCommand, AT_ERROR, AT_OK, DEFAULT_PIN},
+    types::{AT_ERROR, AT_OK, DEFAULT_PIN, ExecutionResult, HandledCommand},
 };
 
 const DEFAULT_PUK: &str = "12345678";
@@ -322,10 +322,10 @@ fn find_df<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a DedicatedFile> {
         return Some(df);
     }
     for file in &df.files {
-        if let SimFile::Df(df) = file {
-            if let Some(found) = find_df(df, id) {
-                return Some(found);
-            }
+        if let SimFile::Df(df) = file
+            && let Some(found) = find_df(df, id)
+        {
+            return Some(found);
         }
     }
     None

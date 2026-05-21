@@ -69,7 +69,7 @@ impl World {
     pub async fn new_with_args(mut args: daemon::Args) -> Self {
         if args.hci_port.is_none() {
             args.hci_port = Some(0); // Let the OS assign a random available
-                                     // port
+            // port
         }
         let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");

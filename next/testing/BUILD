@@ -9,7 +9,7 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_features = ["testing"],
     crate_name = "netsim_testing",
-    edition = "2021",
+    edition = "2024",
     enable_rustfmt = False,
     visibility = ["//next:__subpackages__"],
     deps = [

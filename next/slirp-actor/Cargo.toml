@@ -4,7 +4,7 @@
 [package]
 name = "slirp-actor"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 actor-framework = { path = "../actor-framework" }
@@ -12,5 +12,6 @@ bytes = "1.4"
 http-proxy = { path = "../http-proxy" }
 libslirp-rs = { path = "../libslirp-rs" }
 netsim-model = { path = "../model" }
+netsim-packets = { path = "../packets" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"

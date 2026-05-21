@@ -4,7 +4,7 @@
 //! A minimal pcapng parser.
 
 use zerocopy::{
-    byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, U16, U32, U64,
+    FromBytes, Immutable, IntoBytes, KnownLayout, Ref, U16, U32, U64, byteorder::LittleEndian,
 };
 
 use crate::utils::general::ParseResult;

@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use ap_actor::ffi::{DigestType, Hmac};
 use netsim_packets::{
-    control_field, management_subtype, sap, DataFrameHeader, EapolHeader, EapolKeyFrame,
-    FrameControl, Ieee80211, LlcSnapHeader, MacAddr, SequenceControl, EAPOL_KEY_DESC_TYPE_RSN,
-    EAPOL_TYPE_KEY, EAPOL_VERSION,
+    DataFrameHeader, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION, EapolHeader,
+    EapolKeyFrame, FrameControl, Ieee80211, LlcSnapHeader, MacAddr, SequenceControl, control_field,
+    management_subtype, sap,
 };
 use tracing::info;
 use zerocopy::{FromBytes, IntoBytes};
@@ -113,7 +113,7 @@ async fn test_wpa_handshake_failure_wrong_password() {
     // Offset 32 is EAPOL Start (if header=24+8)
     let eapol_start = 32;
     let header_len = 32; // Assuming 24 + 8 LLC.
-                         // Actually our wrap_eapol adds LLC.
+    // Actually our wrap_eapol adds LLC.
 
     let eapol_payload = &m1_msg[header_len..];
     let (header, body) = EapolHeader::read_from_prefix(eapol_payload).expect("EAPOL Header");
@@ -205,7 +205,7 @@ async fn test_wpa_handshake_failure_wrong_password() {
 
     let start = std::time::Instant::now();
     let mut rx = world.rx_from_ap.take().expect("AP registered"); // Take rx to ownership for polling if needed or just borrow
-                                                                  // Wait, rx is needed elsewhere? No, test ends here.
+    // Wait, rx is needed elsewhere? No, test ends here.
 
     while start.elapsed() < Duration::from_secs(1) {
         let result = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await;
@@ -226,7 +226,7 @@ async fn test_wpa_handshake_failure_wrong_password() {
     }
     // Success if we reach here
     world.rx_from_ap = Some(rx); // Put it back just in case (though not needed)
-                                 // If we timed out or got only beacons, passed.
+    // If we timed out or got only beacons, passed.
 }
 
 // Scenario: WPA Handshake Success

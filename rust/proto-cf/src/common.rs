@@ -45,6 +45,10 @@ pub enum ChipKind {
     NFC = 5,
     // @@protoc_insertion_point(enum_value:netsim.common.ChipKind.CELLULAR)
     CELLULAR = 6,
+    // @@protoc_insertion_point(enum_value:netsim.common.ChipKind.CELLULAR_DATA)
+    CELLULAR_DATA = 7,
+    // @@protoc_insertion_point(enum_value:netsim.common.ChipKind.ETHERNET)
+    ETHERNET = 8,
 }
 
 impl ::protobuf::Enum for ChipKind {
@@ -63,6 +67,8 @@ impl ::protobuf::Enum for ChipKind {
             4 => ::std::option::Option::Some(ChipKind::BLUETOOTH_BEACON),
             5 => ::std::option::Option::Some(ChipKind::NFC),
             6 => ::std::option::Option::Some(ChipKind::CELLULAR),
+            7 => ::std::option::Option::Some(ChipKind::CELLULAR_DATA),
+            8 => ::std::option::Option::Some(ChipKind::ETHERNET),
             _ => ::std::option::Option::None
         }
     }
@@ -76,6 +82,8 @@ impl ::protobuf::Enum for ChipKind {
             "BLUETOOTH_BEACON" => ::std::option::Option::Some(ChipKind::BLUETOOTH_BEACON),
             "NFC" => ::std::option::Option::Some(ChipKind::NFC),
             "CELLULAR" => ::std::option::Option::Some(ChipKind::CELLULAR),
+            "CELLULAR_DATA" => ::std::option::Option::Some(ChipKind::CELLULAR_DATA),
+            "ETHERNET" => ::std::option::Option::Some(ChipKind::ETHERNET),
             _ => ::std::option::Option::None
         }
     }
@@ -88,6 +96,8 @@ impl ::protobuf::Enum for ChipKind {
         ChipKind::BLUETOOTH_BEACON,
         ChipKind::NFC,
         ChipKind::CELLULAR,
+        ChipKind::CELLULAR_DATA,
+        ChipKind::ETHERNET,
     ];
 }
 

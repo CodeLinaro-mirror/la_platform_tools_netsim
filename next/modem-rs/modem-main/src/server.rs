@@ -17,7 +17,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use daemonize::Daemonize;
-use modem_rs::{time::SystemClock, Callbacks, CellularNetworkSimulator, ModemId, NetworkCallbacks};
+use modem_rs::{Callbacks, CellularNetworkSimulator, ModemId, NetworkCallbacks, time::SystemClock};
 use serde::Serialize;
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -27,7 +27,7 @@ use tokio::{
 use tracing::{error, info};
 use url::Url;
 
-use crate::{ClientWriter, ServerCallbacks, PID_FILE, SERVER_LOG_FILE, TCP_PORT};
+use crate::{ClientWriter, PID_FILE, SERVER_LOG_FILE, ServerCallbacks, TCP_PORT};
 
 impl Callbacks for ServerCallbacks {
     fn send_at_response(&self, modem_id: ModemId, response: &[u8]) {
