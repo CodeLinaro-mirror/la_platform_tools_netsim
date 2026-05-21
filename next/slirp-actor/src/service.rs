@@ -80,7 +80,7 @@ impl ActorService for SlirpActor {
             // - EthernetActor: Registers individual L2 ports representing each emulated guest
             //   Ethernet or Cellular chip.
             // Both actors exchange pre-formatted L2 802.3 Ethernet frames with the switch.
-            SlirpReq::Register { client_id, stream, sink, notifier } => {
+            SlirpReq::Register { client_id, stream, mut sink, notifier } => {
                 if self.libslirp.is_none() {
                     let mut config = self.config.clone();
                     let mut proxy_manager = None;
@@ -112,8 +112,23 @@ impl ActorService for SlirpActor {
 
                 if let Entry::Vacant(e) = self.clients.entry(client_id) {
                     tracing::info!("SlirpActor: Registering client {client_id}");
-                    e.insert(ClientInfo { sink, notifier });
+                    let (downlink_tx, mut downlink_rx) = tokio::sync::mpsc::unbounded_channel();
+                    e.insert(ClientInfo { sink: downlink_tx, notifier });
                     ctx.add_stream(client_id, stream);
+
+                    // Spawn isolated background forwarding task on SlirpActor's runtime context
+                    ctx.spawn(
+                        client_id,
+                        Box::pin(async move {
+                            use futures::sink::SinkExt;
+                            while let Some(bytes) = downlink_rx.recv().await {
+                                if sink.send(bytes).await.is_err() {
+                                    break;
+                                }
+                            }
+                            client_id
+                        }),
+                    );
                 } else {
                     tracing::warn!("SlirpActor: Register called twice for client {client_id}");
                 }

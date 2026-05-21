@@ -121,6 +121,7 @@ async fn handle_new_connection(
         ChipKind::CELLULAR => {
             Some(netsim_model::ChipVariant::Cell(netsim_model::Cell { state: "idle".to_string() }))
         }
+        ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
             error!("Unsupported chip kind: {:?}", kind);
             return;
@@ -485,6 +486,13 @@ impl NetsimDaemon {
             args.forward_host_mdns,
         );
 
+        // Setup Ethernet Actor
+        #[cfg(not(feature = "cuttlefish"))]
+        let (eth_runner, eth_client) = ethernet_actor::new();
+        #[cfg(not(feature = "cuttlefish"))]
+        let eth_actor_state =
+            ethernet_actor::EthernetActor::new(slirp_client.clone(), device_client.clone());
+
         // Setup Uwb Server
         let (uwb_runner, uwb_client) = uwb_actor::new();
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
@@ -498,6 +506,10 @@ impl NetsimDaemon {
         chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
         #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
+        #[cfg(not(feature = "cuttlefish"))]
+        chip_clients.insert(ChipKind::ETHERNET, Box::new(eth_client.clone()));
+        #[cfg(not(feature = "cuttlefish"))]
+        chip_clients.insert(ChipKind::CELLULAR_DATA, Box::new(eth_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
         // Note: ApClient is NOT added to chip_clients as it is now an independent
@@ -539,6 +551,8 @@ impl NetsimDaemon {
         join_set.spawn(bt_runner.run(bt_actor_state));
         #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(wifi_runner.run(wifi_actor_state));
+        #[cfg(not(feature = "cuttlefish"))]
+        join_set.spawn(eth_runner.run(eth_actor_state));
         #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(ap_runner.run(ap_actor_state));
         #[cfg(not(feature = "cuttlefish"))]

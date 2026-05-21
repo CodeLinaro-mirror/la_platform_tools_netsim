@@ -121,7 +121,9 @@ mod tests {
         ) {
         }
         fn remove_typed_stream(&mut self, _id: usize) {}
-        fn spawn(&mut self, _id: u32, _task: futures::future::BoxFuture<'static, u32>) {}
+        fn spawn(&mut self, _id: u32, task: futures::future::BoxFuture<'static, u32>) {
+            tokio::spawn(task);
+        }
         fn abort(&mut self, _id: u32) {}
         fn shutdown(&mut self) {}
         fn run_later(
@@ -144,12 +146,17 @@ mod tests {
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (_stream_tx1, stream_rx1) = mpsc::unbounded_channel();
         let stream1 = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx1));
+        let sink1: netsim_model::PacketSink =
+            Box::pin(futures::sink::unfold(tx1, |tx, bytes| async move {
+                let _ = tx.send(bytes);
+                Ok(tx)
+            }));
 
         // Register client 1
         actor
             .handle_action(
                 None,
-                SlirpReq::Register { client_id: 1, stream: stream1, sink: tx1, notifier: None },
+                SlirpReq::Register { client_id: 1, stream: stream1, sink: sink1, notifier: None },
                 &mut ctx,
             )
             .await
@@ -160,12 +167,17 @@ mod tests {
         let (tx2, _rx2) = mpsc::unbounded_channel();
         let (_stream_tx2, stream_rx2) = mpsc::unbounded_channel();
         let stream2 = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx2));
+        let sink2: netsim_model::PacketSink =
+            Box::pin(futures::sink::unfold(tx2, |tx, bytes| async move {
+                let _ = tx.send(bytes);
+                Ok(tx)
+            }));
 
         // Register client 2
         actor
             .handle_action(
                 None,
-                SlirpReq::Register { client_id: 2, stream: stream2, sink: tx2, notifier: None },
+                SlirpReq::Register { client_id: 2, stream: stream2, sink: sink2, notifier: None },
                 &mut ctx,
             )
             .await
