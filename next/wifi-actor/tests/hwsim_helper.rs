@@ -76,3 +76,10 @@ pub fn unwrap_hwsim_to_ethernet(packet: &[u8]) -> Result<Vec<u8>, String> {
 
     Ok(eth_frame)
 }
+
+/// Decodes a HwsimMsg and parses it to extract the Ieee80211 frame.
+pub fn unwrap_hwsim_to_ieee80211(packet: &[u8]) -> Option<Ieee80211> {
+    let hwsim_msg = HwsimMsg::decode_full(packet).ok()?;
+    let frame = HwsimFrame::parse(&hwsim_msg).ok()?;
+    Some(frame.ieee80211)
+}
