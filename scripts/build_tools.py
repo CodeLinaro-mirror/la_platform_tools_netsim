@@ -18,7 +18,6 @@ from tasks import (
     get_tasks,
     log_enabled_tasks,
 )
-from tasks.test_task import ALL_PACKAGES
 from utils import (
     AOSP_ROOT,
     config_logging,
@@ -36,9 +35,7 @@ def main():
   create_emulator_artifact_path()
 
   parser = argparse.ArgumentParser(
-      description=(
-          "Configures the android netsim cmake project so it can be build"
-      )
+      description="Configures and builds the android netsim project"
   )
   parser.add_argument(
       "--out_dir",
@@ -131,19 +128,13 @@ def main():
       type=str,
       nargs="+",
       default=[],
-      choices=ALL_PACKAGES,
-      help="The name of the crate(s) to run tests for.",
+      help="Deprecated: Use --bazel_targets instead.",
   )
   # TODO: Remove --bazel argument in the future. It is now the default.
   parser.add_argument(
       "--bazel",
       action="store_true",
       help="Deprecated: Bazel is now the default build system.",
-  )
-  parser.add_argument(
-      "--cmake",
-      action="store_true",
-      help="Build with CMake instead of Bazel",
   )
   parser.add_argument(
       "--bazel_targets",
@@ -189,10 +180,6 @@ def main():
 
   # Set Environment Variables
   os.environ["GIT_DISCOVERY_ACROSS_FILESYSTEM"] = "1"
-  if not args.buildbot and args.cmake:
-    # Able to config C++ file in vscode.
-    os.environ["CMAKE_EXPORT_COMPILE_COMMANDS"] = "1"
-
   # Provide absolute path for args.out_dir
   if not os.path.isabs(args.out_dir):
     args.out_dir = os.path.join(AOSP_ROOT, args.out_dir)
