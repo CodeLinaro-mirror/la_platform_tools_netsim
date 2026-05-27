@@ -118,9 +118,7 @@ async fn handle_new_connection(
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
-        ChipKind::CELLULAR => {
-            Some(netsim_model::ChipVariant::Cell(netsim_model::Cell { state: "idle".to_string() }))
-        }
+        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
             error!("Unsupported chip kind: {:?}", kind);

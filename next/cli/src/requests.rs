@@ -62,6 +62,21 @@ impl Command {
                     uwb_chip.state = chip_state.into();
                     chip.set_uwb(uwb_chip);
                     chip.kind = ChipKind::UWB.into();
+                } else if cmd.radio_type == RadioType::Ethernet {
+                    let mut eth_chip = Chip_Radio::new();
+                    eth_chip.state = chip_state.into();
+                    chip.set_ethernet(eth_chip);
+                    chip.kind = ChipKind::ETHERNET.into();
+                } else if cmd.radio_type == RadioType::Cellular {
+                    let mut cell_chip = Chip_Radio::new();
+                    cell_chip.state = chip_state.into();
+                    chip.set_cellular(cell_chip);
+                    chip.kind = ChipKind::CELLULAR.into();
+                } else if cmd.radio_type == RadioType::CellularData {
+                    let mut cell_data_chip = Chip_Radio::new();
+                    cell_data_chip.state = chip_state.into();
+                    chip.set_cellular_data(cell_data_chip);
+                    chip.kind = ChipKind::CELLULAR_DATA.into();
                 } else {
                     let mut bt_chip = Chip_Bluetooth::new();
                     let mut bt_chip_radio = Chip_Radio::new();
@@ -564,6 +579,21 @@ mod tests {
             uwb_chip.state = chip_state.into();
             chip.set_uwb(uwb_chip);
             chip.kind = ChipKind::UWB.into();
+        } else if radio_type == "ethernet" {
+            let mut eth_chip = Chip_Radio::new();
+            eth_chip.state = chip_state.into();
+            chip.set_ethernet(eth_chip);
+            chip.kind = ChipKind::ETHERNET.into();
+        } else if radio_type == "cellular" {
+            let mut cell_chip = Chip_Radio::new();
+            cell_chip.state = chip_state.into();
+            chip.set_cellular(cell_chip);
+            chip.kind = ChipKind::CELLULAR.into();
+        } else if radio_type == "cellular-data" {
+            let mut cell_data_chip = Chip_Radio::new();
+            cell_data_chip.state = chip_state.into();
+            chip.set_cellular_data(cell_data_chip);
+            chip.kind = ChipKind::CELLULAR_DATA.into();
         } else {
             let mut bt_chip = Chip_Bluetooth::new();
             let mut bt_chip_radio = Chip_Radio::new();
@@ -709,6 +739,72 @@ mod tests {
                 name: "b".to_string(),
             }),
             GrpcRequest::PatchDevice(get_expected_radio("b", "uwb", "up")),
+        );
+    }
+
+    #[test]
+    fn test_radio_ethernet() {
+        test_command(
+            "netsim-cli radio ethernet down a",
+            Command::Radio(Radio {
+                radio_type: RadioType::Ethernet,
+                status: UpDownStatus::Down,
+                name: "a".to_string(),
+            }),
+            GrpcRequest::PatchDevice(get_expected_radio("a", "ethernet", "down")),
+        );
+        test_command(
+            "netsim-cli radio ethernet up b",
+            Command::Radio(Radio {
+                radio_type: RadioType::Ethernet,
+                status: UpDownStatus::Up,
+                name: "b".to_string(),
+            }),
+            GrpcRequest::PatchDevice(get_expected_radio("b", "ethernet", "up")),
+        );
+    }
+
+    #[test]
+    fn test_radio_cellular() {
+        test_command(
+            "netsim-cli radio cellular down a",
+            Command::Radio(Radio {
+                radio_type: RadioType::Cellular,
+                status: UpDownStatus::Down,
+                name: "a".to_string(),
+            }),
+            GrpcRequest::PatchDevice(get_expected_radio("a", "cellular", "down")),
+        );
+        test_command(
+            "netsim-cli radio cellular up b",
+            Command::Radio(Radio {
+                radio_type: RadioType::Cellular,
+                status: UpDownStatus::Up,
+                name: "b".to_string(),
+            }),
+            GrpcRequest::PatchDevice(get_expected_radio("b", "cellular", "up")),
+        );
+    }
+
+    #[test]
+    fn test_radio_cellular_data() {
+        test_command(
+            "netsim-cli radio cellular-data down a",
+            Command::Radio(Radio {
+                radio_type: RadioType::CellularData,
+                status: UpDownStatus::Down,
+                name: "a".to_string(),
+            }),
+            GrpcRequest::PatchDevice(get_expected_radio("a", "cellular-data", "down")),
+        );
+        test_command(
+            "netsim-cli radio cellular-data up b",
+            Command::Radio(Radio {
+                radio_type: RadioType::CellularData,
+                status: UpDownStatus::Up,
+                name: "b".to_string(),
+            }),
+            GrpcRequest::PatchDevice(get_expected_radio("b", "cellular-data", "up")),
         );
     }
 

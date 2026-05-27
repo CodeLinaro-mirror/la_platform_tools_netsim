@@ -10,6 +10,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 pub struct ChipState {
     pub device_id: device_api::DeviceId,
+    pub enabled: bool,
 }
 
 pub struct CellActor {

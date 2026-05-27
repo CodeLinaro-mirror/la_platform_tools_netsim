@@ -41,11 +41,13 @@
 pub(crate) mod ap;
 pub(crate) mod bluetooth;
 pub(crate) mod cell;
+pub(crate) mod cellular_data;
 pub(crate) mod chip;
 pub(crate) mod chip_error;
 pub(crate) mod client_error;
 pub(crate) mod device;
 pub(crate) mod device_error;
+pub(crate) mod ethernet;
 pub(crate) mod initial_info;
 pub(crate) mod link;
 pub(crate) mod macros;
@@ -90,13 +92,15 @@ pub use crate::{
             Service, TxPower,
         },
     },
-    cell::{Cell, CellCreate, ModemAction, RegistrationStatus},
+    cell::{Cell, CellCreate, CellUpdate, ModemAction, RegistrationStatus},
+    cellular_data::{CellularData, CellularDataCreate, CellularDataUpdate},
     chip::{
         Chip, ChipClient, ChipCreate, ChipId, ChipRequest, ChipUpdate, ChipVariant,
         ChipVariantUpdate, PacketSink, PacketStream, Radio, RadioChipClient, RadioUpdate,
         chip_kind_to_radio_kind,
     },
     chip_error::ChipError,
+    ethernet::{Ethernet, EthernetCreate, EthernetUpdate},
     uwb::{Uwb, UwbCreate, UwbUpdate},
     wifi::{Wifi, WifiCreate, WifiUpdate},
 };

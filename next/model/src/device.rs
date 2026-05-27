@@ -140,6 +140,8 @@ pub mod api {
         Wifi(WifiCreate),
         Uwb(UwbCreate),
         Cell(CellCreate),
+        CellularData(crate::cellular_data::CellularDataCreate),
+        Ethernet(crate::ethernet::EthernetCreate),
     }
 
     impl Default for ChipCreateVariant {
@@ -157,6 +159,8 @@ pub mod api {
                 ChipCreateVariant::Wifi(_) => crate::chip::ChipKind::WIFI,
                 ChipCreateVariant::Uwb(_) => crate::chip::ChipKind::UWB,
                 ChipCreateVariant::Cell(_) => crate::chip::ChipKind::CELLULAR,
+                ChipCreateVariant::CellularData(_) => crate::chip::ChipKind::CELLULAR_DATA,
+                ChipCreateVariant::Ethernet(_) => crate::chip::ChipKind::ETHERNET,
             }
         }
     }
@@ -182,7 +186,15 @@ pub mod api {
                     crate::chip::ChipVariant::Uwb(crate::uwb::Uwb { radio: Default::default() })
                 }
                 ChipCreateVariant::Cell(_cell) => {
-                    crate::chip::ChipVariant::Cell(crate::cell::Cell { state: "idle".to_string() })
+                    crate::chip::ChipVariant::Cell(crate::cell::Cell::default())
+                }
+                ChipCreateVariant::CellularData(cell_data) => {
+                    crate::chip::ChipVariant::CellularData(
+                        crate::cellular_data::CellularData::from(cell_data),
+                    )
+                }
+                ChipCreateVariant::Ethernet(eth) => {
+                    crate::chip::ChipVariant::Ethernet(crate::ethernet::Ethernet::from(eth))
                 }
             }
         }
@@ -226,6 +238,14 @@ pub mod api {
                     }
                     Some(crate::chip::ChipVariant::Cell(_cell)) => {
                         ChipCreateVariant::Cell(crate::chip::CellCreate::default())
+                    }
+                    Some(crate::chip::ChipVariant::CellularData(_cell_data)) => {
+                        ChipCreateVariant::CellularData(
+                            crate::cellular_data::CellularDataCreate::default(),
+                        )
+                    }
+                    Some(crate::chip::ChipVariant::Ethernet(_eth)) => {
+                        ChipCreateVariant::Ethernet(crate::ethernet::EthernetCreate::default())
                     }
                     None => ChipCreateVariant::Beacon(crate::chip::BleBeacon::default()), /* Fallback */
                 },

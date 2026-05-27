@@ -59,7 +59,7 @@ fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> Chi
     let mut chip = Chip::new_test_cell(format!("cell-{}", chip_id));
     chip.id = chip_id.0;
     chip.device_id = DeviceId(1);
-    chip.variant = Some(ChipVariant::Cell(Cell { state: "idle".to_string() }));
+    chip.variant = Some(ChipVariant::Cell(Cell::default()));
 
     ChipCreate { packet_stream: Some(stream), packet_sink: Some(sink), chip }
 }

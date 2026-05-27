@@ -5,6 +5,7 @@
 
 pub mod access_point;
 pub mod ble_service;
+pub mod cell;
 pub mod common;
 pub mod config;
 pub mod configuration;

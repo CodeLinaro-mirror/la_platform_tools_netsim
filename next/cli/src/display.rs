@@ -134,6 +134,36 @@ impl fmt::Display for Displayer<&model::Chip> {
                 writeln!(f)?;
                 write!(f, "{:indent$}{:width$}{}", "", "uwb: ", Displayer::new(uwb, self.verbose))?;
             }
+            Some(model::chip::Chip::Ethernet(eth)) => {
+                writeln!(f)?;
+                write!(
+                    f,
+                    "{:indent$}{:width$}{}",
+                    "",
+                    "ethernet: ",
+                    Displayer::new(eth, self.verbose)
+                )?;
+            }
+            Some(model::chip::Chip::Cellular(cell)) => {
+                writeln!(f)?;
+                write!(
+                    f,
+                    "{:indent$}{:width$}{}",
+                    "",
+                    "cellular: ",
+                    Displayer::new(cell, self.verbose)
+                )?;
+            }
+            Some(model::chip::Chip::CellularData(cell_data)) => {
+                writeln!(f)?;
+                write!(
+                    f,
+                    "{:indent$}{:width$}{}",
+                    "",
+                    "cellular-data: ",
+                    Displayer::new(cell_data, self.verbose)
+                )?;
+            }
             _ => {
                 if self.verbose {
                     writeln!(f)?;
