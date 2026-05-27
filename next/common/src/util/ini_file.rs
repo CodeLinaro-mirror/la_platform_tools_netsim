@@ -107,6 +107,15 @@ pub fn get_ini_filepath(instance_num: u16) -> PathBuf {
 
 /// Get the grpc server address for netsim
 pub fn get_server_address(instance_num: u16) -> Option<String> {
+    get_address_by_key(instance_num, "grpc.port")
+}
+
+/// Get the tcp server address for netsim packet stream
+pub fn get_tcp_server_address(instance_num: u16) -> Option<String> {
+    get_address_by_key(instance_num, "tcp.port")
+}
+
+fn get_address_by_key(instance_num: u16, key: &str) -> Option<String> {
     let filepath = get_ini_filepath(instance_num);
     if !filepath.exists() {
         error!("Unable to find netsim ini file: {filepath:?}");
@@ -126,9 +135,7 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
             error!("Error parsing ini file: {err}");
         })
         .ok()?;
-    ini_map
-        .get("grpc.port")
-        .map(|s| if s.contains(':') { s.to_string() } else { format!("localhost:{s}") })
+    ini_map.get(key).map(|s| if s.contains(':') { s.to_string() } else { format!("localhost:{s}") })
 }
 
 #[cfg(test)]

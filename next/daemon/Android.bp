@@ -14,6 +14,7 @@ rust_library_host {
     features: ["cuttlefish"],
     lints: "none",
     rustlibs: [
+        "libbytes",
         "libclap",
         "libfutures",
         "libgrpcio",
@@ -31,8 +32,10 @@ rust_library_host {
         "libnetsim_next_packet_stream",
         "libnetsim_next_uwb_actor",
         "libnetsim_next_websocket_server",
+        "libnetsim_proto",
         "libserde_json",
         "libtokio",
+        "libtokio_util",
         "libtracing",
     ],
 }

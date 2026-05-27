@@ -1,7 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(all(unix, feature = "dual_fd"))]
+#[cfg(all(unix, feature = "cuttlefish"))]
 mod tests {
     //=============================================================================
     // tests/test_dual_fd_final.rs - DualFd transport tests (Public API only)
@@ -40,7 +40,7 @@ mod tests {
     {
         "devices": [
             {
-                "serial": "emulator-5554",
+                "name": "emulator-5554",
                 "chips": [
                     {
                         "kind": "BLUETOOTH",
@@ -66,7 +66,7 @@ mod tests {
         // Verify configuration parsing
         assert_eq!(dual_fd_config.devices.len(), 1);
         let device = &dual_fd_config.devices[0];
-        assert_eq!(device.serial, "emulator-5554");
+        assert_eq!(device.name, "emulator-5554");
         assert_eq!(device.chips.len(), 2);
 
         // Verify Bluetooth chip config
@@ -92,7 +92,7 @@ mod tests {
     {
         "devices": [
             {
-                "serial": "test-device-001",
+                "name": "test-device-001",
                 "chips": [
                     {
                         "kind": "BLUETOOTH",
@@ -120,7 +120,7 @@ mod tests {
 
         assert_eq!(config.devices.len(), 1);
         let device = &config.devices[0];
-        assert_eq!(device.serial, "test-device-001");
+        assert_eq!(device.name, "test-device-001");
         assert_eq!(device.chips.len(), 3);
 
         // Verify all chips parsed correctly
@@ -146,7 +146,7 @@ mod tests {
     {
         "devices": [
             {
-                "serial": "emulator-5554",
+                "name": "emulator-5554",
                 "chips": [
                     {
                         "kind": "BLUETOOTH",
@@ -156,7 +156,7 @@ mod tests {
                 ]
             },
             {
-                "serial": "emulator-5556",
+                "name": "emulator-5556",
                 "chips": [
                     {
                         "kind": "WIFI",
@@ -175,7 +175,7 @@ mod tests {
 
         // First device
         let device1 = &config.devices[0];
-        assert_eq!(device1.serial, "emulator-5554");
+        assert_eq!(device1.name, "emulator-5554");
         assert_eq!(device1.chips.len(), 1);
         assert_eq!(device1.chips[0].kind, "BLUETOOTH");
         assert_eq!(device1.chips[0].fd_in, 10);
@@ -183,7 +183,7 @@ mod tests {
 
         // Second device
         let device2 = &config.devices[1];
-        assert_eq!(device2.serial, "emulator-5556");
+        assert_eq!(device2.name, "emulator-5556");
         assert_eq!(device2.chips.len(), 1);
         assert_eq!(device2.chips[0].kind, "WIFI");
         assert_eq!(device2.chips[0].fd_in, 20);
@@ -197,7 +197,7 @@ mod tests {
     {
         "devices": [
             {
-                "serial": "minimal-device",
+                "name": "minimal-device",
                 "chips": [
                     {
                         "kind": "BLUETOOTH",
@@ -224,7 +224,7 @@ mod tests {
     {
         "devices": [
             {
-                "serial": "single-fd-device",
+                "name": "single-fd-device",
                 "chips": [
                     {
                         "kind": "BLUETOOTH",
@@ -262,7 +262,8 @@ mod tests {
         // Test that we can serialize and deserialize DualFd configuration
         use packet_stream::DualFdConfig;
 
-        let original_config = r#"{"devices":[{"serial":"test","chips":[{"kind":"BLUETOOTH","fdIn":10,"fdOut":11}]}]}"#;
+        let original_config =
+            r#"{"devices":[{"name":"test","chips":[{"kind":"BLUETOOTH","fdIn":10,"fdOut":11}]}]}"#;
 
         // Parse JSON -> Config
         let config: DualFdConfig = serde_json::from_str(original_config).unwrap();
@@ -275,7 +276,7 @@ mod tests {
 
         // Verify round-trip preserved data
         assert_eq!(config.devices.len(), config2.devices.len());
-        assert_eq!(config.devices[0].serial, config2.devices[0].serial);
+        assert_eq!(config.devices[0].name, config2.devices[0].name);
         assert_eq!(config.devices[0].chips[0].kind, config2.devices[0].chips[0].kind);
         assert_eq!(config.devices[0].chips[0].fd_in, config2.devices[0].chips[0].fd_in);
         assert_eq!(config.devices[0].chips[0].fd_out, config2.devices[0].chips[0].fd_out);
