@@ -4,14 +4,14 @@
 use actor_framework::DynContext;
 use netsim_model::{ChipId, WifiMode};
 use netsim_packets::{
-    control_field, management_subtype, sap, tags, write_ie, write_wmm_param_element,
     AssociationResponseFixedFields, AuthenticationFixedFields, BeaconFixedFields,
     BeaconFrameHeader, FrameControl, IeIterator, Ieee80211, LlcSnapHeader, MacHeader3Addr,
+    control_field, management_subtype, sap, tags, write_ie, write_wmm_param_element,
 };
 use tracing::{debug, error, info, warn};
 use zerocopy::{FromBytes, IntoBytes, U16};
 
-use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApActor, ApError, ApState};
+use crate::{ApActor, ApError, ApState, sae::SaeStateMachine, shared::SharedKeyStore};
 
 /// Handles 802.11 Management Frames
 #[derive(Clone, Debug)]
@@ -75,15 +75,15 @@ impl Ieee80211Manager {
         write_ie(body, tags::DS_PARAMETER_SET, &[ap.config.channel]);
 
         // Country IE (Tag 7)
-        if let Some(cc) = &ap.config.country_code {
-            if cc.len() >= 2 {
-                let mut country_body = Vec::new();
-                country_body.extend_from_slice(cc.as_bytes());
-                // First Channel Number, Number of Channels, Max Transmit Power Level
-                // Simple default: Start at 1, cover 13 channels, Max Power 20dBm
-                country_body.extend_from_slice(&[1, 13, 20]);
-                write_ie(body, tags::COUNTRY, &country_body);
-            }
+        if let Some(cc) = &ap.config.country_code
+            && cc.len() >= 2
+        {
+            let mut country_body = Vec::new();
+            country_body.extend_from_slice(cc.as_bytes());
+            // First Channel Number, Number of Channels, Max Transmit Power Level
+            // Simple default: Start at 1, cover 13 channels, Max Power 20dBm
+            country_body.extend_from_slice(&[1, 13, 20]);
+            write_ie(body, tags::COUNTRY, &country_body);
         }
 
         // TIM IE (Tag 5)

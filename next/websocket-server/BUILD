@@ -9,7 +9,7 @@ netsim_rust_library(
     name = "websocket-server",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "websocket_server",
-    edition = "2021",
+    edition = "2024",
     test_deps = [
         "//next/actor-framework:testing",
         "@mockall",

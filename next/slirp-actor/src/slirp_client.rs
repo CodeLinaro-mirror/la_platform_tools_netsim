@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::ResourceClient;
-use netsim_model::{ClientError, PacketSink, PacketStream};
+use netsim_model::{ChipId, ClientError, PacketSink, PacketStream};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::slirp_actor::{SlirpActor, SlirpReq};
 
@@ -34,11 +35,21 @@ impl SlirpClient {
 
     pub async fn register(
         &self,
+        client_id: u32,
         stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
-        sink: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
+        sink: UnboundedSender<bytes::Bytes>,
+        notifier: Option<UnboundedSender<ChipId>>,
     ) -> Result<(), ClientError> {
         self.client
-            .perform_action(None, SlirpReq::Register { stream, sink })
+            .perform_action(None, SlirpReq::Register { client_id, stream, sink, notifier })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn unregister(&self, client_id: u32) -> Result<(), ClientError> {
+        self.client
+            .perform_action(None, SlirpReq::Unregister { client_id })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         Ok(())

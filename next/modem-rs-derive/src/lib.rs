@@ -3,7 +3,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Type};
+use syn::{Data, DeriveInput, Fields, Ident, Type, parse_macro_input};
 
 #[proc_macro_derive(CommandParser, attributes(command, parser))]
 pub fn command_parser_derive(input: TokenStream) -> TokenStream {

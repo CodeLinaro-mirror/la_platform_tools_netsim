@@ -4,16 +4,16 @@
 use std::{fmt, iter, str::FromStr};
 
 use clap::{
-    builder::{PossibleValue, TypedValueParser},
     Args, Parser, Subcommand, ValueEnum,
+    builder::{PossibleValue, TypedValueParser},
 };
-use hex::{decode as hex_to_bytes, FromHexError};
+use hex::{FromHexError, decode as hex_to_bytes};
 use netsim_proto::model::chip::ble_beacon::{
+    AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
     advertise_settings::{
         AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
         Interval as IntervalProto, Tx_power as TxPowerProto,
     },
-    AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
 };
 
 #[derive(Debug, Parser)]

@@ -12,11 +12,11 @@
 use zerocopy::Ref;
 
 use crate::{
-    ethernet::{ether_type, EthernetPacket},
-    icmp::{v6::Icmpv6Header, IcmpHeader},
+    ethernet::{EthernetPacket, ether_type},
+    icmp::{IcmpHeader, v6::Icmpv6Header},
     ip::{
-        Ipv4Header, Ipv6Header, Ipv6HopByHopHeader, IP_P_HOPOPTS, IP_P_ICMP, IP_P_ICMPV6, IP_P_TCP,
-        IP_P_UDP,
+        IP_P_HOPOPTS, IP_P_ICMP, IP_P_ICMPV6, IP_P_TCP, IP_P_UDP, Ipv4Header, Ipv6Header,
+        Ipv6HopByHopHeader,
     },
     transport::{tcp::TcpHeader, udp::UdpHeader},
 };
@@ -210,7 +210,7 @@ mod tests {
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
         bytes.extend_from_slice(&[192, 168, 0, 1]); // Src Addr
         bytes.extend_from_slice(&[192, 168, 0, 2]); // Dst Addr
-                                                    // ICMP
+        // ICMP
         bytes.extend_from_slice(&[8, 0]); // Type, Code
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Identifier
@@ -230,7 +230,7 @@ mod tests {
         bytes.extend_from_slice(&[IP_P_ICMPV6, 64]); // Next Header, Hop Limit
         bytes.extend_from_slice(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]); // Src
         bytes.extend_from_slice(&[0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]); // Dst
-                                                                                          // ICMPv6
+        // ICMPv6
         bytes.extend_from_slice(&[128, 0]); // Type, Code
         bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
         bytes.extend_from_slice(&[0, 0, 0, 0]); // Body
@@ -316,7 +316,7 @@ mod tests {
         assert!(matches!(packet.ethernet, EthernetPacket::Vlan { .. }));
         assert!(packet.ip.is_some());
         assert!(packet.transport.is_none()); // UDP parsing fails due to missing
-                                             // header
+        // header
     }
 
     #[test]

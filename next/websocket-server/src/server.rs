@@ -8,7 +8,7 @@ use std::{
 
 use bytes::BytesMut;
 use device_actor::DeviceClient;
-use http::{header::CONNECTION, Response, StatusCode};
+use http::{Response, StatusCode, header::CONNECTION};
 use socket2::{Domain, Protocol, Socket, Type};
 use tokio::{
     io::AsyncReadExt,

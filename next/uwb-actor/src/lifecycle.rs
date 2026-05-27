@@ -48,7 +48,9 @@ impl ActorLifecycle for UwbActor {
                 }
                 Ok(PicaEvent::Connected { .. }) => {}
                 Err(TryRecvError::Lagged(skipped)) => {
-                    warn!("UWB actor `on_tick` is too slow -- {skipped} messages were missed from Pica. There may be stale chips.");
+                    warn!(
+                        "UWB actor `on_tick` is too slow -- {skipped} messages were missed from Pica. There may be stale chips."
+                    );
                     continue;
                 }
                 Err(TryRecvError::Empty | TryRecvError::Closed) => {

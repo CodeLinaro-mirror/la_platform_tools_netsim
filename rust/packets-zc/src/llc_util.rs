@@ -3,7 +3,7 @@
 
 //! Provides utility functions for working with LLC and SNAP headers.
 
-use crate::llc::{control_field, sap, LlcHeader};
+use crate::llc::{LlcHeader, control_field, sap};
 use std::fmt::Write;
 
 /// Converts an LLC Service Access Point (SAP) value to a human-readable string.

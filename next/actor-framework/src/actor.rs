@@ -13,8 +13,8 @@ use tokio_stream::StreamExt;
 use tracing::error;
 
 use crate::{
-    client::ResourceClient, context::FrameworkContext, message::ResourceRequest, ActorLifecycle,
-    ActorService, DynContext, StreamMessage,
+    ActorLifecycle, ActorService, DynContext, StreamMessage, client::ResourceClient,
+    context::FrameworkContext, message::ResourceRequest,
 };
 
 /// The generic actor that manages a collection of resources.

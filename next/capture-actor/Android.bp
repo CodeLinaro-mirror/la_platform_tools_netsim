@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_capture_actor",
+    edition: "2024",
     crate_name: "capture_actor",
     stem: "libcapture_actor",
     crate_root: "src/lib.rs",

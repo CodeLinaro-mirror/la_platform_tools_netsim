@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_capture_api",
+    edition: "2024",
     crate_name: "capture_api",
     stem: "libcapture_api",
     crate_root: "src/lib.rs",

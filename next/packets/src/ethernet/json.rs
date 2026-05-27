@@ -133,7 +133,7 @@ mod tests {
     use zerocopy::IntoBytes;
 
     use super::*;
-    use crate::ethernet::{ether_type, MacAddr};
+    use crate::ethernet::{MacAddr, ether_type};
 
     #[test]
     fn test_json_mac_addr_conversion() {

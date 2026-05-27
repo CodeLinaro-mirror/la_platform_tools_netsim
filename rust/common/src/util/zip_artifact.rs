@@ -5,13 +5,13 @@
 //! # Zip Artifact Class
 
 use std::{
-    fs::{read_dir, remove_file, File},
+    fs::{File, read_dir, remove_file},
     io::{Read, Result, Write},
     path::PathBuf,
 };
 
 use log::warn;
-use zip::{result::ZipResult, write::FileOptions, ZipWriter};
+use zip::{ZipWriter, result::ZipResult, write::FileOptions};
 
 use crate::system::netsimd_temp_dir;
 

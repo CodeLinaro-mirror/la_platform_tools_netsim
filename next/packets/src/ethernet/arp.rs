@@ -4,7 +4,7 @@
 //! Defines the ARP (Address Resolution Protocol) header.
 
 use zerocopy::{
-    byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16,
+    FromBytes, Immutable, IntoBytes, KnownLayout, U16, Unaligned, byteorder::NetworkEndian,
 };
 
 /// Represents the ARP Packet for Ethernet and IPv4.

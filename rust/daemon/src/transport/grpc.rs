@@ -6,7 +6,7 @@ use bytes::Bytes;
 use futures_executor::block_on;
 use futures_util::SinkExt as _;
 use grpcio::WriteFlags;
-use netsim_proto::hci_packet::{hcipacket::PacketType, HCIPacket};
+use netsim_proto::hci_packet::{HCIPacket, hcipacket::PacketType};
 use netsim_proto::packet_streamer::PacketResponse;
 use protobuf::Enum;
 use protobuf::EnumOrUnknown;

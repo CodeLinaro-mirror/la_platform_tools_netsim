@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{devices::chip::ChipIdentifier, ffi::ffi_bluetooth::RustBluetoothChip};
-use cxx::{let_cxx_string, UniquePtr};
+use cxx::{UniquePtr, let_cxx_string};
 
 /// Rust bluetooth chip trait.
 pub trait RustBluetoothChipCallbacks {

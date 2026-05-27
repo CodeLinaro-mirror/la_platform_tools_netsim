@@ -4,7 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use modem_rs::{
-    test_utils::MockModemHandler, time::MockClock, ModemEvent, ModemId, ModemNetworkSimulator,
+    ModemEvent, ModemId, ModemNetworkSimulator, test_utils::MockModemHandler, time::MockClock,
 };
 
 #[test]

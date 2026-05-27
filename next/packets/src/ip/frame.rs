@@ -4,8 +4,8 @@
 //! Defines structures for IPv4 and IPv6 headers using `zerocopy`.
 
 use zerocopy::{
-    byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
-    U32,
+    FromBytes, Immutable, IntoBytes, KnownLayout, Ref, U16, U32, Unaligned,
+    byteorder::NetworkEndian,
 };
 
 use crate::utils::general::ParseResult;

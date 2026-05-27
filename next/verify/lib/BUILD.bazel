@@ -15,7 +15,7 @@ rust_library(
         "src/utils.rs",
     ],
     crate_name = "features",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
     ],
     deps = [
@@ -38,7 +38,7 @@ rust_test(
     ]),
     crate_features = ["testing"],
     crate_root = "tests/lib_test_world.rs",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
         "//next/verify/macros:verify_macros",
     ],

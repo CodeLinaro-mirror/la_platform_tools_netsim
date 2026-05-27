@@ -9,7 +9,7 @@ use zerocopy::IntoBytes;
 
 use crate::{
     ethernet::MacAddr,
-    netlink::{mac80211_hwsim, HwsimAttrEnum, NlAttrHdr, TxRate, TxRateFlag},
+    netlink::{HwsimAttrEnum, NlAttrHdr, TxRate, TxRateFlag, mac80211_hwsim},
 };
 
 /// Error type for Hwsim attribute parsing.

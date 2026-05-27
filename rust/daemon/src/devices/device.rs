@@ -120,7 +120,7 @@ impl Device {
                     return Err(format!(
                         "Chip {} not found in device {}",
                         patch_chip_name, self.name
-                    ))
+                    ));
                 }
             }
         }

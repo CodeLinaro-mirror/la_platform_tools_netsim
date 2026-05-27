@@ -19,7 +19,7 @@
 use std::os::unix::io::FromRawFd;
 
 use tokio::{
-    io::{copy_bidirectional, AsyncWriteExt},
+    io::{AsyncWriteExt, copy_bidirectional},
     net::TcpStream,
 };
 use tracing::{error, info};

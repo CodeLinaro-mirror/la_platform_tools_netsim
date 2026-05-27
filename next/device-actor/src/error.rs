@@ -21,7 +21,9 @@ pub enum DeviceError {
     ActorCommunicationError(#[from] ClientError),
     #[error("Chip kind not supported: {0}")]
     ChipKindNotSupported(String),
-    #[error("Multiple errors during reset: {device_delete_errors:?} {chip_reset_errors:?} {link_client_error:?}")]
+    #[error(
+        "Multiple errors during reset: {device_delete_errors:?} {chip_reset_errors:?} {link_client_error:?}"
+    )]
     ResetErrors {
         device_delete_errors: Vec<(DeviceId, Self)>,
         chip_reset_errors: Vec<(u32, ClientError)>,

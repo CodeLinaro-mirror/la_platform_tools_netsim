@@ -480,7 +480,7 @@ impl<W: ?Sized> Features<W> {
         bg: &Option<gherkin::Background>,
         world: &mut W,
     ) -> Result<(), String> {
-        if let Some(ref bg) = bg {
+        if let Some(bg) = bg {
             // Suppress background trace prints to keep test output clean
             for step in &bg.steps {
                 let table =

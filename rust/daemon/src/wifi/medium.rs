@@ -689,7 +689,7 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> WifiResult<HwsimMsg> {
 mod tests {
     use super::*;
     use crate::wifi::hostapd;
-    use netsim_packets::ieee80211::{parse_mac_address, FrameType, Ieee80211, Ieee80211ToAp};
+    use netsim_packets::ieee80211::{FrameType, Ieee80211, Ieee80211ToAp, parse_mac_address};
 
     #[test]
     fn test_get_plaintext_ieee80211() {

@@ -7,8 +7,8 @@
 use crate::wifi::error::WifiError;
 use log::{debug, warn};
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Default)]
@@ -91,7 +91,8 @@ impl WifiStats {
             let window_bytes = throughput_values.window_bytes.load(Ordering::Relaxed);
             let elapsed = now.saturating_sub(start_time) as f64 / 1000.0;
             let current_throughput = (window_bytes as f64 / elapsed) as u32;
-            debug!("{} Throughput Result: Interval: {:.2} sec, Transfer: {:.2} MBytes, Current Throughput: {:.1} Mbits/sec, Previous Max Throughput: {:.1} Mbits/s",
+            debug!(
+                "{} Throughput Result: Interval: {:.2} sec, Transfer: {:.2} MBytes, Current Throughput: {:.1} Mbits/sec, Previous Max Throughput: {:.1} Mbits/s",
                 name,
                 elapsed,
                 (window_bytes as f64) / (1024.0 * 1024.0),

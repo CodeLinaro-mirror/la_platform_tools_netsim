@@ -2064,7 +2064,7 @@ extern "C" {
 }
 extern "C" {
     pub fn listen(__fd: ::std::os::raw::c_int, __n: ::std::os::raw::c_int)
-        -> ::std::os::raw::c_int;
+    -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn accept(

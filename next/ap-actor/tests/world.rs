@@ -7,8 +7,8 @@ use actor_framework::ResourceActor;
 use ap_actor::{ApActor, ApClient, ApConfig, SharedKeyStore};
 use netsim_model::WifiMode;
 use netsim_packets::{
-    management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
-    FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl,
+    AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
+    MacAddr, MacHeader3Addr, SequenceControl, management_subtype,
 };
 use tokio::sync::mpsc;
 use tracing::info;
@@ -222,13 +222,12 @@ impl ApWorld {
         while start.elapsed() < Duration::from_secs(2) {
             match tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
                 Ok(Some(msg)) => {
-                    if let Ok(frame) = Ieee80211::decode(&msg) {
-                        if frame.stype() == management_subtype::ASSOCIATION_RESPONSE
-                            && frame.get_addr1() == dst_mac
-                        {
-                            // DA == Station
-                            return; // Success
-                        }
+                    if let Ok(frame) = Ieee80211::decode(&msg)
+                        && frame.stype() == management_subtype::ASSOCIATION_RESPONSE
+                        && frame.get_addr1() == dst_mac
+                    {
+                        // DA == Station
+                        return; // Success
                     }
                 }
                 _ => continue,

@@ -27,7 +27,7 @@ netsim_rust_library(
     name = "bluetooth-actor",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "bluetooth_actor",
-    edition = "2021",
+    edition = "2024",
     enable_integration_test = False,
     proc_macro_deps = [
         "@async-trait",
@@ -40,7 +40,7 @@ rust_test(
     size = "small",
     srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/mod.rs",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = ["@async-trait"],
     rustc_flags = [
         "-C",

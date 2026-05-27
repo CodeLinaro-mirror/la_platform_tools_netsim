@@ -4,6 +4,7 @@ package {
 
 rust_binary_host {
     name: "netsim_next_netsim",
+    edition: "2024",
     stem: "netsim_next_netsim",
     crate_root: "src/main.rs",
     srcs: [

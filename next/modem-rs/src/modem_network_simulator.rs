@@ -4,7 +4,7 @@
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashMap, VecDeque},
-    sync::{atomic::Ordering as AtomicOrdering, Arc},
+    sync::{Arc, atomic::Ordering as AtomicOrdering},
     time::{Duration, Instant},
 };
 
@@ -18,7 +18,7 @@ use crate::{
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
     time::{Clock, SystemClock},
-    types::{CommandAction, HostEvent, ModemError, ModemId, ModemSink, AT_OK},
+    types::{AT_OK, CommandAction, HostEvent, ModemError, ModemId, ModemSink},
 };
 
 #[derive(Debug)]
@@ -179,15 +179,15 @@ impl ModemNetworkSimulator {
                 }
                 ModemEffect::Response(packet) => {
                     info!("Sending response to {}: {:?}", id, std::str::from_utf8(&packet));
-                    if let Some(sink) = self.sinks.get_mut(&id) {
-                        if let Err(e) = sink.send(Bytes::from(packet)) {
-                            error!("Failed to send response to modem {}: {}", id, e);
-                            let event = HostEvent::SinkError(id);
-                            if let Err(e) = self.host_event_tx.send(event) {
-                                error!("Failed to send client sink error: {}", e);
-                            }
-                            network_events.push(NetworkEvent::SinkError { id });
+                    if let Some(sink) = self.sinks.get_mut(&id)
+                        && let Err(e) = sink.send(Bytes::from(packet))
+                    {
+                        error!("Failed to send response to modem {}: {}", id, e);
+                        let event = HostEvent::SinkError(id);
+                        if let Err(e) = self.host_event_tx.send(event) {
+                            error!("Failed to send client sink error: {}", e);
                         }
+                        network_events.push(NetworkEvent::SinkError { id });
                     }
                 }
                 ModemEffect::Action(action) => {
@@ -240,10 +240,10 @@ impl ModemNetworkSimulator {
                 // Find peer to hold
                 let peer_to_hold = self.find_peer_id(id, |m| m.call_service.is_active());
 
-                if let Some(peer_id) = peer_to_hold {
-                    if let Some(peer) = self.modems.get_mut(&peer_id) {
-                        peer.call_service.receive_hold();
-                    }
+                if let Some(peer_id) = peer_to_hold
+                    && let Some(peer) = self.modems.get_mut(&peer_id)
+                {
+                    peer.call_service.receive_hold();
                 }
 
                 effects.extend(self.initiate_call(id, &phone_number));
@@ -270,18 +270,16 @@ impl ModemNetworkSimulator {
 
                 if let Some(cid) = caller_id {
                     // Caller connects
-                    if let Some(caller) = self.modems.get_mut(&cid) {
-                        if let Some(response) = caller.call_service.connect(cid, answered_modem_id)
-                        {
-                            effects.push((cid, ModemEffect::Response(response)));
-                        }
+                    if let Some(caller) = self.modems.get_mut(&cid)
+                        && let Some(response) = caller.call_service.connect(cid, answered_modem_id)
+                    {
+                        effects.push((cid, ModemEffect::Response(response)));
                     }
                     // Callee connects
-                    if let Some(callee) = self.modems.get_mut(&answered_modem_id) {
-                        if let Some(response) = callee.call_service.connect(answered_modem_id, cid)
-                        {
-                            effects.push((answered_modem_id, ModemEffect::Response(response)));
-                        }
+                    if let Some(callee) = self.modems.get_mut(&answered_modem_id)
+                        && let Some(response) = callee.call_service.connect(answered_modem_id, cid)
+                    {
+                        effects.push((answered_modem_id, ModemEffect::Response(response)));
                     }
                 }
             }
@@ -406,18 +404,18 @@ impl ModemNetworkSimulator {
         // Find target
         let target_id = self.find_peer_id(caller_id, |m| m.phone_number() == phone_number);
 
-        if let Some(tid) = target_id {
-            if let Some(modem) = self.modems.get_mut(&tid) {
-                // Send RING
-                let mut effects = modem.receive_at_command(b"RING\r\n");
+        if let Some(tid) = target_id
+            && let Some(modem) = self.modems.get_mut(&tid)
+        {
+            // Send RING
+            let mut effects = modem.receive_at_command(b"RING\r\n");
 
-                // Also schedule RING timeout on TARGET
-                effects.push(ModemEffect::Schedule {
-                    delay: CALL_RING_TIMEOUT,
-                    event: ModemEvent::CallRingTimeout { call_token: 1 },
-                });
-                return effects.into_iter().map(|e| (tid, e)).collect();
-            }
+            // Also schedule RING timeout on TARGET
+            effects.push(ModemEffect::Schedule {
+                delay: CALL_RING_TIMEOUT,
+                event: ModemEvent::CallRingTimeout { call_token: 1 },
+            });
+            return effects.into_iter().map(|e| (tid, e)).collect();
         }
         Vec::new()
     }
@@ -447,11 +445,7 @@ impl ModemNetworkSimulator {
 
         let next_duration = self.event_queue.peek().map(|e| {
             let when = e.0.when;
-            if when > now {
-                when - now
-            } else {
-                Duration::ZERO
-            }
+            if when > now { when - now } else { Duration::ZERO }
         });
 
         (events, next_duration)

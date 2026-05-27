@@ -3,7 +3,7 @@
 
 //! Provides utility functions for working with Ethernet-related data structures.
 
-use crate::ethernet::{ether_type, MacAddr};
+use crate::ethernet::{MacAddr, ether_type};
 
 /// Converts an EtherType value to a human-readable string.
 ///

@@ -10,8 +10,8 @@ use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceId};
 use netsim_model::{ChipClient, ChipCreate, ChipId, Position};
 use netsim_packets::{
-    ether_type, EthernetFrame, FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddr,
-    MacAddress,
+    EthernetFrame, FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddr, MacAddress,
+    ether_type,
 };
 use slirp_actor::SlirpActor;
 use tokio::sync::mpsc;

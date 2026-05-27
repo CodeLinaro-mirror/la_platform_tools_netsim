@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ap_actor::{
-    ffi::{AesCcmEncrypt, AesUnwrap, AesWrap, DigestType, Hmac, RandBytes, Sha},
     SharedKeyStore,
+    ffi::{AesCcmEncrypt, AesUnwrap, AesWrap, DigestType, Hmac, RandBytes, Sha},
 };
 use netsim_packets::{Ieee80211, MacAddress};
 
@@ -122,7 +122,7 @@ fn test_crypto_interop_boringssl_encrypt_rust_decrypt() {
     // We need a basic frame first.
     let a1 = MacAddress::new([0x11; 6]); // Dest (our station)
     let a3 = MacAddress::new([0x33; 6]); // BSSID/Source
-                                         // Data frame from AP to STA (FromDS=1, ToDS=0)
+    // Data frame from AP to STA (FromDS=1, ToDS=0)
     let mut frame_bytes = Vec::new();
     // FC: Type=Data(2), Subtype=Data(0), ToDS=0, FromDS=1, Protected=1
     // Type/Subtype = 0x08 (Data)

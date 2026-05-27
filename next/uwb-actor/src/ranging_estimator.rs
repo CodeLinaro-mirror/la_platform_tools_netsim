@@ -12,7 +12,7 @@ use pica::{Handle, RangingEstimator, RangingMeasurement};
 use tracing::warn;
 
 use crate::{
-    ranging::{compute_range_azimuth_elevation, Pose},
+    ranging::{Pose, compute_range_azimuth_elevation},
     uwb_actor::UwbChipState,
 };
 

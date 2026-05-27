@@ -11,8 +11,8 @@
 
 use bytes::Bytes;
 
-use std::collections::btree_map::{Iter, Values};
 use std::collections::BTreeMap;
+use std::collections::btree_map::{Iter, Values};
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Result};
 use std::sync::mpsc::channel;
@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::pcap_util::{write_pcap_header, write_pcapng_header, LinkType};
+use super::pcap_util::{LinkType, write_pcap_header, write_pcapng_header};
 use log::{info, warn};
 
 use netsim_proto::{common::ChipKind, model::Capture as ProtoCapture};
@@ -259,8 +259,8 @@ impl Default for Captures {
 /// and ChipRemoved events and updates the collection of CaptureInfo.
 ///
 pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>, capture: bool) {
-    let _ =
-        thread::Builder::new().name("capture_event_subscriber".to_string()).spawn(move || loop {
+    let _ = thread::Builder::new().name("capture_event_subscriber".to_string()).spawn(move || {
+        loop {
             match event_rx.recv() {
                 Ok(Event::ChipAdded(ChipAdded { chip_id, chip_kind, device_name, .. })) => {
                     let mut capture_info =
@@ -279,5 +279,6 @@ pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>, capture: bool) 
                 }
                 _ => {}
             }
-        });
+        }
+    });
 }

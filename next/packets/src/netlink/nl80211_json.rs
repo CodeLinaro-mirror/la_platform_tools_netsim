@@ -158,9 +158,9 @@ pub fn packet_to_json(packet: &[u8]) -> serde_json::Value {
             "genl.cmd".to_string(),
             serde_json::Value::String(format!("0x{:02x}", nlmsg_type)),
         ); // Placeholder
-           // Tshark output for Netlink is complex and depends on protocol (Generic
-           // Netlink, Route, etc.) For our test, we might just want to dump the
-           // header fields and payload.
+        // Tshark output for Netlink is complex and depends on protocol (Generic
+        // Netlink, Route, etc.) For our test, we might just want to dump the
+        // header fields and payload.
 
         // Let's create a "netlink" layer
         let mut nl_map = serde_json::Map::new();

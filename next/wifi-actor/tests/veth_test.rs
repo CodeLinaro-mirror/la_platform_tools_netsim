@@ -4,7 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use actor_framework::ResourceActor;
-use ap_actor::{shared::SharedKeyStore, ApActor, ApClient};
+use ap_actor::{ApActor, ApClient, shared::SharedKeyStore};
 use device_actor::DeviceClient;
 use netsim_model::{ChipClient, ChipCreate, ChipId};
 use slirp_actor::SlirpActor;

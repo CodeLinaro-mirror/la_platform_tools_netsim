@@ -5,7 +5,7 @@ use std::process;
 
 #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 use command_fds::inherited::init_inherited_fds;
-use daemon::{run, RunResult};
+use daemon::{RunResult, run};
 
 fn main() {
     // SAFETY: This is the first line of the main function before anything opens

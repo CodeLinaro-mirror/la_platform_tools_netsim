@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use common::util::ini_file::{parse_ini, IniParserOptions};
+use common::util::ini_file::{IniParserOptions, parse_ini};
 use tracing::{info, warn};
 
 // This struct matches the top-level configuration.
@@ -46,12 +46,11 @@ fn list_avd_ini_files(avd_root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     for entry in fs::read_dir(avd_root)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() {
-            if let Some(extension) = path.extension() {
-                if extension == "ini" {
-                    ini_files.push(path);
-                }
-            }
+        if path.is_file()
+            && let Some(extension) = path.extension()
+            && extension == "ini"
+        {
+            ini_files.push(path);
         }
     }
     Ok(ini_files)
@@ -61,10 +60,10 @@ fn list_avd_ini_files(avd_root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
 fn get_path_from_avd_ini(ini_content: &str) -> Result<PathBuf, String> {
     for line in ini_content.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("path=") {
-            if let Some((_, path_value)) = trimmed.split_once('=') {
-                return Ok(PathBuf::from(path_value.trim()));
-            }
+        if trimmed.starts_with("path=")
+            && let Some((_, path_value)) = trimmed.split_once('=')
+        {
+            return Ok(PathBuf::from(path_value.trim()));
         }
     }
     Err("Could not find the 'path=' key in the AVD .ini file.".to_string())
@@ -171,10 +170,10 @@ pub fn get_or_create_bluetooth_mac(avd_ini_path: &str) -> Result<String, Box<dyn
     let avd_path = PathBuf::from(avd_ini_path);
     match read_netsim_config_for_avd(&avd_path) {
         Ok(config) => {
-            if let Some(address) = config.bluetooth_address {
-                if !address.is_empty() {
-                    return Ok(address);
-                }
+            if let Some(address) = config.bluetooth_address
+                && !address.is_empty()
+            {
+                return Ok(address);
             }
         }
         Err(e) => {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use futures::{pin_mut, stream::StreamExt, SinkExt, TryStreamExt};
+use futures::{SinkExt, TryStreamExt, pin_mut, stream::StreamExt};
 use netsim_model::ChipInfo;
 use netsim_proto::{
     packet_streamer::{self, PacketRequest, PacketResponse},

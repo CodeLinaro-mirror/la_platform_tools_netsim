@@ -9,7 +9,7 @@ netsim_rust_library(
     name = "grpc-server",
     srcs = glob(["src/*.rs"]),
     crate_name = "grpc_server",
-    edition = "2021",
+    edition = "2024",
     proc_macro_deps = [
         "@async-trait",
     ],

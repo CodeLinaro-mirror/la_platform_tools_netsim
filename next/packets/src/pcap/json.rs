@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod tests {
     use serde::{Deserialize, Serialize};
-    use zerocopy::{byteorder::LittleEndian, U16, U32};
+    use zerocopy::{U16, U32, byteorder::LittleEndian};
 
     use crate::pcap::{PcapHeader, PcapRecordHeader};
 

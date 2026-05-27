@@ -7,7 +7,7 @@ mod tests {
     // tests/test_dual_fd_final.rs - DualFd transport tests (Public API only)
     //=============================================================================
 
-    use packet_stream::{transport::dual_fd::DualFdConfig, TransportType};
+    use packet_stream::{TransportType, transport::dual_fd::DualFdConfig};
 
     /// Tests for DualFd transport focusing on what's accessible through public
     /// API

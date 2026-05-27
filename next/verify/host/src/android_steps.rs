@@ -5,8 +5,8 @@ use std::{
     collections::{HashMap, HashSet},
     process::{Child, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -19,7 +19,7 @@ use verify_macros::{step, step_module};
 
 use crate::{
     orchestrator::TestContext,
-    types::{ClientParams, Throughput, LABEL_WIDTH},
+    types::{ClientParams, LABEL_WIDTH, Throughput},
 };
 
 // Protocol markers for Guest-Host communication (legacy)

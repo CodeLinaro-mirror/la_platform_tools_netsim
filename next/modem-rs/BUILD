@@ -20,7 +20,7 @@ netsim_rust_library(
     name = "modem-rs",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "modem_rs",
-    edition = "2021",
+    edition = "2024",
     features = ["test-utils"],
     proc_macro_deps = [
         "//next/modem-rs-derive",

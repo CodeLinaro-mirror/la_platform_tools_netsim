@@ -4,6 +4,7 @@ package {
 
 rust_library_host {
     name: "libnetsim_next_websocket_server",
+    edition: "2024",
     crate_name: "websocket_server",
     stem: "libwebsocket_server",
     crate_root: "src/lib.rs",

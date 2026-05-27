@@ -17,7 +17,7 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    types::{CommandAction, ExecutionResult, ModemId, AT_ERROR, AT_OK},
+    types::{AT_ERROR, AT_OK, CommandAction, ExecutionResult, ModemId},
 };
 
 /// Represents a single modem device.
@@ -126,14 +126,14 @@ impl ModemImpl {
     pub fn trigger_incoming_pdu(&mut self, pdu: &str) -> Vec<ModemEffect> {
         // Calculate TPDU length
         let mut effects = Vec::new();
-        if let Ok(bytes) = hex::decode(pdu) {
-            if !bytes.is_empty() {
-                let sca_len = bytes[0] as usize;
-                if bytes.len() > 1 + sca_len {
-                    let tpdu_len = bytes.len() - 1 - sca_len;
-                    let response = format!("+CMT: ,{}\r\n{}\r\n", tpdu_len, pdu);
-                    effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-                }
+        if let Ok(bytes) = hex::decode(pdu)
+            && !bytes.is_empty()
+        {
+            let sca_len = bytes[0] as usize;
+            if bytes.len() > 1 + sca_len {
+                let tpdu_len = bytes.len() - 1 - sca_len;
+                let response = format!("+CMT: ,{}\r\n{}\r\n", tpdu_len, pdu);
+                effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
             }
         }
         effects
@@ -213,8 +213,8 @@ impl ModemImpl {
                 Some(ExecutionResult::Handled(crate::types::HandledCommand::ok()))
             } else {
                 None // Waiting for more data? Or just ignore for now if
-                     // incomplete? The emulator usually
-                     // sends full line/buffer.
+                // incomplete? The emulator usually
+                // sends full line/buffer.
             }
         } else {
             None

@@ -8,9 +8,10 @@ use tracing::debug;
 use crate::{
     error::WifiError,
     medium::{
+        WifiResult,
         core::Medium,
         tx_packet_state::{InfraTarget, TxPacketState},
-        utils, WifiResult,
+        utils,
     },
 };
 
@@ -91,15 +92,14 @@ impl Medium {
         tx_state.stations = stations;
 
         // Remember which AP this station is sending infrastructure frames to
-        if tx_state.infra_target != InfraTarget::None {
-            if let Some(b) = bssid {
-                if !b.is_multicast() {
-                    self.key_store.set_station_bssid(src_mac, b);
-                    // Also map hardware MAC (hwsim_addr) to ensure Slirp responses can be routed
-                    if let Some(hwsim_addr) = tx_state.frame.transmitter {
-                        self.key_store.set_station_bssid(hwsim_addr, b);
-                    }
-                }
+        if tx_state.infra_target != InfraTarget::None
+            && let Some(b) = bssid
+            && !b.is_multicast()
+        {
+            self.key_store.set_station_bssid(src_mac, b);
+            // Also map hardware MAC (hwsim_addr) to ensure Slirp responses can be routed
+            if let Some(hwsim_addr) = tx_state.frame.transmitter {
+                self.key_store.set_station_bssid(hwsim_addr, b);
             }
         }
 
@@ -144,10 +144,11 @@ impl Medium {
         // --- AP & Slirp ---
 
         // Check BSSID match for Infrastructure frames against ALL active APs
-        if let Some(bssid) = ieee80211.get_bssid() {
-            if !bssid.is_multicast() && !self.key_store.has_bssid(&bssid) {
-                return (infra_target, stations);
-            }
+        if let Some(bssid) = ieee80211.get_bssid()
+            && !bssid.is_multicast()
+            && !self.key_store.has_bssid(&bssid)
+        {
+            return (infra_target, stations);
         }
 
         if ieee80211.is_data() {

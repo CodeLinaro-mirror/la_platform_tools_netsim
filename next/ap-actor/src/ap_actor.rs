@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use netsim_model::{
-    ApCreate, ApUpdate as ModelApUpdate, Position, WifiMode, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID,
+    ApCreate, ApUpdate as ModelApUpdate, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID, Position, WifiMode,
 };
 use netsim_packets::MacAddr;
 use serde::{Deserialize, Serialize};

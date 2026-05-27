@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use futures::{channel::mpsc::UnboundedSender, sink::SinkExt, StreamExt};
+use futures::{StreamExt, channel::mpsc::UnboundedSender, sink::SinkExt};
 use pica::{Handle, Pica};
 
-use netsim_proto::model::chip::Radio as ProtoRadio;
 use netsim_proto::model::Chip as ProtoChip;
-use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
+use netsim_proto::model::chip::Radio as ProtoRadio;
+use netsim_proto::stats::{NetsimRadioStats as ProtoRadioStats, netsim_radio_stats};
 
 use crate::devices::chip::ChipIdentifier;
 use crate::get_runtime;

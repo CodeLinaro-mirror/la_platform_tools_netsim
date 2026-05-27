@@ -6,12 +6,12 @@ use bytes::Bytes;
 use futures::{FutureExt, SinkExt, StreamExt};
 use netsim_model::{Chip, ChipCreate, ChipError, ChipId, ChipUpdate};
 use pdl_runtime::Packet;
-use pica::{packets::uci, PicaCommand, PicaEvent};
+use pica::{PicaCommand, PicaEvent, packets::uci};
 
 use crate::{
+    UwbAction, UwbActionResult,
     error::UwbError,
     uwb_actor::{UwbActor, UwbChipState},
-    UwbAction, UwbActionResult,
 };
 
 impl ActorService for UwbActor {

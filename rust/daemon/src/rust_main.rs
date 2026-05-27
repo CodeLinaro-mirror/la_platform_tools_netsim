@@ -14,9 +14,9 @@ use netsim_proto::frontend_grpc::FrontendServiceClient;
 
 use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
-use crate::devices::devices_handler::{spawn_shutdown_publisher, DeviceManager};
+use crate::devices::devices_handler::{DeviceManager, spawn_shutdown_publisher};
 use crate::events::{Event, Events, ShutDown};
-use crate::links::link::{LinkManager, PhyKind, ANY_CHIP};
+use crate::links::link::{ANY_CHIP, LinkManager, PhyKind};
 use crate::session::Session;
 use crate::version::get_version;
 use crate::wireless;
@@ -25,12 +25,12 @@ use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
 use crate::ffi::ffi_util;
-use crate::service::{new_test_beacon, Service, ServiceParams};
+use crate::service::{Service, ServiceParams, new_test_beacon};
 use netsim_proto::config::{Bluetooth as BluetoothConfig, Capture, Config};
 use std::env;
 use std::ffi::{c_char, c_int};
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 
 /// Wireless network simulator for android (and other) emulated devices.
 ///

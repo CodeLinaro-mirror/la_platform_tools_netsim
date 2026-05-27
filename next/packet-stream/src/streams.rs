@@ -17,8 +17,8 @@ use tokio::{
 use crate::{
     error::{PacketStreamError, Result},
     transport::{
-        traits::{PacketSink, PacketStream, TransportListener},
         ListenerConfig, TransportType,
+        traits::{PacketSink, PacketStream, TransportListener},
     },
     types::{ChipInfo, StreamAddress},
 };
