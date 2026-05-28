@@ -39,7 +39,6 @@ class InstallEmulatorTask(Task):
     self.target = args.emulator_target
     # Local Emulator directory
     self.local_emulator_dir = args.local_emulator_dir
-    self.is_bazel_build = not args.cmake
 
   def do_run(self):
     install_emulator_manager = InstallEmulatorManager(
@@ -48,7 +47,6 @@ class InstallEmulatorTask(Task):
         self.target,
         self.local_emulator_dir,
         self.build_id,
-        self.is_bazel_build,
     )
     return install_emulator_manager.process()
 
@@ -74,7 +72,6 @@ class InstallEmulatorManager:
       target,
       local_emulator_dir,
       build_id,
-      is_bazel_build,
   ):
     """Initializes the instances based on environment
 
@@ -92,7 +89,6 @@ class InstallEmulatorManager:
     # to ensure all artifacts (netsim + emulator) are in one place.
     # OBJS_DIR is usually args.out_dir.
     self.local_netsim_dir = Path(self.out_dir) / "distribution" / "emulator"
-    self.is_bazel_build = is_bazel_build
 
   def __os_name_fetch(self):
     """Obtains the os substring of the emulator artifact"""
@@ -196,29 +192,21 @@ class InstallEmulatorManager:
         os.remove(file)
     # Copy artifacts
     if self.buildbot:
-      if self.is_bazel_build:
-        # Copy netsim binaries
-        for binary in ["netsim", "netsimd"]:
-          binary_name = binary_extension(binary)
-          src_file = BAZEL_OUT_DIR / binary_name
-          if src_file.exists():
-            shutil.copy(src_file, emulator_filepath / binary_name)
-          else:
-            logging.warning(f"Binary not found: {src_file}")
+      # Copy netsim binaries
+      for binary in ["netsim", "netsimd"]:
+        binary_name = binary_extension(binary)
+        src_file = BAZEL_OUT_DIR / binary_name
+        if src_file.exists():
+          shutil.copy(src_file, emulator_filepath / binary_name)
+        else:
+          logging.warning(f"Binary not found: {src_file}")
 
-        # Copy netsim-ui
-        ui_src_dir = BAZEL_OUT_DIR / "netsim-ui"
-        if ui_src_dir.exists():
-          shutil.copytree(
-              ui_src_dir,
-              emulator_filepath / "netsim-ui",
-              dirs_exist_ok=True,
-          )
-      else:
-        source_dir = Path(self.out_dir) / "distribution" / "emulator"
+      # Copy netsim-ui
+      ui_src_dir = BAZEL_OUT_DIR / "netsim-ui"
+      if ui_src_dir.exists():
         shutil.copytree(
-            source_dir,
-            emulator_filepath,
+            ui_src_dir,
+            emulator_filepath / "netsim-ui",
             dirs_exist_ok=True,
         )
     else:

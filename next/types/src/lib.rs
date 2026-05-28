@@ -128,3 +128,21 @@ pub enum ChipKind {
     CELLULAR_DATA,
     ETHERNET,
 }
+
+impl std::str::FromStr for ChipKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "UNSPECIFIED" => Ok(ChipKind::UNSPECIFIED),
+            "BLUETOOTH" => Ok(ChipKind::BLUETOOTH),
+            "WIFI" => Ok(ChipKind::WIFI),
+            "UWB" => Ok(ChipKind::UWB),
+            "NFC" => Ok(ChipKind::NFC),
+            "CELLULAR" => Ok(ChipKind::CELLULAR),
+            "CELLULAR_DATA" => Ok(ChipKind::CELLULAR_DATA),
+            "ETHERNET" => Ok(ChipKind::ETHERNET),
+            _ => Err(format!("invalid chip kind: {}", s)),
+        }
+    }
+}

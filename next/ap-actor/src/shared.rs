@@ -97,6 +97,10 @@ impl SharedKeyStore {
         sessions.remove(sta_addr);
     }
 
+    pub fn remove_station_bssid(&self, sta_addr: &MacAddress) {
+        self.station_bssids.write().unwrap().remove(sta_addr);
+    }
+
     pub fn try_encrypt(&self, ieee80211: &Ieee80211) -> Option<Vec<u8>> {
         let dest = ieee80211.get_destination();
         let is_group = dest.is_multicast() || dest.is_broadcast();

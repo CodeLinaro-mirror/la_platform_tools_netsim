@@ -118,9 +118,8 @@ async fn handle_new_connection(
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
-        ChipKind::CELLULAR => {
-            Some(netsim_model::ChipVariant::Cell(netsim_model::Cell { state: "idle".to_string() }))
-        }
+        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell::default())),
+        ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
             error!("Unsupported chip kind: {:?}", kind);
             return;
@@ -291,7 +290,7 @@ impl NetsimDaemon {
         info!("{args:#?}");
 
         // Resolve TAP configuration early to validate permissions/availability.
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(feature = "cuttlefish")))]
         let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
             if args.wifi.wifi_cvd_tap { Some("cvd-etap-%02d".to_string()) } else { None }
         });
@@ -363,6 +362,11 @@ impl NetsimDaemon {
         let mut listener_addresses = HashMap::new();
         let mut streams = Streams::new();
 
+        #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
+        if let Some(fd_startup_str) = &args.fd_startup_str {
+            Self::init_dualfd_listener(fd_startup_str, &mut streams).await;
+        }
+
         // Setup Link Server
         let (link_runner, link_client) = link_actor::new();
 
@@ -375,13 +379,90 @@ impl NetsimDaemon {
         // Coordinate IDs across all actors
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
-        // Setup AP Actor (Needed for gRPC)
         #[cfg(not(feature = "cuttlefish"))]
-        let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
-        #[cfg(not(feature = "cuttlefish"))]
-        let (ap_runner, ap_client) = ap_actor::new();
-        #[cfg(not(feature = "cuttlefish"))]
-        let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
+        let (
+            ap_runner,
+            ap_client,
+            ap_actor_state,
+            slirp_runner,
+            slirp_client,
+            slirp_actor_state,
+            wifi_runner,
+            wifi_client,
+            wifi_actor_state,
+            eth_runner,
+            eth_client,
+            eth_actor_state,
+        ) = {
+            let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
+            let (ap_runner, ap_client) = ap_actor::new();
+            let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
+
+            // Setup Slirp Actor
+            let (slirp_runner, slirp_client) = slirp_actor::new();
+            let slirp_actor_state = slirp_actor::SlirpActor::new(
+                Default::default(),
+                args.http_proxy.clone(),
+                args.host_dns.clone(),
+            )
+            .await;
+
+            // (AP Actor already initialized above)
+
+            // Setup Wifi Actor
+            let (wifi_runner, wifi_client) = wifi_actor::new();
+            // Initialize wifi_tap configuration.
+            // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d" pattern for
+            // pooling. If --wifi-tap is set, it overrides everything.
+            let wifi_tap = {
+                #[cfg(target_os = "linux")]
+                {
+                    args.wifi.wifi_tap.clone().or_else(|| {
+                        if args.wifi.wifi_cvd_tap {
+                            Some("cvd-etap-%02d".to_string())
+                        } else {
+                            None
+                        }
+                    })
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    None
+                }
+            };
+
+            // TAP preflight check is now done in `new_with_dirs` before lock acquisition.
+
+            let wifi_actor_state = wifi_actor::WifiActor::new(
+                Some(Arc::new(ap_client.clone())),
+                Some(slirp_client.clone()),
+                device_client.clone(),
+                wifi_tap,
+                shared_keys,
+                Arc::new(wifi_actor::SystemClock),
+                args.forward_host_mdns,
+            );
+
+            // Setup Ethernet Actor
+            let (eth_runner, eth_client) = ethernet_actor::new();
+            let eth_actor_state =
+                ethernet_actor::EthernetActor::new(slirp_client.clone(), device_client.clone());
+
+            (
+                ap_runner,
+                ap_client,
+                ap_actor_state,
+                slirp_runner,
+                slirp_client,
+                slirp_actor_state,
+                wifi_runner,
+                wifi_client,
+                wifi_actor_state,
+                eth_runner,
+                eth_client,
+                eth_actor_state,
+            )
+        };
 
         // gRPC port is determined after the listener starts.
         let (actual_grpc_port, grpc_server) = setup_grpc_listener(
@@ -445,46 +526,6 @@ impl NetsimDaemon {
         let (bt_runner, bt_client) = bluetooth_actor::new();
         let bt_actor_state = bluetooth_actor::BluetoothActor::new(device_client.clone());
 
-        // Setup Wifi Server (and dependencies: AP)
-        // Setup Slirp Actor
-        #[cfg(not(feature = "cuttlefish"))]
-        let (slirp_runner, slirp_client) = slirp_actor::new();
-        #[cfg(not(feature = "cuttlefish"))]
-        let slirp_actor_state = slirp_actor::SlirpActor::new(
-            Default::default(),
-            args.http_proxy.clone(),
-            args.host_dns.clone(),
-        )
-        .await;
-
-        // (AP Actor already initialized above)
-
-        // Setup Wifi Actor
-        #[cfg(not(feature = "cuttlefish"))]
-        let (wifi_runner, wifi_client) = wifi_actor::new();
-        // Initialize wifi_tap configuration.
-        // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d" pattern for
-        // pooling. If --wifi-tap is set, it overrides everything.
-        #[cfg(target_os = "linux")]
-        let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
-            if args.wifi.wifi_cvd_tap { Some("cvd-etap-%02d".to_string()) } else { None }
-        });
-        #[cfg(not(target_os = "linux"))]
-        let wifi_tap: Option<String> = None;
-
-        // TAP preflight check is now done in `new_with_dirs` before lock acquisition.
-
-        #[cfg(not(feature = "cuttlefish"))]
-        let wifi_actor_state = wifi_actor::WifiActor::new(
-            Some(Arc::new(ap_client.clone())),
-            Some(slirp_client.clone()),
-            device_client.clone(),
-            wifi_tap,
-            shared_keys.clone(),
-            Arc::new(wifi_actor::SystemClock),
-            args.forward_host_mdns,
-        );
-
         // Setup Uwb Server
         let (uwb_runner, uwb_client) = uwb_actor::new();
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
@@ -498,6 +539,10 @@ impl NetsimDaemon {
         chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
         #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
+        #[cfg(not(feature = "cuttlefish"))]
+        chip_clients.insert(ChipKind::ETHERNET, Box::new(eth_client.clone()));
+        #[cfg(not(feature = "cuttlefish"))]
+        chip_clients.insert(ChipKind::CELLULAR_DATA, Box::new(eth_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
         // Note: ApClient is NOT added to chip_clients as it is now an independent
@@ -539,6 +584,8 @@ impl NetsimDaemon {
         join_set.spawn(bt_runner.run(bt_actor_state));
         #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(wifi_runner.run(wifi_actor_state));
+        #[cfg(not(feature = "cuttlefish"))]
+        join_set.spawn(eth_runner.run(eth_actor_state));
         #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(ap_runner.run(ap_actor_state));
         #[cfg(not(feature = "cuttlefish"))]
@@ -663,6 +710,30 @@ impl NetsimDaemon {
             None => {
                 // Should not happen as we have multiple tasks
                 true
+            }
+        }
+    }
+
+    #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
+    async fn init_dualfd_listener(fd_startup_str: &str, streams: &mut Streams) {
+        if fd_startup_str.is_empty() {
+            return;
+        }
+        match serde_json::from_str::<packet_stream::transport::DualFdConfig>(fd_startup_str) {
+            Ok(config) => match packet_stream::transport::DualFdListener::new(config).await {
+                Ok(listener) => {
+                    if let Err(e) = streams.add_listener("netsim_dualfd", Box::new(listener)) {
+                        error!("Failed to add DualFdListener: {}", e);
+                    } else {
+                        info!("Added DualFdListener");
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to create DualFdListener: {}", e);
+                }
+            },
+            Err(e) => {
+                error!("Failed to parse fd_startup_str JSON: {}", e);
             }
         }
     }

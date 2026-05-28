@@ -63,7 +63,7 @@ impl ActorService for CellActor {
             return Err(CellError::ModemError(e));
         }
 
-        self.active_chips.insert(chip_id, ChipState { device_id });
+        self.active_chips.insert(chip_id, ChipState { device_id, enabled: true });
 
         Ok(chip_id)
     }
@@ -93,12 +93,21 @@ impl ActorService for CellActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         if let Ok(info) = self.controller.get_modem_info(id.0) {
+            let enabled = self.active_chips.get(&id).map(|s| s.enabled).unwrap_or(true);
             Ok(Some(netsim_model::Chip {
                 kind: netsim_model::ChipKind::CELLULAR,
                 id: info.id,
                 name: format!("modem-{}", info.id),
+                enabled,
                 variant: Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
-                    state: if info.ringing { "ringing".to_string() } else { "idle".to_string() },
+                    radio: netsim_model::Radio { state: Some(enabled), ..Default::default() },
+                    state: if !enabled {
+                        "down".to_string()
+                    } else if info.ringing {
+                        "ringing".to_string()
+                    } else {
+                        "idle".to_string()
+                    },
                 })),
                 ..Default::default()
             }))
@@ -109,11 +118,28 @@ impl ActorService for CellActor {
 
     async fn handle_update(
         &mut self,
-        _id: Self::Id,
-        _update: Self::Update,
-        _ctx: &mut DynContext<Self>,
+        id: Self::Id,
+        update: Self::Update,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        Err(CellError::Chip(ChipError::Unsupported))
+        let state = self
+            .active_chips
+            .get_mut(&id)
+            .ok_or_else(|| CellError::Chip(ChipError::ChipNotFound(id)))?;
+
+        if let Some(enabled) = update.enabled {
+            state.enabled = enabled;
+        }
+        if let Some(netsim_model::ChipVariantUpdate::Cell(cell_update)) = &update.variant {
+            if let Some(s) = &cell_update.state {
+                state.enabled = s != "down";
+            }
+            if let Some(enabled) = cell_update.radio.state {
+                state.enabled = enabled;
+            }
+        }
+
+        self.handle_get(id, ctx).await.map(|opt| opt.unwrap())
     }
 
     async fn handle_action(
@@ -130,14 +156,21 @@ impl ActorService for CellActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         let mut chips = Vec::new();
-        for id in self.active_chips.keys() {
+        for (id, state) in &self.active_chips {
             if let Ok(info) = self.controller.get_modem_info(id.0) {
                 chips.push(netsim_model::Chip {
                     kind: netsim_model::ChipKind::CELLULAR,
                     id: info.id,
                     name: format!("modem-{}", info.id),
+                    enabled: state.enabled,
                     variant: Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
-                        state: if info.ringing {
+                        radio: netsim_model::Radio {
+                            state: Some(state.enabled),
+                            ..Default::default()
+                        },
+                        state: if !state.enabled {
+                            "down".to_string()
+                        } else if info.ringing {
                             "ringing".to_string()
                         } else {
                             "idle".to_string()

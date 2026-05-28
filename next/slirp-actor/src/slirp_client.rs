@@ -37,7 +37,7 @@ impl SlirpClient {
         &self,
         client_id: u32,
         stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
-        sink: UnboundedSender<bytes::Bytes>,
+        sink: PacketSink,
         notifier: Option<UnboundedSender<ChipId>>,
     ) -> Result<(), ClientError> {
         self.client

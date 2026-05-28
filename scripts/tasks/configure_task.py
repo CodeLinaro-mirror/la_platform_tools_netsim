@@ -10,8 +10,6 @@ import shutil
 from tasks.task import Task
 from utils import (
     AOSP_ROOT,
-    WINDOWS_TMP_OBJS_PATH,
-    cmake_toolchain,
     get_bazel_path,
     get_bazel_startup_options,
     run,
@@ -19,30 +17,19 @@ from utils import (
 
 
 class ConfigureTask(Task):
-  BUILDCONFIG = {
-      "debug": "-DCMAKE_BUILD_TYPE=Debug",
-      "release": "-DCMAKE_BUILD_TYPE=Release",
-  }
 
   def __init__(self, args, env):
     super().__init__("Configure")
     self.args = args
     self.out = Path(args.out_dir)
     self.env = env
-    if args.target:
-      self.target = args.target.lower()
-    else:
-      self.target = platform.system().lower()
-    self.build_config = self.BUILDCONFIG[args.config]
 
   def do_run(self):
-    if self.args.cmake:
-      return self._run_cmake()
     return self._run_bazel()
 
   def _run_bazel(self):
     # For Bazel, we clean the distribution directory to ensure a fresh install.
-    # This prevents stale artifacts from previous builds (CMake or Bazel) from interfering.
+    # This prevents stale artifacts from previous builds from interfering.
     dist_dir = self.out / "distribution"
     if dist_dir.exists():
       shutil.rmtree(dist_dir)
@@ -56,50 +43,4 @@ class ConfigureTask(Task):
           "bazel clean",
           AOSP_ROOT,
       )
-    return True
-
-  def _run_cmake(self):
-    if self.out.exists():
-      shutil.rmtree(self.out)
-    self.out.mkdir(exist_ok=True, parents=True)
-    cmake = shutil.which(
-        "cmake",
-        path=str(
-            AOSP_ROOT
-            / "prebuilts"
-            / "cmake"
-            / f"{platform.system().lower()}-x86"
-            / "bin"
-        ),
-    )
-    if platform.system() == "Windows":
-      try:
-        WINDOWS_TMP_OBJS_PATH.mkdir(parents=True, exist_ok=True)
-        print(
-            f"Directory '{WINDOWS_TMP_OBJS_PATH}' ensured (created or already"
-            " exists)."
-        )
-
-      except OSError as e:
-        print(f"Error creating directory '{WINDOWS_TMP_OBJS_PATH}': {e}")
-
-      launcher = [
-          cmake,
-          f"-B{WINDOWS_TMP_OBJS_PATH}",
-          "-G Ninja",
-          self.build_config,
-          f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain(self.target)}",
-          AOSP_ROOT / "tools" / "netsim",
-      ]
-      run(launcher, self.env, "bld")
-    else:
-      launcher = [
-          cmake,
-          f"-B{self.out}",
-          "-G Ninja",
-          self.build_config,
-          f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain(self.target)}",
-          AOSP_ROOT / "tools" / "netsim",
-      ]
-      run(launcher, self.env, "bld")
     return True

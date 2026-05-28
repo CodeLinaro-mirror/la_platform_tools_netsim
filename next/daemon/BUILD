@@ -46,6 +46,7 @@ DAEMON_DEPS = [
     "//next/model",
     "//next/packet-stream",
     "//next/slirp-actor",
+    "//next/ethernet-actor",
     "//next/uwb-actor",
     "//next/websocket-server",
     "//next/wifi-actor",

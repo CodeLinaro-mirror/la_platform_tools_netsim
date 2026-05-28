@@ -1,67 +1,28 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::VecDeque,
-    fs::File as StdFile,
-    os::unix::io::OwnedFd,
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::{collections::VecDeque, fs::File as StdFile, os::unix::io::OwnedFd, str::FromStr};
 
 use async_trait::async_trait;
 use command_fds::inherited::take_fd_ownership;
 use futures::{SinkExt, stream::StreamExt};
-use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
+use netsim_types::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use serde::{Deserialize, Serialize};
-use tokio::{
-    fs::File,
-    io::{AsyncRead, AsyncWrite, ReadBuf},
-};
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio::{fs::File, io::AsyncWriteExt};
+use tokio_util::codec::FramedRead;
 
 use crate::{
     error::{PacketStreamError, Result},
-    transport::traits::{PacketSink, PacketStream, TransportListener},
+    transport::{
+        H4Codec, UciCodec,
+        traits::{PacketSink, PacketStream, TransportListener},
+    },
     types::StreamAddress,
 };
 
-struct DualFd {
-    reader: File,
-    writer: File,
-}
-
-impl AsyncRead for DualFd {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.reader).poll_read(cx, buf)
-    }
-}
-
-impl AsyncWrite for DualFd {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.writer).poll_write(cx, buf)
-    }
-
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.writer).poll_flush(cx)
-    }
-
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.writer).poll_shutdown(cx)
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceConfig {
-    pub serial: String,
+    pub name: String,
     pub chips: Vec<ChipConfig>,
 }
 
@@ -98,8 +59,9 @@ impl DualFdListener {
         for device in &self.config.devices {
             for chip in &device.chips {
                 let in_fd = take_fd_ownership(chip.fd_in).map_err(|e| {
-                    PacketStreamError::Socket(crate::error::SocketError::AcceptFailed(
-                        e.to_string(),
+                    PacketStreamError::InvalidConfig(format!(
+                        "Failed to claim input FD {}: {e}",
+                        chip.fd_in
                     ))
                 })?;
                 let out_fd = chip.fd_out.ok_or_else(|| {
@@ -108,12 +70,13 @@ impl DualFdListener {
                     )
                 })?;
                 let out_fd = take_fd_ownership(out_fd).map_err(|e| {
-                    PacketStreamError::Socket(crate::error::SocketError::AcceptFailed(
-                        e.to_string(),
+                    PacketStreamError::InvalidConfig(format!(
+                        "Failed to claim output FD {out_fd}: {e}"
                     ))
                 })?;
+
                 self.pending_streams.push_back((
-                    device.serial.clone(),
+                    device.name.clone(),
                     chip.kind.clone(),
                     (in_fd, out_fd),
                 ));
@@ -127,36 +90,55 @@ impl DualFdListener {
 impl TransportListener for DualFdListener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
         match self.pending_streams.pop_front() {
-            Some((device_serial, chip_kind, (in_fd, out_fd))) => {
-                let guid = format!("dualfd-{}-{}", device_serial, chip_kind);
+            Some((device_name, chip_kind, (in_fd, out_fd))) => {
+                let guid = format!("dualfd-{}-{}", device_name, chip_kind);
+                let kind = ChipKind::from_str(&chip_kind).unwrap_or(ChipKind::UNSPECIFIED);
+
                 let chip_info = ChipInfo {
                     device_info: Some(DeviceInfo {
-                        name: device_serial.clone(),
-                        id: device_serial,
+                        name: device_name.clone(),
+                        id: device_name,
+                        ..Default::default()
                     }),
                     chip: Some(Chip {
                         name: chip_kind.clone(),
-                        kind: ChipKind::Unspecified,
-                        id: chip_kind,
+                        kind,
+                        id: chip_kind.clone(),
                         manufacturer: "".to_string(),
                         product_name: "".to_string(),
+                        address: "".to_string(),
                     }),
                     name: String::new(),
                 };
 
-                let dual_fd = DualFd {
-                    reader: File::from_std(StdFile::from(in_fd)),
-                    writer: File::from_std(StdFile::from(out_fd)),
+                let reader = File::from_std(StdFile::from(out_fd));
+                let writer = File::from_std(StdFile::from(in_fd));
+
+                let stream: PacketStream = match kind {
+                    ChipKind::BLUETOOTH => {
+                        let framed = FramedRead::new(reader, H4Codec);
+                        Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+                    }
+                    ChipKind::UWB => {
+                        let framed = FramedRead::new(reader, UciCodec);
+                        Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+                    }
+                    _ => {
+                        return Err(PacketStreamError::InvalidConfig(format!(
+                            "Unsupported chip kind for FD transport: {:?}",
+                            chip_kind
+                        )));
+                    }
                 };
 
-                let framed = Framed::new(dual_fd, LengthDelimitedCodec::new());
-                let (sink, stream) = framed.split();
+                let sink =
+                    futures::sink::unfold(writer, |mut writer, item: bytes::Bytes| async move {
+                        writer.write_all(&item).await?;
+                        Ok(writer)
+                    });
+                let sink: PacketSink = Box::pin(sink.sink_map_err(PacketStreamError::Io));
 
-                let stream =
-                    stream.map(|item| item.map(|b| b.freeze()).map_err(PacketStreamError::Io));
-                let sink = sink.sink_map_err(PacketStreamError::Io);
-
-                Ok((Box::pin(stream), Box::pin(sink), chip_info, guid))
+                Ok((stream, sink, chip_info, guid))
             }
             None => std::future::pending().await,
         }

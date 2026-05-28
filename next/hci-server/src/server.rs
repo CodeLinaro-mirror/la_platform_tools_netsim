@@ -6,14 +6,13 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use device_actor::DeviceClient;
 use futures::StreamExt;
 use netsim_model::{BluetoothCreate, BluetoothMode, DeviceParams};
+use packet_stream::transport::H4Codec;
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
 };
 use tokio_util::codec::FramedRead;
 use tracing::{info, warn};
-
-use crate::h4::H4Codec;
 
 /// Start the async TCP transport for HCI connections
 ///

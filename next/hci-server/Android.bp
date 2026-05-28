@@ -19,6 +19,7 @@ rust_library_host {
         "libnetsim_next_device_actor",
         "libnetsim_next_device_api",
         "libnetsim_next_model",
+        "libnetsim_next_packet_stream",
         "libtokio",
         "libtokio_stream",
         "libtokio_util",

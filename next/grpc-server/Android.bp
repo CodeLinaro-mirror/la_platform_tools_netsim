@@ -23,7 +23,6 @@ rust_library_host {
         "libnetsim_next_link_api",
         "libnetsim_next_model",
         "libnetsim_next_packet_stream",
-        "libnetsim_next_packets",
         "libnetsim_proto",
         "libprotobuf",
         "libtokio",

@@ -17,7 +17,7 @@ pub enum SlirpReq {
     Register {
         client_id: ClientId,
         stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
-        sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
+        sink: netsim_model::PacketSink,
         notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
     },
     Unregister {
