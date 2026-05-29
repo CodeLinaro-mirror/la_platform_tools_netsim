@@ -3,13 +3,86 @@
 
 use std::collections::HashMap;
 
+use tracing::warn;
+
 use crate::{
     config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
     parser::{Command, QuotedString},
-    types::{AT_ERROR, AT_OK, DEFAULT_PIN, ExecutionResult, HandledCommand},
+    types::{AT_ERROR, AT_OK, CME_NO_RESOURCES, DEFAULT_PIN, ExecutionResult, HandledCommand},
 };
 
 const DEFAULT_PUK: &str = "12345678";
+
+const APDU_SELECT: u16 = 0xA4;
+const APDU_READ_BINARY: u16 = 0xB0;
+const APDU_READ_RECORD: u16 = 0xB2;
+const APDU_GET_RESPONSE: u16 = 0xC0;
+
+const DEFAULT_FALLBACK_IMSI: &str = "310260123456789";
+const DEFAULT_FALLBACK_ICCID: &str = "89012608640220133897";
+
+mod iccprofile_for_sim0 {
+    // --- EF_DIR (Directory File, ID: 0x2F00) ---
+    // Contains the list of applications available on the SIM (USIM, CSIM, etc.)
+
+    /// File Control Parameters (FCP) template for EF_DIR.
+    /// Indicates Linear Fixed structure, record length 0x30 (48 bytes), 4
+    /// records.
+    pub const EF_DIR_FCP: &str = "621A8205422100300483022F008A01058B032F0601800200C08801F0";
+
+    /// EF_DIR Record 1: CSIM Application template (AID:
+    /// A0000003431002FF86FF0389FFFFFFFF, Label: "CSIM")
+    pub const EF_DIR_RECORD_CSIM: &str = "61184F10A0000003431002FF86FF0389FFFFFFFF50044353494DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
+
+    /// EF_DIR Record 2: USIM Application template (AID:
+    /// A0000000871002FF86FF0389FFFFFFFF, Label: "USIM")
+    pub const EF_DIR_RECORD_USIM: &str = "61184F10A0000000871002FF86FF0389FFFFFFFF50045553494DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
+
+    /// Empty record for EF_DIR.
+    pub const EF_DIR_RECORD_EMPTY: &str = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
+
+    // --- EF_ICCID (Integrated Circuit Card Identifier, ID: 0x2FE2) ---
+
+    /// FCP template for EF_ICCID. Transparent structure, size 10 bytes.
+    pub const EF_ICCID_FCP: &str = "62178202412183022FE28A01058B032F06038002000A880110";
+
+    // --- EF_AD (Administrative Data, ID: 0x6FAD) ---
+
+    /// FCP template for EF_AD. Transparent structure, size 4 bytes.
+    pub const EF_AD_FCP: &str = "62178202412183026FAD8A01058B036F060180020004880118";
+
+    /// Default data for EF_AD. Value `00000003` indicates Normal Operation and
+    /// 3-digit MNC.
+    pub const EF_AD_DATA_FALLBACK: &str = "00000003";
+
+    // --- EF_MSISDN (Mobile Station International Subscriber Directory Number, ID:
+    // 0x6F40) ---
+
+    /// FCP template for EF_MSISDN. Linear Fixed structure, record length 28
+    /// bytes, 2 records.
+    pub const EF_MSISDN_FCP: &str = "621982054221001C0283026F408A01058B036F0605800200388800";
+
+    /// Default mocked MSISDN record.
+    pub const EF_MSISDN_RECORD_FALLBACK: &str =
+        "000000000000000000000000000007915155214365F7FFFFFFFFFFFF";
+
+    // --- PKCS15 Application (DF_TELECOM / DF_PHONEBOOK helper) ---
+    // Used for logical channel transmission mocks (AT+CGLA)
+
+    /// Response to SELECT PKCS15 AID (indicates 36 bytes available for GET
+    /// RESPONSE).
+    pub const PKCS15_SELECT_RESP: &str = "4,6124";
+
+    /// FCP template response for PKCS15 (Get Response).
+    pub const PKCS15_FCP_RESP: &str =
+        "76,62228202412183025031A503C001408A01058B066F0601010001800200108102002288009000";
+
+    /// Read Binary response for PKCS15.
+    pub const PKCS15_READ_RESP: &str = "36,A706300404024401A5063004040244029000";
+
+    /// Error response for PKCS15 (Status 6B00: Incorrect parameters P1-P2).
+    pub const PKCS15_ERROR_RESP: &str = "4,6b00";
+}
 
 // Represents the state of the SIM card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +102,7 @@ pub struct SimService {
     puk1_retries: u8,
     fs: FileSystem,
     sms_messages: HashMap<u8, Vec<u8>>,
-    logical_channels: u8,
+    logical_channels: [bool; 4],
     cdma_subscription_source: u8,
     cdma_roaming_preference: u8,
 }
@@ -42,16 +115,29 @@ impl SimService {
             _ => SimState::Ready,
         };
 
+        let imsi = if profile.imsi.is_empty() {
+            DEFAULT_FALLBACK_IMSI.to_string()
+        } else {
+            profile.imsi.clone()
+        };
+
+        let iccid = if profile.iccid.is_empty() {
+            DEFAULT_FALLBACK_ICCID.to_string()
+        } else {
+            profile.iccid.clone()
+        };
+
         Self {
             state,
-            imsi: profile.imsi.clone(),
-            iccid: profile.iccid.clone(),
+            imsi,
+            iccid,
             pin1: DEFAULT_PIN.to_string(),
             pin1_retries: 3,
             puk1_retries: 10,
             fs: profile.sim_io.file_system.clone(),
             sms_messages: HashMap::new(),
-            logical_channels: 0,
+            // Channel 0 is the basic channel and is always open by default.
+            logical_channels: [true, false, false, false],
             cdma_subscription_source: 0,
             cdma_roaming_preference: 0,
         }
@@ -167,61 +253,152 @@ impl SimService {
         &self,
         command: u16,
         file_id: u16,
+        p1: u8,
+        _p2: u8,
+        _p3: u8,
         _data: Option<QuotedString>,
     ) -> ExecutionResult {
-        match command {
-            176 => {
-                // READ BINARY
-                if let Some(ef) = find_ef(&self.fs.master_file, &format!("{:04X}", file_id)) {
-                    let mut response = b"+CRSM: 144,0,\"".to_vec();
-                    response.extend_from_slice(ef.data.as_bytes());
-                    response.extend_from_slice(b"\"\r\n");
-                    let mut handled = HandledCommand::ok();
-                    handled.responses.insert(0, String::from_utf8(response).unwrap());
-                    ExecutionResult::Handled(handled)
-                } else {
-                    ExecutionResult::Handled(HandledCommand::error())
-                }
+        // TODO: Extract goldfish-specific quirks into flags.
+        // 1. Try to read from the loaded FileSystem first (for READ BINARY and SELECT)
+        if command == APDU_READ_BINARY {
+            if let Some(ef) = find_ef(&self.fs.master_file, &format!("{:04X}", file_id)) {
+                return ExecutionResult::Handled(HandledCommand {
+                    responses: vec![format!("+CRSM: 144,0,{}\r\n", ef.data), "OK\r\n".to_string()],
+                    action: None,
+                });
             }
-            162 => {
-                // SELECT
-                if find_df(&self.fs.master_file, &format!("{:04X}", file_id)).is_some() {
-                    let mut handled = HandledCommand::ok();
-                    handled.responses.insert(0, "+CRSM: 144,0,\"6210\"\r\n".to_string());
-                    ExecutionResult::Handled(handled)
-                } else {
-                    ExecutionResult::Handled(HandledCommand::error())
-                }
-            }
-            _ => ExecutionResult::Handled(HandledCommand::error()),
+        } else if command == APDU_SELECT
+            && find_df(&self.fs.master_file, &format!("{:04X}", file_id)).is_some()
+        {
+            return ExecutionResult::Handled(HandledCommand {
+                responses: vec!["+CRSM: 144,0,6210\r\n".to_string(), "OK\r\n".to_string()],
+                action: None,
+            });
         }
+
+        // 2. Fallback to default iccprofile sim0 mappings (essential for boot)
+        let response_str = match (command, file_id) {
+            // 1. EF_DIR (2F00 / 12032)
+            (APDU_GET_RESPONSE, 0x2F00) => {
+                Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_DIR_FCP))
+            }
+            (APDU_READ_RECORD, 0x2F00) => {
+                if p1 == 1 {
+                    Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_DIR_RECORD_CSIM))
+                } else if p1 == 2 {
+                    Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_DIR_RECORD_USIM))
+                } else {
+                    Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_DIR_RECORD_EMPTY))
+                }
+            }
+            // 2. EF_ICCID (2FE2 / 12258)
+            (APDU_GET_RESPONSE, 0x2FE2) => {
+                Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_ICCID_FCP))
+            }
+            (APDU_READ_BINARY, 0x2FE2) => Some(format!("+CRSM: 144,0,{}\r\n", self.iccid)),
+            // 3. EF_AD (6FAD / 28589)
+            (APDU_GET_RESPONSE, 0x6FAD) => {
+                Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_AD_FCP))
+            }
+            (APDU_READ_BINARY, 0x6FAD) => {
+                Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_AD_DATA_FALLBACK))
+            }
+            // 4. EF_MSISDN (6F40 / 28480)
+            (APDU_GET_RESPONSE, 0x6F40) => {
+                Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_MSISDN_FCP))
+            }
+            (APDU_READ_RECORD, 0x6F40) => {
+                Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_MSISDN_RECORD_FALLBACK))
+            }
+            // SELECT (164)
+            (APDU_SELECT, _) => Some("+CRSM: 144,0,6210\r\n".to_string()),
+            _ => None,
+        };
+
+        let resp = response_str.unwrap_or_else(|| "+CRSM: 106,130\r\n".to_string());
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec![resp, "OK\r\n".to_string()],
+            action: None,
+        })
     }
 
     fn handle_open_logical_channel(&mut self) -> ExecutionResult {
-        self.logical_channels += 1;
-        let response = format!("+CCHO: {}\r\n", self.logical_channels);
-        let mut handled = HandledCommand::ok();
-        handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        if let Some(channel_idx) = self.logical_channels.iter().position(|&open| !open) {
+            self.logical_channels[channel_idx] = true;
+            ExecutionResult::Handled(HandledCommand {
+                responses: vec![format!("{}\r\n", channel_idx), "OK\r\n".to_string()],
+                action: None,
+            })
+        } else {
+            ExecutionResult::Handled(HandledCommand::cme_error(CME_NO_RESOURCES))
+        }
     }
 
     fn handle_close_logical_channel(&mut self, channel_id: u8) -> ExecutionResult {
-        if channel_id > self.logical_channels {
+        let idx = channel_id as usize;
+        if idx == 0 || idx >= self.logical_channels.len() || !self.logical_channels[idx] {
             return ExecutionResult::Handled(HandledCommand::error());
         }
-        self.logical_channels -= 1;
-        ExecutionResult::Handled(HandledCommand::ok())
+        self.logical_channels[idx] = false;
+
+        // Non-standard: AOSP Goldfish RIL requires "+CCHC" response on channel close to
+        // prevent serialization locks.
+        // TODO: Extract goldfish-specific quirks into flags.
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec!["+CCHC\r\n".to_string(), "OK\r\n".to_string()],
+            action: None,
+        })
     }
 
-    fn handle_transmit_logical_channel(&self, channel_id: u8, _data: &[u8]) -> ExecutionResult {
-        if channel_id > self.logical_channels {
+    fn handle_transmit_logical_channel(&self, channel_id: u8, data: &[u8]) -> ExecutionResult {
+        let idx = channel_id as usize;
+        if idx >= self.logical_channels.len() || !self.logical_channels[idx] {
             return ExecutionResult::Handled(HandledCommand::error());
         }
 
-        let response = "+CGLA: 10, \"9000\"\r\n".to_string();
-        let mut handled = HandledCommand::ok();
-        handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        let data_str = std::str::from_utf8(data).unwrap_or("");
+        let data_clean = data_str.trim_matches('"');
+
+        // Check and strip prefix case-insensitively first to avoid double-allocation on
+        // heap
+        let data_to_match = if data_clean.len() > 2 && data_clean.is_char_boundary(2) {
+            let (prefix, remainder) = data_clean.split_at(2);
+            if (prefix == "00" || prefix == "01" || prefix == "02" || prefix == "03")
+                && (remainder.starts_with("A4")
+                    || remainder.starts_with("a4")
+                    || remainder.starts_with("C0")
+                    || remainder.starts_with("c0")
+                    || remainder.starts_with("B0")
+                    || remainder.starts_with("b0"))
+            {
+                remainder
+            } else {
+                data_clean
+            }
+        } else {
+            data_clean
+        };
+
+        let data_uppercase = data_to_match.to_ascii_uppercase();
+
+        let response_data = match data_uppercase.as_str() {
+            "A40004025031" => iccprofile_for_sim0::PKCS15_SELECT_RESP,
+            "C0000024" => iccprofile_for_sim0::PKCS15_FCP_RESP,
+            "B0000010" => iccprofile_for_sim0::PKCS15_READ_RESP,
+            "81F2FF0000" => iccprofile_for_sim0::PKCS15_ERROR_RESP,
+            _ => {
+                warn!(
+                    "[SimService] Transmit logical channel: unrecognized APDU payload {:?}, defaulting to dummy success",
+                    data_uppercase
+                );
+                "4,9000"
+            }
+        };
+
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec![format!("+CGLA: {}\r\n", response_data), "OK\r\n".to_string()],
+            action: None,
+        })
     }
 
     fn handle_change_password(
@@ -284,8 +461,8 @@ impl SimService {
         match command {
             Command::GetSimStatus => self.handle_get_sim_status(),
             Command::EnterPin(pin, new_pin) => self.handle_enter_pin(*pin, *new_pin),
-            Command::SimIo { command, file_id, data, .. } => {
-                self.handle_sim_io(*command, *file_id, *data)
+            Command::SimIo { command, file_id, p1, p2, p3, data } => {
+                self.handle_sim_io(*command, *file_id, *p1, *p2, *p3, *data)
             }
             Command::GetImsi => self.handle_get_imsi(),
             Command::GetIccid => self.handle_get_iccid(),
