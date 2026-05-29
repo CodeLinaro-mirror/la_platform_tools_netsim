@@ -203,8 +203,8 @@ contexts, data call activation, and physical channel configurations.
 - [ ] **Improve `AT+CGDATA` (Enter Data State):**
   - [ ] Add a check to the `handle_enter_data_state` function to ensure the
         specified PDP context is active.
-- [ ] **Implement `AT+CGCONTRDP` (Read Dynamic Parameters):**
-  - [ ] Modify the `handle_read_dynamic_param` function to return the correct
+- [x] **Implement `AT+CGCONTRDP` (Read Dynamic Parameters):**
+  - [x] Modify the `handle_read_dynamic_param` function to return the correct
         values for the specified PDP context.
 - [ ] **Add Physical Channel Configuration:**
   - [ ] Implement the logic for updating and sending physical channel

@@ -38,7 +38,7 @@ pub fn parse_raw_data(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 pub fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
     use nom::bytes::complete::take_while;
-    let (input, content) = take_while(|c: u8| c != b';')(input)?;
+    let (input, content) = take_while(|c: u8| c != b';' && c != b'\r' && c != b'\n')(input)?;
     Ok((input, content))
 }
 
@@ -232,7 +232,7 @@ pub enum Command<'a> {
     #[command(tag = "AT+CGPADDR=")]
     ShowPdpAddress(u8),
     /// Read dynamic parameters
-    #[command(tag = "AT+CGSCONTRDP=")]
+    #[command(tag = "AT+CGCONTRDP=")]
     ReadDynamicParam(u8),
     /// 3GPP TS 27.005: Set SMS message format
     #[command(tag = "AT+CMGF=")]
@@ -493,5 +493,12 @@ mod tests {
             cmd,
             Command::SimIo { command: 176, file_id: 28480, p1: 0, p2: 0, p3: 7, data: None }
         );
+    }
+
+    #[test]
+    fn test_parse_gprs_dial() {
+        let (rem, cmd) = Command::parse(b"ATD*99***1#\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(cmd, Command::Dial(b"*99***1#"));
     }
 }

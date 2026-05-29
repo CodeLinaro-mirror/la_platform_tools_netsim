@@ -41,7 +41,9 @@ pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 
 pub const DEFAULT_PIN: &str = "1234";
 
-pub const DEFAULT_IP_ADDRESS: &str = "192.168.1.1";
+pub const DEFAULT_IP_ADDRESS: &str = "10.0.2.15";
+pub const DEFAULT_GATEWAY: &str = "10.0.2.2";
+pub const DEFAULT_DNS: &str = "10.0.2.3";
 
 // A unique identifier for a modem instance.
 pub type ModemId = u32;
