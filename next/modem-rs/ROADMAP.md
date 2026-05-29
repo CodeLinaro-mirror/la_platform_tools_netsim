@@ -218,9 +218,9 @@ for handling time, time zones, and initialization commands.
 
 **Tasks:**
 
-- [ ] **Implement full `AT+CGSN` command handling:**
-  - [ ] Update `parser.rs` to support optional parameters.
-  - [ ] Add support for the `snt` parameter to return different types of
+- [x] **Implement full `AT+CGSN` command handling:**
+  - [x] Update `parser.rs` to support optional parameters.
+  - [x] Add support for the `snt` parameter to return different types of
         identification information (IMEI, SVN, etc.).
 - [ ] **Add time and time zone support:**
   - [ ] Implement logic for parsing the time zone from the system.
@@ -238,18 +238,18 @@ a massive amount of work to reach feature parity with the C++
 
 **Tasks:**
 
-- [ ] **Implement Radio Power Management (`AT+CFUN`):**
-  - [ ] Implement `AT+CFUN` command in `parser.rs`.
-  - [ ] Add support for setting and querying the radio power state.
+- [x] **Implement Radio Power Management (`AT+CFUN`):**
+  - [x] Implement `AT+CFUN` command in `parser.rs`.
+  - [x] Add support for setting and querying the radio power state.
 - [ ] **Implement Network Selection (`AT+COPS`):**
   - [ ] Add support for querying and setting the network selection mode.
   - [ ] Add support for querying available networks.
   - [ ] Add support for requesting the current operator.
-- [ ] **Implement Network Registration (`AT+CREG`, `AT+CGREG`, `AT+CEREG`):**
-  - [ ] Implement `AT+CREG`, `AT+CGREG`, `AT+CEREG` set/query commands in
+- [x] **Implement Network Registration (`AT+CREG`, `AT+CGREG`, `AT+CEREG`):**
+  - [x] Implement `AT+CREG`, `AT+CGREG`, `AT+CEREG` set/query commands in
         `parser.rs`.
-  - [ ] Add support for voice and data network registration.
-  - [ ] Implement unsolicited registration status updates.
+  - [x] Add support for voice and data network registration.
+  - [x] Implement unsolicited registration status updates.
 - [ ] **Implement Signal Strength (`AT+CSQ`):**
   - [ ] Implement the Cuttlefish-specific `+CSQ` command with a detailed
         `SignalStrength` struct.

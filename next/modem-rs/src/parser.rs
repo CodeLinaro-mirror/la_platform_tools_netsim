@@ -132,6 +132,30 @@ pub enum Command<'a> {
     /// Operator selection
     #[command(tag = "AT+COPS?")]
     QueryOperator,
+    /// Query voice network registration
+    #[command(tag = "AT+CREG?")]
+    QueryVoiceNetworkRegistration,
+    /// Set voice network registration
+    #[command(tag = "AT+CREG=")]
+    SetVoiceNetworkRegistration(u8),
+    /// Query data network registration
+    #[command(tag = "AT+CGREG?")]
+    QueryDataNetworkRegistration,
+    /// Set data network registration
+    #[command(tag = "AT+CGREG=")]
+    SetDataNetworkRegistration(u8),
+    /// Query LTE network registration
+    #[command(tag = "AT+CEREG?")]
+    QueryLteNetworkRegistration,
+    /// Set LTE network registration
+    #[command(tag = "AT+CEREG=")]
+    SetLteNetworkRegistration(u8),
+    /// Query radio power state
+    #[command(tag = "AT+CFUN?")]
+    QueryRadioPower,
+    /// Set radio power state
+    #[command(tag = "AT+CFUN=")]
+    SetRadioPower(u8),
     /// Signal quality
     #[command(tag = "AT+CSQ")]
     QuerySignalStrength,
@@ -161,28 +185,41 @@ pub enum Command<'a> {
     SendStkEnvelope(QuotedString<'a>),
     /// Facility lock
     #[command(tag = "AT+CLCK=")]
-    SetFacilityLock(QuotedString<'a>, u8, QuotedString<'a>),
+    SetFacilityLock(QuotedString<'a>, u8, Option<QuotedString<'a>>),
     /// Call forwarding
     #[command(tag = "AT+CCFC=")]
-    CallForwarding { reason: u8, mode: u8, number: Option<QuotedString<'a>>, type_: Option<u8> },
+    CallForwarding { reason: u8, mode: u8, number: Option<QuotedString<'a>>, r#type: Option<u8> },
     /// Calling line identification restriction
     #[command(tag = "AT+CLIR?")]
     QueryClir,
+    /// Non-standard Goldfish CLIR syntax used by Goldfish guest Radio HAL
+    /// (device/generic/goldfish/hals/radio/RadioVoice.cpp: RadioVoice::setClir
+    /// formats request as "AT+CLIR: <status>")
+    #[command(tag = "AT+CLIR: ")]
+    SetClirGoldfish(u8),
+    #[command(tag = "AT+CLIR=")]
+    SetClir(u8),
     /// Calling line identification presentation
     #[command(tag = "AT+CLIP=")]
     SetClip(u8),
+    /// Configure call mode
+    #[command(tag = "AT+CMOD=")]
+    SetCallMode(u8),
+    /// Connected line identification presentation
+    #[command(tag = "AT+COLP=")]
+    SetColp(u8),
+    /// Select TE character set
+    #[command(tag = "AT+CSCS=")]
+    SetCharacterSet(QuotedString<'a>),
     /// Call waiting
     #[command(tag = "AT+CCWA=")]
-    SetCallWaiting(u8, u8),
+    SetCallWaiting(u8, Option<u8>, Option<u8>),
     /// Supplementary service notification
     #[command(tag = "AT+CSSN=")]
     SuppServiceNotification(u8, u8),
     /// Unstructured Supplementary Service Data
-    #[command(tag = "AT+CUSD=1,")]
-    SendUssd(QuotedString<'a>),
-    /// Cancel USSD session
-    #[command(tag = "AT+CUSD=2")]
-    CancelUssd,
+    #[command(tag = "AT+CUSD=")]
+    SetUssd { mode: u8, message: Option<QuotedString<'a>>, dcs: Option<u8> },
     /// Define PDP context
     #[command(tag = "AT+CGDCONT=")]
     DefinePdpContext(u8, QuotedString<'a>, QuotedString<'a>),
@@ -336,6 +373,12 @@ pub enum Command<'a> {
     /// Get serial number
     #[command(tag = "AT+GSN")]
     GetSerialNumber,
+    /// Get product serial number with type
+    #[command(tag = "AT+CGSN=")]
+    GetProductSerialNumberGsmWithType(u8),
+    /// Get product serial number (IMEI)
+    #[command(tag = "AT+CGSN")]
+    GetProductSerialNumberGsm,
     /// Set TE-TA control character framing
     #[command(tag = "AT+ICF=")]
     SetTeTaControlCharacterFraming(u8, u8),
@@ -500,5 +543,68 @@ mod tests {
         let (rem, cmd) = Command::parse(b"ATD*99***1#\r\n").unwrap();
         assert_eq!(rem, b"\r\n");
         assert_eq!(cmd, Command::Dial(b"*99***1#"));
+    }
+
+    #[test]
+    fn test_parse_ccwa_set_single_arg() {
+        let (rem, cmd) = Command::parse(b"AT+CCWA=1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetCallWaiting(1, None, None));
+    }
+
+    #[test]
+    fn test_parse_ccwa_set_multiple_args() {
+        let (rem, cmd) = Command::parse(b"AT+CCWA=1,2,7").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetCallWaiting(1, Some(2), Some(7)));
+    }
+
+    #[test]
+    fn test_parse_cmod_set() {
+        let (rem, cmd) = Command::parse(b"AT+CMOD=0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetCallMode(0));
+    }
+
+    #[test]
+    fn test_parse_colp_set() {
+        let (rem, cmd) = Command::parse(b"AT+COLP=0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetColp(0));
+    }
+
+    #[test]
+    fn test_parse_cscs_set() {
+        let (rem, cmd) = Command::parse(br#"AT+CSCS="HEX""#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetCharacterSet(QuotedString(b"HEX")));
+    }
+
+    #[test]
+    fn test_parse_clir_set_goldfish() {
+        let (rem, cmd) = Command::parse(b"AT+CLIR: 0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetClirGoldfish(0));
+    }
+
+    #[test]
+    fn test_parse_clir_set_standard() {
+        let (rem, cmd) = Command::parse(b"AT+CLIR=0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetClir(0));
+    }
+
+    #[test]
+    fn test_parse_cgsn_query() {
+        let (rem, cmd) = Command::parse(b"AT+CGSN").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::GetProductSerialNumberGsm);
+    }
+
+    #[test]
+    fn test_parse_cgsn_set() {
+        let (rem, cmd) = Command::parse(b"AT+CGSN=2").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::GetProductSerialNumberGsmWithType(2));
     }
 }

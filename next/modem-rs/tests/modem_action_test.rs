@@ -47,6 +47,10 @@ fn test_action_set_registration() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
+    // Enable unsolicited reports first to make it spec-compliant
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+
     when_action_set_voice_registration(&mut world, "A", RegistrationStatus::Roaming);
 
     then_response_is(&mut world, "A", "+CREG: 5");
