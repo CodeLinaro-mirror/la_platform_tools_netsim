@@ -326,9 +326,12 @@ impl NetsimDaemon {
         );
 
         let mut attempts = 0;
+        // Support Cuttlefish multi-instance by using instance-specific INI files.
+        let instance_num = get_instance(args.instance);
 
         loop {
-            let ini_file = IniFile::new_for_dir(discovery_dir.clone()).map_err(init_error)?;
+            let ini_file =
+                IniFile::new_for_dir(discovery_dir.clone(), instance_num).map_err(init_error)?;
 
             // Attempt to acquire the singleton lock for the netsim daemon.
             // The lock is managed by direct file locking on the netsim.ini file.
