@@ -212,6 +212,7 @@ pub mod api {
                 manufacturer: create.manufacturer,
                 product_name: create.product_name,
                 variant: Some(crate::chip::ChipVariant::from(create.chip)),
+                enabled: true,
                 ..Default::default()
             }
         }

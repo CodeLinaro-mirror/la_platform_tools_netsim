@@ -30,6 +30,7 @@ link-actor = { path = "../link-actor" }
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
 packet-stream = { path = "../packet-stream" }
+rootcanal-server = { path = "../rootcanal-server", optional = true }
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
 tracing = "0.1"
 uwb-actor = { path = "../uwb-actor" }
@@ -42,4 +43,4 @@ tempfile = "3"
 
 [features]
 default = []
-cuttlefish = []
+cuttlefish = ["dep:rootcanal-server"]

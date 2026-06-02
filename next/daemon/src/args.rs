@@ -91,6 +91,11 @@ pub struct Args {
     #[cfg_attr(not(feature = "cuttlefish"), arg(env = "NETSIM_WS_PORT"))]
     pub ws_port: Option<u16>,
 
+    /// Rootcanal legacy control port for the TCP socket
+    #[arg(long, alias = "test_port")]
+    #[cfg(feature = "cuttlefish")]
+    pub test_port: Option<u16>,
+
     /// DNS server for the host
     /// TODO: Not implemented yet
     #[arg(long, alias = "host-dns")]
