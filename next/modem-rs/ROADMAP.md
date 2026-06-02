@@ -272,13 +272,14 @@ missing most of the features and complexity of the C++ `sim_service.cpp`.
 - [ ] **Implement a robust SIM File System:**
   - [ ] Create a hierarchical file system model (MF, DF, EF).
   - [ ] Implement a parser for the XML-based SIM profile.
-  - [ ] Implement full `AT+CRSM` and `AT+CSIM` command handling.
+  - [x] Implement full `AT+CRSM` command handling (fallback mappings and clean response formatting).
+  - [ ] Implement full `AT+CSIM` command handling.
 - [ ] **Implement full PIN/PUK Management (`AT+CPIN`):**
   - [ ] Handle all SIM states (ABSENT, NOT_READY, READY, PIN, PUK).
   - [ ] Handle all PIN/PUK operations correctly.
 - [ ] **Implement Facility Lock (`AT+CLCK`):**
   - [ ] Add support for locking, unlocking, and querying all facilities.
-- [ ] **Enhance Logical Channel Support (`AT+CCHO`, `AT+CCHC`, `AT+CGLA`):**
+- [x] **Enhance Logical Channel Support (`AT+CCHO`, `AT+CCHC`, `AT+CGLA`)**: Implemented basic open/close channel lifecycle and transmit APDU mocking.
   - [ ] Add support for Application Identifiers (AIDs).
 - [ ] **Implement CDMA Features (`AT+CCSS`, `AT+WRMP`):**
   - [ ] Implement the CDMA-specific commands.
