@@ -51,6 +51,7 @@ pub(crate) mod ethernet;
 pub(crate) mod initial_info;
 pub(crate) mod link;
 pub(crate) mod macros;
+pub(crate) mod nfc;
 pub(crate) mod packet_streamer;
 pub(crate) mod stats;
 pub(crate) mod uwb;
@@ -101,6 +102,7 @@ pub use crate::{
     },
     chip_error::ChipError,
     ethernet::{Ethernet, EthernetCreate, EthernetUpdate},
+    nfc::{Nfc, NfcCreate, NfcUpdate},
     uwb::{Uwb, UwbCreate, UwbUpdate},
     wifi::{Wifi, WifiCreate, WifiUpdate},
 };

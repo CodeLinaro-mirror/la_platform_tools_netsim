@@ -56,6 +56,7 @@ pub mod api {
     use crate::{
         chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate},
         device::{Device, DeviceConfig, Orientation, Position},
+        nfc::{Nfc, NfcCreate},
     };
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -142,6 +143,7 @@ pub mod api {
         Cell(CellCreate),
         CellularData(crate::cellular_data::CellularDataCreate),
         Ethernet(crate::ethernet::EthernetCreate),
+        Nfc(NfcCreate),
     }
 
     impl Default for ChipCreateVariant {
@@ -161,6 +163,7 @@ pub mod api {
                 ChipCreateVariant::Cell(_) => crate::chip::ChipKind::CELLULAR,
                 ChipCreateVariant::CellularData(_) => crate::chip::ChipKind::CELLULAR_DATA,
                 ChipCreateVariant::Ethernet(_) => crate::chip::ChipKind::ETHERNET,
+                ChipCreateVariant::Nfc(_) => crate::chip::ChipKind::NFC,
             }
         }
     }
@@ -196,6 +199,7 @@ pub mod api {
                 ChipCreateVariant::Ethernet(eth) => {
                     crate::chip::ChipVariant::Ethernet(crate::ethernet::Ethernet::from(eth))
                 }
+                ChipCreateVariant::Nfc(nfc) => crate::chip::ChipVariant::Nfc(Nfc::from(nfc)),
             }
         }
     }
@@ -246,6 +250,9 @@ pub mod api {
                     }
                     Some(crate::chip::ChipVariant::Ethernet(_eth)) => {
                         ChipCreateVariant::Ethernet(crate::ethernet::EthernetCreate::default())
+                    }
+                    Some(crate::chip::ChipVariant::Nfc(_nfc)) => {
+                        ChipCreateVariant::Nfc(NfcCreate::default())
                     }
                     None => ChipCreateVariant::Beacon(crate::chip::BleBeacon::default()), /* Fallback */
                 },

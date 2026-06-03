@@ -221,6 +221,13 @@ impl DeviceActor {
                                 bt.classic.tx_count = stat.tx_count;
                                 bt.classic.rx_count = stat.rx_count;
                             }
+                            (
+                                Some(netsim_model::ChipVariant::Nfc(nfc)),
+                                netsim_model::RadioKind::Nfc,
+                            ) => {
+                                nfc.radio.tx_count = stat.tx_count;
+                                nfc.radio.rx_count = stat.rx_count;
+                            }
                             _ => {}
                         }
                     }
