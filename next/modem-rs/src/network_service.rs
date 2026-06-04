@@ -16,7 +16,6 @@ const DUMMY_ACT: u8 = 7; // LTE (EUTRAN)
 
 // Holds all state related to the network.
 pub struct NetworkService {
-    operator_name: String,
     voice_registration: RegistrationStatus,
     data_registration: RegistrationStatus,
     signal_strength: (u8, u8), // (rssi, ber)
@@ -24,13 +23,13 @@ pub struct NetworkService {
     data_unsol_mode: u8,
     lte_unsol_mode: u8,
     radio_power: u8,
+    plmn: String,
+    cops_format: u8,
 }
 
 impl Default for NetworkService {
     fn default() -> Self {
         Self {
-            // This will be loaded from config later.
-            operator_name: "Android Virtual Operator".to_string(),
             voice_registration: RegistrationStatus::NotRegistered,
             data_registration: RegistrationStatus::NotRegistered,
             signal_strength: (20, 99),
@@ -38,6 +37,8 @@ impl Default for NetworkService {
             data_unsol_mode: 0,
             lte_unsol_mode: 0,
             radio_power: 1,
+            plmn: crate::constants::DEFAULT_PLMN.to_string(),
+            cops_format: 0,
         }
     }
 }
@@ -85,11 +86,25 @@ impl NetworkService {
     // --- Pure command handlers ---
 
     pub fn handle_query_operator(&self) -> ExecutionResult {
-        let response = format!("+COPS: 0,0,\"{}\"\r\n", self.operator_name);
+        let cops_response = match self.cops_format {
+            0 => format!("+COPS: 0,0,\"{}\"\r\n", crate::constants::DEFAULT_OPERATOR_NAME_LONG),
+            1 => format!("+COPS: 0,1,\"{}\"\r\n", crate::constants::DEFAULT_OPERATOR_NAME_SHORT),
+            2 => format!("+COPS: 0,2,{}\r\n", self.plmn),
+            _ => "+COPS: 0\r\n".to_string(),
+        };
         ExecutionResult::Handled(HandledCommand {
-            responses: vec![response, "OK\r\n".to_string()],
+            responses: vec![cops_response, "OK\r\n".to_string()],
             action: None,
         })
+    }
+
+    pub fn handle_set_operator(&mut self, _mode: u8, format: Option<u8>) -> ExecutionResult {
+        if let Some(fmt) = format
+            && (fmt == 0 || fmt == 1 || fmt == 2)
+        {
+            self.cops_format = fmt;
+        }
+        ExecutionResult::Handled(HandledCommand::ok())
     }
 
     fn format_creg_urc(&self, status: RegistrationStatus) -> Option<String> {
@@ -285,6 +300,7 @@ impl NetworkService {
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
             Command::QueryOperator => self.handle_query_operator(),
+            Command::SetOperator { mode, format, .. } => self.handle_set_operator(*mode, *format),
             Command::QuerySignalStrength => self.handle_query_signal_strength(),
             Command::QueryExtendedSignalQuality => self.handle_query_extended_signal_quality(),
             Command::QueryVoiceNetworkRegistration => self.handle_query_voice_registration(),

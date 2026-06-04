@@ -7,6 +7,9 @@ use std::time::Duration;
 
 pub const CALL_RING_TIMEOUT: Duration = Duration::from_secs(1);
 pub const GPRS_DIAL_PREFIX: &[u8] = b"*99";
+pub const DEFAULT_PLMN: &str = "310260";
+pub const DEFAULT_OPERATOR_NAME_LONG: &str = "Android Virtual Operator";
+pub const DEFAULT_OPERATOR_NAME_SHORT: &str = "Android";
 
 /// Returns true if the dial string is a standard GPRS dialing command.
 /// Standard GPRS dialing formats include *99#, *99*<cid>#, or *99***<cid>#.

@@ -6,15 +6,34 @@ use crate::{steps::*, world::World};
 // Scenario: Query Operator Selection
 //   Given a modem "A"
 //   When AT command "AT+COPS?" is sent to "A"
+//   Then response from "A" is "+COPS: 0,2,310260"
+//   When AT command "AT+COPS=3,0" is sent to "A"
+//   And AT command "AT+COPS?" is sent to "A"
 //   Then response from "A" is '+COPS: 0,0,"Android Virtual Operator"'
-//   And response from "A" is "OK"
 #[test]
 fn test_cops_query() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+COPS?");
 
+    // 1. Default should be format 0 (long alphanumeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
     then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Set format to 1 (short alphanumeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS=3,1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,1,\"Android\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Set format to 2 (numeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS=3,2");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
     then_response_is(&mut world, "A", "OK");
 }
 

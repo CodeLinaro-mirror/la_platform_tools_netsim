@@ -23,7 +23,6 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
     fn add_modem(&mut self, chip_id: ModemId, sink: ModemSink) -> Result<(), ModemError> {
         self.new_modem(chip_id, sink)
     }
-
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError> {
         self.remove_modem(chip_id);
         Ok(())
