@@ -155,6 +155,7 @@ impl fmt::Debug for ChipCreate {
 pub use crate::{
     bluetooth::{BeaconParams, BluetoothCreate, BluetoothMode, beacon::BleBeacon},
     cell::CellCreate,
+    nfc::{Nfc, NfcUpdate},
     uwb::{Uwb, UwbCreate},
     wifi::WifiCreate,
 };
@@ -223,6 +224,13 @@ impl Chip {
             Some(ChipVariant::Uwb(Uwb { radio: Radio { state: Some(true) | None, .. } }))
         )
     }
+
+    pub fn is_nfc_enabled(&self) -> bool {
+        matches!(
+            self.variant,
+            Some(ChipVariant::Nfc(Nfc { radio: Radio { state: Some(true) | None, .. } }))
+        )
+    }
 }
 
 #[cfg(any(test, feature = "testing"))]
@@ -259,6 +267,17 @@ impl Chip {
             ..Default::default()
         }
     }
+
+    pub fn new_test_nfc(name: impl Into<String>) -> Self {
+        Self {
+            kind: ChipKind::NFC,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim NFC".into(),
+            variant: Some(ChipVariant::from(ChipKind::NFC)),
+            ..Default::default()
+        }
+    }
 }
 
 fn default_enabled() -> bool {
@@ -284,6 +303,7 @@ pub enum ChipVariant {
     Cell(crate::cell::Cell),
     CellularData(crate::cellular_data::CellularData),
     Ethernet(crate::ethernet::Ethernet),
+    Nfc(Nfc),
 }
 
 impl From<ChipKind> for ChipVariant {
@@ -304,6 +324,7 @@ impl From<ChipKind> for ChipVariant {
             }),
             ChipKind::CELLULAR_DATA => ChipVariant::CellularData(Default::default()),
             ChipKind::ETHERNET => ChipVariant::Ethernet(Default::default()),
+            ChipKind::NFC => ChipVariant::Nfc(Default::default()),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
             // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
             // types.
@@ -385,6 +406,7 @@ pub enum ChipVariantUpdate {
     Cell(crate::cell::CellUpdate),
     CellularData(crate::cellular_data::CellularDataUpdate),
     Ethernet(crate::ethernet::EthernetUpdate),
+    Nfc(NfcUpdate),
 }
 
 impl ChipVariantUpdate {
@@ -396,6 +418,7 @@ impl ChipVariantUpdate {
             ChipVariantUpdate::Cell(_) => ChipKind::CELLULAR,
             ChipVariantUpdate::CellularData(_) => ChipKind::CELLULAR_DATA,
             ChipVariantUpdate::Ethernet(_) => ChipKind::ETHERNET,
+            ChipVariantUpdate::Nfc(_) => ChipKind::NFC,
         }
     }
 
@@ -418,6 +441,9 @@ impl ChipVariantUpdate {
             }
             (ChipVariantUpdate::Ethernet(update), ChipVariant::Ethernet(ethernet)) => {
                 update.apply(ethernet);
+            }
+            (ChipVariantUpdate::Nfc(update), ChipVariant::Nfc(nfc)) => {
+                update.apply(nfc);
             }
             (u, v) => {
                 tracing::warn!("ChipVariantUpdate mismatch with ChipVariant: {:?} vs {:?}", u, v);
