@@ -538,6 +538,10 @@ impl NetsimDaemon {
         let (cell_runner, cell_client) = cell_actor::new();
         let cell_actor_state = cell_actor::CellActor::new(device_client.clone());
 
+        // Setup NFC Server
+        let (nfc_runner, nfc_client) = nfc_actor::new();
+        let nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
+
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
@@ -549,6 +553,7 @@ impl NetsimDaemon {
         chip_clients.insert(ChipKind::CELLULAR_DATA, Box::new(eth_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
+        chip_clients.insert(ChipKind::NFC, Box::new(nfc_client.clone()));
         // Note: ApClient is NOT added to chip_clients as it is now an independent
         // specialist.
 
@@ -598,6 +603,7 @@ impl NetsimDaemon {
         join_set.spawn(link_runner.run(link_actor_state));
         join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap, None)));
         join_set.spawn(uwb_runner.run(uwb_actor));
+        join_set.spawn(nfc_runner.run(nfc_actor_state));
 
         // Spawn DeviceActor separately
         device_actor_state.set_self_client(device_client.clone());

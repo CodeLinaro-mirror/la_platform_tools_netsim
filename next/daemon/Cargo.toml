@@ -18,6 +18,7 @@ clap = { version = "4.1.8", default-features = false, features = [
   "usage",
   "env",
 ] }
+nfc-actor = { path = "../nfc-actor" }
 
 device-actor = { path = "../device-actor" }
 grpc-server = { path = "../grpc-server" }

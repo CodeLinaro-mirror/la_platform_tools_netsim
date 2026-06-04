@@ -12,6 +12,7 @@ members = [
   "bluetooth-actor",
   "model",
   "cell-actor",
+  "nfc-actor",
   "daemon",
   "hci-server",
   "packets",
