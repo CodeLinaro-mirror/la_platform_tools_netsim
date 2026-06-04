@@ -25,6 +25,7 @@ pub struct NetworkService {
     radio_power: u8,
     plmn: String,
     cops_format: u8,
+    is_attached: bool,
 }
 
 impl Default for NetworkService {
@@ -39,18 +40,60 @@ impl Default for NetworkService {
             radio_power: 1,
             plmn: crate::constants::DEFAULT_PLMN.to_string(),
             cops_format: 0,
+            is_attached: false,
         }
     }
 }
 
 impl NetworkService {
-    pub fn handle_registration_complete(&mut self) -> ExecutionResult {
+    pub fn is_attached(&self) -> bool {
+        self.is_attached
+    }
+
+    pub fn attach_network(&mut self) -> Vec<String> {
+        if self.is_attached || self.radio_power == 0 {
+            return Vec::new();
+        }
+        self.is_attached = true;
         self.voice_registration = RegistrationStatus::RegisteredHome;
         self.data_registration = RegistrationStatus::RegisteredHome;
-        ExecutionResult::Handled(HandledCommand {
-            responses: vec!["+CREG: 1\r\n".to_string(), "+CGREG: 1\r\n".to_string()],
-            action: None,
-        })
+
+        let mut responses = Vec::new();
+        if self.voice_unsol_mode > 0 {
+            let stat = self.voice_registration as u8;
+            let urc = if self.voice_unsol_mode == 2 {
+                format!("+CREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+            } else {
+                format!("+CREG: {}\r\n", stat)
+            };
+            responses.push(urc);
+        }
+        if self.data_unsol_mode > 0 {
+            let stat = self.data_registration as u8;
+            let urc = if self.data_unsol_mode == 2 {
+                format!("+CGREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+            } else {
+                format!("+CGREG: {}\r\n", stat)
+            };
+            responses.push(urc);
+        }
+        if self.lte_unsol_mode > 0 {
+            let stat = self.data_registration as u8;
+            let urc = if self.lte_unsol_mode == 2 {
+                format!("+CEREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+            } else {
+                format!("+CEREG: {}\r\n", stat)
+            };
+            responses.push(urc);
+        }
+        let (rssi, ber) = self.signal_strength;
+        responses.push(self.build_csq_response(rssi, ber));
+
+        responses
+    }
+
+    fn build_csq_response(&self, rssi: u8, ber: u8) -> String {
+        format!("+CSQ: {},{}\r\n", rssi, ber)
     }
 
     pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Option<String> {
@@ -148,7 +191,7 @@ impl NetworkService {
 
     pub fn handle_query_signal_strength(&self) -> ExecutionResult {
         let (rssi, ber) = self.signal_strength;
-        let response = format!("+CSQ: {},{}\r\n", rssi, ber);
+        let response = self.build_csq_response(rssi, ber);
         ExecutionResult::Handled(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
@@ -271,14 +314,10 @@ impl NetworkService {
 
         let mut responses = Vec::new();
 
-        if old_power != power {
-            if power == 0 {
-                self.voice_registration = RegistrationStatus::NotRegistered;
-                self.data_registration = RegistrationStatus::NotRegistered;
-            } else {
-                self.voice_registration = RegistrationStatus::RegisteredHome;
-                self.data_registration = RegistrationStatus::RegisteredHome;
-            }
+        if old_power != power && power == 0 {
+            self.is_attached = false;
+            self.voice_registration = RegistrationStatus::NotRegistered;
+            self.data_registration = RegistrationStatus::NotRegistered;
 
             if enable_unsolicited_urcs {
                 if let Some(urc) = self.format_creg_urc(self.voice_registration) {
@@ -297,7 +336,7 @@ impl NetworkService {
         ExecutionResult::Handled(HandledCommand { responses, action: None })
     }
 
-    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
+    pub fn execute(&mut self, command: &Command, enable_unsolicited_urcs: bool) -> ExecutionResult {
         match command {
             Command::QueryOperator => self.handle_query_operator(),
             Command::SetOperator { mode, format, .. } => self.handle_set_operator(*mode, *format),
@@ -310,7 +349,9 @@ impl NetworkService {
             Command::QueryLteNetworkRegistration => self.handle_query_lte_registration(),
             Command::SetLteNetworkRegistration(mode) => self.handle_set_lte_registration(*mode),
             Command::QueryRadioPower => self.handle_query_radio_power(),
-            Command::SetRadioPower(power) => self.handle_set_radio_power(*power, true),
+            Command::SetRadioPower(power) => {
+                self.handle_set_radio_power(*power, enable_unsolicited_urcs)
+            }
             _ => ExecutionResult::Unhandled,
         }
     }

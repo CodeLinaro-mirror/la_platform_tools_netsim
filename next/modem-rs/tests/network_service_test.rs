@@ -52,21 +52,46 @@ fn test_csq_query() {
     then_response_is(&mut world, "A", "OK");
 }
 
-// Scenario: Network Registration
+// Scenario: Network Registration on Radio ON
 //   Given a modem "A"
-//   When time advances 20 ms
+//   When AT command "AT+CFUN=0" is sent to "A"
+//   And AT command "AT+CREG=1" is sent to "A"
+//   And AT command "AT+CGREG=1" is sent to "A"
+//   And AT command "AT+CEREG=1" is sent to "A"
+//   And AT command "AT+CFUN=1" is sent to "A"
 //   Then response from "A" is "+CREG: 1"
+//   And response from "A" is "+CGREG: 1"
+//   And response from "A" is "+CEREG: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_network_registration() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    // Advance the clock to trigger the registration event
-    when_time_advances_ms(&mut world, 20);
+    // Turn radio OFF first to simulate clean boot sequence
+    when_at_command_sent(&mut world, "A", "AT+CFUN=0");
+    then_response_is(&mut world, "A", "OK");
 
-    // Verify that the modem sends a +CREG: 1 and +CGREG: 1 unsolicited response
+    // Enable unsolicited reports
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CEREG=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Turn radio ON which returns only OK synchronously
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Advance time by 10ms to trigger the AttachNetwork event and send URCs!
+    when_time_advances_ms(&mut world, 10);
+
+    // Verify unsolicited reports arrive in correct order
     then_response_is(&mut world, "A", "+CREG: 1");
     then_response_is(&mut world, "A", "+CGREG: 1");
+    then_response_is(&mut world, "A", "+CEREG: 1");
+    then_response_is(&mut world, "A", "+CSQ: 20,99");
 }
 
 // Scenario: Set dynamic registration status
@@ -133,4 +158,47 @@ fn test_set_signal_strength() {
     when_at_command_sent(&mut world, "A", "AT+CSQ");
     then_response_is(&mut world, "A", "+CSQ: 25,0");
     then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Network Registration after Radio Cycle (ON -> OFF -> ON)
+//   Given a modem "A"
+//   When AT command "AT+CREG=1" is sent to "A"
+//   And AT command "AT+CFUN=1" is sent to "A"
+//   And time advances 10 ms
+//   Then response from "A" is "+CREG: 1"
+//   And response from "A" is "+CSQ: 20,99"
+//   When AT command "AT+CFUN=0" is sent to "A"
+//   Then response from "A" is "+CREG: 0"
+//   And response from "A" is "OK"
+//   When AT command "AT+CFUN=1" is sent to "A"
+//   And time advances 10 ms
+//   Then response from "A" is "+CREG: 1"
+//   And response from "A" is "+CSQ: 20,99"
+#[test]
+fn test_network_registration_radio_cycle() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Turn radio ON and check reactive URCs
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(&mut world, "A", "+CSQ: 20,99");
+
+    // 2. Turn radio OFF (drops registration and sends URC synchronously)
+    when_at_command_sent(&mut world, "A", "AT+CFUN=0");
+    then_response_is(&mut world, "A", "+CREG: 0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Turn radio ON again and verify reactive URC triggers again!
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(&mut world, "A", "+CSQ: 20,99");
 }
