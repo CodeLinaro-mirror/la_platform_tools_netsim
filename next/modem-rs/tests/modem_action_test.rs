@@ -33,9 +33,8 @@ fn test_action_incoming_sms() {
 
     when_action_incoming_sms(&mut world, "A", "5555", "Hello");
 
-    // Check for CMT line and body in the same response
-    let response = then_wait_for_response_containing(&mut world, "A", "+CMT: \"5555\"");
-    assert!(response.contains("Hello"));
+    then_wait_for_response_containing(&mut world, "A", "+CMT: \"5555\"");
+    then_response_is(&mut world, "A", "Hello");
 }
 
 // Scenario: Set Registration Status via Action
