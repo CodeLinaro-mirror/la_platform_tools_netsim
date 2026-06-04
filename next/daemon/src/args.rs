@@ -82,6 +82,11 @@ pub struct Args {
     #[cfg_attr(not(feature = "cuttlefish"), arg(env = "NETSIM_HCI_PORT"))]
     pub hci_port: Option<u16>,
 
+    /// TCP port for the packet stream service
+    #[arg(long, alias = "tcp_port")]
+    #[cfg_attr(not(feature = "cuttlefish"), arg(env = "NETSIM_TCP_PORT"))]
+    pub tcp_port: Option<u16>,
+
     #[arg(long)]
     #[cfg_attr(not(feature = "cuttlefish"), arg(env = "NETSIM_WS_PORT"))]
     pub ws_port: Option<u16>,

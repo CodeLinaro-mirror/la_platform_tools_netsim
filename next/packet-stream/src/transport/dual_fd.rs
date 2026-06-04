@@ -64,16 +64,20 @@ impl DualFdListener {
                         chip.fd_in
                     ))
                 })?;
-                let out_fd = chip.fd_out.ok_or_else(|| {
-                    PacketStreamError::InvalidConfig(
-                        "DualFdStream requires an output file descriptor.".to_string(),
-                    )
-                })?;
-                let out_fd = take_fd_ownership(out_fd).map_err(|e| {
-                    PacketStreamError::InvalidConfig(format!(
-                        "Failed to claim output FD {out_fd}: {e}"
-                    ))
-                })?;
+
+                let out_fd = match chip.fd_out {
+                    Some(fd) if fd != chip.fd_in => take_fd_ownership(fd).map_err(|e| {
+                        PacketStreamError::InvalidConfig(format!(
+                            "Failed to claim output FD {fd}: {e}"
+                        ))
+                    })?,
+                    _ => in_fd.try_clone().map_err(|e| {
+                        PacketStreamError::InvalidConfig(format!(
+                            "Failed to clone bidirectional FD {}: {e}",
+                            chip.fd_in
+                        ))
+                    })?,
+                };
 
                 self.pending_streams.push_back((
                     device.name.clone(),
