@@ -126,6 +126,11 @@ impl CallService {
 
     pub fn handle_dial(&mut self, number: &[u8]) -> ExecutionResult {
         debug!("[CallService] Dialing number: {}", String::from_utf8_lossy(number));
+        // GPRS dial commands (e.g. ATD*99#) are GPRS packet-data requests and should
+        // fall back to DataService.
+        if crate::constants::is_gprs_dial(number) {
+            return ExecutionResult::Unhandled;
+        }
         if number == b"911" {
             return ExecutionResult::Handled(HandledCommand::ok_with_action(
                 CommandAction::InitiateEmergencyCall,

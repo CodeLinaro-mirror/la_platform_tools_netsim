@@ -93,15 +93,15 @@ pub fn parse_ini(
     Ok(map)
 }
 
+/// Get the filename of netsim.ini for a given instance number.
+pub fn get_ini_filename(instance_num: u16) -> String {
+    if instance_num == 1 { "netsim.ini".to_string() } else { format!("netsim_{instance_num}.ini") }
+}
+
 /// Get the filepath of netsim.ini under discovery directory
-fn get_ini_filepath(instance_num: u16) -> PathBuf {
+pub fn get_ini_filepath(instance_num: u16) -> PathBuf {
     let mut discovery_dir = get_discovery_directory();
-    let filename = if instance_num == 1 {
-        "netsim.ini".to_string()
-    } else {
-        format!("netsim_{instance_num}.ini")
-    };
-    discovery_dir.push(filename);
+    discovery_dir.push(get_ini_filename(instance_num));
     discovery_dir
 }
 

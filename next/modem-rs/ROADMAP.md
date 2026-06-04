@@ -203,8 +203,8 @@ contexts, data call activation, and physical channel configurations.
 - [ ] **Improve `AT+CGDATA` (Enter Data State):**
   - [ ] Add a check to the `handle_enter_data_state` function to ensure the
         specified PDP context is active.
-- [ ] **Implement `AT+CGCONTRDP` (Read Dynamic Parameters):**
-  - [ ] Modify the `handle_read_dynamic_param` function to return the correct
+- [x] **Implement `AT+CGCONTRDP` (Read Dynamic Parameters):**
+  - [x] Modify the `handle_read_dynamic_param` function to return the correct
         values for the specified PDP context.
 - [ ] **Add Physical Channel Configuration:**
   - [ ] Implement the logic for updating and sending physical channel
@@ -218,9 +218,9 @@ for handling time, time zones, and initialization commands.
 
 **Tasks:**
 
-- [ ] **Implement full `AT+CGSN` command handling:**
-  - [ ] Update `parser.rs` to support optional parameters.
-  - [ ] Add support for the `snt` parameter to return different types of
+- [x] **Implement full `AT+CGSN` command handling:**
+  - [x] Update `parser.rs` to support optional parameters.
+  - [x] Add support for the `snt` parameter to return different types of
         identification information (IMEI, SVN, etc.).
 - [ ] **Add time and time zone support:**
   - [ ] Implement logic for parsing the time zone from the system.
@@ -238,18 +238,18 @@ a massive amount of work to reach feature parity with the C++
 
 **Tasks:**
 
-- [ ] **Implement Radio Power Management (`AT+CFUN`):**
-  - [ ] Implement `AT+CFUN` command in `parser.rs`.
-  - [ ] Add support for setting and querying the radio power state.
+- [x] **Implement Radio Power Management (`AT+CFUN`):**
+  - [x] Implement `AT+CFUN` command in `parser.rs`.
+  - [x] Add support for setting and querying the radio power state.
 - [ ] **Implement Network Selection (`AT+COPS`):**
   - [ ] Add support for querying and setting the network selection mode.
   - [ ] Add support for querying available networks.
   - [ ] Add support for requesting the current operator.
-- [ ] **Implement Network Registration (`AT+CREG`, `AT+CGREG`, `AT+CEREG`):**
-  - [ ] Implement `AT+CREG`, `AT+CGREG`, `AT+CEREG` set/query commands in
+- [x] **Implement Network Registration (`AT+CREG`, `AT+CGREG`, `AT+CEREG`):**
+  - [x] Implement `AT+CREG`, `AT+CGREG`, `AT+CEREG` set/query commands in
         `parser.rs`.
-  - [ ] Add support for voice and data network registration.
-  - [ ] Implement unsolicited registration status updates.
+  - [x] Add support for voice and data network registration.
+  - [x] Implement unsolicited registration status updates.
 - [ ] **Implement Signal Strength (`AT+CSQ`):**
   - [ ] Implement the Cuttlefish-specific `+CSQ` command with a detailed
         `SignalStrength` struct.
@@ -272,13 +272,14 @@ missing most of the features and complexity of the C++ `sim_service.cpp`.
 - [ ] **Implement a robust SIM File System:**
   - [ ] Create a hierarchical file system model (MF, DF, EF).
   - [ ] Implement a parser for the XML-based SIM profile.
-  - [ ] Implement full `AT+CRSM` and `AT+CSIM` command handling.
+  - [x] Implement full `AT+CRSM` command handling (fallback mappings and clean response formatting).
+  - [ ] Implement full `AT+CSIM` command handling.
 - [ ] **Implement full PIN/PUK Management (`AT+CPIN`):**
   - [ ] Handle all SIM states (ABSENT, NOT_READY, READY, PIN, PUK).
   - [ ] Handle all PIN/PUK operations correctly.
 - [ ] **Implement Facility Lock (`AT+CLCK`):**
   - [ ] Add support for locking, unlocking, and querying all facilities.
-- [ ] **Enhance Logical Channel Support (`AT+CCHO`, `AT+CCHC`, `AT+CGLA`):**
+- [x] **Enhance Logical Channel Support (`AT+CCHO`, `AT+CCHC`, `AT+CGLA`)**: Implemented basic open/close channel lifecycle and transmit APDU mocking.
   - [ ] Add support for Application Identifiers (AIDs).
 - [ ] **Implement CDMA Features (`AT+CCSS`, `AT+WRMP`):**
   - [ ] Implement the CDMA-specific commands.

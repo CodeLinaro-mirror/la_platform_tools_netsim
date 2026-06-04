@@ -36,8 +36,8 @@ fn test_set_call_waiting() {
 fn test_send_ussd() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CUSD=1,\"*123#\"");
-    then_response_is(&mut world, "A", "+CUSD: 0,\"OK\",15");
+    when_at_command_sent(&mut world, "A", r#"AT+CUSD=1,"*123#""#);
+    then_response_is(&mut world, "A", r#"+CUSD: 0,"OK",15"#);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -61,7 +61,7 @@ fn test_cancel_ussd() {
 fn test_call_forwarding() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CCFC=1,1,\"+1234567890\",145,20");
+    when_at_command_sent(&mut world, "A", r#"AT+CCFC=1,1,"+1234567890",145,20"#);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -99,6 +99,15 @@ fn test_supp_service_notification() {
 fn test_set_facility_lock() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CLCK=\"SC\",1,\"1234\"");
+    when_at_command_sent(&mut world, "A", r#"AT+CLCK="SC",1,"1234""#);
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_query_facility_lock() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", r#"AT+CLCK="FD",2"#);
+    then_response_is(&mut world, "A", "+CLCK: 0");
     then_response_is(&mut world, "A", "OK");
 }

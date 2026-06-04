@@ -52,7 +52,7 @@ impl StkService {
 
     fn handle_query_stk_ready(&self) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand {
-            responses: vec!["+CUSATP: \"SETUP MENU\"\r\n".to_string()],
+            responses: vec!["+CUSATD: 1, 1\r\n".to_string(), "OK\r\n".to_string()],
             action: None,
         })
     }

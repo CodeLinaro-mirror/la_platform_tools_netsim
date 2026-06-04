@@ -278,7 +278,8 @@ fn test_get_capabilities() {
     let mut world = World::new();
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+GCAP");
-    then_response_is(&mut world, "A", "+GCAP: +FCLASS,+DS\r\nOK");
+    then_response_is(&mut world, "A", "+GCAP: +FCLASS,+DS");
+    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Set Automatic Disconnect Delay
@@ -381,4 +382,32 @@ fn test_set_te_ta_local_data_flow_control() {
 
     when_at_command_sent(&mut world, "A", "AT&V");
     then_response_contains(&mut world, "A", "IFC:3,4");
+}
+
+// Scenario: Get Product Serial Number (IMEI)
+//   Given a modem "A"
+//   When AT command "AT+CGSN" is sent to "A"
+//   Then response from "A" is "867400022047199"
+//   And response from "A" is "OK"
+#[test]
+fn test_get_product_serial_number_gsm() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CGSN");
+    then_response_is(&mut world, "A", "867400022047199");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Get Product Serial Number with Type (IMEI + SVN)
+//   Given a modem "A"
+//   When AT command "AT+CGSN=2" is sent to "A"
+//   Then response from "A" is "86740002204719901"
+//   And response from "A" is "OK"
+#[test]
+fn test_get_product_serial_number_gsm_with_type() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CGSN=2");
+    then_response_is(&mut world, "A", "86740002204719901");
+    then_response_is(&mut world, "A", "OK");
 }

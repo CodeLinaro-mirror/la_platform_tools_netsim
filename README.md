@@ -42,3 +42,7 @@ After this one-time setup, the formatting script will run automatically before e
 # Lockfile Maintenance
 
 For details on `MODULE.bazel.lock` behavior, specifically regarding `rules_python` and the `source.json` checksum, see [proto/GEMINI.md](proto/GEMINI.md).
+
+## TAP Networking
+
+For information on how to use and verify the TAP networking feature, see [TAP-README.md](TAP-README.md).

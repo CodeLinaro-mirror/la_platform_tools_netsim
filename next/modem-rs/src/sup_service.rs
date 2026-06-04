@@ -24,8 +24,13 @@ pub struct SupService {
 impl SupService {
     // --- Pure command handlers ---
 
-    fn handle_set_facility_lock(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+    fn handle_set_facility_lock(&self, _facility: &str, mode: u8) -> ExecutionResult {
+        let responses = if mode == 2 {
+            vec!["+CLCK: 0\r\n".to_string(), "OK\r\n".to_string()]
+        } else {
+            vec!["OK\r\n".to_string()]
+        };
+        ExecutionResult::Handled(HandledCommand { responses, action: None })
     }
 
     fn handle_call_forwarding(
@@ -52,45 +57,73 @@ impl SupService {
     }
 
     fn handle_query_clir(&self) -> ExecutionResult {
-        let mut handled = HandledCommand::ok();
-        handled.responses.insert(0, "+CLIR: 0,0\r\n".to_string());
-        ExecutionResult::Handled(handled)
+        let responses = vec!["+CLIR: 0,0\r\n".to_string(), "OK\r\n".to_string()];
+        ExecutionResult::Handled(HandledCommand { responses, action: None })
+    }
+
+    fn handle_set_clir(&self, _clir: u8) -> ExecutionResult {
+        ExecutionResult::Handled(HandledCommand::ok())
     }
 
     fn handle_set_clip(&self) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    fn handle_set_call_waiting(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+    fn handle_set_call_waiting(
+        &self,
+        _n: u8,
+        mode: Option<u8>,
+        class: Option<u8>,
+    ) -> ExecutionResult {
+        let responses = if let Some(2) = mode {
+            let classx = class.unwrap_or(7);
+            vec![format!("+CCWA: 0,{}\r\n", classx), "OK\r\n".to_string()]
+        } else {
+            vec!["OK\r\n".to_string()]
+        };
+        ExecutionResult::Handled(HandledCommand { responses, action: None })
     }
 
-    fn handle_send_ussd(&self) -> ExecutionResult {
-        let mut handled = HandledCommand::ok();
-        handled.responses.insert(0, "+CUSD: 0,\"OK\",15\r\n".to_string());
-        ExecutionResult::Handled(handled)
-    }
-
-    fn handle_cancel_ussd(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+    fn handle_set_ussd(
+        &self,
+        mode: u8,
+        message: Option<QuotedString>,
+        _dcs: Option<u8>,
+    ) -> ExecutionResult {
+        let mut responses = Vec::new();
+        if mode == 1 && message.is_some() {
+            responses.push("+CUSD: 0,\"OK\",15\r\n".to_string());
+        }
+        responses.push("OK\r\n".to_string());
+        ExecutionResult::Handled(HandledCommand { responses, action: None })
     }
 
     fn handle_supp_service_notification(&self) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
+    fn handle_set_colp(&self) -> ExecutionResult {
+        ExecutionResult::Handled(HandledCommand::ok())
+    }
+
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
-            Command::SetFacilityLock(_, _, _) => self.handle_set_facility_lock(),
-            Command::CallForwarding { reason: _, mode, number, type_, .. } => {
-                self.handle_call_forwarding(*mode, *number, *type_)
+            Command::SetFacilityLock(facility, mode, _) => {
+                let facility_str = std::str::from_utf8(facility.as_ref()).unwrap_or("");
+                self.handle_set_facility_lock(facility_str, *mode)
+            }
+            Command::CallForwarding { reason: _, mode, number, r#type, .. } => {
+                self.handle_call_forwarding(*mode, *number, *r#type)
             }
             Command::QueryClir => self.handle_query_clir(),
+            Command::SetClir(clir) | Command::SetClirGoldfish(clir) => self.handle_set_clir(*clir),
             Command::SetClip(_) => self.handle_set_clip(),
-            Command::SetCallWaiting(_, _) => self.handle_set_call_waiting(),
+            Command::SetColp(_) => self.handle_set_colp(),
+            Command::SetCallWaiting(n, mode, class) => {
+                self.handle_set_call_waiting(*n, *mode, *class)
+            }
             Command::SuppServiceNotification(_, _) => self.handle_supp_service_notification(),
-            Command::SendUssd(_) => self.handle_send_ussd(),
-            Command::CancelUssd => self.handle_cancel_ussd(),
+            Command::SetUssd { mode, message, dcs } => self.handle_set_ussd(*mode, *message, *dcs),
             _ => ExecutionResult::Unhandled,
         }
     }

@@ -50,7 +50,8 @@ fn test_stk_get_input() {
 // Scenario: Query STK Ready
 //   Given a modem "A"
 //   When AT command "AT+CUSATD?" is sent to "A"
-//   Then response from "A" is '+CUSATP: "SETUP MENU"'
+//   Then response from "A" is "+CUSATD: 1, 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_query_stk_ready() {
     let mut world = World::new();
@@ -58,7 +59,8 @@ fn test_query_stk_ready() {
 
     when_at_command_sent(&mut world, "A", "AT+CUSATD?");
 
-    then_response_is(&mut world, "A", "+CUSATP: \"SETUP MENU\"");
+    then_response_is(&mut world, "A", "+CUSATD: 1, 1");
+    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Set STK Mode
