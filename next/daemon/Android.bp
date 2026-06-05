@@ -29,6 +29,7 @@ rust_library_host {
         "libnetsim_next_link_actor",
         "libnetsim_next_link_api",
         "libnetsim_next_model",
+        "libnetsim_next_nfc_actor",
         "libnetsim_next_packet_stream",
         "libnetsim_next_uwb_actor",
         "libnetsim_next_websocket_server",
