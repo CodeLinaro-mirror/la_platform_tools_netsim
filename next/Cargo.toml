@@ -27,6 +27,7 @@ members = [
   "device-api",
 
   "rootcanal",
+  "rootcanal-server",
   "testing",
 ]
 

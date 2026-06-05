@@ -261,6 +261,11 @@ impl NetsimDaemon {
         &self.capture_client
     }
 
+    /// Returns a clone of the DeviceClient.
+    pub fn device_client(&self) -> DeviceClient {
+        self.device_client.clone()
+    }
+
     /// Creates a new `NetsimDaemon` instance or returns config for forwarding.
     ///
     /// Returns:
@@ -525,6 +530,25 @@ impl NetsimDaemon {
             }
         }
 
+        // Rootcanal legacy control server
+        #[cfg(feature = "cuttlefish")]
+        let actual_test_port = {
+            let mut port = None;
+            let test_port = args.test_port.unwrap_or_else(|| 7500 + instance_num - 1);
+            match rootcanal_server::bind(test_port) {
+                Ok(listener) => {
+                    port = Some(listener.local_addr().map_err(init_error)?.port());
+                    // Spawn legacy Rootcanal control server for host-side test runners (like
+                    // pts-bot/mmi2grpc).
+                    tokio::spawn(rootcanal_server::run(listener, device_client.clone()));
+                }
+                Err(e) => {
+                    error!("Failed to bind Rootcanal control server: {e}");
+                }
+            }
+            port
+        };
+
         let mut actual_tcp_port = None;
         let should_start_tcp =
             if cfg!(feature = "cuttlefish") { true } else { args.tcp_port.is_some() };
@@ -552,6 +576,14 @@ impl NetsimDaemon {
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
             ("hci.port".to_string(), hci_port.to_string()),
         ]);
+        #[cfg(feature = "cuttlefish")]
+        if let Some(port) = actual_test_port {
+            listener_addresses.insert(
+                "netsim_rootcanal".to_string(),
+                StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], port))),
+            );
+            ini_data.insert("test.port".to_string(), port.to_string());
+        }
         if let Some(port) = actual_tcp_port {
             ini_data.insert("tcp.port".to_string(), port.to_string());
         }
@@ -703,6 +735,15 @@ impl NetsimDaemon {
     /// Gets the gRPC port, if the server is running.
     pub fn grpc_port(&self) -> Option<u16> {
         self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
+            StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
+            _ => None,
+        })
+    }
+
+    /// Gets the Rootcanal test port, if the server is running.
+    #[cfg(feature = "cuttlefish")]
+    pub fn test_port(&self) -> Option<u16> {
+        self.listener_addresses.get("netsim_rootcanal").and_then(|addr| match addr {
             StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
             _ => None,
         })

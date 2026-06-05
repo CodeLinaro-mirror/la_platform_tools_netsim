@@ -887,15 +887,19 @@ impl ActorService for DeviceActor {
                 }
             }
 
-            if let Some(u) = specific_update
-                && u.variant.is_some()
-            {
-                chip_update.variant = u.variant.clone();
+            if let Some(u) = specific_update {
+                if u.variant.is_some() {
+                    chip_update.variant = u.variant.clone();
+                }
+                if u.enabled.is_some() {
+                    chip_update.enabled = u.enabled;
+                }
             }
 
             if chip_update.pose.position.is_some()
                 || chip_update.pose.orientation.is_some()
                 || chip_update.variant.is_some()
+                || chip_update.enabled.is_some()
             {
                 info!(
                     "DeviceActor: Updating chip {} (kind {:?}) with {:?}",
