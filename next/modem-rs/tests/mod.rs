@@ -4,6 +4,7 @@
 pub mod common;
 pub mod steps;
 
+mod boot_test;
 mod call_service_test;
 mod cellular_network_test;
 mod data_service_test;
