@@ -244,3 +244,69 @@ fn test_query_operator_all_formats() {
     then_response_is(&mut world, "A", "+COPS: 0,2,310260");
     then_response_is(&mut world, "A", "OK");
 }
+
+// Scenario: Query Current Network Technology Mode (AT+CTEC?)
+//   Given a modem "A"
+//   When AT command "AT+CTEC?" is sent to "A"
+//   Then response from "A" is "+CTEC: 32,40"
+//   And response from "A" is "OK"
+#[test]
+fn test_query_current_ctec() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CTEC?");
+    then_response_is(&mut world, "A", "+CTEC: 32,40");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Query Supported Network Technology Modes (AT+CTEC=?)
+//   Given a modem "A"
+//   When AT command "AT+CTEC=?" is sent to "A"
+//   Then response from "A" is "+CTEC: 0,1,5,6"
+//   And response from "A" is "OK"
+#[test]
+fn test_query_supported_ctec() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CTEC=?");
+    then_response_is(&mut world, "A", "+CTEC: 0,1,5,6");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Set Network Technology Mode (AT+CTEC=current,preferred)
+//   Given a modem "A"
+//   When AT command "AT+CTEC=1,"21"" is sent to "A"
+//   Then response from "A" is "+CTEC: DONE"
+//   And response from "A" is "OK"
+#[test]
+fn test_set_ctec() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"21\"");
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify that values are updated and queried back correctly
+    when_at_command_sent(&mut world, "A", "AT+CTEC?");
+    then_response_is(&mut world, "A", "+CTEC: 1,21");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_set_ctec_invalid() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Invalid current tech (99 is not supported)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=99,\"21\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Invalid preferred mask (0x200 is not supported, only 0x63 is supported)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"200\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Invalid current tech (5 is index, but we expect mask. 5 as mask is 0b101
+    // which is invalid)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=5,\"21\"");
+    then_response_is(&mut world, "A", "ERROR");
+}

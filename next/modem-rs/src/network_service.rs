@@ -25,6 +25,8 @@ pub struct NetworkService {
     radio_power: u8,
     plmn: String,
     cops_format: u8,
+    current_network_mode: u8,
+    preferred_network_mode: u32,
     is_attached: bool,
 }
 
@@ -40,6 +42,8 @@ impl Default for NetworkService {
             radio_power: 1,
             plmn: crate::constants::DEFAULT_PLMN.to_string(),
             cops_format: 0,
+            current_network_mode: crate::constants::CTEC_DEFAULT_CURRENT_TECH,
+            preferred_network_mode: crate::constants::CTEC_DEFAULT_PREFERRED_MASK,
             is_attached: false,
         }
     }
@@ -309,6 +313,67 @@ impl NetworkService {
         }
     }
 
+    pub fn handle_query_current_ctec(&self) -> ExecutionResult {
+        let response =
+            format!("+CTEC: {},{:X}\r\n", self.current_network_mode, self.preferred_network_mode);
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec![response, "OK\r\n".to_string()],
+            action: None,
+        })
+    }
+
+    pub fn handle_query_supported_ctec(&self) -> ExecutionResult {
+        let tech_strs: Vec<String> =
+            crate::constants::SUPPORTED_CTEC_INDEXES.iter().map(|t| t.to_string()).collect();
+        let response = format!("+CTEC: {}\r\n", tech_strs.join(","));
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec![response, "OK\r\n".to_string()],
+            action: None,
+        })
+    }
+
+    pub fn handle_set_ctec(&mut self, current: u8, preferred: &[u8]) -> ExecutionResult {
+        let preferred_str = match std::str::from_utf8(preferred) {
+            Ok(s) => s.trim(),
+            Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
+        };
+        let preferred_clean = preferred_str.trim_matches('"').trim();
+        // Strip hex prefix "0x" or "0X" if present
+        let preferred_clean = preferred_clean
+            .strip_prefix("0x")
+            .or_else(|| preferred_clean.strip_prefix("0X"))
+            .unwrap_or(preferred_clean);
+
+        let preferred_mask = match u32::from_str_radix(preferred_clean, 16) {
+            Ok(val) => val,
+            Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
+        };
+
+        // Validate allowed technologies mask
+        let allowed_mask = crate::constants::SUPPORTED_CTEC_INDEXES
+            .iter()
+            .fold(0u32, |acc, &idx| acc | (1u32 << idx));
+
+        // Validate current tech is supported (current is a mask, e.g. 32 for LTE)
+        let current_u32 = current as u32;
+        if current_u32.count_ones() != 1 || (current_u32 & !allowed_mask) != 0 {
+            return ExecutionResult::Handled(HandledCommand::error());
+        }
+
+        // Validate preferred mask only contains supported technologies
+        if (preferred_mask & !allowed_mask) != 0 {
+            return ExecutionResult::Handled(HandledCommand::error());
+        }
+
+        self.current_network_mode = current;
+        self.preferred_network_mode = preferred_mask;
+
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec!["+CTEC: DONE\r\n".to_string(), "OK\r\n".to_string()],
+            action: None,
+        })
+    }
+
     pub fn handle_query_radio_power(&self) -> ExecutionResult {
         let response = format!("+CFUN: {}\r\n", self.radio_power);
         ExecutionResult::Handled(HandledCommand {
@@ -368,6 +433,11 @@ impl NetworkService {
             Command::QueryRadioPower => self.handle_query_radio_power(),
             Command::SetRadioPower(power) => {
                 self.handle_set_radio_power(*power, enable_unsolicited_urcs)
+            }
+            Command::QueryCurrentNetworkTechnology => self.handle_query_current_ctec(),
+            Command::QuerySupportedNetworkTechnology => self.handle_query_supported_ctec(),
+            Command::SetNetworkTechnology(current, preferred) => {
+                self.handle_set_ctec(*current, preferred.as_ref())
             }
             _ => ExecutionResult::Unhandled,
         }

@@ -268,6 +268,15 @@ pub enum Command<'a> {
     /// Enter data state
     #[command(tag = "AT+CGDATA=")]
     EnterDataState(u8),
+    /// Query current network technology
+    #[command(tag = "AT+CTEC?")]
+    QueryCurrentNetworkTechnology,
+    /// Query supported network technology
+    #[command(tag = "AT+CTEC=?")]
+    QuerySupportedNetworkTechnology,
+    /// Set network technology
+    #[command(tag = "AT+CTEC=")]
+    SetNetworkTechnology(u8, #[parser(parse_raw_data)] &'a [u8]),
     /// Packet event reporting
     #[command(tag = "AT+CGEREP=")]
     SetPacketEventReporting(u8, u8),
