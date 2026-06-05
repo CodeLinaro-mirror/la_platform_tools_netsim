@@ -205,6 +205,9 @@ pub enum Command<'a> {
     /// Calling line identification presentation
     #[command(tag = "AT+CLIP=")]
     SetClip(u8),
+    /// Query Calling line identification presentation
+    #[command(tag = "AT+CLIP?")]
+    QueryClip,
     /// Configure call mode
     #[command(tag = "AT+CMOD=")]
     SetCallMode(u8),
