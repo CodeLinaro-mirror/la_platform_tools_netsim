@@ -23,6 +23,7 @@ use crate::{
 /// Represents a single modem device.
 pub struct ModemImpl {
     pub id: ModemId,
+    pub enable_unsolicited_urcs: bool,
     pub sim_service: SimService,
     pub network_service: NetworkService,
     pub sms_service: SmsService,
@@ -43,7 +44,7 @@ pub enum State {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModemEvent {
     CallRingTimeout { call_token: u32 },
-    NetworkRegistrationComplete,
+    AttachNetwork,
     TestEvent,
 }
 
@@ -55,8 +56,10 @@ pub enum ModemEffect {
 
 impl ModemImpl {
     pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile) -> Self {
+        let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         Self {
             id,
+            enable_unsolicited_urcs: enable_unsol,
             sim_service: SimService::new(&profile),
             network_service: NetworkService::default(),
             sms_service: SmsService::default(),
@@ -235,6 +238,24 @@ impl ModemImpl {
                 match result {
                     ExecutionResult::Handled(handled) => {
                         Self::append_handled_effects(&mut effects, handled);
+                        if let Command::SetRadioPower(1) = command {
+                            effects.push(ModemEffect::Schedule {
+                                delay: std::time::Duration::from_millis(10),
+                                event: ModemEvent::AttachNetwork,
+                            });
+                        }
+                        let mode_active = match command {
+                            Command::SetVoiceNetworkRegistration(m)
+                            | Command::SetDataNetworkRegistration(m)
+                            | Command::SetLteNetworkRegistration(m) => m > 0,
+                            _ => false,
+                        };
+                        if mode_active && !self.network_service.is_attached() {
+                            effects.push(ModemEffect::Schedule {
+                                delay: std::time::Duration::from_millis(10),
+                                event: ModemEvent::AttachNetwork,
+                            });
+                        }
                     }
                     ExecutionResult::Unhandled => {
                         error!("Unhandled command: {:?}", command);
@@ -262,11 +283,10 @@ impl ModemImpl {
             ModemEvent::CallRingTimeout { call_token } => {
                 self.call_service.handle_ring_timeout(call_token);
             }
-            ModemEvent::NetworkRegistrationComplete => {
-                let result = self.network_service.handle_registration_complete();
-                if let ExecutionResult::Handled(handled) = result {
-                    let combined = handled
-                        .responses
+            ModemEvent::AttachNetwork => {
+                let responses = self.network_service.attach_network();
+                if self.enable_unsolicited_urcs {
+                    let combined = responses
                         .iter()
                         .filter(|r| !r.is_empty())
                         .cloned()
@@ -325,7 +345,7 @@ impl ModemImpl {
             return result;
         }
 
-        let result = self.network_service.execute(command);
+        let result = self.network_service.execute(command, self.enable_unsolicited_urcs);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
