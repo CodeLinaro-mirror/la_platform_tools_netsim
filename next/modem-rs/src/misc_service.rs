@@ -236,7 +236,7 @@ impl MiscService {
 
     pub fn handle_get_capabilities(&self) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand {
-            responses: vec!["+GCAP: +FCLASS,+DS\r\n".to_string(), "OK\r\n".to_string()],
+            responses: vec!["+GCAP: +FCLASS,+DS\r\nOK\r\n".to_string()],
             action: None,
         })
     }

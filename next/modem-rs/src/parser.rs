@@ -129,9 +129,12 @@ pub enum Command<'a> {
     /// VENDOR: Ring indication
     #[command(tag = "RING")]
     Ring,
-    /// Operator selection
+    /// Operator selection query
     #[command(tag = "AT+COPS?")]
     QueryOperator,
+    /// Set operator selection
+    #[command(tag = "AT+COPS=")]
+    SetOperator { mode: u8, format: Option<u8>, oper: Option<QuotedString<'a>> },
     /// Query voice network registration
     #[command(tag = "AT+CREG?")]
     QueryVoiceNetworkRegistration,
@@ -606,5 +609,12 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+CGSN=2").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::GetProductSerialNumberGsmWithType(2));
+    }
+
+    #[test]
+    fn test_parse_cops_set() {
+        let (rem, cmd) = Command::parse(b"AT+COPS=3,2").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetOperator { mode: 3, format: Some(2), oper: None });
     }
 }
