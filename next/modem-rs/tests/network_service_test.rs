@@ -226,3 +226,21 @@ fn test_network_registration_radio_cycle() {
         "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
     );
 }
+
+// Scenario: Query Operator in All Formats (Compound Query)
+//   Given a modem "A"
+//   When AT command "AT+COPS=3,0;+COPS?;+COPS=3,1;+COPS?;+COPS=3,2;+COPS?" is
+// sent to "A"   Then response from "A" is "+COPS: 0,0,\"Android Virtual
+// Operator\""   And response from "A" is "+COPS: 0,1,\"Android\""
+//   And response from "A" is "+COPS: 0,2,310260"
+//   And response from "A" is "OK"
+#[test]
+fn test_query_operator_all_formats() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+COPS=3,0;+COPS?;+COPS=3,1;+COPS?;+COPS=3,2;+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "+COPS: 0,1,\"Android\"");
+    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
+    then_response_is(&mut world, "A", "OK");
+}
