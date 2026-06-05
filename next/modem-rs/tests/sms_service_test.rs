@@ -171,13 +171,31 @@ fn test_cmgf() {
 
 // Scenario: Broadcast Configuration
 //   Given a modem "A"
+//   When AT command "AT+CSCB?" is sent to "A"
+//   Then response from "A" is '+CSCB: 0,"",""'
+//   And response from "A" is "OK"
 //   When AT command 'AT+CSCB=0,"1,2,3","4,5,6"' is sent to "A"
 //   Then response from "A" is "OK"
+//   When AT command "AT+CSCB?" is sent to "A"
+//   Then response from "A" is '+CSCB: 0,"1,2,3","4,5,6"'
+//   And response from "A" is "OK"
 #[test]
 fn test_broadcast_config() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+
+    // Default query
+    when_at_command_sent(&mut world, "A", "AT+CSCB?");
+    then_response_is(&mut world, "A", "+CSCB: 0,\"\",\"\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Set config
     when_at_command_sent(&mut world, "A", "AT+CSCB=0,\"1,2,3\",\"4,5,6\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query back
+    when_at_command_sent(&mut world, "A", "AT+CSCB?");
+    then_response_is(&mut world, "A", "+CSCB: 0,\"1,2,3\",\"4,5,6\"");
     then_response_is(&mut world, "A", "OK");
 }
 

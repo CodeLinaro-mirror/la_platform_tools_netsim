@@ -289,6 +289,9 @@ pub enum Command<'a> {
     /// 3GPP TS 27.005: Set broadcast config
     #[command(tag = "AT+CSCB=")]
     BroadcastConfig(u8, QuotedString<'a>, QuotedString<'a>),
+    /// 3GPP TS 27.005: Query broadcast config
+    #[command(tag = "AT+CSCB?")]
+    QueryBroadcastConfig,
     /// 3GPP TS 27.005: Set SMSC address
     #[command(tag = "AT+CSCA=")]
     SetSmscAddress(QuotedString<'a>),
