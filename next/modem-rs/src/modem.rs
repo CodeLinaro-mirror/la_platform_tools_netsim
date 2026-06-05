@@ -222,14 +222,7 @@ impl ModemImpl {
 
         if let Some(result) = sms_pdu_action {
             if let ExecutionResult::Handled(handled) = result {
-                for response in handled.responses {
-                    if !response.is_empty() {
-                        effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-                    }
-                }
-                if let Some(action) = handled.action {
-                    effects.push(ModemEffect::Action(action));
-                }
+                Self::append_handled_effects(&mut effects, handled);
             }
             return effects;
         }
@@ -241,14 +234,7 @@ impl ModemImpl {
 
                 match result {
                     ExecutionResult::Handled(handled) => {
-                        for response in handled.responses {
-                            if !response.is_empty() {
-                                effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-                            }
-                        }
-                        if let Some(action) = handled.action {
-                            effects.push(ModemEffect::Action(action));
-                        }
+                        Self::append_handled_effects(&mut effects, handled);
                     }
                     ExecutionResult::Unhandled => {
                         error!("Unhandled command: {:?}", command);
@@ -279,10 +265,15 @@ impl ModemImpl {
             ModemEvent::NetworkRegistrationComplete => {
                 let result = self.network_service.handle_registration_complete();
                 if let ExecutionResult::Handled(handled) = result {
-                    for response in handled.responses {
-                        if !response.is_empty() {
-                            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-                        }
+                    let combined = handled
+                        .responses
+                        .iter()
+                        .filter(|r| !r.is_empty())
+                        .cloned()
+                        .collect::<Vec<String>>()
+                        .join("");
+                    if !combined.is_empty() {
+                        effects.push(ModemEffect::Response(combined.into_bytes()));
                     }
                 }
             }
@@ -355,5 +346,24 @@ impl ModemImpl {
         }
 
         ExecutionResult::Unhandled
+    }
+
+    fn append_handled_effects(
+        effects: &mut Vec<ModemEffect>,
+        handled: crate::types::HandledCommand,
+    ) {
+        let combined = handled
+            .responses
+            .iter()
+            .filter(|r| !r.is_empty())
+            .cloned()
+            .collect::<Vec<String>>()
+            .join("");
+        if !combined.is_empty() {
+            effects.push(ModemEffect::Response(combined.into_bytes()));
+        }
+        if let Some(action) = handled.action {
+            effects.push(ModemEffect::Action(action));
+        }
     }
 }
