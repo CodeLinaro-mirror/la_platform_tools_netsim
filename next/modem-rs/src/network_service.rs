@@ -92,8 +92,25 @@ impl NetworkService {
         responses
     }
 
+    /// Formats the unsolicited signal quality (CSQ) report according to the
+    /// extended 22-field layout:
+    ///
+    /// * Field 0: rssi (Received Signal Strength Indicator)
+    /// * Field 1: ber (Bit Error Rate)
+    /// * Field 2..6: LTE signal parameters (unsupported placeholder `i32::MAX`)
+    /// * Field 7: `CSQ_LTE_RSSI_DEFAULT` (N/A / GSM parameter placeholder)
+    /// * Field 8: `CSQ_LTE_RSRP_DEFAULT` (constant representing typical strong
+    ///   signal)
+    /// * Field 9..21: Extended tech signal parameters (unsupported placeholder
+    ///   `i32::MAX`)
     fn build_csq_response(&self, rssi: u8, ber: u8) -> String {
-        format!("+CSQ: {},{}\r\n", rssi, ber)
+        let max = i32::MAX;
+        let lte_rssi = crate::constants::CSQ_LTE_RSSI_DEFAULT;
+        let lte_rsrp = crate::constants::CSQ_LTE_RSRP_DEFAULT;
+        format!(
+            "+CSQ: {rssi},{ber},{max},{max},{max},{max},{max},{lte_rssi},{lte_rsrp},\
+            {max},{max},{max},{max},{max},{max},{max},{max},{max},{max},{max},{max},{max}\r\n"
+        )
     }
 
     pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Option<String> {

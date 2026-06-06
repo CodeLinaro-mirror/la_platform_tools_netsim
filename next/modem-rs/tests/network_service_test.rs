@@ -48,7 +48,11 @@ fn test_csq_query() {
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CSQ");
 
-    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -91,7 +95,11 @@ fn test_network_registration() {
     then_response_is(&mut world, "A", "+CREG: 1");
     then_response_is(&mut world, "A", "+CGREG: 1");
     then_response_is(&mut world, "A", "+CEREG: 1");
-    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
 }
 
 // Scenario: Set dynamic registration status
@@ -147,7 +155,11 @@ fn test_set_signal_strength() {
 
     // Check default
     when_at_command_sent(&mut world, "A", "AT+CSQ");
-    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
     then_response_is(&mut world, "A", "OK");
 
     // Change value
@@ -156,7 +168,11 @@ fn test_set_signal_strength() {
 
     // Check new value
     when_at_command_sent(&mut world, "A", "AT+CSQ");
-    then_response_is(&mut world, "A", "+CSQ: 25,0");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 25,0,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -187,7 +203,11 @@ fn test_network_registration_radio_cycle() {
 
     when_time_advances_ms(&mut world, 10);
     then_response_is(&mut world, "A", "+CREG: 1");
-    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
 
     // 2. Turn radio OFF (drops registration and sends URC synchronously)
     when_at_command_sent(&mut world, "A", "AT+CFUN=0");
@@ -200,5 +220,9 @@ fn test_network_registration_radio_cycle() {
 
     when_time_advances_ms(&mut world, 10);
     then_response_is(&mut world, "A", "+CREG: 1");
-    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
 }
