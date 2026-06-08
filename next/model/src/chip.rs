@@ -188,7 +188,7 @@ impl fmt::Display for ChipId {
 ///
 /// Use `Chip` for generic operations (positioning, lifecycle) and access
 /// `variant` for technology-specific state.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Chip {
     pub id: u32,
     pub kind: ChipKind,
@@ -201,6 +201,23 @@ pub struct Chip {
     pub links: Vec<(ChipId, i8)>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+}
+
+impl Default for Chip {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            kind: ChipKind::default(),
+            name: String::default(),
+            manufacturer: String::default(),
+            product_name: String::default(),
+            pose: Pose::default(),
+            device_id: DeviceId::default(),
+            variant: None,
+            links: Vec::default(),
+            enabled: true,
+        }
+    }
 }
 
 impl Chip {
@@ -588,5 +605,16 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
 impl Clone for Box<dyn ChipClient> {
     fn clone(&self) -> Box<dyn ChipClient> {
         self.clone_box()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chip_default_enabled() {
+        let chip = Chip::default();
+        assert!(chip.enabled);
     }
 }

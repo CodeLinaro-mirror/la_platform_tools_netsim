@@ -206,13 +206,11 @@ pub mod api {
     impl From<DeviceChipCreate> for crate::chip::Chip {
         fn from(create: DeviceChipCreate) -> Self {
             crate::chip::Chip {
-                id: 0,
                 kind: create.chip.kind(),
                 name: create.name,
                 manufacturer: create.manufacturer,
                 product_name: create.product_name,
                 variant: Some(crate::chip::ChipVariant::from(create.chip)),
-                enabled: true,
                 ..Default::default()
             }
         }
