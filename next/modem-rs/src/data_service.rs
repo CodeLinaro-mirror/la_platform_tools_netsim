@@ -59,7 +59,7 @@ impl DataService {
             PdpContext {
                 pdp_type: String::from_utf8(pdp_type.to_vec()).unwrap_or_default(),
                 apn: String::from_utf8(apn.to_vec()).unwrap_or_default(),
-                active: false,
+                active: true, // Goldfish expects data to be auto-activated
                 qos: Qos::default(),
                 req_qos: Qos::default(),
                 gprs_qos: Qos::default(),
@@ -403,5 +403,12 @@ mod tests {
         } else {
             panic!("Expected Handled");
         }
+    }
+
+    #[test]
+    fn test_pdp_context_auto_activation() {
+        let mut service = DataService::default();
+        service.handle_define_pdp_context(1, QuotedString(b""), QuotedString(b""));
+        assert!(service.pdp_contexts.get(&1).unwrap().active);
     }
 }
