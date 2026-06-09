@@ -95,7 +95,7 @@ impl TransportListener for DualFdListener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
         match self.pending_streams.pop_front() {
             Some((device_name, chip_kind, (in_fd, out_fd))) => {
-                let guid = format!("dualfd-{}-{}", device_name, chip_kind);
+                let guid = format!("dualfd-{}", device_name);
                 let kind = ChipKind::from_str(&chip_kind).unwrap_or(ChipKind::UNSPECIFIED);
 
                 let chip_info = ChipInfo {
