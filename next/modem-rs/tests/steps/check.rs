@@ -89,3 +89,18 @@ fn normalize_expected_response(expected: &str) -> Vec<u8> {
         _ => [expected.trim_end_matches(['\r', '\n']).as_bytes(), b"\r\n"].concat(),
     }
 }
+
+/// Verifies that the modem has no pending responses in its queue.
+///
+/// This is useful for asserting that an asynchronous notification (like +CMT)
+/// was NOT received (e.g., when a message is dropped due to routing failure).
+pub fn then_no_response(world: &mut World, name: &str) {
+    let (_, handler) = world.get_modem(name);
+    let response = handler.try_get_response();
+    assert!(
+        response.is_none(),
+        "Expected no response from modem {}, but got: {:?}",
+        name,
+        String::from_utf8_lossy(&response.unwrap())
+    );
+}
