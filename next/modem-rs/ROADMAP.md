@@ -99,10 +99,6 @@ docs (e.g., Google Fi, Pixel) but are not yet scheduled in specific phases.
   - Requirement: Ability to simulate packet loss, variable latency, and dynamic
     signal strength changes via Netsim API.
   - Source: Integration Teams.
-- **Extended PDP Context Support**:
-  - Requirement: Reliable support for at least 3 concurrent PDP contexts with
-    independent network interfaces.
-  - Source: Pixel Team.
 
 ## Completed Milestones
 
@@ -110,6 +106,7 @@ docs (e.g., Google Fi, Pixel) but are not yet scheduled in specific phases.
 - **Event Loop & Timers**: Implemented.
 - **Initial Test Coverage**: Expanded to over 100 passing tests across all
   services (Call, Data, Network, SIM, SMS, STK, Sup).
+- **Extended PDP Context Support**: Implemented dynamic IP allocation (up to 240 unique IPs) to support multiple concurrent PDP contexts.
 
 ## Android Emulator Console Support
 

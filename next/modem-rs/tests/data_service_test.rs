@@ -281,3 +281,90 @@ fn test_gprs_dialing_default_cid() {
     then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_multiple_concurrent_pdp_contexts() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Define and activate PDP context 1
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"apn1\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,1");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 2. Define and activate PDP context 2
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=2,\"IP\",\"apn2\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,2"); // Activate CID 2
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 3. Verify unique IP addresses via AT+CGPADDR
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=2");
+    then_response_is(&mut world, "A", "+CGPADDR: 2,\"10.0.2.16\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Verify unique IP addresses via AT+CGCONTRDP
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=1");
+    then_response_is(&mut world, "A", "+CGCONTRDP: 1,5,\"apn1\",10.0.2.15/24,10.0.2.2,10.0.2.3");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=2");
+    then_response_is(&mut world, "A", "+CGCONTRDP: 2,5,\"apn2\",10.0.2.16/24,10.0.2.2,10.0.2.3");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_goldfish_ril_compat_incorrect_cgact() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Define and activate PDP context 1
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,1");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Verify it is active
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Send the goldfish RIL "deactivate CID 1" command: AT+CGACT=1,0
+    // (Standard would be AT+CGACT=0,1)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,0");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 3. Verify it is now inactive (IP is 0.0.0.0)
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"0.0.0.0\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Define CID 2
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=2,\"IP\",\"test2\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 5. Activate CID 2 using legacy format: AT+CGACT=2,1 (Standard is
+    //    AT+CGACT=1,2)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=2,1");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Verify CID 2 is active
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=2");
+    then_response_is(&mut world, "A", "+CGPADDR: 2,\"10.0.2.16\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6. Deactivate CID 2 using legacy format: AT+CGACT=2,0 (Standard is
+    //    AT+CGACT=0,2)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=2,0");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Verify CID 2 is inactive
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=2");
+    then_response_is(&mut world, "A", "+CGPADDR: 2,\"0.0.0.0\"");
+    then_response_is(&mut world, "A", "OK");
+}
