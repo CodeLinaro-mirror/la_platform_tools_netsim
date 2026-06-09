@@ -10,6 +10,7 @@
 mod bt_pcap;
 mod capture_actor;
 mod error;
+mod ethernet_pcap;
 mod lifecycle;
 mod service;
 mod uwb_pcap;
@@ -19,6 +20,7 @@ mod writer;
 use actor_framework::ResourceActor;
 pub use capture_actor::CaptureActor;
 pub use error::CaptureError;
+pub use writer::{DLT_BLUETOOTH_H4, DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO};
 
 pub mod client;
 pub use client::CaptureClient;

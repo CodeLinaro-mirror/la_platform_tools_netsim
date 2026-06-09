@@ -282,6 +282,8 @@ pub enum ChipVariant {
     Wifi(crate::wifi::Wifi),
     Uwb(crate::uwb::Uwb),
     Cell(crate::cell::Cell),
+    CellularData(crate::cellular_data::CellularData),
+    Ethernet(crate::ethernet::Ethernet),
 }
 
 impl From<ChipKind> for ChipVariant {
@@ -296,7 +298,12 @@ impl From<ChipKind> for ChipVariant {
             })),
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),
-            ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell { state: "unknown".into() }),
+            ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell {
+                radio: Default::default(),
+                state: "unknown".into(),
+            }),
+            ChipKind::CELLULAR_DATA => ChipVariant::CellularData(Default::default()),
+            ChipKind::ETHERNET => ChipVariant::Ethernet(Default::default()),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
             // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
             // types.
@@ -369,12 +376,15 @@ impl RadioUpdate {
     }
 }
 
-/// The techbology variant specific fields
+/// The technology variant specific fields
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariantUpdate {
     Bluetooth(crate::bluetooth::BluetoothUpdate),
     Wifi(crate::wifi::WifiUpdate),
     Uwb(crate::uwb::UwbUpdate),
+    Cell(crate::cell::CellUpdate),
+    CellularData(crate::cellular_data::CellularDataUpdate),
+    Ethernet(crate::ethernet::EthernetUpdate),
 }
 
 impl ChipVariantUpdate {
@@ -383,6 +393,9 @@ impl ChipVariantUpdate {
             ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
             ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
             ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
+            ChipVariantUpdate::Cell(_) => ChipKind::CELLULAR,
+            ChipVariantUpdate::CellularData(_) => ChipKind::CELLULAR_DATA,
+            ChipVariantUpdate::Ethernet(_) => ChipKind::ETHERNET,
         }
     }
 
@@ -396,6 +409,15 @@ impl ChipVariantUpdate {
             }
             (ChipVariantUpdate::Uwb(update), ChipVariant::Uwb(uwb)) => {
                 update.apply(uwb);
+            }
+            (ChipVariantUpdate::Cell(update), ChipVariant::Cell(cell)) => {
+                update.apply(cell);
+            }
+            (ChipVariantUpdate::CellularData(update), ChipVariant::CellularData(cellular_data)) => {
+                update.apply(cellular_data);
+            }
+            (ChipVariantUpdate::Ethernet(update), ChipVariant::Ethernet(ethernet)) => {
+                update.apply(ethernet);
             }
             (u, v) => {
                 tracing::warn!("ChipVariantUpdate mismatch with ChipVariant: {:?} vs {:?}", u, v);

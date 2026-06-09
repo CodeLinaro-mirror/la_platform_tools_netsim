@@ -12,10 +12,18 @@ pub struct CellCreate {
 }
 
 /// Cellular technology specific chip information.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cell {
+    #[serde(flatten)]
+    pub radio: crate::chip::Radio,
     /// A string representing the current state of the cellular modem.
     pub state: String,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self { radio: crate::chip::Radio::default(), state: "idle".to_string() }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -42,4 +50,21 @@ pub enum ModemAction {
     IncomingPdu { id: ChipId, pdu: String },
     UpdatePhysicalChannelConfigs { id: ChipId },
     UpdateNetworkTime { id: ChipId, time: String },
+}
+
+/// Cellular specific chip updates.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CellUpdate {
+    #[serde(flatten)]
+    pub radio: crate::chip::RadioUpdate,
+    pub state: Option<String>,
+}
+
+impl CellUpdate {
+    pub fn apply(&self, cell: &mut Cell) {
+        self.radio.apply(&mut cell.radio);
+        if let Some(state) = &self.state {
+            cell.state = state.clone();
+        }
+    }
 }

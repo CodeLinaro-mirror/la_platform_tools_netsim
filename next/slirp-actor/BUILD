@@ -10,9 +10,7 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "slirp_actor",
     edition = "2024",
-    test_deps = [
-        "@futures",
-    ],
+    test_deps = [],
     deps = [
         "//next/actor-framework",
         "//next/http-proxy",
@@ -20,6 +18,7 @@ netsim_rust_library(
         "//next/model",
         "//next/packets",
         "@bytes",
+        "@futures",
         "@thiserror",
         "@tokio",
         "@tokio-stream",

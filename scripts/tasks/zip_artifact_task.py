@@ -10,7 +10,7 @@ import platform
 import zipfile
 
 from tasks.task import Task
-from utils import AOSP_ROOT, platform_to_cmake_target
+from utils import AOSP_ROOT, platform_to_target_name
 
 
 class ZipArtifactTask(Task):
@@ -19,10 +19,7 @@ class ZipArtifactTask(Task):
     super().__init__("ZipArtifact")
     self.build_id = args.build_id
     self.out = Path(args.out_dir)
-    if args.target:
-      self.target = args.target.lower()
-    else:
-      self.target = platform.system().lower()
+    self.target = args.target or platform.system()
     self.dist = Path(args.dist_dir).absolute()
 
   def do_run(self):
@@ -32,7 +29,7 @@ class ZipArtifactTask(Task):
     # Zip results..
     zip_fname = (
         self.dist
-        / f"netsim-{platform_to_cmake_target(self.target)}-{self.build_id}.zip"
+        / f"netsim-{platform_to_target_name(self.target)}-{self.build_id}.zip"
     )
     search_dir = self.out / "distribution" / "emulator"
     if not search_dir.is_dir():

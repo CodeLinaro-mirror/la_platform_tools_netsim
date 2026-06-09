@@ -19,6 +19,7 @@ netsim_rust_library(
         "//next/model",
         "//next/slirp-actor",
         "@tokio",
+        "@tokio-stream",
         "@tracing",
     ],
 )

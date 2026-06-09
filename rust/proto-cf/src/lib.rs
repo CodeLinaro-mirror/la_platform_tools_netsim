@@ -10,6 +10,8 @@ pub mod access_point;
 pub mod access_point_grpc;
 pub mod ble_service;
 pub mod ble_service_grpc;
+pub mod cell;
+pub mod cell_grpc;
 pub mod common;
 pub mod config;
 pub mod configuration;

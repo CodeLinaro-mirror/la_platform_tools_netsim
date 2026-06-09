@@ -48,7 +48,7 @@ impl ActorService for EthernetActor {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        _ctx: &mut DynContext<Self>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.ok_or_else(|| EthernetError::Internal("missing chip id".into()))?;
         let chip_kind = params.chip.kind;
@@ -63,9 +63,27 @@ impl ActorService for EthernetActor {
             _ => return Err(EthernetError::InvalidChipKind),
         }
 
+        let packet_stream = params.packet_stream;
+        let packet_sink = params.packet_sink;
         let mut chip = params.chip;
         chip.id = id.0;
         self.active_chips.insert(id, chip);
+
+        if let (Some(stream), Some(sink)) = (packet_stream, packet_sink) {
+            let (notifier_tx, notifier_rx) =
+                tokio::sync::mpsc::unbounded_channel::<netsim_model::ChipId>();
+
+            if let Err(e) =
+                self.slirp_client.register(id.0, Box::pin(stream), sink, Some(notifier_tx)).await
+            {
+                tracing::warn!("EthernetActor: Failed to register with SlirpActor: {}", e);
+            }
+
+            ctx.add_typed_stream(
+                id.0 as usize,
+                Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(notifier_rx)),
+            );
+        }
 
         Ok(id)
     }
@@ -98,6 +116,7 @@ impl ActorService for EthernetActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         if let Some(chip) = self.active_chips.remove(&id) {
+            let _ = self.slirp_client.unregister(id.0).await;
             let dc = self.device_client.clone();
             let device_id = chip.device_id;
             tokio::spawn(async move {

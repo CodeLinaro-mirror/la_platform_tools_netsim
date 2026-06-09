@@ -166,7 +166,13 @@ impl GatewayTrait for SlirpGateway {
                 // Register with SlirpActor
                 let stream =
                     Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(uplink_rx));
-                if let Err(e) = client.register(SLIRP_ID.0, stream, downlink_tx, None).await {
+                let sink: netsim_model::PacketSink =
+                    Box::pin(futures::sink::unfold(downlink_tx, |tx, bytes| async move {
+                        let _ = tx.send(bytes);
+                        Ok(tx)
+                    }));
+
+                if let Err(e) = client.register(SLIRP_ID.0, stream, sink, None).await {
                     warn!("Failed to register with SlirpActor: {}", e);
                 }
 

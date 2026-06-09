@@ -227,8 +227,8 @@ pub use netlink::{
 };
 pub use packet::frame::{IpPacket, LlcPacket, Packet, TransportPacket, parse};
 pub use pcap::{
-    create_bredr_bb_packet, create_le_ll_packet, ng::InterfaceDescriptionBlock,
-    radiotap::create_radiotap_packet,
+    PcapHeader, PcapRecordHeader, create_bredr_bb_packet, create_le_ll_packet,
+    ng::InterfaceDescriptionBlock, radiotap::create_radiotap_packet,
 };
 // Additional types needed by tests or external consumers
 pub use transport::tcp::TcpHeader;

@@ -9,6 +9,7 @@ edition = "2024"
 [dependencies]
 async-trait = "0.1"
 bytes = "1.0"
+cell-actor = { path = "../cell-actor" }
 device-actor = { path = "../device-actor" }
 device-api = { path = "../device-api" }
 futures = "0.3"

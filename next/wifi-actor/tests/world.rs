@@ -38,6 +38,7 @@ pub struct World {
     pub device_action_rx: mpsc::UnboundedReceiver<DeviceAction>,
     pub baseline_stats: Option<netsim_proto::stats::WifiStats>,
     pub mock_clock: std::sync::Arc<wifi_actor::MockClock>,
+    pub shared_keys: std::sync::Arc<ap_actor::SharedKeyStore>,
 }
 
 impl World {
@@ -160,6 +161,7 @@ impl World {
             device_action_rx: device_rx,
             baseline_stats: None,
             mock_clock,
+            shared_keys,
         }
     }
 

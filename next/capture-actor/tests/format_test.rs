@@ -1,6 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use capture_actor::{DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO};
 use netsim_model::ChipKind;
 
 use crate::world::World;
@@ -25,6 +26,9 @@ async fn test_uwb_capture() {
 
     // Then: the capture info reflects the written packet
     world.then_capture_stats_are(chip_id, 1, 4).await;
+
+    // And: the PCAP file header has correct UWB DLT
+    world.then_capture_file_has_dlt(DLT_FIRA_UCI).await;
 }
 
 // Scenario: Wi-Fi packet handles Hwsim formatting
@@ -47,7 +51,54 @@ async fn test_wifi_capture() {
         // Then: it is discarded during parsing, resulting in 0 records
         world.then_capture_stats_are(chip_id, 0, 0).await;
 
+        // And: the PCAP file header has correct Wi-Fi DLT
+        world.then_capture_file_has_dlt(DLT_IEEE802_11_RADIO).await;
+
         // Cleanup for next iteration
         world.when_delete_capture(chip_id).await.unwrap();
     }
+}
+
+// Scenario: Ethernet packet is captured correctly
+#[tokio::test]
+async fn test_ethernet_capture() {
+    let world = World::new().await;
+    let chip_id = 6;
+
+    // Given: an enabled Ethernet capture
+    world
+        .when_create_capture(chip_id, ChipKind::ETHERNET, "test_ethernet_device", true)
+        .await
+        .unwrap();
+
+    // When: a dummy packet is sent
+    world.when_dummy_packet_is_sent(chip_id).await;
+
+    // Then: the capture info reflects the written packet
+    world.then_capture_stats_are(chip_id, 1, 4).await;
+
+    // And: the PCAP file header has correct Ethernet DLT
+    world.then_capture_file_has_dlt(DLT_ETHERNET).await;
+}
+
+// Scenario: Cellular Data packet is captured correctly (as Ethernet)
+#[tokio::test]
+async fn test_cellular_data_capture() {
+    let world = World::new().await;
+    let chip_id = 7;
+
+    // Given: an enabled Cellular Data capture
+    world
+        .when_create_capture(chip_id, ChipKind::CELLULAR_DATA, "test_cellular_data_device", true)
+        .await
+        .unwrap();
+
+    // When: a dummy packet is sent
+    world.when_dummy_packet_is_sent(chip_id).await;
+
+    // Then: the capture info reflects the written packet
+    world.then_capture_stats_are(chip_id, 1, 4).await;
+
+    // And: the PCAP file header has correct Ethernet DLT
+    world.then_capture_file_has_dlt(DLT_ETHERNET).await;
 }

@@ -1,13 +1,12 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
-
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, exit};
-
 fn main() {
     // Entry point for build_proto
+
     let args: Vec<String> = env::args().collect();
     let mut protoc = String::new();
     let mut plugin = String::new();
@@ -144,6 +143,7 @@ pub mod netsim {
   pub mod config;
   pub mod access_point;
   pub mod ble_service;
+  pub mod cell;
   pub mod frontend;
   pub mod hci_packet;
   pub mod model;
@@ -169,6 +169,7 @@ pub use netsim::common;
 pub use netsim::config;
 pub use netsim::access_point;
 pub use netsim::ble_service;
+pub use netsim::cell;
 pub use netsim::frontend;
 pub use netsim::hci_packet;
 pub use netsim::model;
@@ -184,6 +185,9 @@ pub mod packet_streamer_grpc;
 pub mod access_point_grpc;
 #[path = "netsim/ble_service_grpc.rs"]
 pub mod ble_service_grpc;
+#[path = "netsim/cell_grpc.rs"]
+pub mod cell_grpc;
+
 pub use protobuf;
 pub use protobuf::well_known_types::empty;
 "#;

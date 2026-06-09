@@ -19,20 +19,9 @@ from utils import (
     get_bazel_startup_options,
     get_bazel_targets,
     run,
-    rust_version,
 )
 
 PLATFORM_SYSTEM = platform.system()
-ALL_PACKAGES = [
-    "hostapd-rs",
-    "libslirp-rs",
-    "http-proxy",
-    "netsim-cli",
-    "netsim-common",
-    "netsim-daemon",
-    "netsim-packets",
-    "capture",
-]
 
 
 class TestTask(Task):
@@ -42,95 +31,31 @@ class TestTask(Task):
     self.args = args
     self.buildbot = args.buildbot
     self.out = Path(args.out_dir)
-    self.crate = args.crate
     self.env = env
 
   def do_run(self):
-    if not self.args.cmake:
-      # Bazel Test
-      bazel = get_bazel_path()
-      build_configs = get_bazel_build_configs(self.args, self.env)
-      startup_options = get_bazel_startup_options()
-      targets = get_bazel_targets(self.args)
+    # Bazel Test
+    bazel = get_bazel_path()
+    build_configs = get_bazel_build_configs(self.args, self.env)
+    startup_options = get_bazel_startup_options()
+    targets = get_bazel_targets(self.args)
 
-      try:
-        run(
-            [bazel]
-            + startup_options
-            + ["test"]
-            + targets
-            + build_configs
-            + ["--test_output=streamed"],
-            self.env,
-            "bazel test",
-            AOSP_ROOT,
-        )
-      except Exception as e:
-        if self.buildbot:
-          self._copy_bazel_test_logs()
-        raise e
-      return True
-
-    # TODO(b/379745416): Support clippy for Mac and Windows
-    if PLATFORM_SYSTEM == "Linux":
-
-      def run_clippy(flags):
-        run(
-            [
-                AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_clippy.sh",
-                str(self.out),
-                rust_version(),
-                " ".join(flags),
-            ],
-            self.env,
-            "clippy",
-        )
-
-      # Default Rust lints in Android. Reference: build/soong/rust/config/lints.go
-      default_clippy_flags = [
-          # Default rustc Lints from main build
-          "-A deprecated",
-          "-A unknown_lints",
-          "-D missing-docs",
-          "-D warnings",
-          "-D unsafe_op_in_unsafe_fn",
-          # Default Clippy lints from main build
-          "-A clippy::disallowed_names",
-          "-A clippy::empty_line_after_doc_comments",
-          "-A clippy::type-complexity",
-          # TODO: Enable once prebuilt clippy is updated to 1.75.0+
-          # "-A clippy::unnecessary_fallible_conversions",
-          "-A clippy::unnecessary-wraps",
-          "-A clippy::unusual-byte-groupings",
-          "-A clippy::upper-case-acronyms",
-          "-D clippy::undocumented_unsafe_blocks",
-      ]
-      # Additional lints for our project.
-      additional_clippy_flags = [
-          "-W clippy::cognitive-complexity",
-      ]
-      # Run cargo clippy with default flags
-      run_clippy(default_clippy_flags)
-      # Run cargo clippy with additional flags
-      run_clippy(additional_clippy_flags)
-
-    # Set script for cargo Test
-    if PLATFORM_SYSTEM == "Windows":
-      script = AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_test.cmd"
-    else:
-      script = AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_test.sh"
-
-    # Run cargo Test
-    packages = self.crate if self.crate else ALL_PACKAGES
-    for package in packages:
-      # TODO(b/379708365): Resolve netsim-daemon test for Mac & Windows
-      if (
-          package in ["netsim-daemon", "netsim-cli"]
-          and PLATFORM_SYSTEM != "Linux"
-      ):
-        continue
-      cmd = [script, package, str(self.out), rust_version()]
-      run(cmd, self.env, f"{package}_unit_tests")
+    try:
+      run(
+          [bazel]
+          + startup_options
+          + ["test"]
+          + targets
+          + build_configs
+          + ["--test_output=streamed"],
+          self.env,
+          "bazel test",
+          AOSP_ROOT,
+      )
+    except Exception as e:
+      if self.buildbot:
+        self._copy_bazel_test_logs()
+      raise e
     return True
 
   def _copy_bazel_test_logs(self):

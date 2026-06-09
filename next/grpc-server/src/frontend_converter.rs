@@ -76,8 +76,18 @@ pub fn to_proto_chip(c: netsim_model::Chip) -> ProtoChip {
             netsim_model::ChipVariant::Uwb(uwb) => {
                 chip.chip = Some(netsim_proto::model::chip::Chip::Uwb(to_proto_radio(&uwb.radio)));
             }
-            netsim_model::ChipVariant::Cell(_) => {
-                // TODO: Add Cell support to proto if available
+            netsim_model::ChipVariant::Cell(cell) => {
+                chip.chip =
+                    Some(netsim_proto::model::chip::Chip::Cellular(to_proto_radio(&cell.radio)));
+            }
+            netsim_model::ChipVariant::CellularData(cell_data) => {
+                chip.chip = Some(netsim_proto::model::chip::Chip::CellularData(to_proto_radio(
+                    &cell_data.radio,
+                )));
+            }
+            netsim_model::ChipVariant::Ethernet(eth) => {
+                chip.chip =
+                    Some(netsim_proto::model::chip::Chip::Ethernet(to_proto_radio(&eth.radio)));
             }
         }
     }
@@ -259,6 +269,27 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
             netsim_proto::model::chip::Chip::Wifi(wifi) => {
                 Some(ChipVariantUpdate::Wifi(netsim_model::WifiUpdate {
                     radio: from_proto_radio_update(Some(wifi)),
+                }))
+            }
+            netsim_proto::model::chip::Chip::Cellular(cell) => {
+                let state = if cell.state.unwrap_or(true) {
+                    "idle".to_string()
+                } else {
+                    "down".to_string()
+                };
+                Some(ChipVariantUpdate::Cell(netsim_model::CellUpdate {
+                    radio: from_proto_radio_update(Some(cell)),
+                    state: Some(state),
+                }))
+            }
+            netsim_proto::model::chip::Chip::CellularData(cell_data) => {
+                Some(ChipVariantUpdate::CellularData(netsim_model::CellularDataUpdate {
+                    radio: from_proto_radio_update(Some(cell_data)),
+                }))
+            }
+            netsim_proto::model::chip::Chip::Ethernet(eth) => {
+                Some(ChipVariantUpdate::Ethernet(netsim_model::EthernetUpdate {
+                    radio: from_proto_radio_update(Some(eth)),
                 }))
             }
             _ => None,
