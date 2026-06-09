@@ -57,6 +57,7 @@ message NetsimFrontendStats {
   optional uint32 patch_capture = 8;
   optional uint32 list_capture = 9;
   optional uint32 get_capture = 10;
+  optional uint32 delete_device = 11;
 }
 
 // Detailed stats of a device
