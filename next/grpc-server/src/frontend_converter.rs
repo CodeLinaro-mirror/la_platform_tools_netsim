@@ -261,6 +261,7 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
                 Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate {
                     classic: from_proto_radio_update(bt.classic.into_option()),
                     low_energy: from_proto_radio_update(bt.low_energy.into_option()),
+                    preset: None,
                 }))
             }
             netsim_proto::model::chip::Chip::BleBeacon(_) => None, // TODO

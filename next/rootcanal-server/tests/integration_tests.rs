@@ -204,6 +204,29 @@ impl RootcanalWorld {
         }
     }
 
+    /// Asserts whether the Bluetooth chip's preset matches the expected value
+    async fn then_bluetooth_preset_is(&mut self, device_id: u32, expected: Option<&str>) {
+        let device =
+            self.device_client.get(DeviceId(device_id)).await.unwrap().expect("Device missing");
+
+        let bt_chips: Vec<_> =
+            device.chips.iter().filter(|c| c.kind == ChipKind::BLUETOOTH).collect();
+
+        assert!(!bt_chips.is_empty(), "No bluetooth chips found on device {}", device_id);
+        for chip in bt_chips {
+            if let Some(ChipVariant::Bluetooth(bluetooth)) = &chip.variant {
+                assert_eq!(
+                    bluetooth.preset.as_deref(),
+                    expected,
+                    "Bluetooth chip {} preset mismatch: expected {:?}, got {:?}",
+                    chip.id,
+                    expected,
+                    bluetooth.preset.as_deref()
+                );
+            }
+        }
+    }
+
     /// Asserts that a device is fully deleted from the simulation
     fn then_device_is_deleted(&self, id: u32) -> impl std::future::Future<Output = ()> + Send {
         let client = self.device_client.clone();
@@ -498,25 +521,18 @@ async fn test_rootcanal_argument_validation() {
     );
 }
 
-/// Scenario 6: Unsupported and Unknown Commands
+/// Scenario 6: Unknown Commands
 ///   Given a running Netsim Daemon
-///   When the TCP client sends 'set_device_configuration'
-///   Then the server returns "OK" (no-op shim)
 ///   When the TCP client sends an unknown command
 ///   Then the server returns "OK" (fallback shim)
 #[tokio::test]
-async fn test_rootcanal_unsupported_and_unknown_commands() {
+async fn test_rootcanal_unknown_commands() {
     let mut world = RootcanalWorld::new().await;
     world.when_spawn_daemon().await;
 
     let mut client = world.when_connect_client().await;
     client.then_welcome_received().await;
 
-    // 1. Test 'set_device_configuration' (parsed but no-op)
-    let resp = client.send_command("set_device_configuration", &["1", "csr_rck_pts_dongle"]).await;
-    assert_eq!(resp, "OK");
-
-    // 2. Test unknown command
     let resp = client.send_command("completely_unknown_command", &["arg1", "arg2"]).await;
     assert_eq!(resp, "OK");
 }
@@ -699,4 +715,55 @@ async fn test_rootcanal_add_device_no_address() {
     // Verify device exists and is enabled by default
     world.then_bluetooth_le_enabled_is(device_id, true).await;
     world.then_bluetooth_classic_enabled_is(device_id, true).await;
+}
+
+/// Scenario 13: Set Device Configuration
+///   Given a running Netsim Daemon
+///   And a virtual device with a Bluetooth chip is created
+///   When the TCP client sends 'set_device_configuration' with the device ID
+/// and preset   Then the server successfully updates the device configuration
+/// and returns a success message
+#[tokio::test]
+async fn test_rootcanal_set_device_configuration() {
+    let mut world = RootcanalWorld::new().await;
+    world.when_spawn_daemon().await;
+
+    let mut client = world.when_connect_client().await;
+    client.then_welcome_received().await;
+
+    let device_id = client.when_add_device("device", Some("11:22:33:44:55:aa")).await;
+    world.then_bluetooth_preset_is(device_id, None).await;
+
+    let resp = client
+        .send_command("set_device_configuration", &[&device_id.to_string(), "csr_rck_pts_dongle"])
+        .await;
+    assert_eq!(resp, format!("set_device_configuration {} csr_rck_pts_dongle", device_id));
+
+    world.then_bluetooth_preset_is(device_id, Some("csr_rck_pts_dongle")).await;
+}
+
+/// Scenario 14: Set Device Configuration with Invalid Preset
+///   Given a running Netsim Daemon
+///   And a virtual device with a Bluetooth chip is created
+///   When the TCP client sends 'set_device_configuration' with an invalid
+/// preset   Then the server returns an error message
+///   And the device's configuration preset remains None in the registry
+#[tokio::test]
+async fn test_rootcanal_set_device_configuration_invalid_preset() {
+    let mut world = RootcanalWorld::new().await;
+    world.when_spawn_daemon().await;
+
+    let mut client = world.when_connect_client().await;
+    client.then_welcome_received().await;
+
+    let device_id = client.when_add_device("device", Some("11:22:33:44:55:aa")).await;
+    world.then_bluetooth_preset_is(device_id, None).await;
+
+    let resp = client
+        .send_command("set_device_configuration", &[&device_id.to_string(), "invalid_preset_name"])
+        .await;
+
+    assert!(resp.starts_with("Failed to update device configuration"));
+
+    world.then_bluetooth_preset_is(device_id, None).await;
 }

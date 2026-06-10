@@ -727,6 +727,7 @@ impl World {
             variant: Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate {
                 low_energy: RadioUpdate { state: le_state },
                 classic: RadioUpdate { state: classic_state },
+                ..Default::default()
             })),
             ..Default::default()
         }

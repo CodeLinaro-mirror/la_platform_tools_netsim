@@ -10,15 +10,17 @@ pub type Id = u32;
 use std::{
     ffi::{c_int, c_void},
     sync::{
-        Arc, Mutex, Weak,
+        Arc, Weak,
         atomic::{AtomicU64, Ordering},
     },
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
+use parking_lot::Mutex;
 use tracing::warn;
 
 use crate::{
+    error::{Error, Result},
     ffi,
     types::{Address, Phy},
 };
@@ -170,7 +172,7 @@ impl ControllerImpl {
         // Lock the mutex and store the real controller pointer. This is safe
         // because no other thread can have access to the `controller_impl` yet.
         {
-            let mut controller_guard = controller_impl.controller.lock().unwrap();
+            let mut controller_guard = controller_impl.controller.lock();
             *controller_guard = FfiController(controller_ptr);
         }
 
@@ -180,7 +182,7 @@ impl ControllerImpl {
     /// Receives an HCI packet from the host.
     pub(crate) fn receive_hci(&self, data: Bytes) {
         self.hci_commands_in.fetch_add(1, Ordering::Relaxed);
-        let controller = self.controller.lock().unwrap();
+        let controller = self.controller.lock();
         let idc = data[0] as c_int;
         let data: &[u8] = &data[1..];
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
@@ -207,7 +209,7 @@ impl ControllerImpl {
                 self.ll_packets_in_classic.fetch_add(1, Ordering::Relaxed);
             }
         }
-        let controller = self.controller.lock().unwrap();
+        let controller = self.controller.lock();
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
         // as long as `self` exists. `data` is a valid slice, and we provide its
         // length to ensure the C++ side does not read out of bounds.
@@ -222,9 +224,29 @@ impl ControllerImpl {
         };
     }
 
+    /// Reconfigures the controller with new properties.
+    pub(crate) fn set_properties(&self, properties: &[u8]) -> Result<()> {
+        let controller = self.controller.lock();
+
+        // Defensively handle empty slices to avoid passing dangling pointers to FFI
+        let (ptr, len) = if properties.is_empty() {
+            (std::ptr::null(), 0)
+        } else {
+            (properties.as_ptr(), properties.len())
+        };
+
+        // SAFETY: The `controller.0` pointer is guaranteed to be valid.
+        // `ptr` is either null (with len 0) or points to a valid slice of bytes.
+        // The C++ function parses the properties synchronously and does not retain the
+        // pointer.
+        let success =
+            unsafe { ffi::ffi_controller_set_properties(controller.0, ptr, len as ffi::size_t) };
+        if success { Ok(()) } else { Err(Error::SetPropertiesFailed) }
+    }
+
     /// Advances the controller's state by one tick.
     pub(crate) fn tick(&self) {
-        let controller = self.controller.lock().unwrap();
+        let controller = self.controller.lock();
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
         // as long as `self` exists, as its lifetime is tied to the `ControllerImpl`.
         unsafe { ffi::ffi_controller_tick(controller.0) };
@@ -278,7 +300,7 @@ impl ControllerImpl {
 
 impl Drop for ControllerImpl {
     fn drop(&mut self) {
-        let controller = self.controller.lock().unwrap();
+        let controller = self.controller.lock();
         // SAFETY: This is called when the last `Arc<ControllerImpl>` is dropped,
         // ensuring the C++ object is deleted exactly once. The `controller.0`
         // pointer is valid at this point.

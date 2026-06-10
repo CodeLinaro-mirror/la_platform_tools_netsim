@@ -92,8 +92,6 @@ enum Command {
         device_id: u32,
     },
     Reset,
-    // TODO(b/522322253): Implement this variant via C++ FFI
-    #[allow(dead_code)]
     SetDeviceConfiguration {
         device_id: u32,
         preset: String,
@@ -247,9 +245,8 @@ async fn handle_client(mut stream: TcpStream, device_client: DeviceClient) -> io
                 handle_del(&device_client, device_id).await.map(Some)
             }
             Command::Reset => handle_reset(&device_client).await.map(|_| None),
-            Command::SetDeviceConfiguration { .. } => {
-                // TODO(b/522322253): Implement dynamic controller reconfiguration via C++ FFI
-                Ok(None)
+            Command::SetDeviceConfiguration { device_id, preset } => {
+                handle_set_device_configuration(&device_client, device_id, &preset).await.map(Some)
             }
             Command::Unknown { name } => {
                 warn!("Unknown Rootcanal command received: {name}");
@@ -442,4 +439,47 @@ async fn handle_add(
         device_client.add_chip(add_chip_params).await.map_err(|e| format!("Add failed: {e}"))?;
 
     Ok(format!("{}:hci_device_{}", device_id.0, device_id.0))
+}
+
+/// Handles the 'set_device_configuration' command.
+async fn handle_set_device_configuration(
+    device_client: &DeviceClient,
+    device_id: u32,
+    preset: &str,
+) -> Result<String, String> {
+    let device_id_typed = DeviceId(device_id);
+    let device = device_client
+        .get(device_id_typed)
+        .await
+        .map_err(|e| format!("Failed to get device: {e}"))?
+        .ok_or_else(|| format!("Device {device_id} not found"))?;
+
+    let bluetooth_chips: Vec<_> =
+        device.chips.iter().filter(|chip| chip.kind == ChipKind::BLUETOOTH).collect();
+
+    if bluetooth_chips.is_empty() {
+        return Err(format!("Device {device_id} has no Bluetooth chip"));
+    }
+
+    let chip_updates: Vec<ChipUpdate> = bluetooth_chips
+        .iter()
+        .map(|chip| ChipUpdate {
+            id: Some(chip.id.into()),
+            variant: Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate {
+                preset: Some(preset.to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+        .collect();
+
+    let device_update =
+        DeviceUpdate { id: device_id, chips: Some(chip_updates), ..Default::default() };
+
+    device_client
+        .update(device_id_typed, device_update)
+        .await
+        .map_err(|e| format!("Failed to update device configuration: {e}"))?;
+
+    Ok(format!("set_device_configuration {device_id} {preset}"))
 }

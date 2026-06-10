@@ -39,6 +39,10 @@ pub enum Error {
     #[error("malformed LE features: {0}")]
     MalformedLeFeatures(String),
 
+    /// Failed to set controller properties.
+    #[error("failed to set controller properties")]
+    SetPropertiesFailed,
+
     /// An error parsing an integer.
     #[error(transparent)]
     ParseIntError(#[from] ParseIntError),
