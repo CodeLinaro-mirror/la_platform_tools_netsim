@@ -399,3 +399,29 @@ fn test_invalid_dial_syntax() {
     when_at_command_sent(&mut world, "A", "ATD+12345;");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_dtmf_validation() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Valid DTMFs
+    when_at_command_sent(&mut world, "A", "AT+VTS=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=*");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=A,10");
+    then_response_is(&mut world, "A", "OK");
+
+    // Invalid DTMFs
+    when_at_command_sent(&mut world, "A", "AT+VTS=X");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=12");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=1,A");
+    then_response_is(&mut world, "A", "ERROR");
+}
