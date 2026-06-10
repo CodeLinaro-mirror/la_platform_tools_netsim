@@ -84,8 +84,10 @@ NetsimDepInfo = provider(
     fields = {
         "crate_name": "Crate name",
         "rlib": "The .rlib file",
+        "direct_externs": "Depset of direct crate_name=path strings",
         "transitive_rlibs": "Depset of transitive .rlib files",
         "transitive_externs": "Depset of transitive crate_name=path strings",
+        "compile_data": "Depset of compile_data files",
     },
 )
 
@@ -113,12 +115,16 @@ def _netsim_dep_aspect_impl(target, ctx):
 
     trans_rlibs = []
     trans_externs = []
+    direct_externs_list = []
 
     if hasattr(ctx.rule.attr, "deps"):
         for d in ctx.rule.attr.deps:
             if NetsimDepInfo in d:
                 trans_rlibs.append(d[NetsimDepInfo].transitive_rlibs)
                 trans_externs.append(d[NetsimDepInfo].transitive_externs)
+                dep_info = d[NetsimDepInfo]
+                if dep_info.crate_name and dep_info.rlib:
+                    direct_externs_list.append("%s=%s" % (dep_info.crate_name, dep_info.rlib.path))
 
     # Proc-macros are built for the host (execution) platform.
     # We still need to pass them to clippy via --extern so it can expand macros.
@@ -130,12 +136,22 @@ def _netsim_dep_aspect_impl(target, ctx):
                 if lib and name:
                     direct_rlibs.append(lib)
                     direct_externs.append("%s=%s" % (name, lib.path))
+                dep_info = d[NetsimDepInfo]
+                if dep_info.crate_name and dep_info.rlib:
+                    direct_externs_list.append("%s=%s" % (dep_info.crate_name, dep_info.rlib.path))
+
+    compile_data_list = []
+    if hasattr(ctx.rule.attr, "compile_data"):
+        for f in ctx.rule.attr.compile_data:
+            compile_data_list.extend(f[DefaultInfo].files.to_list())
 
     return [NetsimDepInfo(
         crate_name = crate_name,
         rlib = lib_file,
+        direct_externs = depset(direct_externs_list),
         transitive_rlibs = depset(direct_rlibs, transitive = trans_rlibs),
         transitive_externs = depset(direct_externs, transitive = trans_externs),
+        compile_data = depset(compile_data_list),
     )]
 
 netsim_dep_aspect = aspect(
@@ -203,14 +219,19 @@ def _netsim_clippy_test_impl(ctx):
         info = t[rust_common.crate_info]
         edition = info.edition
         root_file = info.root
-        srcs = [s for s in info.srcs.to_list() if s.is_source]
+        segments = root_file.short_path.split("/")
+        if len(segments) > 0 and segments[0] == "..":
+            segments = segments[2:]
+        depth = len(segments) - 1
+        target_out_dir = "/".join([".."] * depth) if depth > 0 else "."
+        srcs = info.srcs.to_list()
 
         # Collect dependencies for THIS target t!
         t_rlibs = []
         t_externs = []
         if NetsimDepInfo in t:
             t_rlibs = t[NetsimDepInfo].transitive_rlibs.to_list()
-            t_externs = t[NetsimDepInfo].transitive_externs.to_list()
+            t_externs = t[NetsimDepInfo].direct_externs.to_list()
 
         lib_dirs = {}
         for rlib in t_rlibs:
@@ -227,8 +248,8 @@ def _netsim_clippy_test_impl(ctx):
         target_names.append(t.label.name)
 
         compile_data = []
-        if hasattr(info, "compile_data"):
-            compile_data = info.compile_data.to_list()
+        if NetsimDepInfo in t:
+            compile_data = t[NetsimDepInfo].compile_data.to_list()
 
         t_args = ctx.actions.args()
         t_args.use_param_file("@%s", use_always = True)
@@ -269,6 +290,7 @@ def _netsim_clippy_test_impl(ctx):
             arguments = [clippy_driver_path, log_file.path, status_file.path, success_file.path, t_args],
             env = {
                 "CARGO_MANIFEST_DIR": (ctx.label.workspace_root + "/" + ctx.label.package) if ctx.label.workspace_root else ctx.label.package,
+                "OUT_DIR": target_out_dir,
             },
             mnemonic = "NetsimClippy",
             progress_message = "Running Netsim Clippy on %s target %d" % (ctx.label.name, idx),

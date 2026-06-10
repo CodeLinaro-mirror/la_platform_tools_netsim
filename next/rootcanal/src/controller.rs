@@ -68,6 +68,10 @@ pub(crate) struct ControllerImpl {
     ll_packets_in_classic: AtomicU64,
     ll_packets_out_ble: AtomicU64,
     ll_packets_out_classic: AtomicU64,
+    ble_p2p_tx_count: AtomicU64,
+    ble_p2p_rx_count: AtomicU64,
+    classic_p2p_tx_count: AtomicU64,
+    classic_p2p_rx_count: AtomicU64,
 }
 
 /// A Bluetooth controller.
@@ -96,6 +100,14 @@ pub struct Stats {
     pub ll_packets_out_ble: u64,
     /// The number of Classic link layer packets sent.
     pub ll_packets_out_classic: u64,
+    /// The number of payload-bearing BLE P2P packets sent over the air.
+    pub ble_p2p_tx_count: u64,
+    /// The number of payload-bearing BLE P2P packets received over the air.
+    pub ble_p2p_rx_count: u64,
+    /// The number of payload-bearing Classic P2P packets sent over the air.
+    pub classic_p2p_tx_count: u64,
+    /// The number of payload-bearing Classic P2P packets received over the air.
+    pub classic_p2p_rx_count: u64,
 }
 
 // The context that is passed to the C++ code.
@@ -138,6 +150,10 @@ impl ControllerImpl {
             ll_packets_in_classic: AtomicU64::new(0),
             ll_packets_out_ble: AtomicU64::new(0),
             ll_packets_out_classic: AtomicU64::new(0),
+            ble_p2p_tx_count: AtomicU64::new(0),
+            ble_p2p_rx_count: AtomicU64::new(0),
+            classic_p2p_tx_count: AtomicU64::new(0),
+            classic_p2p_rx_count: AtomicU64::new(0),
         });
 
         // Create the context for the C++ side, using a Weak pointer to avoid cycles.
@@ -201,12 +217,19 @@ impl ControllerImpl {
     /// Receives a link layer packet from a peer.
     pub(crate) fn receive_ll(&self, data: &[u8], phy: Phy, rssi: i32) {
         self.ll_packets_in.fetch_add(1, Ordering::Relaxed);
+        let is_p2p = netsim_packets::link_layer::fast_inspect_p2p_payload(data);
         match phy {
             Phy::LowEnergy => {
                 self.ll_packets_in_ble.fetch_add(1, Ordering::Relaxed);
+                if is_p2p {
+                    self.ble_p2p_rx_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
             _ => {
                 self.ll_packets_in_classic.fetch_add(1, Ordering::Relaxed);
+                if is_p2p {
+                    self.classic_p2p_rx_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
         let controller = self.controller.lock();
@@ -275,6 +298,10 @@ impl ControllerImpl {
             ll_packets_in_classic: self.ll_packets_in_classic.load(Ordering::Relaxed),
             ll_packets_out_ble: self.ll_packets_out_ble.load(Ordering::Relaxed),
             ll_packets_out_classic: self.ll_packets_out_classic.load(Ordering::Relaxed),
+            ble_p2p_tx_count: self.ble_p2p_tx_count.load(Ordering::Relaxed),
+            ble_p2p_rx_count: self.ble_p2p_rx_count.load(Ordering::Relaxed),
+            classic_p2p_tx_count: self.classic_p2p_tx_count.load(Ordering::Relaxed),
+            classic_p2p_rx_count: self.classic_p2p_rx_count.load(Ordering::Relaxed),
         }
     }
 
@@ -295,6 +322,10 @@ impl ControllerImpl {
         self.ll_packets_in_classic.store(0, Ordering::Relaxed);
         self.ll_packets_out_ble.store(0, Ordering::Relaxed);
         self.ll_packets_out_classic.store(0, Ordering::Relaxed);
+        self.ble_p2p_tx_count.store(0, Ordering::Relaxed);
+        self.ble_p2p_rx_count.store(0, Ordering::Relaxed);
+        self.classic_p2p_tx_count.store(0, Ordering::Relaxed);
+        self.classic_p2p_rx_count.store(0, Ordering::Relaxed);
     }
 }
 
@@ -385,12 +416,19 @@ extern "C" fn send_ll_trampoline(
         // least `data_len` bytes that is valid for the duration of this call.
         let data_slice = unsafe { std::slice::from_raw_parts(data, data_len as ffi::size_t) };
         controller.ll_packets_out.fetch_add(1, Ordering::Relaxed);
+        let is_p2p = netsim_packets::link_layer::fast_inspect_p2p_payload(data_slice);
         match Phy::from(phy) {
             Phy::LowEnergy => {
                 controller.ll_packets_out_ble.fetch_add(1, Ordering::Relaxed);
+                if is_p2p {
+                    controller.ble_p2p_tx_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
             _ => {
                 controller.ll_packets_out_classic.fetch_add(1, Ordering::Relaxed);
+                if is_p2p {
+                    controller.classic_p2p_tx_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
         // rootcanal request to send ll through bluetooth medium
@@ -406,6 +444,8 @@ extern "C" fn send_ll_trampoline(
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use pdl_runtime::Packet;
 
     use super::*;
     use crate::controller::Id as ControllerId;
@@ -493,5 +533,60 @@ mod tests {
         assert_eq!(controller.get_stats().ll_packets_in, 0);
         controller.receive_ll(&[1, 2, 3], Phy::LowEnergy, -80);
         assert_eq!(controller.get_stats().ll_packets_in, 1);
+    }
+
+    #[test]
+    fn test_receive_ll_p2p_counter() {
+        let address = Address::from_str("01:02:03:04:05:06").unwrap();
+        let controller = ControllerImpl::new(
+            1,
+            address,
+            Box::new(MockControllerCallbacks),
+            Box::new(MockBtOps),
+            None,
+        );
+
+        use netsim_packets::link_layer::{Acl, Address as LlAddress};
+
+        let src = LlAddress::try_from(1).unwrap();
+        let dest = LlAddress::try_from(2).unwrap();
+
+        assert_eq!(controller.get_stats().ble_p2p_rx_count, 0);
+        assert_eq!(controller.get_stats().classic_p2p_rx_count, 0);
+
+        // Payload-bearing empty PDU (ACL empty)
+        let acl_empty = Acl {
+            source_address: src,
+            destination_address: dest,
+            packet_boundary_flag: 0,
+            broadcast_flag: 0,
+            data: vec![].into(),
+        };
+        let mut acl_empty_bytes = Vec::new();
+        acl_empty.encode(&mut acl_empty_bytes).unwrap();
+
+        controller.receive_ll(&acl_empty_bytes, Phy::LowEnergy, -80);
+        assert_eq!(controller.get_stats().ble_p2p_rx_count, 0);
+        assert_eq!(controller.get_stats().classic_p2p_rx_count, 0);
+
+        // Payload-bearing PDU (ACL payload) - BLE
+        let acl_payload = Acl {
+            source_address: src,
+            destination_address: dest,
+            packet_boundary_flag: 0,
+            broadcast_flag: 0,
+            data: vec![1, 2, 3].into(),
+        };
+        let mut acl_payload_bytes = Vec::new();
+        acl_payload.encode(&mut acl_payload_bytes).unwrap();
+
+        controller.receive_ll(&acl_payload_bytes, Phy::LowEnergy, -80);
+        assert_eq!(controller.get_stats().ble_p2p_rx_count, 1);
+        assert_eq!(controller.get_stats().classic_p2p_rx_count, 0);
+
+        // Payload-bearing PDU (ACL payload) - Classic
+        controller.receive_ll(&acl_payload_bytes, Phy::BrEdr, -80);
+        assert_eq!(controller.get_stats().ble_p2p_rx_count, 1);
+        assert_eq!(controller.get_stats().classic_p2p_rx_count, 1);
     }
 }
