@@ -295,7 +295,7 @@ impl ModemImpl {
     }
 
     pub fn is_ringing(&self) -> bool {
-        self.call_service.is_alerting()
+        self.call_service.is_incoming() || self.call_service.is_alerting()
     }
 
     pub fn get_active_calls(&self) -> Vec<String> {
