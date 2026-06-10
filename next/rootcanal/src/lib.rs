@@ -72,7 +72,7 @@ mod tests {
     // controller is added and subsequently removed.
     #[test]
     fn test_create_and_delete_controller() {
-        let rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks));
+        let rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks), false);
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
         let id = 1;
         rootcanal.new_controller(id, address, Box::new(MockControllerCallbacks), None).unwrap();

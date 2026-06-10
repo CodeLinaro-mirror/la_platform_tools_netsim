@@ -43,6 +43,7 @@ pub trait Callbacks: Send + Sync {
 pub struct Rootcanal {
     controllers: Mutex<HashMap<ControllerId, Controller>>,
     callbacks: Box<dyn Callbacks>,
+    disable_address_reuse: bool,
 }
 
 // A wrapper around the Bluetooth ops that a controller uses.  It
@@ -72,8 +73,8 @@ impl BtOps for BtOpsWrapper {
 
 impl Rootcanal {
     /// Creates a new Bluetooth subsystem.
-    pub fn new(callbacks: Box<dyn Callbacks>) -> Arc<Self> {
-        Arc::new(Self { controllers: Mutex::new(HashMap::new()), callbacks })
+    pub fn new(callbacks: Box<dyn Callbacks>, disable_address_reuse: bool) -> Arc<Self> {
+        Arc::new(Self { controllers: Mutex::new(HashMap::new()), callbacks, disable_address_reuse })
     }
 
     /// Creates a new Bluetooth controller with a unique id and possibly
@@ -88,6 +89,9 @@ impl Rootcanal {
         let mut controllers = self.controllers.lock();
         if controllers.contains_key(&id) {
             return Err(Error::DuplicateControllerId(id));
+        }
+        if self.disable_address_reuse && controllers.values().any(|c| c.get_address() == address) {
+            return Err(Error::AddressInUse(address));
         }
         let bt_ops = Box::new(BtOpsWrapper { bluetooth: Arc::downgrade(self) });
         let controller = ControllerImpl::new(id, address, callbacks, bt_ops, properties);
@@ -297,7 +301,7 @@ mod tests {
     fn test_send_ll_packet() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 2);
 
         // TODO: Send valid link layer packets.
@@ -313,7 +317,7 @@ mod tests {
     fn test_send_ll_packet_dropped() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: true, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 2);
 
         // TODO: Send valid link layer packets.
@@ -329,7 +333,7 @@ mod tests {
     fn test_delete_controller() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 2);
 
         assert_eq!(bluetooth.len(), 2);
@@ -347,7 +351,7 @@ mod tests {
     fn test_delete_controller_invalid_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let result = bluetooth.remove_controller(2);
@@ -362,7 +366,7 @@ mod tests {
     fn test_add_controller_duplicate_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let addr = Address::from_str("01:02:03:04:05:06").unwrap();
@@ -380,7 +384,7 @@ mod tests {
     fn test_receive_hci_invalid_controller() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let result = bluetooth.receive_hci(2, Bytes::from_static(&[1, 1, 2, 3]));
@@ -395,7 +399,7 @@ mod tests {
     fn test_clear_stats() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         // Clear stats for a valid controller.
@@ -414,7 +418,7 @@ mod tests {
     fn test_get_address_invalid_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let result = bluetooth.get_address(2);
@@ -429,13 +433,36 @@ mod tests {
     fn test_get_stats_invalid_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks);
+        let bluetooth = Rootcanal::new(callbacks, false);
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let result = bluetooth.get_stats(2);
         assert!(result.is_err());
         match result.err().unwrap() {
             Error::ControllerNotFound(id) => assert_eq!(id, 2),
+            _ => panic!("unexpected error type"),
+        }
+    }
+
+    #[test]
+    fn test_disable_address_reuse() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        // Create with disable_address_reuse = true
+        let bluetooth = Rootcanal::new(callbacks, true);
+
+        let addr = Address::from_str("01:02:03:04:05:06").unwrap();
+
+        // Adding first controller should succeed
+        assert!(
+            bluetooth.add_controller(1, addr, Box::new(MockControllerCallbacks {}), None).is_ok()
+        );
+
+        // Adding second controller with SAME address should fail
+        let result = bluetooth.add_controller(2, addr, Box::new(MockControllerCallbacks {}), None);
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            Error::AddressInUse(a) => assert_eq!(a, addr),
             _ => panic!("unexpected error type"),
         }
     }

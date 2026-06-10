@@ -30,6 +30,21 @@ impl FromStr for Address {
     }
 }
 
+impl std::fmt::Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            self.address[0],
+            self.address[1],
+            self.address[2],
+            self.address[3],
+            self.address[4],
+            self.address[5]
+        )
+    }
+}
+
 impl Address {
     /// Returns the address as a byte slice.
     pub fn as_bytes(&self) -> &[u8; 6] {

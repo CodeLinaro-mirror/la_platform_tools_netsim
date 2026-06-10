@@ -64,6 +64,10 @@ pub struct Args {
     #[arg(long)]
     pub pcap: bool,
 
+    /// Disable Address Reuse for Bluetooth test model
+    #[arg(long, alias = "disable_address_reuse")]
+    pub disable_address_reuse: bool,
+
     /// Entering Verbose mode
     #[arg(short = 'v', long)]
     pub verbose: bool,
