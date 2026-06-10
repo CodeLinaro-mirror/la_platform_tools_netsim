@@ -12,9 +12,9 @@ path = "src/lib.rs"
 [dependencies]
 device-actor = { path = "../device-actor" }
 netsim-model = { path = "../model" }
+rand = "0.8"
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
 tracing = "0.1"
 
 [dev-dependencies]
 daemon = { path = "../daemon" }
-rand = "0.8"
