@@ -327,3 +327,16 @@ fn test_external_call_hold() {
     then_response_contains(&mut world, "A", "+CLCC: 1,0,0,0,0,\"123\",129");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_dial_speed_dial_does_not_fallback() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Dial *999# which starts with *99 and ends with #, but is not standard GPRS
+    // dial format. It should NOT fall back, but remain handled by CallService
+    // as a normal voice dial attempt (returns OK). If it had fallen back, it
+    // would have returned CONNECT!
+    when_at_command_sent(&mut world, "A", "ATD*999#");
+    then_response_is(&mut world, "A", "OK");
+}

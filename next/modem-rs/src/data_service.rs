@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use crate::{
     modem::ModemImpl,
     parser::{Command, QuotedString},
-    types::{DEFAULT_IP_ADDRESS, ExecutionResult, HandledCommand},
+    types::{DEFAULT_DNS, DEFAULT_GATEWAY, DEFAULT_IP_ADDRESS, ExecutionResult, HandledCommand},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -258,10 +258,21 @@ impl DataService {
     }
 
     pub fn handle_read_dynamic_param(&self, cid: u8) -> ExecutionResult {
-        let response = format!("+CGSCONTRDP: {}, 5, 1500, 300000, 300000, 300000, 300000\r\n", cid);
-        let mut handled = HandledCommand::ok();
-        handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        if let Some(context) = self.pdp_contexts.get(&cid) {
+            if context.active {
+                let response = format!(
+                    concat!(r#"+CGCONTRDP: {},5,"{}",{}/24,{},{}"#, "\r\n"),
+                    cid, context.apn, DEFAULT_IP_ADDRESS, DEFAULT_GATEWAY, DEFAULT_DNS
+                );
+                let mut handled = HandledCommand::ok();
+                handled.responses.insert(0, response);
+                ExecutionResult::Handled(handled)
+            } else {
+                ExecutionResult::Handled(HandledCommand::error())
+            }
+        } else {
+            ExecutionResult::Handled(HandledCommand::error())
+        }
     }
 
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
@@ -302,7 +313,95 @@ impl DataService {
             Command::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
             Command::ShowPdpAddress(cid) => self.handle_show_pdp_address(*cid),
             Command::ReadDynamicParam(cid) => self.handle_read_dynamic_param(*cid),
+            Command::Dial(number) => {
+                if crate::constants::is_gprs_dial(number) {
+                    match parse_cid_from_gprs_dial(number) {
+                        Ok(cid) => {
+                            if let Some(context) = self.pdp_contexts.get_mut(&cid) {
+                                context.active = true;
+                                ExecutionResult::Handled(HandledCommand {
+                                    responses: vec!["CONNECT\r\n".to_string()],
+                                    action: None,
+                                })
+                            } else {
+                                ExecutionResult::Handled(HandledCommand::error())
+                            }
+                        }
+                        Err(_) => ExecutionResult::Handled(HandledCommand::error()),
+                    }
+                } else {
+                    ExecutionResult::Unhandled
+                }
+            }
             _ => ExecutionResult::Unhandled,
+        }
+    }
+}
+
+fn parse_cid_from_gprs_dial(number: &[u8]) -> Result<u8, ()> {
+    let trimmed = number.strip_suffix(b"#").ok_or(())?;
+    let parts: Vec<&[u8]> = trimmed.split(|&b| b == b'*').collect();
+
+    // Expecting a format like *99, *99*<cid>, or *99***<cid> (at most 5 segments)
+    if parts.len() < 2 || parts.len() > 5 || !parts[0].is_empty() || parts[1] != b"99" {
+        return Err(());
+    }
+
+    // Case 1: *99# (parts are ["", "99"])
+    if parts.len() == 2 {
+        return Ok(1);
+    }
+
+    // Case 2: *99*<cid># or *99***<cid># (parts.len() > 2)
+    let last_part = parts.last().ok_or(())?;
+    if last_part.is_empty() {
+        return Err(());
+    }
+    let cid_str = std::str::from_utf8(last_part).map_err(|_err| ())?;
+    let cid = cid_str.parse::<u8>().map_err(|_err| ())?;
+    Ok(cid)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::QuotedString;
+
+    #[test]
+    fn test_data_service_dial_direct() {
+        let mut service = DataService::default();
+        let res = service.handle_define_pdp_context(1, QuotedString(b"IP"), QuotedString(b"test"));
+        assert!(matches!(res, ExecutionResult::Handled(_)));
+
+        // Dial
+        let res = service.execute(&Command::Dial(b"*99***1#"));
+        if let ExecutionResult::Handled(handled) = res {
+            assert_eq!(handled.responses, vec!["CONNECT\r\n".to_string()]);
+        } else {
+            panic!("Expected Handled");
+        }
+    }
+
+    #[test]
+    fn test_data_service_dial_malformed() {
+        let mut service = DataService::default();
+        let res = service.handle_define_pdp_context(1, QuotedString(b"IP"), QuotedString(b"test"));
+        assert!(matches!(res, ExecutionResult::Handled(_)));
+
+        // Dial malformed alphanumeric CID
+        let res = service.execute(&Command::Dial(b"*99*abc#"));
+        if let ExecutionResult::Handled(handled) = res {
+            assert_eq!(handled.responses, vec!["ERROR\r\n".to_string()]);
+        } else {
+            panic!("Expected Handled");
+        }
+
+        // Dial empty trailing CID
+        let res = service.execute(&Command::Dial(b"*99*#"));
+        if let ExecutionResult::Handled(handled) = res {
+            assert_eq!(handled.responses, vec!["ERROR\r\n".to_string()]);
+        } else {
+            panic!("Expected Handled");
         }
     }
 }

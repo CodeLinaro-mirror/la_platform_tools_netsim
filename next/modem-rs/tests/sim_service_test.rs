@@ -82,24 +82,25 @@ fn test_pin_retry_counter() {
 // Scenario: Open Logical Channel
 //   Given a modem "A"
 //   When AT command 'AT+CCHO="1234"' is sent to "A"
-//   Then response from "A" is "+CCHO: 1"
+//   Then response from "A" is "1"
 //   And response from "A" is "OK"
 #[test]
 fn test_open_logical_channel() {
     let mut world = World::new();
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CCHO=\"1234\"");
-    then_response_is(&mut world, "A", "+CCHO: 1");
+    then_response_is(&mut world, "A", "1");
     then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Close Logical Channel
 //   Given a modem "A"
 //   When AT command 'AT+CCHO="1234"' is sent to "A"
-//   Then response from "A" is "+CCHO: 1"
+//   Then response from "A" is "1"
 //   And response from "A" is "OK"
 //   When AT command "AT+CCHC=1" is sent to "A"
-//   Then response from "A" is "OK"
+//   Then response from "A" is "+CCHC"
+//   And response from "A" is "OK"
 //   When AT command 'AT+CGLA=1,10,"00A40004022FE2"' is sent to "A"
 //   Then response from "A" is "ERROR"
 #[test]
@@ -107,10 +108,11 @@ fn test_close_logical_channel() {
     let mut world = World::new();
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CCHO=\"1234\"");
-    then_response_is(&mut world, "A", "+CCHO: 1");
+    then_response_is(&mut world, "A", "1");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CCHC=1");
+    then_response_is(&mut world, "A", "+CCHC");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"00A40004022FE2\"");
@@ -120,21 +122,21 @@ fn test_close_logical_channel() {
 // Scenario: Transmit Logical Channel
 //   Given a modem "A"
 //   When AT command 'AT+CCHO="1234"' is sent to "A"
-//   Then response from "A" is "+CCHO: 1"
+//   Then response from "A" is "1"
 //   And response from "A" is "OK"
 //   When AT command 'AT+CGLA=1,10,"00A40004022FE2"' is sent to "A"
-//   Then response from "A" is '+CGLA: 10, "9000"'
+//   Then response from "A" is '+CGLA: 4,9000'
 //   And response from "A" is "OK"
 #[test]
 fn test_transmit_logical_channel() {
     let mut world = World::new();
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CCHO=\"1234\"");
-    then_response_is(&mut world, "A", "+CCHO: 1");
+    then_response_is(&mut world, "A", "1");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"00A40004022FE2\"");
-    then_response_is(&mut world, "A", "+CGLA: 10, \"9000\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
     then_response_is(&mut world, "A", "OK");
 }
 

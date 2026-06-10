@@ -59,16 +59,25 @@ fn test_update_physical_channel_configs() {
 
 // Scenario: Read Dynamic Parameters
 //   Given a modem "A"
-//   When AT command "AT+CGSCONTRDP=1" is sent to "A"
-//   Then response from "A" is "+CGSCONTRDP: 1, 5, 1500, 300000, 300000, 300000,
-// 300000"   And response from "A" is "OK"
+//   When AT command 'AT+CGDCONT=1,"IP","test"' is sent to "A"
+//   And AT command "ATD*99***1#" is sent to "A"
+//   And AT command "AT+CGCONTRDP=1" is sent to "A"
+//   Then response from "A" is '+CGCONTRDP:
+// 1,5,"test","10.0.2.15/24","10.0.2.2","10.0.2.3"'   And response from "A" is
+// "OK"
 #[test]
 fn test_read_dynamic_param() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    when_at_command_sent(&mut world, "A", "AT+CGSCONTRDP=1");
-    then_response_is(&mut world, "A", "+CGSCONTRDP: 1, 5, 1500, 300000, 300000, 300000, 300000");
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "ATD*99***1#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=1");
+    then_response_is(&mut world, "A", "+CGCONTRDP: 1,5,\"test\",10.0.2.15/24,10.0.2.2,10.0.2.3");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -222,5 +231,53 @@ fn test_show_pdp_address() {
 
     when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
     then_response_is(&mut world, "A", "+CGPADDR: 1,\"0.0.0.0\"");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_gprs_dialing_fallback() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Define the context first
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 2. Dial GPRS fallback which should return CONNECT
+    when_at_command_sent(&mut world, "A", "ATD*99***1#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // 3. Verify that the PDP context is indeed active now (returns active IP)
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_dial_non_existent_context() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Dial GPRS context 2 which is undefined -> should return ERROR
+    when_at_command_sent(&mut world, "A", "ATD*99***2#");
+    then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_gprs_dialing_default_cid() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Define PDP context 1
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Dialing *99# without specified CID should default to PDP context 1
+    when_at_command_sent(&mut world, "A", "ATD*99#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Verify PDP context 1 is indeed active
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
     then_response_is(&mut world, "A", "OK");
 }

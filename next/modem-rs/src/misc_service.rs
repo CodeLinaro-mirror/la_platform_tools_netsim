@@ -6,6 +6,12 @@ use crate::{
     types::{ExecutionResult, HandledCommand},
 };
 
+const DEFAULT_IMEI: &str = "867400022047199";
+const DEFAULT_IMEI_CRLF: &str = "867400022047199\r\n";
+const DEFAULT_SVN: &str = "01";
+const DEFAULT_SVN_CRLF: &str = "01\r\n";
+const DEFAULT_INFO: &str = "modem simulator";
+
 pub struct MiscService {
     clock: String,
     speaker_volume: u8,
@@ -75,6 +81,28 @@ impl MiscService {
         })
     }
 
+    pub fn handle_get_product_serial_number_gsm(&self) -> ExecutionResult {
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec![DEFAULT_IMEI_CRLF.to_string(), "OK\r\n".to_string()],
+            action: None,
+        })
+    }
+
+    pub fn handle_get_product_serial_number_gsm_with_type(&self, snt: u8) -> ExecutionResult {
+        let response = match snt {
+            0 => format!("{}{}\r\n", DEFAULT_IMEI, DEFAULT_INFO),
+            1 => DEFAULT_IMEI_CRLF.to_string(),
+            2 => format!("{}{}\r\n", DEFAULT_IMEI, DEFAULT_SVN),
+            3 => DEFAULT_SVN_CRLF.to_string(),
+            _ => DEFAULT_IMEI_CRLF.to_string(),
+        };
+
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec![response, "OK\r\n".to_string()],
+            action: None,
+        })
+    }
+
     pub fn handle_set_icf(&mut self, format: u8, parity: u8) -> ExecutionResult {
         self.icf_format = format;
         self.icf_parity = parity;
@@ -133,7 +161,7 @@ impl MiscService {
 
     pub fn handle_view_active_configuration(&self) -> ExecutionResult {
         let config_str = format!(
-            "ACTIVE PROFILE:\nL:{} M:{} Q:{} V:{} ICF:{},{} IFC:{},{}\nOK\r\n",
+            "ACTIVE PROFILE:\r\nL:{} M:{} Q:{} V:{} ICF:{},{} IFC:{},{}\r\nOK\r\n",
             self.speaker_volume,
             self.speaker_mute,
             self.quiet_mode,
@@ -191,6 +219,14 @@ impl MiscService {
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
+    pub fn handle_set_call_mode(&self) -> ExecutionResult {
+        ExecutionResult::Handled(HandledCommand::ok())
+    }
+
+    pub fn handle_set_character_set(&self) -> ExecutionResult {
+        ExecutionResult::Handled(HandledCommand::ok())
+    }
+
     pub fn handle_get_manufacturer_identification(&self) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand {
             responses: vec!["Android\r\n".to_string(), "OK\r\n".to_string()],
@@ -200,7 +236,7 @@ impl MiscService {
 
     pub fn handle_get_capabilities(&self) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand {
-            responses: vec!["+GCAP: +FCLASS,+DS\r\nOK\r\n".to_string()],
+            responses: vec!["+GCAP: +FCLASS,+DS\r\n".to_string(), "OK\r\n".to_string()],
             action: None,
         })
     }
@@ -212,6 +248,10 @@ impl MiscService {
             Command::GetModelId => self.handle_get_model_id(),
             Command::GetRevision => self.handle_get_revision(),
             Command::GetSerialNumber => self.handle_get_serial_number(),
+            Command::GetProductSerialNumberGsm => self.handle_get_product_serial_number_gsm(),
+            Command::GetProductSerialNumberGsmWithType(snt) => {
+                self.handle_get_product_serial_number_gsm_with_type(*snt)
+            }
             Command::SetTeTaControlCharacterFraming(f, p) => self.handle_set_icf(*f, *p),
             Command::SetTeTaLocalDataFlowControl(d1, d2) => self.handle_set_ifc(*d1, *d2),
             Command::SetTeTaFixedLocalRate(_) => self.handle_set_ipr(),
@@ -246,6 +286,9 @@ impl MiscService {
             }
             Command::SetCommaDialModifierTime(_) => self.handle_set_comma_dial_modifier_time(),
             Command::SetAutomaticDisconnectDelay(_) => self.handle_set_automatic_disconnect_delay(),
+            Command::SetCallMode(_) => self.handle_set_call_mode(),
+
+            Command::SetCharacterSet(_) => self.handle_set_character_set(),
             _ => ExecutionResult::Unhandled,
         }
     }

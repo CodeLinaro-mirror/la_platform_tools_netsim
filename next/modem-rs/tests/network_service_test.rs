@@ -62,6 +62,12 @@ fn test_set_registration_status() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
+    // Enable unsolicited reports first to make it spec-compliant
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGREG=1");
+    then_response_is(&mut world, "A", "OK");
+
     let id_a = world.modems.get("A").unwrap().0;
 
     // Set Voice
