@@ -601,7 +601,8 @@ impl NetsimDaemon {
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
-        let bt_actor_state = bluetooth_actor::BluetoothActor::new(device_client.clone());
+        let bt_actor_state =
+            bluetooth_actor::BluetoothActor::new(device_client.clone(), args.disable_address_reuse);
 
         // Setup Uwb Server
         let (uwb_runner, uwb_client) = uwb_actor::new();

@@ -29,7 +29,7 @@
 //!
 //!     let (actor, client) = bluetooth_actor::new();
 //!     let device_client = device_actor::DeviceClient::new(Box::new(resource_client));
-//!     let bluetooth_actor = bluetooth_actor::BluetoothActor::new(device_client);
+//!     let bluetooth_actor = bluetooth_actor::BluetoothActor::new(device_client, false);
 //!     tokio::spawn(async move {
 //!         actor.run(bluetooth_actor).await;
 //!     });

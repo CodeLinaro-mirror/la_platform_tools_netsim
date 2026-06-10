@@ -53,7 +53,7 @@ impl World {
         // gracefully (ignoring them), so explicit draining is not needed.
 
         let actor_task = tokio::spawn(async move {
-            actor.run(BluetoothActor::new(resource_client_clone)).await;
+            actor.run(BluetoothActor::new(resource_client_clone, false)).await;
         });
 
         World {

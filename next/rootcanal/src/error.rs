@@ -23,6 +23,10 @@ pub enum Error {
     #[error("controller not found: {0}")]
     ControllerNotFound(u32),
 
+    /// The address is already in use.
+    #[error("address already in use: {0}")]
+    AddressInUse(crate::types::Address),
+
     /// The address is malformed.
     #[error("malformed address: {0}")]
     MalformedAddress(String),
