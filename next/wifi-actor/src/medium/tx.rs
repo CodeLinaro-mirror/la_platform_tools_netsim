@@ -330,6 +330,16 @@ impl Medium {
                         self.wifi_stats.incr_hwsim_frames_tx();
                         self.push_packet(dest.client_id, &msg, out_queue)?;
                         self.incr_rx(dest.client_id)?;
+
+                        let is_routed_via_infrastructure_ap =
+                            ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
+                        if !is_routed_via_infrastructure_ap
+                            && source.client_id != dest.client_id
+                            && !dest_addr.is_multicast()
+                        {
+                            self.incr_p2p_tx(source.client_id);
+                            self.incr_p2p_rx(dest.client_id);
+                        }
                     }
                     Err(e) => self.wifi_stats.log_and_incr_err_count(&e),
                 }

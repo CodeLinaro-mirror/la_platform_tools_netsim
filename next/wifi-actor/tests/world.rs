@@ -669,6 +669,22 @@ impl World {
             expected_min
         );
     }
+
+    pub async fn then_p2p_tx_count_is(&self, chip_idx: usize, expected: u64) {
+        use netsim_model::ChipClient;
+        let stats = self.wifi_client.read_statistics().await.unwrap();
+        let chip_id = self.chips[chip_idx].id;
+        let chip_stats = stats.iter().find(|s| s.id == chip_id).unwrap();
+        assert_eq!(chip_stats.p2p_tx_count, expected);
+    }
+
+    pub async fn then_p2p_rx_count_is(&self, chip_idx: usize, expected: u64) {
+        use netsim_model::ChipClient;
+        let stats = self.wifi_client.read_statistics().await.unwrap();
+        let chip_id = self.chips[chip_idx].id;
+        let chip_stats = stats.iter().find(|s| s.id == chip_id).unwrap();
+        assert_eq!(chip_stats.p2p_rx_count, expected);
+    }
 }
 
 #[derive(Clone, Debug)]
