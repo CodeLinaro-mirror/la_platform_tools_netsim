@@ -226,11 +226,32 @@ fn test_show_pdp_address() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
+    // 1. Define context (auto-activated by default)
     when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
     then_wait_for_response_containing(&mut world, "A", "OK");
 
+    // 2. Query address (should be active IP)
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Deactivate context (using Goldfish-style AT+CGACT=cid,state instead of
+    //    standard state,cid)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Query address (should be 0.0.0.0)
     when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
     then_response_is(&mut world, "A", "+CGPADDR: 1,\"0.0.0.0\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Reactivate context (Goldfish-style AT+CGACT=cid,state)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6. Query address (should be active IP again)
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
     then_response_is(&mut world, "A", "OK");
 }
 
