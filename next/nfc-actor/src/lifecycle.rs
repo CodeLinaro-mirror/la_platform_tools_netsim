@@ -10,6 +10,14 @@ use crate::nfc_actor::NfcActor;
 impl ActorLifecycle for NfcActor {
     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
         info!("NfcActor started");
+        self.start_casimir();
+    }
+
+    async fn on_shutdown(&mut self) {
+        if let Some(task) = self.scene_task.take() {
+            info!("Shutting down Casimir scene task");
+            task.abort();
+        }
     }
 
     async fn on_stream(&mut self, id: Self::Id, message: Bytes, ctx: &mut DynContext<Self>) {
