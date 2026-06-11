@@ -102,8 +102,8 @@ impl WirelessChip for Uwb {
         stats_proto.set_kind(netsim_radio_stats::Kind::UWB);
         let chip_proto = self.get();
         if chip_proto.has_uwb() {
-            stats_proto.set_tx_count(chip_proto.uwb().tx_count);
-            stats_proto.set_rx_count(chip_proto.uwb().rx_count);
+            stats_proto.set_tx_count(chip_proto.uwb().tx_count as u64);
+            stats_proto.set_rx_count(chip_proto.uwb().rx_count as u64);
         }
         vec![stats_proto]
     }

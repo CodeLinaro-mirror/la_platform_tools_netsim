@@ -873,11 +873,20 @@ impl World {
                         continue;
                     }
 
-                    // Check match criteria
-                    let tx_bytes = s["tx_bytes"].as_u64();
-                    let rx_bytes = s["rx_bytes"].as_u64();
-                    let tx_count = s["tx_count"].as_u64();
-                    let rx_count = s["rx_count"].as_u64();
+                    // Handle both numeric and string representations (since uint64 is serialized as
+                    // strings)
+                    let tx_bytes = s["tx_bytes"]
+                        .as_u64()
+                        .or_else(|| s["tx_bytes"].as_str().and_then(|v| v.parse().ok()));
+                    let rx_bytes = s["rx_bytes"]
+                        .as_u64()
+                        .or_else(|| s["rx_bytes"].as_str().and_then(|v| v.parse().ok()));
+                    let tx_count = s["tx_count"]
+                        .as_u64()
+                        .or_else(|| s["tx_count"].as_str().and_then(|v| v.parse().ok()));
+                    let rx_count = s["rx_count"]
+                        .as_u64()
+                        .or_else(|| s["rx_count"].as_str().and_then(|v| v.parse().ok()));
 
                     let mut matches = true;
 
