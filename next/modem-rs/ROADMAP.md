@@ -170,7 +170,7 @@ missing several key features and the detailed logic that is present in the C++
 
 - [ ] **Implement full `ATD` command handling:**
   - [ ] Add support for emergency number dialing with categories and CLIR
-        (`ATDnumber@[category],#[clir];`).
+        (`ATDnumber@[category],#[clir];`); syntactic parsing is implemented.
   - [ ] Integrate with `SimService` to perform FDN (Fixed Dialing Number)
         checks.
 - [x] **Expand `AT+CHLD` command handling:**

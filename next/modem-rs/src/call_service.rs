@@ -200,9 +200,33 @@ impl CallService {
         let Some(dial_str) = parse_number(number) else {
             return ExecutionResult::Handled(HandledCommand::error());
         };
-        let clean_number = dial_str.trim_end_matches(';');
+        let mut is_emergency = false;
+        let clean_number = if let Some(pos) = dial_str.find('@') {
+            is_emergency = true;
+            // TODO: Support emergency categories and CLIR suffixes (e.g. @1,#I) currently
+            // they are discarded.
+            &dial_str[..pos]
+        } else {
+            let stripped = dial_str.trim_end_matches([';', 'i', 'I']);
+            if stripped == "911" {
+                is_emergency = true;
+            }
+            stripped
+        };
 
-        if clean_number == "911" {
+        // '+' is only valid as the very first character (international prefix)
+        let is_valid = !clean_number.is_empty()
+            && clean_number.bytes().enumerate().all(|(i, b)| match b {
+                b'+' => i == 0,
+                b'0'..=b'9' | b'*' | b'#' => true,
+                _ => false,
+            });
+
+        if !is_valid {
+            return ExecutionResult::Handled(HandledCommand::error());
+        }
+
+        if is_emergency {
             return ExecutionResult::Handled(HandledCommand::ok_with_action(
                 CommandAction::InitiateEmergencyCall,
             ));
