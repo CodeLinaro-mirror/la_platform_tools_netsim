@@ -129,9 +129,12 @@ pub enum Command<'a> {
     /// VENDOR: Ring indication
     #[command(tag = "RING")]
     Ring,
-    /// Operator selection
+    /// Operator selection query
     #[command(tag = "AT+COPS?")]
     QueryOperator,
+    /// Set operator selection
+    #[command(tag = "AT+COPS=")]
+    SetOperator { mode: u8, format: Option<u8>, oper: Option<QuotedString<'a>> },
     /// Query voice network registration
     #[command(tag = "AT+CREG?")]
     QueryVoiceNetworkRegistration,
@@ -202,6 +205,9 @@ pub enum Command<'a> {
     /// Calling line identification presentation
     #[command(tag = "AT+CLIP=")]
     SetClip(u8),
+    /// Query Calling line identification presentation
+    #[command(tag = "AT+CLIP?")]
+    QueryClip,
     /// Configure call mode
     #[command(tag = "AT+CMOD=")]
     SetCallMode(u8),
@@ -262,6 +268,15 @@ pub enum Command<'a> {
     /// Enter data state
     #[command(tag = "AT+CGDATA=")]
     EnterDataState(u8),
+    /// Query current network technology
+    #[command(tag = "AT+CTEC?")]
+    QueryCurrentNetworkTechnology,
+    /// Query supported network technology
+    #[command(tag = "AT+CTEC=?")]
+    QuerySupportedNetworkTechnology,
+    /// Set network technology
+    #[command(tag = "AT+CTEC=")]
+    SetNetworkTechnology(u8, #[parser(parse_raw_data)] &'a [u8]),
     /// Packet event reporting
     #[command(tag = "AT+CGEREP=")]
     SetPacketEventReporting(u8, u8),
@@ -283,6 +298,9 @@ pub enum Command<'a> {
     /// 3GPP TS 27.005: Set broadcast config
     #[command(tag = "AT+CSCB=")]
     BroadcastConfig(u8, QuotedString<'a>, QuotedString<'a>),
+    /// 3GPP TS 27.005: Query broadcast config
+    #[command(tag = "AT+CSCB?")]
+    QueryBroadcastConfig,
     /// 3GPP TS 27.005: Set SMSC address
     #[command(tag = "AT+CSCA=")]
     SetSmscAddress(QuotedString<'a>),
@@ -606,5 +624,12 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+CGSN=2").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::GetProductSerialNumberGsmWithType(2));
+    }
+
+    #[test]
+    fn test_parse_cops_set() {
+        let (rem, cmd) = Command::parse(b"AT+COPS=3,2").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::SetOperator { mode: 3, format: Some(2), oper: None });
     }
 }

@@ -19,6 +19,7 @@ pub struct CallForwardingInfo {
 #[derive(Debug, Default)]
 pub struct SupService {
     call_forwarding_info: Option<CallForwardingInfo>,
+    clip_enabled: u8,
 }
 
 impl SupService {
@@ -65,8 +66,17 @@ impl SupService {
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    fn handle_set_clip(&self) -> ExecutionResult {
+    fn handle_set_clip(&mut self, enabled: u8) -> ExecutionResult {
+        self.clip_enabled = enabled;
         ExecutionResult::Handled(HandledCommand::ok())
+    }
+
+    fn handle_query_clip(&self) -> ExecutionResult {
+        let response = format!("+CLIP: {},1\r\n", self.clip_enabled);
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec![response, "OK\r\n".to_string()],
+            action: None,
+        })
     }
 
     fn handle_set_call_waiting(
@@ -117,7 +127,8 @@ impl SupService {
             }
             Command::QueryClir => self.handle_query_clir(),
             Command::SetClir(clir) | Command::SetClirGoldfish(clir) => self.handle_set_clir(*clir),
-            Command::SetClip(_) => self.handle_set_clip(),
+            Command::SetClip(enabled) => self.handle_set_clip(*enabled),
+            Command::QueryClip => self.handle_query_clip(),
             Command::SetColp(_) => self.handle_set_colp(),
             Command::SetCallWaiting(n, mode, class) => {
                 self.handle_set_call_waiting(*n, *mode, *class)

@@ -3,15 +3,47 @@
 
 use crate::{steps::*, world::World};
 
-// Scenario: Set CLIP (Calling Line Identification Presentation)
+// Scenario: Set and Query CLIP (Calling Line Identification Presentation)
 //   Given a modem "A"
+//   When AT command "AT+CLIP?" is sent to "A"
+//   Then response from "A" is "+CLIP: 0,1"
+//   And response from "A" is "OK"
 //   When AT command "AT+CLIP=1" is sent to "A"
 //   Then response from "A" is "OK"
+//   When AT command "AT+CLIP?" is sent to "A"
+//   Then response from "A" is "+CLIP: 1,1"
+//   And response from "A" is "OK"
+//   When AT command "AT+CLIP=0" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+CLIP?" is sent to "A"
+//   Then response from "A" is "+CLIP: 0,1"
+//   And response from "A" is "OK"
 #[test]
-fn test_set_clip() {
+fn test_set_and_query_clip() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+
+    // Default query
+    when_at_command_sent(&mut world, "A", "AT+CLIP?");
+    then_response_is(&mut world, "A", "+CLIP: 0,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Enable CLIP
     when_at_command_sent(&mut world, "A", "AT+CLIP=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query enabled state
+    when_at_command_sent(&mut world, "A", "AT+CLIP?");
+    then_response_is(&mut world, "A", "+CLIP: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Disable CLIP
+    when_at_command_sent(&mut world, "A", "AT+CLIP=0");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query disabled state
+    when_at_command_sent(&mut world, "A", "AT+CLIP?");
+    then_response_is(&mut world, "A", "+CLIP: 0,1");
     then_response_is(&mut world, "A", "OK");
 }
 

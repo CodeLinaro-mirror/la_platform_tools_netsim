@@ -254,8 +254,8 @@ a massive amount of work to reach feature parity with the C++
   - [ ] Implement the Cuttlefish-specific `+CSQ` command with a detailed
         `SignalStrength` struct.
   - [ ] Implement a loop to continuously update the signal strength.
-- [ ] **Implement Preferred Network Type (`AT+CTEC`):**
-  - [ ] Add support for getting and setting the preferred network type.
+- [x] **Implement Preferred Network Type (`AT+CTEC`):**
+  - [x] Add support for getting and setting the preferred network type.
 - [ ] **Integrate with NVRAM Configuration:**
   - [ ] Use a configuration management system to store and retrieve
         network-related settings.

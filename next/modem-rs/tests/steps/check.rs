@@ -84,14 +84,8 @@ pub fn then_wait_for_response_containing(world: &mut World, name: &str, expected
 /// Normalizes the expected response string to bytes.
 /// Adds \r\n unless it's "OK" or already present.
 fn normalize_expected_response(expected: &str) -> Vec<u8> {
-    if expected == "OK" {
-        AT_OK.to_vec()
-    } else {
-        let s = if expected.ends_with("\r\n") {
-            expected.to_string()
-        } else {
-            format!("{}\r\n", expected)
-        };
-        s.as_bytes().to_vec()
+    match expected {
+        "OK" => AT_OK.to_vec(),
+        _ => [expected.trim_end_matches(['\r', '\n']).as_bytes(), b"\r\n"].concat(),
     }
 }

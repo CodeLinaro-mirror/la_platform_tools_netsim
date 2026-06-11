@@ -9,6 +9,7 @@ bazel_dep(name = "fmt", version = "12.1.0")
 
 # Force buildozer 8.2.1 checksum in lockfile for cloud presubmit
 bazel_dep(name = "buildozer", version = "8.2.1")
+bazel_dep(name = "casimir", version = "0.0.1")
 
 custom_toolchains = use_extension("@goldfish_build//extensions:toolchain.bzl", "toolchain")
 custom_toolchains.clang(root_path = "prebuilts/clang/host")
@@ -42,3 +43,8 @@ maven.install(
     ],
 )
 use_repo(maven, "maven")
+
+local_path_override(
+    module_name = "casimir",
+    path = "packages/modules/Nfc/libnfc-nci/tools/casimir",
+)

@@ -60,7 +60,7 @@ pub fn given_modem_with_sim_profile(world: &mut World, name: &str) {
 }
 
 /// Helper function to create the legacy SIM profile used in tests.
-fn create_legacy_test_profile() -> SimProfile {
+pub fn create_legacy_test_profile() -> SimProfile {
     SimProfile {
         iccid: "89012345678901234567".to_string(),
         imsi: "123456789012345".to_string(),

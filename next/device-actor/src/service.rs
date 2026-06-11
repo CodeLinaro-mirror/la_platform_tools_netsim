@@ -221,6 +221,13 @@ impl DeviceActor {
                                 bt.classic.tx_count = stat.tx_count;
                                 bt.classic.rx_count = stat.rx_count;
                             }
+                            (
+                                Some(netsim_model::ChipVariant::Nfc(nfc)),
+                                netsim_model::RadioKind::Nfc,
+                            ) => {
+                                nfc.radio.tx_count = stat.tx_count;
+                                nfc.radio.rx_count = stat.rx_count;
+                            }
                             _ => {}
                         }
                     }
@@ -880,15 +887,19 @@ impl ActorService for DeviceActor {
                 }
             }
 
-            if let Some(u) = specific_update
-                && u.variant.is_some()
-            {
-                chip_update.variant = u.variant.clone();
+            if let Some(u) = specific_update {
+                if u.variant.is_some() {
+                    chip_update.variant = u.variant.clone();
+                }
+                if u.enabled.is_some() {
+                    chip_update.enabled = u.enabled;
+                }
             }
 
             if chip_update.pose.position.is_some()
                 || chip_update.pose.orientation.is_some()
                 || chip_update.variant.is_some()
+                || chip_update.enabled.is_some()
             {
                 info!(
                     "DeviceActor: Updating chip {} (kind {:?}) with {:?}",

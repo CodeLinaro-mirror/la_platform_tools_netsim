@@ -37,6 +37,15 @@ use tokio::{
     task::JoinSet,
 };
 use tracing::{error, info, warn};
+#[cfg(feature = "cuttlefish")]
+use {
+    packet_stream::{
+        ChipInfo as PsChipInfo, DualFdConfig, DualFdListener, InitInfo as PsInitInfo,
+        transport::traits::TransportListener,
+    },
+    tokio::{net::TcpStream, select},
+    tokio_util::codec::{Framed, LengthDelimitedCodec},
+};
 
 use crate::{
     args::Args,
@@ -119,6 +128,7 @@ async fn handle_new_connection(
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
         ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell::default())),
+        ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
             error!("Unsupported chip kind: {:?}", kind);
@@ -251,6 +261,11 @@ impl NetsimDaemon {
         &self.capture_client
     }
 
+    /// Returns a clone of the DeviceClient.
+    pub fn device_client(&self) -> DeviceClient {
+        self.device_client.clone()
+    }
+
     /// Creates a new `NetsimDaemon` instance or returns config for forwarding.
     ///
     /// Returns:
@@ -275,6 +290,15 @@ impl NetsimDaemon {
         }
 
         logger::init("netsim", args.verbose);
+
+        #[cfg(feature = "cuttlefish")]
+        if let Some(connector_instance) = args.connector_instance {
+            info!("netsim startup (Connector mode)");
+            return match Self::run_netsimd_connector(args, connector_instance).await {
+                Ok(()) => Err(RunResult::ExitedNormally),
+                Err(err) => Err(RunResult::InitializationError(err)),
+            };
+        }
 
         info!("netsim startup");
 
@@ -506,6 +530,45 @@ impl NetsimDaemon {
             }
         }
 
+        // Rootcanal legacy control server
+        #[cfg(feature = "cuttlefish")]
+        let actual_test_port = {
+            let mut port = None;
+            let test_port = args.test_port.unwrap_or_else(|| 7500 + instance_num - 1);
+            match rootcanal_server::bind(test_port) {
+                Ok(listener) => {
+                    port = Some(listener.local_addr().map_err(init_error)?.port());
+                    // Spawn legacy Rootcanal control server for host-side test runners (like
+                    // pts-bot/mmi2grpc).
+                    tokio::spawn(rootcanal_server::run(listener, device_client.clone()));
+                }
+                Err(e) => {
+                    error!("Failed to bind Rootcanal control server: {e}");
+                }
+            }
+            port
+        };
+
+        let mut actual_tcp_port = None;
+        let should_start_tcp =
+            if cfg!(feature = "cuttlefish") { true } else { args.tcp_port.is_some() };
+
+        if should_start_tcp {
+            let tcp_port = args.tcp_port.unwrap_or(0);
+            if let Err(e) = streams
+                .start_listener(
+                    "tcp",
+                    packet_stream::transport::TransportType::tcp("127.0.0.1", tcp_port),
+                )
+                .await
+            {
+                error!("Failed to start TCP forwarder listener: {e}");
+            } else if let Some(packet_stream::StreamAddress::Tcp(socket_addr)) =
+                streams.listener_address("tcp")
+            {
+                actual_tcp_port = Some(socket_addr.port());
+            }
+        }
         // Write the current daemon's information to the INI file.
         // Clients will use this to connect.
         let mut ini_data = HashMap::from([
@@ -513,6 +576,17 @@ impl NetsimDaemon {
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
             ("hci.port".to_string(), hci_port.to_string()),
         ]);
+        #[cfg(feature = "cuttlefish")]
+        if let Some(port) = actual_test_port {
+            listener_addresses.insert(
+                "netsim_rootcanal".to_string(),
+                StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], port))),
+            );
+            ini_data.insert("test.port".to_string(), port.to_string());
+        }
+        if let Some(port) = actual_tcp_port {
+            ini_data.insert("tcp.port".to_string(), port.to_string());
+        }
         if let Some(ws_port) = actual_ws_port {
             ini_data.insert("ws.port".to_string(), ws_port.to_string());
         }
@@ -537,6 +611,10 @@ impl NetsimDaemon {
         let (cell_runner, cell_client) = cell_actor::new();
         let cell_actor_state = cell_actor::CellActor::new(device_client.clone());
 
+        // Setup NFC Server
+        let (nfc_runner, nfc_client) = nfc_actor::new();
+        let nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
+
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
@@ -548,6 +626,7 @@ impl NetsimDaemon {
         chip_clients.insert(ChipKind::CELLULAR_DATA, Box::new(eth_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
+        chip_clients.insert(ChipKind::NFC, Box::new(nfc_client.clone()));
         // Note: ApClient is NOT added to chip_clients as it is now an independent
         // specialist.
 
@@ -597,6 +676,7 @@ impl NetsimDaemon {
         join_set.spawn(link_runner.run(link_actor_state));
         join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap, None)));
         join_set.spawn(uwb_runner.run(uwb_actor));
+        join_set.spawn(nfc_runner.run(nfc_actor_state));
 
         // Spawn DeviceActor separately
         device_actor_state.set_self_client(device_client.clone());
@@ -655,6 +735,15 @@ impl NetsimDaemon {
     /// Gets the gRPC port, if the server is running.
     pub fn grpc_port(&self) -> Option<u16> {
         self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
+            StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
+            _ => None,
+        })
+    }
+
+    /// Gets the Rootcanal test port, if the server is running.
+    #[cfg(feature = "cuttlefish")]
+    pub fn test_port(&self) -> Option<u16> {
+        self.listener_addresses.get("netsim_rootcanal").and_then(|addr| match addr {
             StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
             _ => None,
         })
@@ -722,8 +811,8 @@ impl NetsimDaemon {
         if fd_startup_str.is_empty() {
             return;
         }
-        match serde_json::from_str::<packet_stream::transport::DualFdConfig>(fd_startup_str) {
-            Ok(config) => match packet_stream::transport::DualFdListener::new(config).await {
+        match serde_json::from_str::<DualFdConfig>(fd_startup_str) {
+            Ok(config) => match DualFdListener::new(config).await {
                 Ok(listener) => {
                     if let Err(e) = streams.add_listener("netsim_dualfd", Box::new(listener)) {
                         error!("Failed to add DualFdListener: {}", e);
@@ -873,5 +962,175 @@ pub async fn run() -> RunResult {
             RunResult::ExitedNormally
         }
         Err(e) => e,
+    }
+}
+
+#[cfg(feature = "cuttlefish")]
+impl NetsimDaemon {
+    async fn run_chip_bridge(
+        mut packet_stream: PacketStream,
+        mut packet_sink: PacketSink,
+        chip_info: PsChipInfo,
+        server_addr: String,
+    ) {
+        let chip_id = chip_info.chip.as_ref().map_or("Unknown".to_string(), |c| c.id.clone());
+
+        loop {
+            // Connect to TCP port
+            let tcp_stream_raw = match TcpStream::connect(&server_addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    warn!("Failed to connect to primary daemon TCP port, retrying in 1s: {e}");
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    continue;
+                }
+            };
+
+            // Create InitInfo
+            let init_info = PsInitInfo {
+                chip_info: chip_info.clone(),
+                transport_type: "TCP Forwarder".to_string(),
+            };
+
+            // Send InitInfo with LengthDelimitedCodec
+            let mut framed_tcp = Framed::new(tcp_stream_raw, LengthDelimitedCodec::new());
+
+            let init_json = match serde_json::to_vec(&init_info) {
+                Ok(json) => json,
+                Err(e) => {
+                    error!("Failed to serialize InitInfo: {e}");
+                    break;
+                }
+            };
+
+            if let Err(e) = framed_tcp.send(bytes::Bytes::from(init_json)).await {
+                error!("Failed to send InitInfo: {e}");
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                continue;
+            }
+
+            info!("Sent initial ChipInfo to primary daemon for chip {chip_id}");
+
+            let (mut tcp_sink, mut tcp_stream) = framed_tcp.split();
+
+            enum BridgeError {
+                Guest(String),
+                Tcp(String),
+            }
+
+            // Poll both concurrently.
+            let is_guest_disconnected = select! {
+                res = async {
+                    while let Some(packet) = packet_stream.next().await {
+                        let packet = packet.map_err(|e| BridgeError::Guest(format!("read error: {e:?}")))?;
+                        tcp_sink.send(packet).await.map_err(|e| BridgeError::Tcp(format!("write error: {e:?}")))?;
+                    }
+                    Ok::<(), BridgeError>(())
+                } => {
+                    if let Err(e) = res {
+                        match e {
+                            BridgeError::Guest(msg) => {
+                                error!("Upstream bridge failed for chip {chip_id} (Guest): {msg}");
+                                true
+                            }
+                            BridgeError::Tcp(msg) => {
+                                error!("Upstream bridge failed for chip {chip_id} (TCP): {msg}");
+                                false
+                            }
+                        }
+                    } else {
+                        true // Guest FD reader hit EOF, break loop permanently!
+                    }
+                }
+                res = async {
+                    while let Some(packet) = tcp_stream.next().await {
+                        let packet = packet.map_err(|e| BridgeError::Tcp(format!("read error: {e:?}")))?;
+                        packet_sink.send(packet.freeze()).await.map_err(|e| BridgeError::Guest(format!("write error: {e:?}")))?;
+                    }
+                    Ok::<(), BridgeError>(())
+                } => {
+                    if let Err(e) = res {
+                        match e {
+                            BridgeError::Guest(msg) => {
+                                error!("Downstream bridge failed for chip {chip_id} (Guest): {msg}");
+                                true
+                            }
+                            BridgeError::Tcp(msg) => {
+                                error!("Downstream bridge failed for chip {chip_id} (TCP): {msg}");
+                                false
+                            }
+                        }
+                    } else {
+                        false // TCP stream disconnected, need to reconnect
+                    }
+                }
+            };
+
+            if is_guest_disconnected {
+                info!("Guest radio transport disconnected permanently for chip {chip_id}");
+                break;
+            }
+
+            info!("TCP stream disconnected, re-establishing session in 1s for chip {chip_id}...");
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+        info!("Duplex bridge closed for chip {chip_id}");
+    }
+
+    /// Orchestrates the Cuttlefish packet forwarder connector daemon.
+    async fn run_netsimd_connector(args: Args, connector_instance: u16) -> Result<(), String> {
+        let Some(fd_startup_str) = args.fd_startup_str else {
+            return Err("Failed to start netsimd forwarder, missing `-s` arg".to_string());
+        };
+
+        let dual_fd_config: DualFdConfig = serde_json::from_str(&fd_startup_str)
+            .map_err(|e| format!("Could not parse startup info JSON: {e}"))?;
+
+        let Some(server_addr) = common::util::ini_file::get_tcp_server_address(connector_instance)
+        else {
+            return Err(format!(
+                "No primary netsimd tcp port found for instance {connector_instance}"
+            ));
+        };
+
+        info!("Starting in Connector mode to {server_addr}");
+
+        let mut join_set = JoinSet::new();
+
+        let mut listener = DualFdListener::new(dual_fd_config)
+            .await
+            .map_err(|e| format!("Failed to create DualFdListener: {e}"))?;
+
+        loop {
+            tokio::select! {
+                res = listener.accept() => {
+                    match res {
+                        Ok((packet_stream, packet_sink, chip_info, _guid)) => {
+                            join_set.spawn(Self::run_chip_bridge(
+                                packet_stream,
+                                packet_sink,
+                                chip_info,
+                                server_addr.clone(),
+                            ));
+                        }
+                        Err(e) => {
+                            error!("Error accepting connection: {e}");
+                            break;
+                        }
+                    }
+                }
+                res = join_set.join_next(), if !join_set.is_empty() => {
+                    if let Some(res) = res {
+                        if let Err(e) = res {
+                            return Err(format!("Bridge task panicked: {e}"));
+                        }
+                        return Err("A guest radio transport disconnected".to_string());
+                    }
+                }
+            }
+        }
+
+        info!("Connector forwarder disconnected unexpectedly");
+        Err("Connector forwarder disconnected unexpectedly from guest FDs".to_string())
     }
 }
