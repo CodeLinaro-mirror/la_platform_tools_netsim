@@ -299,8 +299,8 @@ features in the Rust version.
 
 **Tasks:**
 
-- [ ] **Implement PDU Parsing:**
-  - [ ] Add a PDU parser to handle SMS messages in PDU mode.
+- [x] **Implement PDU Parsing**:
+  - [x] Add a PDU parser to handle SMS messages in PDU mode.
 - [ ] **Implement SMS Status Reports:**
   - [ ] Add the logic for generating and sending SMS status reports.
 - [ ] **Improve Error Handling:**
