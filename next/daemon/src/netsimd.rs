@@ -184,6 +184,7 @@ async fn setup_grpc_listener(
     link_client: LinkClient,
     #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
     version: String,
+    frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
     let (new_connection_tx, new_connection_rx) = mpsc::channel(100);
@@ -199,6 +200,7 @@ async fn setup_grpc_listener(
         ap_client,
         packet_streamer_service,
         version,
+        frontend_stats,
     )
     .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
@@ -406,6 +408,8 @@ impl NetsimDaemon {
         // Coordinate IDs across all actors
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
+        let frontend_stats = Arc::new(netsim_model::FrontendStats::default());
+
         #[cfg(not(feature = "cuttlefish"))]
         let (
             ap_runner,
@@ -502,6 +506,7 @@ impl NetsimDaemon {
             #[cfg(not(feature = "cuttlefish"))]
             ap_client.clone(),
             get_version(),
+            frontend_stats.clone(),
         )
         .await?;
 
@@ -660,6 +665,7 @@ impl NetsimDaemon {
             get_version(),
             None,
             None,
+            frontend_stats.clone(),
         );
 
         // Spawn server tasks

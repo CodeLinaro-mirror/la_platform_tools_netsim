@@ -25,16 +25,25 @@ pub struct Stats {
     // For long-running stress tests, this may need a cap or disk-offload.
     archived_radio_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
     pub stats_path: std::path::PathBuf,
+    frontend_stats: std::sync::Arc<netsim_model::FrontendStats>,
 }
 
 impl Default for Stats {
     fn default() -> Self {
-        Self::new("0.0.0".to_string(), None)
+        Self::new(
+            "0.0.0".to_string(),
+            None,
+            std::sync::Arc::new(netsim_model::FrontendStats::default()),
+        )
     }
 }
 
 impl Stats {
-    pub fn new(version: String, path: Option<std::path::PathBuf>) -> Self {
+    pub fn new(
+        version: String,
+        path: Option<std::path::PathBuf>,
+        frontend_stats: std::sync::Arc<netsim_model::FrontendStats>,
+    ) -> Self {
         let mut proto = ProtoNetsimStats::default();
         proto.set_version(version);
         proto.set_device_count(0);
@@ -51,6 +60,7 @@ impl Stats {
             start_time: Some(Instant::now()),
             archived_radio_stats: Vec::new(),
             stats_path,
+            frontend_stats,
         }
     }
 
@@ -87,6 +97,22 @@ impl Stats {
         if let Some(ws) = wifi_stats {
             combined.wifi_stats = Some(ws).into();
         }
+
+        let frontend_snap = self.frontend_stats.snapshot();
+        let mut frontend_proto = netsim_proto::stats::NetsimFrontendStats::new();
+        frontend_proto.set_get_version(frontend_snap.get_version);
+        frontend_proto.set_create_device(frontend_snap.create_device);
+        frontend_proto.set_delete_chip(frontend_snap.delete_chip);
+        frontend_proto.set_patch_device(frontend_snap.patch_device);
+        frontend_proto.set_reset(frontend_snap.reset);
+        frontend_proto.set_list_device(frontend_snap.list_device);
+        frontend_proto.set_subscribe_device(frontend_snap.subscribe_device);
+        frontend_proto.set_patch_capture(frontend_snap.patch_capture);
+        frontend_proto.set_list_capture(frontend_snap.list_capture);
+        frontend_proto.set_get_capture(frontend_snap.get_capture);
+        frontend_proto.set_delete_device(frontend_snap.delete_device);
+        combined.frontend_stats = netsim_proto::protobuf::MessageField::some(frontend_proto);
+
         combined
     }
 

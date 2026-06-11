@@ -24,6 +24,7 @@ pub struct FrontendClient {
     #[cfg(not(feature = "cuttlefish"))]
     ap_client: ap_actor::ApClient,
     version: String,
+    frontend_stats: Arc<netsim_model::FrontendStats>,
 }
 
 impl FrontendClient {
@@ -32,6 +33,7 @@ impl FrontendClient {
         link_client: Arc<dyn LinkClient>,
         #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
         version: String,
+        frontend_stats: Arc<netsim_model::FrontendStats>,
     ) -> Self {
         Self {
             device_client,
@@ -39,6 +41,7 @@ impl FrontendClient {
             #[cfg(not(feature = "cuttlefish"))]
             ap_client,
             version,
+            frontend_stats,
         }
     }
 
@@ -348,6 +351,7 @@ impl FrontendService for FrontendClient {
         _req: netsim_proto::frontend::DeleteDeviceRequest,
         sink: UnarySink<Empty>,
     ) {
+        self.frontend_stats.delete_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_delete_device(client, _req).await.map(|_| Empty::new());
@@ -361,6 +365,7 @@ impl FrontendService for FrontendClient {
         _req: Empty,
         sink: UnarySink<netsim_proto::frontend::VersionResponse>,
     ) {
+        self.frontend_stats.get_version.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut response = netsim_proto::frontend::VersionResponse::new();
         response.version = self.version.clone();
         let f = sink.success(response).map(|_| ());
@@ -368,6 +373,7 @@ impl FrontendService for FrontendClient {
     }
 
     fn list_device(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<ListDeviceResponse>) {
+        self.frontend_stats.list_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_list_device(client).await;
@@ -381,6 +387,7 @@ impl FrontendService for FrontendClient {
         _req: netsim_proto::frontend::SubscribeDeviceRequest,
         sink: UnarySink<netsim_proto::frontend::SubscribeDeviceResponse>,
     ) {
+        self.frontend_stats.subscribe_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let f = sink.fail(RpcStatus::new(RpcStatusCode::UNIMPLEMENTED)).map(|_| ());
         ctx.spawn(f)
     }
@@ -391,6 +398,7 @@ impl FrontendService for FrontendClient {
         req: netsim_proto::frontend::PatchDeviceRequest,
         sink: UnarySink<Empty>,
     ) {
+        self.frontend_stats.patch_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_patch_device(client, req).await.map(|_| Empty::new());
@@ -399,6 +407,7 @@ impl FrontendService for FrontendClient {
     }
 
     fn reset(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<Empty>) {
+        self.frontend_stats.reset.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         #[cfg(not(feature = "cuttlefish"))]
         let ap_client = self.ap_client.clone();
@@ -420,6 +429,7 @@ impl FrontendService for FrontendClient {
         req: netsim_proto::frontend::CreateDeviceRequest,
         sink: UnarySink<netsim_proto::frontend::CreateDeviceResponse>,
     ) {
+        self.frontend_stats.create_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_create_device(client, req).await;
@@ -434,6 +444,7 @@ impl FrontendService for FrontendClient {
         req: netsim_proto::frontend::DeleteChipRequest,
         sink: UnarySink<Empty>,
     ) {
+        self.frontend_stats.delete_chip.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_delete_chip(client, req).await.map(|_| Empty::new());

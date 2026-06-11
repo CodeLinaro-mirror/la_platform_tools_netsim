@@ -127,6 +127,42 @@ pub struct NetsimFrontendStats {
     pub patch_capture: u32,
     pub list_capture: u32,
     pub get_capture: u32,
+    pub delete_device: u32,
+}
+
+use std::sync::atomic::{AtomicU32, Ordering};
+
+#[derive(Debug, Default)]
+pub struct FrontendStats {
+    pub get_version: AtomicU32,
+    pub create_device: AtomicU32,
+    pub delete_chip: AtomicU32,
+    pub patch_device: AtomicU32,
+    pub reset: AtomicU32,
+    pub list_device: AtomicU32,
+    pub subscribe_device: AtomicU32,
+    pub patch_capture: AtomicU32,
+    pub list_capture: AtomicU32,
+    pub get_capture: AtomicU32,
+    pub delete_device: AtomicU32,
+}
+
+impl FrontendStats {
+    pub fn snapshot(&self) -> NetsimFrontendStats {
+        NetsimFrontendStats {
+            get_version: self.get_version.load(Ordering::Relaxed),
+            create_device: self.create_device.load(Ordering::Relaxed),
+            delete_chip: self.delete_chip.load(Ordering::Relaxed),
+            patch_device: self.patch_device.load(Ordering::Relaxed),
+            reset: self.reset.load(Ordering::Relaxed),
+            list_device: self.list_device.load(Ordering::Relaxed),
+            subscribe_device: self.subscribe_device.load(Ordering::Relaxed),
+            patch_capture: self.patch_capture.load(Ordering::Relaxed),
+            list_capture: self.list_capture.load(Ordering::Relaxed),
+            get_capture: self.get_capture.load(Ordering::Relaxed),
+            delete_device: self.delete_device.load(Ordering::Relaxed),
+        }
+    }
 }
 
 #[cfg(test)]

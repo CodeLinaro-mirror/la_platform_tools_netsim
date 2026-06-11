@@ -82,7 +82,9 @@ pub use crate::initial_info::{ChipInfo, ChipKind};
 // From link.rs
 pub use crate::link::{Link, LinkId, LinkUpdate};
 // From stats.rs
-pub use crate::stats::{NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind};
+pub use crate::stats::{
+    FrontendStats, NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind,
+};
 pub use crate::{
     ap::{Ap, ApCreate, ApUpdate, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID, WifiMode},
     bluetooth::{
