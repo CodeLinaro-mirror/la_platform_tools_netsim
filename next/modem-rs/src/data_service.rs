@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use crate::{
     modem::ModemImpl,
     parser::{Command, QuotedString},
-    types::{DEFAULT_DNS, DEFAULT_GATEWAY, ExecutionResult, HandledCommand},
+    types::{DEFAULT_DNS, DEFAULT_GATEWAY, DEFAULT_IP_ADDRESS, ExecutionResult, HandledCommand},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -247,9 +247,8 @@ impl DataService {
 
     pub fn handle_show_pdp_address(&self, cid: u8) -> ExecutionResult {
         if let Some(context) = self.pdp_contexts.get(&cid) {
-            let ip_address =
-                if context.active { get_ip_address(cid) } else { "0.0.0.0".to_string() };
-            let response = format!("+CGPADDR: {cid},\"{ip_address}\"\r\n");
+            let ip_address = if context.active { DEFAULT_IP_ADDRESS } else { "0.0.0.0" };
+            let response = format!("+CGPADDR: {},\"{}\"\r\n", cid, ip_address);
             let mut handled = HandledCommand::ok();
             handled.responses.insert(0, response);
             ExecutionResult::Handled(handled)
@@ -261,12 +260,10 @@ impl DataService {
     pub fn handle_read_dynamic_param(&self, cid: u8) -> ExecutionResult {
         if let Some(context) = self.pdp_contexts.get(&cid) {
             if context.active {
-                let ip_address = get_ip_address(cid);
-                let apn = &context.apn;
-                let gateway = DEFAULT_GATEWAY;
-                let dns = DEFAULT_DNS;
-                let response =
-                    format!("+CGCONTRDP: {cid},5,\"{apn}\",{ip_address}/24,{gateway},{dns}\r\n");
+                let response = format!(
+                    concat!(r#"+CGCONTRDP: {},5,"{}",{}/24,{},{}"#, "\r\n"),
+                    cid, context.apn, DEFAULT_IP_ADDRESS, DEFAULT_GATEWAY, DEFAULT_DNS
+                );
                 let mut handled = HandledCommand::ok();
                 handled.responses.insert(0, response);
                 ExecutionResult::Handled(handled)
@@ -307,14 +304,8 @@ impl DataService {
             Command::QueryQualityOfServiceRequestedGprs => {
                 self.handle_query_quality_of_service_requested_gprs()
             }
-            Command::SetPdpContextActivate(state, cid) => {
-                // Compatibility hack for legacy Goldfish/Reference RIL.
-                // It sends AT+CGACT using non-standard <cid>,<state> format.
-                // We detect this by checking if the parsed state is > 1 (which means it's
-                // actually the CID) or if the parsed CID is 0 (which means it's the state 0).
-                let (real_cid, real_state) =
-                    if *state > 1 || *cid == 0 { (*state, *cid) } else { (*cid, *state) };
-                self.handle_set_pdp_context_activate(real_cid, real_state)
+            Command::SetPdpContextActivate(cid, state) => {
+                self.handle_set_pdp_context_activate(*cid, *state)
             }
             Command::SetPsAttach(_) => self.handle_set_ps_attach(),
             Command::SetPdpContextModify(_) => self.handle_set_pdp_context_modify(),
@@ -369,12 +360,6 @@ fn parse_cid_from_gprs_dial(number: &[u8]) -> Result<u8, ()> {
     let cid_str = std::str::from_utf8(last_part).map_err(|_err| ())?;
     let cid = cid_str.parse::<u8>().map_err(|_err| ())?;
     Ok(cid)
-}
-
-fn get_ip_address(cid: u8) -> String {
-    // Capped at 254 to exclude broadcast address.
-    let last_octet = std::cmp::min(14u8.saturating_add(cid), 254);
-    format!("10.0.2.{last_octet}")
 }
 
 #[cfg(test)]

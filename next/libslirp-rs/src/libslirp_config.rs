@@ -87,8 +87,8 @@ impl Default for SlirpConfig {
     /// Creates a new `SlirpConfig` with default values.
     ///
     /// The default configuration has IPv4 and IPv6 enabled on a private
-    /// network, with DHCP starting at `10.0.3.16` and a DNS server at
-    /// `10.0.3.3`.
+    /// network, with DHCP starting at `10.0.2.16` and a DNS server at
+    /// `10.0.2.3`.
     fn default() -> Self {
         SlirpConfig {
             version: 5,
@@ -96,10 +96,10 @@ impl Default for SlirpConfig {
             restricted: 0,
             in_enabled: true,
             // Private network address
-            vnetwork: Ipv4Addr::new(10, 0, 3, 0),
+            vnetwork: Ipv4Addr::new(10, 0, 2, 0),
             vnetmask: Ipv4Addr::new(255, 255, 255, 0),
             // Default host address
-            vhost: Ipv4Addr::new(10, 0, 3, 2),
+            vhost: Ipv4Addr::new(10, 0, 2, 2),
             // IPv6 enabled by default
             in6_enabled: true,
             vprefix_addr6: "fec0::".parse().unwrap(),
@@ -110,9 +110,9 @@ impl Default for SlirpConfig {
             tftp_path: None,
             bootfile: None,
             // DHCP starting address
-            vdhcp_start: Ipv4Addr::new(10, 0, 3, 16),
+            vdhcp_start: Ipv4Addr::new(10, 0, 2, 16),
             // Public DNS server
-            vnameserver: Ipv4Addr::new(10, 0, 3, 3),
+            vnameserver: Ipv4Addr::new(10, 0, 2, 3),
             vnameserver6: "fec0::3".parse().unwrap(),
             vdnssearch: Vec::new(),
             vdomainname: None,
@@ -351,9 +351,9 @@ mod tests {
         assert_eq!(config.version, 5);
         assert_eq!(config.restricted, 0);
         assert!(config.in_enabled);
-        assert_eq!(config.vnetwork, Ipv4Addr::new(10, 0, 3, 0));
+        assert_eq!(config.vnetwork, Ipv4Addr::new(10, 0, 2, 0));
         assert_eq!(config.vnetmask, Ipv4Addr::new(255, 255, 255, 0));
-        assert_eq!(config.vhost, Ipv4Addr::new(10, 0, 3, 2));
+        assert_eq!(config.vhost, Ipv4Addr::new(10, 0, 2, 2));
         assert!(config.in6_enabled);
         assert_eq!(config.vprefix_addr6, "fec0::".parse::<Ipv6Addr>().unwrap());
         assert_eq!(config.vprefix_len, 64);
@@ -362,8 +362,8 @@ mod tests {
         assert_eq!(config.tftp_server_name, None);
         assert_eq!(config.tftp_path, None);
         assert_eq!(config.bootfile, None);
-        assert_eq!(config.vdhcp_start, Ipv4Addr::new(10, 0, 3, 16));
-        assert_eq!(config.vnameserver, Ipv4Addr::new(10, 0, 3, 3));
+        assert_eq!(config.vdhcp_start, Ipv4Addr::new(10, 0, 2, 16));
+        assert_eq!(config.vnameserver, Ipv4Addr::new(10, 0, 2, 3));
         assert_eq!(config.vnameserver6, "fec0::3".parse::<Ipv6Addr>().unwrap());
         assert!(config.vdnssearch.is_empty());
         assert_eq!(config.vdomainname, None);
