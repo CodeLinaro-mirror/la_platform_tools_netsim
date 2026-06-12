@@ -200,9 +200,33 @@ impl CallService {
         let Some(dial_str) = parse_number(number) else {
             return ExecutionResult::Handled(HandledCommand::error());
         };
-        let clean_number = dial_str.trim_end_matches(';');
+        let mut is_emergency = false;
+        let clean_number = if let Some(pos) = dial_str.find('@') {
+            is_emergency = true;
+            // TODO: Support emergency categories and CLIR suffixes (e.g. @1,#I) currently
+            // they are discarded.
+            &dial_str[..pos]
+        } else {
+            let stripped = dial_str.trim_end_matches([';', 'i', 'I']);
+            if stripped == "911" {
+                is_emergency = true;
+            }
+            stripped
+        };
 
-        if clean_number == "911" {
+        // '+' is only valid as the very first character (international prefix)
+        let is_valid = !clean_number.is_empty()
+            && clean_number.bytes().enumerate().all(|(i, b)| match b {
+                b'+' => i == 0,
+                b'0'..=b'9' | b'*' | b'#' => true,
+                _ => false,
+            });
+
+        if !is_valid {
+            return ExecutionResult::Handled(HandledCommand::error());
+        }
+
+        if is_emergency {
             return ExecutionResult::Handled(HandledCommand::ok_with_action(
                 CommandAction::InitiateEmergencyCall,
             ));
@@ -390,8 +414,14 @@ impl CallService {
         ExecutionResult::Handled(handled)
     }
 
-    pub fn handle_send_dtmf(&self, _dtmf: &[u8]) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+    pub fn handle_send_dtmf(&self, dtmf: &[u8]) -> ExecutionResult {
+        debug!("[CallService] Send DTMF: {}", String::from_utf8_lossy(dtmf));
+
+        if std::str::from_utf8(dtmf).is_ok_and(is_valid_dtmf_format) {
+            ExecutionResult::Handled(HandledCommand::ok())
+        } else {
+            ExecutionResult::Handled(HandledCommand::error())
+        }
     }
 
     pub fn handle_set_emergency_mode(&mut self, mode: u8) -> ExecutionResult {
@@ -427,4 +457,23 @@ impl CallService {
 
 fn parse_number(number: &[u8]) -> Option<String> {
     std::str::from_utf8(number).ok().map(|s| s.trim().to_string())
+}
+
+fn is_valid_dtmf_format(dtmf_str: &str) -> bool {
+    let (digit_part, duration_part) =
+        dtmf_str.split_once(',').map(|(d, dur)| (d, Some(dur))).unwrap_or((dtmf_str, None));
+
+    if digit_part.len() != 1 {
+        return false;
+    }
+    let digit = digit_part.as_bytes()[0];
+    if !matches!(digit, b'0'..=b'9' | b'#' | b'*' | b'A'..=b'D' | b'a'..=b'd') {
+        return false;
+    }
+
+    if duration_part.is_some_and(|dur| dur.is_empty() || !dur.chars().all(|c| c.is_ascii_digit())) {
+        return false;
+    }
+
+    true
 }

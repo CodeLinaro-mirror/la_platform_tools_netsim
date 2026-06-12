@@ -347,3 +347,81 @@ fn test_dial_speed_dial_does_not_fallback() {
     when_at_command_sent(&mut world, "A", "ATD*999#");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_emergency_dial_syntax() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Emergency with category and CLIR
+    when_at_command_sent(&mut world, "A", "ATD911@1,#I;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify it is NOT in active calls (InitiateEmergencyCall is no-op)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_is(&mut world, "A", "OK");
+
+    // Normal call to non-existent peer should be in Dialing state
+    when_at_command_sent(&mut world, "A", "ATD12345;");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"12345\",129");
+}
+
+#[test]
+fn test_dial_clir_semicolon() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Dial with CLIR 'i' and semicolon
+    when_at_command_sent(&mut world, "A", "ATD12345i;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify it dialed "12345" (clean number)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"12345\",129");
+}
+
+#[test]
+fn test_invalid_dial_syntax() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Plus in the middle should be rejected
+    when_at_command_sent(&mut world, "A", "ATD123+456;");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Multiple pluses should be rejected
+    when_at_command_sent(&mut world, "A", "ATD++123;");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Plus at the beginning should be accepted
+    when_at_command_sent(&mut world, "A", "ATD+12345;");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_dtmf_validation() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Valid DTMFs
+    when_at_command_sent(&mut world, "A", "AT+VTS=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=*");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=A,10");
+    then_response_is(&mut world, "A", "OK");
+
+    // Invalid DTMFs
+    when_at_command_sent(&mut world, "A", "AT+VTS=X");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=12");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=1,A");
+    then_response_is(&mut world, "A", "ERROR");
+}
