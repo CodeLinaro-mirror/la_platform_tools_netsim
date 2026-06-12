@@ -374,14 +374,14 @@ pub struct NetsimRadioStats {
     pub duration_secs: ::std::option::Option<u64>,
     ///  TX/RX messages for phy layer
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.tx_count)
-    pub tx_count: ::std::option::Option<u64>,
+    pub tx_count: ::std::option::Option<i32>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.rx_count)
-    pub rx_count: ::std::option::Option<u64>,
+    pub rx_count: ::std::option::Option<i32>,
     ///  TX/RX bytes for HostController
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.tx_bytes)
-    pub tx_bytes: ::std::option::Option<u64>,
+    pub tx_bytes: ::std::option::Option<i32>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.rx_bytes)
-    pub rx_bytes: ::std::option::Option<u64>,
+    pub rx_bytes: ::std::option::Option<i32>,
     ///  Recent Invalid Packets
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.invalid_packets)
     pub invalid_packets: ::std::vec::Vec<InvalidPacket>,
@@ -461,9 +461,9 @@ impl NetsimRadioStats {
         self.duration_secs = ::std::option::Option::Some(v);
     }
 
-    // optional uint64 tx_count = 4;
+    // optional int32 tx_count = 4;
 
-    pub fn tx_count(&self) -> u64 {
+    pub fn tx_count(&self) -> i32 {
         self.tx_count.unwrap_or(0)
     }
 
@@ -476,13 +476,13 @@ impl NetsimRadioStats {
     }
 
     // Param is passed by value, moved
-    pub fn set_tx_count(&mut self, v: u64) {
+    pub fn set_tx_count(&mut self, v: i32) {
         self.tx_count = ::std::option::Option::Some(v);
     }
 
-    // optional uint64 rx_count = 5;
+    // optional int32 rx_count = 5;
 
-    pub fn rx_count(&self) -> u64 {
+    pub fn rx_count(&self) -> i32 {
         self.rx_count.unwrap_or(0)
     }
 
@@ -495,13 +495,13 @@ impl NetsimRadioStats {
     }
 
     // Param is passed by value, moved
-    pub fn set_rx_count(&mut self, v: u64) {
+    pub fn set_rx_count(&mut self, v: i32) {
         self.rx_count = ::std::option::Option::Some(v);
     }
 
-    // optional uint64 tx_bytes = 6;
+    // optional int32 tx_bytes = 6;
 
-    pub fn tx_bytes(&self) -> u64 {
+    pub fn tx_bytes(&self) -> i32 {
         self.tx_bytes.unwrap_or(0)
     }
 
@@ -514,13 +514,13 @@ impl NetsimRadioStats {
     }
 
     // Param is passed by value, moved
-    pub fn set_tx_bytes(&mut self, v: u64) {
+    pub fn set_tx_bytes(&mut self, v: i32) {
         self.tx_bytes = ::std::option::Option::Some(v);
     }
 
-    // optional uint64 rx_bytes = 7;
+    // optional int32 rx_bytes = 7;
 
-    pub fn rx_bytes(&self) -> u64 {
+    pub fn rx_bytes(&self) -> i32 {
         self.rx_bytes.unwrap_or(0)
     }
 
@@ -533,7 +533,7 @@ impl NetsimRadioStats {
     }
 
     // Param is passed by value, moved
-    pub fn set_rx_bytes(&mut self, v: u64) {
+    pub fn set_rx_bytes(&mut self, v: i32) {
         self.rx_bytes = ::std::option::Option::Some(v);
     }
 
@@ -608,16 +608,16 @@ impl ::protobuf::Message for NetsimRadioStats {
                     self.duration_secs = ::std::option::Option::Some(is.read_uint64()?);
                 },
                 32 => {
-                    self.tx_count = ::std::option::Option::Some(is.read_uint64()?);
+                    self.tx_count = ::std::option::Option::Some(is.read_int32()?);
                 },
                 40 => {
-                    self.rx_count = ::std::option::Option::Some(is.read_uint64()?);
+                    self.rx_count = ::std::option::Option::Some(is.read_int32()?);
                 },
                 48 => {
-                    self.tx_bytes = ::std::option::Option::Some(is.read_uint64()?);
+                    self.tx_bytes = ::std::option::Option::Some(is.read_int32()?);
                 },
                 56 => {
-                    self.rx_bytes = ::std::option::Option::Some(is.read_uint64()?);
+                    self.rx_bytes = ::std::option::Option::Some(is.read_int32()?);
                 },
                 66 => {
                     self.invalid_packets.push(is.read_message()?);
@@ -644,16 +644,16 @@ impl ::protobuf::Message for NetsimRadioStats {
             my_size += ::protobuf::rt::uint64_size(3, v);
         }
         if let Some(v) = self.tx_count {
-            my_size += ::protobuf::rt::uint64_size(4, v);
+            my_size += ::protobuf::rt::int32_size(4, v);
         }
         if let Some(v) = self.rx_count {
-            my_size += ::protobuf::rt::uint64_size(5, v);
+            my_size += ::protobuf::rt::int32_size(5, v);
         }
         if let Some(v) = self.tx_bytes {
-            my_size += ::protobuf::rt::uint64_size(6, v);
+            my_size += ::protobuf::rt::int32_size(6, v);
         }
         if let Some(v) = self.rx_bytes {
-            my_size += ::protobuf::rt::uint64_size(7, v);
+            my_size += ::protobuf::rt::int32_size(7, v);
         }
         for value in &self.invalid_packets {
             let len = value.compute_size();
@@ -675,16 +675,16 @@ impl ::protobuf::Message for NetsimRadioStats {
             os.write_uint64(3, v)?;
         }
         if let Some(v) = self.tx_count {
-            os.write_uint64(4, v)?;
+            os.write_int32(4, v)?;
         }
         if let Some(v) = self.rx_count {
-            os.write_uint64(5, v)?;
+            os.write_int32(5, v)?;
         }
         if let Some(v) = self.tx_bytes {
-            os.write_uint64(6, v)?;
+            os.write_int32(6, v)?;
         }
         if let Some(v) = self.rx_bytes {
-            os.write_uint64(7, v)?;
+            os.write_int32(7, v)?;
         }
         for v in &self.invalid_packets {
             ::protobuf::rt::write_message_field_with_cached_size(8, v, os)?;
@@ -2947,10 +2947,10 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x10\x04\"\xb9\x03\n\x10NetsimRadioStats\x12\x1b\n\tdevice_id\x18\x01\
     \x20\x01(\rR\x08deviceId\x127\n\x04kind\x18\x02\x20\x01(\x0e2#.netsim.st\
     ats.NetsimRadioStats.KindR\x04kind\x12#\n\rduration_secs\x18\x03\x20\x01\
-    (\x04R\x0cdurationSecs\x12\x19\n\x08tx_count\x18\x04\x20\x01(\x04R\x07tx\
-    Count\x12\x19\n\x08rx_count\x18\x05\x20\x01(\x04R\x07rxCount\x12\x19\n\
-    \x08tx_bytes\x18\x06\x20\x01(\x04R\x07txBytes\x12\x19\n\x08rx_bytes\x18\
-    \x07\x20\x01(\x04R\x07rxBytes\x12D\n\x0finvalid_packets\x18\x08\x20\x03(\
+    (\x04R\x0cdurationSecs\x12\x19\n\x08tx_count\x18\x04\x20\x01(\x05R\x07tx\
+    Count\x12\x19\n\x08rx_count\x18\x05\x20\x01(\x05R\x07rxCount\x12\x19\n\
+    \x08tx_bytes\x18\x06\x20\x01(\x05R\x07txBytes\x12\x19\n\x08rx_bytes\x18\
+    \x07\x20\x01(\x05R\x07rxBytes\x12D\n\x0finvalid_packets\x18\x08\x20\x03(\
     \x0b2\x1b.netsim.stats.InvalidPacketR\x0einvalidPackets\"x\n\x04Kind\x12\
     \x0f\n\x0bUNSPECIFIED\x10\0\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x01\
     \x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x02\x12\x12\n\nBLE_BEACON\x10\x03\
@@ -3056,21 +3056,21 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x05\x04\x01\x02\x02\x04\x12\x03$\x02\n\n\x0c\n\x05\x04\x01\x02\x02\x05\
     \x12\x03$\x0b\x11\n\x0c\n\x05\x04\x01\x02\x02\x01\x12\x03$\x12\x1f\n\x0c\
     \n\x05\x04\x01\x02\x02\x03\x12\x03$\"#\n+\n\x04\x04\x01\x02\x03\x12\x03&\
-    \x02\x1f\x1a\x1e\x20TX/RX\x20messages\x20for\x20phy\x20layer\n\n\x0c\n\
+    \x02\x1e\x1a\x1e\x20TX/RX\x20messages\x20for\x20phy\x20layer\n\n\x0c\n\
     \x05\x04\x01\x02\x03\x04\x12\x03&\x02\n\n\x0c\n\x05\x04\x01\x02\x03\x05\
-    \x12\x03&\x0b\x11\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\x03&\x12\x1a\n\x0c\
-    \n\x05\x04\x01\x02\x03\x03\x12\x03&\x1d\x1e\n\x0b\n\x04\x04\x01\x02\x04\
-    \x12\x03'\x02\x1f\n\x0c\n\x05\x04\x01\x02\x04\x04\x12\x03'\x02\n\n\x0c\n\
-    \x05\x04\x01\x02\x04\x05\x12\x03'\x0b\x11\n\x0c\n\x05\x04\x01\x02\x04\
-    \x01\x12\x03'\x12\x1a\n\x0c\n\x05\x04\x01\x02\x04\x03\x12\x03'\x1d\x1e\n\
-    -\n\x04\x04\x01\x02\x05\x12\x03)\x02\x1f\x1a\x20\x20TX/RX\x20bytes\x20fo\
+    \x12\x03&\x0b\x10\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\x03&\x11\x19\n\x0c\
+    \n\x05\x04\x01\x02\x03\x03\x12\x03&\x1c\x1d\n\x0b\n\x04\x04\x01\x02\x04\
+    \x12\x03'\x02\x1e\n\x0c\n\x05\x04\x01\x02\x04\x04\x12\x03'\x02\n\n\x0c\n\
+    \x05\x04\x01\x02\x04\x05\x12\x03'\x0b\x10\n\x0c\n\x05\x04\x01\x02\x04\
+    \x01\x12\x03'\x11\x19\n\x0c\n\x05\x04\x01\x02\x04\x03\x12\x03'\x1c\x1d\n\
+    -\n\x04\x04\x01\x02\x05\x12\x03)\x02\x1e\x1a\x20\x20TX/RX\x20bytes\x20fo\
     r\x20HostController\n\n\x0c\n\x05\x04\x01\x02\x05\x04\x12\x03)\x02\n\n\
-    \x0c\n\x05\x04\x01\x02\x05\x05\x12\x03)\x0b\x11\n\x0c\n\x05\x04\x01\x02\
-    \x05\x01\x12\x03)\x12\x1a\n\x0c\n\x05\x04\x01\x02\x05\x03\x12\x03)\x1d\
-    \x1e\n\x0b\n\x04\x04\x01\x02\x06\x12\x03*\x02\x1f\n\x0c\n\x05\x04\x01\
+    \x0c\n\x05\x04\x01\x02\x05\x05\x12\x03)\x0b\x10\n\x0c\n\x05\x04\x01\x02\
+    \x05\x01\x12\x03)\x11\x19\n\x0c\n\x05\x04\x01\x02\x05\x03\x12\x03)\x1c\
+    \x1d\n\x0b\n\x04\x04\x01\x02\x06\x12\x03*\x02\x1e\n\x0c\n\x05\x04\x01\
     \x02\x06\x04\x12\x03*\x02\n\n\x0c\n\x05\x04\x01\x02\x06\x05\x12\x03*\x0b\
-    \x11\n\x0c\n\x05\x04\x01\x02\x06\x01\x12\x03*\x12\x1a\n\x0c\n\x05\x04\
-    \x01\x02\x06\x03\x12\x03*\x1d\x1e\n%\n\x04\x04\x01\x02\x07\x12\x03,\x02-\
+    \x10\n\x0c\n\x05\x04\x01\x02\x06\x01\x12\x03*\x11\x19\n\x0c\n\x05\x04\
+    \x01\x02\x06\x03\x12\x03*\x1c\x1d\n%\n\x04\x04\x01\x02\x07\x12\x03,\x02-\
     \x1a\x18\x20Recent\x20Invalid\x20Packets\n\n\x0c\n\x05\x04\x01\x02\x07\
     \x04\x12\x03,\x02\n\n\x0c\n\x05\x04\x01\x02\x07\x06\x12\x03,\x0b\x18\n\
     \x0c\n\x05\x04\x01\x02\x07\x01\x12\x03,\x19(\n\x0c\n\x05\x04\x01\x02\x07\

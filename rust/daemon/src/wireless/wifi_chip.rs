@@ -61,8 +61,8 @@ impl WirelessChip for WifiChip {
         stats_proto.set_kind(netsim_radio_stats::Kind::WIFI);
         let chip_proto = self.get();
         if chip_proto.has_wifi() {
-            stats_proto.set_tx_count(chip_proto.wifi().tx_count as u64);
-            stats_proto.set_rx_count(chip_proto.wifi().rx_count as u64);
+            stats_proto.set_tx_count(chip_proto.wifi().tx_count);
+            stats_proto.set_rx_count(chip_proto.wifi().rx_count);
         }
         vec![stats_proto]
     }
