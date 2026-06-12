@@ -97,6 +97,7 @@ impl World {
             address,
             bt_properties: Default::default(),
             mode,
+            ..Default::default()
         })));
 
         let params = ChipCreate { packet_stream, packet_sink, chip };
@@ -214,6 +215,7 @@ impl World {
             address: "".to_string(),
             bt_properties: Default::default(),
             mode,
+            ..Default::default()
         })));
 
         let params = ChipCreate { packet_stream: None, packet_sink: None, chip };

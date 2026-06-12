@@ -137,6 +137,7 @@ async fn test_actor_reset_re_enables_chip() {
         variant: Some(netsim_model::ChipVariantUpdate::Bluetooth(netsim_model::BluetoothUpdate {
             low_energy: netsim_model::RadioUpdate { state: Some(false) },
             classic: netsim_model::RadioUpdate { state: Some(false) },
+            ..Default::default()
         })),
         ..Default::default()
     };

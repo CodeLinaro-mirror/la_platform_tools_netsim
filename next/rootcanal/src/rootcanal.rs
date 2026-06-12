@@ -205,6 +205,17 @@ impl Rootcanal {
             .ok_or(Error::ControllerNotFound(controller_id))
             .map(|controller| controller.clear_stats())
     }
+
+    /// Reconfigures a specific controller's properties.
+    pub fn set_properties(&self, controller_id: ControllerId, properties: &[u8]) -> Result<()> {
+        let controller = self
+            .controllers
+            .lock()
+            .get(&controller_id)
+            .cloned()
+            .ok_or(Error::ControllerNotFound(controller_id))?;
+        controller.set_properties(properties)
+    }
 }
 
 impl Default for Rootcanal {
