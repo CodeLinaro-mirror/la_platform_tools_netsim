@@ -36,7 +36,7 @@ pub struct RunArgs {
     pub netsim_args: Option<String>,
     #[arg(long, help = "Path to netsim CLI binary")]
     pub netsim_cli_path: Option<String>,
-    #[arg(long, help = "Gateway IP to connect to (defaults to 10.0.2.2)")]
+    #[arg(long, help = "Gateway IP to connect to (defaults to 10.0.3.2)")]
     pub gateway_ip: Option<String>,
     #[arg(long, help = "Optional scenario filter (matches feature file name)")]
     pub filter: Option<String>,
@@ -90,8 +90,8 @@ pub async fn run(
         host,
         adb,
         netsim,
-        target_ip: "10.0.2.2".to_string(),
-        gateway_ip: args.gateway_ip.unwrap_or_else(|| "10.0.2.2".to_string()),
+        target_ip: "10.0.3.2".to_string(),
+        gateway_ip: args.gateway_ip.unwrap_or_else(|| "10.0.3.2".to_string()),
         filter: args.filter,
         is_dry_run: args.dry_run,
         is_verbose: args.verbose,
@@ -128,8 +128,8 @@ pub async fn list_scenarios(
             "com.android.verify.vbs/com.android.verify.vbs.VbsInstrumentation".to_string(),
         ),
         netsim: NetsimWorld::new(),
-        target_ip: "10.0.2.2".to_string(),
-        gateway_ip: "10.0.2.2".to_string(),
+        target_ip: "10.0.3.2".to_string(),
+        gateway_ip: "10.0.3.2".to_string(),
         filter: None,
         is_dry_run: true,
         is_verbose: false,
