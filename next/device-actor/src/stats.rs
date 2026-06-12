@@ -163,3 +163,46 @@ pub(crate) fn write_combined_stats(
 ) -> Result<(), std::io::Error> {
     Stats::write_to_disk(&stats_proto, &path)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, atomic::Ordering};
+
+    use netsim_model::FrontendStats;
+
+    use super::*;
+
+    #[test]
+    fn test_frontend_stats_translation() {
+        let frontend_stats = Arc::new(FrontendStats::default());
+
+        // Simulate API calls
+        frontend_stats.get_version.store(1, Ordering::SeqCst);
+        frontend_stats.create_device.store(2, Ordering::SeqCst);
+        frontend_stats.delete_chip.store(3, Ordering::SeqCst);
+        frontend_stats.patch_device.store(4, Ordering::SeqCst);
+        frontend_stats.reset.store(5, Ordering::SeqCst);
+        frontend_stats.list_device.store(6, Ordering::SeqCst);
+        frontend_stats.subscribe_device.store(7, Ordering::SeqCst);
+        frontend_stats.patch_capture.store(8, Ordering::SeqCst);
+        frontend_stats.list_capture.store(9, Ordering::SeqCst);
+        frontend_stats.get_capture.store(10, Ordering::SeqCst);
+        frontend_stats.delete_device.store(11, Ordering::SeqCst);
+
+        let mut stats = Stats::new("1.0.0".to_string(), None, frontend_stats);
+        let proto = stats.get_combined_stats(vec![], None);
+
+        let frontend_proto = proto.frontend_stats.as_ref().expect("Frontend stats missing");
+        assert_eq!(frontend_proto.get_version(), 1);
+        assert_eq!(frontend_proto.create_device(), 2);
+        assert_eq!(frontend_proto.delete_chip(), 3);
+        assert_eq!(frontend_proto.patch_device(), 4);
+        assert_eq!(frontend_proto.reset(), 5);
+        assert_eq!(frontend_proto.list_device(), 6);
+        assert_eq!(frontend_proto.subscribe_device(), 7);
+        assert_eq!(frontend_proto.patch_capture(), 8);
+        assert_eq!(frontend_proto.list_capture(), 9);
+        assert_eq!(frontend_proto.get_capture(), 10);
+        assert_eq!(frontend_proto.delete_device(), 11);
+    }
+}

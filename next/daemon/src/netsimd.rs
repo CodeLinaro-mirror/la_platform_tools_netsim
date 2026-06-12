@@ -655,6 +655,9 @@ impl NetsimDaemon {
             )
         };
 
+        let stats_path =
+            initialized_guard.path().parent().map(|p| p.join("netsim_session_stats.json"));
+
         let mut device_actor_state = device_actor::DeviceActor::new(
             chip_clients.clone(),
             next_chip_id.clone(),
@@ -663,7 +666,7 @@ impl NetsimDaemon {
             startup_timeout,
             idle_timeout,
             get_version(),
-            None,
+            stats_path,
             None,
             frontend_stats.clone(),
         );
