@@ -173,8 +173,8 @@ missing several key features and the detailed logic that is present in the C++
         (`ATDnumber@[category],#[clir];`).
   - [ ] Integrate with `SimService` to perform FDN (Fixed Dialing Number)
         checks.
-- [ ] **Expand `AT+CHLD` command handling:**
-  - [ ] Implement all modes (0, 1, 2, 3, 4) of the `AT+CHLD` command.
+- [x] **Expand `AT+CHLD` command handling:**
+  - [x] Implement all modes (0, 1, 2, 3, 4) of the `AT+CHLD` command.
 - [ ] **Add `AT+CUSD` command handling:**
   - [ ] Implement the `AT+CUSD=` command for canceling USSD sessions.
 - [ ] **Improve error handling:**
