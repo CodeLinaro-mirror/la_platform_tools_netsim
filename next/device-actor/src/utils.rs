@@ -199,6 +199,11 @@ pub fn distribute_stream_stats(
     }
 }
 
+/// Helper to saturate u64 to i32::MAX
+fn saturate_cast(val: u64) -> i32 {
+    std::cmp::min(val, i32::MAX as u64) as i32
+}
+
 /// Converts internal Model stats to Proto stats for persistence/RPC.
 pub fn to_proto_stats(m: netsim_model::NetsimRadioStats) -> netsim_proto::stats::NetsimRadioStats {
     let mut p = netsim_proto::stats::NetsimRadioStats::new();
@@ -211,10 +216,10 @@ pub fn to_proto_stats(m: netsim_model::NetsimRadioStats) -> netsim_proto::stats:
         p.set_kind(netsim_proto::stats::netsim_radio_stats::Kind::UNSPECIFIED);
     }
     p.set_duration_secs(m.duration_secs);
-    p.set_tx_count(m.tx_count);
-    p.set_rx_count(m.rx_count);
-    p.set_tx_bytes(m.tx_bytes);
-    p.set_rx_bytes(m.rx_bytes);
+    p.set_tx_count(saturate_cast(m.tx_count));
+    p.set_rx_count(saturate_cast(m.rx_count));
+    p.set_tx_bytes(saturate_cast(m.tx_bytes));
+    p.set_rx_bytes(saturate_cast(m.rx_bytes));
     // invalid_packets are not yet persisted/converted
     p
 }

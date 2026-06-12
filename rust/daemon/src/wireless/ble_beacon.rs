@@ -70,8 +70,8 @@ impl WirelessChip for BleBeacon {
         stats_proto.set_kind(netsim_radio_stats::Kind::BLE_BEACON);
         let chip_proto = self.get();
         if chip_proto.has_ble_beacon() {
-            stats_proto.set_tx_count(chip_proto.ble_beacon().bt.low_energy.tx_count as u64);
-            stats_proto.set_rx_count(chip_proto.ble_beacon().bt.low_energy.rx_count as u64);
+            stats_proto.set_tx_count(chip_proto.ble_beacon().bt.low_energy.tx_count);
+            stats_proto.set_rx_count(chip_proto.ble_beacon().bt.low_energy.rx_count);
         }
         vec![stats_proto]
     }

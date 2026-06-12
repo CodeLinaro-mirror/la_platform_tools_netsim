@@ -147,12 +147,12 @@ impl WirelessChip for Bluetooth {
         if chip_proto.has_bt() {
             // Setting values for BLE Radio Stats
             ble_stats_proto.set_kind(netsim_radio_stats::Kind::BLUETOOTH_LOW_ENERGY);
-            ble_stats_proto.set_tx_count(chip_proto.bt().low_energy.tx_count as u64);
-            ble_stats_proto.set_rx_count(chip_proto.bt().low_energy.rx_count as u64);
+            ble_stats_proto.set_tx_count(chip_proto.bt().low_energy.tx_count);
+            ble_stats_proto.set_rx_count(chip_proto.bt().low_energy.rx_count);
             // Setting values for Classic Radio Stats
             classic_stats_proto.set_kind(netsim_radio_stats::Kind::BLUETOOTH_CLASSIC);
-            classic_stats_proto.set_tx_count(chip_proto.bt().classic.tx_count as u64);
-            classic_stats_proto.set_rx_count(chip_proto.bt().classic.rx_count as u64);
+            classic_stats_proto.set_tx_count(chip_proto.bt().classic.tx_count);
+            classic_stats_proto.set_rx_count(chip_proto.bt().classic.rx_count);
         }
         vec![ble_stats_proto, classic_stats_proto]
     }
