@@ -72,6 +72,7 @@ netsim_rust_library(
         "@bytes",
         "@rand",
         "@regex",
+        "@serde_json",
         "@tempfile",
     ],
     deps = DAEMON_DEPS,
