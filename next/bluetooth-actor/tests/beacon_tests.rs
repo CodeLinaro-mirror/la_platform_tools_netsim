@@ -63,3 +63,29 @@ async fn test_beacon_explicit_name() {
     let id = *world.chips.get("MyBeacon").unwrap();
     world.then_chip_name_is(id, "MyBeacon").await;
 }
+
+// Scenario: Beacon respects configured interval (default vs override)
+#[tokio::test]
+async fn test_beacon_interval() {
+    let mut world = world::World::new();
+
+    // Given a scanner
+    world.given_scanner("Scanner").await;
+
+    // And a beacon with default settings
+    world.given_beacon("Beacon-Default").await;
+
+    // And a beacon configured with BALANCED mode (250ms)
+    world
+        .given_beacon_with_interval(
+            "Beacon-250ms",
+            netsim_model::Interval::AdvertiseMode(netsim_model::AdvertiseMode::Balanced.into()),
+        )
+        .await;
+
+    // Then scanner should see advertisements from "Beacon-Default" at ~1000ms rate
+    world.then_scanner_measures_interval_from("Scanner", "Beacon-Default", 1000).await;
+
+    // And scanner should see advertisements from "Beacon-250ms" at ~250ms rate
+    world.then_scanner_measures_interval_from("Scanner", "Beacon-250ms", 250).await;
+}

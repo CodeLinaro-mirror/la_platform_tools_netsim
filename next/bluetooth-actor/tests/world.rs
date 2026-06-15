@@ -9,7 +9,7 @@ use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
 use netsim_model::{
     AdvertiseSettings, AdvertiseTxPower, BeaconParams, BleBeacon, BluetoothMode, Chip, ChipCreate,
-    ChipId, ChipUpdate, ChipVariant, DeviceId, DeviceParams, PacketSink, PacketStream,
+    ChipId, ChipUpdate, ChipVariant, DeviceId, DeviceParams, Interval, PacketSink, PacketStream,
     ScannerParams, TxPower,
 };
 use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
@@ -232,6 +232,17 @@ impl World {
         self.create_beacon_chip(name, Some(address.to_string()), None).await;
     }
 
+    /// Creates a Bluetooth chip in Beacon mode with a specific interval.
+    pub async fn given_beacon_with_interval(&mut self, name: &str, interval: Interval) {
+        let id_val = self.chip_id_counter + 1;
+        let address = format!("00:00:00:00:{:02x}:{:02x}", (id_val >> 8) & 0xFF, id_val & 0xFF);
+        let settings = Some(AdvertiseSettings { interval: Some(interval), ..Default::default() });
+        let mode = BluetoothMode::Beacon(Box::new(BeaconParams {
+            ble_beacon: BleBeacon { address, settings, ..Default::default() },
+        }));
+        self.create_chip(name, mode, None, None, self.device_id).await;
+    }
+
     /// Creates a Bluetooth chip in Beacon mode with specified Tx Power.
     pub async fn given_beacon_with_tx_power(&mut self, name: &str, tx_power: &str) {
         let power_level = match tx_power {
@@ -343,7 +354,7 @@ impl World {
 
     pub async fn receive_packet(&mut self, name: &str) -> Vec<u8> {
         let rx = self.sinks.get_mut(name).expect("Sink not found for chip");
-        tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+        tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
             .await
             .expect("Timed out waiting for packet")
             .expect("Packet stream closed unexpectedly")
@@ -424,5 +435,59 @@ impl World {
             tokio::time::sleep(duration).await;
         }
         panic!("Chip {name} was not removed after timeout");
+    }
+
+    /// Verifies that the scanner receives advertisements from the specified
+    /// beacon at the expected interval.
+    pub async fn then_scanner_measures_interval_from(
+        &mut self,
+        scanner_name: &str,
+        beacon_name: &str,
+        expected_ms: u64,
+    ) {
+        let beacon_id = *self
+            .chips
+            .get(beacon_name)
+            .unwrap_or_else(|| panic!("Beacon '{}' not found", beacon_name));
+        let expected_byte_5 = (beacon_id.0 & 0xFF) as u8;
+        let expected_byte_4 = ((beacon_id.0 >> 8) & 0xFF) as u8;
+
+        let mut timestamps = Vec::new();
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_millis(expected_ms * 5 + 1000);
+
+        while start.elapsed() < timeout && timestamps.len() < 3 {
+            let reports = self.receive_scan_report(scanner_name).await;
+            let now = std::time::Instant::now();
+            for report in reports {
+                if report.mac[5] == expected_byte_5 && report.mac[4] == expected_byte_4 {
+                    timestamps.push(now);
+                }
+            }
+        }
+
+        assert!(
+            timestamps.len() >= 2,
+            "Need at least 2 packets to measure interval, got {}",
+            timestamps.len()
+        );
+        let mut intervals = Vec::new();
+        for i in 1..timestamps.len() {
+            intervals.push(timestamps[i].duration_since(timestamps[i - 1]).as_millis() as u64);
+        }
+        let avg_interval: u64 = intervals.iter().sum::<u64>() / intervals.len() as u64;
+
+        info!(
+            "Measured average interval for {}: {}ms (expected {}ms)",
+            beacon_name, avg_interval, expected_ms
+        );
+        let margin = (expected_ms / 2).max(50);
+        assert!(
+            avg_interval >= expected_ms - margin && avg_interval <= expected_ms + margin,
+            "Interval {}ms not within expected range {}ms +/- {}ms",
+            avg_interval,
+            expected_ms,
+            margin
+        );
     }
 }
