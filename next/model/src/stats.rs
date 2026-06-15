@@ -71,6 +71,10 @@ pub struct NetsimRadioStats {
     pub tx_count: u64,
     /// Number of packets received.
     pub rx_count: u64,
+    /// Number of medium-layer payload packets transmitted.
+    pub p2p_tx_count: u64,
+    /// Number of medium-layer payload packets received.
+    pub p2p_rx_count: u64,
     /// Number of bytes transmitted.
     pub tx_bytes: u64,
     /// Number of bytes received.

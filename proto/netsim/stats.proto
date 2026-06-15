@@ -43,6 +43,10 @@ message NetsimRadioStats {
   optional int32 rx_bytes = 7;
   // Recent Invalid Packets
   repeated InvalidPacket invalid_packets = 8;
+  // Payload messages transmitted on P2P medium
+  optional int32 p2p_tx_count = 9;
+  // Payload messages received on P2P medium
+  optional int32 p2p_rx_count = 10;
 }
 
 // Frontend statistics for a netsim session representing count of API calls
