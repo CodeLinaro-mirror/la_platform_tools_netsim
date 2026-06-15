@@ -20,6 +20,7 @@ BLUETOOTH_DEPS = [
     "@serde",
     "@thiserror",
     "@tokio",
+    "@tokio-stream",
     "@zerocopy",
 ]
 
