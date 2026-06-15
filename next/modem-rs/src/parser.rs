@@ -412,6 +412,9 @@ pub enum Command<'a> {
     /// Query clock
     #[command(tag = "AT+CCLK?")]
     QueryTime,
+    /// Goldfish specific concatenated init command
+    #[command(tag = "ATE0Q0V1")]
+    GoldfishInitSequence,
 }
 
 impl<'a> Command<'a> {}
