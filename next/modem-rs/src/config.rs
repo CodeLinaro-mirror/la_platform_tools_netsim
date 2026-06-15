@@ -15,6 +15,7 @@ pub struct SimProfile {
     pub facility_locks: FacilityLocks,
     pub stk: Stk,
     pub sim_io: SimIo,
+    pub enable_unsolicited_urcs: Option<bool>,
 }
 
 /// Represents the PIN profile configuration.

@@ -23,6 +23,7 @@ use crate::{
 /// Represents a single modem device.
 pub struct ModemImpl {
     pub id: ModemId,
+    pub enable_unsolicited_urcs: bool,
     pub sim_service: SimService,
     pub network_service: NetworkService,
     pub sms_service: SmsService,
@@ -43,7 +44,7 @@ pub enum State {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModemEvent {
     CallRingTimeout { call_token: u32 },
-    NetworkRegistrationComplete,
+    AttachNetwork,
     TestEvent,
 }
 
@@ -55,8 +56,10 @@ pub enum ModemEffect {
 
 impl ModemImpl {
     pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile) -> Self {
+        let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         Self {
             id,
+            enable_unsolicited_urcs: enable_unsol,
             sim_service: SimService::new(&profile),
             network_service: NetworkService::default(),
             sms_service: SmsService::default(),
@@ -186,8 +189,6 @@ impl ModemImpl {
 
     /// Receives an AT command from the modem.
     pub fn receive_at_command(&mut self, command_bytes: &[u8]) -> Vec<ModemEffect> {
-        let mut effects = Vec::new();
-
         // Check for SMS PDU submission first. This requires special state handling.
         let sms_pdu_action = if self.sms_service.waiting_for_pdu_len.is_some() {
             if command_bytes.ends_with(b"\x1a") {
@@ -221,46 +222,24 @@ impl ModemImpl {
         };
 
         if let Some(result) = sms_pdu_action {
+            let mut effects = Vec::new();
             if let ExecutionResult::Handled(handled) = result {
-                for response in handled.responses {
-                    if !response.is_empty() {
-                        effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-                    }
-                }
-                if let Some(action) = handled.action {
-                    effects.push(ModemEffect::Action(action));
-                }
+                Self::append_handled_effects(&mut effects, handled);
             }
             return effects;
         }
 
-        // Proceed with normal command parsing.
-        match Command::parse(command_bytes) {
-            Ok((_, command)) => {
-                let result = self.execute(&command);
-
-                match result {
-                    ExecutionResult::Handled(handled) => {
-                        for response in handled.responses {
-                            if !response.is_empty() {
-                                effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-                            }
-                        }
-                        if let Some(action) = handled.action {
-                            effects.push(ModemEffect::Action(action));
-                        }
-                    }
-                    ExecutionResult::Unhandled => {
-                        error!("Unhandled command: {:?}", command);
-                        effects.push(ModemEffect::Response(AT_ERROR.to_vec()));
-                    }
-                }
-            }
-            Err(_) => {
-                effects.push(ModemEffect::Response(AT_ERROR.to_vec()));
-            }
+        let mut len = command_bytes.len();
+        while len > 0 && (command_bytes[len - 1] == b'\r' || command_bytes[len - 1] == b'\n') {
+            len -= 1;
         }
-        effects
+        let command_clean = &command_bytes[..len];
+
+        let sub_commands = split_chained_commands(command_clean);
+        if sub_commands.is_empty() {
+            return vec![ModemEffect::Response(AT_ERROR.to_vec())];
+        }
+        self.execute_chained_commands(&sub_commands)
     }
 
     pub fn tick(&mut self) -> Vec<ModemEffect> {
@@ -276,13 +255,17 @@ impl ModemImpl {
             ModemEvent::CallRingTimeout { call_token } => {
                 self.call_service.handle_ring_timeout(call_token);
             }
-            ModemEvent::NetworkRegistrationComplete => {
-                let result = self.network_service.handle_registration_complete();
-                if let ExecutionResult::Handled(handled) = result {
-                    for response in handled.responses {
-                        if !response.is_empty() {
-                            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-                        }
+            ModemEvent::AttachNetwork => {
+                let responses = self.network_service.attach_network();
+                if self.enable_unsolicited_urcs {
+                    let combined = responses
+                        .iter()
+                        .filter(|r| !r.is_empty())
+                        .cloned()
+                        .collect::<Vec<String>>()
+                        .join("");
+                    if !combined.is_empty() {
+                        effects.push(ModemEffect::Response(combined.into_bytes()));
                     }
                 }
             }
@@ -311,6 +294,92 @@ impl ModemImpl {
         &self.call_service
     }
 
+    /// Executes a single command and schedules any associated side-effects
+    /// (e.g. network attachment).
+    fn execute_and_schedule(
+        &mut self,
+        command: &Command,
+        effects: &mut Vec<ModemEffect>,
+    ) -> ExecutionResult {
+        let mut result = self.execute(command);
+        if let ExecutionResult::Handled(ref mut handled) = result {
+            if let Command::SetRadioPower(1) = command {
+                effects.push(ModemEffect::Schedule {
+                    delay: std::time::Duration::from_millis(10),
+                    event: ModemEvent::AttachNetwork,
+                });
+            }
+            let mode_active = match command {
+                Command::SetVoiceNetworkRegistration(m)
+                | Command::SetDataNetworkRegistration(m)
+                | Command::SetLteNetworkRegistration(m) => *m > 0,
+                _ => false,
+            };
+            if mode_active && !self.network_service.is_attached() {
+                effects.push(ModemEffect::Schedule {
+                    delay: std::time::Duration::from_millis(10),
+                    event: ModemEvent::AttachNetwork,
+                });
+            }
+            if let Some(action) = handled.action.take() {
+                effects.push(ModemEffect::Action(action));
+            }
+        }
+        result
+    }
+
+    /// Executes a list of chained commands sequentially, halting on error and
+    /// merging responses.
+    fn execute_chained_commands(&mut self, sub_commands: &[Vec<u8>]) -> Vec<ModemEffect> {
+        let mut combined_responses = Vec::new();
+        let mut combined_effects = Vec::new();
+        let mut stop_chain = false;
+
+        for (i, cmd_bytes) in sub_commands.iter().enumerate() {
+            let is_last = i == sub_commands.len() - 1;
+            match Command::parse(cmd_bytes) {
+                Ok((_, command)) => {
+                    match self.execute_and_schedule(&command, &mut combined_effects) {
+                        ExecutionResult::Handled(mut handled) => {
+                            let success =
+                                handled.responses.last().map(|s| s.as_str()) == Some("OK\r\n");
+                            if !is_last && success {
+                                handled.responses.pop();
+                            }
+                            combined_responses.append(&mut handled.responses);
+                            if !success {
+                                stop_chain = true;
+                            }
+                        }
+                        ExecutionResult::Unhandled => {
+                            error!("Unhandled command: {:?}", command);
+                            combined_responses.push("ERROR\r\n".to_string());
+                            stop_chain = true;
+                        }
+                    }
+                }
+                Err(_) => {
+                    combined_responses.push("ERROR\r\n".to_string());
+                    stop_chain = true;
+                }
+            }
+            if stop_chain {
+                break;
+            }
+        }
+
+        let combined = combined_responses
+            .iter()
+            .filter(|r| !r.is_empty())
+            .cloned()
+            .collect::<Vec<String>>()
+            .join("");
+        if !combined.is_empty() {
+            combined_effects.insert(0, ModemEffect::Response(combined.into_bytes()));
+        }
+        combined_effects
+    }
+
     pub fn execute(&mut self, command: &Command) -> crate::types::ExecutionResult {
         let result = self.misc_service.execute(command);
         if !matches!(result, ExecutionResult::Unhandled) {
@@ -334,7 +403,7 @@ impl ModemImpl {
             return result;
         }
 
-        let result = self.network_service.execute(command);
+        let result = self.network_service.execute(command, self.enable_unsolicited_urcs);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
@@ -356,4 +425,81 @@ impl ModemImpl {
 
         ExecutionResult::Unhandled
     }
+
+    fn append_handled_effects(
+        effects: &mut Vec<ModemEffect>,
+        handled: crate::types::HandledCommand,
+    ) {
+        let combined = handled
+            .responses
+            .iter()
+            .filter(|r| !r.is_empty())
+            .cloned()
+            .collect::<Vec<String>>()
+            .join("");
+        if !combined.is_empty() {
+            effects.push(ModemEffect::Response(combined.into_bytes()));
+        }
+        if let Some(action) = handled.action {
+            effects.push(ModemEffect::Action(action));
+        }
+    }
+}
+
+/// Splits a chained command line by semicolons (ignoring them inside quotes)
+/// and normalizes prefixes.
+fn split_chained_commands(input: &[u8]) -> Vec<Vec<u8>> {
+    let mut commands = Vec::new();
+    let mut current = Vec::new();
+    let mut in_quotes = false;
+    for &b in input {
+        if b == b'"' {
+            in_quotes = !in_quotes;
+            current.push(b);
+        } else if b == b';' && !in_quotes {
+            if !current.is_empty() {
+                commands.push(current);
+                current = Vec::new();
+            }
+        } else {
+            current.push(b);
+        }
+    }
+    if !current.is_empty() {
+        commands.push(current);
+    }
+
+    let mut processed = Vec::new();
+    for cmd in commands {
+        let trimmed = trim_slice(&cmd);
+        if trimmed.is_empty() {
+            continue;
+        }
+        if starts_with_ignore_case(trimmed, b"AT") || starts_with_ignore_case(trimmed, b"RING") {
+            processed.push(trimmed.to_vec());
+        } else {
+            let mut new_cmd = b"AT".to_vec();
+            new_cmd.extend_from_slice(trimmed);
+            processed.push(new_cmd);
+        }
+    }
+    processed
+}
+
+/// Trims leading and trailing ASCII whitespace from a byte slice.
+fn trim_slice(s: &[u8]) -> &[u8] {
+    let mut start = 0;
+    while start < s.len() && s[start].is_ascii_whitespace() {
+        start += 1;
+    }
+    let mut end = s.len();
+    while end > start && s[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    &s[start..end]
+}
+
+/// Checks if a byte slice starts with a prefix, ignoring ASCII case.
+fn starts_with_ignore_case(s: &[u8], prefix: &[u8]) -> bool {
+    s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
 }

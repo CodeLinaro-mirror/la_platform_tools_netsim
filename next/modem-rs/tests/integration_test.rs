@@ -102,7 +102,6 @@ fn test_two_modem_end_to_end_scenario() {
     then_response_is(&mut world, "B", "OK");
 
     // Verify A received
-    // Expect: "+CMT: ,5\r\nhello"
-    let resp = then_wait_for_response_containing(&mut world, "A", "+CMT:");
-    assert!(resp.contains("hello"));
+    then_wait_for_response_containing(&mut world, "A", "+CMT: ,5");
+    then_response_is(&mut world, "A", "hello");
 }

@@ -34,6 +34,7 @@ pub struct SmsService {
     pending_sms_destination: Option<String>,
     pub waiting_for_pdu_len: Option<usize>,
     pub waiting_for_pdu_store: bool,
+    broadcast_config: (u8, String, String),
 }
 
 impl Default for SmsService {
@@ -49,6 +50,7 @@ impl Default for SmsService {
             pending_sms_destination: None,
             waiting_for_pdu_len: None,
             waiting_for_pdu_store: false,
+            broadcast_config: (0, "".to_string(), "".to_string()),
         }
     }
 }
@@ -196,12 +198,25 @@ impl SmsService {
     }
 
     pub fn handle_broadcast_config(
-        &self,
-        _mode: u8,
-        _mids: QuotedString,
-        _dcss: QuotedString,
+        &mut self,
+        mode: u8,
+        mids: QuotedString,
+        dcss: QuotedString,
     ) -> ExecutionResult {
+        self.broadcast_config = (
+            mode,
+            String::from_utf8(mids.to_vec()).unwrap_or_default(),
+            String::from_utf8(dcss.to_vec()).unwrap_or_default(),
+        );
         ExecutionResult::Handled(HandledCommand::ok())
+    }
+
+    pub fn handle_query_broadcast_config(&self) -> ExecutionResult {
+        let (mode, mids, dcss) = &self.broadcast_config;
+        let response = format!("+CSCB: {},\"{}\",\"{}\"\r\n", mode, mids, dcss);
+        let mut handled = HandledCommand::ok();
+        handled.responses.insert(0, response);
+        ExecutionResult::Handled(handled)
     }
 
     pub fn handle_set_smsc_address(&mut self, address: QuotedString) -> ExecutionResult {
@@ -237,6 +252,7 @@ impl SmsService {
             Command::BroadcastConfig(mode, mids, dcss) => {
                 self.handle_broadcast_config(*mode, *mids, *dcss)
             }
+            Command::QueryBroadcastConfig => self.handle_query_broadcast_config(),
             Command::SetSmscAddress(address) => self.handle_set_smsc_address(*address),
             Command::GetSmscAddress => self.handle_get_smsc_address(),
             Command::RemoteSms(pdu) => self.handle_remote_sms(*pdu),

@@ -6,15 +6,34 @@ use crate::{steps::*, world::World};
 // Scenario: Query Operator Selection
 //   Given a modem "A"
 //   When AT command "AT+COPS?" is sent to "A"
+//   Then response from "A" is "+COPS: 0,2,310260"
+//   When AT command "AT+COPS=3,0" is sent to "A"
+//   And AT command "AT+COPS?" is sent to "A"
 //   Then response from "A" is '+COPS: 0,0,"Android Virtual Operator"'
-//   And response from "A" is "OK"
 #[test]
 fn test_cops_query() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+COPS?");
 
+    // 1. Default should be format 0 (long alphanumeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
     then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Set format to 1 (short alphanumeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS=3,1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,1,\"Android\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Set format to 2 (numeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS=3,2");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -29,25 +48,58 @@ fn test_csq_query() {
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CSQ");
 
-    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
     then_response_is(&mut world, "A", "OK");
 }
 
-// Scenario: Network Registration
+// Scenario: Network Registration on Radio ON
 //   Given a modem "A"
-//   When time advances 20 ms
+//   When AT command "AT+CFUN=0" is sent to "A"
+//   And AT command "AT+CREG=1" is sent to "A"
+//   And AT command "AT+CGREG=1" is sent to "A"
+//   And AT command "AT+CEREG=1" is sent to "A"
+//   And AT command "AT+CFUN=1" is sent to "A"
 //   Then response from "A" is "+CREG: 1"
+//   And response from "A" is "+CGREG: 1"
+//   And response from "A" is "+CEREG: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_network_registration() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    // Advance the clock to trigger the registration event
-    when_time_advances_ms(&mut world, 20);
+    // Turn radio OFF first to simulate clean boot sequence
+    when_at_command_sent(&mut world, "A", "AT+CFUN=0");
+    then_response_is(&mut world, "A", "OK");
 
-    // Verify that the modem sends a +CREG: 1 and +CGREG: 1 unsolicited response
+    // Enable unsolicited reports
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CEREG=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Turn radio ON which returns only OK synchronously
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Advance time by 10ms to trigger the AttachNetwork event and send URCs!
+    when_time_advances_ms(&mut world, 10);
+
+    // Verify unsolicited reports arrive in correct order
     then_response_is(&mut world, "A", "+CREG: 1");
     then_response_is(&mut world, "A", "+CGREG: 1");
+    then_response_is(&mut world, "A", "+CEREG: 1");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
 }
 
 // Scenario: Set dynamic registration status
@@ -103,7 +155,11 @@ fn test_set_signal_strength() {
 
     // Check default
     when_at_command_sent(&mut world, "A", "AT+CSQ");
-    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
     then_response_is(&mut world, "A", "OK");
 
     // Change value
@@ -112,6 +168,145 @@ fn test_set_signal_strength() {
 
     // Check new value
     when_at_command_sent(&mut world, "A", "AT+CSQ");
-    then_response_is(&mut world, "A", "+CSQ: 25,0");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 25,0,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
     then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Network Registration after Radio Cycle (ON -> OFF -> ON)
+//   Given a modem "A"
+//   When AT command "AT+CREG=1" is sent to "A"
+//   And AT command "AT+CFUN=1" is sent to "A"
+//   And time advances 10 ms
+//   Then response from "A" is "+CREG: 1"
+//   And response from "A" is "+CSQ: 20,99"
+//   When AT command "AT+CFUN=0" is sent to "A"
+//   Then response from "A" is "+CREG: 0"
+//   And response from "A" is "OK"
+//   When AT command "AT+CFUN=1" is sent to "A"
+//   And time advances 10 ms
+//   Then response from "A" is "+CREG: 1"
+//   And response from "A" is "+CSQ: 20,99"
+#[test]
+fn test_network_registration_radio_cycle() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Turn radio ON and check reactive URCs
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
+
+    // 2. Turn radio OFF (drops registration and sends URC synchronously)
+    when_at_command_sent(&mut world, "A", "AT+CFUN=0");
+    then_response_is(&mut world, "A", "+CREG: 0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Turn radio ON again and verify reactive URC triggers again!
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
+}
+
+// Scenario: Query Operator in All Formats (Compound Query)
+//   Given a modem "A"
+//   When AT command "AT+COPS=3,0;+COPS?;+COPS=3,1;+COPS?;+COPS=3,2;+COPS?" is
+// sent to "A"   Then response from "A" is "+COPS: 0,0,\"Android Virtual
+// Operator\""   And response from "A" is "+COPS: 0,1,\"Android\""
+//   And response from "A" is "+COPS: 0,2,310260"
+//   And response from "A" is "OK"
+#[test]
+fn test_query_operator_all_formats() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+COPS=3,0;+COPS?;+COPS=3,1;+COPS?;+COPS=3,2;+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "+COPS: 0,1,\"Android\"");
+    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Query Current Network Technology Mode (AT+CTEC?)
+//   Given a modem "A"
+//   When AT command "AT+CTEC?" is sent to "A"
+//   Then response from "A" is "+CTEC: 32,40"
+//   And response from "A" is "OK"
+#[test]
+fn test_query_current_ctec() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CTEC?");
+    then_response_is(&mut world, "A", "+CTEC: 32,40");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Query Supported Network Technology Modes (AT+CTEC=?)
+//   Given a modem "A"
+//   When AT command "AT+CTEC=?" is sent to "A"
+//   Then response from "A" is "+CTEC: 0,1,5,6"
+//   And response from "A" is "OK"
+#[test]
+fn test_query_supported_ctec() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CTEC=?");
+    then_response_is(&mut world, "A", "+CTEC: 0,1,5,6");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Set Network Technology Mode (AT+CTEC=current,preferred)
+//   Given a modem "A"
+//   When AT command "AT+CTEC=1,"21"" is sent to "A"
+//   Then response from "A" is "+CTEC: DONE"
+//   And response from "A" is "OK"
+#[test]
+fn test_set_ctec() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"21\"");
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify that values are updated and queried back correctly
+    when_at_command_sent(&mut world, "A", "AT+CTEC?");
+    then_response_is(&mut world, "A", "+CTEC: 1,21");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_set_ctec_invalid() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Invalid current tech (99 is not supported)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=99,\"21\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Invalid preferred mask (0x200 is not supported, only 0x63 is supported)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"200\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Invalid current tech (5 is index, but we expect mask. 5 as mask is 0b101
+    // which is invalid)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=5,\"21\"");
+    then_response_is(&mut world, "A", "ERROR");
 }

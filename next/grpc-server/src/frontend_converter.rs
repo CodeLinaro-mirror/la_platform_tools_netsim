@@ -89,6 +89,9 @@ pub fn to_proto_chip(c: netsim_model::Chip) -> ProtoChip {
                 chip.chip =
                     Some(netsim_proto::model::chip::Chip::Ethernet(to_proto_radio(&eth.radio)));
             }
+            netsim_model::ChipVariant::Nfc(nfc) => {
+                chip.chip = Some(netsim_proto::model::chip::Chip::Nfc(to_proto_radio(&nfc.radio)));
+            }
         }
     }
 

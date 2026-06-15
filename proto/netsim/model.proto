@@ -190,7 +190,9 @@ message Chip {
     Radio cellular = 11;
     // CELLULAR_DATA
     Radio cellular_data = 12;
-    // Reserved fields 13 to 14
+    // NFC
+    Radio nfc = 13;
+    // Reserved fields 14
   }
   // Offset of the chip position from center of device
   optional Position offset = 15;

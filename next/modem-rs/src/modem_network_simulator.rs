@@ -139,13 +139,6 @@ impl ModemNetworkSimulator {
         }
         let modem = crate::modem::ModemImpl::new(id, profile.unwrap_or_default());
 
-        // Schedule initial event (registration complete)
-        self.schedule_event(
-            id,
-            std::time::Duration::from_millis(10),
-            ModemEvent::NetworkRegistrationComplete,
-        );
-
         self.modems.insert(id, modem);
         self.sinks.insert(id, sink);
         Ok(())
