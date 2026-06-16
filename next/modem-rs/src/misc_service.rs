@@ -123,6 +123,10 @@ impl MiscService {
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
+    pub fn handle_goldfish_init_sequence(&self) -> ExecutionResult {
+        ExecutionResult::Handled(HandledCommand::ok())
+    }
+
     pub fn handle_set_echo(&self) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand::ok())
     }
@@ -260,6 +264,7 @@ impl MiscService {
             Command::SetReportMobileEquipmentError(_) => {
                 self.handle_set_report_mobile_equipment_error()
             }
+            Command::GoldfishInitSequence => self.handle_goldfish_init_sequence(),
             Command::SetEcho(_) => self.handle_set_echo(),
             Command::SetSpeakerVolume(vol) => self.handle_set_speaker_volume(*vol),
             Command::SetSpeakerMute(mute) => self.handle_set_speaker_mute(*mute),
@@ -287,7 +292,6 @@ impl MiscService {
             Command::SetCommaDialModifierTime(_) => self.handle_set_comma_dial_modifier_time(),
             Command::SetAutomaticDisconnectDelay(_) => self.handle_set_automatic_disconnect_delay(),
             Command::SetCallMode(_) => self.handle_set_call_mode(),
-
             Command::SetCharacterSet(_) => self.handle_set_character_set(),
             _ => ExecutionResult::Unhandled,
         }
