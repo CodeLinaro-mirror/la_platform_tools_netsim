@@ -15,8 +15,12 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{info, warn};
 
 use crate::{
-    bt_pcap::BluetoothH4Writer, capture_actor::CaptureActor, error::CaptureError,
-    ethernet_pcap::EthernetPcapWriter, uwb_pcap::UwbPcapWriter, writer::CaptureWriter,
+    bt_pcap::BluetoothH4Writer,
+    capture_actor::CaptureActor,
+    error::CaptureError,
+    ethernet_pcap::EthernetPcapWriter,
+    uwb_pcap::UwbPcapWriter,
+    writer::{CaptureWriter, DLT_USER0, PcapWriter},
 };
 
 /// Entity representing a packet capture for a specific chip.
@@ -147,9 +151,9 @@ impl CaptureActor {
             ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => {
                 EthernetPcapWriter::new(&filepath).await?
             }
-            // Fallback
+            // Fallback for custom/unregistered protocols (use DLT_USER0)
             ChipKind::UNSPECIFIED | ChipKind::NFC | ChipKind::CELLULAR => {
-                BluetoothH4Writer::new(&filepath).await?
+                Box::new(PcapWriter::new(&filepath, DLT_USER0).await?)
             }
         };
         Ok(writer)
