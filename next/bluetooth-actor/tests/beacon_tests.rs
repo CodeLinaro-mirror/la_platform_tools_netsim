@@ -102,3 +102,14 @@ async fn test_beacon_classic_disabled() {
     let id = *world.chips.get("Beacon").unwrap();
     world.then_classic_state_is(id, Some(false)).await;
 }
+
+// Scenario: Beacon advertises ADV_SCAN_IND (0x02) by default
+#[tokio::test]
+async fn test_beacon_advertises_adv_scan_ind() {
+    let mut world = world::World::new();
+
+    world.given_beacon("Beacon").await;
+    world.given_scanner("Scanner").await;
+
+    world.then_scanner_sees_adv_type("Scanner", 0x02).await;
+}

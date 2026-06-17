@@ -178,8 +178,9 @@ impl World {
             format!("00:00:00:00:{:02x}:{:02x}", (id_val >> 8) & 0xFF, id_val & 0xFF)
         });
 
-        let settings = tx_power.map(|power| AdvertiseSettings {
-            tx_power: Some(TxPower::TxPowerLevel(power)),
+        let settings = Some(AdvertiseSettings {
+            tx_power: tx_power.map(TxPower::TxPowerLevel),
+            scannable: true,
             ..Default::default()
         });
 
@@ -203,7 +204,11 @@ impl World {
     pub async fn when_create_beacon_with_defaults(&mut self) -> ChipId {
         let id = self.next_chip_id();
         let mode = BluetoothMode::Beacon(Box::new(BeaconParams {
-            ble_beacon: BleBeacon { address: "".to_string(), ..Default::default() },
+            ble_beacon: BleBeacon {
+                address: "".to_string(),
+                settings: Some(AdvertiseSettings { scannable: true, ..Default::default() }),
+                ..Default::default()
+            },
         }));
 
         let mut chip = Chip::new_test_ble("");
@@ -223,7 +228,6 @@ impl World {
         if let Err(e) = self.client.0.create_with_id(id, params).await {
             panic!("Failed to create default beacon: {:?}", e);
         }
-
         id
     }
 
@@ -236,7 +240,11 @@ impl World {
     pub async fn given_beacon_with_interval(&mut self, name: &str, interval: Interval) {
         let id_val = self.chip_id_counter + 1;
         let address = format!("00:00:00:00:{:02x}:{:02x}", (id_val >> 8) & 0xFF, id_val & 0xFF);
-        let settings = Some(AdvertiseSettings { interval: Some(interval), ..Default::default() });
+        let settings = Some(AdvertiseSettings {
+            interval: Some(interval),
+            scannable: true,
+            ..Default::default()
+        });
         let mode = BluetoothMode::Beacon(Box::new(BeaconParams {
             ble_beacon: BleBeacon { address, settings, ..Default::default() },
         }));
@@ -385,6 +393,28 @@ impl World {
         for report in reports {
             info!("Received Scan Report: {:?}", report.mac);
         }
+    }
+
+    pub async fn then_scanner_sees_adv_type(
+        &mut self,
+        scanner_name: &str,
+        expected_event_type: u8,
+    ) {
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_secs(5);
+        // Outer loop skips over unrelated ambient traffic in multi-device tests.
+        while start.elapsed() < timeout {
+            let reports = self.receive_scan_report(scanner_name).await;
+            for report in reports {
+                if report.event_type == expected_event_type {
+                    return;
+                }
+            }
+        }
+        panic!(
+            "Scanner '{}' did not see adv with event type {} within timeout",
+            scanner_name, expected_event_type
+        );
     }
 
     /// Verifies that the scanner receives an advertisement from the specified

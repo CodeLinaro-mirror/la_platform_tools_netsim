@@ -81,6 +81,10 @@ pub fn create(
         .unwrap_or(DEFAULT_BEACON_INTERVAL_MS);
     let slots = (interval_ms * 8 / 5).clamp(ADV_INTERVAL_MIN_SLOTS, ADV_INTERVAL_MAX_SLOTS) as u16;
 
+    let scannable = params.ble_beacon.settings.as_ref().map(|s| s.scannable).unwrap_or_default();
+    let advertising_type =
+        if scannable { AdvertisingType::ADV_SCAN_IND } else { AdvertisingType::ADV_NONCONN_IND };
+
     // LE Set Advertising Parameters
     send_hci_command(
         rootcanal,
@@ -88,7 +92,7 @@ pub fn create(
         LeSetAdvertisingParameters {
             advertising_interval_min: U16::new(slots),
             advertising_interval_max: U16::new(slots),
-            advertising_type: AdvertisingType::ADV_IND,
+            advertising_type,
             own_address_type: OwnAddressType::PUBLIC_DEVICE_ADDRESS,
             peer_address_type: PeerAddressType::PUBLIC_DEVICE_OR_IDENTITY_ADDRESS,
             peer_address: PacketsAddress { bytes: address.address },
