@@ -11,9 +11,12 @@ DEPS = [
     "//next/device-api",
     "//next/model",
     "@tracing",
+    "@anyhow",
     "@bytes",
     "@futures",
     "@thiserror",
+    "@tokio",
+    "@casimir//:casimir_lib",
 ]
 
 netsim_rust_library(
