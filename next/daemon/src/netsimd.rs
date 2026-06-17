@@ -655,8 +655,11 @@ impl NetsimDaemon {
             )
         };
 
-        let stats_path =
-            initialized_guard.path().parent().map(|p| p.join("netsim_session_stats.json"));
+        let stats_path = if cfg!(feature = "testing") {
+            initialized_guard.path().parent().map(|p| p.join("netsim_session_stats.json"))
+        } else {
+            None
+        };
 
         let mut device_actor_state = device_actor::DeviceActor::new(
             chip_clients.clone(),
@@ -885,6 +888,10 @@ impl NetsimDaemon {
                 () = &mut shutdown_signal => {
                     info!("Shutting down gracefully...");
                     self.shutdown_actors().await;
+                    if !self.device_task.is_finished() {
+                        let _ = self.device_client.shutdown().await;
+                        let _ = (&mut self.device_task).await;
+                    }
                     break;
                 }
             }
