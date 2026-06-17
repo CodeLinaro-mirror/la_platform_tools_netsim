@@ -490,4 +490,13 @@ impl World {
             margin
         );
     }
+
+    pub async fn then_classic_state_is(&self, id: ChipId, expected: Option<bool>) {
+        use netsim_model::ChipClient;
+        let chip = self.client.read(id).await.unwrap();
+        let Some(netsim_model::ChipVariant::Bluetooth(bt)) = &chip.variant else {
+            panic!("Expected Bluetooth chip variant");
+        };
+        assert_eq!(bt.classic.state, expected);
+    }
 }

@@ -88,7 +88,9 @@ impl ActorService for BluetoothActor {
                 bluetooth.low_energy.state = Some(true);
             }
             if bluetooth.classic.state.is_none() {
-                bluetooth.classic.state = Some(true);
+                // Beacons are BLE-only and must not respond to classic BR/EDR inquiries
+                let is_beacon = matches!(bluetooth.mode, BluetoothMode::Beacon(_));
+                bluetooth.classic.state = Some(!is_beacon);
             }
         }
 

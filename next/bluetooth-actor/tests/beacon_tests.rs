@@ -89,3 +89,16 @@ async fn test_beacon_interval() {
     // And scanner should see advertisements from "Beacon-250ms" at ~250ms rate
     world.then_scanner_measures_interval_from("Scanner", "Beacon-250ms", 250).await;
 }
+
+// Scenario: Beacon is created with classic disabled by default
+#[tokio::test]
+async fn test_beacon_classic_disabled() {
+    let mut world = world::World::new();
+
+    // When a beacon is created
+    world.given_beacon("Beacon").await;
+
+    // Then its classic radio state should be disabled (false)
+    let id = *world.chips.get("Beacon").unwrap();
+    world.then_classic_state_is(id, Some(false)).await;
+}
