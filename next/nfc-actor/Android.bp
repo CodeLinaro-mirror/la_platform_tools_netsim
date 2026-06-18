@@ -24,6 +24,7 @@ rust_library_host {
         "libnetsim_next_model",
         "libthiserror",
         "libtokio",
+        "libtokio_util",
         "libtracing",
     ],
     proc_macros: [
