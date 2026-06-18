@@ -183,6 +183,7 @@ async fn setup_grpc_listener(
     device_client: DeviceClient,
     link_client: LinkClient,
     #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
+    cell_client: cell_actor::CellClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(u16, grpcio::Server), RunResult> {
@@ -198,6 +199,7 @@ async fn setup_grpc_listener(
         link_client,
         #[cfg(not(feature = "cuttlefish"))]
         ap_client,
+        cell_client,
         packet_streamer_service,
         version,
         frontend_stats,
@@ -402,6 +404,10 @@ impl NetsimDaemon {
         // Setup Device Server Channel
         let (device_runner, device_client) = device_actor::new();
 
+        // Setup Cell Server
+        let (cell_runner, cell_client) = cell_actor::new();
+        let cell_actor_state = cell_actor::CellActor::new(device_client.clone());
+
         // Setup Capture Server
         let (capture_runner, capture_client) = capture_actor::new();
 
@@ -505,6 +511,7 @@ impl NetsimDaemon {
             link_client.clone(),
             #[cfg(not(feature = "cuttlefish"))]
             ap_client.clone(),
+            cell_client.clone(),
             get_version(),
             frontend_stats.clone(),
         )
@@ -612,10 +619,6 @@ impl NetsimDaemon {
         // Setup Uwb Server
         let (uwb_runner, uwb_client) = uwb_actor::new();
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
-
-        // Setup Cell Server
-        let (cell_runner, cell_client) = cell_actor::new();
-        let cell_actor_state = cell_actor::CellActor::new(device_client.clone());
 
         // Setup NFC Server
         let (nfc_runner, nfc_client) = nfc_actor::new();
