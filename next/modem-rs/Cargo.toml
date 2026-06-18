@@ -12,11 +12,13 @@ doctest = false
 
 [dependencies]
 bytes = "1"
+chrono = { version = "0.4.19", default-features = false, features = ["now"] }
 hex = "0.4.3"
 modem-rs-derive = { path = "../modem-rs-derive" }
 netsim-model = { path = "../model" }
 nom = "7"
 serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.28.2", features = ["full", "tracing"] }
 toml = "0.8"
 tracing = "0.1"
 

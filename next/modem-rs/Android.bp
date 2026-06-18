@@ -15,6 +15,7 @@ rust_library_host {
     lints: "none",
     rustlibs: [
         "libbytes",
+        "libchrono",
         "libhex",
         "libnetsim_next_model",
         "libnom",

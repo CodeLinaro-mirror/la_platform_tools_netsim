@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, atomic::AtomicU64},
     time::Duration,
 };
 
@@ -15,7 +15,9 @@ use tokio::sync::{broadcast, mpsc};
 /// State associated with a single UWB chip.
 pub(crate) struct UwbChipState {
     /// The chip model.
-    pub(super) chip: Chip,
+    pub(crate) chip: Chip,
+    pub(crate) p2p_tx_count: Arc<AtomicU64>,
+    pub(crate) p2p_rx_count: Arc<AtomicU64>,
 }
 
 /// The UWB Actor responsible for managing UWB chips and their state.

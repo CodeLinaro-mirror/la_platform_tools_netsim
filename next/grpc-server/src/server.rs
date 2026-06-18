@@ -42,6 +42,7 @@ pub fn start(
     packet_streamer_service: PacketStreamerService,
 
     version: String,
+    frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(Server, u16), grpcio::Error> {
     let env = SHARED_ENV.get_or_init(|| Arc::new(Environment::new(1))).clone();
     let backend_service = create_packet_streamer(packet_streamer_service);
@@ -74,6 +75,7 @@ pub fn start(
             #[cfg(not(feature = "cuttlefish"))]
             ap_client,
             version,
+            frontend_stats,
         ));
         server_builder = server_builder.register_service(frontend_service);
     }

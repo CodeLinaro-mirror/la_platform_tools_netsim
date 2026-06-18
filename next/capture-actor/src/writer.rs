@@ -128,3 +128,5 @@ pub const DLT_FIRA_UCI: u32 = 299;
 pub const DLT_IEEE802_11_RADIO: u32 = 127;
 // Ethernet DLT is 1
 pub const DLT_ETHERNET: u32 = 1;
+// User defined 0 DLT is 147 (for custom protocols like NCI/AT commands)
+pub const DLT_USER0: u32 = 147;

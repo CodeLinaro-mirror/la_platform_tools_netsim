@@ -63,3 +63,53 @@ async fn test_beacon_explicit_name() {
     let id = *world.chips.get("MyBeacon").unwrap();
     world.then_chip_name_is(id, "MyBeacon").await;
 }
+
+// Scenario: Beacon respects configured interval (default vs override)
+#[tokio::test]
+async fn test_beacon_interval() {
+    let mut world = world::World::new();
+
+    // Given a scanner
+    world.given_scanner("Scanner").await;
+
+    // And a beacon with default settings
+    world.given_beacon("Beacon-Default").await;
+
+    // And a beacon configured with BALANCED mode (250ms)
+    world
+        .given_beacon_with_interval(
+            "Beacon-250ms",
+            netsim_model::Interval::AdvertiseMode(netsim_model::AdvertiseMode::Balanced.into()),
+        )
+        .await;
+
+    // Then scanner should see advertisements from "Beacon-Default" at ~1000ms rate
+    world.then_scanner_measures_interval_from("Scanner", "Beacon-Default", 1000).await;
+
+    // And scanner should see advertisements from "Beacon-250ms" at ~250ms rate
+    world.then_scanner_measures_interval_from("Scanner", "Beacon-250ms", 250).await;
+}
+
+// Scenario: Beacon is created with classic disabled by default
+#[tokio::test]
+async fn test_beacon_classic_disabled() {
+    let mut world = world::World::new();
+
+    // When a beacon is created
+    world.given_beacon("Beacon").await;
+
+    // Then its classic radio state should be disabled (false)
+    let id = *world.chips.get("Beacon").unwrap();
+    world.then_classic_state_is(id, Some(false)).await;
+}
+
+// Scenario: Beacon advertises ADV_SCAN_IND (0x02) by default
+#[tokio::test]
+async fn test_beacon_advertises_adv_scan_ind() {
+    let mut world = world::World::new();
+
+    world.given_beacon("Beacon").await;
+    world.given_scanner("Scanner").await;
+
+    world.then_scanner_sees_adv_type("Scanner", 0x02).await;
+}

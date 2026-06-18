@@ -139,7 +139,7 @@ impl std::str::FromStr for ChipKind {
             "WIFI" => Ok(ChipKind::WIFI),
             "UWB" => Ok(ChipKind::UWB),
             "NFC" => Ok(ChipKind::NFC),
-            "CELLULAR" => Ok(ChipKind::CELLULAR),
+            "CELLULAR" | "MODEM" => Ok(ChipKind::CELLULAR),
             "CELLULAR_DATA" => Ok(ChipKind::CELLULAR_DATA),
             "ETHERNET" => Ok(ChipKind::ETHERNET),
             _ => Err(format!("invalid chip kind: {}", s)),

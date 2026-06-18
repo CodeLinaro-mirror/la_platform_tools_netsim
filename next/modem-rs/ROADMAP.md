@@ -170,11 +170,11 @@ missing several key features and the detailed logic that is present in the C++
 
 - [ ] **Implement full `ATD` command handling:**
   - [ ] Add support for emergency number dialing with categories and CLIR
-        (`ATDnumber@[category],#[clir];`).
+        (`ATDnumber@[category],#[clir];`); syntactic parsing is implemented.
   - [ ] Integrate with `SimService` to perform FDN (Fixed Dialing Number)
         checks.
-- [ ] **Expand `AT+CHLD` command handling:**
-  - [ ] Implement all modes (0, 1, 2, 3, 4) of the `AT+CHLD` command.
+- [x] **Expand `AT+CHLD` command handling:**
+  - [x] Implement all modes (0, 1, 2, 3, 4) of the `AT+CHLD` command.
 - [ ] **Add `AT+CUSD` command handling:**
   - [ ] Implement the `AT+CUSD=` command for canceling USSD sessions.
 - [ ] **Improve error handling:**
@@ -299,8 +299,8 @@ features in the Rust version.
 
 **Tasks:**
 
-- [ ] **Implement PDU Parsing:**
-  - [ ] Add a PDU parser to handle SMS messages in PDU mode.
+- [x] **Implement PDU Parsing**:
+  - [x] Add a PDU parser to handle SMS messages in PDU mode.
 - [ ] **Implement SMS Status Reports:**
   - [ ] Add the logic for generating and sending SMS status reports.
 - [ ] **Improve Error Handling:**

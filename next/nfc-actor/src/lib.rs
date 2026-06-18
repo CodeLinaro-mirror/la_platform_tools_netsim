@@ -4,6 +4,7 @@
 mod error;
 mod lifecycle;
 mod nfc_actor;
+mod scene;
 mod service;
 
 mod client;

@@ -89,10 +89,13 @@ pub struct BluetoothActor {
 
 impl BluetoothActor {
     /// Creates a new BluetoothActor context.
-    pub fn new(device_client: DeviceClient) -> Self {
+    pub fn new(device_client: DeviceClient, disable_address_reuse: bool) -> Self {
         let chips = Arc::new(Mutex::new(HashMap::new()));
         let initial_chips = HashMap::new();
-        let rootcanal = Rootcanal::new(Box::new(RootcanalCallbacksImpl { chips: chips.clone() }));
+        let rootcanal = Rootcanal::new(
+            Box::new(RootcanalCallbacksImpl { chips: chips.clone() }),
+            disable_address_reuse,
+        );
         Self { rootcanal, chips, initial_chips, device_client }
     }
 }

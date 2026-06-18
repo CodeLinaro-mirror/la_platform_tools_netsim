@@ -65,10 +65,11 @@ impl SmsService {
     pub fn handle_sms_body(&mut self, pdu: &[u8]) -> ExecutionResult {
         let action = if self.message_format == MessageFormat::Text {
             let to = self.pending_sms_destination.take().unwrap_or_default();
-            let text = String::from_utf8(pdu.to_vec()).unwrap_or_default();
+            let text = std::str::from_utf8(pdu).unwrap_or_default().to_string();
             CommandAction::ReceiveTextSms { to, text }
         } else {
-            CommandAction::ReceiveSms(pdu.to_vec())
+            let processed = crate::pdu::process_outgoing_sms(pdu);
+            CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu }
         };
 
         let mr = self.message_reference.fetch_add(1, Ordering::Relaxed);
@@ -123,7 +124,7 @@ impl SmsService {
     pub fn handle_read_sms(&mut self, sim_service: &mut SimService, index: u8) -> ExecutionResult {
         if self.storage1 == MessageStorage::Sim {
             sim_service.read_sms(index)
-        } else if let Some(pdu) = self.messages.get(index as usize - 1) {
+        } else if let Some(pdu) = index.checked_sub(1).and_then(|i| self.messages.get(i as usize)) {
             let response = format!("+CMGR: 0,,{}\r\n{}\r\n", pdu.len(), hex::encode_upper(pdu));
             let mut handled = HandledCommand::ok();
             handled.responses.insert(0, response);
@@ -232,7 +233,9 @@ impl SmsService {
     }
 
     pub fn handle_remote_sms(&self, pdu: QuotedString) -> ExecutionResult {
-        let action = CommandAction::ReceiveSms(pdu.to_vec());
+        let pdu_bytes = pdu.to_vec();
+        let processed = crate::pdu::process_outgoing_sms(&pdu_bytes);
+        let action = CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu };
         ExecutionResult::Handled(HandledCommand::ok_with_action(action))
     }
 

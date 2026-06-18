@@ -15,6 +15,7 @@ rust_library_host {
     rustlibs: [
         "libnetsim_next_device_actor",
         "libnetsim_next_model",
+        "librand",
         "libtokio",
         "libtracing",
     ],

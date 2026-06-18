@@ -14,7 +14,7 @@ use tokio_util::codec::FramedRead;
 use crate::{
     error::{PacketStreamError, Result},
     transport::{
-        H4Codec, UciCodec,
+        H4Codec, ModemCodec, NciCodec, UciCodec,
         traits::{PacketSink, PacketStream, TransportListener},
     },
     types::StreamAddress,
@@ -93,59 +93,67 @@ impl DualFdListener {
 #[async_trait]
 impl TransportListener for DualFdListener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
-        match self.pending_streams.pop_front() {
-            Some((device_name, chip_kind, (in_fd, out_fd))) => {
-                let guid = format!("dualfd-{}", device_name);
-                let kind = ChipKind::from_str(&chip_kind).unwrap_or(ChipKind::UNSPECIFIED);
+        while let Some((device_name, chip_kind, (in_fd, out_fd))) = self.pending_streams.pop_front()
+        {
+            let guid = format!("dualfd-{}", device_name);
+            let kind = ChipKind::from_str(&chip_kind).unwrap_or(ChipKind::UNSPECIFIED);
 
-                let chip_info = ChipInfo {
-                    device_info: Some(DeviceInfo {
-                        name: device_name.clone(),
-                        id: device_name,
-                        ..Default::default()
-                    }),
-                    chip: Some(Chip {
-                        name: chip_kind.clone(),
-                        kind,
-                        id: chip_kind.clone(),
-                        manufacturer: "".to_string(),
-                        product_name: "".to_string(),
-                        address: "".to_string(),
-                    }),
-                    name: String::new(),
-                };
+            let chip_info = ChipInfo {
+                device_info: Some(DeviceInfo {
+                    name: device_name.clone(),
+                    id: device_name,
+                    ..Default::default()
+                }),
+                chip: Some(Chip {
+                    name: chip_kind.clone(),
+                    kind,
+                    id: chip_kind.clone(),
+                    manufacturer: "".to_string(),
+                    product_name: "".to_string(),
+                    address: "".to_string(),
+                }),
+                name: String::new(),
+            };
 
-                let reader = File::from_std(StdFile::from(out_fd));
-                let writer = File::from_std(StdFile::from(in_fd));
+            let reader = File::from_std(StdFile::from(out_fd));
+            let writer = File::from_std(StdFile::from(in_fd));
 
-                let stream: PacketStream = match kind {
-                    ChipKind::BLUETOOTH => {
-                        let framed = FramedRead::new(reader, H4Codec);
-                        Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
-                    }
-                    ChipKind::UWB => {
-                        let framed = FramedRead::new(reader, UciCodec);
-                        Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
-                    }
-                    _ => {
-                        return Err(PacketStreamError::InvalidConfig(format!(
-                            "Unsupported chip kind for FD transport: {:?}",
-                            chip_kind
-                        )));
-                    }
-                };
+            let stream: PacketStream = match kind {
+                ChipKind::BLUETOOTH => {
+                    let framed = FramedRead::new(reader, H4Codec);
+                    Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+                }
+                ChipKind::UWB => {
+                    let framed = FramedRead::new(reader, UciCodec);
+                    Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+                }
+                ChipKind::NFC => {
+                    let framed = FramedRead::new(reader, NciCodec);
+                    Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+                }
+                ChipKind::CELLULAR => {
+                    let framed = FramedRead::new(reader, ModemCodec);
+                    Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+                }
 
-                let sink =
-                    futures::sink::unfold(writer, |mut writer, item: bytes::Bytes| async move {
-                        writer.write_all(&item).await?;
-                        Ok(writer)
-                    });
-                let sink: PacketSink = Box::pin(sink.sink_map_err(PacketStreamError::Io));
+                _ => {
+                    tracing::warn!(
+                        "Unsupported chip kind for FD transport: {:?}, skipping",
+                        chip_kind
+                    );
+                    continue;
+                }
+            };
 
-                Ok((stream, sink, chip_info, guid))
-            }
-            None => std::future::pending().await,
+            let sink = futures::sink::unfold(writer, |mut writer, item: bytes::Bytes| async move {
+                writer.write_all(&item).await?;
+                Ok(writer)
+            });
+            let sink: PacketSink = Box::pin(sink.sink_map_err(PacketStreamError::Io));
+
+            return Ok((stream, sink, chip_info, guid));
         }
+        std::future::pending().await
     }
 
     fn local_addr(&self) -> Result<StreamAddress> {

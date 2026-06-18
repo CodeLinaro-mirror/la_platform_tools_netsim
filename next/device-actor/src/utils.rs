@@ -220,6 +220,8 @@ pub fn to_proto_stats(m: netsim_model::NetsimRadioStats) -> netsim_proto::stats:
     p.set_rx_count(saturate_cast(m.rx_count));
     p.set_tx_bytes(saturate_cast(m.tx_bytes));
     p.set_rx_bytes(saturate_cast(m.rx_bytes));
+    p.set_p2p_tx_count(saturate_cast(m.p2p_tx_count));
+    p.set_p2p_rx_count(saturate_cast(m.p2p_rx_count));
     // invalid_packets are not yet persisted/converted
     p
 }

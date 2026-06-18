@@ -23,6 +23,10 @@ pub enum Error {
     #[error("controller not found: {0}")]
     ControllerNotFound(u32),
 
+    /// The address is already in use.
+    #[error("address already in use: {0}")]
+    AddressInUse(crate::types::Address),
+
     /// The address is malformed.
     #[error("malformed address: {0}")]
     MalformedAddress(String),
@@ -34,6 +38,10 @@ pub enum Error {
     /// The LE features are malformed.
     #[error("malformed LE features: {0}")]
     MalformedLeFeatures(String),
+
+    /// Failed to set controller properties.
+    #[error("failed to set controller properties")]
+    SetPropertiesFailed,
 
     /// An error parsing an integer.
     #[error(transparent)]

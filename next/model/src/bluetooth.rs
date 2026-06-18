@@ -15,6 +15,7 @@ pub struct Bluetooth {
     pub address: String,
     pub bt_properties: Controller,
     pub mode: BluetoothMode,
+    pub preset: Option<String>,
 }
 
 impl Default for Bluetooth {
@@ -25,6 +26,7 @@ impl Default for Bluetooth {
             address: "00:00:00:00:00:00".to_string(),
             bt_properties: Controller::default(),
             mode: BluetoothMode::Device(DeviceParams::default()),
+            preset: None,
         }
     }
 }
@@ -33,12 +35,16 @@ impl Default for Bluetooth {
 pub struct BluetoothUpdate {
     pub classic: RadioUpdate,
     pub low_energy: RadioUpdate,
+    pub preset: Option<String>,
 }
 
 impl BluetoothUpdate {
     pub fn apply(&self, bluetooth: &mut Bluetooth) {
         self.classic.apply(&mut bluetooth.classic);
         self.low_energy.apply(&mut bluetooth.low_energy);
+        if let Some(preset) = &self.preset {
+            bluetooth.preset = Some(preset.clone());
+        }
     }
 }
 
@@ -61,6 +67,7 @@ impl From<BluetoothCreate> for Bluetooth {
             address: create.address,
             bt_properties: create.bt_properties,
             mode: create.mode,
+            preset: None,
         }
     }
 }

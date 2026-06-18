@@ -8,13 +8,16 @@ edition = "2024"
 
 [dependencies]
 actor-framework = { path = "../actor-framework" }
+anyhow = "1"
 async-trait = "0.1"
 bytes = "1"
+casimir = { path = "../../../../packages/modules/Nfc/libnfc-nci/tools/casimir" }
 device-actor = { path = "../device-actor" }
 device-api = { path = "../device-api" }
 futures = "0.3"
 netsim-model = { path = "../model" }
 thiserror = "1"
+tokio = { version = "1.28.2", features = ["process", "rt-multi-thread"] }
 tracing = "0.1"
 
 [features]

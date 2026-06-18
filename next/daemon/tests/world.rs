@@ -111,6 +111,10 @@ impl World {
         }
     }
 
+    pub fn get_temp_dir(&self) -> &std::path::Path {
+        &self._temp_dir
+    }
+
     /// When I request the version
     pub async fn when_get_version(&mut self) -> String {
         let resp = self
