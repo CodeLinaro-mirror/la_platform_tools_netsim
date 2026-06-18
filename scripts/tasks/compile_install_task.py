@@ -28,17 +28,24 @@ from utils import (
 
 class CompileInstallTask(Task):
 
-  BINARIES = {
-      "netsim": "next/cli/netsim",
-      "netsimd": "netsimd",
-      "netsimdx": "next/daemon/daemon",
-  }
 
   def __init__(self, args, env):
     super().__init__("CompileInstall")
     self.args = args
     self.out = Path(args.out_dir)
     self.env = env
+    if platform.system().lower() in ["linux", "darwin"]:
+      self.binaries = {
+          "netsim": "_stripped/netsim",
+          "netsimd": "_stripped/netsimd",
+          "netsimdx": "next/daemon/_stripped/daemon",
+      }
+    else:
+      self.binaries = {
+          "netsim": "next/cli/netsim",
+          "netsimd": "netsimd",
+          "netsimdx": "next/daemon/daemon",
+      }
 
   def on_rm_error(self, func, path, exc_info):
     """Error handler for ``shutil.rmtree``.
@@ -68,7 +75,7 @@ class CompileInstallTask(Task):
       return
 
     installed_files = []
-    for bin_name in self.BINARIES:
+    for bin_name in self.binaries:
       actual_name = binary_extension(bin_name)
       bin_path = search_dir / actual_name
       if bin_path.is_file():
@@ -129,7 +136,7 @@ class CompileInstallTask(Task):
       dest_dir.mkdir(exist_ok=True, parents=True)
 
       # Copy netsim binaries
-      for binary, src in self.BINARIES.items():
+      for binary, src in self.binaries.items():
         binary_name = binary_extension(binary)
         src_name = binary_extension(src)
 
