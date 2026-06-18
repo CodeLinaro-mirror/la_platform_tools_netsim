@@ -225,6 +225,243 @@ pub use netlink::{
     nl80211_attr::NlAttrHdr,
     stream::NetlinkStream,
 };
+pub mod link_layer {
+    #[allow(warnings, clippy::all, clippy::unwrap_in_result, clippy::map_err_ignore)]
+    mod pdl_generated {
+        include!(concat!(env!("OUT_DIR"), "/link_layer_packets.rs"));
+    }
+    pub use pdl_generated::*;
+
+    /// Allocation-free, manual byte-inspector designed to bypass full PDL
+    /// deserialization overhead. Uses hardcoded offsets derived from
+    /// `link_layer_packets.pdl`.
+    pub fn fast_inspect_p2p_payload(data_slice: &[u8]) -> bool {
+        if data_slice.len() < 13 {
+            return false;
+        }
+        let Ok(packet_type) = PacketType::try_from(data_slice[0]) else {
+            return false;
+        };
+        match packet_type {
+            PacketType::Acl => data_slice.len() > 15,
+            PacketType::Sco => data_slice.len() > 13,
+            PacketType::LeConnectedIsochronousPdu => data_slice.len() > 17,
+            PacketType::LeBroadcastIsochronousPdu => data_slice.len() > 17,
+            PacketType::LeLegacyAdvertisingPdu => data_slice.len() > 16,
+            PacketType::LeExtendedAdvertisingPdu => data_slice.len() > 22,
+            PacketType::LePeriodicAdvertisingPdu => data_slice.len() > 35,
+            PacketType::LeScanResponse => data_slice.len() > 14,
+            _ => false,
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use pdl_runtime::Packet;
+
+        use super::*;
+
+        #[test]
+        fn test_fast_inspect_p2p_payload() {
+            let src = Address::try_from(1).unwrap();
+            let dest = Address::try_from(2).unwrap();
+
+            // Short packets are ignored
+            assert!(!fast_inspect_p2p_payload(&[0u8; 13]));
+
+            // ACL empty PDU (no data) -> false
+            let acl_empty = Acl {
+                source_address: src,
+                destination_address: dest,
+                packet_boundary_flag: 0,
+                broadcast_flag: 0,
+                data: vec![].into(),
+            };
+            let mut acl_empty_bytes = Vec::new();
+            acl_empty.encode(&mut acl_empty_bytes).unwrap();
+            assert!(!fast_inspect_p2p_payload(&acl_empty_bytes));
+
+            // ACL payload -> true
+            let acl_payload = Acl {
+                source_address: src,
+                destination_address: dest,
+                packet_boundary_flag: 0,
+                broadcast_flag: 0,
+                data: vec![1, 2, 3].into(),
+            };
+            let mut acl_payload_bytes = Vec::new();
+            acl_payload.encode(&mut acl_payload_bytes).unwrap();
+            assert!(fast_inspect_p2p_payload(&acl_payload_bytes));
+
+            // SCO empty PDU -> false
+            let sco_empty =
+                Sco { source_address: src, destination_address: dest, payload: vec![].into() };
+            let mut sco_empty_bytes = Vec::new();
+            sco_empty.encode(&mut sco_empty_bytes).unwrap();
+            assert!(!fast_inspect_p2p_payload(&sco_empty_bytes));
+
+            // SCO payload -> true
+            let sco_payload = Sco {
+                source_address: src,
+                destination_address: dest,
+                payload: vec![1, 2, 3].into(),
+            };
+            let mut sco_payload_bytes = Vec::new();
+            sco_payload.encode(&mut sco_payload_bytes).unwrap();
+            assert!(fast_inspect_p2p_payload(&sco_payload_bytes));
+
+            // LE Scan -> false regardless of size
+            let scan_packet = LeScan {
+                source_address: src,
+                destination_address: dest,
+                scanning_address_type: AddressType::Public,
+                advertising_address_type: AddressType::Public,
+            };
+            let mut scan_packet_bytes = Vec::new();
+            scan_packet.encode(&mut scan_packet_bytes).unwrap();
+            assert!(!fast_inspect_p2p_payload(&scan_packet_bytes));
+
+            // LE Legacy ADV empty -> false
+            let adv_empty = LeLegacyAdvertisingPdu {
+                source_address: src,
+                destination_address: dest,
+                advertising_address_type: AddressType::Public,
+                target_address_type: AddressType::Public,
+                advertising_type: LegacyAdvertisingType::AdvInd,
+                advertising_data: vec![].into(),
+            };
+            let mut adv_empty_bytes = Vec::new();
+            adv_empty.encode(&mut adv_empty_bytes).unwrap();
+            assert!(!fast_inspect_p2p_payload(&adv_empty_bytes));
+
+            // LE Legacy ADV payload -> true
+            let adv_payload = LeLegacyAdvertisingPdu {
+                source_address: src,
+                destination_address: dest,
+                advertising_address_type: AddressType::Public,
+                target_address_type: AddressType::Public,
+                advertising_type: LegacyAdvertisingType::AdvInd,
+                advertising_data: vec![1, 2, 3].into(),
+            };
+            let mut adv_payload_bytes = Vec::new();
+            adv_payload.encode(&mut adv_payload_bytes).unwrap();
+            assert!(fast_inspect_p2p_payload(&adv_payload_bytes));
+
+            // LeConnectedIsochronousPdu empty -> false
+            let iso_empty = LeConnectedIsochronousPdu {
+                source_address: src,
+                destination_address: dest,
+                cig_id: 0,
+                cis_id: 0,
+                sequence_number: 0,
+                data: vec![].into(),
+            };
+            let mut iso_empty_bytes = Vec::new();
+            iso_empty.encode(&mut iso_empty_bytes).unwrap();
+            assert!(!fast_inspect_p2p_payload(&iso_empty_bytes));
+
+            // LeConnectedIsochronousPdu payload -> true
+            let iso_payload = LeConnectedIsochronousPdu {
+                source_address: src,
+                destination_address: dest,
+                cig_id: 0,
+                cis_id: 0,
+                sequence_number: 0,
+                data: vec![1, 2, 3].into(),
+            };
+            let mut iso_payload_bytes = Vec::new();
+            iso_payload.encode(&mut iso_payload_bytes).unwrap();
+            assert!(fast_inspect_p2p_payload(&iso_payload_bytes));
+
+            // LeScanResponse empty -> false
+            let scan_rsp_empty = LeScanResponse {
+                source_address: src,
+                destination_address: dest,
+                advertising_address_type: AddressType::Public,
+                scan_response_data: vec![].into(),
+            };
+            let mut scan_rsp_empty_bytes = Vec::new();
+            scan_rsp_empty.encode(&mut scan_rsp_empty_bytes).unwrap();
+            assert!(!fast_inspect_p2p_payload(&scan_rsp_empty_bytes));
+
+            // LeScanResponse payload -> true
+            let scan_rsp_payload = LeScanResponse {
+                source_address: src,
+                destination_address: dest,
+                advertising_address_type: AddressType::Public,
+                scan_response_data: vec![1, 2, 3].into(),
+            };
+            let mut scan_rsp_payload_bytes = Vec::new();
+            scan_rsp_payload.encode(&mut scan_rsp_payload_bytes).unwrap();
+            assert!(fast_inspect_p2p_payload(&scan_rsp_payload_bytes));
+
+            // LeExtendedAdvertisingPdu empty -> false
+            let ext_adv_empty = LeExtendedAdvertisingPdu {
+                source_address: src,
+                destination_address: dest,
+                advertising_address_type: AddressType::Public,
+                target_address_type: AddressType::Public,
+                connectable: 0,
+                scannable: 0,
+                directed: 0,
+                sid: 0,
+                tx_power: 0,
+                primary_phy: PhyType::Le1m,
+                secondary_phy: PhyType::Le1m,
+                periodic_advertising_interval: 0,
+                advertising_data: vec![].into(),
+            };
+            let mut ext_adv_empty_bytes = Vec::new();
+            ext_adv_empty.encode(&mut ext_adv_empty_bytes).unwrap();
+            assert!(!fast_inspect_p2p_payload(&ext_adv_empty_bytes));
+
+            // LeExtendedAdvertisingPdu payload -> true
+            let ext_adv_payload = LeExtendedAdvertisingPdu {
+                source_address: src,
+                destination_address: dest,
+                advertising_address_type: AddressType::Public,
+                target_address_type: AddressType::Public,
+                connectable: 0,
+                scannable: 0,
+                directed: 0,
+                sid: 0,
+                tx_power: 0,
+                primary_phy: PhyType::Le1m,
+                secondary_phy: PhyType::Le1m,
+                periodic_advertising_interval: 0,
+                advertising_data: vec![1, 2, 3].into(),
+            };
+            let mut ext_adv_payload_bytes = Vec::new();
+            ext_adv_payload.encode(&mut ext_adv_payload_bytes).unwrap();
+            assert!(fast_inspect_p2p_payload(&ext_adv_payload_bytes));
+
+            // LeBroadcastIsochronousPdu
+            let bis_empty = LeBroadcastIsochronousPdu {
+                source_address: src,
+                destination_address: dest,
+                big_id: 0,
+                bis_id: 0,
+                sequence_number: 0,
+                data: vec![].into(),
+            };
+            let mut bis_empty_bytes = Vec::new();
+            bis_empty.encode(&mut bis_empty_bytes).unwrap();
+            assert!(!fast_inspect_p2p_payload(&bis_empty_bytes));
+
+            let bis_payload = LeBroadcastIsochronousPdu {
+                source_address: src,
+                destination_address: dest,
+                big_id: 0,
+                bis_id: 0,
+                sequence_number: 0,
+                data: vec![1, 2, 3].into(),
+            };
+            let mut bis_payload_bytes = Vec::new();
+            bis_payload.encode(&mut bis_payload_bytes).unwrap();
+            assert!(fast_inspect_p2p_payload(&bis_payload_bytes));
+        }
+    }
+}
 pub use packet::frame::{IpPacket, LlcPacket, Packet, TransportPacket, parse};
 pub use pcap::{
     PcapHeader, PcapRecordHeader, create_bredr_bb_packet, create_le_ll_packet,

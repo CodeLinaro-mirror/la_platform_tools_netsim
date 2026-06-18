@@ -15,8 +15,12 @@ netsim_rust_library(
     crate_name = "rootcanal",
     edition = "2024",
     enable_integration_test = False,
+    test_deps = [
+        "@pdl-runtime",
+    ],
     visibility = ["//next:__subpackages__"],
     deps = [
+        "//next/packets",
         "@bytes",
         "@parking_lot",
         "@rootcanal//:lib_rootcanal_ffi",

@@ -275,6 +275,8 @@ impl ActorService for BluetoothActor {
                         radio_stats.kind = netsim_model::RadioKind::BluetoothLowEnergy;
                         radio_stats.tx_count = stats.ll_packets_out_ble;
                         radio_stats.rx_count = stats.ll_packets_in_ble;
+                        radio_stats.p2p_tx_count = stats.ble_p2p_tx_count;
+                        radio_stats.p2p_rx_count = stats.ble_p2p_rx_count;
                         stats_list.push(radio_stats);
 
                         // Classic Stats
@@ -284,6 +286,8 @@ impl ActorService for BluetoothActor {
                         radio_stats.kind = netsim_model::RadioKind::BluetoothClassic;
                         radio_stats.tx_count = stats.ll_packets_out_classic;
                         radio_stats.rx_count = stats.ll_packets_in_classic;
+                        radio_stats.p2p_tx_count = stats.classic_p2p_tx_count;
+                        radio_stats.p2p_rx_count = stats.classic_p2p_rx_count;
                         stats_list.push(radio_stats);
                     }
                 }
