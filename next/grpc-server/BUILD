@@ -18,6 +18,7 @@ netsim_rust_library(
     ],
     deps = [
         "//next/ap-actor",
+        "//next/cell-actor",
         "//next/device-actor",
         "//next/device-api",
         "//next/link-actor",

@@ -95,7 +95,10 @@ pub use crate::{
             Service, TxPower,
         },
     },
-    cell::{Cell, CellCreate, CellUpdate, ModemAction, RegistrationStatus},
+    cell::{
+        Cell, CellCreate, CellUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING,
+        ModemAction, RadioTechnology, RegistrationStatus,
+    },
     cellular_data::{CellularData, CellularDataCreate, CellularDataUpdate},
     chip::{
         Chip, ChipClient, ChipCreate, ChipId, ChipRequest, ChipUpdate, ChipVariant,

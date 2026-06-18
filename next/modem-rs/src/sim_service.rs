@@ -87,6 +87,7 @@ mod iccprofile_for_sim0 {
 // Represents the state of the SIM card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SimState {
+    Absent,
     Ready,
     PinRequired,
     PukRequired,
@@ -95,6 +96,7 @@ pub enum SimState {
 // Holds all state related to the SIM card.
 pub struct SimService {
     state: SimState,
+    pin_enabled: bool,
     imsi: String,
     iccid: String,
     pin1: String,
@@ -110,9 +112,12 @@ pub struct SimService {
 impl SimService {
     /// Creates a new SimService from a SIM profile configuration.
     pub fn new(profile: &SimProfile) -> Self {
-        let state = match profile.pin_profile.state.as_str() {
-            "EnabledNotVerified" => SimState::PinRequired,
-            _ => SimState::Ready,
+        let pin_enabled =
+            matches!(profile.pin_profile.state.as_str(), "EnabledNotVerified" | "EnabledVerified");
+        let state = if profile.pin_profile.state.as_str() == "EnabledNotVerified" {
+            SimState::PinRequired
+        } else {
+            SimState::Ready
         };
 
         let imsi = if profile.imsi.is_empty() {
@@ -129,6 +134,7 @@ impl SimService {
 
         Self {
             state,
+            pin_enabled,
             imsi,
             iccid,
             pin1: DEFAULT_PIN.to_string(),
@@ -143,6 +149,28 @@ impl SimService {
         }
     }
 
+    pub fn is_present(&self) -> bool {
+        self.state != SimState::Absent
+    }
+
+    pub fn set_present(&mut self, present: bool) -> bool {
+        let old_state = self.state;
+        if present {
+            if self.state == SimState::Absent {
+                self.state = if self.puk1_retries == 0 || self.pin1_retries == 0 {
+                    SimState::PukRequired
+                } else if self.pin_enabled {
+                    SimState::PinRequired
+                } else {
+                    SimState::Ready
+                };
+            }
+        } else {
+            self.state = SimState::Absent;
+        }
+        self.state != old_state
+    }
+
     // --- Public API for other services ---
 
     pub fn get_sms_count(&self) -> usize {
@@ -150,12 +178,18 @@ impl SimService {
     }
 
     pub fn store_sms(&mut self, pdu: &[u8]) -> Option<u8> {
+        if !self.is_present() {
+            return None;
+        }
         let index = self.sms_messages.len() as u8 + 1;
         self.sms_messages.insert(index, pdu.to_vec());
         Some(index)
     }
 
     pub fn read_sms(&self, index: u8) -> ExecutionResult {
+        if !self.is_present() {
+            return ExecutionResult::Handled(HandledCommand::cme_error(10));
+        }
         if let Some(pdu) = self.sms_messages.get(&index) {
             let response = format!("+CMGR: 0,,{}\r\n{}\r\n", pdu.len(), hex::encode_upper(pdu));
             let mut handled = HandledCommand::ok();
@@ -167,6 +201,9 @@ impl SimService {
     }
 
     pub fn delete_sms(&mut self, index: u8) -> bool {
+        if !self.is_present() {
+            return false;
+        }
         self.sms_messages.remove(&index).is_some()
     }
 
@@ -174,6 +211,7 @@ impl SimService {
 
     fn handle_get_sim_status(&self) -> ExecutionResult {
         let response_str = match self.state {
+            SimState::Absent => unreachable!("Absent state handled in execute"),
             SimState::Ready => "+CPIN: READY\r\n",
             SimState::PinRequired => "+CPIN: SIM PIN\r\n",
             SimState::PukRequired => "+CPIN: SIM PUK\r\n",
@@ -189,6 +227,7 @@ impl SimService {
         new_pin: Option<QuotedString>,
     ) -> ExecutionResult {
         let response = match self.state {
+            SimState::Absent => unreachable!("Absent state handled in execute"),
             SimState::Ready => {
                 if pin_or_puk.as_ref() == self.pin1.as_bytes() {
                     AT_OK.to_vec()
@@ -457,7 +496,35 @@ impl SimService {
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
+    fn is_sim_command(command: &Command) -> bool {
+        matches!(
+            command,
+            Command::GetSimStatus
+                | Command::EnterPin(_, _)
+                | Command::SimIo { .. }
+                | Command::GetImsi
+                | Command::GetIccid
+                | Command::OpenLogicalChannel(_)
+                | Command::CloseLogicalChannel(_)
+                | Command::TransmitLogicalChannel(_, _, _)
+                | Command::ChangePassword(_, _, _)
+                | Command::QueryPinRetries
+                | Command::SetCdmaSubscriptionSource(_)
+                | Command::QueryCdmaSubscriptionSource
+                | Command::SetCdmaRoamingPreference(_)
+                | Command::QueryCdmaRoamingPreference
+                | Command::SimAuthentication(_)
+                | Command::UpdatePhoneNumber(_)
+        )
+    }
+
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
+        if !Self::is_sim_command(command) {
+            return ExecutionResult::Unhandled;
+        }
+        if self.state == SimState::Absent {
+            return ExecutionResult::Handled(HandledCommand::cme_error(10)); /* SIM not inserted */
+        }
         match command {
             Command::GetSimStatus => self.handle_get_sim_status(),
             Command::EnterPin(pin, new_pin) => self.handle_enter_pin(*pin, *new_pin),

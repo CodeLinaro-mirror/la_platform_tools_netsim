@@ -40,6 +40,8 @@ message ExecuteCellRequest {
     SetDataRegistration set_data_registration = 8;
     RemoteAnswer remote_answer = 9;
     RemoteHold remote_hold = 10;
+    SetSimStatus set_sim_status = 11;
+    SetNetworkTechnology set_network_technology = 12;
   }
 }
 
@@ -113,4 +115,22 @@ message Call {
     WAITING = 6;
   }
   State state = 2;
+}
+
+message SetSimStatus {
+  enum SimState {
+    ABSENT = 0;
+    PRESENT = 1;
+  }
+  SimState state = 1;
+}
+
+message SetNetworkTechnology {
+  enum RadioTechnology {
+    UNKNOWN = 0;
+    GSM = 1;
+    LTE = 2;
+    NR = 3;
+  }
+  RadioTechnology tech = 1;
 }

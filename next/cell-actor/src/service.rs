@@ -4,10 +4,14 @@
 use actor_framework::{ActorService, DynContext};
 use futures::SinkExt;
 use modem_rs::ModemSink;
-use netsim_model::{ChipCreate, ChipError, ChipId, ChipRequest, ChipUpdate};
+use netsim_model::{
+    Cell, Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipUpdate, ChipVariant,
+    ChipVariantUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING, ModemAction, Radio,
+};
 use tracing::{error, info};
 
 use crate::{
+    CellAction, CellActionResult,
     cell_actor::{CellActor, ChipState},
     error::CellError,
 };
@@ -16,10 +20,10 @@ impl ActorService for CellActor {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
-    type Action = ChipRequest;
-    type ActionResult = ();
+    type Action = CellAction;
+    type ActionResult = CellActionResult;
     type Error = CellError;
-    type Entity = netsim_model::Chip;
+    type Entity = Chip;
     type TypedStream = modem_rs::HostEvent;
 
     async fn handle_create(
@@ -94,19 +98,19 @@ impl ActorService for CellActor {
     ) -> Result<Option<Self::Entity>, Self::Error> {
         if let Ok(info) = self.controller.get_modem_info(id.0) {
             let enabled = self.active_chips.get(&id).map(|s| s.enabled).unwrap_or(true);
-            Ok(Some(netsim_model::Chip {
-                kind: netsim_model::ChipKind::CELLULAR,
+            Ok(Some(Chip {
+                kind: ChipKind::CELLULAR,
                 id: info.id,
                 name: format!("modem-{}", info.id),
                 enabled,
-                variant: Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
-                    radio: netsim_model::Radio { state: Some(enabled), ..Default::default() },
+                variant: Some(ChipVariant::Cell(Cell {
+                    radio: Radio { state: Some(enabled), ..Default::default() },
                     state: if !enabled {
-                        "down".to_string()
+                        MODEM_STATE_DOWN.to_string()
                     } else if info.ringing {
-                        "ringing".to_string()
+                        MODEM_STATE_RINGING.to_string()
                     } else {
-                        "idle".to_string()
+                        MODEM_STATE_IDLE.to_string()
                     },
                 })),
                 ..Default::default()
@@ -130,7 +134,7 @@ impl ActorService for CellActor {
         if let Some(enabled) = update.enabled {
             state.enabled = enabled;
         }
-        if let Some(netsim_model::ChipVariantUpdate::Cell(cell_update)) = &update.variant {
+        if let Some(ChipVariantUpdate::Cell(cell_update)) = &update.variant {
             if let Some(s) = &cell_update.state {
                 state.enabled = s != "down";
             }
@@ -144,11 +148,59 @@ impl ActorService for CellActor {
 
     async fn handle_action(
         &mut self,
-        _id: Option<Self::Id>,
-        _action: Self::Action,
+        id: Option<Self::Id>,
+        action: Self::Action,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
-        Ok(())
+        let chip_id = id.ok_or_else(|| {
+            CellError::Chip(ChipError::InvalidArguments("missing chip id".into()))
+        })?;
+
+        if !self.active_chips.contains_key(&chip_id) {
+            return Err(CellError::Chip(ChipError::ChipNotFound(chip_id)));
+        }
+
+        let modem_action = match action {
+            CellAction::IncomingCall { number } => {
+                ModemAction::IncomingCall { target_id: chip_id, number }
+            }
+            CellAction::UpdateCall => ModemAction::UpdatePhysicalChannelConfigs { id: chip_id },
+            CellAction::EndCall => ModemAction::RemoteHangup { id: chip_id },
+            CellAction::ReceiveSms { sender, text } => {
+                ModemAction::IncomingSms { id: chip_id, sender, text }
+            }
+            CellAction::SetSignalStrength { rssi, ber } => {
+                let rssi_u8 = u8::try_from(rssi).map_err(|e| {
+                    CellError::Chip(ChipError::InvalidArguments(
+                        format!("rssi out of range ({}): {}", rssi, e).into(),
+                    ))
+                })?;
+                let ber_u8 = u8::try_from(ber).map_err(|e| {
+                    CellError::Chip(ChipError::InvalidArguments(
+                        format!("ber out of range ({}): {}", ber, e).into(),
+                    ))
+                })?;
+                ModemAction::SetSignalStrength { id: chip_id, rssi: rssi_u8, ber: ber_u8 }
+            }
+            CellAction::SetVoiceRegistration { status } => {
+                ModemAction::SetVoiceRegistration { id: chip_id, status }
+            }
+            CellAction::SetDataRegistration { status } => {
+                ModemAction::SetDataRegistration { id: chip_id, status }
+            }
+            CellAction::RemoteAnswer => ModemAction::RemoteAnswer { id: chip_id },
+            CellAction::RemoteHold { on_hold } => ModemAction::RemoteHold { id: chip_id, on_hold },
+            CellAction::SetSimStatus { present } => {
+                ModemAction::SetSimStatus { id: chip_id, present }
+            }
+            CellAction::SetNetworkTechnology { tech } => {
+                ModemAction::SetNetworkTechnology { id: chip_id, tech }
+            }
+        };
+
+        self.controller.perform_action(modem_action)?;
+
+        Ok(CellActionResult::Success)
     }
 
     async fn handle_list(
@@ -158,22 +210,19 @@ impl ActorService for CellActor {
         let mut chips = Vec::new();
         for (id, state) in &self.active_chips {
             if let Ok(info) = self.controller.get_modem_info(id.0) {
-                chips.push(netsim_model::Chip {
-                    kind: netsim_model::ChipKind::CELLULAR,
+                chips.push(Chip {
+                    kind: ChipKind::CELLULAR,
                     id: info.id,
                     name: format!("modem-{}", info.id),
                     enabled: state.enabled,
-                    variant: Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
-                        radio: netsim_model::Radio {
-                            state: Some(state.enabled),
-                            ..Default::default()
-                        },
+                    variant: Some(ChipVariant::Cell(Cell {
+                        radio: Radio { state: Some(state.enabled), ..Default::default() },
                         state: if !state.enabled {
-                            "down".to_string()
+                            MODEM_STATE_DOWN.to_string()
                         } else if info.ringing {
-                            "ringing".to_string()
+                            MODEM_STATE_RINGING.to_string()
                         } else {
-                            "idle".to_string()
+                            MODEM_STATE_IDLE.to_string()
                         },
                     })),
                     ..Default::default()

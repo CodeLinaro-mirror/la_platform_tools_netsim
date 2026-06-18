@@ -1,6 +1,7 @@
-// Copyright 2025 The Android Open Source Project
+// Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+mod actions;
 mod cell_actor;
 mod error;
 mod lifecycle;
@@ -8,6 +9,7 @@ mod service;
 
 mod client;
 // Re-export core types
+pub use actions::{CellAction, CellActionResult};
 pub use actor_framework::ResourceActor;
 pub use cell_actor::CellActor;
 /// A type alias for the client used to interact with the Cell actor.

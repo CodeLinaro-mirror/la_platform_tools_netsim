@@ -9,7 +9,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use netsim_model::{ModemAction, RegistrationStatus};
+use netsim_model::{ModemAction, RadioTechnology, RegistrationStatus};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -119,7 +119,23 @@ impl ModemNetworkSimulator {
             ModemAction::UpdatePhysicalChannelConfigs { id } => {
                 self.update_physical_channel_configs(id.0)
             }
+            ModemAction::SetSimStatus { id, present } => self.set_sim_status(id.0, present),
+            ModemAction::SetNetworkTechnology { id, tech } => {
+                self.set_network_technology(id.0, tech)
+            }
         }
+    }
+
+    pub fn set_sim_status(&mut self, id: ModemId, present: bool) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.set_sim_status(present))
+    }
+
+    pub fn set_network_technology(
+        &mut self,
+        id: ModemId,
+        tech: RadioTechnology,
+    ) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.set_network_technology(tech))
     }
 
     /// Creates a new modem instance.

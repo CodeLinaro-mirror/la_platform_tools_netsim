@@ -21,6 +21,7 @@ rust_library_host {
         "libnetsim_next_device_api",
         "libnetsim_next_model",
         "libnetsim_next_modem_rs",
+        "libserde",
         "libthiserror",
         "libtokio",
         "libtokio_stream",
