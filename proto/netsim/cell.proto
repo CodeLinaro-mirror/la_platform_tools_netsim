@@ -19,6 +19,7 @@ service CellService {
 }
 
 message GetCellRequest {
+  // Matches the Chip ID of the cellular chip.
   uint32 id = 1;
 }
 
@@ -29,6 +30,7 @@ message ListCellsResponse {
 }
 
 message ExecuteCellRequest {
+  // Matches the Chip ID of the cellular chip.
   uint32 id = 1;
   oneof action {
     IncomingCall incoming_call = 2;
@@ -92,6 +94,7 @@ enum RegistrationStatus {
 }
 
 message Cell {
+  // Matches the Chip ID of the cellular chip.
   uint32 id = 1;
   string state = 2;  // "idle", "ringing", etc.
   bool ringing = 3;  // NOTE: Consider deriving ringing directly from state to
