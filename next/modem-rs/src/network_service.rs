@@ -74,7 +74,7 @@ impl NetworkService {
             let urc = if self.voice_unsol_mode == 2 {
                 format!("+CREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
             } else {
-                format!("+CREG: {}\r\n", stat)
+                format!("+CREG: {stat}\r\n")
             };
             responses.push(urc);
         }
@@ -83,7 +83,7 @@ impl NetworkService {
             let urc = if self.data_unsol_mode == 2 {
                 format!("+CGREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
             } else {
-                format!("+CGREG: {}\r\n", stat)
+                format!("+CGREG: {stat}\r\n")
             };
             responses.push(urc);
         }
@@ -92,7 +92,7 @@ impl NetworkService {
             let urc = if self.lte_unsol_mode == 2 {
                 format!("+CEREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
             } else {
-                format!("+CEREG: {}\r\n", stat)
+                format!("+CEREG: {stat}\r\n")
             };
             responses.push(urc);
         }

@@ -63,7 +63,7 @@ impl std::error::Error for ModemError {}
 impl fmt::Display for ModemError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ModemError::DuplicateModemId(id) => write!(f, "Duplicate modem ID: {}", id),
+            ModemError::DuplicateModemId(id) => write!(f, "Duplicate modem ID: {id}"),
             ModemError::NotFound => write!(f, "Modem network not found"),
         }
     }

@@ -101,6 +101,8 @@ message Cell {
   uint32 rssi = 5;
   uint32 ber = 6;
   repeated Call active_calls = 7;
+  RegistrationStatus voice_registration = 8;
+  RegistrationStatus data_registration = 9;
 }
 
 message Call {

@@ -23,6 +23,7 @@ netsim_rust_library(
     rustc_env = {
         "OUT_DIR": "../../..",
     },
+    rustc_flags = ["--cap-lints=allow"],
     deps = [
         "@bytes",
         "@hex",

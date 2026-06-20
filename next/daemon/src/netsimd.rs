@@ -127,7 +127,10 @@ async fn handle_new_connection(
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
-        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell::default())),
+        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
+            sim_type: chip.sim_type,
+            ..Default::default()
+        })),
         ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
