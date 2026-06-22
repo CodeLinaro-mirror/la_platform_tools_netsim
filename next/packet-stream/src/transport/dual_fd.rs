@@ -8,7 +8,10 @@ use command_fds::inherited::take_fd_ownership;
 use futures::{SinkExt, stream::StreamExt};
 use netsim_types::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use serde::{Deserialize, Serialize};
-use tokio::{fs::File, io::AsyncWriteExt};
+use tokio::{
+    io::AsyncWriteExt,
+    net::unix::pipe::{Receiver, Sender},
+};
 use tokio_util::codec::FramedRead;
 
 use crate::{
@@ -115,8 +118,8 @@ impl TransportListener for DualFdListener {
                 name: String::new(),
             };
 
-            let reader = File::from_std(StdFile::from(out_fd));
-            let writer = File::from_std(StdFile::from(in_fd));
+            let reader = Receiver::from_owned_fd(out_fd)?;
+            let writer = Sender::from_owned_fd(in_fd)?;
 
             let stream: PacketStream = match kind {
                 ChipKind::BLUETOOTH => {
