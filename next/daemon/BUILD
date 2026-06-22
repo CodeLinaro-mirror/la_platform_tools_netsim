@@ -65,9 +65,6 @@ netsim_rust_library(
     crate_name = "daemon",
     edition = "2024",
     proc_macro_deps = [],
-    select_deps = select({
-        "//conditions:default": [],
-    }),
     test_deps = [
         "//proto",
         "@bytes",

@@ -29,15 +29,16 @@ EXACT_DEP_MAPPING = {
     "//next/daemon": "netsim_next_daemon",
     "//next/daemon:testing": "libnetsim_next_daemon_lib",
     "//next/testing:testing": "libnetsim_next_netsim_testing_testing",
+    "//:netsim_link_layer_packets_rust_gen": (
+        "rootcanal_link_layer_packets_rust_gen"
+    ),
 }
 
 IGNORED_DEPS = {
     "libslirp-rs",
+    "@libslirp",
     "http-proxy",
-    "wifi-actor",
-    "ap-actor",
     "@libglib",
-    "ethernet-actor",
 }
 
 
@@ -102,6 +103,10 @@ def glob(include, exclude=None):
 
 
 def select(items):
+  # Prioritize Linux/Android for Soong generation
+  for key in items:
+    if "linux" in key or "android" in key:
+      return items[key]
   if "//conditions:default" in items:
     return items["//conditions:default"]
   return list(items.values())[0]
@@ -275,9 +280,7 @@ PLATFORM_RUSTLIBS = {
 IGNORED_TARGETS = {
     "libslirp-rs",
     "ap-actor",
-    "wifi-actor",
     "http-proxy",
-    "ethernet-actor",
 }
 ALLOWED_TESTING_TARGETS = {
     "nfc-actor",
@@ -306,6 +309,11 @@ def netsim_rust_library(
     return
   if deps is None:
     deps = []
+  else:
+    deps = list(deps)
+  select_deps = kwargs.get("select_deps")
+  if select_deps:
+    deps.extend(select_deps)
   if proc_macro_deps is None:
     proc_macro_deps = []
   if compile_data is None:
@@ -327,6 +335,7 @@ def netsim_rust_library(
 
   if name in PLATFORM_RUSTLIBS:
     rustlibs.extend(PLATFORM_RUSTLIBS[name])
+  rustlibs = sorted(list(set(rustlibs)))
   proc_macros = transform_deps(proc_macro_deps)
   srcs_content = resolve_rust_srcs(srcs, "lib.rs")
   data_content = resolve_rust_srcs(compile_data, "") if compile_data else []
@@ -348,7 +357,7 @@ def netsim_rust_library(
       "shared_libs": shared_libs,
       "proc_macros": proc_macros,
       "features": ["cuttlefish"],
-      "edition": edition,
+      "edition": edition or "2021",
   })
 
   # 1.5. Testing Library Target (mimicking defs.bzl)
@@ -517,8 +526,8 @@ def netsim_rust_library(
 def resolve_rust_srcs(srcs, default_file):
   mapped_srcs = []
   for src in srcs:
-    if src == "//:netsim_link_layer_packets_rust_gen":
-      mapped_srcs.append(":rootcanal_link_layer_packets_rust_gen")
+    if src in EXACT_DEP_MAPPING:
+      mapped_srcs.append(":" + EXACT_DEP_MAPPING[src])
     elif "**/*.rs" in src:
       mapped_srcs.append(src.replace("**/*.rs", default_file))
     elif "*.rs" in src:
@@ -531,14 +540,18 @@ def resolve_rust_srcs(srcs, default_file):
 def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
   if deps is None:
     deps = []
+  else:
+    deps = list(deps)
+  select_deps = kwargs.get("select_deps")
+  if select_deps:
+    deps.extend(select_deps)
   if srcs is None or not isinstance(srcs, list):
     srcs = ["src/**/*.rs"]
 
   rustlibs = transform_deps(deps)
-  # Add platform-specific rustlibs
   if name in PLATFORM_RUSTLIBS:
     rustlibs.extend(PLATFORM_RUSTLIBS[name])
-
+  rustlibs = sorted(list(set(rustlibs)))
   srcs_content = resolve_rust_srcs(srcs, "main.rs")
   data_content = resolve_rust_srcs(kwargs.get("compile_data", []), "")
 
@@ -555,11 +568,11 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
       "type": "rust_binary_host",
       "name": soong_name,
       "stem": soong_name,
-      "edition": kwargs.get("edition"),
       "crate_root": srcs_content[0],
       "srcs": srcs_content + data_content,
       "rustlibs": rustlibs,
       "features": ["cuttlefish"],
+      "edition": kwargs.get("edition", "2021"),
   })
 
 
@@ -616,6 +629,7 @@ SANDBOX = {
     "rust_proc_macro": rust_proc_macro,
     "genrule": genrule,
     "cc_binary": cc_binary,
+    "stripped_binaries": stripped_binaries,
     "kt_android_library": kt_android_library,
     "rust_cxx_bridge": rust_cxx_bridge,
     "sh_test": sh_test,
@@ -623,7 +637,6 @@ SANDBOX = {
     "rust_clippy": rust_clippy,
     "rust_doc": rust_doc,
     "rust_doc_test": rust_doc_test,
-    "stripped_binaries": stripped_binaries,
     "True": True,
     "False": False,
     "None": None,
@@ -708,6 +721,7 @@ def main():
               for feat in sorted(list(set(features))):
                 f.write(f'        "{feat}",\n')
               f.write("    ],\n")
+
             f.write('    lints: "none",\n')
 
             if tgt.get("rustlibs"):

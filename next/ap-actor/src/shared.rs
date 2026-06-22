@@ -113,7 +113,7 @@ impl SharedKeyStore {
             (session.tk.clone(), pn, 0) // KeyID 0
         };
 
-        if tk.is_empty() {
+        if tk.len() < 16 {
             return None;
         }
 
@@ -183,6 +183,9 @@ impl SharedKeyStore {
         let src = ieee80211.get_source();
         let sessions = self.sessions.read().ok()?;
         let session = sessions.get(&src)?;
+        if session.tk.len() < 16 {
+            return None;
+        }
 
         if ieee80211.as_bytes().len() < ieee80211.hdr_length() + CCMP_HDR_LEN {
             return None;
