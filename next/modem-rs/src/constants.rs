@@ -55,6 +55,7 @@ pub const SUPPORTED_CTEC_INDEXES: &[u8] =
 /// +CREG)
 pub mod access_technology {
     pub const GSM: u8 = 0;
+    pub const WCDMA: u8 = 2;
     pub const LTE: u8 = 7;
     pub const NR: u8 = 11;
 }
