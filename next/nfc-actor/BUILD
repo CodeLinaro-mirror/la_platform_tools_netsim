@@ -16,6 +16,7 @@ DEPS = [
     "@futures",
     "@thiserror",
     "@tokio",
+    "@tokio-util",
     "@casimir//:casimir_lib",
 ]
 

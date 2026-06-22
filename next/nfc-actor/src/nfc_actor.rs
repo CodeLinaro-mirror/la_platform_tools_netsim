@@ -5,11 +5,14 @@ use std::collections::HashMap;
 
 use device_actor::DeviceClient;
 use netsim_model::ChipId;
+use tokio::io::{DuplexStream, WriteHalf};
 use tracing::info;
 
 pub struct ChipState {
     pub device_id: device_api::DeviceId,
     pub enabled: bool,
+    pub casimir_device_id: u16,
+    pub nfc_writer: WriteHalf<DuplexStream>,
 }
 
 pub struct NfcActor {
