@@ -11,7 +11,7 @@ use std::{
 use bytes::Bytes;
 use netsim_model::{ModemAction, RegistrationStatus};
 use tokio::sync::mpsc;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     constants::CALL_RING_TIMEOUT,
@@ -286,30 +286,47 @@ impl ModemNetworkSimulator {
                 events.push(NetworkEvent::ModemHangedUp { id: hung_up_modem_id });
             }
             CommandAction::InitiateEmergencyCall => {} // No-op
-            CommandAction::ReceiveSms(pdu) => {
+            CommandAction::ReceiveSms { to, pdu } => {
                 self.metrics.sms_sent.fetch_add(1, AtomicOrdering::Relaxed);
-                let peer_id = self.find_peer_id(id, |_| true);
-                if let Some(pid) = peer_id {
+                let peer_id = if let Some(ref num) = to {
+                    let sender_num = self.modems.get(&id).map(|m| m.phone_number());
+                    if sender_num.as_deref() == Some(num.as_str()) {
+                        Some(id)
+                    } else if let Some(peer) = self.find_peer_id(id, |m| m.phone_number() == *num) {
+                        Some(peer)
+                    } else {
+                        warn!("No peer found with number {}, dropping SMS", num);
+                        None
+                    }
+                } else {
+                    debug!("No destination number, falling back to loopback (self)");
+                    Some(id)
+                };
+
+                if let Some(peer_id) = peer_id {
+                    let tpdu_len = crate::pdu::calculate_tpdu_len(&pdu);
+
                     let mut response = b"+CMT: ,".to_vec();
-                    response.extend_from_slice(pdu.len().to_string().as_bytes());
+                    response.extend_from_slice(tpdu_len.to_string().as_bytes());
                     response.extend_from_slice(b"\r\n");
                     response.extend_from_slice(&pdu);
                     response.extend_from_slice(b"\r\n");
-                    effects.push((pid, ModemEffect::Response(response)));
+                    effects.push((peer_id, ModemEffect::Response(response)));
                 }
             }
             CommandAction::ReceiveTextSms { to, text } => {
                 self.metrics.sms_sent.fetch_add(1, AtomicOrdering::Relaxed);
-                let peer_id = self.find_peer_id(id, |m| m.phone_number() == to);
-                if let Some(pid) = peer_id {
-                    let sender_num = if let Some(m) = self.modems.get(&id) {
-                        m.phone_number()
-                    } else {
-                        "".to_string()
-                    };
+                let sender_num = self.modems.get(&id).map(|m| m.phone_number());
+                let peer_id = if sender_num.as_deref() == Some(to.as_str()) {
+                    Some(id)
+                } else {
+                    self.find_peer_id(id, |m| m.phone_number() == to)
+                };
 
+                if let Some(pid) = peer_id {
+                    let sender_num_str = sender_num.unwrap_or_default();
                     let mut response =
-                        format!("+CMT: \"{}\",\"\", \"25/08/03,16:56:00+00\"\r\n", sender_num)
+                        format!("+CMT: \"{}\",\"\", \"25/08/03,16:56:00+00\"\r\n", sender_num_str)
                             .as_bytes()
                             .to_vec();
                     response.extend_from_slice(text.as_bytes());

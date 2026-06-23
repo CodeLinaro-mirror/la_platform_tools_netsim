@@ -332,6 +332,7 @@ impl From<ChipKind> for ChipVariant {
                 address: String::new(),
                 bt_properties: Default::default(),
                 mode: crate::chip::BluetoothMode::Device(Default::default()),
+                preset: None,
             })),
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),

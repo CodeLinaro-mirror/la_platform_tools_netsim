@@ -11,7 +11,7 @@
 //! NOTE: This module is currently missing the complete setup for converting
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
-use netsim_model::{BeaconParams, ChipError, ChipId};
+use netsim_model::{BeaconParams, ChipError, ChipId, Interval};
 use netsim_packets::{
     Address as PacketsAddress, AdvertisingFilterPolicy, AdvertisingType, Enable, HciCommand,
     HciCommandHeader, LeSetAdvertisingData, LeSetAdvertisingEnable, LeSetAdvertisingParameters,
@@ -22,6 +22,14 @@ use rootcanal::{Address, Rootcanal};
 use zerocopy::{Immutable, IntoBytes, KnownLayout, U16};
 
 use crate::{beacon_utils::construct_data, utils::ToChipError};
+
+const DEFAULT_BEACON_INTERVAL_MS: u64 = 1000;
+const MODE_LOW_POWER_MS: u64 = 1000;
+const MODE_BALANCED_MS: u64 = 250;
+const MODE_LOW_LATENCY_MS: u64 = 100;
+
+const ADV_INTERVAL_MIN_SLOTS: u64 = 0x0020;
+const ADV_INTERVAL_MAX_SLOTS: u64 = 0x4000;
 
 /// Send an HCI command to the controller.
 fn send_hci_command<T: HciCommand + IntoBytes + Immutable + KnownLayout>(
@@ -57,14 +65,34 @@ pub fn create(
         )))
     })?;
 
+    let interval_ms = params
+        .ble_beacon
+        .settings
+        .as_ref()
+        .and_then(|s| s.interval.as_ref())
+        .map(|interval| match interval {
+            Interval::Milliseconds(ms) => *ms,
+            Interval::AdvertiseMode(mode) => match *mode {
+                netsim_model::AdvertiseMode::LowPower => MODE_LOW_POWER_MS,
+                netsim_model::AdvertiseMode::Balanced => MODE_BALANCED_MS,
+                netsim_model::AdvertiseMode::LowLatency => MODE_LOW_LATENCY_MS,
+            },
+        })
+        .unwrap_or(DEFAULT_BEACON_INTERVAL_MS);
+    let slots = (interval_ms * 8 / 5).clamp(ADV_INTERVAL_MIN_SLOTS, ADV_INTERVAL_MAX_SLOTS) as u16;
+
+    let scannable = params.ble_beacon.settings.as_ref().map(|s| s.scannable).unwrap_or_default();
+    let advertising_type =
+        if scannable { AdvertisingType::ADV_SCAN_IND } else { AdvertisingType::ADV_NONCONN_IND };
+
     // LE Set Advertising Parameters
     send_hci_command(
         rootcanal,
         chip_id,
         LeSetAdvertisingParameters {
-            advertising_interval_min: U16::new(0x00A0),
-            advertising_interval_max: U16::new(0x00A0),
-            advertising_type: AdvertisingType::ADV_IND,
+            advertising_interval_min: U16::new(slots),
+            advertising_interval_max: U16::new(slots),
+            advertising_type,
             own_address_type: OwnAddressType::PUBLIC_DEVICE_ADDRESS,
             peer_address_type: PeerAddressType::PUBLIC_DEVICE_OR_IDENTITY_ADDRESS,
             peer_address: PacketsAddress { bytes: address.address },

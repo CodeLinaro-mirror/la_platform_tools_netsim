@@ -218,6 +218,7 @@ impl World {
             "0.0.0-test".to_string(),
             stats_path.clone(),
             stats_interval,
+            Arc::new(netsim_model::FrontendStats::default()),
         );
         actor.set_self_client(client.clone());
         let actor_task = tokio::spawn(runner.run(actor));
@@ -726,6 +727,7 @@ impl World {
             variant: Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate {
                 low_energy: RadioUpdate { state: le_state },
                 classic: RadioUpdate { state: classic_state },
+                ..Default::default()
             })),
             ..Default::default()
         }

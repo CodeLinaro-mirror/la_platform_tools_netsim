@@ -73,7 +73,13 @@ unsafe extern "C" {
         rssi: c_int,
     );
 
+    /// Reconfigures the controller with new properties.
+    pub fn ffi_controller_set_properties(
+        controller: *mut c_void,
+        proto_bytes: *const uint8_t,
+        proto_len: size_t,
+    ) -> bool;
+
     /// Advances the controller's state by one tick.
     pub fn ffi_controller_tick(controller: *mut c_void);
-
 }

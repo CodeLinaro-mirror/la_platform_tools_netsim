@@ -184,6 +184,7 @@ async fn setup_grpc_listener(
     link_client: LinkClient,
     #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
     version: String,
+    frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
     let (new_connection_tx, new_connection_rx) = mpsc::channel(100);
@@ -199,6 +200,7 @@ async fn setup_grpc_listener(
         ap_client,
         packet_streamer_service,
         version,
+        frontend_stats,
     )
     .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
@@ -406,6 +408,8 @@ impl NetsimDaemon {
         // Coordinate IDs across all actors
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
+        let frontend_stats = Arc::new(netsim_model::FrontendStats::default());
+
         #[cfg(not(feature = "cuttlefish"))]
         let (
             ap_runner,
@@ -502,6 +506,7 @@ impl NetsimDaemon {
             #[cfg(not(feature = "cuttlefish"))]
             ap_client.clone(),
             get_version(),
+            frontend_stats.clone(),
         )
         .await?;
 
@@ -601,7 +606,8 @@ impl NetsimDaemon {
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
-        let bt_actor_state = bluetooth_actor::BluetoothActor::new(device_client.clone());
+        let bt_actor_state =
+            bluetooth_actor::BluetoothActor::new(device_client.clone(), args.disable_address_reuse);
 
         // Setup Uwb Server
         let (uwb_runner, uwb_client) = uwb_actor::new();
@@ -649,6 +655,12 @@ impl NetsimDaemon {
             )
         };
 
+        let stats_path = if cfg!(feature = "testing") {
+            initialized_guard.path().parent().map(|p| p.join("netsim_session_stats.json"))
+        } else {
+            None
+        };
+
         let mut device_actor_state = device_actor::DeviceActor::new(
             chip_clients.clone(),
             next_chip_id.clone(),
@@ -657,8 +669,9 @@ impl NetsimDaemon {
             startup_timeout,
             idle_timeout,
             get_version(),
+            stats_path,
             None,
-            None,
+            frontend_stats.clone(),
         );
 
         // Spawn server tasks
@@ -875,6 +888,10 @@ impl NetsimDaemon {
                 () = &mut shutdown_signal => {
                     info!("Shutting down gracefully...");
                     self.shutdown_actors().await;
+                    if !self.device_task.is_finished() {
+                        let _ = self.device_client.shutdown().await;
+                        let _ = (&mut self.device_task).await;
+                    }
                     break;
                 }
             }

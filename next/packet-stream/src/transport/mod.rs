@@ -10,6 +10,8 @@
 #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 pub mod dual_fd;
 pub mod h4;
+pub mod modem;
+pub mod nci;
 pub mod traits;
 pub mod types;
 pub mod uci;
@@ -31,6 +33,8 @@ use async_trait::async_trait;
 pub use dual_fd::{DualFdConfig, DualFdListener};
 use futures::{SinkExt, StreamExt};
 pub use h4::H4Codec;
+pub use modem::ModemCodec;
+pub use nci::NciCodec;
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 #[cfg(windows)]

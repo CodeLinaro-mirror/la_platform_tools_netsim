@@ -14,13 +14,16 @@ rust_library_host {
     features: ["cuttlefish"],
     lints: "none",
     rustlibs: [
+        "libanyhow",
         "libbytes",
+        "libcasimir",
         "libfutures",
         "libnetsim_next_actor_framework",
         "libnetsim_next_device_actor",
         "libnetsim_next_device_api",
         "libnetsim_next_model",
         "libthiserror",
+        "libtokio",
         "libtracing",
     ],
     proc_macros: [

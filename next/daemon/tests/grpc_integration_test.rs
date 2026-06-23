@@ -283,3 +283,69 @@ async fn test_link_wiring_grpc() {
     // 7. Verify Deletion
     world.then_link_count_is(0).await;
 }
+
+// Scenario: Frontend API Stats Tracking
+//   Given a running Netsim Daemon
+//   When I perform frontend API actions
+//   Then the session stats are correctly populated with counts
+#[tokio::test]
+async fn test_frontend_stats_tracking() {
+    let mut args = daemon::Args::default();
+    args.no_shutdown = false;
+    // Set a short idle shutdown timeout (500ms) to rapidly trigger daemon teardown
+    // after the last active client connection closes.
+    args.idle_shutdown_timeout = Some(500);
+    args.logtostderr = true;
+    let mut world = World::new_with_args(args).await;
+    world.when_spawn_daemon().await;
+
+    // Perform API calls
+    let _ = world.when_get_version().await;
+    let device_id = world.when_create_device("stats_device", "chip1").await;
+    let _devices = world.when_list_devices().await;
+
+    // Patch device
+    let mut patch_req = netsim_proto::frontend::PatchDeviceRequest::new();
+    patch_req.id = Some(device_id);
+    let mut patch_fields = netsim_proto::frontend::patch_device_request::PatchDeviceFields::new();
+    patch_fields.name = Some("new_name".to_string());
+    patch_req.device = netsim_proto::protobuf::MessageField::some(patch_fields);
+    world.when_patch_device(&patch_req).await;
+
+    world.when_delete_device(device_id).await;
+
+    // Wait for the daemon to shut down via idle timeout, which flushes stats.
+    // A 5000ms timeout provides a safe upper bound to ensure all asynchronous
+    // teardown and IO operations (like writing the stats JSON) complete reliably.
+    world.then_daemon_shutdown(5000).await;
+
+    let stats_path = world.get_temp_dir().join("netsim_session_stats.json");
+
+    // Verify stats file is written after shutdown
+    let content = std::fs::read_to_string(&stats_path).expect("Failed to read stats JSON file");
+
+    // Deserialize and assert on the strictly typed fields
+    let json: serde_json::Value = serde_json::from_str(&content).expect("Failed to parse JSON");
+    let frontend_stats = json.get("frontend_stats").expect("frontend_stats not found in JSON");
+
+    assert!(
+        frontend_stats.get("get_version").and_then(|v| v.as_u64()).unwrap_or(0) > 0,
+        "get_version not tracked or is 0"
+    );
+    assert!(
+        frontend_stats.get("create_device").and_then(|v| v.as_u64()).unwrap_or(0) > 0,
+        "create_device not tracked or is 0"
+    );
+    assert!(
+        frontend_stats.get("list_device").and_then(|v| v.as_u64()).unwrap_or(0) > 0,
+        "list_device not tracked or is 0"
+    );
+    assert!(
+        frontend_stats.get("patch_device").and_then(|v| v.as_u64()).unwrap_or(0) > 0,
+        "patch_device not tracked or is 0"
+    );
+    assert!(
+        frontend_stats.get("delete_device").and_then(|v| v.as_u64()).unwrap_or(0) > 0,
+        "delete_device not tracked or is 0"
+    );
+}

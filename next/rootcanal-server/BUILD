@@ -11,13 +11,13 @@ netsim_rust_library(
     crate_name = "rootcanal_server",
     edition = "2024",
     test_deps = [
-        "//next/daemon:daemon-lib",
-        "@rand",
+        "//next/daemon:testing",
     ],
     visibility = ["//next:__subpackages__"],
     deps = [
         "//next/device-actor",
         "//next/model",
+        "@rand",
         "@tokio",
         "@tracing",
     ],
