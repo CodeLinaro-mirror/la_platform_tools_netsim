@@ -69,6 +69,12 @@ impl ActorService for NfcActor {
                 match item {
                     Ok(bytes_mut) => {
                         let bytes = bytes_mut.freeze();
+                        if bytes.is_empty() {
+                            tracing::warn!(
+                                "Received empty bytes from NFC stream! Casimir connection lost?"
+                            );
+                            break;
+                        }
                         if let Err(e) = packet_sink.send(bytes).await {
                             error!("Failed to send packet to guest: {:?}", e);
                             break;
