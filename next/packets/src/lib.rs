@@ -175,7 +175,9 @@ pub(crate) mod transport;
 pub(crate) mod utils;
 
 // Facade
-pub use ethernet::{EthernetFrame, EthernetPacket, MacAddr, frame::ether_type};
+pub use ethernet::{
+    ArpPacket, ArpPacketBuilder, EthernetFrame, EthernetPacket, MacAddr, frame::ether_type,
+};
 // hci commands and types
 pub use hci::commands::{
     HciCommand, HciCommandHeader, LeSetAdvertisingData, LeSetAdvertisingEnable,
