@@ -195,6 +195,13 @@ pub use hci::{
         PeerAddressType,
     },
 };
+// NDP headers and builders
+pub use icmp::{
+    Icmpv6Header, NeighborAdvertisement, NeighborAdvertisementBuilder, NeighborSolicitation,
+    NeighborSolicitationBuilder, PrefixInformationOption, RdnssOption, RouterAdvertisement,
+    RouterAdvertisementBuilder, RouterSolicitation, RouterSolicitationBuilder,
+    SourceLinkLayerAddressOption,
+};
 // ieee80211 constants
 pub use ieee80211::{
     AKM_PSK, CIPHER_CCMP, EXTENDED_CAPABILITIES, EXTENDED_CAPABILITIES_FTM_RESPONDER_BIT,
