@@ -174,6 +174,33 @@ async fn handle_new_connection(
     }
 }
 
+fn get_env_port_impl<F>(var_name: &str, get_var: F) -> Option<u16>
+where
+    F: Fn(&str) -> Result<String, std::env::VarError>,
+{
+    get_var(var_name).ok().and_then(|val| {
+        let trimmed = val.trim();
+        match trimmed.parse::<u16>() {
+            Ok(port) => Some(port),
+            Err(e) => {
+                warn!("Environment variable {var_name} value '{val}' could not be parsed as a port: {e}");
+                None
+            }
+        }
+    })
+}
+/// Resolves a port number, prioritizing the command line argument (`arg_port`)
+/// over the environment variable (`env_var`).
+///
+/// Returns `None` if neither the argument is provided nor the environment
+/// variable is set/valid.
+fn resolve_port_with_env<F>(arg_port: Option<u16>, env_var: &str, get_var: F) -> Option<u16>
+where
+    F: Fn(&str) -> Result<String, std::env::VarError>,
+{
+    arg_port.or_else(|| get_env_port_impl(env_var, get_var))
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn setup_grpc_listener(
     streams: &mut Streams,
@@ -502,10 +529,13 @@ impl NetsimDaemon {
         };
 
         // gRPC port is determined after the listener starts.
+        let resolved_grpc_port =
+            resolve_port_with_env(args.grpc_port, "NETSIM_GRPC_PORT", |name| std::env::var(name))
+                .unwrap_or(0);
         let (actual_grpc_port, grpc_server) = setup_grpc_listener(
             &mut streams,
             &mut listener_addresses,
-            args.grpc_port.unwrap_or(0),
+            resolved_grpc_port,
             !args.no_cli_ui,
             device_client.clone(),
             link_client.clone(),
@@ -524,12 +554,16 @@ impl NetsimDaemon {
 
         // HCI TCP socket server
         let instance_num = get_instance(args.instance);
-        let hci_port = args.hci_port.unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
-        tokio::spawn(hci_server::server::run(hci_port, device_client.clone()));
+        let resolved_hci_port =
+            resolve_port_with_env(args.hci_port, "NETSIM_HCI_PORT", |name| std::env::var(name))
+                .unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
+        tokio::spawn(hci_server::server::run(resolved_hci_port, device_client.clone()));
 
         // WebSocket server
         let mut actual_ws_port = None;
-        let websocket_port = args.ws_port.map(|p| p + instance_num - 1);
+        let resolved_ws_port_opt =
+            resolve_port_with_env(args.ws_port, "NETSIM_WS_PORT", |name| std::env::var(name));
+        let websocket_port = resolved_ws_port_opt.map(|p| p + instance_num - 1);
         if let Some(ws_port) = websocket_port {
             match websocket_server::server::bind(ws_port) {
                 Ok(listener) => {
@@ -562,11 +596,13 @@ impl NetsimDaemon {
         };
 
         let mut actual_tcp_port = None;
+        let resolved_tcp_port_opt =
+            resolve_port_with_env(args.tcp_port, "NETSIM_TCP_PORT", |name| std::env::var(name));
         let should_start_tcp =
-            if cfg!(feature = "cuttlefish") { true } else { args.tcp_port.is_some() };
+            if cfg!(feature = "cuttlefish") { true } else { resolved_tcp_port_opt.is_some() };
 
         if should_start_tcp {
-            let tcp_port = args.tcp_port.unwrap_or(0);
+            let tcp_port = resolved_tcp_port_opt.unwrap_or(0);
             if let Err(e) = streams
                 .start_listener(
                     "tcp",
@@ -586,7 +622,7 @@ impl NetsimDaemon {
         let mut ini_data = HashMap::from([
             ("pid".to_string(), std::process::id().to_string()),
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
-            ("hci.port".to_string(), hci_port.to_string()),
+            ("hci.port".to_string(), resolved_hci_port.to_string()),
         ]);
         #[cfg(feature = "cuttlefish")]
         if let Some(port) = actual_test_port {
@@ -1152,5 +1188,51 @@ impl NetsimDaemon {
 
         info!("Connector forwarder disconnected unexpectedly");
         Err("Connector forwarder disconnected unexpectedly from guest FDs".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_env_port_impl() {
+        let mock_env = |name: &str| match name {
+            "VALID" => Ok("1234".to_string()),
+            "WHITESPACE" => Ok("  5678  ".to_string()),
+            "INVALID" => Ok("not_a_port".to_string()),
+            "EMPTY" => Ok("".to_string()),
+            "OVERFLOW" => Ok("999999".to_string()),
+            _ => Err(std::env::VarError::NotPresent),
+        };
+
+        assert_eq!(get_env_port_impl("VALID", mock_env), Some(1234));
+        assert_eq!(get_env_port_impl("WHITESPACE", mock_env), Some(5678));
+        assert_eq!(get_env_port_impl("INVALID", mock_env), None);
+        assert_eq!(get_env_port_impl("EMPTY", mock_env), None);
+        assert_eq!(get_env_port_impl("OVERFLOW", mock_env), None);
+        assert_eq!(get_env_port_impl("NOT_PRESENT", mock_env), None);
+    }
+
+    #[test]
+    fn test_resolve_port_with_env() {
+        let mock_env = |name: &str| match name {
+            "NETSIM_PORT" => Ok("1234".to_string()),
+            "INVALID_PORT" => Ok("invalid".to_string()),
+            _ => Err(std::env::VarError::NotPresent),
+        };
+
+        // Case 1: CLI arg is Some, should ignore environment variable
+        assert_eq!(resolve_port_with_env(Some(5678), "NETSIM_PORT", mock_env), Some(5678));
+        assert_eq!(resolve_port_with_env(Some(5678), "NOT_PRESENT", mock_env), Some(5678));
+
+        // Case 2: CLI arg is None, environment variable is present and valid
+        assert_eq!(resolve_port_with_env(None, "NETSIM_PORT", mock_env), Some(1234));
+
+        // Case 3: CLI arg is None, environment variable is invalid/malformed
+        assert_eq!(resolve_port_with_env(None, "INVALID_PORT", mock_env), None);
+
+        // Case 4: CLI arg is None, environment variable is not present
+        assert_eq!(resolve_port_with_env(None, "NOT_PRESENT", mock_env), None);
     }
 }
