@@ -61,6 +61,7 @@ impl ActorService for NfcActor {
         let mut stream = tokio_util::codec::length_delimited::Builder::new()
             .length_field_offset(2)
             .length_field_length(1)
+            .length_adjustment(3)
             .num_skip(0)
             .new_read(nfc_reader);
         let chip_id_clone = chip_id;
@@ -69,12 +70,6 @@ impl ActorService for NfcActor {
                 match item {
                     Ok(bytes_mut) => {
                         let bytes = bytes_mut.freeze();
-                        if bytes.is_empty() {
-                            tracing::warn!(
-                                "Received empty bytes from NFC stream! Casimir connection lost?"
-                            );
-                            break;
-                        }
                         if let Err(e) = packet_sink.send(bytes).await {
                             error!("Failed to send packet to guest: {:?}", e);
                             break;
@@ -205,5 +200,42 @@ impl ActorService for NfcActor {
             });
         }
         Ok(chips)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncWriteExt, duplex};
+    use tokio_stream::StreamExt;
+    use tokio_util::codec::length_delimited::Builder;
+
+    #[tokio::test]
+    async fn test_nci_codec_length_adjustment() -> Result<(), Box<dyn std::error::Error>> {
+        // This test documents and verifies the correct configuration of the
+        // LengthDelimitedCodec used in service.rs to read NCI packets.
+        // NCI header is 3 bytes (offset 2 + len 1). We must use length_adjustment(3)
+        // to include the header in the returned bytes when num_skip(0) is used.
+
+        let (mut writer, reader) = duplex(1024);
+        let mut stream = Builder::new()
+            .length_field_offset(2)
+            .length_field_length(1)
+            .length_adjustment(3) // Crucial fix!
+            .num_skip(0)
+            .new_read(reader);
+
+        // Packet: header [0x40, 0x00], len 1, payload [0xaa]
+        let packet = &[0x40, 0x00, 1, 0xaa];
+        writer.write_all(packet).await?;
+        drop(writer);
+
+        // Verify we receive the full 4 bytes (header + payload)
+        let bytes = stream.next().await.ok_or("Stream ended prematurely")??;
+        assert_eq!(bytes.len(), 4);
+        assert_eq!(bytes.as_ref(), packet);
+
+        // Verify the stream terminates cleanly (EOF) on next read without looping
+        assert!(stream.next().await.is_none());
+        Ok(())
     }
 }
