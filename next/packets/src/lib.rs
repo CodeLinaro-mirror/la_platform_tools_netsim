@@ -1,4 +1,4 @@
-// Copyright 2025 The Android Open Source Project
+// Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
 //! `packets` is a crate for zero-copy parsing and handling of network packets.
@@ -162,6 +162,9 @@
 //! }
 //! ```
 #![allow(missing_docs)]
+#[allow(unused_imports)]
+use bytes as _;
+
 pub(crate) mod ethernet;
 pub(crate) mod hci;
 pub(crate) mod icmp;
@@ -218,6 +221,8 @@ pub use ieee80211::{
     ie::{IeIterator, set_ext_cap, tags, write_ie},
     wmm::write_wmm_param_element,
 };
+// IP headers and builders
+pub use ip::{Ipv4Builder, Ipv4Header, Ipv6Builder, Ipv6Header};
 pub use llc::frame::{LlcSnapHeader, control_field, sap};
 pub use netlink::{
     HwsimAttrSet, HwsimAttrSetBuilder, HwsimFrame, HwsimMsgHdr, Nl80211AttrSetBuilder, NlMsgHdr,
@@ -227,6 +232,13 @@ pub use netlink::{
     nl80211_attr::NlAttrHdr,
     stream::NetlinkStream,
 };
+// Transport headers and builders
+pub use transport::{TcpBuilder, UdpBuilder};
+// Checksum helpers
+pub use utils::checksum::{
+    icmpv6_checksum, ipv4_checksum, tcp_checksum, tcp_checksum_v6, udp_checksum, udp_checksum_v6,
+};
+
 pub mod link_layer {
     #[allow(warnings, clippy::all, clippy::unwrap_in_result, clippy::map_err_ignore)]
     mod pdl_generated {
