@@ -6,14 +6,14 @@
     "androidx.test:monitor": 1543279357,
     "androidx.test:runner": -1144989367,
     "com.google.android:annotations": 1910180409,
-    "com.google.api.grpc:proto-google-common-protos": -2106826238,
-    "com.google.auth:google-auth-library-credentials": 1149797254,
-    "com.google.auth:google-auth-library-oauth2-http": -2102758232,
+    "com.google.api.grpc:proto-google-common-protos": 391189699,
+    "com.google.auth:google-auth-library-credentials": 43407369,
+    "com.google.auth:google-auth-library-oauth2-http": 1085819179,
     "com.google.auto.value:auto-value": 1146221104,
     "com.google.auto.value:auto-value-annotations": -1101276935,
     "com.google.code.findbugs:jsr305": 495355163,
-    "com.google.code.gson:gson": -445462229,
-    "com.google.errorprone:error_prone_annotations": -2110097316,
+    "com.google.code.gson:gson": 245099245,
+    "com.google.errorprone:error_prone_annotations": -707968160,
     "com.google.guava:failureaccess": 1582410452,
     "com.google.guava:guava": -1791353471,
     "com.google.j2objc:j2objc-annotations": 2003271689,
@@ -22,28 +22,29 @@
     "com.google.truth:truth": 1696781452,
     "com.squareup.okhttp:okhttp": -1467174407,
     "com.squareup.okio:okio": 795722926,
-    "io.netty:netty-buffer": -36891658,
-    "io.netty:netty-codec": -1968637428,
-    "io.netty:netty-codec-http": 2069139895,
-    "io.netty:netty-codec-http2": 980426895,
-    "io.netty:netty-codec-socks": -1802651606,
-    "io.netty:netty-common": -644663253,
-    "io.netty:netty-handler": 1555108312,
-    "io.netty:netty-handler-proxy": -964658153,
-    "io.netty:netty-resolver": -1317606544,
-    "io.netty:netty-tcnative-boringssl-static": 2033070843,
-    "io.netty:netty-tcnative-classes": 2023773715,
-    "io.netty:netty-transport": 1563151065,
-    "io.netty:netty-transport-native-epoll": -1215800119,
-    "io.netty:netty-transport-native-unix-common": -818773192,
+    "io.netty:netty-buffer": 2012301521,
+    "io.netty:netty-codec": 80555751,
+    "io.netty:netty-codec-http": -176634222,
+    "io.netty:netty-codec-http2": -1265347222,
+    "io.netty:netty-codec-socks": 246541573,
+    "io.netty:netty-common": 1404529926,
+    "io.netty:netty-handler": -690665805,
+    "io.netty:netty-handler-proxy": 1084535026,
+    "io.netty:netty-resolver": 731586635,
+    "io.netty:netty-tcnative-boringssl-static": -754344644,
+    "io.netty:netty-tcnative-classes": -763641772,
+    "io.netty:netty-transport": -682623052,
+    "io.netty:netty-transport-native-epoll": 833393060,
+    "io.netty:netty-transport-native-unix-common": 1230419987,
     "io.opencensus:opencensus-api": 2042364617,
     "io.opencensus:opencensus-contrib-grpc-metrics": 317094357,
     "io.perfmark:perfmark-api": 1019157794,
     "junit:junit": -744267592,
     "org.checkerframework:checker-qual": -819031361,
-    "org.codehaus.mojo:animal-sniffer-annotations": -1634689353,
+    "org.codehaus.mojo:animal-sniffer-annotations": 852823480,
     "org.jetbrains.kotlinx:kotlinx-coroutines-android": -1709166003,
     "org.jetbrains.kotlinx:kotlinx-coroutines-core": -1648913921,
+    "org.mockito:mockito-core": -1925148636,
     "repositories": 233549113
   },
   "__RESOLVED_ARTIFACTS_HASH": {
@@ -54,7 +55,7 @@
     "androidx.asynclayoutinflater:asynclayoutinflater:aar": 26253299,
     "androidx.collection:collection": -1448739928,
     "androidx.coordinatorlayout:coordinatorlayout:aar": -1818885182,
-    "androidx.core.uwb:uwb:aar": 756248271,
+    "androidx.core.uwb:uwb:aar": 685147245,
     "androidx.core:core-ktx:aar": -949470071,
     "androidx.core:core:aar": -367789442,
     "androidx.cursoradapter:cursoradapter:aar": 1645061594,
@@ -87,63 +88,65 @@
     "com.google.android.gms:play-services-nearby:aar": 513379107,
     "com.google.android.gms:play-services-tasks:aar": 735254110,
     "com.google.android:annotations": -106042933,
-    "com.google.api.grpc:proto-google-common-protos": 2136930450,
-    "com.google.api:api-common": -1039876571,
-    "com.google.auth:google-auth-library-credentials": 1802998147,
-    "com.google.auth:google-auth-library-oauth2-http": -38964270,
+    "com.google.api.grpc:proto-google-common-protos": -2076640671,
+    "com.google.api:api-common": -1830617404,
+    "com.google.auth:google-auth-library-credentials": -2052916383,
+    "com.google.auth:google-auth-library-oauth2-http": -1140829420,
     "com.google.auto.value:auto-value": -1437856168,
     "com.google.auto.value:auto-value-annotations": 525259480,
     "com.google.code.findbugs:jsr305": -378717798,
-    "com.google.code.gson:gson": 936730516,
-    "com.google.errorprone:error_prone_annotations": -1413072071,
+    "com.google.code.gson:gson": -1254576759,
+    "com.google.errorprone:error_prone_annotations": -616559436,
     "com.google.guava:failureaccess": 1206604605,
-    "com.google.guava:guava": -1737485285,
+    "com.google.guava:guava": 1953384558,
     "com.google.guava:listenablefuture": 624574968,
-    "com.google.http-client:google-http-client": 1453117298,
-    "com.google.http-client:google-http-client-gson": -1152458393,
+    "com.google.http-client:google-http-client": -724603240,
+    "com.google.http-client:google-http-client-gson": 947595691,
     "com.google.j2objc:j2objc-annotations": -1502485612,
     "com.google.protobuf:protobuf-java": -1483069861,
     "com.google.re2j:re2j": -1674581422,
-    "com.google.s2a.proto.v2:s2a-proto": -1924779612,
-    "com.google.truth:truth": 1927009063,
+    "com.google.s2a.proto.v2:s2a-proto": -1822508647,
+    "com.google.truth:truth": 228934064,
     "com.squareup.okhttp:okhttp": 79632463,
     "com.squareup.okio:okio": 257435758,
     "commons-codec:commons-codec": 552652796,
-    "io.grpc:grpc-api": -1398491243,
-    "io.grpc:grpc-context": -917992000,
-    "io.grpc:grpc-protobuf": 1777674418,
-    "io.grpc:grpc-protobuf-lite": 1748072520,
-    "io.grpc:grpc-stub": -1981834463,
-    "io.netty:netty-buffer": -88963291,
-    "io.netty:netty-codec": 196848589,
-    "io.netty:netty-codec-http": 1099468793,
-    "io.netty:netty-codec-http2": -512108998,
-    "io.netty:netty-codec-socks": 1138221449,
-    "io.netty:netty-common": -1288782099,
-    "io.netty:netty-handler": 1929781661,
-    "io.netty:netty-handler-proxy": -142685725,
-    "io.netty:netty-resolver": -1240135496,
-    "io.netty:netty-tcnative-boringssl-static": 543610772,
-    "io.netty:netty-tcnative-boringssl-static:jar:linux-aarch_64": -1370686965,
-    "io.netty:netty-tcnative-boringssl-static:jar:linux-x86_64": -252945943,
-    "io.netty:netty-tcnative-boringssl-static:jar:osx-aarch_64": 931569170,
-    "io.netty:netty-tcnative-boringssl-static:jar:osx-x86_64": -1300626880,
-    "io.netty:netty-tcnative-boringssl-static:jar:windows-x86_64": -1452300805,
-    "io.netty:netty-tcnative-classes": 1362905020,
-    "io.netty:netty-transport": -957566425,
-    "io.netty:netty-transport-classes-epoll": 559468402,
-    "io.netty:netty-transport-native-epoll:jar:linux-x86_64": 398918094,
-    "io.netty:netty-transport-native-unix-common": 109815381,
-    "io.opencensus:opencensus-api": -1250127673,
-    "io.opencensus:opencensus-contrib-grpc-metrics": 1699698746,
-    "io.opencensus:opencensus-contrib-http-util": 1826406140,
+    "io.grpc:grpc-api": -1084420308,
+    "io.grpc:grpc-context": 1363880382,
+    "io.grpc:grpc-protobuf": 628027170,
+    "io.grpc:grpc-protobuf-lite": 50877026,
+    "io.grpc:grpc-stub": -1090918175,
+    "io.netty:netty-buffer": 619823084,
+    "io.netty:netty-codec": 85148345,
+    "io.netty:netty-codec-http": -1741286358,
+    "io.netty:netty-codec-http2": 869913610,
+    "io.netty:netty-codec-socks": -1019477884,
+    "io.netty:netty-common": 503666317,
+    "io.netty:netty-handler": 943043366,
+    "io.netty:netty-handler-proxy": 1056983517,
+    "io.netty:netty-resolver": -56660872,
+    "io.netty:netty-tcnative-boringssl-static": -1612901560,
+    "io.netty:netty-tcnative-boringssl-static:jar:linux-aarch_64": -727058290,
+    "io.netty:netty-tcnative-boringssl-static:jar:linux-x86_64": -1638652105,
+    "io.netty:netty-tcnative-boringssl-static:jar:osx-aarch_64": -1549131092,
+    "io.netty:netty-tcnative-boringssl-static:jar:osx-x86_64": -140420543,
+    "io.netty:netty-tcnative-boringssl-static:jar:windows-x86_64": -851899986,
+    "io.netty:netty-tcnative-classes": 1827049946,
+    "io.netty:netty-transport": -609686479,
+    "io.netty:netty-transport-classes-epoll": -1182278398,
+    "io.netty:netty-transport-native-epoll:jar:linux-x86_64": 1834242373,
+    "io.netty:netty-transport-native-unix-common": -739582042,
+    "io.opencensus:opencensus-api": 725698291,
+    "io.opencensus:opencensus-contrib-grpc-metrics": 602788960,
+    "io.opencensus:opencensus-contrib-http-util": -636635938,
     "io.perfmark:perfmark-api": 1646857621,
     "javax.annotation:javax.annotation-api": 769413985,
     "junit:junit": 909920928,
+    "net.bytebuddy:byte-buddy": -2024896036,
+    "net.bytebuddy:byte-buddy-agent": -1214055883,
     "org.apache.httpcomponents:httpclient": 1121125024,
     "org.apache.httpcomponents:httpcore": 1054598898,
     "org.checkerframework:checker-qual": 303460731,
-    "org.codehaus.mojo:animal-sniffer-annotations": 1978223466,
+    "org.codehaus.mojo:animal-sniffer-annotations": -685301760,
     "org.hamcrest:hamcrest-core": 1886500706,
     "org.jetbrains.kotlin:kotlin-stdlib": -1203758452,
     "org.jetbrains.kotlin:kotlin-stdlib-common": 389951364,
@@ -155,6 +158,8 @@
     "org.jetbrains.kotlinx:kotlinx-coroutines-play-services": -734511882,
     "org.jetbrains:annotations": 1343229301,
     "org.jspecify:jspecify": -2091595516,
+    "org.mockito:mockito-core": 747245314,
+    "org.objenesis:objenesis": 284342040,
     "org.ow2.asm:asm": -968578543
   },
   "conflict_resolution": {
@@ -406,9 +411,9 @@
     },
     "com.google.api.grpc:proto-google-common-protos": {
       "shasums": {
-        "jar": "352ffc769f4d17e2d6227b6893ec368f4f07fbb069dd7aaa644b16949369f8b7"
+        "jar": "beb8107f340dc0bb04bf40d1a61631a21e450c58aad93c160959f0292136d99f"
       },
-      "version": "2.63.1"
+      "version": "2.64.1"
     },
     "com.google.api:api-common": {
       "shasums": {
@@ -418,15 +423,15 @@
     },
     "com.google.auth:google-auth-library-credentials": {
       "shasums": {
-        "jar": "dd7e39b8f5c366b09f8c2d400b7b63c925499df813b0f0d78044abd72098e159"
+        "jar": "d29934610c3e9eb6c60e95ad05ca34ce486c3867c2f3689548b4aa2c2dd6ec52"
       },
-      "version": "1.40.0"
+      "version": "1.42.1"
     },
     "com.google.auth:google-auth-library-oauth2-http": {
       "shasums": {
-        "jar": "67fe2c9df9780d8725c1dff61d2ffbbcb93fdcf15e91c44a5e610a4a69afd151"
+        "jar": "fb54ada3c0223ffb4470fb6d8fbd55f764588dbd244dc7c05caaf4ab62977898"
       },
-      "version": "1.40.0"
+      "version": "1.42.1"
     },
     "com.google.auto.value:auto-value": {
       "shasums": {
@@ -448,15 +453,15 @@
     },
     "com.google.code.gson:gson": {
       "shasums": {
-        "jar": "ebee13d5fb7477cd7f1cc010e0c356df8ca80709715248da97f79e35ccb4fbec"
+        "jar": "dd0ce1b55a3ed2080cb70f9c655850cda86c206862310009dcb5e5c95265a5e0"
       },
-      "version": "2.12.1"
+      "version": "2.13.2"
     },
     "com.google.errorprone:error_prone_annotations": {
       "shasums": {
-        "jar": "bcf738a525e546c926a233d0a169cf7eafcf703fe81ac9d6994f7244eda29052"
+        "jar": "b49c5c958316ed67a09c699dda9aa749caf434d51d863dea599ef36a49b9c855"
       },
-      "version": "2.44.0"
+      "version": "2.48.0"
     },
     "com.google.guava:failureaccess": {
       "shasums": {
@@ -478,15 +483,15 @@
     },
     "com.google.http-client:google-http-client": {
       "shasums": {
-        "jar": "97a0666340956dbc96893bc8cf843a5b57367543f218feddad3ff433fbfdaa68"
+        "jar": "20aa0948f6ceb5cfa9b2b3adddd9b7e990ab40230e084081642cbb81235d3eef"
       },
-      "version": "2.0.2"
+      "version": "2.1.0"
     },
     "com.google.http-client:google-http-client-gson": {
       "shasums": {
-        "jar": "37c8fd5c7869bc4abf3b3219c7e79cb566afa745559772e969c21595199600cd"
+        "jar": "3cf72c7b88375a34bf721c664f42edc8e096e2370e4126c9b8933c3c92e591f3"
       },
-      "version": "2.0.2"
+      "version": "2.1.0"
     },
     "com.google.j2objc:j2objc-annotations": {
       "shasums": {
@@ -568,98 +573,98 @@
     },
     "io.netty:netty-buffer": {
       "shasums": {
-        "jar": "4a0a17dc5a58d910c56545be6912b9923cfe902522dc1df268e774bc22443eb6"
+        "jar": "386d560b5eb8fa5317190c67be1b657e33163eeecd0b25ab36a15bdf235ff204"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-codec": {
       "shasums": {
-        "jar": "187d21cee1a114f43b87be235f66c83828bdd0a3e0c1cdfebedaa37748e6e470"
+        "jar": "65d9fd0b5ae80ddda532b3a98bf5adbd4f34ec6ae19ba2439eab2ed3d6d79c5a"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-codec-http": {
       "shasums": {
-        "jar": "2408776c87c1808b5522298c25e8290427123763f4addfda02dff6a24a538f61"
+        "jar": "cb82f9fd12d9cd3c3bf2306080e2230a29fcddaab388fc8a36bd7b2c7e1e49ec"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-codec-http2": {
       "shasums": {
-        "jar": "0eb1befa55f785b47729d58d4fce72abea73b7f48fc1c434d71953e6a558ffaa"
+        "jar": "0e07715264db137a41b75aa3733b7bb5ab597403abb9668385ea776692ee41d0"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-codec-socks": {
       "shasums": {
-        "jar": "d3d251f9239951a845f22e39191f95471fb2eb7951b9878ea4555ccac99529fb"
+        "jar": "83a031b42f7b577cd38726ebcc769a3dfc0a904a1b426041c34f2c9784a2a682"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-common": {
       "shasums": {
-        "jar": "a6732bb70dc15ed96aa33ecca82c0d7b20f8ff41adf04f74f168f626adf359e8"
+        "jar": "799930f8e36ea3611f90372f1ed54c212aee8ae70bf38bdf082417d6db672b0a"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-handler": {
       "shasums": {
-        "jar": "88b6892bc1321d32409392e5b9f94e59d8e800678c029c71e7c0d76daf6050d0"
+        "jar": "b468863c1b0fd13ba20f8b1a2b04f8f23d3d6bb50ee3003d372fd8ec7eb87265"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-handler-proxy": {
       "shasums": {
-        "jar": "2c0c8046e5d737e08f40a7c2907526648860d0434e125bd51de3c2cf390453fb"
+        "jar": "562c8c851983a0913bcfe2044da774c677dc98afb910891a66b01401eadf0c3c"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-resolver": {
       "shasums": {
-        "jar": "a57ee62deb54ed99690db2696039f0f768a65c974677946ed48b2a2d8510ded3"
+        "jar": "8b9ee3129bd6f8d0b5b09007b4e41e78c6ea63f18a8d33cb171455ffabcda10e"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-tcnative-boringssl-static": {
       "shasums": {
-        "jar": "ec3b14ceff74c5d7e24a378e64074744cc5e7035c49cf6ca0a4e23dff9713d1f",
-        "linux-aarch_64": "11dfee82cfcb5c4f596271fe1d56a70fe77b4034e54162d0bd211623b540857f",
-        "linux-x86_64": "39ac6b1eb4ffc18d5fe9412cc6253a8954bafc8e3ca10109bc370490f73a3673",
-        "osx-aarch_64": "eef3fc7cdc5e2dc8c5cb50bae11443052bf1ee2f6e8b64378565746d1529f05e",
-        "osx-x86_64": "e3beaa3ebdb136569528c59aa826d771efadc0ac9db484c6c0e457fa5efd0f07",
-        "windows-x86_64": "5458b4b502763d49cd2e16c434312687178afac9c164cabf75c4a8bcecf7ac50"
+        "jar": "ffb1fd42e5952863159f10a370e8c2dcfa3f40615ec4caefaa9ac8b1b1790233",
+        "linux-aarch_64": "cba3868793eb7ad32963275f32eb3e8932a3d50192557af8abd2516dab8b8956",
+        "linux-x86_64": "8e4bf375ae8b82fe657f54d142beb35d115d8294ec5d23a9c09afc8a93dd4928",
+        "osx-aarch_64": "10c6dd7eee84c099ea9e40ccbd933b501c665738d610627c5390d729fc978a47",
+        "osx-x86_64": "b5a5048cff2a64641cbbe9fcfffbf032ef506b4d2836c8ba9e689b3c461b24fc",
+        "windows-x86_64": "dee808e0dd5b4c14b4e8bd8d116dff347163b32574b2fb11a2ade476f7d03628"
       },
-      "version": "2.0.74.Final"
+      "version": "2.0.75.Final"
     },
     "io.netty:netty-tcnative-classes": {
       "shasums": {
-        "jar": "194874cf723794dd409fd1e728cd91ffbcff0584d73b4d8a1ad0d69d04acf9b3"
+        "jar": "2d5a6a8be78bba7782eec385ba178b12f5bfc6837771fd3bb8c1d7cd18b6911c"
       },
-      "version": "2.0.74.Final"
+      "version": "2.0.75.Final"
     },
     "io.netty:netty-transport": {
       "shasums": {
-        "jar": "0d1ad82bc658f9919ca750cebe2571d4b0ae4514ec781964091f405343760e92"
+        "jar": "9895abfebf5cb8c185e4534f3936759d7ecd133353cef18d2ae9ae3c58845142"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-transport-classes-epoll": {
       "shasums": {
-        "jar": "a39452eb911cb60068da6cdfd00e513b0a06e195b064fc44bd6fbfbc43c9527e"
+        "jar": "d21448bca3a3691437e88e974f24a36270783a62a79eff3a615fb6f730d6714b"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-transport-native-epoll": {
       "shasums": {
-        "linux-x86_64": "3d03f27eea1cd23357a56a96e1eeedfeb3d74fa0ba4d5c36a862bd035056275b"
+        "linux-x86_64": "fdc76fe46e7218ef54547c1002aff69c4597291cc3ef34322d6f1a2f3090c880"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.netty:netty-transport-native-unix-common": {
       "shasums": {
-        "jar": "0e3a45e3ce1fe034ca8b32c1579afa5f06729ca6427b7b0610528c4ef37c6e50"
+        "jar": "75681c3be01ff3c5bb6a39a7583e70289f64fd926e4fc29859ce9cf223ad99fc"
       },
-      "version": "4.1.127.Final"
+      "version": "4.1.133.Final"
     },
     "io.opencensus:opencensus-api": {
       "shasums": {
@@ -697,6 +702,18 @@
       },
       "version": "4.13.2"
     },
+    "net.bytebuddy:byte-buddy": {
+      "shasums": {
+        "jar": "42ba43dcccd8d9d77bfe8776a83e72b67f1fa52c4038a98629e7d288b648da4e"
+      },
+      "version": "1.12.8"
+    },
+    "net.bytebuddy:byte-buddy-agent": {
+      "shasums": {
+        "jar": "18faf4f33893c3e883a3220adfdab25d6ceff9e46b1ad760a5b6f83df9373307"
+      },
+      "version": "1.12.8"
+    },
     "org.apache.httpcomponents:httpclient": {
       "shasums": {
         "jar": "c8bc7e1c51a6d4ce72f40d2ebbabf1c4b68bfe76e732104b04381b493478e9d6"
@@ -717,9 +734,9 @@
     },
     "org.codehaus.mojo:animal-sniffer-annotations": {
       "shasums": {
-        "jar": "342f4d815eae69bb980620d0a622862709be37d38f47577675b42c739a962da9"
+        "jar": "cfd7e51a828fe6b98bc0dbb99e34900c9e9012322cb9ddd57fd8dd0b02da5e27"
       },
-      "version": "1.26"
+      "version": "1.27"
     },
     "org.hamcrest:hamcrest-core": {
       "shasums": {
@@ -786,6 +803,18 @@
         "jar": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab"
       },
       "version": "1.0.0"
+    },
+    "org.mockito:mockito-core": {
+      "shasums": {
+        "jar": "9a5f59ad06d0bb7d0fd2d4a74eb4d66d561ee0327f0febacb7f9cfb5be4abbfb"
+      },
+      "version": "4.4.0"
+    },
+    "org.objenesis:objenesis": {
+      "shasums": {
+        "jar": "03d960bd5aef03c653eb000413ada15eb77cdd2b8e4448886edf5692805e35f3"
+      },
+      "version": "3.2"
     },
     "org.ow2.asm:asm": {
       "shasums": {
@@ -1237,6 +1266,11 @@
       "com.google.android.gms:play-services-tasks:aar",
       "org.jetbrains.kotlin:kotlin-stdlib-jdk8",
       "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm"
+    ],
+    "org.mockito:mockito-core": [
+      "net.bytebuddy:byte-buddy",
+      "net.bytebuddy:byte-buddy-agent",
+      "org.objenesis:objenesis"
     ]
   },
   "packages": {
@@ -1603,6 +1637,50 @@
       "org.junit.runners.parameterized",
       "org.junit.validator"
     ],
+    "net.bytebuddy:byte-buddy": [
+      "net.bytebuddy",
+      "net.bytebuddy.agent.builder",
+      "net.bytebuddy.asm",
+      "net.bytebuddy.build",
+      "net.bytebuddy.description",
+      "net.bytebuddy.description.annotation",
+      "net.bytebuddy.description.enumeration",
+      "net.bytebuddy.description.field",
+      "net.bytebuddy.description.method",
+      "net.bytebuddy.description.modifier",
+      "net.bytebuddy.description.type",
+      "net.bytebuddy.dynamic",
+      "net.bytebuddy.dynamic.loading",
+      "net.bytebuddy.dynamic.scaffold",
+      "net.bytebuddy.dynamic.scaffold.inline",
+      "net.bytebuddy.dynamic.scaffold.subclass",
+      "net.bytebuddy.implementation",
+      "net.bytebuddy.implementation.attribute",
+      "net.bytebuddy.implementation.auxiliary",
+      "net.bytebuddy.implementation.bind",
+      "net.bytebuddy.implementation.bind.annotation",
+      "net.bytebuddy.implementation.bytecode",
+      "net.bytebuddy.implementation.bytecode.assign",
+      "net.bytebuddy.implementation.bytecode.assign.primitive",
+      "net.bytebuddy.implementation.bytecode.assign.reference",
+      "net.bytebuddy.implementation.bytecode.collection",
+      "net.bytebuddy.implementation.bytecode.constant",
+      "net.bytebuddy.implementation.bytecode.member",
+      "net.bytebuddy.jar.asm",
+      "net.bytebuddy.jar.asm.commons",
+      "net.bytebuddy.jar.asm.signature",
+      "net.bytebuddy.matcher",
+      "net.bytebuddy.pool",
+      "net.bytebuddy.utility",
+      "net.bytebuddy.utility.dispatcher",
+      "net.bytebuddy.utility.nullability",
+      "net.bytebuddy.utility.privilege",
+      "net.bytebuddy.utility.visitor"
+    ],
+    "net.bytebuddy:byte-buddy-agent": [
+      "net.bytebuddy.agent",
+      "net.bytebuddy.agent.utility.nullability"
+    ],
     "org.apache.httpcomponents:httpclient": [
       "org.apache.http.auth",
       "org.apache.http.auth.params",
@@ -1765,6 +1843,84 @@
     "org.jspecify:jspecify": [
       "org.jspecify.annotations"
     ],
+    "org.mockito:mockito-core": [
+      "org.mockito",
+      "org.mockito.codegen",
+      "org.mockito.configuration",
+      "org.mockito.creation.instance",
+      "org.mockito.exceptions.base",
+      "org.mockito.exceptions.misusing",
+      "org.mockito.exceptions.stacktrace",
+      "org.mockito.exceptions.verification",
+      "org.mockito.exceptions.verification.junit",
+      "org.mockito.exceptions.verification.opentest4j",
+      "org.mockito.hamcrest",
+      "org.mockito.internal",
+      "org.mockito.internal.configuration",
+      "org.mockito.internal.configuration.injection",
+      "org.mockito.internal.configuration.injection.filter",
+      "org.mockito.internal.configuration.injection.scanner",
+      "org.mockito.internal.configuration.plugins",
+      "org.mockito.internal.creation",
+      "org.mockito.internal.creation.bytebuddy",
+      "org.mockito.internal.creation.instance",
+      "org.mockito.internal.creation.proxy",
+      "org.mockito.internal.creation.settings",
+      "org.mockito.internal.creation.util",
+      "org.mockito.internal.debugging",
+      "org.mockito.internal.exceptions",
+      "org.mockito.internal.exceptions.stacktrace",
+      "org.mockito.internal.exceptions.util",
+      "org.mockito.internal.framework",
+      "org.mockito.internal.hamcrest",
+      "org.mockito.internal.handler",
+      "org.mockito.internal.invocation",
+      "org.mockito.internal.invocation.finder",
+      "org.mockito.internal.invocation.mockref",
+      "org.mockito.internal.junit",
+      "org.mockito.internal.listeners",
+      "org.mockito.internal.matchers",
+      "org.mockito.internal.matchers.apachecommons",
+      "org.mockito.internal.matchers.text",
+      "org.mockito.internal.progress",
+      "org.mockito.internal.reporting",
+      "org.mockito.internal.runners",
+      "org.mockito.internal.runners.util",
+      "org.mockito.internal.session",
+      "org.mockito.internal.stubbing",
+      "org.mockito.internal.stubbing.answers",
+      "org.mockito.internal.stubbing.defaultanswers",
+      "org.mockito.internal.util",
+      "org.mockito.internal.util.collections",
+      "org.mockito.internal.util.concurrent",
+      "org.mockito.internal.util.io",
+      "org.mockito.internal.util.reflection",
+      "org.mockito.internal.verification",
+      "org.mockito.internal.verification.api",
+      "org.mockito.internal.verification.argumentmatching",
+      "org.mockito.internal.verification.checkers",
+      "org.mockito.invocation",
+      "org.mockito.junit",
+      "org.mockito.listeners",
+      "org.mockito.mock",
+      "org.mockito.plugins",
+      "org.mockito.quality",
+      "org.mockito.session",
+      "org.mockito.stubbing",
+      "org.mockito.verification"
+    ],
+    "org.objenesis:objenesis": [
+      "org.objenesis",
+      "org.objenesis.instantiator",
+      "org.objenesis.instantiator.android",
+      "org.objenesis.instantiator.annotations",
+      "org.objenesis.instantiator.basic",
+      "org.objenesis.instantiator.gcj",
+      "org.objenesis.instantiator.perc",
+      "org.objenesis.instantiator.sun",
+      "org.objenesis.instantiator.util",
+      "org.objenesis.strategy"
+    ],
     "org.ow2.asm:asm": [
       "org.objectweb.asm",
       "org.objectweb.asm.signature"
@@ -1865,6 +2021,8 @@
       "io.perfmark:perfmark-api",
       "javax.annotation:javax.annotation-api",
       "junit:junit",
+      "net.bytebuddy:byte-buddy",
+      "net.bytebuddy:byte-buddy-agent",
       "org.apache.httpcomponents:httpclient",
       "org.apache.httpcomponents:httpcore",
       "org.checkerframework:checker-qual",
@@ -1880,6 +2038,8 @@
       "org.jetbrains.kotlinx:kotlinx-coroutines-play-services",
       "org.jetbrains:annotations",
       "org.jspecify:jspecify",
+      "org.mockito:mockito-core",
+      "org.objenesis:objenesis",
       "org.ow2.asm:asm"
     ],
     "https://maven.google.com/": [
@@ -1976,6 +2136,8 @@
       "io.perfmark:perfmark-api",
       "javax.annotation:javax.annotation-api",
       "junit:junit",
+      "net.bytebuddy:byte-buddy",
+      "net.bytebuddy:byte-buddy-agent",
       "org.apache.httpcomponents:httpclient",
       "org.apache.httpcomponents:httpcore",
       "org.checkerframework:checker-qual",
@@ -1991,6 +2153,8 @@
       "org.jetbrains.kotlinx:kotlinx-coroutines-play-services",
       "org.jetbrains:annotations",
       "org.jspecify:jspecify",
+      "org.mockito:mockito-core",
+      "org.objenesis:objenesis",
       "org.ow2.asm:asm"
     ]
   },
