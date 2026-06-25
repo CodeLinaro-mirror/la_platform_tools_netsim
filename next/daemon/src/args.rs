@@ -76,23 +76,21 @@ pub struct Args {
     #[arg(long)]
     pub version: bool,
 
-    /// gRPC port for the netsim service
+    /// gRPC port for the netsim service. Overrides env var NETSIM_GRPC_PORT
     #[arg(long, alias = "grpc_port")]
-    #[cfg_attr(not(feature = "cuttlefish"), arg(env = "NETSIM_GRPC_PORT"))]
     pub grpc_port: Option<u16>,
 
-    /// HCI port for the raw TCP socket
+    /// HCI port for the raw TCP socket. Overrides env var NETSIM_HCI_PORT
     #[arg(long, alias = "hci_port")]
-    #[cfg_attr(not(feature = "cuttlefish"), arg(env = "NETSIM_HCI_PORT"))]
     pub hci_port: Option<u16>,
 
-    /// TCP port for the packet stream service
+    /// TCP port for the packet stream service. Overrides env var
+    /// NETSIM_TCP_PORT
     #[arg(long, alias = "tcp_port")]
-    #[cfg_attr(not(feature = "cuttlefish"), arg(env = "NETSIM_TCP_PORT"))]
     pub tcp_port: Option<u16>,
 
+    /// WebSocket port for the web UI. Overrides env var NETSIM_WS_PORT
     #[arg(long)]
-    #[cfg_attr(not(feature = "cuttlefish"), arg(env = "NETSIM_WS_PORT"))]
     pub ws_port: Option<u16>,
 
     /// Rootcanal legacy control port for the TCP socket

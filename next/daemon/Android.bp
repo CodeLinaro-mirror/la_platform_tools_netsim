@@ -43,9 +43,8 @@ rust_library_host {
 }
 
 rust_binary_host {
-    name: "netsim_next_daemon",
+    name: "netsimd",
     edition: "2024",
-    stem: "netsim_next_daemon",
     crate_root: "src/main.rs",
     srcs: [
         "src/main.rs",

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::{ActorService, DynContext};
+use futures::{SinkExt, StreamExt};
 use netsim_model::{ChipCreate, ChipError, ChipId, ChipRequest, ChipUpdate};
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     error::NfcError,
@@ -33,17 +34,69 @@ impl ActorService for NfcActor {
             return Err(NfcError::Chip(ChipError::ChipExists(chip_id.0)));
         }
 
-        // Register the packet stream to receive packets from the guest
-        if let Some(stream) = params.packet_stream.take() {
-            ctx.add_stream(chip_id, Box::pin(stream));
-        } else {
-            return Err(NfcError::MissingStreamSink);
-        }
+        let packet_stream = params.packet_stream.take().ok_or(NfcError::MissingStreamSink)?;
+        let mut packet_sink = params.packet_sink.take().ok_or(NfcError::MissingStreamSink)?;
 
-        // We ignore packet_sink for now as we don't have a simulator to send packets
-        // back. In a real implementation, we would bridge this to Casimir.
+        let scene_client = self
+            .scene_client
+            .as_ref()
+            .ok_or_else(|| {
+                NfcError::IoError(std::io::Error::other("Scene client not initialized"))
+            })?
+            .clone();
 
-        self.active_chips.insert(chip_id, ChipState { device_id, enabled: true });
+        // Create duplex stream for Casimir bridge
+        let (nfc_io, casimir_io) = tokio::io::duplex(1024);
+
+        let (casimir_rx, casimir_tx) = tokio::io::split(casimir_io);
+        let casimir_device_id = scene_client
+            .add_device(move |id, rf_tx| casimir::Device::nci(id, casimir_rx, casimir_tx, rf_tx))
+            .await
+            .map_err(|e| NfcError::IoError(std::io::Error::other(e)))?;
+
+        info!("Added NFC device to Casimir scene with ID {}", casimir_device_id);
+
+        // Bridge Casimir -> Guest
+        let (nfc_reader, nfc_writer) = tokio::io::split(nfc_io);
+        let mut stream = tokio_util::codec::length_delimited::Builder::new()
+            .length_field_offset(2)
+            .length_field_length(1)
+            .num_skip(0)
+            .new_read(nfc_reader);
+        let chip_id_clone = chip_id;
+        let task_1 = Box::pin(async move {
+            while let Some(item) = stream.next().await {
+                match item {
+                    Ok(bytes_mut) => {
+                        let bytes = bytes_mut.freeze();
+                        if bytes.is_empty() {
+                            tracing::warn!(
+                                "Received empty bytes from NFC stream! Casimir connection lost?"
+                            );
+                            break;
+                        }
+                        if let Err(e) = packet_sink.send(bytes).await {
+                            error!("Failed to send packet to guest: {:?}", e);
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        error!("NFC reader error: {:?}", e);
+                        break;
+                    }
+                }
+            }
+            info!("NFC forward loop finished");
+            chip_id_clone
+        });
+        ctx.spawn(chip_id, task_1);
+
+        // Bridge Guest -> Casimir
+        ctx.add_stream(chip_id, Box::pin(packet_stream));
+
+        self.active_chips
+            .insert(chip_id, ChipState { device_id, enabled: true, casimir_device_id, nfc_writer });
+
         info!("NFC chip {} created for device {}", chip_id, device_id);
 
         Ok(chip_id)
@@ -52,12 +105,28 @@ impl ActorService for NfcActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         if let Some(state) = self.active_chips.remove(&id) {
             info!("Deleting NFC chip {}", id);
             // Notify DeviceClient
             let _ = self.device_client.notify_chip_removed(state.device_id, id).await;
+
+            // Abort the Casimir -> Guest task
+            ctx.abort(id);
+
+            // Remove the guest stream
+            ctx.remove_stream(id);
+
+            // Remove device from Casimir scene
+            if let Some(ref scene_client) = self.scene_client
+                && let Err(e) = scene_client.remove_device(state.casimir_device_id).await
+            {
+                error!(
+                    "Failed to remove device {} from Casimir scene: {:?}",
+                    state.casimir_device_id, e
+                );
+            }
         }
         Ok(())
     }

@@ -238,7 +238,7 @@ netsim_ui_modules = [
 ]
 
 cc_binary_host {
-    name: "netsimd",
+    name: "netsim_classic_daemon",
     defaults: ["netsim_defaults"],
     srcs: [
         "rust/netsimd.cc",

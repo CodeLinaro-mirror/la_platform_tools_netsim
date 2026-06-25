@@ -15,6 +15,7 @@ rust_library_host {
     lints: "none",
     rustlibs: [
         "libbytes",
+        "libnetsim_next_packets",
         "libparking_lot",
         "libthiserror",
         "libtracing",

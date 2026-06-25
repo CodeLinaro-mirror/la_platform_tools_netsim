@@ -631,6 +631,16 @@ impl Ieee80211 {
         (self.get_fc() & 0x000C) == 0x0008
     }
 
+    /// Checks if this frame is a payload-bearing data frame (Data or QoS Data).
+    /// Excluding Data frames without a frame body (e.g., Null or CF-Ack).
+    pub fn is_payload_bearing_data(&self) -> bool {
+        // Bit 2 (0x04) of the 4-bit Subtype field is the 'No Data' bit for Type 2
+        // (Data) frames in the IEEE 802.11 spec. It is 0 for data-bearing
+        // frames, and 1 for frames without a frame body (like Null Data or QoS
+        // Null).
+        self.is_data() && (self.stype() & 0x04) == 0
+    }
+
     pub fn stype(&self) -> u8 {
         ((self.get_fc() & 0x00F0) >> 4) as u8
     }
@@ -1220,5 +1230,47 @@ mod tests {
         assert!(re_decoded_frame.is_qos_data());
         assert_eq!(re_decoded_frame.get_payload(), vec![0xDE, 0xAD, 0xBE, 0xEF]);
         assert_eq!(re_decoded_frame.bytes[24..26], [0x12, 0x34]);
+    }
+
+    #[test]
+    fn test_is_payload_bearing_data() {
+        let make_fc_bytes = |frame_type: u8, subtype: u8| -> [u8; 32] {
+            let mut bytes = [0u8; 32];
+            // Protocol Version = 0
+            // Type at bits 2-3: (frame_type & 0b11) << 2
+            // Subtype at bits 4-7: (subtype & 0b1111) << 4
+            bytes[0] = ((subtype & 0b1111) << 4) | ((frame_type & 0b11) << 2);
+            bytes
+        };
+
+        // 1. Management frame (Type = 0), Subtype = Beacon (8)
+        let mgmt_bytes = make_fc_bytes(0, 8);
+        let mgmt_frame = Ieee80211::decode(&mgmt_bytes).unwrap();
+        assert!(!mgmt_frame.is_payload_bearing_data());
+
+        // 2. Control frame (Type = 1), Subtype = Ack (13)
+        let ctrl_bytes = make_fc_bytes(1, 13);
+        let ctrl_frame = Ieee80211::decode(&ctrl_bytes).unwrap();
+        assert!(!ctrl_frame.is_payload_bearing_data());
+
+        // 3. Data frame (Type = 2), Subtype = Data (0) -> payload-bearing
+        let data_bytes = make_fc_bytes(2, 0);
+        let data_frame = Ieee80211::decode(&data_bytes).unwrap();
+        assert!(data_frame.is_payload_bearing_data());
+
+        // 4. Data frame (Type = 2), Subtype = QoS Data (8) -> payload-bearing
+        let qos_bytes = make_fc_bytes(2, 8);
+        let qos_frame = Ieee80211::decode(&qos_bytes).unwrap();
+        assert!(qos_frame.is_payload_bearing_data());
+
+        // 5. Data frame (Type = 2), Subtype = Null (4) -> control-only (no data)
+        let null_bytes = make_fc_bytes(2, 4);
+        let null_frame = Ieee80211::decode(&null_bytes).unwrap();
+        assert!(!null_frame.is_payload_bearing_data());
+
+        // 6. Data frame (Type = 2), Subtype = QoS Null (12) -> control-only (no data)
+        let qos_null_bytes = make_fc_bytes(2, 12);
+        let qos_null_frame = Ieee80211::decode(&qos_null_bytes).unwrap();
+        assert!(!qos_null_frame.is_payload_bearing_data());
     }
 }

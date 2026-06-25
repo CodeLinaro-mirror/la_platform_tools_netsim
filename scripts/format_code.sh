@@ -40,6 +40,9 @@ fi
 
 # --- Configuration ---
 RUSTFMT="$REPO/prebuilts/rust/$OS-x86/stable/rustfmt"
+if [[ ! -f "$RUSTFMT" ]] && command -v rustfmt &> /dev/null; then
+  RUSTFMT="rustfmt"
+fi
 BPFMT="$REPO/prebuilts/build-tools/$OS-x86/bin/bpfmt"
 TAPLO_CONFIG="$REPO/tools/netsim/next/taplo.toml"
 

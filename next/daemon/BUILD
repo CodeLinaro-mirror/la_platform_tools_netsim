@@ -12,6 +12,7 @@
 # Run the tests:
 #   bazel test //next/daemon:tests
 
+load("@goldfish_build//rules/native:native_binaries.bzl", "stripped_binaries")
 load(
     "//next:defs.bzl",
     "netsim_rust_binary",
@@ -91,4 +92,9 @@ netsim_rust_binary(
     deps = [
         ":daemon-lib",
     ],
+)
+
+stripped_binaries(
+    name = "daemon_stripped",
+    srcs = [":daemon"],
 )
