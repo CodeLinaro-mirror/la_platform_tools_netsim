@@ -175,6 +175,10 @@ format_files() {
 
 check_taplo_version
 
+# --- Regenerate Android.bp files ---
+echo "Regenerating Android.bp files..."
+python3 "$SCRIPT_DIR/bzl2bp.py"
+
 # --- Main Logic ---
 
 # Declare file arrays dynamically
