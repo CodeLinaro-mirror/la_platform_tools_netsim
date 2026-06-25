@@ -9,17 +9,12 @@ use std::{
     },
 };
 
-use aes::Aes128;
-use ccm::{
-    Ccm,
-    aead::{Aead, KeyInit, Payload},
-    consts::{U8, U13},
-};
 use netsim_packets::{CcmpHeader, Ieee80211, MacAddress};
 use tracing::error;
 use zerocopy::IntoBytes;
 
-type AesCcm = Ccm<Aes128, U8, U13>;
+use crate::ffi::{AesCcmDecrypt, AesCcmEncrypt};
+
 const CCMP_HDR_LEN: usize = 8;
 
 #[derive(Debug)]
@@ -121,8 +116,6 @@ impl SharedKeyStore {
         if tk.is_empty() {
             return None;
         }
-        let key = ccm::aead::generic_array::GenericArray::from_slice(&tk[..16]);
-        let cipher = AesCcm::new(key);
 
         let mut nonce = [0u8; 13];
         nonce[0] = 0; // Priority (0)
@@ -141,8 +134,6 @@ impl SharedKeyStore {
         // PN is Little Endian from to_le_bytes (LSB at index 0).
         // We map to Nonce bytes [7..13] matching legacy hostapd logic.
 
-        let nonce_ga = ccm::aead::generic_array::GenericArray::from_slice(&nonce);
-
         // The CCMP AAD explicitly requires the 'Protected' frame control bit to be
         // active. We must calculate the AAD against the final physical MAC byte
         // sequence!
@@ -153,10 +144,11 @@ impl SharedKeyStore {
 
         let payload = ieee80211.get_payload();
 
-        let ciphertext = match cipher.encrypt(nonce_ga, Payload { msg: &payload, aad: &aad }) {
-            Ok(c) => c,
-            Err(_) => return None,
-        };
+        let mut ciphertext = Vec::with_capacity(payload.len() + 8);
+        let success = AesCcmEncrypt(&tk[..16], &nonce, &aad, &payload, &mut ciphertext, 8);
+        if !success {
+            return None;
+        }
 
         // Reconstruct Frame
         let mut new_packet =
@@ -196,9 +188,6 @@ impl SharedKeyStore {
             return None;
         }
 
-        let key = ccm::aead::generic_array::GenericArray::from_slice(&session.tk[..16]);
-        let cipher = AesCcm::new(key);
-
         // Extract Nonce from Frame (CCMP Header)
         // Frame: Header || CCMP Header || Data || MIC
         let hdr_len = ieee80211.hdr_length();
@@ -220,25 +209,26 @@ impl SharedKeyStore {
         nonce[11] = pn1;
         nonce[12] = pn0;
 
-        let nonce_ga = ccm::aead::generic_array::GenericArray::from_slice(&nonce);
-
         // Payload
         let data = &ieee80211.as_bytes()[hdr_len + CCMP_HDR_LEN..];
         let aad = ieee80211.get_aad();
 
-        let plaintext = match cipher.decrypt(nonce_ga, Payload { msg: data, aad: &aad }) {
-            Ok(p) => p,
-            Err(_) => {
-                error!(
-                    "CCMP DECRYPT FAILED! hdr_len: {}, msg_len: {}, aad_len: {}",
-                    hdr_len,
-                    data.len(),
-                    aad.len()
-                );
-                error!("RAW FRAME TO DECRYPT (Hex): {:02X?}", ieee80211.as_bytes());
-                return None;
-            }
-        };
+        if data.len() < 8 {
+            return None;
+        }
+        let mut out_plain = Vec::with_capacity(data.len() - 8);
+        let success = AesCcmDecrypt(&session.tk[..16], &nonce, &aad, data, &mut out_plain, 8);
+        if !success {
+            error!(
+                "CCMP DECRYPT FAILED! hdr_len: {}, msg_len: {}, aad_len: {}",
+                hdr_len,
+                data.len(),
+                aad.len()
+            );
+            error!("RAW FRAME TO DECRYPT (Hex): {:02X?}", ieee80211.as_bytes());
+            return None;
+        }
+        let plaintext = out_plain;
 
         let mut new_packet = Vec::new();
         new_packet.extend_from_slice(&ieee80211.as_bytes()[..hdr_len]);

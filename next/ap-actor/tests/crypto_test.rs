@@ -72,11 +72,10 @@ fn test_crypto_interop_boringssl_encrypt_rust_decrypt() {
     let plain = b"InteropPayload".to_vec();
 
     // 2. Encrypt using BoringSSL (via FFI)
-    let mut cipher = Vec::new();
-    let mut tag = Vec::new();
+    let mut ciphertext = Vec::new();
     let tag_len = 8; // CCMP uses 8-byte MIC
 
-    let success = AesCcmEncrypt(&key, &nonce, &aad, &plain, &mut cipher, &mut tag, tag_len);
+    let success = AesCcmEncrypt(&key, &nonce, &aad, &plain, &mut ciphertext, tag_len);
     assert!(success, "BoringSSL Encryption failed");
 
     // 3. Construct an Ieee80211 frame that SharedKeyStore expects
@@ -149,18 +148,16 @@ fn test_crypto_interop_boringssl_encrypt_rust_decrypt() {
     let real_aad = temp_ieee.get_aad();
 
     // Encrypt with BoringSSL
-    let mut real_cipher = Vec::new();
-    let mut real_tag = Vec::new();
+    let mut real_ciphertext = Vec::new();
     let encrypt_success =
-        AesCcmEncrypt(&key, &real_nonce, &real_aad, &plain, &mut real_cipher, &mut real_tag, 8);
+        AesCcmEncrypt(&key, &real_nonce, &real_aad, &plain, &mut real_ciphertext, 8);
     assert!(encrypt_success, "BoringSSL Encrypt failed");
 
     // Construct Full Encrypted Frame for SharedKeyStore
-    // Header || CCMP Header || Ciphertext || MIC
+    // Header || CCMP Header || Ciphertext (includes MIC)
     let mut final_packet = frame_bytes; // Header
     final_packet.extend_from_slice(&ccmp_header);
-    final_packet.extend_from_slice(&real_cipher);
-    final_packet.extend_from_slice(&real_tag);
+    final_packet.extend_from_slice(&real_ciphertext);
 
     let encrypted_ieee = Ieee80211::decode(&final_packet).expect("Final Decode");
 
