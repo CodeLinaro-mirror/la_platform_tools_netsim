@@ -103,6 +103,7 @@ genrule(
         "netsim/access_point_grpc.rs",
         "netsim/ble_service_grpc.rs",
         "netsim/cell_grpc.rs",
+        "netsim/casimir_control_grpc.rs",
     ],
     cmd = """
         NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(location netsim/common.proto)))
@@ -145,6 +146,7 @@ genrule(
         "netsim/access_point.rs",
         "netsim/ble_service.rs",
         "netsim/cell.rs",
+        "netsim/casimir_control.rs",
         "rootcanal/configuration.rs",
         "lib.rs",
     ],
@@ -179,6 +181,8 @@ rust_library(
         "netsim/access_point_grpc.rs",
         "netsim/ble_service.rs",
         "netsim/ble_service_grpc.rs",
+        "netsim/casimir_control.rs",
+        "netsim/casimir_control_grpc.rs",
         "netsim/cell.rs",
         "netsim/cell_grpc.rs",
         "netsim/common.rs",
