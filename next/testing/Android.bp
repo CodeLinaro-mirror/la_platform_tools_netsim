@@ -5,10 +5,10 @@ package {
 }
 
 rust_library_host {
-    name: "libnetsim_next_actor_framework",
-    crate_name: "actor_framework",
+    name: "libnetsim_next_netsim_testing",
+    crate_name: "netsim_testing",
     edition: "2024",
-    stem: "libactor_framework",
+    stem: "libnetsim_testing",
     crate_root: "src/lib.rs",
     srcs: [
         "src/lib.rs",
@@ -18,23 +18,17 @@ rust_library_host {
     rustlibs: [
         "libbytes",
         "libfutures",
-        "libnetsim_next_model",
-        "libthiserror",
+        "libnetsim_next_common",
         "libtokio",
         "libtokio_stream",
-        "libtokio_util",
-        "libtracing",
-    ],
-    proc_macros: [
-        "libasync_trait",
     ],
 }
 
 rust_library_host {
-    name: "libnetsim_next_actor_framework_testing",
-    crate_name: "actor_framework",
+    name: "libnetsim_next_netsim_testing_testing",
+    crate_name: "netsim_testing",
     edition: "2024",
-    stem: "libactor_framework_testing",
+    stem: "libnetsim_testing_testing",
     crate_root: "src/lib.rs",
     srcs: [
         "src/lib.rs",
@@ -47,15 +41,8 @@ rust_library_host {
     rustlibs: [
         "libbytes",
         "libfutures",
-        "libmockall",
-        "libnetsim_next_model_testing",
-        "libthiserror",
+        "libnetsim_next_common_testing",
         "libtokio",
         "libtokio_stream",
-        "libtokio_util",
-        "libtracing",
-    ],
-    proc_macros: [
-        "libasync_trait",
     ],
 }

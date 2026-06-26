@@ -23,3 +23,27 @@ rust_library_host {
         "libasync_trait",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_link_api_testing",
+    crate_name: "link_api",
+    edition: "2024",
+    stem: "liblink_api_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libmockall",
+        "libnetsim_next_model_testing",
+        "libthiserror",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

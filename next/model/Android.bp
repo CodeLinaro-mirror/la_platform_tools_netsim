@@ -29,3 +29,33 @@ rust_library_host {
         "libasync_trait",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_model_testing",
+    crate_name: "netsim_model",
+    edition: "2024",
+    stem: "libnetsim_model_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libmockall",
+        "libnetsim_next_types_testing",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

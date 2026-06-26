@@ -26,3 +26,29 @@ rust_library_host {
         "libasync_trait",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_capture_api_testing",
+    crate_name: "capture_api",
+    edition: "2024",
+    stem: "libcapture_api_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_model_testing",
+        "libserde",
+        "libtokio",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

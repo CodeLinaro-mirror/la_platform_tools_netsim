@@ -26,3 +26,29 @@ rust_library_host {
         "libzip",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_common_testing",
+    crate_name: "common",
+    edition: "2024",
+    stem: "libcommon_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libchrono",
+        "liblibc",
+        "libprotobuf_json_mapping",
+        "libthiserror",
+        "libtracing",
+        "libtracing_log",
+        "libtracing_subscriber",
+        "libzip",
+    ],
+}
