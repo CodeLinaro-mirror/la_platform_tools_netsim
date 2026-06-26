@@ -106,3 +106,41 @@ impl<'a> UdpBuilder<'a> {
         Some(total_len)
     }
 }
+
+/// A legacy compatibility builder for a UDP packet.
+pub struct UdpPacketBuilder<'a> {
+    header: &'a mut UdpHeader,
+    payload: &'a mut [u8],
+}
+
+impl<'a> UdpPacketBuilder<'a> {
+    /// Creates a new `UdpPacketBuilder`.
+    pub fn new(buffer: &'a mut [u8], src_port: u16, dst_port: u16) -> Option<Self> {
+        if buffer.len() < std::mem::size_of::<UdpHeader>() {
+            return None;
+        }
+        let (header_slice, payload) = buffer.split_at_mut(std::mem::size_of::<UdpHeader>());
+        let header = UdpHeader::mut_from_bytes(header_slice).ok()?;
+        header.source_port.set(src_port);
+        header.dest_port.set(dst_port);
+        header.length.set(std::mem::size_of::<UdpHeader>() as u16);
+        header.checksum.set(0);
+        Some(Self { header, payload })
+    }
+
+    /// Returns a mutable reference to the payload.
+    pub fn payload_mut(&mut self) -> &mut [u8] {
+        self.payload
+    }
+
+    /// Sets the payload length.
+    pub fn payload_len(&mut self, len: usize) {
+        self.header.length.set((std::mem::size_of::<UdpHeader>() + len) as u16);
+    }
+
+    /// Builds the UDP packet.
+    pub fn build(self) -> usize {
+        self.header.checksum.set(0);
+        self.header.length.get() as usize
+    }
+}

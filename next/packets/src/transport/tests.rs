@@ -6,7 +6,7 @@ mod tests {
     use std::net::Ipv4Addr;
 
     use crate::{
-        transport::{TcpBuilder, UdpBuilder},
+        transport::{TcpBuilder, UdpBuilder, UdpPacketBuilder},
         utils::test_utils::validate_pcap_json,
     };
 
@@ -33,6 +33,8 @@ mod tests {
             )
             .is_none()
         );
+
+        assert!(UdpPacketBuilder::new(&mut small_buffer, 1234, 5678).is_none());
     }
 
     #[test]
@@ -135,5 +137,20 @@ mod tests {
             include_str!("test_data/udp.json"),
             fields,
         );
+    }
+
+    #[test]
+    fn test_udp_packet_builder() {
+        let mut buffer = [0u8; 100];
+        let mut builder = UdpPacketBuilder::new(&mut buffer, 1234, 5678).unwrap();
+
+        let payload = builder.payload_mut();
+        payload[0] = 1;
+        payload[1] = 2;
+
+        builder.payload_len(2);
+
+        let total_len = builder.build();
+        assert_eq!(total_len, 8 + 2); // 8 bytes UDP header + 2 bytes payload
     }
 }

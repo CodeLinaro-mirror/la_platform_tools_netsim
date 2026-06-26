@@ -162,9 +162,6 @@
 //! }
 //! ```
 #![allow(missing_docs)]
-#[allow(unused_imports)]
-use bytes as _;
-
 pub(crate) mod ethernet;
 pub(crate) mod hci;
 pub(crate) mod icmp;
@@ -195,12 +192,14 @@ pub use hci::{
         PeerAddressType,
     },
 };
-// NDP headers and builders
+// ICMP and NDP headers/builders
 pub use icmp::{
-    Icmpv6Header, NeighborAdvertisement, NeighborAdvertisementBuilder, NeighborSolicitation,
-    NeighborSolicitationBuilder, PrefixInformationOption, RdnssOption, RouterAdvertisement,
-    RouterAdvertisementBuilder, RouterSolicitation, RouterSolicitationBuilder,
-    SourceLinkLayerAddressOption,
+    IcmpEcho, IcmpHeader, IcmpType, Icmpv4UnreachableCode as UnreachableCode,
+    Icmpv4UnreachableCode, Icmpv6Echo, Icmpv6Header, Icmpv6ParameterProblemCode,
+    Icmpv6TimeExceededCode, Icmpv6Type, Icmpv6UnreachableCode, NeighborAdvertisement,
+    NeighborAdvertisementBuilder, NeighborSolicitation, NeighborSolicitationBuilder,
+    PrefixInformationOption, RdnssOption, RouterAdvertisement, RouterAdvertisementBuilder,
+    RouterSolicitation, RouterSolicitationBuilder, SourceLinkLayerAddressOption,
 };
 // ieee80211 constants
 pub use ieee80211::{
@@ -229,7 +228,10 @@ pub use ieee80211::{
     wmm::write_wmm_param_element,
 };
 // IP headers and builders
-pub use ip::{Ipv4Builder, Ipv4Header, Ipv6Builder, Ipv6Header};
+pub use ip::{
+    IP_P_HOPOPTS, IP_P_ICMP, IP_P_ICMPV6, IP_P_TCP, IP_P_UDP, Ipv4Builder, Ipv4Header, Ipv6Builder,
+    Ipv6Header, Ipv6HopByHopHeader,
+};
 pub use llc::frame::{LlcSnapHeader, control_field, sap};
 pub use netlink::{
     HwsimAttrSet, HwsimAttrSetBuilder, HwsimFrame, HwsimMsgHdr, Nl80211AttrSetBuilder, NlMsgHdr,
@@ -240,7 +242,30 @@ pub use netlink::{
     stream::NetlinkStream,
 };
 // Transport headers and builders
-pub use transport::{TcpBuilder, UdpBuilder};
+pub use transport::tcp::flags::{
+    ACK as TCP_FLAG_ACK, FIN as TCP_FLAG_FIN, PSH as TCP_FLAG_PSH, RST as TCP_FLAG_RST,
+    SYN as TCP_FLAG_SYN, URG as TCP_FLAG_URG,
+};
+// DHCPv6 and DNS headers/builders
+pub mod dhcpv6 {
+    pub use crate::transport::{
+        DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, Dhcpv6Header, Dhcpv6OptionHeader,
+        Dhcpv6OptionIterator, MSG_INFORMATION_REQUEST, MSG_REPLY, OPTION_CLIENTID,
+        OPTION_DNS_SERVERS, OPTION_DOMAIN_LIST, OPTION_SERVERID,
+    };
+}
+pub mod dns {
+    pub use crate::transport::{
+        DnsFlags, DnsHeader, DnsPacketBuilder, Opcode, Question, ResourceClass, ResourceType,
+        ResponseCode,
+    };
+}
+pub use transport::{
+    DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, Dhcpv6Header, Dhcpv6OptionHeader, Dhcpv6OptionIterator,
+    DnsFlags, DnsHeader, DnsPacketBuilder, MSG_INFORMATION_REQUEST, MSG_REPLY, OPTION_CLIENTID,
+    OPTION_DNS_SERVERS, OPTION_DOMAIN_LIST, OPTION_SERVERID, Opcode, Question, ResourceClass,
+    ResourceType, ResponseCode, TcpBuilder, UdpBuilder, UdpPacketBuilder,
+};
 // Checksum helpers
 pub use utils::checksum::{
     icmpv6_checksum, ipv4_checksum, tcp_checksum, tcp_checksum_v6, udp_checksum, udp_checksum_v6,
