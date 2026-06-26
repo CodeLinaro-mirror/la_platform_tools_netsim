@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import glob as pyglob
 import os
 import sys
 
@@ -10,6 +11,8 @@ CURRENT_REL_PATH = ""
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 NEXT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "next")
+
+ALLOWED_TEST_PACKAGES = {"cli", "nfc-actor"}
 
 
 EXACT_DEP_MAPPING = {
@@ -74,23 +77,20 @@ def transform_deps(deps):
 
 
 def glob(include, exclude=None):
-  import glob as pyglob
-  import os as pyos
-
   out = []
   for pattern in include:
     if pattern.count("**") > 1:
       if pattern.endswith("**"):
         pattern = pattern + "/*"
-      base_dir = pyos.path.join(NEXT_DIR, CURRENT_REL_PATH)
-      matched = pyglob.glob(pyos.path.join(base_dir, pattern), recursive=True)
+      base_dir = os.path.join(NEXT_DIR, CURRENT_REL_PATH)
+      matched = pyglob.glob(os.path.join(base_dir, pattern), recursive=True)
       for p in matched:
-        if pyos.path.isfile(p):
-          rel = pyos.path.relpath(p, base_dir)
+        if os.path.isfile(p):
+          rel = os.path.relpath(p, base_dir)
           out.append(rel)
     else:
       out.append(pattern)
-  return out
+  return sorted(out)
 
 
 def select(items):
@@ -132,7 +132,76 @@ def exports_files(*args, **kwargs):
 
 
 def rust_test(*args, **kwargs):
-  pass
+  name = kwargs.get("name")
+  srcs = kwargs.get("srcs")
+  if not name or not srcs or name in IGNORED_TARGETS:
+    return
+
+  deps = kwargs.get("deps", [])
+  proc_macro_deps = kwargs.get("proc_macro_deps", [])
+
+  pkg_name = CURRENT_REL_PATH.strip("/")
+  if not pkg_name:
+    pkg_name = name
+
+  package_name = CURRENT_REL_PATH.strip("/")
+  if package_name not in ALLOWED_TEST_PACKAGES:
+    return
+
+
+  module_name = pkg_name.replace("-", "_")
+  module_prefix = f"{module_name}_" if module_name else ""
+  target_name = f"libnetsim_next_{module_prefix}{name.replace('-', '_')}"
+
+  rustlibs = []
+  shared_libs = []
+  for lib in transform_deps(deps):
+    if lib in SHARED_LIB_OVERRIDES:
+      shared_libs.append(lib)
+    else:
+      rustlibs.append(lib)
+  proc_macros = transform_deps(proc_macro_deps)
+
+  crate_root = kwargs.get("crate_root")
+  if not crate_root:
+    for opt in ["tests/mod.rs", "tests/integration_tests.rs"]:
+      if opt in srcs:
+        crate_root = opt
+        break
+    if not crate_root:
+      if srcs:
+        crate_root = srcs[0]
+      else:
+        print(
+            f"Warning: rust_test {name} in {CURRENT_REL_PATH} lacks a valid "
+            "crate root and has no sources. Skipping.",
+            file=sys.stderr)
+        return
+
+  crate_name = kwargs.get("crate_name")
+  if not crate_name:
+    if crate_root == "src/lib.rs" or crate_root == "src/main.rs":
+      crate_name = module_name
+    else:
+      crate_name = f"{module_name}_tests"
+
+  default_file = os.path.basename(crate_root) if crate_root else "lib.rs"
+  srcs_content = resolve_rust_srcs(srcs, default_file)
+  crate_root_mapped = crate_root if crate_root else srcs_content[0]
+
+  soong_targets.append({
+      "type": "rust_test_host",
+      "name": target_name,
+      "crate_name": crate_name,
+      "srcs": sorted(list(set(srcs_content))),
+      "crate_root": crate_root_mapped,
+      "rustlibs": sorted(list(set(rustlibs))),
+      "shared_libs": sorted(list(set(shared_libs))),
+      "proc_macros": sorted(list(set(proc_macros))),
+      "features": ["cuttlefish", "testing"],
+      "edition": kwargs.get("edition", "2024"),
+      "test_suites": ["general_tests"],
+  })
 
 
 def rust_test_suite(*args, **kwargs):
@@ -234,7 +303,7 @@ def netsim_rust_library(
     proc_macro_deps = []
   if compile_data is None:
     compile_data = []
-  if srcs is None or type(srcs) is not list:
+  if srcs is None or not isinstance(srcs, list):
     srcs = ["src/**/*.rs"]
   if crate_name is None:
     crate_name = name.replace("-", "_")
@@ -254,6 +323,9 @@ def netsim_rust_library(
   proc_macros = transform_deps(proc_macro_deps)
   srcs_content = resolve_rust_srcs(srcs, "lib.rs")
   data_content = resolve_rust_srcs(compile_data, "") if compile_data else []
+
+  if not srcs_content:
+    raise ValueError(f"Target '{name}' has an empty source list, cannot resolve crate_root.")
 
   # 1. Main Library Target
   soong_targets.append({
@@ -314,11 +386,8 @@ def netsim_rust_library(
     })
 
   # 2. Automatic Test Targets (mimicking defs.bzl)
-  is_nfc = name == "nfc-actor"
-  enable_unit_test = kwargs.get("enable_unit_test", True) and is_nfc
-  enable_integration_test = (
-      kwargs.get("enable_integration_test", True) and is_nfc
-  )
+  enable_unit_test = kwargs.get("enable_unit_test", True)
+  enable_integration_test = kwargs.get("enable_integration_test", True)
   test_deps = kwargs.get("test_deps", [])
   test_rustlibs = []
   test_shared_libs = []
@@ -340,8 +409,10 @@ def netsim_rust_library(
     inline_test_proc_macros.extend(transform_deps(proc_macro_test_deps))
     inline_test_proc_macros = sorted(list(set(inline_test_proc_macros)))
 
-    soong_targets.append({
-        "type": "rust_test_host",
+    package_name = CURRENT_REL_PATH.strip("/")
+    if package_name in ALLOWED_TEST_PACKAGES:
+      soong_targets.append({
+          "type": "rust_test_host",
         "name": f"libnetsim_next_{name.replace('-', '_')}_tests",
         "crate_name": crate_name,
         "crate_root": srcs_content[0],
@@ -377,8 +448,11 @@ def netsim_rust_library(
       if opt in integration_test_srcs:
         crate_root = opt
         break
-    if not crate_root and integration_test_srcs:
-      crate_root = integration_test_srcs[0]
+    if not crate_root:
+      print(
+          f"Warning: Integration test in {CURRENT_REL_PATH} lacks a valid "
+          "crate root (tests/mod.rs or tests/integration_tests.rs). Skipping.",
+          file=sys.stderr)
 
     if crate_root:
       integration_test_rustlibs = sorted(
@@ -400,9 +474,11 @@ def netsim_rust_library(
           list(set(integration_test_proc_macros))
       )
 
-      soong_targets.append({
-          "type": "rust_test_host",
-          "name": f"libnetsim_next_{name.replace('-', '_')}_integration_tests",
+      package_name = CURRENT_REL_PATH.strip("/")
+      if package_name in ALLOWED_TEST_PACKAGES:
+        soong_targets.append({
+            "type": "rust_test_host",
+            "name": f"libnetsim_next_{name.replace('-', '_')}_integration_tests",
           "crate_name": f"{crate_name}_tests",
           "crate_root": crate_root,
           "srcs": integration_test_srcs,
@@ -431,7 +507,7 @@ def resolve_rust_srcs(srcs, default_file):
 def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
   if deps is None:
     deps = []
-  if srcs is None or type(srcs) is not list:
+  if srcs is None or not isinstance(srcs, list):
     srcs = ["src/**/*.rs"]
 
   rustlibs = transform_deps(deps)
@@ -441,6 +517,9 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
 
   srcs_content = resolve_rust_srcs(srcs, "main.rs")
   data_content = resolve_rust_srcs(kwargs.get("compile_data", []), "")
+
+  if not srcs_content:
+    raise ValueError(f"Target '{name}' has an empty source list, cannot resolve crate_root.")
 
   soong_name = (
       "netsimd" if name == "daemon" else f"netsim_next_{name.replace('-', '_')}"
@@ -461,12 +540,15 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
 def rust_proc_macro(name, srcs=None, deps=None, **kwargs):
   if deps is None:
     deps = []
-  if srcs is None or type(srcs) is not list:
+  if srcs is None or not isinstance(srcs, list):
     srcs = ["src/**/*.rs"]
 
   rustlibs = transform_deps(deps)
   srcs_content = resolve_rust_srcs(srcs, "lib.rs")
   data_content = resolve_rust_srcs(kwargs.get("compile_data", []), "")
+
+  if not srcs_content:
+    raise ValueError(f"Target '{name}' has an empty source list, cannot resolve crate_root.")
 
   soong_targets.append({
       "type": "rust_proc_macro",
@@ -556,13 +638,10 @@ def main():
       global soong_targets
       soong_targets = []
       CURRENT_REL_PATH = rel_path
-      code = open(path).read()
+      with open(path, "r") as f:
+        code = f.read()
 
-      try:
-        exec(code, SANDBOX)
-      except Exception as e:
-        print(f"Error parsing {path}: {e}", file=sys.stderr)
-        sys.exit(1)
+      exec(code, SANDBOX)
 
       if soong_targets:
         with open(os.path.join(root, "Android.bp"), "w") as f:

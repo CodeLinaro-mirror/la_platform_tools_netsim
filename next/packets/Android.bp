@@ -11,6 +11,7 @@ rust_library_host {
     stem: "libnetsim_packets",
     crate_root: "src/lib.rs",
     srcs: [
+        "src/lib.rs",
         ":rootcanal_link_layer_packets_rust_gen",
         "src/ethernet/test_data/arp.json",
         "src/ethernet/test_data/arp.pcap",
@@ -22,7 +23,6 @@ rust_library_host {
         "src/ieee80211/test_data/beacon.pcap",
         "src/ieee80211/test_data/golden_ccmp.json",
         "src/ieee80211/test_data/golden_ccmp.pcap",
-        "src/lib.rs",
         "src/llc/test_data/llc_snap.json",
         "src/llc/test_data/llc_snap.pcap",
         "src/netlink/test_data/hwsim_cmd_frame.bin",
