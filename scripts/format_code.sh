@@ -97,7 +97,6 @@ CMake_REGEX="CMakeLists\.txt$|\.cmake$"
 Blueprint_CMD="$BPFMT -w"
 Blueprint_DIRS="."
 Blueprint_EXTS="-name Android.bp"
-Blueprint_FLAGS="-maxdepth 1"
 Blueprint_REGEX="Android\.bp$"
 
 # Bazel
