@@ -1,6 +1,7 @@
 # Copyright 2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 
+import argparse
 import os
 import sys
 
@@ -364,8 +365,25 @@ SANDBOX = {
 
 def main():
   global CURRENT_REL_PATH
+
+  parser = argparse.ArgumentParser(
+      description="Convert Bazel BUILD files to Soong Android.bp"
+  )
+  parser.add_argument(
+      "--package",
+      help="Only process this specific package directory (e.g., 'nfc-actor')",
+  )
+  args = parser.parse_args()
+
   repo_dir = NEXT_DIR
-  for root, dirs, files in os.walk(repo_dir):
+  search_dir = repo_dir
+  if args.package:
+    search_dir = os.path.join(repo_dir, args.package.strip("/"))
+
+  if not os.path.exists(search_dir):
+    return
+
+  for root, dirs, files in os.walk(search_dir):
     if "BUILD" in files:
       path = os.path.join(root, "BUILD")
       rel_path = os.path.relpath(root, repo_dir)
