@@ -13,6 +13,7 @@ mod error;
 mod file_handler;
 mod grpc_client;
 mod gsm;
+mod nfc;
 mod requests;
 mod response;
 mod sms;
@@ -27,6 +28,7 @@ use grpcio::{ChannelBuilder, EnvBuilder};
 use netsim_proto::{
     access_point_grpc::AccessPointServiceClient, ble_service_grpc::BleServiceClient,
     cell_grpc::CellServiceClient, frontend, frontend_grpc::FrontendServiceClient,
+    nfc_service_grpc::NfcServiceClient,
 };
 use tracing::error;
 
@@ -224,6 +226,7 @@ fn main() {
         ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build())).connect(&server);
     let frontend_client = FrontendServiceClient::new(channel.clone());
     let access_point_client = AccessPointServiceClient::new(channel.clone());
+    let nfc_client = NfcServiceClient::new(channel.clone());
     let ble_client = BleServiceClient::new(channel.clone());
 
     if let args::Command::Ap(ap_cmd) = &args.command {
@@ -255,6 +258,13 @@ fn main() {
                 }
             }
             _ => unreachable!(),
+        }
+        return;
+    }
+
+    if let args::Command::Nfc(nfc_cmd) = &args.command {
+        if let Err(e) = crate::nfc::client::execute(nfc_cmd, &nfc_client, args.verbose) {
+            error!("{e}");
         }
         return;
     }

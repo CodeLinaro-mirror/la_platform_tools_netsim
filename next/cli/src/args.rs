@@ -75,6 +75,9 @@ pub enum Command {
     /// Manage SMS properties
     #[command(subcommand)]
     Sms(crate::sms::args::SmsCommand),
+    /// Manage Near-Field Communication (NFC) properties
+    #[command(subcommand)]
+    Nfc(crate::nfc::args::NfcCommand),
 }
 
 #[derive(Debug, Args, PartialEq)]
