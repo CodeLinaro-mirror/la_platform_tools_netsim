@@ -90,9 +90,9 @@ impl MiscService {
 
     pub fn handle_get_product_serial_number_gsm_with_type(&self, snt: u8) -> ExecutionResult {
         let response = match snt {
-            0 => format!("{}{}\r\n", DEFAULT_IMEI, DEFAULT_INFO),
+            0 => format!("{DEFAULT_IMEI}{DEFAULT_INFO}\r\n"),
             1 => DEFAULT_IMEI_CRLF.to_string(),
-            2 => format!("{}{}\r\n", DEFAULT_IMEI, DEFAULT_SVN),
+            2 => format!("{DEFAULT_IMEI}{DEFAULT_SVN}\r\n"),
             3 => DEFAULT_SVN_CRLF.to_string(),
             _ => DEFAULT_IMEI_CRLF.to_string(),
         };
@@ -293,6 +293,7 @@ impl MiscService {
             Command::SetAutomaticDisconnectDelay(_) => self.handle_set_automatic_disconnect_delay(),
             Command::SetCallMode(_) => self.handle_set_call_mode(),
             Command::SetCharacterSet(_) => self.handle_set_character_set(),
+            Command::Test => ExecutionResult::Handled(HandledCommand::ok()),
             _ => ExecutionResult::Unhandled,
         }
     }

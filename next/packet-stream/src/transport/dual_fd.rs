@@ -37,6 +37,8 @@ pub struct ChipConfig {
     #[serde(rename = "fdOut")]
     pub fd_out: Option<i32>,
     pub model: Option<String>,
+    #[serde(rename = "simType")]
+    pub sim_type: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,7 +48,7 @@ pub struct DualFdConfig {
 
 pub struct DualFdListener {
     config: DualFdConfig,
-    pending_streams: VecDeque<(String, String, (OwnedFd, OwnedFd))>,
+    pending_streams: VecDeque<(String, String, Option<i32>, (OwnedFd, OwnedFd))>,
 }
 
 impl DualFdListener {
@@ -85,6 +87,7 @@ impl DualFdListener {
                 self.pending_streams.push_back((
                     device.name.clone(),
                     chip.kind.clone(),
+                    chip.sim_type,
                     (in_fd, out_fd),
                 ));
             }
@@ -96,7 +99,8 @@ impl DualFdListener {
 #[async_trait]
 impl TransportListener for DualFdListener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
-        while let Some((device_name, chip_kind, (in_fd, out_fd))) = self.pending_streams.pop_front()
+        while let Some((device_name, chip_kind, sim_type, (in_fd, out_fd))) =
+            self.pending_streams.pop_front()
         {
             let guid = format!("dualfd-{}", device_name);
             let kind = ChipKind::from_str(&chip_kind).unwrap_or(ChipKind::UNSPECIFIED);
@@ -114,6 +118,7 @@ impl TransportListener for DualFdListener {
                     manufacturer: "".to_string(),
                     product_name: "".to_string(),
                     address: "".to_string(),
+                    sim_type,
                 }),
                 name: String::new(),
             };

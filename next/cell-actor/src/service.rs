@@ -8,7 +8,7 @@ use netsim_model::{
     Cell, Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipUpdate, ChipVariant,
     ChipVariantUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING, ModemAction, Radio,
 };
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::{
     CellAction, CellActionResult,
@@ -50,6 +50,11 @@ impl ActorService for CellActor {
             chip_id,
             Box::pin(async move {
                 while let Some(packet) = rx.recv().await {
+                    debug!(
+                        "CellActor forwarder: raw packet for chip {}: {:?}",
+                        chip_id,
+                        std::str::from_utf8(&packet)
+                    );
                     if let Err(e) = sink.send(packet).await {
                         error!("PacketSink send error: {}", e);
                     }
@@ -63,7 +68,12 @@ impl ActorService for CellActor {
         ctx.add_stream(chip_id, Box::pin(stream));
 
         // 2. Add to Controller directly (Sync)
-        if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink) {
+        let sim_type = if let Some(ChipVariant::Cell(cell)) = params.chip.variant.as_ref() {
+            cell.sim_type
+        } else {
+            None
+        };
+        if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink, sim_type) {
             return Err(CellError::ModemError(e));
         }
 
@@ -112,6 +122,7 @@ impl ActorService for CellActor {
                     } else {
                         MODEM_STATE_IDLE.to_string()
                     },
+                    sim_type: None,
                 })),
                 ..Default::default()
             }))
@@ -224,6 +235,7 @@ impl ActorService for CellActor {
                         } else {
                             MODEM_STATE_IDLE.to_string()
                         },
+                        sim_type: None,
                     })),
                     ..Default::default()
                 });

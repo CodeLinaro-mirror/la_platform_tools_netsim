@@ -19,7 +19,7 @@ use crate::world::World;
 pub fn when_at_command_sent(world: &mut World, name: &str, command: &str) {
     let (id, _) = world.get_modem(name);
     let full_command =
-        if command.ends_with("\r\n") { command.to_string() } else { format!("{}\r\n", command) };
+        if command.ends_with("\r\n") { command.to_string() } else { format!("{command}\r\n") };
 
     world.manager.send_at_command(id, full_command.as_bytes());
 }

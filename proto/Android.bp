@@ -10,6 +10,7 @@ package {
 filegroup {
     name: "netsim-protos",
     srcs: [
+        "netsim/cell.proto",
         "netsim/common.proto",
         "netsim/frontend.proto",
         "netsim/hci_packet.proto",
@@ -82,6 +83,7 @@ cc_library {
         "libprotobuf-cpp-full",
     ],
     srcs: [
+        "netsim/cell.proto",
         "netsim/common.proto",
         "netsim/config.proto",
         "netsim/frontend.proto",
@@ -106,6 +108,7 @@ cc_library {
         ],
     },
     srcs: [
+        "netsim/cell.proto",
         "netsim/common.proto",
         "netsim/config.proto",
         "netsim/frontend.proto",

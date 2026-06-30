@@ -15,7 +15,7 @@ fn test_event_loop_tick_and_duration() {
 
     let modem_id: ModemId = 1;
     let (mut modem_handler, sink) = MockModemHandler::new();
-    simulator.new_modem(modem_id, sink).unwrap();
+    simulator.new_modem(modem_id, sink, None).unwrap();
 
     // 1. Schedule an event 100ms in the future.
     let event_duration = Duration::from_millis(100);

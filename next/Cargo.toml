@@ -29,6 +29,7 @@ members = [
   "rootcanal",
   "rootcanal-server",
   "testing",
+  "cli",
 ]
 
 [workspace.doc]

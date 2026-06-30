@@ -272,6 +272,9 @@ fn test_send_sms_text_mode() {
     when_at_command_sent(&mut world, "A", "AT+CMGF=1");
     then_response_is(&mut world, "A", "OK");
 
+    when_at_command_sent(&mut world, "B", "AT+CMGF=1");
+    then_response_is(&mut world, "B", "OK");
+
     when_at_command_sent(&mut world, "A", "AT+CMGS=\"12345\"");
     then_response_is(&mut world, "A", "> ");
 
@@ -301,6 +304,9 @@ fn test_incoming_sms() {
     let id_a = world.modems.get("A").unwrap().0;
 
     // 1. Text Mode
+    when_at_command_sent(&mut world, "A", "AT+CMGF=1");
+    then_response_is(&mut world, "A", "OK");
+
     when_incoming_sms_received(&mut world, id_a, "123456", "Hello World");
 
     // Expect +CMT response

@@ -99,6 +99,7 @@ pub struct SimService {
     pin_enabled: bool,
     imsi: String,
     iccid: String,
+    msisdn: String,
     pin1: String,
     pin1_retries: u8,
     puk1_retries: u8,
@@ -132,11 +133,14 @@ impl SimService {
             profile.iccid.clone()
         };
 
+        let msisdn = profile.msisdn.clone();
+
         Self {
             state,
             pin_enabled,
             imsi,
             iccid,
+            msisdn,
             pin1: DEFAULT_PIN.to_string(),
             pin1_retries: 3,
             puk1_retries: 10,
@@ -147,6 +151,10 @@ impl SimService {
             cdma_subscription_source: 0,
             cdma_roaming_preference: 0,
         }
+    }
+
+    pub fn set_msisdn(&mut self, msisdn: &str) {
+        self.msisdn = msisdn.to_string();
     }
 
     pub fn is_present(&self) -> bool {
@@ -300,14 +308,14 @@ impl SimService {
         // TODO: Extract goldfish-specific quirks into flags.
         // 1. Try to read from the loaded FileSystem first (for READ BINARY and SELECT)
         if command == APDU_READ_BINARY {
-            if let Some(ef) = find_ef(&self.fs.master_file, &format!("{:04X}", file_id)) {
+            if let Some(ef) = find_ef(&self.fs.master_file, &format!("{file_id:04X}")) {
                 return ExecutionResult::Handled(HandledCommand {
                     responses: vec![format!("+CRSM: 144,0,{}\r\n", ef.data), "OK\r\n".to_string()],
                     action: None,
                 });
             }
         } else if command == APDU_SELECT
-            && find_df(&self.fs.master_file, &format!("{:04X}", file_id)).is_some()
+            && find_df(&self.fs.master_file, &format!("{file_id:04X}")).is_some()
         {
             return ExecutionResult::Handled(HandledCommand {
                 responses: vec!["+CRSM: 144,0,6210\r\n".to_string(), "OK\r\n".to_string()],
@@ -347,7 +355,7 @@ impl SimService {
                 Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_MSISDN_FCP))
             }
             (APDU_READ_RECORD, 0x6F40) => {
-                Some(format!("+CRSM: 144,0,{}\r\n", iccprofile_for_sim0::EF_MSISDN_RECORD_FALLBACK))
+                Some(format!("+CRSM: 144,0,{}\r\n", self.encode_msisdn()))
             }
             // SELECT (164)
             (APDU_SELECT, _) => Some("+CRSM: 144,0,6210\r\n".to_string()),
@@ -456,7 +464,7 @@ impl SimService {
 
     fn handle_query_pin_retries(&self) -> ExecutionResult {
         let retries = self.pin1_retries;
-        let response = format!("+SPIC: {}\r\n", retries);
+        let response = format!("+SPIC: {retries}\r\n");
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)
@@ -469,7 +477,7 @@ impl SimService {
 
     fn handle_query_cdma_subscription_source(&self) -> ExecutionResult {
         let source = self.cdma_subscription_source;
-        let response = format!("+CCSS: {}\r\n", source);
+        let response = format!("+CCSS: {source}\r\n");
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)
@@ -482,7 +490,7 @@ impl SimService {
 
     fn handle_query_cdma_roaming_preference(&self) -> ExecutionResult {
         let preference = self.cdma_roaming_preference;
-        let response = format!("+WRMP: {}\r\n", preference);
+        let response = format!("+WRMP: {preference}\r\n");
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)
@@ -494,6 +502,52 @@ impl SimService {
 
     fn handle_update_phone_number(&self, _phone_number: &[u8]) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand::ok())
+    }
+
+    fn encode_msisdn(&self) -> String {
+        let msisdn = &self.msisdn;
+        if msisdn.is_empty() {
+            return iccprofile_for_sim0::EF_MSISDN_RECORD_FALLBACK.to_string();
+        }
+        let digits: String = msisdn.chars().filter(|c| c.is_ascii_digit()).collect();
+        if digits.is_empty() {
+            return iccprofile_for_sim0::EF_MSISDN_RECORD_FALLBACK.to_string();
+        }
+
+        let ton_npi = if msisdn.starts_with('+') || (digits.len() == 11 && digits.starts_with('1'))
+        {
+            "91"
+        } else {
+            "81"
+        };
+
+        let mut padded_digits = digits.clone();
+        if (padded_digits.len() & 1) != 0 {
+            padded_digits.push('F');
+        }
+
+        let mut swapped = String::new();
+        let chars: Vec<char> = padded_digits.chars().collect();
+        for chunk in chars.chunks(2) {
+            if chunk.len() == 2 {
+                swapped.push(chunk[1]);
+                swapped.push(chunk[0]);
+            }
+        }
+
+        let bcd_len = 1 + (padded_digits.len() / 2);
+        let bcd_len_hex = format!("{bcd_len:02X}");
+
+        let mut dialing_number = swapped;
+        while dialing_number.len() < 20 {
+            dialing_number.push_str("FF");
+        }
+        dialing_number.truncate(20);
+
+        let alpha = "0000000000000000000000000000";
+        let suffix = "FFFF";
+
+        format!("{alpha}{bcd_len_hex}{ton_npi}{dialing_number}{suffix}")
     }
 
     fn is_sim_command(command: &Command) -> bool {

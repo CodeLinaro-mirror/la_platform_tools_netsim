@@ -40,9 +40,8 @@ pub fn bcd_to_string(bytes: &[u8]) -> String {
 /// Encodes a string of digits and special characters (*, #, a, b, c)
 /// to semi-octet (BCD) representation.
 /// Swaps every pair of digits. Pads with 'F' (0x0F) if odd length.
-#[cfg(test)]
 pub fn string_to_bcd(s: &str) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity((s.len() + 1) / 2);
+    let mut bytes = Vec::with_capacity(s.len().div_ceil(2));
     let mut bytes_iter = s.bytes();
 
     let char_to_bcd = |b: u8| -> u8 {
