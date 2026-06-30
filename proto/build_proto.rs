@@ -150,6 +150,7 @@ pub mod netsim {
   pub mod packet_streamer;
   pub mod startup;
   pub mod stats;
+  pub mod casimir_control;
   pub use crate::rootcanal::configuration;
   pub mod packet {
       pub use super::hci_packet::*;
@@ -176,6 +177,8 @@ pub use netsim::model;
 pub use netsim::packet_streamer;
 pub use netsim::startup;
 pub use netsim::stats;
+pub use netsim::casimir_control;
+pub use netsim::casimir_control as casimircontrolserver;
 pub use rootcanal::configuration;
 #[path = "netsim/frontend_grpc.rs"]
 pub mod frontend_grpc;
@@ -187,6 +190,8 @@ pub mod access_point_grpc;
 pub mod ble_service_grpc;
 #[path = "netsim/cell_grpc.rs"]
 pub mod cell_grpc;
+#[path = "netsim/casimir_control_grpc.rs"]
+pub mod casimir_control_grpc;
 
 pub use protobuf;
 pub use protobuf::well_known_types::empty;
