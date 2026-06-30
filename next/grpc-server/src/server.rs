@@ -13,7 +13,7 @@ use netsim_proto::access_point_grpc::create_access_point_service;
 use netsim_proto::{
     ble_service_grpc::create_ble_service, casimir_control_grpc::create_casimir_control_service,
     cell_grpc::create_cell_service, frontend_grpc::create_frontend_service,
-    packet_streamer_grpc::create_packet_streamer,
+    nfc_service_grpc::create_nfc_service, packet_streamer_grpc::create_packet_streamer,
 };
 use tracing::{error, info, warn};
 
@@ -21,7 +21,7 @@ use tracing::{error, info, warn};
 use crate::access_point::AccessPointServiceImpl;
 use crate::{
     ble_service::BleServiceImpl, cell::CellServiceImpl, frontend::FrontendClient,
-    packet_streamer::PacketStreamerService,
+    nfc::NfcServiceImpl, packet_streamer::PacketStreamerService,
 };
 
 // Share a single gRPC Environment across all server instances within the same
@@ -51,8 +51,10 @@ pub fn start(
     let access_point_service =
         create_access_point_service(AccessPointServiceImpl::new(ap_client.clone()));
     let cell_service = create_cell_service(CellServiceImpl::new(cell_client));
-    let casimir_service =
-        create_casimir_control_service(crate::casimir::CasimirControlServiceImpl::new(nfc_client));
+    let casimir_service = create_casimir_control_service(
+        crate::casimir::CasimirControlServiceImpl::new(nfc_client.clone()),
+    );
+    let nfc_service = create_nfc_service(NfcServiceImpl::new(nfc_client));
 
     let ble_service = create_ble_service(BleServiceImpl::new(device_client.clone()));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
@@ -61,7 +63,8 @@ pub fn start(
         .register_service(backend_service)
         .register_service(ble_service)
         .register_service(cell_service)
-        .register_service(casimir_service);
+        .register_service(casimir_service)
+        .register_service(nfc_service);
 
     #[cfg(not(feature = "cuttlefish"))]
     {

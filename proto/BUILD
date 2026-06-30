@@ -104,6 +104,7 @@ genrule(
         "netsim/ble_service_grpc.rs",
         "netsim/cell_grpc.rs",
         "netsim/casimir_control_grpc.rs",
+        "netsim/nfc_service_grpc.rs",
     ],
     cmd = """
         NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(location netsim/common.proto)))
@@ -147,6 +148,7 @@ genrule(
         "netsim/ble_service.rs",
         "netsim/cell.rs",
         "netsim/casimir_control.rs",
+        "netsim/nfc_service.rs",
         "rootcanal/configuration.rs",
         "lib.rs",
     ],
@@ -191,6 +193,8 @@ rust_library(
         "netsim/frontend_grpc.rs",
         "netsim/hci_packet.rs",
         "netsim/model.rs",
+        "netsim/nfc_service.rs",
+        "netsim/nfc_service_grpc.rs",
         "netsim/packet_streamer.rs",
         "netsim/packet_streamer_grpc.rs",
         "netsim/startup.rs",
