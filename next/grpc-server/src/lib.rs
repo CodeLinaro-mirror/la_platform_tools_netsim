@@ -5,6 +5,7 @@ pub(crate) mod frontend;
 
 pub(crate) mod access_point;
 pub(crate) mod ble_service;
+pub mod casimir;
 pub(crate) mod cell;
 pub(crate) mod frontend_converter;
 pub(crate) mod packet_stream_converter;

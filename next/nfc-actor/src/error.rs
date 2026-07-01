@@ -11,6 +11,8 @@ pub enum NfcError {
     MissingStreamSink,
     #[error("Chip error: {0}")]
     Chip(#[from] ChipError),
+    #[error("Internal error: {0}")]
+    Internal(String),
     #[error("Unknown error")]
     Unknown,
 }

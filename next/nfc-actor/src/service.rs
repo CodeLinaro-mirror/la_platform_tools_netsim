@@ -3,19 +3,19 @@
 
 use actor_framework::{ActorService, DynContext};
 use futures::{SinkExt, StreamExt};
-use netsim_model::{ChipCreate, ChipError, ChipId, ChipRequest, ChipUpdate};
+use netsim_model::{ChipCreate, ChipError, ChipId, ChipUpdate};
 use tracing::{error, info};
 
 use crate::{
     error::NfcError,
-    nfc_actor::{ChipState, NfcActor},
+    nfc_actor::{ChipState, NfcAction, NfcActor},
 };
 
 impl ActorService for NfcActor {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
-    type Action = ChipRequest;
+    type Action = NfcAction;
     type ActionResult = ();
     type Error = NfcError;
     type Entity = netsim_model::Chip;
@@ -175,10 +175,47 @@ impl ActorService for NfcActor {
     async fn handle_action(
         &mut self,
         _id: Option<Self::Id>,
-        _action: Self::Action,
+        action: Self::Action,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
-        Ok(())
+        match action {
+            NfcAction::Generic(_req) => Ok(()),
+            NfcAction::CreateControlChannel { respond_to } => {
+                info!("NfcActor: Received CreateControlChannel action");
+                let (grpc_io, casimir_io) = tokio::io::duplex(1024);
+                if let Some(ref scene_client) = self.scene_client {
+                    info!("NfcActor: Calling scene_client.add_device...");
+                    let add_result = scene_client
+                        .add_device(move |id, rf_tx| {
+                            let (rx, tx) = tokio::io::split(casimir_io);
+                            casimir::Device::rf(id, rx, tx, rf_tx)
+                        })
+                        .await;
+                    info!("NfcActor: scene_client.add_device returned: {:?}", add_result);
+                    match add_result {
+                        Ok(id) => {
+                            info!(
+                                "NfcActor: Sending success response to grpc-server with ID {}",
+                                id
+                            );
+                            let _ = respond_to.send(Ok((grpc_io, id)));
+                            Ok(())
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to add RF device to Casimir: {e}");
+                            error!("NfcActor: {}", err_msg);
+                            let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
+                            Ok(())
+                        }
+                    }
+                } else {
+                    let err_msg = "Casimir scene not started".to_string();
+                    error!("NfcActor: {}", err_msg);
+                    let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
+                    Ok(())
+                }
+            }
+        }
     }
 
     async fn handle_list(

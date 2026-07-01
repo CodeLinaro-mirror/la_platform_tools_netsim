@@ -209,11 +209,13 @@ async fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
+    #[cfg(unix)] grpc_uds_path: Option<String>,
     enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: LinkClient,
     #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
     cell_client: cell_actor::CellClient,
+    nfc_client: nfc_actor::NfcClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(u16, grpcio::Server), RunResult> {
@@ -224,12 +226,15 @@ async fn setup_grpc_listener(
     // Start the gRPC server
     let (server, port) = grpc_server::start(
         requested_port.into(),
+        #[cfg(unix)]
+        grpc_uds_path.clone(),
         enable_cli_ui,
         device_client,
         link_client,
         #[cfg(not(feature = "cuttlefish"))]
         ap_client,
         cell_client,
+        nfc_client,
         packet_streamer_service,
         version,
         frontend_stats,
@@ -254,6 +259,13 @@ async fn setup_grpc_listener(
             port,
         )),
     );
+    #[cfg(unix)]
+    if let Some(ref uds_path) = grpc_uds_path {
+        listener_addresses.insert(
+            "netsim_uds".to_string(),
+            StreamAddress::Uds(std::path::PathBuf::from(uds_path)),
+        );
+    }
 
     Ok((port, server))
 }
@@ -531,6 +543,11 @@ impl NetsimDaemon {
             )
         };
 
+        // Setup NFC Server
+        let (nfc_runner, nfc_client) = nfc_actor::new();
+        let mut nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
+        nfc_actor_state.start_casimir();
+
         // gRPC port is determined after the listener starts.
         let resolved_grpc_port =
             resolve_port_with_env(args.grpc_port, "NETSIM_GRPC_PORT", |name| std::env::var(name))
@@ -539,21 +556,19 @@ impl NetsimDaemon {
             &mut streams,
             &mut listener_addresses,
             resolved_grpc_port,
+            #[cfg(unix)]
+            args.grpc_uds_path.clone(),
             !args.no_cli_ui,
             device_client.clone(),
             link_client.clone(),
             #[cfg(not(feature = "cuttlefish"))]
             ap_client.clone(),
             cell_client.clone(),
+            nfc_client.clone(),
             get_version(),
             frontend_stats.clone(),
         )
         .await?;
-
-        listener_addresses.insert(
-            "netsim_grpc".to_string(),
-            StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], actual_grpc_port))),
-        );
 
         // HCI TCP socket server
         let instance_num = get_instance(args.instance);
@@ -658,10 +673,6 @@ impl NetsimDaemon {
         // Setup Uwb Server
         let (uwb_runner, uwb_client) = uwb_actor::new();
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
-
-        // Setup NFC Server
-        let (nfc_runner, nfc_client) = nfc_actor::new();
-        let nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
@@ -790,7 +801,9 @@ impl NetsimDaemon {
     /// Gets the gRPC port, if the server is running.
     pub fn grpc_port(&self) -> Option<u16> {
         self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
-            StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
+            StreamAddress::Tcp(socket_addr) | StreamAddress::Grpc(socket_addr) => {
+                Some(socket_addr.port())
+            }
             _ => None,
         })
     }

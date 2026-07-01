@@ -10,10 +10,12 @@ mod service;
 mod client;
 
 // Re-export core types
+pub use ::casimir;
 pub use actor_framework::ResourceActor;
 pub use client::NfcClient;
 pub use error::NfcError;
 pub use nfc_actor::NfcActor;
+pub use scene::SceneClient;
 
 /// Creates a new NFC actor framework instance and client.
 pub fn new() -> (ResourceActor<NfcActor>, NfcClient) {
