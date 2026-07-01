@@ -14,13 +14,19 @@ categories = ["network-programming", "api-bindings"]
 [dependencies]
 async-trait = "0.1"
 bytes = "1.0"
+command-fds = { version = "0.3", optional = true }
 futures = "0.3"
 netsim-types = { path = "../types" }
+nix = { version = "0.31", features = ["fs", "socket"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.143"
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
+tracing = "0.1"
+
+[features]
+cuttlefish = ["dep:command-fds"]
 
 [dev-dependencies]
 tokio-test = "0.4.3"

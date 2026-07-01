@@ -270,7 +270,7 @@ PLATFORM_RUSTLIBS = {
         "libtokio_util",
         "libnetsim_next_rootcanal_server",
     ],
-    "packet-stream": ["libcommand_fds"],
+    "packet-stream": ["libcommand_fds", "libtracing"],
 }
 IGNORED_TARGETS = {
     "libslirp-rs",

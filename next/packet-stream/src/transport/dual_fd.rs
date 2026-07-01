@@ -1,17 +1,27 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::VecDeque, fs::File as StdFile, os::unix::io::OwnedFd, str::FromStr};
+use std::{
+    collections::VecDeque,
+    io,
+    os::unix::io::{AsFd, AsRawFd, FromRawFd, OwnedFd},
+    pin::Pin,
+    str::FromStr,
+    task::{Context, Poll},
+};
 
 use async_trait::async_trait;
+#[cfg(all(not(test), feature = "cuttlefish"))]
 use command_fds::inherited::take_fd_ownership;
-use futures::{SinkExt, stream::StreamExt};
+use futures::{SinkExt, ready, stream::StreamExt};
 use netsim_types::{Chip, ChipInfo, ChipKind, DeviceInfo};
-use serde::{Deserialize, Serialize};
-use tokio::{
-    io::AsyncWriteExt,
-    net::unix::pipe::{Receiver, Sender},
+use nix::{
+    fcntl::{FcntlArg, OFlag, fcntl},
+    sys::socket::{SockFlag, accept4, getsockopt, sockopt},
+    unistd::{read, write},
 };
+use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf, unix::AsyncFd};
 use tokio_util::codec::FramedRead;
 
 use crate::{
@@ -32,7 +42,9 @@ pub struct DeviceConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChipConfig {
     pub kind: String,
-    #[serde(rename = "fdIn")]
+    /// Input to the device (netsim output). Supports aliases "vsockFd" and
+    /// "virtioFd".
+    #[serde(rename = "fdIn", alias = "vsockFd", alias = "virtioFd")]
     pub fd_in: i32,
     #[serde(rename = "fdOut")]
     pub fd_out: Option<i32>,
@@ -46,122 +58,296 @@ pub struct DualFdConfig {
     pub devices: Vec<DeviceConfig>,
 }
 
+#[cfg(all(not(test), feature = "cuttlefish"))]
+fn claim_fd(fd: i32) -> Result<OwnedFd> {
+    take_fd_ownership(fd)
+        .map_err(|e| PacketStreamError::InvalidConfig(format!("Failed to claim FD {fd}: {e}")))
+}
+
+#[cfg(all(not(test), not(feature = "cuttlefish")))]
+fn claim_fd(fd: i32) -> Result<OwnedFd> {
+    Err(PacketStreamError::InvalidConfig(format!(
+        "Claiming FD {fd} is not supported without cuttlefish feature"
+    )))
+}
+
+#[cfg(test)]
+fn claim_fd(fd: i32) -> Result<OwnedFd> {
+    // SAFETY: In test configurations, we assume the provided raw file descriptor is
+    // valid and that ownership can be safely transferred to OwnedFd.
+    // WARNING: This transfers ownership, so the FD will be closed
+    // when dropped. Do not pass process-wide FDs (like 0, 1, 2)
+    // unless you intend to close them.
+    unsafe { Ok(OwnedFd::from_raw_fd(fd)) }
+}
+
+fn is_listening_socket<T: AsFd>(fd: &T) -> bool {
+    getsockopt(fd, sockopt::AcceptConn).unwrap_or(false)
+}
+
+fn set_nonblocking<T: AsFd>(fd: &T) -> io::Result<()> {
+    let flags_int = fcntl(fd, FcntlArg::F_GETFL).map_err(io::Error::from)?;
+    let flags = OFlag::from_bits_truncate(flags_int);
+    fcntl(fd, FcntlArg::F_SETFL(flags | OFlag::O_NONBLOCK)).map_err(io::Error::from)?;
+    Ok(())
+}
+
+struct AsyncGenericFd(AsyncFd<OwnedFd>);
+
+impl AsyncGenericFd {
+    fn new(fd: OwnedFd) -> Result<Self> {
+        let async_fd = AsyncFd::new(fd).map_err(PacketStreamError::Io)?;
+        Ok(Self(async_fd))
+    }
+}
+
+impl AsyncRead for AsyncGenericFd {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let this = self.as_mut().get_mut();
+        loop {
+            let mut guard = ready!(this.0.poll_read_ready(cx))?;
+            let unfilled = buf.initialize_unfilled();
+
+            match guard.try_io(|inner| read(inner, unfilled).map_err(io::Error::from)) {
+                Ok(Ok(bytes_read)) => {
+                    buf.advance(bytes_read);
+                    return Poll::Ready(Ok(()));
+                }
+                Ok(Err(err)) => return Poll::Ready(Err(err)),
+                Err(_would_block) => continue,
+            }
+        }
+    }
+}
+
+impl AsyncWrite for AsyncGenericFd {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        let this = self.as_mut().get_mut();
+        loop {
+            let mut guard = ready!(this.0.poll_write_ready(cx))?;
+
+            match guard.try_io(|inner| write(inner, buf).map_err(io::Error::from)) {
+                Ok(Ok(bytes_written)) => return Poll::Ready(Ok(bytes_written)),
+                Ok(Err(err)) => return Poll::Ready(Err(err)),
+                Err(_would_block) => continue,
+            }
+        }
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
 pub struct DualFdListener {
     config: DualFdConfig,
-    pending_streams: VecDeque<(String, String, Option<i32>, (OwnedFd, OwnedFd))>,
+    /// Streams established from pre-existing FDs (e.g., inherited pipes) that
+    /// do not need to accept connections dynamically.
+    pending_static_streams: VecDeque<(String, String, Option<i32>, (OwnedFd, OwnedFd))>,
+    listening_sockets: Vec<(String, String, Option<i32>, AsyncFd<OwnedFd>)>,
 }
 
 impl DualFdListener {
     pub async fn new(config: DualFdConfig) -> Result<Self> {
-        #[allow(unused_mut)]
-        let mut listener = Self { config, pending_streams: VecDeque::new() };
+        let mut listener =
+            Self { config, pending_static_streams: VecDeque::new(), listening_sockets: Vec::new() };
         listener.prepare_streams()?;
         Ok(listener)
     }
 
     fn prepare_streams(&mut self) -> Result<()> {
-        self.pending_streams.clear();
+        self.pending_static_streams.clear();
+        self.listening_sockets.clear();
         for device in &self.config.devices {
             for chip in &device.chips {
-                let in_fd = take_fd_ownership(chip.fd_in).map_err(|e| {
-                    PacketStreamError::InvalidConfig(format!(
-                        "Failed to claim input FD {}: {e}",
-                        chip.fd_in
-                    ))
-                })?;
+                let in_fd = claim_fd(chip.fd_in)?;
 
-                let out_fd = match chip.fd_out {
-                    Some(fd) if fd != chip.fd_in => take_fd_ownership(fd).map_err(|e| {
+                if is_listening_socket(&in_fd) {
+                    set_nonblocking(&in_fd)?;
+                    let async_fd = AsyncFd::new(in_fd).map_err(|e| {
                         PacketStreamError::InvalidConfig(format!(
-                            "Failed to claim output FD {fd}: {e}"
+                            "Failed to create AsyncFd for listening socket: {e}"
                         ))
-                    })?,
-                    _ => in_fd.try_clone().map_err(|e| {
-                        PacketStreamError::InvalidConfig(format!(
-                            "Failed to clone bidirectional FD {}: {e}",
-                            chip.fd_in
-                        ))
-                    })?,
-                };
+                    })?;
+                    self.listening_sockets.push((
+                        device.name.clone(),
+                        chip.kind.clone(),
+                        chip.sim_type,
+                        async_fd,
+                    ));
+                } else {
+                    let out_fd = match chip.fd_out {
+                        Some(fd) if fd != chip.fd_in => claim_fd(fd)?,
+                        _ => in_fd.try_clone().map_err(PacketStreamError::Io)?,
+                    };
 
-                self.pending_streams.push_back((
-                    device.name.clone(),
-                    chip.kind.clone(),
-                    chip.sim_type,
-                    (in_fd, out_fd),
-                ));
+                    self.pending_static_streams.push_back((
+                        device.name.clone(),
+                        chip.kind.clone(),
+                        chip.sim_type,
+                        (in_fd, out_fd),
+                    ));
+                }
             }
         }
         Ok(())
     }
 }
 
+async fn accept_one_connection(async_fd: &AsyncFd<OwnedFd>) -> Result<(OwnedFd, OwnedFd)> {
+    loop {
+        let mut guard = async_fd.readable().await.map_err(PacketStreamError::Io)?;
+
+        match guard.try_io(|inner| {
+            accept4(inner.as_raw_fd(), SockFlag::SOCK_CLOEXEC | SockFlag::SOCK_NONBLOCK)
+                .map_err(io::Error::from)
+        }) {
+            Ok(Ok(connected_raw_fd)) => {
+                // SAFETY: accept4 successfully returned a new file descriptor. We take
+                // ownership of this descriptor to ensure it is closed when dropped.
+                let connected_fd = unsafe { OwnedFd::from_raw_fd(connected_raw_fd) };
+                let cloned_fd = connected_fd.try_clone().map_err(PacketStreamError::Io)?;
+                return Ok((connected_fd, cloned_fd));
+            }
+            Ok(Err(err)) => return Err(PacketStreamError::Io(err)),
+            Err(_would_block) => continue,
+        }
+    }
+}
+
+fn create_stream_and_sink(
+    device_name: String,
+    chip_kind: String,
+    sim_type: Option<i32>,
+    in_fd: OwnedFd,
+    out_fd: OwnedFd,
+) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
+    let guid = format!("dualfd-{}", device_name);
+    let kind = ChipKind::from_str(&chip_kind).unwrap_or(ChipKind::UNSPECIFIED);
+
+    let chip_info = ChipInfo {
+        device_info: Some(DeviceInfo {
+            name: device_name.clone(),
+            id: device_name,
+            ..Default::default()
+        }),
+        chip: Some(Chip {
+            name: chip_kind.clone(),
+            kind,
+            id: chip_kind.clone(),
+            manufacturer: "".to_string(),
+            product_name: "".to_string(),
+            address: "".to_string(),
+            sim_type,
+        }),
+        name: String::new(),
+    };
+
+    set_nonblocking(&in_fd)?;
+    set_nonblocking(&out_fd)?;
+
+    let reader = AsyncGenericFd::new(out_fd)?;
+    let writer = AsyncGenericFd::new(in_fd)?;
+
+    let stream: PacketStream = match kind {
+        ChipKind::BLUETOOTH => {
+            let framed = FramedRead::new(reader, H4Codec);
+            Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+        }
+        ChipKind::UWB => {
+            let framed = FramedRead::new(reader, UciCodec);
+            Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+        }
+        ChipKind::NFC => {
+            let framed = FramedRead::new(reader, NciCodec);
+            Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+        }
+        ChipKind::CELLULAR => {
+            let framed = FramedRead::new(reader, ModemCodec);
+            Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+        }
+        _ => {
+            return Err(PacketStreamError::InvalidConfig(format!(
+                "Unsupported chip kind for FD transport: {chip_kind}"
+            )));
+        }
+    };
+
+    let sink = futures::sink::unfold(writer, |mut writer, item: bytes::Bytes| async move {
+        writer.write_all(&item).await?;
+        Ok(writer)
+    });
+    let sink: PacketSink = Box::pin(sink.sink_map_err(PacketStreamError::Io));
+
+    Ok((stream, sink, chip_info, guid))
+}
+
 #[async_trait]
 impl TransportListener for DualFdListener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
         while let Some((device_name, chip_kind, sim_type, (in_fd, out_fd))) =
-            self.pending_streams.pop_front()
+            self.pending_static_streams.pop_front()
         {
-            let guid = format!("dualfd-{}", device_name);
-            let kind = ChipKind::from_str(&chip_kind).unwrap_or(ChipKind::UNSPECIFIED);
-
-            let chip_info = ChipInfo {
-                device_info: Some(DeviceInfo {
-                    name: device_name.clone(),
-                    id: device_name,
-                    ..Default::default()
-                }),
-                chip: Some(Chip {
-                    name: chip_kind.clone(),
-                    kind,
-                    id: chip_kind.clone(),
-                    manufacturer: "".to_string(),
-                    product_name: "".to_string(),
-                    address: "".to_string(),
-                    sim_type,
-                }),
-                name: String::new(),
-            };
-
-            let reader = Receiver::from_owned_fd(out_fd)?;
-            let writer = Sender::from_owned_fd(in_fd)?;
-
-            let stream: PacketStream = match kind {
-                ChipKind::BLUETOOTH => {
-                    let framed = FramedRead::new(reader, H4Codec);
-                    Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
+            match create_stream_and_sink(device_name, chip_kind, sim_type, in_fd, out_fd) {
+                Ok(res) => return Ok(res),
+                Err(e) => {
+                    tracing::warn!("Failed to create transport for static FD: {e}, skipping");
                 }
-                ChipKind::UWB => {
-                    let framed = FramedRead::new(reader, UciCodec);
-                    Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
-                }
-                ChipKind::NFC => {
-                    let framed = FramedRead::new(reader, NciCodec);
-                    Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
-                }
-                ChipKind::CELLULAR => {
-                    let framed = FramedRead::new(reader, ModemCodec);
-                    Box::pin(framed.map(|item| item.map_err(PacketStreamError::Io)))
-                }
-
-                _ => {
-                    tracing::warn!(
-                        "Unsupported chip kind for FD transport: {:?}, skipping",
-                        chip_kind
-                    );
-                    continue;
-                }
-            };
-
-            let sink = futures::sink::unfold(writer, |mut writer, item: bytes::Bytes| async move {
-                writer.write_all(&item).await?;
-                Ok(writer)
-            });
-            let sink: PacketSink = Box::pin(sink.sink_map_err(PacketStreamError::Io));
-
-            return Ok((stream, sink, chip_info, guid));
+            }
         }
-        std::future::pending().await
+
+        if self.listening_sockets.is_empty() {
+            std::future::pending().await
+        }
+
+        // Recreating and boxing futures on every loop iteration is fine because we only
+        // loop on transient accept errors, which are rare. This is not a hot path.
+        loop {
+            let mut accept_futures = Vec::new();
+            for (device_name, chip_kind, sim_type, async_fd) in &self.listening_sockets {
+                accept_futures.push(Box::pin(async move {
+                    let res = accept_one_connection(async_fd).await;
+                    (device_name, chip_kind, *sim_type, res)
+                }));
+            }
+
+            let (result, _, _remaining) = futures::future::select_all(accept_futures).await;
+            let (device_name, chip_kind, sim_type, res) = result;
+
+            match res {
+                Ok((connected_fd, cloned_fd)) => {
+                    match create_stream_and_sink(
+                        device_name.clone(),
+                        chip_kind.clone(),
+                        sim_type,
+                        connected_fd,
+                        cloned_fd,
+                    ) {
+                        Ok(res) => return Ok(res),
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to create transport for accepted connection: {e}, continuing"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("accept4 failed: {e}, continuing");
+                }
+            }
+        }
     }
 
     fn local_addr(&self) -> Result<StreamAddress> {
@@ -173,10 +359,82 @@ impl TransportListener for DualFdListener {
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.pending_streams.clear();
+        self.pending_static_streams.clear();
+        self.listening_sockets.clear();
         Ok(())
     }
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_dual_fd_listener_listening_socket() {
+        use std::os::unix::{io::IntoRawFd, net::UnixListener};
+
+        use futures::{SinkExt, StreamExt};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        // 1. Create a listening Unix socket
+        let socket_path =
+            std::env::temp_dir().join(format!("test_vsock_{}.sock", std::process::id()));
+        if socket_path.exists() {
+            let _ = std::fs::remove_file(&socket_path);
+        }
+        let std_listener = UnixListener::bind(&socket_path).unwrap();
+        let listener_fd = std_listener.into_raw_fd();
+
+        // 2. Prepare DualFdConfig with this FD as vsockFd (which maps to fd_in)
+        let json_config = format!(
+            r#"
+            {{
+                "devices": [
+                    {{
+                        "name": "cvd-1",
+                        "chips": [
+                            {{
+                                "kind": "CELLULAR",
+                                "vsockFd": {}
+                            }}
+                        ]
+                    }}
+                ]
+            }}
+            "#,
+            listener_fd
+        );
+
+        let config: DualFdConfig = serde_json::from_str(&json_config).unwrap();
+
+        // 3. Create DualFdListener
+        let mut listener = DualFdListener::new(config).await.unwrap();
+
+        // 4. Start a task to connect to the socket
+        let client_path = socket_path.clone();
+        let client_task = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            let mut stream = tokio::net::UnixStream::connect(client_path).await.unwrap();
+            stream.write_all(b"hello from client\n").await.unwrap();
+
+            let mut buf = [0; 18];
+            stream.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"hello from server\n");
+        });
+
+        // 5. Accept connection in listener
+        let (mut stream, mut sink, chip_info, _guid) = listener.accept().await.unwrap();
+
+        assert_eq!(chip_info.device_info.unwrap().name, "cvd-1");
+        assert_eq!(chip_info.chip.unwrap().name, "CELLULAR");
+
+        // 6. Verify communication
+        let bytes = stream.next().await.unwrap().unwrap();
+        assert_eq!(bytes.as_ref(), b"hello from client");
+
+        sink.send(bytes::Bytes::from("hello from server\n")).await.unwrap();
+
+        client_task.await.unwrap();
+        let _ = std::fs::remove_file(&socket_path);
+    }
+}

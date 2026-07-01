@@ -30,6 +30,7 @@ fn create_test_chip_info() -> ChipInfo {
             name: "test-init-info-device".to_string(),
             id: "test-init-info-device".to_string(),
             avd_path: "".to_string(),
+            ..Default::default()
         }),
     }
 }
@@ -50,7 +51,7 @@ async fn test_normal_init_info_protocol() {
     .unwrap()
     .unwrap();
 
-    let (_name, (mut server_stream, mut server_sink, chip_info, _guid)) =
+    let (_name, (_server_stream, _server_sink, chip_info, _guid)) =
         streams.accept_any().await.unwrap();
 
     assert_eq!(chip_info.device_info.as_ref().unwrap().name, "test-init-info-device");

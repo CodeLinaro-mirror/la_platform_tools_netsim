@@ -22,6 +22,7 @@ rust_library_host {
         "libnetsim_next_model",
         "libnom",
         "libserde",
+        "libserde_json",
         "libtokio",
         "libtracing",
     ],
