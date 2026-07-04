@@ -310,3 +310,48 @@ fn test_set_ctec_invalid() {
     when_at_command_sent(&mut world, "A", "AT+CTEC=5,\"21\"");
     then_response_is(&mut world, "A", "ERROR");
 }
+
+#[test]
+fn test_set_ctec_wcdma_and_urc() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Attach to network and enable unsolicited reports with format 2 (includes
+    //    AcT!)
+    when_at_command_sent(&mut world, "A", "AT+CREG=2");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGREG=2");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CEREG=2");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+
+    // Consume the initial attachment URCs (which default to LTE act = 7!)
+    then_response_is(&mut world, "A", "+CREG: 1,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "+CGREG: 1,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "+CEREG: 1,\"2142\",\"0000B804\",7");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,44,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
+
+    // 2. Switch technology to WCDMA (current mode = 2, preferred mask = 0x21)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=2,\"21\"");
+
+    // Verify CTEC response and the IMMEDIATE unsolicited URCs showing WCDMA act =
+    // 2!
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "+CREG: 1,\"2142\",\"0000B804\",2");
+    then_response_is(&mut world, "A", "+CGREG: 1,\"2142\",\"0000B804\",2");
+    then_response_is(&mut world, "A", "+CEREG: 1,\"2142\",\"0000B804\",2");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify that tech is queried back correctly as WCDMA (current = 2!)
+    when_at_command_sent(&mut world, "A", "AT+CTEC?");
+    then_response_is(&mut world, "A", "+CTEC: 2,21");
+    then_response_is(&mut world, "A", "OK");
+}

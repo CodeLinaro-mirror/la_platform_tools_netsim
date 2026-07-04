@@ -473,6 +473,12 @@ impl ModemNetworkSimulator {
         caller_id: ModemId,
         phone_number: &str,
     ) -> Vec<(ModemId, ModemEffect)> {
+        debug!("[Network] initiate_call: caller_id={}, phone_number={}", caller_id, phone_number);
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            for (id, modem) in &self.modems {
+                debug!("[Network]   modem id={}, phone_number='{}'", id, modem.phone_number());
+            }
+        }
         // Find target
         let normalized_target = normalize_number(phone_number);
         let target_id = self

@@ -4,7 +4,7 @@
 // src/network_service.rs
 
 use netsim_model::RegistrationStatus;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
     parser::Command,
@@ -61,6 +61,10 @@ impl NetworkService {
     }
 
     pub fn attach_network(&mut self) -> Vec<String> {
+        info!(
+            "attach_network called! is_attached: {}, radio_power: {}",
+            self.is_attached, self.radio_power
+        );
         if self.is_attached || self.radio_power == 0 {
             return Vec::new();
         }
@@ -152,6 +156,10 @@ impl NetworkService {
         &mut self,
         tech: netsim_model::RadioTechnology,
     ) -> Option<String> {
+        info!(
+            "set_network_technology: tech={:?}, current_mode={}, act={}, is_attached={}",
+            tech, self.current_network_mode, self.act, self.is_attached
+        );
         let (new_mode, new_act) = match tech {
             netsim_model::RadioTechnology::Gsm => {
                 (crate::constants::modem_tech::GSM, crate::constants::access_technology::GSM)
@@ -286,6 +294,10 @@ impl NetworkService {
     }
 
     pub fn handle_set_voice_registration(&mut self, mode: u8) -> ExecutionResult {
+        info!(
+            "handle_set_voice_registration: mode={}, current_reg={:?}",
+            mode, self.voice_registration
+        );
         if mode <= 2 {
             self.voice_unsol_mode = mode;
             let mut responses = Vec::new();
@@ -414,13 +426,37 @@ impl NetworkService {
             return ExecutionResult::Handled(HandledCommand::error());
         }
 
+        info!("handle_set_ctec: current={}, preferred_mask={:#X}", current, preferred_mask);
         self.current_network_mode = current;
         self.preferred_network_mode = preferred_mask;
+        self.act = match current {
+            crate::constants::modem_tech::GSM => crate::constants::access_technology::GSM,
+            crate::constants::modem_tech::WCDMA => crate::constants::access_technology::WCDMA,
+            crate::constants::modem_tech::LTE => crate::constants::access_technology::LTE,
+            crate::constants::modem_tech::NR => crate::constants::access_technology::NR,
+            _ => {
+                warn!("Unknown current network mode {}, falling back to LTE act", current);
+                crate::constants::access_technology::LTE
+            }
+        };
+        info!("handle_set_ctec: updated self.act to {}", self.act);
 
-        ExecutionResult::Handled(HandledCommand {
-            responses: vec!["+CTEC: DONE\r\n".to_string(), "OK\r\n".to_string()],
-            action: None,
-        })
+        let mut responses = Vec::new();
+        responses.push("+CTEC: DONE\r\n".to_string());
+        if self.is_attached {
+            if let Some(creg) = self.format_creg_urc(self.voice_registration) {
+                responses.push(creg);
+            }
+            if let Some(cgreg) = self.format_cgreg_urc(self.data_registration) {
+                responses.push(cgreg);
+            }
+            if let Some(cereg) = self.format_cereg_urc(self.data_registration) {
+                responses.push(cereg);
+            }
+        }
+        responses.push("OK\r\n".to_string());
+
+        ExecutionResult::Handled(HandledCommand { responses, action: None })
     }
 
     pub fn handle_query_radio_power(&self) -> ExecutionResult {
