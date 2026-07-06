@@ -62,11 +62,8 @@ pub fn fragment_outgoing_packets(responses: &mut Vec<SlirpResponse>) {
                     eth_fragments.push(SlirpResponse::Packet(Bytes::copy_from_slice(&eth_frag)));
                 }
 
-                responses.remove(i);
                 let num_frags = eth_fragments.len();
-                for (j, eth_frag) in eth_fragments.into_iter().enumerate() {
-                    responses.insert(i + j, eth_frag);
-                }
+                responses.splice(i..=i, eth_fragments);
                 i += num_frags;
                 continue;
             }

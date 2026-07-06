@@ -34,7 +34,6 @@ EXACT_DEP_MAPPING = {
 IGNORED_DEPS = {
     "libslirp-rs",
     "http-proxy",
-    "slirp-actor",
     "wifi-actor",
     "ap-actor",
     "@libglib",
@@ -274,7 +273,6 @@ PLATFORM_RUSTLIBS = {
     "packet-stream": ["libcommand_fds"],
 }
 IGNORED_TARGETS = {
-    "slirp-actor",
     "libslirp-rs",
     "ap-actor",
     "wifi-actor",
