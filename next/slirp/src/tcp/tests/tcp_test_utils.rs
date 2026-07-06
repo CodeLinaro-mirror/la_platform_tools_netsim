@@ -61,7 +61,7 @@ pub fn process_responses(host: &mut MockHost, responses: Vec<SlirpResponse>) {
 pub type ParsedTcpPacket<'a> =
     (Ref<&'a [u8], EthernetFrame>, Ref<&'a [u8], Ipv4Header>, Ref<&'a [u8], TcpHeader>, &'a [u8]);
 
-pub fn parse_tcp_packet(packet: &[u8]) -> ParsedTcpPacket {
+pub fn parse_tcp_packet(packet: &[u8]) -> ParsedTcpPacket<'_> {
     let (eth, eth_payload) = EthernetFrame::parse(packet).unwrap();
     let (ipv4, ipv4_payload) = Ipv4Header::parse(eth_payload).unwrap();
     let (tcp, tcp_payload) = TcpHeader::parse(ipv4_payload).unwrap();

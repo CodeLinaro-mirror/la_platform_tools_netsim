@@ -18,7 +18,6 @@ rust_library_host {
     rustlibs: [
         "libbytes",
         "libfutures",
-        "libnetsim_next_model",
         "libthiserror",
         "libtokio",
         "libtokio_stream",
@@ -48,7 +47,6 @@ rust_library_host {
         "libbytes",
         "libfutures",
         "libmockall",
-        "libnetsim_next_model_testing",
         "libthiserror",
         "libtokio",
         "libtokio_stream",

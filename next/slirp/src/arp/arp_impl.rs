@@ -44,7 +44,7 @@ impl ArpTable {
             if let Some(mac_addr) = self.cache.get(&target_ip) {
                 // This is a request for an IP we own. Generate a reply.
                 let mut reply_buf = [0u8; 28];
-                let builder = ArpPacketBuilder::new(&mut reply_buf).unwrap();
+                let builder = ArpPacketBuilder::new(&mut reply_buf)?;
                 builder
                     .hardware_type(1)
                     .protocol_type(0x0800)

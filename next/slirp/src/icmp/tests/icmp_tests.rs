@@ -3,9 +3,7 @@
 
 use std::net::Ipv4Addr;
 
-use netsim_packets::{
-    EthernetFrame, IcmpEcho, IcmpHeader, IcmpType, Ipv4Header, MacAddr, UnreachableCode,
-};
+use netsim_packets::{EthernetFrame, IcmpHeader, IcmpType, Ipv4Header, MacAddr, UnreachableCode};
 use zerocopy::{FromBytes, IntoBytes, U16};
 
 use crate::{Config, SlirpResponse, icmp::*, packet::ParsedPacket};

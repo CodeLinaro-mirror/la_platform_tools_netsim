@@ -168,26 +168,28 @@ impl Slirp {
                 if conn_id >= (1 << 63) {
                     self.udp_manager.remove_flow(conn_id);
                 } else {
-                    if let Some(conn) = self.tcp_manager.get_connection(conn_id) {
-                        if conn.state == State::SynSent {
-                            info!(
-                                "TCP connection {conn_id} failed to connect, sending ICMP Host Unreachable"
+                    if let Some(conn) = self
+                        .tcp_manager
+                        .get_connection(conn_id)
+                        .filter(|c| c.state == State::SynSent)
+                    {
+                        info!(
+                            "TCP connection {conn_id} failed to connect, sending ICMP Host Unreachable"
+                        );
+                        let offending_packet =
+                            synthesize_offending_tcp_packet(conn.guest_addr, conn.host_addr);
+                        if conn.guest_addr.is_ipv6() {
+                            self.icmpv6_manager.send_host_unreachable(
+                                &mut responses,
+                                &self.config,
+                                &offending_packet,
                             );
-                            let offending_packet =
-                                synthesize_offending_tcp_packet(conn.guest_addr, conn.host_addr);
-                            if conn.guest_addr.is_ipv6() {
-                                self.icmpv6_manager.send_host_unreachable(
-                                    &mut responses,
-                                    &self.config,
-                                    &offending_packet,
-                                );
-                            } else {
-                                self.icmp_manager.send_host_unreachable(
-                                    &mut responses,
-                                    &self.config,
-                                    &offending_packet,
-                                );
-                            }
+                        } else {
+                            self.icmp_manager.send_host_unreachable(
+                                &mut responses,
+                                &self.config,
+                                &offending_packet,
+                            );
                         }
                     }
                     self.tcp_manager.remove_connection(conn_id);

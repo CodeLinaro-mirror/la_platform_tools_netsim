@@ -40,7 +40,7 @@ impl NdpTable {
         if self.cache.contains_key(&target_addr) {
             // This is a request for an IP we own. Generate a reply.
             let mut reply_buf = [0u8; std::mem::size_of::<NeighborAdvertisement>()];
-            let builder = NeighborAdvertisementBuilder::new(&mut reply_buf).unwrap();
+            let builder = NeighborAdvertisementBuilder::new(&mut reply_buf)?;
             builder
                 .flags(0b01100000) // Router, Solicited, Override
                 .target_addr(target_addr.octets())

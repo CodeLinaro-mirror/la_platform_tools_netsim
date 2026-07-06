@@ -7,7 +7,7 @@ use netsim_packets::{
     DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, Dhcpv6Header, Dhcpv6OptionHeader, Dhcpv6OptionIterator,
     EthernetFrame, IP_P_UDP, Ipv6Builder, Ipv6Header, MSG_INFORMATION_REQUEST, MSG_REPLY, MacAddr,
     OPTION_CLIENTID, OPTION_DNS_SERVERS, OPTION_DOMAIN_LIST, OPTION_SERVERID, UdpBuilder,
-    UdpHeader, ether_type,
+    UdpHeader,
 };
 use zerocopy::FromBytes;
 

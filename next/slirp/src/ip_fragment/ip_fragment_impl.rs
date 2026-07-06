@@ -64,13 +64,14 @@ impl FragmentCache {
 
         let mut fragments = self.fragments.clone();
         fragments.sort_by_key(|a| {
-            let (h, _) = Ipv4Header::parse(a).unwrap();
+            let (h, _) = Ipv4Header::parse(a).expect("fragment should be valid IPv4");
             h.flags_fragment_offset.get() & 0x1FFF
         });
 
         let mut current_offset = 0;
         for fragment in &fragments {
-            let (header, payload) = Ipv4Header::parse(fragment).unwrap();
+            let (header, payload) =
+                Ipv4Header::parse(fragment).expect("fragment should be valid IPv4");
             let offset = (header.flags_fragment_offset.get() & 0x1FFF) * 8;
             if offset as usize != current_offset {
                 return false;
@@ -95,7 +96,7 @@ impl Reassembler {
     }
 
     pub fn reassemble(&mut self, fragment: &[u8]) -> Option<Vec<u8>> {
-        let (ipv4_header, payload) = Ipv4Header::parse(fragment).unwrap();
+        let (ipv4_header, payload) = Ipv4Header::parse(fragment)?;
         let identification = ipv4_header.identification.get();
         let more_fragments = ipv4_header.flags_fragment_offset.get() & 0x2000 != 0;
 
@@ -109,14 +110,15 @@ impl Reassembler {
         }
 
         if cache_entry.is_complete() {
-            let cache_entry = self.cache.remove(&identification).unwrap();
+            let cache_entry = self.cache.remove(&identification)?;
             let mut fragments = cache_entry.fragments;
             fragments.sort_by_key(|a| {
-                let (h, _) = Ipv4Header::parse(a).unwrap();
+                let (h, _) =
+                    Ipv4Header::parse(a).expect("fragment in cache must be valid IPv4 header");
                 h.flags_fragment_offset.get() & 0x1FFF
             });
 
-            let (first_header, _) = Ipv4Header::parse(&fragments[0]).unwrap();
+            let (first_header, _) = Ipv4Header::parse(&fragments[0])?;
             let header_len = first_header.header_length();
             let total_len = header_len + cache_entry.total_len;
             let mut reassembled = vec![0u8; total_len];
@@ -124,7 +126,7 @@ impl Reassembler {
             reassembled[..header_len].copy_from_slice(&fragments[0][..header_len]);
 
             for frag in &fragments {
-                let (header, payload) = Ipv4Header::parse(frag).unwrap();
+                let (header, payload) = Ipv4Header::parse(frag)?;
                 let offset = (header.flags_fragment_offset.get() & 0x1FFF) * 8;
                 let start = header_len + offset as usize;
                 reassembled[start..start + payload.len()].copy_from_slice(payload);

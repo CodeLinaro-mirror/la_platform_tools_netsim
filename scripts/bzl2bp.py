@@ -21,6 +21,7 @@ EXACT_DEP_MAPPING = {
     "//proto": "libnetsim_proto",
     "//rootcanal": "librootcanal",
     "@base64": "libbase64_rust",
+    "@log": "liblog_rust",
     "@rootcanal//:lib_rootcanal_ffi": "lib_rootcanal_ffi",
     "@cxx.rs//:cxx": "libcxx",
     "@casimir//:casimir_lib": "libcasimir",
@@ -30,7 +31,15 @@ EXACT_DEP_MAPPING = {
     "//next/testing:testing": "libnetsim_next_netsim_testing_testing",
 }
 
-IGNORED_DEPS = {"slirp", "wifi-actor", "ap-actor", "@libglib", "ethernet-actor"}
+IGNORED_DEPS = {
+    "libslirp-rs",
+    "http-proxy",
+    "slirp-actor",
+    "wifi-actor",
+    "ap-actor",
+    "@libglib",
+    "ethernet-actor",
+}
 
 
 def translate_dep(dep):
@@ -148,7 +157,6 @@ def rust_test(*args, **kwargs):
   if package_name not in ALLOWED_TEST_PACKAGES:
     return
 
-
   module_name = pkg_name.replace("-", "_")
   module_prefix = f"{module_name}_" if module_name else ""
   target_name = f"libnetsim_next_{module_prefix}{name.replace('-', '_')}"
@@ -175,7 +183,8 @@ def rust_test(*args, **kwargs):
         print(
             f"Warning: rust_test {name} in {CURRENT_REL_PATH} lacks a valid "
             "crate root and has no sources. Skipping.",
-            file=sys.stderr)
+            file=sys.stderr,
+        )
         return
 
   crate_name = kwargs.get("crate_name")
@@ -325,7 +334,9 @@ def netsim_rust_library(
   data_content = resolve_rust_srcs(compile_data, "") if compile_data else []
 
   if not srcs_content:
-    raise ValueError(f"Target '{name}' has an empty source list, cannot resolve crate_root.")
+    raise ValueError(
+        f"Target '{name}' has an empty source list, cannot resolve crate_root."
+    )
 
   # 1. Main Library Target
   soong_targets.append({
@@ -413,16 +424,16 @@ def netsim_rust_library(
     if package_name in ALLOWED_TEST_PACKAGES:
       soong_targets.append({
           "type": "rust_test_host",
-        "name": f"libnetsim_next_{name.replace('-', '_')}_tests",
-        "crate_name": crate_name,
-        "crate_root": srcs_content[0],
-        "srcs": srcs_content + data_content,
-        "rustlibs": inline_test_rustlibs,
-        "shared_libs": inline_test_shared_libs,
-        "proc_macros": inline_test_proc_macros,
-        "features": ["testing", "cuttlefish"],
-        "edition": edition,
-    })
+          "name": f"libnetsim_next_{name.replace('-', '_')}_tests",
+          "crate_name": crate_name,
+          "crate_root": srcs_content[0],
+          "srcs": srcs_content + data_content,
+          "rustlibs": inline_test_rustlibs,
+          "shared_libs": inline_test_shared_libs,
+          "proc_macros": inline_test_proc_macros,
+          "features": ["testing", "cuttlefish"],
+          "edition": edition,
+      })
 
   # 2.2. Integration Test Target
   current_dir = os.path.join(NEXT_DIR, CURRENT_REL_PATH)
@@ -444,15 +455,28 @@ def netsim_rust_library(
 
   if enable_integration_test and has_integration_tests:
     crate_root = None
-    for opt in ["tests/mod.rs", "tests/integration_tests.rs"]:
+    for opt in [
+        "tests/mod.rs",
+        "tests/integration_tests.rs",
+        "tests/integration_test.rs",
+    ]:
       if opt in integration_test_srcs:
         crate_root = opt
         break
+    if (
+        not crate_root
+        and len(integration_test_srcs) == 1
+        and integration_test_srcs[0].startswith("tests/")
+    ):
+      crate_root = integration_test_srcs[0]
+
     if not crate_root:
       print(
-          f"Warning: Integration test in {CURRENT_REL_PATH} lacks a valid "
-          "crate root (tests/mod.rs or tests/integration_tests.rs). Skipping.",
-          file=sys.stderr)
+          f"Warning: Integration test in {CURRENT_REL_PATH} lacks a valid crate"
+          " root (tests/mod.rs, tests/integration_tests.rs, or"
+          " tests/integration_test.rs). Skipping.",
+          file=sys.stderr,
+      )
 
     if crate_root:
       integration_test_rustlibs = sorted(
@@ -478,16 +502,18 @@ def netsim_rust_library(
       if package_name in ALLOWED_TEST_PACKAGES:
         soong_targets.append({
             "type": "rust_test_host",
-            "name": f"libnetsim_next_{name.replace('-', '_')}_integration_tests",
-          "crate_name": f"{crate_name}_tests",
-          "crate_root": crate_root,
-          "srcs": integration_test_srcs,
-          "rustlibs": integration_test_rustlibs,
-          "shared_libs": integration_test_shared_libs,
-          "proc_macros": integration_test_proc_macros,
-          "features": ["testing", "cuttlefish"],
-          "edition": edition,
-      })
+            "name": (
+                f"libnetsim_next_{name.replace('-', '_')}_integration_tests"
+            ),
+            "crate_name": f"{crate_name}_tests",
+            "crate_root": crate_root,
+            "srcs": integration_test_srcs,
+            "rustlibs": integration_test_rustlibs,
+            "shared_libs": integration_test_shared_libs,
+            "proc_macros": integration_test_proc_macros,
+            "features": ["testing", "cuttlefish"],
+            "edition": edition,
+        })
 
 
 def resolve_rust_srcs(srcs, default_file):
@@ -519,7 +545,9 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
   data_content = resolve_rust_srcs(kwargs.get("compile_data", []), "")
 
   if not srcs_content:
-    raise ValueError(f"Target '{name}' has an empty source list, cannot resolve crate_root.")
+    raise ValueError(
+        f"Target '{name}' has an empty source list, cannot resolve crate_root."
+    )
 
   soong_name = (
       "netsimd" if name == "daemon" else f"netsim_next_{name.replace('-', '_')}"
@@ -548,7 +576,9 @@ def rust_proc_macro(name, srcs=None, deps=None, **kwargs):
   data_content = resolve_rust_srcs(kwargs.get("compile_data", []), "")
 
   if not srcs_content:
-    raise ValueError(f"Target '{name}' has an empty source list, cannot resolve crate_root.")
+    raise ValueError(
+        f"Target '{name}' has an empty source list, cannot resolve crate_root."
+    )
 
   soong_targets.append({
       "type": "rust_proc_macro",
