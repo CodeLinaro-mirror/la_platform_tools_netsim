@@ -55,6 +55,10 @@ impl ActorService for CellActor {
                         chip_id,
                         std::str::from_utf8(&packet)
                     );
+                    // Note: If the underlying transport is a PTY, ensure ONLCR processing
+                    // is disabled on the PTY descriptor (e.g. at PTY creation site when opened
+                    // via openpty/tcsetattr for Casimir or emulator bridge) to prevent '\n' to
+                    // '\r\n' expansion which corrupts the packet framing.
                     if let Err(e) = sink.send(packet).await {
                         error!("PacketSink send error: {}", e);
                     }

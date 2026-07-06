@@ -25,7 +25,7 @@ use crate::{
 pub enum NetworkEvent {
     Response { id: ModemId, packet: Vec<u8> },
     NewConnection { id: ModemId, destination: String },
-    ModemHangedUp { id: ModemId },
+    ModemHungUp { id: ModemId },
     SinkError { id: ModemId },
 }
 
@@ -343,7 +343,7 @@ impl ModemNetworkSimulator {
                 }
                 let processed_events = self.process_effects(effects);
                 events.extend(processed_events);
-                events.push(NetworkEvent::ModemHangedUp { id: hung_up_modem_id });
+                events.push(NetworkEvent::ModemHungUp { id: hung_up_modem_id });
             }
             CommandAction::InitiateEmergencyCall => {} // No-op
             CommandAction::ReceiveSms { to, pdu } => {
