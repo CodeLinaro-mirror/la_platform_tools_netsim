@@ -88,6 +88,8 @@ impl Stats {
         &mut self,
         mut active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
         wifi_stats: Option<netsim_proto::stats::WifiStats>,
+        nfc_stats: Option<netsim_proto::stats::NfcStats>,
+        nfc_service_stats: Option<netsim_proto::stats::NfcServiceStats>,
     ) -> ProtoNetsimStats {
         if let Some(start) = self.start_time {
             self.proto.set_duration_secs(start.elapsed().as_secs());
@@ -97,6 +99,12 @@ impl Stats {
         combined.radio_stats.append(&mut active_stats);
         if let Some(ws) = wifi_stats {
             combined.wifi_stats = Some(ws).into();
+        }
+        if let Some(ns) = nfc_stats {
+            combined.nfc_stats = Some(ns).into();
+        }
+        if let Some(nss) = nfc_service_stats {
+            combined.nfc_service_stats = Some(nss).into();
         }
 
         let frontend_snap = self.frontend_stats.snapshot();
@@ -206,7 +214,7 @@ mod tests {
         frontend_stats.delete_device.store(11, Ordering::SeqCst);
 
         let mut stats = Stats::new("1.0.0".to_string(), None, frontend_stats);
-        let proto = stats.get_combined_stats(vec![], None);
+        let proto = stats.get_combined_stats(vec![], None, None, None);
 
         let frontend_proto = proto.frontend_stats.as_ref().expect("Frontend stats missing");
         assert_eq!(frontend_proto.get_version(), 1);

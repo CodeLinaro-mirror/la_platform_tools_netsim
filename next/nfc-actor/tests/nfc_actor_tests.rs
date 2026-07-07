@@ -172,7 +172,7 @@ impl NfcWorld {
         let _ = tracing_subscriber::fmt().with_test_writer().try_init();
 
         let device_client = device_actor::DeviceClient::new(Box::new(MockDeviceActorClient));
-        let mut actor = NfcActor::new(device_client);
+        let mut actor = NfcActor::new(device_client, Arc::new(nfc_actor::NfcStats::new()));
         actor.start_casimir();
 
         let tasks = Arc::new(Mutex::new(HashMap::new()));

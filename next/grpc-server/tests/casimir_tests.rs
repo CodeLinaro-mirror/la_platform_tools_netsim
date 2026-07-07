@@ -5,11 +5,13 @@
 mod tests {
     use std::sync::Arc;
 
-    use grpc_server::casimir::CasimirControlServiceImpl;
+    use grpc_server::{casimir::CasimirControlServiceImpl, nfc::NfcServiceImpl};
     use grpcio::{ChannelBuilder, Environment, ServerBuilder, ServerCredentials};
     use netsim_proto::{
         casimir_control::{SendBroadcastRequest, Void},
         casimir_control_grpc::CasimirControlServiceClient,
+        nfc_service::{GetStatusRequest, PollRequest, SendApduRequest, SetPowerRequest},
+        nfc_service_grpc::{NfcServiceClient, create_nfc_service},
     };
     use pdl_runtime::Packet;
     use tracing::info;
@@ -22,7 +24,7 @@ mod tests {
 
         // 2. NFC Actor with in-process Casimir started
         let (nfc_actor, nfc_client) = nfc_actor::new();
-        let mut nfc_actor_impl = nfc_actor::NfcActor::new(device_client);
+        let mut nfc_actor_impl = nfc_actor::NfcActor::new(device_client, nfc_client.stats.clone());
         nfc_actor_impl.start_casimir();
         let scene_client = nfc_actor_impl.scene_client.clone();
 
@@ -112,21 +114,28 @@ mod tests {
         assert_eq!(mock_device_id, 0); // First device in scene gets ID 0 (0-based)
 
         // 3. Start local gRPC Server on a free port
-        let service = CasimirControlServiceImpl::new(nfc_client);
+        let casimir_service_impl = CasimirControlServiceImpl::new(nfc_client.clone());
+        let nfc_service_impl = NfcServiceImpl::new(nfc_client.clone());
         let env = Arc::new(Environment::new(1));
-        let casimir_service =
-            netsim_proto::casimir_control_grpc::create_casimir_control_service(service);
+        let casimir_service = netsim_proto::casimir_control_grpc::create_casimir_control_service(
+            casimir_service_impl,
+        );
+        let nfc_grpc_service = create_nfc_service(nfc_service_impl);
 
-        let mut server =
-            ServerBuilder::new(env.clone()).register_service(casimir_service).build().unwrap();
+        let mut server = ServerBuilder::new(env.clone())
+            .register_service(casimir_service)
+            .register_service(nfc_grpc_service)
+            .build()
+            .unwrap();
 
         let port = server.add_listening_port("localhost:0", ServerCredentials::insecure()).unwrap();
         server.start();
         info!("Test gRPC server listening on localhost:{}", port);
 
-        // 4. Create gRPC Client connecting to our local server
+        // 4. Create gRPC Clients connecting to our local server
         let ch = ChannelBuilder::new(env).connect(&format!("localhost:{port}"));
-        let client = CasimirControlServiceClient::new(ch);
+        let client = CasimirControlServiceClient::new(ch.clone());
+        let nfc_grpc_client = NfcServiceClient::new(ch);
 
         // 5. Execute Test Cases
 
@@ -150,6 +159,30 @@ mod tests {
         // Test Case D: Close the control channel
         let close_res = client.close(&Void::new());
         assert!(close_res.is_ok(), "Close failed: {:?}", close_res.err());
+
+        // Test Case E: Verify NfcService API counters
+        let status_res = nfc_grpc_client.get_status(&GetStatusRequest::new());
+        assert!(status_res.is_ok(), "GetStatus failed: {:?}", status_res.err());
+        let power_res = nfc_grpc_client.set_power(&SetPowerRequest::new());
+        assert!(power_res.is_ok(), "SetPower failed: {:?}", power_res.err());
+        let poll_res = nfc_grpc_client.poll(&PollRequest::new());
+        assert!(poll_res.is_ok(), "Poll failed: {:?}", poll_res.err());
+        let apdu_res = nfc_grpc_client.send_apdu(&SendApduRequest::new());
+        assert!(apdu_res.is_ok(), "SendApdu failed: {:?}", apdu_res.err());
+
+        assert_eq!(
+            nfc_client.service_stats().get_status.load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
+        assert_eq!(
+            nfc_client.service_stats().set_power.load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
+        assert_eq!(nfc_client.service_stats().poll.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(
+            nfc_client.service_stats().send_apdu.load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
 
         // 6. Cleanup
         let _ = server.shutdown().await;

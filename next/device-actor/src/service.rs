@@ -93,8 +93,16 @@ impl DeviceActor {
 
         // Collect WiFi specific stats (Global)
         let wifi_stats = self.collect_wifi_stats_async().await;
+        // Collect NFC specific stats (Global)
+        let nfc_stats = self.collect_nfc_stats_async().await;
+        let nfc_service_stats = self.collect_nfc_service_stats_async().await;
 
-        let combined_stats = self.stats.get_combined_stats(active_proto_stats, wifi_stats);
+        let combined_stats = self.stats.get_combined_stats(
+            active_proto_stats,
+            wifi_stats,
+            nfc_stats,
+            nfc_service_stats,
+        );
         let path = self.stats.stats_path.clone();
 
         let previous_task = self.stats_write_task.take();
@@ -304,6 +312,56 @@ impl DeviceActor {
             }
             Err(_) => {
                 debug!("DeviceActor: Timeout getting global stats");
+                None
+            }
+        }
+    }
+
+    async fn collect_nfc_stats_async(&self) -> Option<netsim_proto::stats::NfcStats> {
+        let client = self.chip_clients.get(&netsim_model::ChipKind::NFC)?;
+        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_global_stats()).await {
+            Ok(Ok(Some(stats_bytes))) => {
+                match netsim_proto::stats::NfcStats::parse_from_bytes(&stats_bytes) {
+                    Ok(stats) => Some(stats),
+                    Err(e) => {
+                        error!("DeviceActor: Failed to parse NfcStats: {}", e);
+                        None
+                    }
+                }
+            }
+            Ok(Ok(None)) => None,
+            Ok(Err(e)) => {
+                warn!("DeviceActor: Failed to get NFC global stats: {}", e);
+                None
+            }
+            Err(_) => {
+                debug!("DeviceActor: Timeout getting NFC global stats");
+                None
+            }
+        }
+    }
+
+    async fn collect_nfc_service_stats_async(
+        &self,
+    ) -> Option<netsim_proto::stats::NfcServiceStats> {
+        let client = self.chip_clients.get(&netsim_model::ChipKind::NFC)?;
+        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_service_stats()).await {
+            Ok(Ok(Some(stats_bytes))) => {
+                match netsim_proto::stats::NfcServiceStats::parse_from_bytes(&stats_bytes) {
+                    Ok(stats) => Some(stats),
+                    Err(e) => {
+                        error!("DeviceActor: Failed to parse NfcServiceStats: {}", e);
+                        None
+                    }
+                }
+            }
+            Ok(Ok(None)) => None,
+            Ok(Err(e)) => {
+                warn!("DeviceActor: Failed to get NFC service stats: {}", e);
+                None
+            }
+            Err(_) => {
+                debug!("DeviceActor: Timeout getting NFC service stats");
                 None
             }
         }

@@ -526,7 +526,8 @@ impl NetsimDaemon {
 
         // Setup NFC Server
         let (nfc_runner, nfc_client) = nfc_actor::new();
-        let mut nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
+        let mut nfc_actor_state =
+            nfc_actor::NfcActor::new(device_client.clone(), nfc_client.stats.clone());
         nfc_actor_state.start_casimir();
 
         // gRPC port is determined after the listener starts.

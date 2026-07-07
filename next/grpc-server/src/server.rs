@@ -159,7 +159,7 @@ mod tests {
         let cell_client = cell_actor::CellClient(actor_framework::ResourceClient::new(cell_tx));
 
         let (nfc_tx, nfc_rx) = mpsc::channel(100);
-        let nfc_client = nfc_actor::NfcClient(actor_framework::ResourceClient::new(nfc_tx));
+        let nfc_client = nfc_actor::NfcClient::new(actor_framework::ResourceClient::new(nfc_tx));
 
         let (new_connection_tx, _new_connection_rx) = mpsc::channel(10);
         let packet_streamer_service =
@@ -352,7 +352,7 @@ mod tests {
         let cell_client =
             cell_actor::CellClient(actor_framework::ResourceClient::new(mpsc::channel(1).0));
         let nfc_client =
-            nfc_actor::NfcClient(actor_framework::ResourceClient::new(mpsc::channel(1).0));
+            nfc_actor::NfcClient::new(actor_framework::ResourceClient::new(mpsc::channel(1).0));
         let (new_connection_tx, _new_connection_rx) = mpsc::channel(1);
         let packet_streamer_service =
             crate::packet_streamer::PacketStreamerService::new(new_connection_tx);

@@ -602,6 +602,9 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
         Ok(None)
     }
+    async fn get_service_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
+        Ok(None)
+    }
 }
 
 impl Clone for Box<dyn ChipClient> {
