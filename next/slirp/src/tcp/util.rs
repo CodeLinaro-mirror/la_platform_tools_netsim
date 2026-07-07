@@ -43,7 +43,7 @@ pub(super) fn parse_tcp_options(
                 // SACK
                 if options.len() >= 2 {
                     let len = options[1] as usize;
-                    if len >= 2 && (len - 2) % 8 == 0 {
+                    if len >= 2 && (len - 2).is_multiple_of(8) {
                         let mut i = 2;
                         while i < len {
                             let left = u32::from_be_bytes([

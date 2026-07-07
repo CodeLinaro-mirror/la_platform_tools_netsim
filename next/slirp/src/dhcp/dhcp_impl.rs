@@ -44,7 +44,7 @@ pub struct DhcpPacket {
 pub type DhcpPacketRef<'a> = Ref<&'a [u8], DhcpPacket>;
 
 impl DhcpPacket {
-    pub fn parse(bytes: &[u8]) -> Option<(DhcpPacketRef, &[u8])> {
+    pub fn parse(bytes: &[u8]) -> Option<(DhcpPacketRef<'_>, &[u8])> {
         Ref::from_prefix(bytes).ok()
     }
 }
@@ -403,12 +403,8 @@ impl DhcpManager {
     }
 
     fn get_requested_ip(options: &[u8]) -> [u8; 4] {
-        if let Some(opt) = Self::find_dhcp_option(options, 50) {
-            if opt.len() == 4 {
-                let mut ip = [0u8; 4];
-                ip.copy_from_slice(opt);
-                return ip;
-            }
+        if let Some(&[a, b, c, d]) = Self::find_dhcp_option(options, 50) {
+            return [a, b, c, d];
         }
         [0; 4]
     }

@@ -95,13 +95,14 @@ impl TcpManager {
             );
 
             if is_rst {
-                if let Some(conn_id) = self.find_connection_by_addrs(src_addr, dst_addr) {
-                    if let Some(conn) = self.connections.remove(&conn_id) {
-                        responses.push(SlirpResponse::CloseConnection {
-                            conn_id,
-                            guest_addr: conn.guest_addr,
-                        });
-                    }
+                if let Some((conn_id, conn)) = self
+                    .find_connection_by_addrs(src_addr, dst_addr)
+                    .and_then(|id| self.connections.remove(&id).map(|c| (id, c)))
+                {
+                    responses.push(SlirpResponse::CloseConnection {
+                        conn_id,
+                        guest_addr: conn.guest_addr,
+                    });
                 }
                 return;
             }
@@ -112,21 +113,22 @@ impl TcpManager {
             );
             if is_syn && !is_ack {
                 crate::slirp_debug!(crate::logging::Topic::Tcp, "SYN packet");
-                if let Some(conn_id) = self.find_connection_by_addrs(src_addr, dst_addr) {
-                    if let Some(conn) = self.connections.get(&conn_id) {
-                        if conn.state == State::TimeWait {
-                            // Silently drop SYN packets to connections in TIME_WAIT.
-                            return;
-                        } else {
-                            // Drop unexpected SYN for existing active connections to prevent
-                            // duplicate connection allocation
-                            crate::slirp_debug!(
-                                crate::logging::Topic::Tcp,
-                                "SYN received for active connection {conn_id} in state {:?}, dropping.",
-                                conn.state
-                            );
-                            return;
-                        }
+                if let Some((conn_id, conn)) = self
+                    .find_connection_by_addrs(src_addr, dst_addr)
+                    .and_then(|id| self.connections.get(&id).map(|c| (id, c)))
+                {
+                    if conn.state == State::TimeWait {
+                        // Silently drop SYN packets to connections in TIME_WAIT.
+                        return;
+                    } else {
+                        // Drop unexpected SYN for existing active connections to prevent
+                        // duplicate connection allocation
+                        crate::slirp_debug!(
+                            crate::logging::Topic::Tcp,
+                            "SYN received for active connection {conn_id} in state {:?}, dropping.",
+                            conn.state
+                        );
+                        return;
                     }
                 }
 

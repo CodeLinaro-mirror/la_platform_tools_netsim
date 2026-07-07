@@ -54,3 +54,11 @@ impl From<tokio::sync::oneshot::error::RecvError> for ClientError {
         ClientError::Recv(err.to_string())
     }
 }
+
+impl<E: 'static + std::error::Error + Send + Sync> From<actor_framework::FrameworkError<E>>
+    for ClientError
+{
+    fn from(val: actor_framework::FrameworkError<E>) -> Self {
+        ClientError::Framework(Box::new(val))
+    }
+}

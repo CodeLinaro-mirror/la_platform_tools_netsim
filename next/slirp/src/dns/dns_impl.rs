@@ -100,7 +100,7 @@ impl DnsProxy {
 
         // Helper to get the default/configured server for the correct family
         let get_upstream_server = |servers: &[IpAddr]| {
-            let server = servers.iter().find(|ip| ip.is_ipv6() == is_ipv6).cloned();
+            let server = servers.iter().find(|ip| ip.is_ipv6() == is_ipv6).copied();
             match (is_ipv6, server) {
                 (true, Some(IpAddr::V6(ipv6))) => IpAddr::V6(ipv6),
                 (true, _) => IpAddr::V6("2001:4860:4860::8888".parse().unwrap()),
@@ -111,7 +111,7 @@ impl DnsProxy {
 
         // Filter servers to match the query family
         let family_servers: Vec<IpAddr> =
-            dns_servers.iter().filter(|ip| ip.is_ipv6() == is_ipv6).cloned().collect();
+            dns_servers.iter().filter(|ip| ip.is_ipv6() == is_ipv6).copied().collect();
 
         // 1. Parse the question
         let Some((qname, qtype, _, flags)) = parse_dns_query(query_payload) else {

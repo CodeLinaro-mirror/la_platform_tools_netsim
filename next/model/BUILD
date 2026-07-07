@@ -14,6 +14,7 @@ NETSIM_API_DEPS = [
     "@tokio",
     "@tokio-stream",
     "@tracing",
+    "//next/actor-framework",
 ]
 
 netsim_rust_library(

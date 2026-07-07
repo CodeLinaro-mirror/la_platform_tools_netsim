@@ -122,15 +122,14 @@ impl TcpManager {
         let total_len = eth_header_len + ip_header_len + tcp_header_len + args.payload.len();
         responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer[..total_len])));
 
-        if let Some(conn_id) = args.conn_id {
-            if let Some(conn) = connections.get_mut(&conn_id) {
-                if !args.payload.is_empty() || args.syn || args.fin {
-                    let sequence_end = args.sequence_num.wrapping_add(args.payload.len() as u32);
-                    conn.sent_packets.push_back((sequence_end, timers.clock().now()));
-                    timers
-                        .schedule(conn.retransmission_timeout, TimerEvent::TcpRetransmit(conn_id));
-                }
-            }
+        if let Some((conn_id, conn)) = args
+            .conn_id
+            .and_then(|id| connections.get_mut(&id).map(|c| (id, c)))
+            .filter(|_| !args.payload.is_empty() || args.syn || args.fin)
+        {
+            let sequence_end = args.sequence_num.wrapping_add(args.payload.len() as u32);
+            conn.sent_packets.push_back((sequence_end, timers.clock().now()));
+            timers.schedule(conn.retransmission_timeout, TimerEvent::TcpRetransmit(conn_id));
         }
     }
 }

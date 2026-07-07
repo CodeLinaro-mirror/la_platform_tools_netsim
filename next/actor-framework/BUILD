@@ -13,7 +13,6 @@ DEPS = [
     "@tokio-util",
     "@thiserror",
     "@tracing",
-    "//next/model",
 ]
 
 netsim_rust_library(

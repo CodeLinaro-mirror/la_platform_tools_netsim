@@ -54,60 +54,58 @@ impl IcmpManager {
         let Some(NetworkPacket::Ip(IpPacket::V4(ipv4_header, _))) = &packet.network else {
             return;
         };
-        if let Some(TransportPacket::Icmp(icmp_header, icmp_payload)) = &packet.transport {
-            if icmp_header.icmp_type == IcmpType::EchoRequest as u8 {
-                let identifier = u16::from_be_bytes([icmp_header.rest[0], icmp_header.rest[1]]);
-                let sequence_number =
-                    u16::from_be_bytes([icmp_header.rest[2], icmp_header.rest[3]]);
-                let echo_request = IcmpEcho {
-                    identifier: identifier.into(),
-                    sequence_number: sequence_number.into(),
+        let Some(TransportPacket::Icmp(icmp_header, icmp_payload)) = &packet.transport else {
+            return;
+        };
+        if icmp_header.icmp_type == IcmpType::EchoRequest as u8 {
+            let identifier = u16::from_be_bytes([icmp_header.rest[0], icmp_header.rest[1]]);
+            let sequence_number = u16::from_be_bytes([icmp_header.rest[2], icmp_header.rest[3]]);
+            let echo_request =
+                IcmpEcho { identifier: identifier.into(), sequence_number: sequence_number.into() };
+            let echo_payload = icmp_payload;
+            let dest_ip = Ipv4Addr::from(ipv4_header.dest_addr);
+            let guest_ip = Ipv4Addr::from(ipv4_header.source_addr);
+
+            if dest_ip == config.host_ipv4 {
+                let guest_mac = match packet.ethernet {
+                    netsim_packets::EthernetPacket::Untagged { frame, .. } => frame.src_addr,
+                    netsim_packets::EthernetPacket::Vlan { frame, .. } => frame.src_addr,
                 };
-                let echo_payload = icmp_payload;
-                let dest_ip = Ipv4Addr::from(ipv4_header.dest_addr);
-                let guest_ip = Ipv4Addr::from(ipv4_header.source_addr);
+                self.send_echo_reply(
+                    responses,
+                    config,
+                    guest_mac,
+                    ipv4_header,
+                    &echo_request,
+                    echo_payload,
+                );
+            } else {
+                // External IPv4 ping! Forward to host driver via Icmp connection flow.
+                let guest_id = echo_request.identifier.get();
+                let flow_key = (guest_ip, dest_ip, guest_id);
 
-                if dest_ip == config.host_ipv4 {
-                    let guest_mac = match packet.ethernet {
-                        netsim_packets::EthernetPacket::Untagged { frame, .. } => frame.src_addr,
-                        netsim_packets::EthernetPacket::Vlan { frame, .. } => frame.src_addr,
+                let (conn_id, _) = self.flows.entry(flow_key).or_insert_with(|| {
+                    let id = self.next_flow_id;
+                    self.next_flow_id += 1;
+                    let conn_info = IcmpConnectionArgs {
+                        destination: IpAddr::V4(dest_ip),
+                        guest_ip: IpAddr::V4(guest_ip),
+                        guest_id,
                     };
-                    self.send_echo_reply(
-                        responses,
-                        config,
-                        guest_mac,
-                        ipv4_header,
-                        &echo_request,
-                        echo_payload,
-                    );
-                } else {
-                    // External IPv4 ping! Forward to host driver via Icmp connection flow.
-                    let guest_id = echo_request.identifier.get();
-                    let flow_key = (guest_ip, dest_ip, guest_id);
-
-                    let (conn_id, _) = self.flows.entry(flow_key).or_insert_with(|| {
-                        let id = self.next_flow_id;
-                        self.next_flow_id += 1;
-                        let conn_info = IcmpConnectionArgs {
-                            destination: IpAddr::V4(dest_ip),
-                            guest_ip: IpAddr::V4(guest_ip),
-                            guest_id,
-                        };
-                        responses.push(SlirpResponse::EstablishConnection(
-                            id,
-                            ConnectionArgs::Icmp(conn_info),
-                        ));
-
-                        self.id_to_flow.insert(id, flow_key);
-                        (id, dest_ip)
-                    });
-
-                    // Forward the entire raw ICMP packet (raw_icmp_packet)
-                    responses.push(SlirpResponse::WriteToConnection(
-                        *conn_id,
-                        Bytes::copy_from_slice(raw_icmp_packet),
+                    responses.push(SlirpResponse::EstablishConnection(
+                        id,
+                        ConnectionArgs::Icmp(conn_info),
                     ));
-                }
+
+                    self.id_to_flow.insert(id, flow_key);
+                    (id, dest_ip)
+                });
+
+                // Forward the entire raw ICMP packet (raw_icmp_packet)
+                responses.push(SlirpResponse::WriteToConnection(
+                    *conn_id,
+                    Bytes::copy_from_slice(raw_icmp_packet),
+                ));
             }
         }
     }

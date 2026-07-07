@@ -18,6 +18,7 @@ rust_library_host {
     rustlibs: [
         "libbytes",
         "libfutures",
+        "libnetsim_next_actor_framework",
         "libnetsim_next_types",
         "libserde",
         "libthiserror",
@@ -48,6 +49,7 @@ rust_library_host {
         "libbytes",
         "libfutures",
         "libmockall",
+        "libnetsim_next_actor_framework_testing",
         "libnetsim_next_types_testing",
         "libserde",
         "libthiserror",
