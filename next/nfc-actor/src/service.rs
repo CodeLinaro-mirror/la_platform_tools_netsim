@@ -1,6 +1,11 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 use actor_framework::{ActorService, DynContext};
 use futures::{SinkExt, StreamExt};
 use netsim_model::{ChipCreate, ChipError, ChipId, ChipUpdate};
@@ -10,6 +15,23 @@ use crate::{
     error::NfcError,
     nfc_actor::{ChipState, NfcAction, NfcActor},
 };
+
+impl From<&ChipState> for netsim_model::Chip {
+    fn from(state: &ChipState) -> Self {
+        let is_enabled = state.enabled.load(Ordering::Acquire);
+        netsim_model::Chip {
+            kind: netsim_model::ChipKind::NFC,
+            id: state.id.0,
+            name: format!("nfc-{}", state.id.0),
+            device_id: state.device_id,
+            enabled: is_enabled,
+            variant: Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc {
+                radio: netsim_model::Radio { state: Some(is_enabled), ..Default::default() },
+            })),
+            ..Default::default()
+        }
+    }
+}
 
 impl ActorService for NfcActor {
     type Id = ChipId;
@@ -64,11 +86,16 @@ impl ActorService for NfcActor {
             .length_adjustment(3)
             .num_skip(0)
             .new_read(nfc_reader);
+        let enabled = Arc::new(AtomicBool::new(false));
+        let enabled_clone = enabled.clone();
         let chip_id_clone = chip_id;
         let task_1 = Box::pin(async move {
             while let Some(item) = stream.next().await {
                 match item {
                     Ok(bytes_mut) => {
+                        if !enabled_clone.load(Ordering::Acquire) {
+                            continue;
+                        }
                         let bytes = bytes_mut.freeze();
                         if let Err(e) = packet_sink.send(bytes).await {
                             error!("Failed to send packet to guest: {:?}", e);
@@ -89,8 +116,10 @@ impl ActorService for NfcActor {
         // Bridge Guest -> Casimir
         ctx.add_stream(chip_id, Box::pin(packet_stream));
 
-        self.active_chips
-            .insert(chip_id, ChipState { device_id, enabled: true, casimir_device_id, nfc_writer });
+        self.active_chips.insert(
+            chip_id,
+            ChipState { id: chip_id, device_id, enabled, casimir_device_id, nfc_writer },
+        );
 
         info!("NFC chip {} created for device {}", chip_id, device_id);
 
@@ -131,21 +160,7 @@ impl ActorService for NfcActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        if let Some(state) = self.active_chips.get(&id) {
-            Ok(Some(netsim_model::Chip {
-                kind: netsim_model::ChipKind::NFC,
-                id: id.0,
-                name: format!("nfc-{}", id.0),
-                device_id: state.device_id,
-                enabled: state.enabled,
-                variant: Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc {
-                    radio: netsim_model::Radio { state: Some(state.enabled), ..Default::default() },
-                })),
-                ..Default::default()
-            }))
-        } else {
-            Ok(None)
-        }
+        Ok(self.active_chips.get(&id).map(Into::into))
     }
 
     async fn handle_update(
@@ -160,13 +175,13 @@ impl ActorService for NfcActor {
             .ok_or_else(|| NfcError::Chip(ChipError::ChipNotFound(id)))?;
 
         if let Some(enabled) = update.enabled {
-            state.enabled = enabled;
+            state.enabled.store(enabled, Ordering::Release);
         }
         if let Some(netsim_model::ChipVariantUpdate::Nfc(netsim_model::NfcUpdate {
             radio: netsim_model::RadioUpdate { state: Some(enabled), .. },
         })) = &update.variant
         {
-            state.enabled = *enabled;
+            state.enabled.store(*enabled, Ordering::Release);
         }
 
         self.handle_get(id, ctx).await?.ok_or_else(|| NfcError::Chip(ChipError::ChipNotFound(id)))
@@ -222,21 +237,7 @@ impl ActorService for NfcActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        let mut chips = Vec::new();
-        for (id, state) in &self.active_chips {
-            chips.push(netsim_model::Chip {
-                kind: netsim_model::ChipKind::NFC,
-                id: id.0,
-                name: format!("nfc-{}", id.0),
-                device_id: state.device_id,
-                enabled: state.enabled,
-                variant: Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc {
-                    radio: netsim_model::Radio { state: Some(state.enabled), ..Default::default() },
-                })),
-                ..Default::default()
-            });
-        }
-        Ok(chips)
+        Ok(self.active_chips.values().map(Into::into).collect())
     }
 }
 

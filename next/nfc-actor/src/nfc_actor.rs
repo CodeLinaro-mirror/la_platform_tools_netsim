@@ -1,7 +1,10 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 use device_actor::DeviceClient;
 use netsim_model::ChipId;
@@ -9,8 +12,9 @@ use tokio::io::{DuplexStream, WriteHalf};
 use tracing::info;
 
 pub struct ChipState {
+    pub id: ChipId,
     pub device_id: device_api::DeviceId,
-    pub enabled: bool,
+    pub enabled: Arc<AtomicBool>,
     pub casimir_device_id: u16,
     pub nfc_writer: WriteHalf<DuplexStream>,
 }
