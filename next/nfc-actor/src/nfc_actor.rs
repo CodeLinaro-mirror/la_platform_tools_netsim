@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 use device_actor::DeviceClient;
@@ -22,13 +22,20 @@ pub struct ChipState {
 pub struct NfcActor {
     pub device_client: DeviceClient,
     pub active_chips: HashMap<ChipId, ChipState>,
+    pub casimir_to_device: Arc<Mutex<HashMap<u16, device_api::DeviceId>>>,
     pub scene_client: Option<crate::scene::SceneClient>,
     pub scene_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl NfcActor {
     pub fn new(device_client: DeviceClient) -> Self {
-        Self { device_client, active_chips: HashMap::new(), scene_client: None, scene_task: None }
+        Self {
+            device_client,
+            active_chips: HashMap::new(),
+            casimir_to_device: Arc::new(Mutex::new(HashMap::new())),
+            scene_client: None,
+            scene_task: None,
+        }
     }
 
     pub fn start_casimir(&mut self) {
