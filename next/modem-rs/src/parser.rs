@@ -192,7 +192,7 @@ pub enum Command<'a> {
     SendStkEnvelope(QuotedString<'a>),
     /// Facility lock
     #[command(tag = "AT+CLCK=")]
-    SetFacilityLock(QuotedString<'a>, u8, Option<QuotedString<'a>>),
+    SetFacilityLock(QuotedString<'a>, u8, Option<QuotedString<'a>>, Option<u8>),
     /// Call forwarding
     #[command(tag = "AT+CCFC=")]
     CallForwarding {
@@ -241,7 +241,14 @@ pub enum Command<'a> {
     SetUssd { mode: u8, message: Option<QuotedString<'a>>, dcs: Option<u8> },
     /// Define PDP context
     #[command(tag = "AT+CGDCONT=")]
-    DefinePdpContext(u8, QuotedString<'a>, QuotedString<'a>),
+    DefinePdpContext(
+        u8,
+        QuotedString<'a>,
+        QuotedString<'a>,
+        Option<QuotedString<'a>>,
+        Option<u8>,
+        Option<u8>,
+    ),
     /// Read PDP context
     #[command(tag = "AT+CGDCONT?")]
     QueryPdpContext,
@@ -464,7 +471,17 @@ mod tests {
     fn test_parse_cgdcont() {
         let (rem, cmd) = Command::parse(b"AT+CGDCONT=1,\"IP\",\"apn\"").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::DefinePdpContext(1, QuotedString(b"IP"), QuotedString(b"apn")));
+        assert_eq!(
+            cmd,
+            Command::DefinePdpContext(
+                1,
+                QuotedString(b"IP"),
+                QuotedString(b"apn"),
+                None,
+                None,
+                None
+            )
+        );
     }
 
     #[test]
