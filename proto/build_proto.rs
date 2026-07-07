@@ -144,6 +144,7 @@ pub mod netsim {
   pub mod access_point;
   pub mod ble_service;
   pub mod cell;
+  pub mod nfc_service;
   pub mod frontend;
   pub mod hci_packet;
   pub mod model;
@@ -171,6 +172,7 @@ pub use netsim::config;
 pub use netsim::access_point;
 pub use netsim::ble_service;
 pub use netsim::cell;
+pub use netsim::nfc_service;
 pub use netsim::frontend;
 pub use netsim::hci_packet;
 pub use netsim::model;
@@ -192,6 +194,8 @@ pub mod ble_service_grpc;
 pub mod cell_grpc;
 #[path = "netsim/casimir_control_grpc.rs"]
 pub mod casimir_control_grpc;
+#[path = "netsim/nfc_service_grpc.rs"]
+pub mod nfc_service_grpc;
 
 pub use protobuf;
 pub use protobuf::well_known_types::empty;
