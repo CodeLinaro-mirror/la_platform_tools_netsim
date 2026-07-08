@@ -23,5 +23,3 @@ tracing = "0.1"
 [features]
 default = ["libslirp-rs", "http-proxy", "slirp"]
 cuttlefish = ["slirp"]
-
-
