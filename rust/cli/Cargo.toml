@@ -3,7 +3,7 @@
 
 [package]
 name = "netsim-cli"
-version = "0.3.112"
+version = "0.3.113"
 edition = "2021"
 
 [lib]

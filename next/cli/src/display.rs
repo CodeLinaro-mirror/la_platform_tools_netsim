@@ -164,6 +164,10 @@ impl fmt::Display for Displayer<&model::Chip> {
                     Displayer::new(cell_data, self.verbose)
                 )?;
             }
+            Some(model::chip::Chip::Nfc(nfc)) => {
+                writeln!(f)?;
+                write!(f, "{:indent$}{:width$}{}", "", "nfc: ", Displayer::new(nfc, self.verbose))?;
+            }
             _ => {
                 if self.verbose {
                     writeln!(f)?;

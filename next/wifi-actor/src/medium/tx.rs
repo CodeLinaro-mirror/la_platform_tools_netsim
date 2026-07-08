@@ -271,14 +271,16 @@ impl Medium {
             self.wifi_stats.incr_wmedium_unicast_frames_tx();
         }
 
+        let via_infra_ap = ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
         // Consider a frame as infra if it is coming from an AP (FromDS=1)
         // OR if it aligns with a hosted AP in key_store.
-        let is_infra = ieee80211.is_from_ds()
-            || ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
+        let is_infra = ieee80211.is_from_ds() || via_infra_ap;
 
         // RESTRICT: Only run M2U optimizations for infrastructure networks
         let is_m2u_conversion = is_infra
             && (is_m2u_candidate(&dest_addr) || (!dest_addr.is_multicast() && targets.len() > 1));
+
+        let is_p2p_payload_data = !via_infra_ap && ieee80211.is_payload_bearing_data();
 
         for dest in targets {
             // Drop unicast packets destined to the sender itself (invalid for hwsim)
@@ -331,9 +333,7 @@ impl Medium {
                         self.push_packet(dest.client_id, &msg, out_queue)?;
                         self.incr_rx(dest.client_id)?;
 
-                        let is_routed_via_infrastructure_ap =
-                            ieee80211.get_bssid().is_some_and(|b| self.key_store.has_bssid(&b));
-                        if !is_routed_via_infrastructure_ap
+                        if is_p2p_payload_data
                             && source.client_id != dest.client_id
                             && !dest_addr.is_multicast()
                         {

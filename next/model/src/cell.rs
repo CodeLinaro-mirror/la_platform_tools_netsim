@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::chip::ChipId;
 
+pub const MODEM_STATE_DOWN: &str = "down";
+pub const MODEM_STATE_RINGING: &str = "ringing";
+pub const MODEM_STATE_IDLE: &str = "idle";
+
 /// Parameters for creating a Cellular chip.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CellCreate {
@@ -36,6 +40,14 @@ pub enum RegistrationStatus {
     Roaming = 5,
 }
 
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+pub enum RadioTechnology {
+    Unknown = 0,
+    Gsm = 1,
+    Lte = 2,
+    Nr = 3,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ModemAction {
     ProcessAtCommand { id: ChipId, command: Vec<u8> },
@@ -50,6 +62,8 @@ pub enum ModemAction {
     IncomingPdu { id: ChipId, pdu: String },
     UpdatePhysicalChannelConfigs { id: ChipId },
     UpdateNetworkTime { id: ChipId, time: String },
+    SetSimStatus { id: ChipId, present: bool },
+    SetNetworkTechnology { id: ChipId, tech: RadioTechnology },
 }
 
 /// Cellular specific chip updates.

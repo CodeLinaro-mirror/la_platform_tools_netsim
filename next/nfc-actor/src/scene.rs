@@ -20,6 +20,10 @@ pub enum SceneCommand {
         >,
         resp: tokio::sync::oneshot::Sender<anyhow::Result<casimir::Id>>,
     },
+    RemoveDevice {
+        id: casimir::Id,
+        resp: tokio::sync::oneshot::Sender<anyhow::Result<()>>,
+    },
 }
 
 /// Client to interact with the Netsim-wrapped Scene.
@@ -46,6 +50,14 @@ impl SceneClient {
         self.cmd_tx
             .send(SceneCommand::AddDevice { builder: Box::new(builder), resp: tx })
             .map_err(|err| anyhow::anyhow!("failed to send AddDevice command: {err}"))?;
+        rx.await?
+    }
+
+    pub async fn remove_device(&self, id: casimir::Id) -> anyhow::Result<()> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.cmd_tx
+            .send(SceneCommand::RemoveDevice { id, resp: tx })
+            .map_err(|err| anyhow::anyhow!("failed to send RemoveDevice command: {err}"))?;
         rx.await?
     }
 }
@@ -75,6 +87,14 @@ impl Future for NetsimScene {
                 SceneCommand::AddDevice { builder, resp } => {
                     let res = this.scene.add_device(builder);
                     let _ = resp.send(res);
+                }
+                SceneCommand::RemoveDevice { id, resp } => {
+                    if (id as usize) < this.scene.devices.len()
+                        && this.scene.devices[id as usize].is_some()
+                    {
+                        this.scene.disconnect(id as usize);
+                    }
+                    let _ = resp.send(Ok(()));
                 }
             }
         }

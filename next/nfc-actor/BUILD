@@ -16,6 +16,7 @@ DEPS = [
     "@futures",
     "@thiserror",
     "@tokio",
+    "@tokio-util",
     "@casimir//:casimir_lib",
 ]
 
@@ -28,6 +29,7 @@ netsim_rust_library(
         "@async-trait",
     ],
     test_deps = [
+        "@tokio-stream",
         "@tracing-subscriber",
     ],
     deps = DEPS,

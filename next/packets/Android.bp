@@ -10,6 +10,7 @@ rust_library_host {
     crate_root: "src/lib.rs",
     srcs: [
         "src/lib.rs",
+        ":rootcanal_link_layer_packets_rust_gen",
         "src/llc/test_data/llc_snap.pcap",
         "src/llc/test_data/llc_snap.json",
         "src/ieee80211/test_data/beacon.pcap",
@@ -33,6 +34,8 @@ rust_library_host {
     features: ["cuttlefish"],
     lints: "none",
     rustlibs: [
+        "libbytes",
+        "libpdl_runtime",
         "libhex",
         "libnum_traits",
         "libserde",

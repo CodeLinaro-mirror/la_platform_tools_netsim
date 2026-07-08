@@ -4,6 +4,7 @@
 // src/network_service.rs
 
 use netsim_model::RegistrationStatus;
+use tracing::warn;
 
 use crate::{
     parser::Command,
@@ -12,7 +13,6 @@ use crate::{
 
 const DUMMY_LAC: &str = "2142";
 const DUMMY_CID: &str = "0000B804";
-const DUMMY_ACT: u8 = 7; // LTE (EUTRAN)
 
 // Holds all state related to the network.
 pub struct NetworkService {
@@ -28,6 +28,7 @@ pub struct NetworkService {
     current_network_mode: u8,
     preferred_network_mode: u32,
     is_attached: bool,
+    act: u8,
 }
 
 impl Default for NetworkService {
@@ -45,6 +46,7 @@ impl Default for NetworkService {
             current_network_mode: crate::constants::CTEC_DEFAULT_CURRENT_TECH,
             preferred_network_mode: crate::constants::CTEC_DEFAULT_PREFERRED_MASK,
             is_attached: false,
+            act: crate::constants::access_technology::LTE,
         }
     }
 }
@@ -52,6 +54,10 @@ impl Default for NetworkService {
 impl NetworkService {
     pub fn is_attached(&self) -> bool {
         self.is_attached
+    }
+
+    pub fn detach_network(&mut self) {
+        self.is_attached = false;
     }
 
     pub fn attach_network(&mut self) -> Vec<String> {
@@ -66,7 +72,7 @@ impl NetworkService {
         if self.voice_unsol_mode > 0 {
             let stat = self.voice_registration as u8;
             let urc = if self.voice_unsol_mode == 2 {
-                format!("+CREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+                format!("+CREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
             } else {
                 format!("+CREG: {}\r\n", stat)
             };
@@ -75,7 +81,7 @@ impl NetworkService {
         if self.data_unsol_mode > 0 {
             let stat = self.data_registration as u8;
             let urc = if self.data_unsol_mode == 2 {
-                format!("+CGREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+                format!("+CGREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
             } else {
                 format!("+CGREG: {}\r\n", stat)
             };
@@ -84,7 +90,7 @@ impl NetworkService {
         if self.lte_unsol_mode > 0 {
             let stat = self.data_registration as u8;
             let urc = if self.lte_unsol_mode == 2 {
-                format!("+CEREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+                format!("+CEREG: {},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
             } else {
                 format!("+CEREG: {}\r\n", stat)
             };
@@ -142,6 +148,49 @@ impl NetworkService {
         }
     }
 
+    pub fn set_network_technology(
+        &mut self,
+        tech: netsim_model::RadioTechnology,
+    ) -> Option<String> {
+        let (new_mode, new_act) = match tech {
+            netsim_model::RadioTechnology::Gsm => {
+                (crate::constants::modem_tech::GSM, crate::constants::access_technology::GSM)
+            }
+            netsim_model::RadioTechnology::Lte => {
+                (crate::constants::modem_tech::LTE, crate::constants::access_technology::LTE)
+            }
+            netsim_model::RadioTechnology::Nr => {
+                (crate::constants::modem_tech::NR, crate::constants::access_technology::NR)
+            }
+            netsim_model::RadioTechnology::Unknown => {
+                warn!("Unknown radio technology {:?}, falling back to LTE", tech);
+                (crate::constants::modem_tech::LTE, crate::constants::access_technology::LTE)
+            }
+        };
+
+        if self.current_network_mode != new_mode || self.act != new_act {
+            self.current_network_mode = new_mode;
+            self.act = new_act;
+            if self.is_attached {
+                let mut urcs = String::new();
+                if let Some(creg) = self.format_creg_urc(self.voice_registration) {
+                    urcs.push_str(&creg);
+                }
+                if let Some(cgreg) = self.format_cgreg_urc(self.data_registration) {
+                    urcs.push_str(&cgreg);
+                }
+                if let Some(cereg) = self.format_cereg_urc(self.data_registration) {
+                    urcs.push_str(&cereg);
+                }
+                if urcs.is_empty() { None } else { Some(urcs) }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     /// Sets the signal strength and bit error rate.
     pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) {
         self.signal_strength = (rssi, ber);
@@ -177,7 +226,7 @@ impl NetworkService {
         } else if self.voice_unsol_mode == 2 {
             Some(format!(
                 "+CREG: {},\"{}\",\"{}\",{}\r\n",
-                status as u8, DUMMY_LAC, DUMMY_CID, DUMMY_ACT
+                status as u8, DUMMY_LAC, DUMMY_CID, self.act
             ))
         } else {
             Some(format!("+CREG: {}\r\n", status as u8))
@@ -190,7 +239,7 @@ impl NetworkService {
         } else if self.data_unsol_mode == 2 {
             Some(format!(
                 "+CGREG: {},\"{}\",\"{}\",{}\r\n",
-                status as u8, DUMMY_LAC, DUMMY_CID, DUMMY_ACT
+                status as u8, DUMMY_LAC, DUMMY_CID, self.act
             ))
         } else {
             Some(format!("+CGREG: {}\r\n", status as u8))
@@ -203,7 +252,7 @@ impl NetworkService {
         } else if self.lte_unsol_mode == 2 {
             Some(format!(
                 "+CEREG: {},\"{}\",\"{}\",{}\r\n",
-                status as u8, DUMMY_LAC, DUMMY_CID, DUMMY_ACT
+                status as u8, DUMMY_LAC, DUMMY_CID, self.act
             ))
         } else {
             Some(format!("+CEREG: {}\r\n", status as u8))
@@ -226,7 +275,7 @@ impl NetworkService {
     pub fn handle_query_voice_registration(&self) -> ExecutionResult {
         let stat = self.voice_registration as u8;
         let response = if self.voice_unsol_mode == 2 {
-            format!("+CREG: 2,{},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+            format!("+CREG: 2,{},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
         } else {
             format!("+CREG: {},{}\r\n", self.voice_unsol_mode, stat)
         };
@@ -256,7 +305,7 @@ impl NetworkService {
     pub fn handle_query_data_registration(&self) -> ExecutionResult {
         let stat = self.data_registration as u8;
         let response = if self.data_unsol_mode == 2 {
-            format!("+CGREG: 2,{},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+            format!("+CGREG: 2,{},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
         } else {
             format!("+CGREG: {},{}\r\n", self.data_unsol_mode, stat)
         };
@@ -286,7 +335,7 @@ impl NetworkService {
     pub fn handle_query_lte_registration(&self) -> ExecutionResult {
         let stat = self.data_registration as u8;
         let response = if self.lte_unsol_mode == 2 {
-            format!("+CEREG: 2,{},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, DUMMY_ACT)
+            format!("+CEREG: 2,{},\"{}\",\"{}\",{}\r\n", stat, DUMMY_LAC, DUMMY_CID, self.act)
         } else {
             format!("+CEREG: {},{}\r\n", self.lte_unsol_mode, stat)
         };

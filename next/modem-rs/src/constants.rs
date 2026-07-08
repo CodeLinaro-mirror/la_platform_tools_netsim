@@ -50,3 +50,11 @@ pub const CTEC_DEFAULT_PREFERRED_MASK: u32 = modem_tech::NR as u32;
 /// List of CTEC technologies supported by this simulator.
 pub const SUPPORTED_CTEC_INDEXES: &[u8] =
     &[modem_tech_index::GSM, modem_tech_index::WCDMA, modem_tech_index::LTE, modem_tech_index::NR];
+
+/// Access Technology (AcT) values as defined in 3GPP TS 27.007 (e.g. +COPS,
+/// +CREG)
+pub mod access_technology {
+    pub const GSM: u8 = 0;
+    pub const LTE: u8 = 7;
+    pub const NR: u8 = 11;
+}

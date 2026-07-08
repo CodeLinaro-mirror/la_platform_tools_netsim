@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use netsim_model::RegistrationStatus;
+use netsim_model::{RadioTechnology, RegistrationStatus};
 use tracing::error;
 
 use crate::{
@@ -185,6 +185,32 @@ impl ModemImpl {
         effects
     }
 
+    pub fn set_sim_status(&mut self, present: bool) -> Vec<ModemEffect> {
+        let changed = self.sim_service.set_present(present);
+        let mut effects = Vec::new();
+        if changed {
+            if !present {
+                effects.extend(self.set_voice_registration(RegistrationStatus::NotRegistered));
+                effects.extend(self.set_data_registration(RegistrationStatus::NotRegistered));
+                self.network_service.detach_network();
+            } else {
+                effects.push(ModemEffect::Schedule {
+                    delay: Duration::from_millis(10),
+                    event: ModemEvent::AttachNetwork,
+                });
+            }
+        }
+        effects
+    }
+
+    pub fn set_network_technology(&mut self, tech: RadioTechnology) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
+        if let Some(response) = self.network_service.set_network_technology(tech) {
+            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+        }
+        effects
+    }
+
     // Removed set_waiting_for_sms_pdu, moved to SmsService
 
     /// Receives an AT command from the modem.
@@ -256,16 +282,18 @@ impl ModemImpl {
                 self.call_service.handle_ring_timeout(call_token);
             }
             ModemEvent::AttachNetwork => {
-                let responses = self.network_service.attach_network();
-                if self.enable_unsolicited_urcs {
-                    let combined = responses
-                        .iter()
-                        .filter(|r| !r.is_empty())
-                        .cloned()
-                        .collect::<Vec<String>>()
-                        .join("");
-                    if !combined.is_empty() {
-                        effects.push(ModemEffect::Response(combined.into_bytes()));
+                if self.sim_service.is_present() {
+                    let responses = self.network_service.attach_network();
+                    if self.enable_unsolicited_urcs {
+                        let combined = responses
+                            .iter()
+                            .filter(|r| !r.is_empty())
+                            .cloned()
+                            .collect::<Vec<String>>()
+                            .join("");
+                        if !combined.is_empty() {
+                            effects.push(ModemEffect::Response(combined.into_bytes()));
+                        }
                     }
                 }
             }
