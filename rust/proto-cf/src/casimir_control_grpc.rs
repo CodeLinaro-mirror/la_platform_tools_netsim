@@ -18,8 +18,8 @@
 #![allow(unused_results)]
 
 const METHOD_CASIMIR_CONTROL_SERVICE_SEND_APDU: ::grpcio::Method<
-    super::casimircontrolserver::SendApduRequest,
-    super::casimircontrolserver::SendApduReply,
+    super::casimir_control::SendApduRequest,
+    super::casimir_control::SendApduReply,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
     name: "/casimircontrolserver.CasimirControlService/SendApdu",
@@ -28,8 +28,8 @@ const METHOD_CASIMIR_CONTROL_SERVICE_SEND_APDU: ::grpcio::Method<
 };
 
 const METHOD_CASIMIR_CONTROL_SERVICE_POLL_A: ::grpcio::Method<
-    super::casimircontrolserver::Void,
-    super::casimircontrolserver::SenderId,
+    super::casimir_control::Void,
+    super::casimir_control::SenderId,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
     name: "/casimircontrolserver.CasimirControlService/PollA",
@@ -38,8 +38,8 @@ const METHOD_CASIMIR_CONTROL_SERVICE_POLL_A: ::grpcio::Method<
 };
 
 const METHOD_CASIMIR_CONTROL_SERVICE_SET_RADIO_STATE: ::grpcio::Method<
-    super::casimircontrolserver::RadioState,
-    super::casimircontrolserver::Void,
+    super::casimir_control::RadioState,
+    super::casimir_control::Void,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
     name: "/casimircontrolserver.CasimirControlService/SetRadioState",
@@ -48,8 +48,8 @@ const METHOD_CASIMIR_CONTROL_SERVICE_SET_RADIO_STATE: ::grpcio::Method<
 };
 
 const METHOD_CASIMIR_CONTROL_SERVICE_SET_POWER_LEVEL: ::grpcio::Method<
-    super::casimircontrolserver::PowerLevel,
-    super::casimircontrolserver::Void,
+    super::casimir_control::PowerLevel,
+    super::casimir_control::Void,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
     name: "/casimircontrolserver.CasimirControlService/SetPowerLevel",
@@ -58,8 +58,8 @@ const METHOD_CASIMIR_CONTROL_SERVICE_SET_POWER_LEVEL: ::grpcio::Method<
 };
 
 const METHOD_CASIMIR_CONTROL_SERVICE_SEND_BROADCAST: ::grpcio::Method<
-    super::casimircontrolserver::SendBroadcastRequest,
-    super::casimircontrolserver::SendBroadcastResponse,
+    super::casimir_control::SendBroadcastRequest,
+    super::casimir_control::SendBroadcastResponse,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
     name: "/casimircontrolserver.CasimirControlService/SendBroadcast",
@@ -68,8 +68,8 @@ const METHOD_CASIMIR_CONTROL_SERVICE_SEND_BROADCAST: ::grpcio::Method<
 };
 
 const METHOD_CASIMIR_CONTROL_SERVICE_INIT: ::grpcio::Method<
-    super::casimircontrolserver::Void,
-    super::casimircontrolserver::Void,
+    super::casimir_control::Void,
+    super::casimir_control::Void,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
     name: "/casimircontrolserver.CasimirControlService/Init",
@@ -78,8 +78,8 @@ const METHOD_CASIMIR_CONTROL_SERVICE_INIT: ::grpcio::Method<
 };
 
 const METHOD_CASIMIR_CONTROL_SERVICE_CLOSE: ::grpcio::Method<
-    super::casimircontrolserver::Void,
-    super::casimircontrolserver::Void,
+    super::casimir_control::Void,
+    super::casimir_control::Void,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
     name: "/casimircontrolserver.CasimirControlService/Close",
@@ -99,219 +99,217 @@ impl CasimirControlServiceClient {
 
     pub fn send_apdu_opt(
         &self,
-        req: &super::casimircontrolserver::SendApduRequest,
+        req: &super::casimir_control::SendApduRequest,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<super::casimircontrolserver::SendApduReply> {
+    ) -> ::grpcio::Result<super::casimir_control::SendApduReply> {
         self.client.unary_call(&METHOD_CASIMIR_CONTROL_SERVICE_SEND_APDU, req, opt)
     }
 
     pub fn send_apdu(
         &self,
-        req: &super::casimircontrolserver::SendApduRequest,
-    ) -> ::grpcio::Result<super::casimircontrolserver::SendApduReply> {
+        req: &super::casimir_control::SendApduRequest,
+    ) -> ::grpcio::Result<super::casimir_control::SendApduReply> {
         self.send_apdu_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn send_apdu_async_opt(
         &self,
-        req: &super::casimircontrolserver::SendApduRequest,
+        req: &super::casimir_control::SendApduRequest,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::SendApduReply>>
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::SendApduReply>>
     {
         self.client.unary_call_async(&METHOD_CASIMIR_CONTROL_SERVICE_SEND_APDU, req, opt)
     }
 
     pub fn send_apdu_async(
         &self,
-        req: &super::casimircontrolserver::SendApduRequest,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::SendApduReply>>
+        req: &super::casimir_control::SendApduRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::SendApduReply>>
     {
         self.send_apdu_async_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn poll_a_opt(
         &self,
-        req: &super::casimircontrolserver::Void,
+        req: &super::casimir_control::Void,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<super::casimircontrolserver::SenderId> {
+    ) -> ::grpcio::Result<super::casimir_control::SenderId> {
         self.client.unary_call(&METHOD_CASIMIR_CONTROL_SERVICE_POLL_A, req, opt)
     }
 
     pub fn poll_a(
         &self,
-        req: &super::casimircontrolserver::Void,
-    ) -> ::grpcio::Result<super::casimircontrolserver::SenderId> {
+        req: &super::casimir_control::Void,
+    ) -> ::grpcio::Result<super::casimir_control::SenderId> {
         self.poll_a_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn poll_a_async_opt(
         &self,
-        req: &super::casimircontrolserver::Void,
+        req: &super::casimir_control::Void,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::SenderId>>
-    {
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::SenderId>> {
         self.client.unary_call_async(&METHOD_CASIMIR_CONTROL_SERVICE_POLL_A, req, opt)
     }
 
     pub fn poll_a_async(
         &self,
-        req: &super::casimircontrolserver::Void,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::SenderId>>
-    {
+        req: &super::casimir_control::Void,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::SenderId>> {
         self.poll_a_async_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn set_radio_state_opt(
         &self,
-        req: &super::casimircontrolserver::RadioState,
+        req: &super::casimir_control::RadioState,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<super::casimircontrolserver::Void> {
+    ) -> ::grpcio::Result<super::casimir_control::Void> {
         self.client.unary_call(&METHOD_CASIMIR_CONTROL_SERVICE_SET_RADIO_STATE, req, opt)
     }
 
     pub fn set_radio_state(
         &self,
-        req: &super::casimircontrolserver::RadioState,
-    ) -> ::grpcio::Result<super::casimircontrolserver::Void> {
+        req: &super::casimir_control::RadioState,
+    ) -> ::grpcio::Result<super::casimir_control::Void> {
         self.set_radio_state_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn set_radio_state_async_opt(
         &self,
-        req: &super::casimircontrolserver::RadioState,
+        req: &super::casimir_control::RadioState,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::Void>> {
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::Void>> {
         self.client.unary_call_async(&METHOD_CASIMIR_CONTROL_SERVICE_SET_RADIO_STATE, req, opt)
     }
 
     pub fn set_radio_state_async(
         &self,
-        req: &super::casimircontrolserver::RadioState,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::Void>> {
+        req: &super::casimir_control::RadioState,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::Void>> {
         self.set_radio_state_async_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn set_power_level_opt(
         &self,
-        req: &super::casimircontrolserver::PowerLevel,
+        req: &super::casimir_control::PowerLevel,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<super::casimircontrolserver::Void> {
+    ) -> ::grpcio::Result<super::casimir_control::Void> {
         self.client.unary_call(&METHOD_CASIMIR_CONTROL_SERVICE_SET_POWER_LEVEL, req, opt)
     }
 
     pub fn set_power_level(
         &self,
-        req: &super::casimircontrolserver::PowerLevel,
-    ) -> ::grpcio::Result<super::casimircontrolserver::Void> {
+        req: &super::casimir_control::PowerLevel,
+    ) -> ::grpcio::Result<super::casimir_control::Void> {
         self.set_power_level_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn set_power_level_async_opt(
         &self,
-        req: &super::casimircontrolserver::PowerLevel,
+        req: &super::casimir_control::PowerLevel,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::Void>> {
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::Void>> {
         self.client.unary_call_async(&METHOD_CASIMIR_CONTROL_SERVICE_SET_POWER_LEVEL, req, opt)
     }
 
     pub fn set_power_level_async(
         &self,
-        req: &super::casimircontrolserver::PowerLevel,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::Void>> {
+        req: &super::casimir_control::PowerLevel,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::Void>> {
         self.set_power_level_async_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn send_broadcast_opt(
         &self,
-        req: &super::casimircontrolserver::SendBroadcastRequest,
+        req: &super::casimir_control::SendBroadcastRequest,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<super::casimircontrolserver::SendBroadcastResponse> {
+    ) -> ::grpcio::Result<super::casimir_control::SendBroadcastResponse> {
         self.client.unary_call(&METHOD_CASIMIR_CONTROL_SERVICE_SEND_BROADCAST, req, opt)
     }
 
     pub fn send_broadcast(
         &self,
-        req: &super::casimircontrolserver::SendBroadcastRequest,
-    ) -> ::grpcio::Result<super::casimircontrolserver::SendBroadcastResponse> {
+        req: &super::casimir_control::SendBroadcastRequest,
+    ) -> ::grpcio::Result<super::casimir_control::SendBroadcastResponse> {
         self.send_broadcast_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn send_broadcast_async_opt(
         &self,
-        req: &super::casimircontrolserver::SendBroadcastRequest,
+        req: &super::casimir_control::SendBroadcastRequest,
         opt: ::grpcio::CallOption,
     ) -> ::grpcio::Result<
-        ::grpcio::ClientUnaryReceiver<super::casimircontrolserver::SendBroadcastResponse>,
+        ::grpcio::ClientUnaryReceiver<super::casimir_control::SendBroadcastResponse>,
     > {
         self.client.unary_call_async(&METHOD_CASIMIR_CONTROL_SERVICE_SEND_BROADCAST, req, opt)
     }
 
     pub fn send_broadcast_async(
         &self,
-        req: &super::casimircontrolserver::SendBroadcastRequest,
+        req: &super::casimir_control::SendBroadcastRequest,
     ) -> ::grpcio::Result<
-        ::grpcio::ClientUnaryReceiver<super::casimircontrolserver::SendBroadcastResponse>,
+        ::grpcio::ClientUnaryReceiver<super::casimir_control::SendBroadcastResponse>,
     > {
         self.send_broadcast_async_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn init_opt(
         &self,
-        req: &super::casimircontrolserver::Void,
+        req: &super::casimir_control::Void,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<super::casimircontrolserver::Void> {
+    ) -> ::grpcio::Result<super::casimir_control::Void> {
         self.client.unary_call(&METHOD_CASIMIR_CONTROL_SERVICE_INIT, req, opt)
     }
 
     pub fn init(
         &self,
-        req: &super::casimircontrolserver::Void,
-    ) -> ::grpcio::Result<super::casimircontrolserver::Void> {
+        req: &super::casimir_control::Void,
+    ) -> ::grpcio::Result<super::casimir_control::Void> {
         self.init_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn init_async_opt(
         &self,
-        req: &super::casimircontrolserver::Void,
+        req: &super::casimir_control::Void,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::Void>> {
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::Void>> {
         self.client.unary_call_async(&METHOD_CASIMIR_CONTROL_SERVICE_INIT, req, opt)
     }
 
     pub fn init_async(
         &self,
-        req: &super::casimircontrolserver::Void,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::Void>> {
+        req: &super::casimir_control::Void,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::Void>> {
         self.init_async_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn close_opt(
         &self,
-        req: &super::casimircontrolserver::Void,
+        req: &super::casimir_control::Void,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<super::casimircontrolserver::Void> {
+    ) -> ::grpcio::Result<super::casimir_control::Void> {
         self.client.unary_call(&METHOD_CASIMIR_CONTROL_SERVICE_CLOSE, req, opt)
     }
 
     pub fn close(
         &self,
-        req: &super::casimircontrolserver::Void,
-    ) -> ::grpcio::Result<super::casimircontrolserver::Void> {
+        req: &super::casimir_control::Void,
+    ) -> ::grpcio::Result<super::casimir_control::Void> {
         self.close_opt(req, ::grpcio::CallOption::default())
     }
 
     pub fn close_async_opt(
         &self,
-        req: &super::casimircontrolserver::Void,
+        req: &super::casimir_control::Void,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::Void>> {
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::Void>> {
         self.client.unary_call_async(&METHOD_CASIMIR_CONTROL_SERVICE_CLOSE, req, opt)
     }
 
     pub fn close_async(
         &self,
-        req: &super::casimircontrolserver::Void,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimircontrolserver::Void>> {
+        req: &super::casimir_control::Void,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::casimir_control::Void>> {
         self.close_async_opt(req, ::grpcio::CallOption::default())
     }
     pub fn spawn<F>(&self, f: F)
@@ -326,56 +324,56 @@ pub trait CasimirControlService {
     fn send_apdu(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::casimircontrolserver::SendApduRequest,
-        sink: ::grpcio::UnarySink<super::casimircontrolserver::SendApduReply>,
+        _req: super::casimir_control::SendApduRequest,
+        sink: ::grpcio::UnarySink<super::casimir_control::SendApduReply>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
     fn poll_a(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::casimircontrolserver::Void,
-        sink: ::grpcio::UnarySink<super::casimircontrolserver::SenderId>,
+        _req: super::casimir_control::Void,
+        sink: ::grpcio::UnarySink<super::casimir_control::SenderId>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
     fn set_radio_state(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::casimircontrolserver::RadioState,
-        sink: ::grpcio::UnarySink<super::casimircontrolserver::Void>,
+        _req: super::casimir_control::RadioState,
+        sink: ::grpcio::UnarySink<super::casimir_control::Void>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
     fn set_power_level(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::casimircontrolserver::PowerLevel,
-        sink: ::grpcio::UnarySink<super::casimircontrolserver::Void>,
+        _req: super::casimir_control::PowerLevel,
+        sink: ::grpcio::UnarySink<super::casimir_control::Void>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
     fn send_broadcast(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::casimircontrolserver::SendBroadcastRequest,
-        sink: ::grpcio::UnarySink<super::casimircontrolserver::SendBroadcastResponse>,
+        _req: super::casimir_control::SendBroadcastRequest,
+        sink: ::grpcio::UnarySink<super::casimir_control::SendBroadcastResponse>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
     fn init(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::casimircontrolserver::Void,
-        sink: ::grpcio::UnarySink<super::casimircontrolserver::Void>,
+        _req: super::casimir_control::Void,
+        sink: ::grpcio::UnarySink<super::casimir_control::Void>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
     fn close(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::casimircontrolserver::Void,
-        sink: ::grpcio::UnarySink<super::casimircontrolserver::Void>,
+        _req: super::casimir_control::Void,
+        sink: ::grpcio::UnarySink<super::casimir_control::Void>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
