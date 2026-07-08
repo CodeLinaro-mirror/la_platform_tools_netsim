@@ -35,6 +35,7 @@ rust_library_host {
         "libnetsim_next_nfc_actor",
         "libnetsim_next_packet_stream",
         "libnetsim_next_rootcanal_server",
+        "libnetsim_next_slirp_actor",
         "libnetsim_next_uwb_actor",
         "libnetsim_next_websocket_server",
         "libserde_json",

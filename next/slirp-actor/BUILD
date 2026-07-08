@@ -17,6 +17,7 @@ netsim_rust_library(
         "//next/libslirp-rs",
         "//next/model",
         "//next/packets",
+        "//next/slirp",
         "@bytes",
         "@futures",
         "@thiserror",
