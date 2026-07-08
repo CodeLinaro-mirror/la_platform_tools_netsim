@@ -485,6 +485,24 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_cgdcont_extra() {
+        let (rem, cmd) =
+            Command::parse(b"AT+CGDCONT=1,\"IPV6\",\"fast.t-mobile.com\",,0,0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::DefinePdpContext(
+                1,
+                QuotedString(b"IPV6"),
+                QuotedString(b"fast.t-mobile.com"),
+                None,
+                Some(0),
+                Some(0)
+            )
+        );
+    }
+
+    #[test]
     fn test_parse_cgeqmin() {
         let (rem, cmd) = Command::parse(b"AT+CGEQMIN=1,2,3,4,5,6").unwrap();
         assert!(rem.is_empty());

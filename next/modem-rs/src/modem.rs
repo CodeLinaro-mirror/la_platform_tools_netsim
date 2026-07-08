@@ -67,7 +67,7 @@ impl ModemImpl {
             sup_service: SupService::default(),
             misc_service: MiscService::default(),
             call_service: CallService::default(),
-            data_service: DataService::default(),
+            data_service: DataService::from_env(),
             phone_number: profile.msisdn.clone(),
             _state: State::Idle,
         }
