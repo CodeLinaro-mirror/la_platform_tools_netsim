@@ -21,6 +21,7 @@ from utils import (
     get_bazel_path,
     get_bazel_startup_options,
     get_bazel_targets,
+    get_netsim_binaries,
     platform_to_target_name,
     run,
 )
@@ -28,24 +29,12 @@ from utils import (
 
 class CompileInstallTask(Task):
 
-
   def __init__(self, args, env):
     super().__init__("CompileInstall")
     self.args = args
     self.out = Path(args.out_dir)
     self.env = env
-    if platform.system().lower() in ["linux", "darwin"]:
-      self.binaries = {
-          "netsim": "_stripped/netsim",
-          "netsimd": "_stripped/netsimd",
-          "netsimdx": "next/daemon/_stripped/daemon",
-      }
-    else:
-      self.binaries = {
-          "netsim": "next/cli/netsim",
-          "netsimd": "netsimd",
-          "netsimdx": "next/daemon/daemon",
-      }
+    self.binaries = get_netsim_binaries()
 
   def on_rm_error(self, func, path, exc_info):
     """Error handler for ``shutil.rmtree``.
