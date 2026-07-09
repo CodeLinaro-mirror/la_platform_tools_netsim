@@ -41,6 +41,10 @@ impl RootcanalCallbacks for TestCallbacks {
     ) -> Option<i32> {
         Some(tx_power)
     }
+
+    fn estimate_distance(&self, _source_id: u32, _destination_id: u32) -> u32 {
+        0
+    }
 }
 
 /// Callbacks for the sniffer controller, which forwards received LL packets.
