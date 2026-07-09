@@ -44,6 +44,7 @@ message ExecuteCellRequest {
     RemoteHold remote_hold = 10;
     SetSimStatus set_sim_status = 11;
     SetNetworkTechnology set_network_technology = 12;
+    SetNetworkTimezone set_network_timezone = 13;
   }
 }
 
@@ -138,4 +139,8 @@ message SetNetworkTechnology {
     NR = 3;
   }
   RadioTechnology tech = 1;
+}
+
+message SetNetworkTimezone {
+  string timezone = 1;
 }
