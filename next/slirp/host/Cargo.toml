@@ -1,0 +1,19 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "slirp-host"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytes = "1"
+log = "0.4"
+netsim-packets = { path = "../../packets" }
+slirp = { path = ".." }
+socket2 = { version = "0.6", features = ["all"] }
+tokio = { version = "1", features = ["full"] }
+tokio-tun = "0.11.5"
+
+[dev-dependencies]
+zerocopy = { version = "0.8", features = ["derive"] }

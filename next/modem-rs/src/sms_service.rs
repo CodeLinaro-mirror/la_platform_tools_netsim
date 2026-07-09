@@ -30,7 +30,7 @@ pub struct SmsService {
     storage2: MessageStorage,
     storage3: MessageStorage,
     smsc_address: String,
-    message_format: MessageFormat,
+    pub(crate) message_format: MessageFormat,
     pending_sms_destination: Option<String>,
     pub waiting_for_pdu_len: Option<usize>,
     pub waiting_for_pdu_store: bool,
@@ -73,7 +73,7 @@ impl SmsService {
         };
 
         let mr = self.message_reference.fetch_add(1, Ordering::Relaxed);
-        let response = format!("+CMGS: {}\r\n", mr);
+        let response = format!("+CMGS: {mr}\r\n");
         let mut handled = HandledCommand::ok_with_action(action);
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)
@@ -86,7 +86,7 @@ impl SmsService {
     ) -> ExecutionResult {
         if self.storage1 == MessageStorage::Sim {
             if let Some(index) = sim_service.store_sms(pdu) {
-                let response = format!("+CMGW: {}\r\n", index);
+                let response = format!("+CMGW: {index}\r\n");
                 let mut handled = HandledCommand::ok();
                 handled.responses.insert(0, response);
                 ExecutionResult::Handled(handled)
@@ -214,7 +214,7 @@ impl SmsService {
 
     pub fn handle_query_broadcast_config(&self) -> ExecutionResult {
         let (mode, mids, dcss) = &self.broadcast_config;
-        let response = format!("+CSCB: {},\"{}\",\"{}\"\r\n", mode, mids, dcss);
+        let response = format!("+CSCB: {mode},\"{mids}\",\"{dcss}\"\r\n");
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)

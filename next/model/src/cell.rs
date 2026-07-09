@@ -22,11 +22,14 @@ pub struct Cell {
     pub radio: crate::chip::Radio,
     /// A string representing the current state of the cellular modem.
     pub state: String,
+    /// SIM card type (0 = No SIM, 1 = Normal SIM, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_type: Option<i32>,
 }
 
 impl Default for Cell {
     fn default() -> Self {
-        Self { radio: crate::chip::Radio::default(), state: "idle".to_string() }
+        Self { radio: crate::chip::Radio::default(), state: "idle".to_string(), sim_type: None }
     }
 }
 

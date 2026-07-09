@@ -104,6 +104,10 @@ impl CallService {
         self.calls.clear();
     }
 
+    pub fn receive_hangup_from_peer_id(&mut self, peer_id: ModemId) {
+        self.calls.retain(|c| c.peer_id != Some(peer_id));
+    }
+
     pub fn handle_ring_timeout(&mut self, _call_token: u32) {
         self.calls.retain(|c| c.state != CallState::Incoming);
     }
@@ -305,9 +309,16 @@ impl CallService {
 
         match op {
             0 => {
+                let prev_len = self.calls.len();
                 self.calls.retain(|c| c.state != CallState::Held && !c.state.is_waiting());
+                if self.calls.len() < prev_len {
+                    return ExecutionResult::Handled(HandledCommand::ok_with_action(
+                        CommandAction::HangupCall(id),
+                    ));
+                }
             }
             1 => {
+                let prev_len = self.calls.len();
                 if let Some(idx) = index {
                     self.remove_call(idx);
                 } else {
@@ -318,6 +329,11 @@ impl CallService {
                             call.state = CallState::Active;
                         }
                     }
+                }
+                if self.calls.len() < prev_len {
+                    return ExecutionResult::Handled(HandledCommand::ok_with_action(
+                        CommandAction::HangupCall(id),
+                    ));
                 }
             }
             2 => {

@@ -16,7 +16,7 @@ use crate::world::ApWorld;
 
 // Helper: Calculate MIC (from wpa_auth.rs logic reversed/reused)
 fn calc_mic(kck: &[u8], frame: &[u8]) -> Vec<u8> {
-    let mic = Hmac(DigestType::SHA1, &kck.to_vec(), &frame.to_vec());
+    let mic = Hmac(DigestType::SHA1, kck, frame);
     mic[0..16].to_vec()
 }
 
@@ -31,7 +31,7 @@ fn prf(key: &[u8], label: &[u8], data: &[u8], bit_len: usize) -> Vec<u8> {
         input.push(0);
         input.extend_from_slice(data);
         input.push(i);
-        let hmac = Hmac(DigestType::SHA1, &key.to_vec(), &input);
+        let hmac = Hmac(DigestType::SHA1, key, &input);
         result.extend_from_slice(&hmac);
         i += 1;
     }

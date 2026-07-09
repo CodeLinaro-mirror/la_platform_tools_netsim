@@ -76,8 +76,7 @@ pub fn then_wait_for_response_containing(world: &mut World, name: &str, expected
     }
 
     panic!(
-        "Modem {} did not receive expected substring after {} attempts.\nExpected to contain: {:?}",
-        name, MAX_RESPONSE_RETRIES, expected
+        "Modem {name} did not receive expected substring after {MAX_RESPONSE_RETRIES} attempts.\nExpected to contain: {expected:?}"
     );
 }
 

@@ -18,7 +18,7 @@ pub const IP_P_UDP: u8 = 17;
 pub const IP_P_ICMPV6: u8 = 58;
 
 /// Represents the IPv4 header.
-#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
 #[repr(C)]
 pub struct Ipv4Header {
     pub version_ihl: u8,
@@ -74,7 +74,7 @@ impl Ipv4Header {
 }
 
 /// Represents the IPv6 header.
-#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
 #[repr(C)]
 pub struct Ipv6Header {
     pub version_tc_fl: U32<NetworkEndian>,

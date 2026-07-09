@@ -1,0 +1,75 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+genrule {
+    name: "libnetsim_next_ap_actor_bridge_header",
+    tools: ["cxxbridge"],
+    cmd: "$(location cxxbridge) $(in) --header > $(out)",
+    srcs: ["src/ffi.rs"],
+    out: ["ap_actor/ffi.rs.h"],
+}
+
+genrule {
+    name: "libnetsim_next_ap_actor_bridge_code",
+    tools: ["cxxbridge"],
+    cmd: "$(location cxxbridge) $(in) > $(out)",
+    srcs: ["src/ffi.rs"],
+    out: ["ap_actor/ffi.rs.cc"],
+}
+
+cc_library_static {
+    name: "libnetsim_next_ap_actor_cxx",
+    host_supported: true,
+    device_supported: false,
+    cflags: [
+        "-DRUST_CXX_NO_EXCEPTIONS",
+        "-DCONFIG_OPENSSL_INTERNAL_AES_WRAP",
+    ],
+    srcs: [
+        "src/crypto_ffi.cc",
+        ":libnetsim_next_ap_actor_bridge_code",
+    ],
+    generated_headers: [
+        "libnetsim_next_ap_actor_bridge_header",
+        "cxx-bridge-header",
+    ],
+    local_include_dirs: [
+        "src",
+    ],
+    shared_libs: [
+        "libcrypto",
+    ],
+}
+
+rust_library_host {
+    name: "libnetsim_next_ap_actor",
+    crate_name: "ap_actor",
+    stem: "libap_actor",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libcxx",
+        "libfutures",
+        "libnetsim_next_actor_framework",
+        "libnetsim_next_model",
+        "libnetsim_next_packets",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+        "libzerocopy",
+    ],
+    static_libs: [
+        "libnetsim_next_ap_actor_cxx",
+    ],
+    shared_libs: [
+        "libcrypto",
+    ],
+}

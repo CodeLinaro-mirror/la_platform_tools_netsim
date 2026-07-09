@@ -144,12 +144,14 @@ pub mod netsim {
   pub mod access_point;
   pub mod ble_service;
   pub mod cell;
+  pub mod nfc_service;
   pub mod frontend;
   pub mod hci_packet;
   pub mod model;
   pub mod packet_streamer;
   pub mod startup;
   pub mod stats;
+  pub mod casimir_control;
   pub use crate::rootcanal::configuration;
   pub mod packet {
       pub use super::hci_packet::*;
@@ -170,12 +172,15 @@ pub use netsim::config;
 pub use netsim::access_point;
 pub use netsim::ble_service;
 pub use netsim::cell;
+pub use netsim::nfc_service;
 pub use netsim::frontend;
 pub use netsim::hci_packet;
 pub use netsim::model;
 pub use netsim::packet_streamer;
 pub use netsim::startup;
 pub use netsim::stats;
+pub use netsim::casimir_control;
+pub use netsim::casimir_control as casimircontrolserver;
 pub use rootcanal::configuration;
 #[path = "netsim/frontend_grpc.rs"]
 pub mod frontend_grpc;
@@ -187,6 +192,10 @@ pub mod access_point_grpc;
 pub mod ble_service_grpc;
 #[path = "netsim/cell_grpc.rs"]
 pub mod cell_grpc;
+#[path = "netsim/casimir_control_grpc.rs"]
+pub mod casimir_control_grpc;
+#[path = "netsim/nfc_service_grpc.rs"]
+pub mod nfc_service_grpc;
 
 pub use protobuf;
 pub use protobuf::well_known_types::empty;

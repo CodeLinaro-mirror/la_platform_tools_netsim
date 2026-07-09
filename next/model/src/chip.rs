@@ -339,6 +339,7 @@ impl From<ChipKind> for ChipVariant {
             ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell {
                 radio: Default::default(),
                 state: "unknown".into(),
+                sim_type: None,
             }),
             ChipKind::CELLULAR_DATA => ChipVariant::CellularData(Default::default()),
             ChipKind::ETHERNET => ChipVariant::Ethernet(Default::default()),

@@ -219,7 +219,7 @@ fn is_7bit_dcs(dcs: u8) -> bool {
     }
 }
 
-fn get_current_timestamp_bcd() -> Vec<u8> {
+pub(crate) fn get_current_timestamp_bcd() -> Vec<u8> {
     let dt = Utc::now();
     vec![
         bcd::to_bcd_byte((dt.year() % 100) as u8),
@@ -230,6 +230,44 @@ fn get_current_timestamp_bcd() -> Vec<u8> {
         bcd::to_bcd_byte(dt.second() as u8),
         0, // Timezone: UTC (+00) -> BCD 00
     ]
+}
+
+/// Creates an SMS-DELIVER PDU from sender number and plain text, encoded in
+/// UCS-2. Returns the hex-encoded PDU string.
+pub fn create_deliver_pdu_ucs2(sender: &str, text: &str) -> String {
+    let rx_pdu_type = 0x24; // SMS-DELIVER, SRI=1, MMS=1
+    let scts = get_current_timestamp_bcd();
+
+    // 1. OA Address
+    let clean_sender = sender.strip_prefix('+').unwrap_or(sender);
+    let address_len_digits = clean_sender.len() as u8;
+    let address_type = if sender.starts_with('+') { 0x91 } else { 0x81 };
+    let bcd_digits = bcd::string_to_bcd(clean_sender);
+
+    let mut address_bytes = Vec::with_capacity(2 + bcd_digits.len());
+    address_bytes.push(address_len_digits);
+    address_bytes.push(address_type);
+    address_bytes.extend(bcd_digits);
+
+    // 2. User Data (UCS-2)
+    let utf16_chars: Vec<u16> = text.encode_utf16().collect();
+    let mut ud_bytes = Vec::with_capacity(1 + utf16_chars.len() * 2);
+    ud_bytes.push((utf16_chars.len() * 2) as u8); // UDL (length of user data in bytes for UCS2)
+    for &ch in &utf16_chars {
+        ud_bytes.push((ch >> 8) as u8);
+        ud_bytes.push((ch & 0xFF) as u8);
+    }
+
+    let bytes: Vec<u8> = std::iter::once(0x00) // 1. SCA (default)
+        .chain(std::iter::once(rx_pdu_type)) // 2. PDU-Type
+        .chain(address_bytes.iter().copied()) // 3. OA
+        .chain(std::iter::once(0x00)) // 4. PID (SmsDefault)
+        .chain(std::iter::once(0x08)) // 5. DCS (UCS-2)
+        .chain(scts) // 6. SCTS
+        .chain(ud_bytes.iter().copied()) // 7. User Data (UDL + UD)
+        .collect();
+
+    hex::encode_upper(bytes)
 }
 
 fn try_decode_hex(pdu: &[u8]) -> Option<Vec<u8>> {

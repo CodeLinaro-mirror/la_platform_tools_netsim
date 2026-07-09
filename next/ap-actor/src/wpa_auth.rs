@@ -55,7 +55,7 @@ impl WpaAuthenticator {
         gtk: [u8; 16],
     ) -> Self {
         // Derive PMK using PBKDF2-HMAC-SHA1(psk, ssid, 4096 iterations, 32 bytes)
-        let pmk = crate::ffi::Pbkdf2HmacSha1(&psk.to_vec(), &ssid.to_vec(), 4096, 32);
+        let pmk = crate::ffi::Pbkdf2HmacSha1(psk, ssid, 4096, 32);
         Self {
             bssid,
             sta_addr,
@@ -266,7 +266,7 @@ impl WpaAuthenticator {
             input.extend_from_slice(data);
             input.push(i);
 
-            let hmac = Hmac(DigestType::SHA1, &key.to_vec(), &input);
+            let hmac = Hmac(DigestType::SHA1, key, &input);
             result.extend_from_slice(&hmac);
             i += 1;
         }
@@ -277,7 +277,7 @@ impl WpaAuthenticator {
     fn calc_mic_for_frame(&self, frame: &[u8]) -> Vec<u8> {
         // MIC is calculated over the EAPol frame with MIC field set to 0.
         // Hmac-SHA1-128 (first 16 bytes of SHA1) for CCMP.
-        let mic = Hmac(DigestType::SHA1, &self.kck, &frame.to_vec());
+        let mic = Hmac(DigestType::SHA1, &self.kck, frame);
         mic[0..16].to_vec()
     }
 

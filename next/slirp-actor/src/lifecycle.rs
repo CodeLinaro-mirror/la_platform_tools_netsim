@@ -36,9 +36,9 @@ impl ActorLifecycle for SlirpActor {
         }
         self.mac_table.insert(src_mac, id);
 
-        // UPLINK FLOW (Client -> libslirp)
-        if let Some(slirp) = &self.libslirp {
-            slirp.input(msg);
+        // UPLINK FLOW (Client -> backend)
+        if let Some(instance) = &self.backend_instance {
+            instance.input(msg);
         }
     }
 
@@ -85,13 +85,35 @@ impl ActorLifecycle for SlirpActor {
     }
 
     async fn on_typed_stream_closed(&mut self, id: usize, _ctx: &mut DynContext<Self>) {
+        if Some(id) != self.active_stream_id {
+            tracing::info!(
+                "SlirpActor: Ignored closed event for stale gateway downlink stream, id {id} (active: {:?})",
+                self.active_stream_id
+            );
+            return;
+        }
         tracing::warn!(
             "SlirpActor: Gateway downlink stream closed, id {id}. Clearing network stack."
         );
-        self.libslirp = None;
+        self.active_stream_id = None;
+        self.active_task_id = None;
+        if let Some(instance) = self.backend_instance.take() {
+            instance.shutdown();
+        }
     }
 
-    async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<Self>) {}
+    async fn on_task_closed(&mut self, id: u32, _ctx: &mut DynContext<Self>) {
+        if Some(id) == self.active_task_id {
+            tracing::warn!("SlirpActor: Active native loop task closed, id {id}");
+            self.active_task_id = None;
+            self.active_stream_id = None;
+            if let Some(instance) = self.backend_instance.take() {
+                instance.shutdown();
+            }
+        } else {
+            tracing::info!("SlirpActor: Ignored closed event for stale task, id {id}");
+        }
+    }
 }
 
 #[cfg(test)]

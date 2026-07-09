@@ -21,6 +21,7 @@ use netsim_proto::{
     frontend::{CreateDeviceRequest, DeleteChipRequest, DeleteDeviceRequest},
     frontend_grpc::FrontendServiceClient,
     model::{ChipCreate, DeviceCreate},
+    nfc_service_grpc::NfcServiceClient,
     packet_streamer_grpc::PacketStreamerClient,
     protobuf::{EnumOrUnknown, MessageField},
 };
@@ -36,6 +37,7 @@ pub struct World {
     pub daemon_task: Option<tokio::task::JoinHandle<()>>,
     pub frontend_client: FrontendServiceClient,
     pub access_point_client: AccessPointServiceClient,
+    pub nfc_client: NfcServiceClient,
     pub packet_client: PacketStreamerClient,
     pub capture_client: capture_actor::CaptureClient,
     pub packet_sender:
@@ -94,6 +96,7 @@ impl World {
         let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", grpc_port));
         let frontend_client = FrontendServiceClient::new(ch.clone());
         let access_point_client = AccessPointServiceClient::new(ch.clone());
+        let nfc_client = NfcServiceClient::new(ch.clone());
         let packet_client = PacketStreamerClient::new(ch.clone());
 
         World {
@@ -101,6 +104,7 @@ impl World {
             daemon_task: None,
             frontend_client,
             access_point_client,
+            nfc_client,
             packet_client,
             capture_client,
             packet_sender: None,
