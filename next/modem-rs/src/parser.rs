@@ -279,9 +279,15 @@ pub enum Command<'a> {
     /// PDP context activate
     #[command(tag = "AT+CGACT=")]
     SetPdpContextActivate(u8, u8),
+    /// Query PDP context activate status
+    #[command(tag = "AT+CGACT?")]
+    QueryPdpContextActivate,
     /// PS attach or detach
     #[command(tag = "AT+CGATT=")]
     SetPsAttach(u8),
+    /// Query PS attach status
+    #[command(tag = "AT+CGATT?")]
+    QueryPsAttach,
     /// PDP context modify
     #[command(tag = "AT+CGCMOD=")]
     SetPdpContextModify(u8),

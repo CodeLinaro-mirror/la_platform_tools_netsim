@@ -3,7 +3,7 @@
 
 // src/data_service.rs
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
     cuttlefish::read_cuttlefish_config,
@@ -33,11 +33,12 @@ pub struct PdpContext {
 }
 
 pub struct DataService {
-    pdp_contexts: HashMap<u8, PdpContext>,
+    pdp_contexts: BTreeMap<u8, PdpContext>,
     ip_address: Option<String>,
     prefixlen: Option<u32>,
     gateway: Option<String>,
     dns: Option<String>,
+    ps_attached: bool,
 }
 
 impl DataService {
@@ -47,7 +48,14 @@ impl DataService {
         gateway: Option<String>,
         dns: Option<String>,
     ) -> Self {
-        Self { pdp_contexts: HashMap::new(), ip_address, prefixlen, gateway, dns }
+        Self {
+            pdp_contexts: BTreeMap::new(),
+            ip_address,
+            prefixlen,
+            gateway,
+            dns,
+            ps_attached: true,
+        }
     }
 
     pub fn from_env() -> Self {
@@ -93,7 +101,7 @@ impl DataService {
             PdpContext {
                 pdp_type: String::from_utf8(pdp_type.to_vec()).unwrap_or_default(),
                 apn: String::from_utf8(apn.to_vec()).unwrap_or_default(),
-                active: true, // Goldfish expects data to be auto-activated
+                active: self.ps_attached, // Goldfish expects data to be auto-activated
                 qos: Qos::default(),
                 req_qos: Qos::default(),
                 gprs_qos: Qos::default(),
@@ -105,7 +113,7 @@ impl DataService {
 
     pub fn handle_query_pdp_context(&self) -> ExecutionResult {
         let mut responses = Vec::new();
-        for (cid, context) in self.pdp_contexts.iter() {
+        for (cid, context) in &self.pdp_contexts {
             responses.push(format!(
                 "+CGDCONT: {},\"{}\",\"{}\",,0,0\r\n",
                 cid, context.pdp_type, context.apn
@@ -134,7 +142,7 @@ impl DataService {
 
     pub fn handle_query_quality_of_service_minimum(&self) -> ExecutionResult {
         let mut responses = Vec::new();
-        for (cid, context) in self.pdp_contexts.iter() {
+        for (cid, context) in &self.pdp_contexts {
             responses.push(format!(
                 "+CGEQMIN: {},{},{},{},{},{}\r\n",
                 cid,
@@ -168,7 +176,7 @@ impl DataService {
 
     pub fn handle_query_quality_of_service_requested(&self) -> ExecutionResult {
         let mut responses = Vec::new();
-        for (cid, context) in self.pdp_contexts.iter() {
+        for (cid, context) in &self.pdp_contexts {
             responses.push(format!(
                 "+CGEQREQ: {},{},{},{},{},{}\r\n",
                 cid,
@@ -202,7 +210,7 @@ impl DataService {
 
     pub fn handle_query_quality_of_service_minimum_gprs(&self) -> ExecutionResult {
         let mut responses = Vec::new();
-        for (cid, context) in self.pdp_contexts.iter() {
+        for (cid, context) in &self.pdp_contexts {
             responses.push(format!(
                 "+CGQMIN: {},{},{},{},{},{}\r\n",
                 cid,
@@ -236,7 +244,7 @@ impl DataService {
 
     pub fn handle_query_quality_of_service_requested_gprs(&self) -> ExecutionResult {
         let mut responses = Vec::new();
-        for (cid, context) in self.pdp_contexts.iter() {
+        for (cid, context) in &self.pdp_contexts {
             responses.push(format!(
                 "+CGQREQ: {},{},{},{},{},{}\r\n",
                 cid,
@@ -260,8 +268,32 @@ impl DataService {
         }
     }
 
-    pub fn handle_set_ps_attach(&self) -> ExecutionResult {
+    pub fn handle_set_ps_attach(&mut self, state: u8) -> ExecutionResult {
+        self.ps_attached = state == 1;
+        if !self.ps_attached {
+            for context in self.pdp_contexts.values_mut() {
+                context.active = false;
+            }
+        }
         ExecutionResult::Handled(HandledCommand::ok())
+    }
+
+    pub fn handle_query_ps_attach(&self) -> ExecutionResult {
+        let state = if self.ps_attached { 1 } else { 0 };
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec![format!("+CGATT: {}\r\n", state), "OK\r\n".to_string()],
+            action: None,
+        })
+    }
+
+    pub fn handle_query_pdp_context_activate(&self) -> ExecutionResult {
+        let mut responses = Vec::new();
+        for (cid, context) in &self.pdp_contexts {
+            let state = if context.active { 1 } else { 0 };
+            responses.push(format!("+CGACT: {},{}\r\n", cid, state));
+        }
+        responses.push("OK\r\n".to_string());
+        ExecutionResult::Handled(HandledCommand { responses, action: None })
     }
 
     pub fn handle_set_pdp_context_modify(&self) -> ExecutionResult {
@@ -380,7 +412,9 @@ impl DataService {
                     if *state > 1 || *cid == 0 { (*state, *cid) } else { (*cid, *state) };
                 self.handle_set_pdp_context_activate(real_cid, real_state)
             }
-            Command::SetPsAttach(_) => self.handle_set_ps_attach(),
+            Command::QueryPdpContextActivate => self.handle_query_pdp_context_activate(),
+            Command::SetPsAttach(state) => self.handle_set_ps_attach(*state),
+            Command::QueryPsAttach => self.handle_query_ps_attach(),
             Command::SetPdpContextModify(_) => self.handle_set_pdp_context_modify(),
             Command::EnterDataState(_) => self.handle_enter_data_state(),
             Command::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
@@ -494,6 +528,14 @@ mod tests {
         let mut service = DataService::default();
         service.handle_define_pdp_context(1, QuotedString(b""), QuotedString(b""));
         assert!(service.pdp_contexts.get(&1).unwrap().active);
+    }
+
+    #[test]
+    fn test_pdp_context_no_auto_activation_when_detached() {
+        let mut service = DataService::default();
+        service.handle_set_ps_attach(0);
+        service.handle_define_pdp_context(1, QuotedString(b""), QuotedString(b""));
+        assert!(!service.pdp_contexts.get(&1).unwrap().active);
     }
 
     #[test]

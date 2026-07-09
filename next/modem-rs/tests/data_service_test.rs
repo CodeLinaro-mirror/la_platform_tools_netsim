@@ -390,3 +390,60 @@ fn test_goldfish_ril_compat_incorrect_cgact() {
     then_response_is(&mut world, "A", "+CGPADDR: 2,\"0.0.0.0\"");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_query_pdp_context_activate() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Define context 1 and 2
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"apn1\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=2,\"IP\",\"apn2\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // By default, contexts are auto-activated in Goldfish mode.
+    when_at_command_sent(&mut world, "A", "AT+CGACT?");
+    then_response_is(&mut world, "A", "+CGACT: 1,1");
+    then_response_is(&mut world, "A", "+CGACT: 2,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Deactivate context 1
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,0");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Query again
+    when_at_command_sent(&mut world, "A", "AT+CGACT?");
+    then_response_is(&mut world, "A", "+CGACT: 1,0");
+    then_response_is(&mut world, "A", "+CGACT: 2,1");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_ps_attach_detach() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Verify initially attached
+    when_at_command_sent(&mut world, "A", "AT+CGATT?");
+    then_response_is(&mut world, "A", "+CGATT: 1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Define a context
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 3. Detach PS
+    when_at_command_sent(&mut world, "A", "AT+CGATT=0");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 4. Verify detached
+    when_at_command_sent(&mut world, "A", "AT+CGATT?");
+    then_response_is(&mut world, "A", "+CGATT: 0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Verify context is deactivated
+    when_at_command_sent(&mut world, "A", "AT+CGACT?");
+    then_response_is(&mut world, "A", "+CGACT: 1,0");
+    then_response_is(&mut world, "A", "OK");
+}
