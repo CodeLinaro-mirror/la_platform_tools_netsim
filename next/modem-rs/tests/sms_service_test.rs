@@ -157,6 +157,14 @@ fn test_cnma() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_cnma_with_val() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CNMA=1");
+    then_response_is(&mut world, "A", "OK");
+}
+
 // Scenario: Set SMS Message Format
 //   Given a modem "A"
 //   When AT command "AT+CMGF=1" is sent to "A"

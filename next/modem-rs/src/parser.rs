@@ -189,6 +189,9 @@ pub enum Command<'a> {
     /// 3GPP TS 27.005: Delete SMS Message
     #[command(tag = "AT+CMGD=")]
     DeleteSms(u8),
+    /// 3GPP TS 27.005: New message acknowledgement with value (e.g. AT+CNMA=1)
+    #[command(tag = "AT+CNMA=")]
+    SendSmsAckWithVal(u8),
     /// 3GPP TS 27.005: New message acknowledgement
     #[command(tag = "AT+CNMA")]
     SendSmsAck,
