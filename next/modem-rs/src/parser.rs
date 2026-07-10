@@ -21,6 +21,14 @@ impl<'a> AsRef<[u8]> for QuotedString<'a> {
     }
 }
 
+impl<'a> std::ops::Deref for QuotedString<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
 impl<'a> Parsable<'a> for QuotedString<'a> {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         use nom::{bytes::complete::take_while, sequence::delimited};

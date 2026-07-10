@@ -24,6 +24,7 @@ pub struct NetworkService {
     lte_unsol_mode: u8,
     radio_power: u8,
     plmn: String,
+    cops_mode: u8,
     cops_format: u8,
     current_network_mode: u8,
     preferred_network_mode: u32,
@@ -42,6 +43,7 @@ impl Default for NetworkService {
             lte_unsol_mode: 0,
             radio_power: 1,
             plmn: crate::constants::DEFAULT_PLMN.to_string(),
+            cops_mode: 0,
             cops_format: 0,
             current_network_mode: crate::constants::CTEC_DEFAULT_CURRENT_TECH,
             preferred_network_mode: crate::constants::CTEC_DEFAULT_PREFERRED_MASK,
@@ -207,11 +209,23 @@ impl NetworkService {
     // --- Pure command handlers ---
 
     pub fn handle_query_operator(&self) -> ExecutionResult {
-        let cops_response = match self.cops_format {
-            0 => format!("+COPS: 0,0,\"{}\"\r\n", crate::constants::DEFAULT_OPERATOR_NAME_LONG),
-            1 => format!("+COPS: 0,1,\"{}\"\r\n", crate::constants::DEFAULT_OPERATOR_NAME_SHORT),
-            2 => format!("+COPS: 0,2,{}\r\n", self.plmn),
-            _ => "+COPS: 0\r\n".to_string(),
+        let cops_response = if self.is_attached {
+            match self.cops_format {
+                0 => format!(
+                    "+COPS: {},0,\"{}\"\r\n",
+                    self.cops_mode,
+                    crate::constants::DEFAULT_OPERATOR_NAME_LONG
+                ),
+                1 => format!(
+                    "+COPS: {},1,\"{}\"\r\n",
+                    self.cops_mode,
+                    crate::constants::DEFAULT_OPERATOR_NAME_SHORT
+                ),
+                2 => format!("+COPS: {},2,{}\r\n", self.cops_mode, self.plmn),
+                _ => format!("+COPS: {}\r\n", self.cops_mode),
+            }
+        } else {
+            format!("+COPS: {}\r\n", self.cops_mode)
         };
         ExecutionResult::Handled(HandledCommand {
             responses: vec![cops_response, "OK\r\n".to_string()],
@@ -219,13 +233,149 @@ impl NetworkService {
         })
     }
 
-    pub fn handle_set_operator(&mut self, _mode: u8, format: Option<u8>) -> ExecutionResult {
-        if let Some(fmt) = format
-            && (fmt == 0 || fmt == 1 || fmt == 2)
-        {
-            self.cops_format = fmt;
+    pub fn handle_set_operator(
+        &mut self,
+        mode: u8,
+        format: Option<u8>,
+        oper: Option<&[u8]>,
+    ) -> ExecutionResult {
+        info!(
+            "handle_set_operator: mode={}, format={:?}, oper={:?}",
+            mode,
+            format,
+            oper.map(|o| String::from_utf8_lossy(o))
+        );
+
+        if format.is_some_and(|fmt| fmt > 2) {
+            return ExecutionResult::Handled(HandledCommand::error());
         }
-        ExecutionResult::Handled(HandledCommand::ok())
+
+        match mode {
+            0 => {
+                self.cops_mode = 0;
+                if let Some(fmt) = format {
+                    self.cops_format = fmt;
+                }
+                let mut responses = Vec::new();
+                if !self.is_attached && self.radio_power == 1 {
+                    responses.extend(self.attach_network());
+                }
+                responses.push("OK\r\n".to_string());
+                ExecutionResult::Handled(HandledCommand { responses, action: None })
+            }
+            1 => {
+                if let Some(op_bytes) = oper {
+                    let op_str = match std::str::from_utf8(op_bytes) {
+                        Ok(s) => s,
+                        Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
+                    };
+
+                    let prev_cops_mode = self.cops_mode;
+                    self.cops_mode = 1;
+                    if let Some(fmt) = format {
+                        self.cops_format = fmt;
+                    }
+
+                    let is_valid_operator = op_str == crate::constants::DEFAULT_PLMN
+                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
+                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
+
+                    if is_valid_operator {
+                        self.plmn = crate::constants::DEFAULT_PLMN.to_string();
+                        let mut responses = Vec::new();
+                        if !self.is_attached && self.radio_power == 1 {
+                            responses.extend(self.attach_network());
+                        }
+                        responses.push("OK\r\n".to_string());
+                        ExecutionResult::Handled(HandledCommand { responses, action: None })
+                    } else {
+                        self.cops_mode = prev_cops_mode;
+                        self.is_attached = false;
+                        self.voice_registration = RegistrationStatus::Denied;
+                        self.data_registration = RegistrationStatus::Denied;
+                        let mut responses = Vec::new();
+                        if let Some(urc) = self.format_creg_urc(self.voice_registration) {
+                            responses.push(urc);
+                        }
+                        if let Some(urc) = self.format_cgreg_urc(self.data_registration) {
+                            responses.push(urc);
+                        }
+                        if let Some(urc) = self.format_cereg_urc(self.data_registration) {
+                            responses.push(urc);
+                        }
+                        responses.push("ERROR\r\n".to_string());
+                        ExecutionResult::Handled(HandledCommand { responses, action: None })
+                    }
+                } else {
+                    ExecutionResult::Handled(HandledCommand::error())
+                }
+            }
+            2 => {
+                self.cops_mode = 2;
+                if let Some(fmt) = format {
+                    self.cops_format = fmt;
+                }
+                let mut responses = Vec::new();
+                if self.is_attached {
+                    self.is_attached = false;
+                    self.voice_registration = RegistrationStatus::NotRegistered;
+                    self.data_registration = RegistrationStatus::NotRegistered;
+                    if let Some(urc) = self.format_creg_urc(self.voice_registration) {
+                        responses.push(urc);
+                    }
+                    if let Some(urc) = self.format_cgreg_urc(self.data_registration) {
+                        responses.push(urc);
+                    }
+                    if let Some(urc) = self.format_cereg_urc(self.data_registration) {
+                        responses.push(urc);
+                    }
+                }
+                responses.push("OK\r\n".to_string());
+                ExecutionResult::Handled(HandledCommand { responses, action: None })
+            }
+            3 => {
+                if let Some(fmt) = format {
+                    self.cops_format = fmt;
+                    ExecutionResult::Handled(HandledCommand::ok())
+                } else {
+                    ExecutionResult::Handled(HandledCommand::error())
+                }
+            }
+            4 => {
+                if let Some(op_bytes) = oper {
+                    let op_str = match std::str::from_utf8(op_bytes) {
+                        Ok(s) => s,
+                        Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
+                    };
+
+                    self.cops_mode = 4;
+                    if let Some(fmt) = format {
+                        self.cops_format = fmt;
+                    }
+
+                    let manual_success = op_str == crate::constants::DEFAULT_PLMN
+                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
+                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
+                    let mut responses = Vec::new();
+                    if manual_success {
+                        self.plmn = crate::constants::DEFAULT_PLMN.to_string();
+                        if !self.is_attached && self.radio_power == 1 {
+                            responses.extend(self.attach_network());
+                        }
+                    } else {
+                        self.cops_mode = 0;
+                        if !self.is_attached && self.radio_power == 1 {
+                            responses.extend(self.attach_network());
+                        }
+                    }
+                    responses.push("OK\r\n".to_string());
+                    ExecutionResult::Handled(HandledCommand { responses, action: None })
+                } else {
+                    ExecutionResult::Handled(HandledCommand::error())
+                }
+            }
+            _ => ExecutionResult::Handled(HandledCommand::error()),
+        }
     }
 
     fn format_creg_urc(&self, status: RegistrationStatus) -> Option<String> {
@@ -506,7 +656,9 @@ impl NetworkService {
     pub fn execute(&mut self, command: &Command, enable_unsolicited_urcs: bool) -> ExecutionResult {
         match command {
             Command::QueryOperator => self.handle_query_operator(),
-            Command::SetOperator { mode, format, .. } => self.handle_set_operator(*mode, *format),
+            Command::SetOperator { mode, format, oper } => {
+                self.handle_set_operator(*mode, *format, oper.as_deref())
+            }
             Command::QuerySignalStrength => self.handle_query_signal_strength(),
             Command::QueryExtendedSignalQuality => self.handle_query_extended_signal_quality(),
             Command::QueryVoiceNetworkRegistration => self.handle_query_voice_registration(),
