@@ -92,14 +92,16 @@ impl Medium {
         tx_state.stations = stations;
 
         // Remember which AP this station is sending infrastructure frames to
-        if tx_state.infra_target != InfraTarget::None
-            && let Some(b) = bssid
-            && !b.is_multicast()
-        {
-            self.key_store.set_station_bssid(src_mac, b);
-            // Also map hardware MAC (hwsim_addr) to ensure Slirp responses can be routed
-            if let Some(hwsim_addr) = tx_state.frame.transmitter {
-                self.key_store.set_station_bssid(hwsim_addr, b);
+        #[allow(clippy::collapsible_if)]
+        if tx_state.infra_target != InfraTarget::None {
+            if let Some(b) = bssid {
+                if !b.is_multicast() {
+                    self.key_store.set_station_bssid(src_mac, b);
+                    // Also map hardware MAC (hwsim_addr) to ensure Slirp responses can be routed
+                    if let Some(hwsim_addr) = tx_state.frame.transmitter {
+                        self.key_store.set_station_bssid(hwsim_addr, b);
+                    }
+                }
             }
         }
 

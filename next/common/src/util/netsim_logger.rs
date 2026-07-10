@@ -19,7 +19,9 @@ fn log_current_time() -> String {
 pub fn init(prefix: &'static str, is_verbose: bool) {
     let _ = LogTracer::init();
 
-    let builder = tracing_subscriber::fmt().event_format(CustomFormatter { prefix });
+    let builder = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .event_format(CustomFormatter { prefix });
 
     #[cfg(not(feature = "cuttlefish"))]
     {

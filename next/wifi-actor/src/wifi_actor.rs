@@ -7,7 +7,7 @@ use actor_framework::DynContext;
 use ap_actor::{ApClient, SharedKeyStore};
 use netsim_model::{Chip, ChipId, NetsimRadioStats};
 use netsim_packets::Ieee80211;
-use netsim_proto::stats::WifiStats as ProtoWifiStats;
+use netsim_proto::stats::WifiIpcStats as ProtoWifiIpcStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
 #[cfg(not(target_os = "linux"))]
@@ -35,7 +35,7 @@ pub enum WifiReq {
 pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
-    GlobalStats(Box<ProtoWifiStats>),
+    GlobalStats(Box<ProtoWifiIpcStats>),
     Chip(netsim_model::Chip),
 }
 
@@ -221,22 +221,24 @@ impl WifiActor {
                                     if let (Some(initiator), Some(responder)) = (
                                         self.active_chips.get(&ChipId(chip_id)),
                                         self.active_chips.get(&ChipId(peer_id)),
-                                    ) && let Some(responses) = crate::ftm::handle_ftm_request(
-                                        &frame,
-                                        &initiator.pose.position,
-                                        &responder.pose.position,
                                     ) {
-                                        debug!(
-                                            "Simulated FTM Response from {} to {}",
-                                            peer_id, chip_id
-                                        );
-                                        for resp in responses {
-                                            self.out_queue.push((chip_id, resp));
+                                        if let Some(responses) = crate::ftm::handle_ftm_request(
+                                            &frame,
+                                            &initiator.pose.position,
+                                            &responder.pose.position,
+                                        ) {
+                                            debug!(
+                                                "Simulated FTM Response from {} to {}",
+                                                peer_id, chip_id
+                                            );
+                                            for resp in responses {
+                                                self.out_queue.push((chip_id, resp));
+                                            }
+                                            // Suppress generic transmission.
+                                            // Act as a Hardware Offload/Medium Interception to
+                                            // ensure ONLY the simulated FTM response is sent.
+                                            return;
                                         }
-                                        // Suppress generic transmission.
-                                        // Act as a Hardware Offload/Medium Interception to
-                                        // ensure ONLY the simulated FTM response is sent.
-                                        return;
                                     }
                                 }
                             }

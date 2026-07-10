@@ -9,5 +9,7 @@ edition = "2024"
 [dependencies]
 actor-framework = { path = "../actor-framework" }
 async-trait = "0.1"
+futures = "0.3"
 link-api = { path = "../link-api" }
 netsim-model = { path = "../model" }
+tracing = "0.1"

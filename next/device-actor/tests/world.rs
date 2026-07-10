@@ -392,7 +392,9 @@ impl World {
             for id in chips.keys() {
                 if let Some(stat) = ws_lock.get(&id.0) {
                     use netsim_proto::protobuf::Message;
-                    return Ok(Some(stat.write_to_bytes().unwrap_or_default()));
+                    let mut ipc_stats = netsim_proto::stats::WifiIpcStats::new();
+                    ipc_stats.wifi_stats = netsim_proto::protobuf::MessageField::some(stat.clone());
+                    return Ok(Some(ipc_stats.write_to_bytes().unwrap_or_default()));
                 }
             }
             Ok(None)

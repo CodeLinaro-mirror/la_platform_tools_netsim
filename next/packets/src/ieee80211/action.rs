@@ -33,6 +33,9 @@ pub mod category {
 
 /// Public Action Field Values
 pub mod public_action {
+    pub const VENDOR_SPECIFIC: u8 = 9;
+    pub const GAS_INITIAL_REQUEST: u8 = 10;
+    pub const GAS_INITIAL_RESPONSE: u8 = 11;
     pub const FTM_REQUEST: u8 = 32;
     pub const FINE_TIMING_MEASUREMENT: u8 = 33;
 }
@@ -42,6 +45,14 @@ pub mod public_action {
 pub struct ActionHeader {
     pub category: u8,
     pub action: u8,
+}
+
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy)]
+#[repr(C, packed)]
+pub struct VendorSpecificPublicActionHeader {
+    pub dialog_token: u8,
+    pub oui: [u8; 3],
+    pub oui_type: u8,
 }
 
 #[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy)]
@@ -81,3 +92,115 @@ pub struct FineTimingMeasurement {
 // Bit 4-7: Number of Bursts Exponent
 pub const FTM_PARAM_ASAP: u8 = 0x01;
 pub const FTM_PARAM_LMR_FEEDBACK: u8 = 0x02;
+
+/// Wi-Fi Aware (NAN) constants and header definitions
+pub mod nan {
+    pub const OUI: [u8; 3] = [0x50, 0x6F, 0x9A];
+    pub const OUI_TYPE: u8 = 0x13;
+
+    pub mod attr {
+        pub const SDA: u8 = 0x03;
+        pub const NDP: u8 = 0x10;
+    }
+
+    pub mod service_type {
+        pub const PUBLISH: u8 = 0;
+        pub const SUBSCRIBE: u8 = 1;
+        pub const FOLLOW_UP: u8 = 2;
+    }
+
+    pub mod ndp_type {
+        pub const REQUEST: u8 = 0;
+        pub const RESPONSE: u8 = 1;
+        pub const CONFIRM: u8 = 2;
+        pub const TERMINATE: u8 = 4;
+    }
+}
+
+/// Wi-Fi Direct (P2P) constants and header definitions
+pub mod p2p {
+    pub const OUI: [u8; 3] = [0x50, 0x6F, 0x9A];
+    pub const OUI_TYPE: u8 = 0x09;
+
+    pub mod action_type {
+        pub const GO_NEG_REQ: u8 = 0;
+        pub const GO_NEG_RESP: u8 = 1;
+        pub const GO_NEG_CONF: u8 = 2;
+        pub const INVITATION_REQ: u8 = 3;
+        pub const INVITATION_RESP: u8 = 4;
+        pub const DEV_DISC_REQ: u8 = 5;
+        pub const DEV_DISC_RESP: u8 = 6;
+        pub const PROV_DISC_REQ: u8 = 7;
+        pub const PROV_DISC_RESP: u8 = 8;
+    }
+}
+
+/// Wi-Fi Easy Connect (DPP) constants and header definitions
+pub mod dpp {
+    pub const OUI: [u8; 3] = [0x50, 0x6F, 0x9A];
+    pub const OUI_TYPE: u8 = 0x1A;
+
+    pub mod action_type {
+        pub const AUTH_REQ: u8 = 0;
+        pub const AUTH_RESP: u8 = 1;
+        pub const AUTH_CONF: u8 = 2;
+        pub const CONFIG_RESULT: u8 = 11;
+    }
+}
+
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy)]
+#[repr(C, packed)]
+pub struct NanAttributeHeader {
+    pub id: u8,
+    pub len: [u8; 2],
+}
+
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy)]
+#[repr(C, packed)]
+pub struct NanSdaHeader {
+    pub service_id: [u8; 6],
+    pub instance_id: u8,
+    pub req_instance_id: u8,
+    pub control: u8,
+}
+
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy)]
+#[repr(C, packed)]
+pub struct NanNdpHeader {
+    pub dialog_token: u8,
+    pub type_and_status: u8,
+}
+
+/// Iterator for NAN Attributes in a byte slice.
+pub struct NanAttributeIterator<'a> {
+    data: &'a [u8],
+}
+
+impl<'a> NanAttributeIterator<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        Self { data }
+    }
+}
+
+pub struct NanAttribute<'a> {
+    pub id: u8,
+    pub val: &'a [u8],
+}
+
+impl<'a> Iterator for NanAttributeIterator<'a> {
+    type Item = NanAttribute<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.data.is_empty() {
+            return None;
+        }
+        let (hdr, rest) = NanAttributeHeader::ref_from_prefix(self.data).ok()?;
+        let len = u16::from_le_bytes(hdr.len) as usize;
+        if len > rest.len() {
+            return None;
+        }
+        let (val, next) = rest.split_at(len);
+        self.data = next;
+        Some(NanAttribute { id: hdr.id, val })
+    }
+}

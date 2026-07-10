@@ -16,6 +16,14 @@ const STATS_PRINT_OPTIONS: PrintOptions = PrintOptions {
 
 const DEFAULT_STATS_FILENAME: &str = "netsim_session_stats.json";
 
+pub struct CombinedStatsInputs {
+    pub active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
+    pub wifi_stats: Option<netsim_proto::stats::WifiStats>,
+    pub wifi_api: Option<netsim_proto::stats::WifiApiStats>,
+    pub nfc_stats: Option<netsim_proto::stats::NfcStats>,
+    pub nfc_service_stats: Option<netsim_proto::stats::NfcServiceStats>,
+}
+
 #[derive(Debug)]
 pub struct Stats {
     proto: ProtoNetsimStats,
@@ -84,19 +92,26 @@ impl Stats {
         self.proto.device_stats.push(device_stats);
     }
 
-    pub fn get_combined_stats(
-        &mut self,
-        mut active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
-        wifi_stats: Option<netsim_proto::stats::WifiStats>,
-        nfc_stats: Option<netsim_proto::stats::NfcStats>,
-        nfc_service_stats: Option<netsim_proto::stats::NfcServiceStats>,
-    ) -> ProtoNetsimStats {
+    pub fn get_combined_stats(&mut self, inputs: CombinedStatsInputs) -> ProtoNetsimStats {
+        let CombinedStatsInputs {
+            mut active_stats,
+            wifi_stats,
+            wifi_api,
+            nfc_stats,
+            nfc_service_stats,
+        } = inputs;
         if let Some(start) = self.start_time {
             self.proto.set_duration_secs(start.elapsed().as_secs());
         }
         let mut combined = self.proto.clone();
         combined.radio_stats.extend(self.archived_radio_stats.clone());
         combined.radio_stats.append(&mut active_stats);
+        if let Some(wa) = wifi_api {
+            let mut api_stats = netsim_proto::stats::ApiStats::new();
+            api_stats.wifi = netsim_proto::protobuf::MessageField::some(wa);
+            combined.api_stats = netsim_proto::protobuf::MessageField::some(api_stats);
+        }
+
         if let Some(ws) = wifi_stats {
             combined.wifi_stats = Some(ws).into();
         }
@@ -214,7 +229,13 @@ mod tests {
         frontend_stats.delete_device.store(11, Ordering::SeqCst);
 
         let mut stats = Stats::new("1.0.0".to_string(), None, frontend_stats);
-        let proto = stats.get_combined_stats(vec![], None, None, None);
+        let proto = stats.get_combined_stats(CombinedStatsInputs {
+            active_stats: vec![],
+            wifi_stats: None,
+            wifi_api: None,
+            nfc_stats: None,
+            nfc_service_stats: None,
+        });
 
         let frontend_proto = proto.frontend_stats.as_ref().expect("Frontend stats missing");
         assert_eq!(frontend_proto.get_version(), 1);

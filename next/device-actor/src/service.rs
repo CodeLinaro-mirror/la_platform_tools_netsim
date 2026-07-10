@@ -92,17 +92,27 @@ impl DeviceActor {
         let active_proto_stats = active_model_stats.into_iter().map(to_proto_stats).collect();
 
         // Collect WiFi specific stats (Global)
-        let wifi_stats = self.collect_wifi_stats_async().await;
+        let wifi_ipc_stats = self
+            .collect_chip_stats::<netsim_proto::stats::WifiIpcStats>(netsim_model::ChipKind::WIFI)
+            .await;
+        let mut wifi_stats = None;
+        let mut wifi_api = None;
+        if let Some(mut ipc) = wifi_ipc_stats {
+            wifi_stats = ipc.wifi_stats.take();
+            wifi_api = ipc.wifi_api_stats.take();
+        }
+
         // Collect NFC specific stats (Global)
         let nfc_stats = self.collect_nfc_stats_async().await;
         let nfc_service_stats = self.collect_nfc_service_stats_async().await;
 
-        let combined_stats = self.stats.get_combined_stats(
-            active_proto_stats,
+        let combined_stats = self.stats.get_combined_stats(crate::stats::CombinedStatsInputs {
+            active_stats: active_proto_stats,
             wifi_stats,
+            wifi_api,
             nfc_stats,
             nfc_service_stats,
-        );
+        });
         let path = self.stats.stats_path.clone();
 
         let previous_task = self.stats_write_task.take();
@@ -293,28 +303,18 @@ impl DeviceActor {
         stats_list
     }
 
-    async fn collect_wifi_stats_async(&self) -> Option<netsim_proto::stats::WifiStats> {
-        let client = self.chip_clients.get(&netsim_model::ChipKind::WIFI)?;
-        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_global_stats()).await {
-            Ok(Ok(Some(stats_bytes))) => {
-                match netsim_proto::stats::WifiStats::parse_from_bytes(&stats_bytes) {
-                    Ok(stats) => Some(stats),
-                    Err(e) => {
-                        error!("DeviceActor: Failed to parse WifiStats: {}", e);
-                        None
-                    }
-                }
-            }
-            Ok(Ok(None)) => None,
-            Ok(Err(e)) => {
-                warn!("DeviceActor: Failed to get global stats: {}", e);
-                None
-            }
-            Err(_) => {
-                debug!("DeviceActor: Timeout getting global stats");
-                None
-            }
-        }
+    async fn collect_chip_stats<T: Message>(&self, kind: netsim_model::ChipKind) -> Option<T> {
+        let client = self.chip_clients.get(&kind)?;
+        let stats_bytes = tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_global_stats())
+            .await
+            .inspect_err(|e| debug!("DeviceActor: Timeout getting {:?} global stats: {}", kind, e))
+            .ok()?
+            .inspect_err(|e| warn!("DeviceActor: Failed to get global stats for {:?}: {}", kind, e))
+            .ok()??;
+
+        T::parse_from_bytes(&stats_bytes)
+            .inspect_err(|e| error!("DeviceActor: Failed to parse {:?}Stats: {}", kind, e))
+            .ok()
     }
 
     async fn collect_nfc_stats_async(&self) -> Option<netsim_proto::stats::NfcStats> {
