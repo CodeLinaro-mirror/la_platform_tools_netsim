@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2022 The Android Open Source Project
+# Copyright 2022, 2026 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,9 +55,14 @@ echo "[Step 1] Generating protobuf files for proto-cf (protobuf 3.7.2)..."
 # Install compilers since the crates are not in AOSP
 # TODO: Add required crate mappings to work in git_main-netsim-dev
 export CARGO_HOME=""
-rustup default 1.88.0
-cargo install protobuf-codegen --version 3.7.2 --force
-cargo install grpcio-compiler --version 0.13.0 --force
+export PATH="$HOME/.cargo/bin:$PATH"
+if command -v rustup &> /dev/null; then
+    rustup default 1.88.0
+fi
+cargo install protobuf-codegen --version 3.7.2
+cargo install grpcio-compiler --version 0.13.0
+
+
 
 PROTOC_PLUGIN_PATH=$(which grpc_rust_plugin)
 if [ -z "$PROTOC_PLUGIN_PATH" ]; then
@@ -65,9 +70,9 @@ if [ -z "$PROTOC_PLUGIN_PATH" ]; then
     exit 1
 fi
 
-PROTOC_CMD="protoc --rust_out=$PROTO_SRC_DIR --grpc_out=$PROTO_SRC_DIR \
+PROTOC_CMD="protoc --rust_community_out=$PROTO_SRC_DIR --grpc_out=$PROTO_SRC_DIR \
  --plugin=protoc-gen-grpc=$PROTOC_PLUGIN_PATH \
- --plugin=protoc-gen-rust=$(which protoc-gen-rs) \
+ --plugin=protoc-gen-rust_community=$(which protoc-gen-rs) \
  -I./proto -I../../external/protobuf/src \
  -I../../tools/rootcanal/proto"
 
@@ -85,10 +90,21 @@ find "$PROTO_SRC_DIR" -name '*.rs' -exec sed -i '/^#!\[allow(box_pointers)\]$/d'
 
 # Format generated code using prebuilt rustfmt
 # Find the most recent rustfmt available in prebuilts for the detected OS
-RUSTFMT="../../prebuilts/rust-toolchain/linux-x86/stable/rustfmt"
+RUSTFMT="../../prebuilts/rust/linux-x86/stable/rustfmt"
 find "$PROTO_SRC_DIR" -name '*.rs' -exec "$RUSTFMT" {} \;
 
 # --- Step 3. Add license headers ---
 echo "[Step 3] Adding license headers..."
 find "$PROTO_SRC_DIR" -name '*.rs' -exec python3 scripts/format_licenses.py {} +
+
+# --- Step 4. Add LCOV exclusion markers to generated files ---
+echo "[Step 4] Adding LCOV exclusion markers..."
+for file in "$PROTO_SRC_DIR/stats.rs" "$PROTO_SRC_DIR/cell.rs"; do
+    if [ -f "$file" ] && ! grep -q "LCOV_EXCL_START" "$file"; then
+        awk 'NR==4{print "// LCOV_EXCL_START\n"}1' "$file" > "$file.tmp"
+        echo "// LCOV_EXCL_STOP" >> "$file.tmp"
+        mv "$file.tmp" "$file"
+        echo "Added LCOV markers to $file"
+    fi
+done
 
