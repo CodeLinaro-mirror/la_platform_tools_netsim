@@ -246,6 +246,16 @@ impl NfcWorld {
         assert!(!self.actor.active_chips.contains_key(&chip_id), "Chip still active in NfcActor");
         assert!(self.aborted_tasks.lock().unwrap().contains(&chip_id), "Task was not aborted");
         assert!(self.removed_streams.lock().unwrap().contains(&chip_id), "Stream was not removed");
+        assert!(
+            !self
+                .actor
+                .casimir_to_device
+                .lock()
+                .unwrap()
+                .values()
+                .any(|&dev_id| dev_id.0 == id_val),
+            "Casimir mapping was not cleaned up!"
+        );
     }
 }
 
@@ -363,4 +373,19 @@ async fn test_nfc_update_via_variant() {
     let state_disabled_again =
         world.actor.handle_get(ChipId(chip_id), &mut world.ctx).await.unwrap().unwrap();
     assert!(!state_disabled_again.enabled, "Chip should be disabled after second variant update!");
+}
+
+// Feature: NFC Proximity Threshold and Mapping
+// Scenario: Verify spatial distance calculation and threshold gating
+//
+//   Given two positions in 3D space
+//   When distance is calculated
+//   Then distance <= 0.04m is within NFC proximity threshold
+#[test]
+fn test_nfc_spatial_proximity_threshold() {
+    let p1 = netsim_model::Position { x: 0.0, y: 0.0, z: 0.0 };
+    let p2 = netsim_model::Position { x: 0.0, y: 0.0, z: 0.035 }; // 3.5cm
+    let p3 = netsim_model::Position { x: 0.0, y: 0.0, z: 0.045 }; // 4.5cm
+    assert!(p1.distance(&p2) <= 0.04, "3.5cm should be within 4cm NFC threshold!");
+    assert!(p1.distance(&p3) > 0.04, "4.5cm should be outside 4cm NFC threshold!");
 }

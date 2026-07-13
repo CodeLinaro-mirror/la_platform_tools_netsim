@@ -15,6 +15,16 @@ pub struct Position {
     pub z: f32,
 }
 
+impl Position {
+    /// Calculate the Euclidean distance between two positions in meters.
+    pub fn distance(&self, other: &Position) -> f32 {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        let dz = self.z - other.z;
+        (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Orientation {
     pub yaw: f32,
@@ -327,5 +337,19 @@ impl fmt::Debug for DeviceAddChip {
             .field("device_config", &self.device_config)
             .field("chip", &self.chip)
             .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_position_distance() {
+        let p1 = Position { x: 0.0, y: 0.0, z: 0.0 };
+        let p2 = Position { x: 0.0, y: 0.0, z: 0.03 };
+        let p3 = Position { x: 0.05, y: 0.0, z: 0.0 };
+        assert!((p1.distance(&p2) - 0.03).abs() < 1e-6);
+        assert!((p1.distance(&p3) - 0.05).abs() < 1e-6);
     }
 }
