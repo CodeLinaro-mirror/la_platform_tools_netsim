@@ -205,16 +205,14 @@ impl NfcWorld {
         let create_res = self.actor.handle_create(Some(chip_id), params, &mut self.ctx).await;
         assert!(create_res.is_ok());
         assert_eq!(create_res.unwrap(), chip_id);
-        assert!(self.actor.active_chips.contains_key(&chip_id));
         assert!(
-            !self
-                .actor
+            self.actor
                 .active_chips
                 .get(&chip_id)
                 .unwrap()
                 .enabled
                 .load(std::sync::atomic::Ordering::Relaxed),
-            "Chip must be disabled by default upon boot!"
+            "Chip must be enabled by default upon boot across all platforms during transition to Netsim"
         );
     }
 
@@ -286,77 +284,56 @@ async fn test_casimir_eof_cleanup() {
 }
 
 // Feature: NFC Enablement Gating
-// Scenario: Chips spawn disabled by default and can be dynamically
-// enabled/disabled
+// Scenario: Chips can be dynamically enabled/disabled via handle_update
 //
 //   Given a new NFC world with a registered chip
-//   Then the chip is disabled by default upon boot
-//   When handle_update sets enabled = true
-//   Then the chip state transitions to enabled
 //   When handle_update sets enabled = false
-//   Then the chip state transitions back to disabled
+//   Then the chip state transitions to disabled
+//   When handle_update sets enabled = true
+//   Then the chip state transitions back to enabled
 #[tokio::test]
-async fn test_nfc_default_disabled_and_enablement_toggle() {
+async fn test_nfc_enablement_toggle() {
     // Given
     let mut world = NfcWorld::new().await;
     let chip_id = 1;
     world.given_a_chip(chip_id).await;
 
-    // Then (Verify disabled by default upon boot)
+    // When (Android OS calls NfcAdapter.disable())
+    let update_disable = netsim_model::ChipUpdate { enabled: Some(false), ..Default::default() };
+    let update_res1 =
+        world.actor.handle_update(ChipId(chip_id), update_disable, &mut world.ctx).await;
+    assert!(update_res1.is_ok());
+
+    // Then (Verify chip is now disabled)
     let state_disabled =
         world.actor.handle_get(ChipId(chip_id), &mut world.ctx).await.unwrap().unwrap();
-    assert!(!state_disabled.enabled, "Chip should be disabled by default upon boot!");
+    assert!(!state_disabled.enabled, "Chip should be disabled after update!");
 
     // When (Android OS calls NfcAdapter.enable())
     let update_enable = netsim_model::ChipUpdate { enabled: Some(true), ..Default::default() };
-    let update_res1 =
-        world.actor.handle_update(ChipId(chip_id), update_enable, &mut world.ctx).await;
-    assert!(update_res1.is_ok());
-
-    // Then (Verify chip is now enabled)
-    let state_enabled =
-        world.actor.handle_get(ChipId(chip_id), &mut world.ctx).await.unwrap().unwrap();
-    assert!(state_enabled.enabled, "Chip should be enabled after update!");
-
-    // When (Android OS calls NfcAdapter.disable())
-    let update_disable = netsim_model::ChipUpdate { enabled: Some(false), ..Default::default() };
     let update_res2 =
-        world.actor.handle_update(ChipId(chip_id), update_disable, &mut world.ctx).await;
+        world.actor.handle_update(ChipId(chip_id), update_enable, &mut world.ctx).await;
     assert!(update_res2.is_ok());
 
-    // Then (Verify chip is disabled again)
-    let state_disabled_again =
+    // Then (Verify chip is enabled again)
+    let state_enabled_again =
         world.actor.handle_get(ChipId(chip_id), &mut world.ctx).await.unwrap().unwrap();
-    assert!(!state_disabled_again.enabled, "Chip should be disabled after second update!");
+    assert!(state_enabled_again.enabled, "Chip should be enabled after second update!");
 }
 
 // variant update path
 //
 // Given a new NFC world with a registered chip
-// When handle_update sets state via variant = Some(true/false)
-// Then the chip state transitions between enabled and disabled
+// When handle_update sets state via variant = Some(false)
+// Then the chip state transitions to disabled
+// When handle_update sets state via variant = Some(true)
+// Then the chip state transitions back to enabled
 #[tokio::test]
 async fn test_nfc_update_via_variant() {
     // Given
     let mut world = NfcWorld::new().await;
     let chip_id = 1;
     world.given_a_chip(chip_id).await;
-
-    // When (Update via variant field to enable)
-    let update_enable = netsim_model::ChipUpdate {
-        variant: Some(netsim_model::ChipVariantUpdate::Nfc(netsim_model::NfcUpdate {
-            radio: netsim_model::RadioUpdate { state: Some(true) },
-        })),
-        ..Default::default()
-    };
-    let update_res1 =
-        world.actor.handle_update(ChipId(chip_id), update_enable, &mut world.ctx).await;
-    assert!(update_res1.is_ok());
-
-    // Then (Verify chip is now enabled)
-    let state_enabled =
-        world.actor.handle_get(ChipId(chip_id), &mut world.ctx).await.unwrap().unwrap();
-    assert!(state_enabled.enabled, "Chip should be enabled after variant update!");
 
     // When (Update via variant field to disable)
     let update_disable = netsim_model::ChipUpdate {
@@ -365,14 +342,30 @@ async fn test_nfc_update_via_variant() {
         })),
         ..Default::default()
     };
-    let update_res2 =
+    let update_res1 =
         world.actor.handle_update(ChipId(chip_id), update_disable, &mut world.ctx).await;
+    assert!(update_res1.is_ok());
+
+    // Then (Verify chip is now disabled)
+    let state_disabled =
+        world.actor.handle_get(ChipId(chip_id), &mut world.ctx).await.unwrap().unwrap();
+    assert!(!state_disabled.enabled, "Chip should be disabled after variant update!");
+
+    // When (Update via variant field to enable)
+    let update_enable = netsim_model::ChipUpdate {
+        variant: Some(netsim_model::ChipVariantUpdate::Nfc(netsim_model::NfcUpdate {
+            radio: netsim_model::RadioUpdate { state: Some(true) },
+        })),
+        ..Default::default()
+    };
+    let update_res2 =
+        world.actor.handle_update(ChipId(chip_id), update_enable, &mut world.ctx).await;
     assert!(update_res2.is_ok());
 
-    // Then (Verify chip is disabled again)
-    let state_disabled_again =
+    // Then (Verify chip is enabled again)
+    let state_enabled_again =
         world.actor.handle_get(ChipId(chip_id), &mut world.ctx).await.unwrap().unwrap();
-    assert!(!state_disabled_again.enabled, "Chip should be disabled after second variant update!");
+    assert!(state_enabled_again.enabled, "Chip should be enabled after second variant update!");
 }
 
 // Feature: NFC Proximity Threshold and Mapping
@@ -388,4 +381,17 @@ fn test_nfc_spatial_proximity_threshold() {
     let p3 = netsim_model::Position { x: 0.0, y: 0.0, z: 0.045 }; // 4.5cm
     assert!(p1.distance(&p2) <= 0.04, "3.5cm should be within 4cm NFC threshold!");
     assert!(p1.distance(&p3) > 0.04, "4.5cm should be outside 4cm NFC threshold!");
+}
+
+#[tokio::test]
+async fn test_nfc_initial_enablement_universal() {
+    let mut world = NfcWorld::new().await;
+    let chip_id = 1;
+    world.given_a_chip(chip_id).await;
+
+    let chip = world.actor.handle_get(ChipId(chip_id), &mut world.ctx).await.unwrap().unwrap();
+    assert!(
+        chip.enabled,
+        "Chip must be enabled upon creation across all platforms during transition to Netsim"
+    );
 }
