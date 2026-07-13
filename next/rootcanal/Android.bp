@@ -26,3 +26,29 @@ rust_library_host {
         "lib_rootcanal_ffi",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_rootcanal_testing",
+    crate_name: "rootcanal",
+    edition: "2024",
+    stem: "librootcanal_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libnetsim_next_packets_testing",
+        "libparking_lot",
+        "libthiserror",
+        "libtracing",
+    ],
+    shared_libs: [
+        "lib_rootcanal_ffi",
+    ],
+}

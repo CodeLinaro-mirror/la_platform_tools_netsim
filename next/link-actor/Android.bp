@@ -26,3 +26,29 @@ rust_library_host {
         "libasync_trait",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_link_actor_testing",
+    crate_name: "link_actor",
+    edition: "2024",
+    stem: "liblink_actor_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libfutures",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_link_api_testing",
+        "libnetsim_next_model_testing",
+        "libtracing",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

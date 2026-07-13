@@ -28,3 +28,31 @@ rust_library_host {
         "libtracing",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_hci_server_testing",
+    crate_name: "hci_server",
+    edition: "2024",
+    stem: "libhci_server_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_device_api_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_packet_stream_testing",
+        "libtokio",
+        "libtokio_stream",
+        "libtokio_util",
+        "libtracing",
+    ],
+}

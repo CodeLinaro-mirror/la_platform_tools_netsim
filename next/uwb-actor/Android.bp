@@ -33,3 +33,36 @@ rust_library_host {
         "libasync_trait",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_uwb_actor_testing",
+    crate_name: "uwb_actor",
+    edition: "2024",
+    stem: "libuwb_actor_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libglam",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_model_testing",
+        "libpdl_runtime",
+        "libpica",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtracing",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}
