@@ -103,6 +103,18 @@ fn test_cops_modes() {
     when_at_command_sent(&mut world, "A", "AT+COPS?");
     then_response_is(&mut world, "A", "+COPS: 1,0,\"Android Virtual Operator\"");
     then_response_is(&mut world, "A", "OK");
+
+    // 5. Test Manual Register to wrong operator when previous was manual
+    //    (AT+COPS=1,2,\"123456\")
+    when_at_command_sent(&mut world, "A", "AT+COPS=1,2,\"123456\"");
+    // Registration denied (3)
+    then_response_is(&mut world, "A", "+CREG: 3");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Query should show mode 0 (fallback to 0, even though previous was 1)
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0");
+    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Query Signal Quality
@@ -553,4 +565,47 @@ fn test_csq_nr_technology() {
         "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,99,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,99,2147483647,20,2147483647,2147483647,2147483647,2147483647,2147483647",
     );
     then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_network_registration_radio_cycle_cfun_4() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Turn radio ON and check reactive URCs
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,20,2147483647,2147483647,2147483647,2147483647,2147483647,99,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
+
+    // 2. Turn radio to Minimum Functionality (4) (drops registration and sends URC
+    //    synchronously)
+    when_at_command_sent(&mut world, "A", "AT+CFUN=4");
+    then_response_is(&mut world, "A", "+CREG: 0");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify QueryRadioPower returns 4
+    when_at_command_sent(&mut world, "A", "AT+CFUN?");
+    then_response_is(&mut world, "A", "+CFUN: 4");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Turn radio ON again and verify reactive URC triggers again!
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,20,2147483647,2147483647,2147483647,2147483647,2147483647,99,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
+    );
 }

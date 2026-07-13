@@ -67,7 +67,7 @@ impl NetworkService {
             "attach_network called! is_attached: {}, radio_power: {}",
             self.is_attached, self.radio_power
         );
-        if self.is_attached || self.radio_power == 0 {
+        if self.is_attached || self.radio_power == 0 || self.radio_power == 4 {
             return Vec::new();
         }
         self.is_attached = true;
@@ -282,7 +282,6 @@ impl NetworkService {
                         Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
                     };
 
-                    let prev_cops_mode = self.cops_mode;
                     self.cops_mode = 1;
                     if let Some(fmt) = format {
                         self.cops_format = fmt;
@@ -301,7 +300,7 @@ impl NetworkService {
                         responses.push("OK\r\n".to_string());
                         ExecutionResult::Handled(HandledCommand { responses, action: None })
                     } else {
-                        self.cops_mode = prev_cops_mode;
+                        self.cops_mode = 0;
                         self.is_attached = false;
                         self.voice_registration = RegistrationStatus::Denied;
                         self.data_registration = RegistrationStatus::Denied;
@@ -636,7 +635,7 @@ impl NetworkService {
         power: u8,
         enable_unsolicited_urcs: bool,
     ) -> ExecutionResult {
-        if power > 1 {
+        if power != 0 && power != 1 && power != 4 {
             return ExecutionResult::Handled(HandledCommand::error());
         }
 
@@ -645,7 +644,10 @@ impl NetworkService {
 
         let mut responses = Vec::new();
 
-        if old_power != power && power == 0 {
+        let was_on = old_power == 1;
+        let is_on = self.radio_power == 1;
+
+        if was_on && !is_on {
             self.is_attached = false;
             self.voice_registration = RegistrationStatus::NotRegistered;
             self.data_registration = RegistrationStatus::NotRegistered;
