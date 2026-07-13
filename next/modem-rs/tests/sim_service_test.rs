@@ -226,3 +226,29 @@ fn test_update_phone_number() {
     when_at_command_sent(&mut world, "A", "AT+REMOTEUPADATEPHONENUMBER=\"1234567890\"");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_cmee_error_formatting_across_modes() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    let (id, _) = world.get_modem("A");
+    world.manager.set_sim_status(id, false);
+
+    // Mode 0 (Disable): Returns standard ERROR
+    when_at_command_sent(&mut world, "A", "AT+CMEE=0");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Mode 1 (Numeric): Returns "+CME ERROR: 10" (SIM not inserted)
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CME ERROR: 10");
+
+    // Mode 2 (Verbose): Returns "+CME ERROR: SIM not inserted"
+    when_at_command_sent(&mut world, "A", "AT+CMEE=2");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CME ERROR: SIM not inserted");
+}

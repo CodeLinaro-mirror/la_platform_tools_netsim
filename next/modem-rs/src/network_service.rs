@@ -239,7 +239,7 @@ impl NetworkService {
         } else {
             format!("+COPS: {}\r\n", self.cops_mode)
         };
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![cops_response, "OK\r\n".to_string()],
             action: None,
         })
@@ -259,7 +259,7 @@ impl NetworkService {
         );
 
         if format.is_some_and(|fmt| fmt > 2) {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
 
         match mode {
@@ -273,13 +273,13 @@ impl NetworkService {
                     responses.extend(self.attach_network());
                 }
                 responses.push("OK\r\n".to_string());
-                ExecutionResult::Handled(HandledCommand { responses, action: None })
+                ExecutionResult::Success(HandledCommand { responses, action: None })
             }
             1 => {
                 if let Some(op_bytes) = oper {
                     let op_str = match std::str::from_utf8(op_bytes) {
                         Ok(s) => s,
-                        Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
+                        Err(_) => return ExecutionResult::Error,
                     };
 
                     self.cops_mode = 1;
@@ -298,7 +298,7 @@ impl NetworkService {
                             responses.extend(self.attach_network());
                         }
                         responses.push("OK\r\n".to_string());
-                        ExecutionResult::Handled(HandledCommand { responses, action: None })
+                        ExecutionResult::Success(HandledCommand { responses, action: None })
                     } else {
                         self.cops_mode = 0;
                         self.is_attached = false;
@@ -314,11 +314,10 @@ impl NetworkService {
                         if let Some(urc) = self.format_cereg_urc(self.data_registration) {
                             responses.push(urc);
                         }
-                        responses.push("ERROR\r\n".to_string());
-                        ExecutionResult::Handled(HandledCommand { responses, action: None })
+                        ExecutionResult::ErrorWithUrc(responses)
                     }
                 } else {
-                    ExecutionResult::Handled(HandledCommand::error())
+                    ExecutionResult::Error
                 }
             }
             2 => {
@@ -342,21 +341,21 @@ impl NetworkService {
                     }
                 }
                 responses.push("OK\r\n".to_string());
-                ExecutionResult::Handled(HandledCommand { responses, action: None })
+                ExecutionResult::Success(HandledCommand { responses, action: None })
             }
             3 => {
                 if let Some(fmt) = format {
                     self.cops_format = fmt;
-                    ExecutionResult::Handled(HandledCommand::ok())
+                    ExecutionResult::Success(HandledCommand::ok())
                 } else {
-                    ExecutionResult::Handled(HandledCommand::error())
+                    ExecutionResult::Error
                 }
             }
             4 => {
                 if let Some(op_bytes) = oper {
                     let op_str = match std::str::from_utf8(op_bytes) {
                         Ok(s) => s,
-                        Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
+                        Err(_) => return ExecutionResult::Error,
                     };
 
                     self.cops_mode = 4;
@@ -380,12 +379,12 @@ impl NetworkService {
                         }
                     }
                     responses.push("OK\r\n".to_string());
-                    ExecutionResult::Handled(HandledCommand { responses, action: None })
+                    ExecutionResult::Success(HandledCommand { responses, action: None })
                 } else {
-                    ExecutionResult::Handled(HandledCommand::error())
+                    ExecutionResult::Error
                 }
             }
-            _ => ExecutionResult::Handled(HandledCommand::error()),
+            _ => ExecutionResult::Error,
         }
     }
 
@@ -431,14 +430,14 @@ impl NetworkService {
     pub fn handle_query_signal_strength(&self) -> ExecutionResult {
         let (rssi, ber) = self.signal_strength;
         let response = self.build_csq_response(rssi, ber);
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
     }
 
     pub fn handle_query_extended_signal_quality(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_voice_registration(&self) -> ExecutionResult {
@@ -448,7 +447,7 @@ impl NetworkService {
         } else {
             format!("+CREG: {},{}\r\n", self.voice_unsol_mode, stat)
         };
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
@@ -469,9 +468,9 @@ impl NetworkService {
                 responses.push(urc);
             }
             responses.push("OK\r\n".to_string());
-            ExecutionResult::Handled(HandledCommand { responses, action: None })
+            ExecutionResult::Success(HandledCommand { responses, action: None })
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -482,7 +481,7 @@ impl NetworkService {
         } else {
             format!("+CGREG: {},{}\r\n", self.data_unsol_mode, stat)
         };
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
@@ -499,9 +498,9 @@ impl NetworkService {
                 responses.push(urc);
             }
             responses.push("OK\r\n".to_string());
-            ExecutionResult::Handled(HandledCommand { responses, action: None })
+            ExecutionResult::Success(HandledCommand { responses, action: None })
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -512,7 +511,7 @@ impl NetworkService {
         } else {
             format!("+CEREG: {},{}\r\n", self.lte_unsol_mode, stat)
         };
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
@@ -529,16 +528,16 @@ impl NetworkService {
                 responses.push(urc);
             }
             responses.push("OK\r\n".to_string());
-            ExecutionResult::Handled(HandledCommand { responses, action: None })
+            ExecutionResult::Success(HandledCommand { responses, action: None })
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
     pub fn handle_query_current_ctec(&self) -> ExecutionResult {
         let response =
             format!("+CTEC: {},{:X}\r\n", self.current_network_mode, self.preferred_network_mode);
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
@@ -548,7 +547,7 @@ impl NetworkService {
         let tech_strs: Vec<String> =
             crate::constants::SUPPORTED_CTEC_INDEXES.iter().map(|t| t.to_string()).collect();
         let response = format!("+CTEC: {}\r\n", tech_strs.join(","));
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
@@ -557,7 +556,7 @@ impl NetworkService {
     pub fn handle_set_ctec(&mut self, current: u8, preferred: &[u8]) -> ExecutionResult {
         let preferred_str = match std::str::from_utf8(preferred) {
             Ok(s) => s.trim(),
-            Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
+            Err(_) => return ExecutionResult::Error,
         };
         let preferred_clean = preferred_str.trim_matches('"').trim();
         // Strip hex prefix "0x" or "0X" if present
@@ -568,7 +567,7 @@ impl NetworkService {
 
         let preferred_mask = match u32::from_str_radix(preferred_clean, 16) {
             Ok(val) => val,
-            Err(_) => return ExecutionResult::Handled(HandledCommand::error()),
+            Err(_) => return ExecutionResult::Error,
         };
 
         // Validate allowed technologies mask
@@ -579,12 +578,12 @@ impl NetworkService {
         // Validate current tech is supported (current is a mask, e.g. 32 for LTE)
         let current_u32 = current as u32;
         if current_u32.count_ones() != 1 || (current_u32 & !allowed_mask) != 0 {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
 
         // Validate preferred mask only contains supported technologies
         if (preferred_mask & !allowed_mask) != 0 {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
 
         info!("handle_set_ctec: current={}, preferred_mask={:#X}", current, preferred_mask);
@@ -619,12 +618,12 @@ impl NetworkService {
         }
         responses.push("OK\r\n".to_string());
 
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn handle_query_radio_power(&self) -> ExecutionResult {
         let response = format!("+CFUN: {}\r\n", self.radio_power);
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
@@ -636,7 +635,7 @@ impl NetworkService {
         enable_unsolicited_urcs: bool,
     ) -> ExecutionResult {
         if power != 0 && power != 1 && power != 4 {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
 
         let old_power = self.radio_power;
@@ -666,7 +665,7 @@ impl NetworkService {
         }
 
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn execute(&mut self, command: &Command, enable_unsolicited_urcs: bool) -> ExecutionResult {

@@ -108,7 +108,7 @@ impl DataService {
                 gprs_req_qos: Qos::default(),
             },
         );
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_pdp_context(&self) -> ExecutionResult {
@@ -120,7 +120,7 @@ impl DataService {
             ));
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn handle_set_quality_of_service_minimum(
@@ -134,9 +134,9 @@ impl DataService {
     ) -> ExecutionResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.qos = Qos { precedence, delay, reliability, peak, mean };
-            ExecutionResult::Handled(HandledCommand::ok())
+            ExecutionResult::Success(HandledCommand::ok())
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -154,7 +154,7 @@ impl DataService {
             ));
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn handle_set_quality_of_service_requested(
@@ -168,9 +168,9 @@ impl DataService {
     ) -> ExecutionResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.req_qos = Qos { precedence, delay, reliability, peak, mean };
-            ExecutionResult::Handled(HandledCommand::ok())
+            ExecutionResult::Success(HandledCommand::ok())
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -188,7 +188,7 @@ impl DataService {
             ));
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn handle_set_quality_of_service_minimum_gprs(
@@ -202,9 +202,9 @@ impl DataService {
     ) -> ExecutionResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.gprs_qos = Qos { precedence, delay, reliability, peak, mean };
-            ExecutionResult::Handled(HandledCommand::ok())
+            ExecutionResult::Success(HandledCommand::ok())
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -222,7 +222,7 @@ impl DataService {
             ));
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn handle_set_quality_of_service_requested_gprs(
@@ -236,9 +236,9 @@ impl DataService {
     ) -> ExecutionResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.gprs_req_qos = Qos { precedence, delay, reliability, peak, mean };
-            ExecutionResult::Handled(HandledCommand::ok())
+            ExecutionResult::Success(HandledCommand::ok())
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -256,15 +256,15 @@ impl DataService {
             ));
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn handle_set_pdp_context_activate(&mut self, cid: u8, state: u8) -> ExecutionResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.active = state == 1;
-            ExecutionResult::Handled(HandledCommand::ok())
+            ExecutionResult::Success(HandledCommand::ok())
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -275,12 +275,12 @@ impl DataService {
                 context.active = false;
             }
         }
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_ps_attach(&self) -> ExecutionResult {
         let state = if self.ps_attached { 1 } else { 0 };
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![format!("+CGATT: {}\r\n", state), "OK\r\n".to_string()],
             action: None,
         })
@@ -293,22 +293,22 @@ impl DataService {
             responses.push(format!("+CGACT: {},{}\r\n", cid, state));
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn handle_set_pdp_context_modify(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_enter_data_state(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec!["CONNECT\r\n".to_string()],
             action: None,
         })
     }
 
     pub fn handle_set_packet_event_reporting(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn get_ip_address(&self, cid: u8) -> String {
@@ -346,9 +346,9 @@ impl DataService {
             let response = format!("+CGPADDR: {cid},\"{ip_address}\"\r\n");
             let mut handled = HandledCommand::ok();
             handled.responses.insert(0, response);
-            ExecutionResult::Handled(handled)
+            ExecutionResult::Success(handled)
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -365,12 +365,12 @@ impl DataService {
                 );
                 let mut handled = HandledCommand::ok();
                 handled.responses.insert(0, response);
-                ExecutionResult::Handled(handled)
+                ExecutionResult::Success(handled)
             } else {
-                ExecutionResult::Handled(HandledCommand::error())
+                ExecutionResult::Error
             }
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -426,15 +426,15 @@ impl DataService {
                         Ok(cid) => {
                             if let Some(context) = self.pdp_contexts.get_mut(&cid) {
                                 context.active = true;
-                                ExecutionResult::Handled(HandledCommand {
+                                ExecutionResult::Success(HandledCommand {
                                     responses: vec!["CONNECT\r\n".to_string()],
                                     action: None,
                                 })
                             } else {
-                                ExecutionResult::Handled(HandledCommand::error())
+                                ExecutionResult::Error
                             }
                         }
-                        Err(_) => ExecutionResult::Handled(HandledCommand::error()),
+                        Err(_) => ExecutionResult::Error,
                     }
                 } else {
                     ExecutionResult::Unhandled
@@ -489,14 +489,14 @@ mod tests {
     fn test_data_service_dial_direct() {
         let mut service = DataService::default();
         let res = service.handle_define_pdp_context(1, QuotedString(b"IP"), QuotedString(b"test"));
-        assert!(matches!(res, ExecutionResult::Handled(_)));
+        assert!(matches!(res, ExecutionResult::Success(_)));
 
         // Dial
         let res = service.execute(&Command::Dial(b"*99***1#"));
-        if let ExecutionResult::Handled(handled) = res {
+        if let ExecutionResult::Success(handled) = res {
             assert_eq!(handled.responses, vec!["CONNECT\r\n".to_string()]);
         } else {
-            panic!("Expected Handled");
+            panic!("Expected Success");
         }
     }
 
@@ -504,23 +504,15 @@ mod tests {
     fn test_data_service_dial_malformed() {
         let mut service = DataService::default();
         let res = service.handle_define_pdp_context(1, QuotedString(b"IP"), QuotedString(b"test"));
-        assert!(matches!(res, ExecutionResult::Handled(_)));
+        assert!(matches!(res, ExecutionResult::Success(_)));
 
         // Dial malformed alphanumeric CID
         let res = service.execute(&Command::Dial(b"*99*abc#"));
-        if let ExecutionResult::Handled(handled) = res {
-            assert_eq!(handled.responses, vec!["ERROR\r\n".to_string()]);
-        } else {
-            panic!("Expected Handled");
-        }
+        assert!(matches!(res, ExecutionResult::Error));
 
         // Dial empty trailing CID
         let res = service.execute(&Command::Dial(b"*99*#"));
-        if let ExecutionResult::Handled(handled) = res {
-            assert_eq!(handled.responses, vec!["ERROR\r\n".to_string()]);
-        } else {
-            panic!("Expected Handled");
-        }
+        assert!(matches!(res, ExecutionResult::Error));
     }
 
     #[test]
