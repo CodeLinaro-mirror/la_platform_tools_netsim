@@ -246,7 +246,7 @@ impl SmsService {
             Command::StoreSms(len) => self.handle_wait_for_store_sms(*len),
             Command::ReadSms(index) => self.handle_read_sms(sim_service, *index),
             Command::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
-            Command::SendSmsAck => self.handle_send_sms_ack(),
+            Command::SendSmsAck | Command::SendSmsAckWithVal(_) => self.handle_send_sms_ack(),
             Command::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
             Command::SetPreferredMessageStorage(storage1, storage2, storage3) => {
                 self.handle_set_preferred_message_storage(*storage1, *storage2, *storage3)

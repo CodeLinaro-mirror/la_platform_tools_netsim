@@ -175,3 +175,93 @@ pub struct ModemInfo {
     pub ringing: bool,
     pub sms_count: usize,
 }
+
+/// Represents the signal strength parameters for all supported tech layout (22
+/// fields). Default values are initialized to standard "unknown" values (99 for
+/// RSSI, i32::MAX for others).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignalStrength {
+    pub gsm_rssi: i32,
+    pub gsm_ber: i32,
+    pub cdma_dbm: i32,
+    pub cdma_ecio: i32,
+    pub evdo_dbm: i32,
+    pub evdo_ecio: i32,
+    pub evdo_snr: i32,
+    pub lte_rssi: i32,
+    pub lte_rsrp: i32,
+    pub lte_rsrq: i32,
+    pub lte_rssnr: i32,
+    pub lte_cqi: i32,
+    pub lte_ta: i32,
+    pub tdscdma_rscp: i32,
+    pub wcdma_rssi: i32,
+    pub wcdma_ber: i32,
+    pub nr_ss_rsrp: i32,
+    pub nr_ss_rsrq: i32,
+    pub nr_ss_sinr: i32,
+    pub nr_csi_rsrp: i32,
+    pub nr_csi_rsrq: i32,
+    pub nr_csi_sinr: i32,
+}
+
+impl Default for SignalStrength {
+    fn default() -> Self {
+        let max = i32::MAX;
+        let unknown = crate::constants::CSQ_SIGNAL_UNKNOWN as i32;
+        Self {
+            gsm_rssi: unknown,
+            gsm_ber: unknown,
+            cdma_dbm: max,
+            cdma_ecio: max,
+            evdo_dbm: max,
+            evdo_ecio: max,
+            evdo_snr: max,
+            lte_rssi: unknown,
+            lte_rsrp: max,
+            lte_rsrq: max,
+            lte_rssnr: max,
+            lte_cqi: max,
+            lte_ta: max,
+            tdscdma_rscp: max,
+            wcdma_rssi: unknown,
+            wcdma_ber: max,
+            nr_ss_rsrp: max,
+            nr_ss_rsrq: max,
+            nr_ss_sinr: max,
+            nr_csi_rsrp: max,
+            nr_csi_rsrq: max,
+            nr_csi_sinr: max,
+        }
+    }
+}
+
+impl SignalStrength {
+    pub fn to_csq_response(&self) -> String {
+        format!(
+            "+CSQ: {},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\r\n",
+            self.gsm_rssi,
+            self.gsm_ber,
+            self.cdma_dbm,
+            self.cdma_ecio,
+            self.evdo_dbm,
+            self.evdo_ecio,
+            self.evdo_snr,
+            self.lte_rssi,
+            self.lte_rsrp,
+            self.lte_rsrq,
+            self.lte_rssnr,
+            self.lte_cqi,
+            self.lte_ta,
+            self.tdscdma_rscp,
+            self.wcdma_rssi,
+            self.wcdma_ber,
+            self.nr_ss_rsrp,
+            self.nr_ss_rsrq,
+            self.nr_ss_sinr,
+            self.nr_csi_rsrp,
+            self.nr_csi_rsrq,
+            self.nr_csi_sinr
+        )
+    }
+}
