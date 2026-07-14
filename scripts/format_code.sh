@@ -39,8 +39,17 @@ if [[ $# -gt 0 ]]; then
 fi
 
 # --- Configuration ---
-RUSTFMT="$REPO/prebuilts/rust/$OS-x86/stable/rustfmt"
-if [[ ! -f "$RUSTFMT" ]] && command -v rustfmt &> /dev/null; then
+RUSTFMT=""
+for rustfmt_path in \
+  "$REPO/prebuilts/rust-toolchain/$OS-x86/stable/rustfmt" \
+  "$REPO/prebuilts/rust/$OS-x86/stable/rustfmt"; do
+  if [[ -f "$rustfmt_path" ]]; then
+    RUSTFMT="$rustfmt_path"
+    break
+  fi
+done
+
+if [[ -z "$RUSTFMT" ]]; then
   RUSTFMT="rustfmt"
 fi
 BPFMT="$REPO/prebuilts/build-tools/$OS-x86/bin/bpfmt"
