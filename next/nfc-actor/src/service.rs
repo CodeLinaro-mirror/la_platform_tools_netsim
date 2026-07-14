@@ -141,7 +141,7 @@ impl ActorService for NfcActor {
             .length_adjustment(3)
             .num_skip(0)
             .new_read(nfc_reader);
-        let enabled = Arc::new(AtomicBool::new(false));
+        let enabled = Arc::new(AtomicBool::new(true));
         let enabled_clone = enabled.clone();
         let chip_id_clone = chip_id;
         let task_1 = Box::pin(async move {
