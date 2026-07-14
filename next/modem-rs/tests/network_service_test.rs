@@ -22,25 +22,25 @@ fn test_cops_query() {
     let csq_response = "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647";
     then_response_is(&mut world, "A", csq_response);
 
-    // 1. Default should be format 0 (long alphanumeric)
+    // 1. Default should be format 2 (numeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Set format to 0 (long alphanumeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS=3,0");
+    then_response_is(&mut world, "A", "OK");
+
     when_at_command_sent(&mut world, "A", "AT+COPS?");
     then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
     then_response_is(&mut world, "A", "OK");
 
-    // 2. Set format to 1 (short alphanumeric)
+    // 3. Set format to 1 (short alphanumeric)
     when_at_command_sent(&mut world, "A", "AT+COPS=3,1");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
     then_response_is(&mut world, "A", "+COPS: 0,1,\"Android\"");
-    then_response_is(&mut world, "A", "OK");
-
-    // 3. Set format to 2 (numeric)
-    when_at_command_sent(&mut world, "A", "AT+COPS=3,2");
-    then_response_is(&mut world, "A", "OK");
-
-    when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -69,7 +69,7 @@ fn test_cops_modes() {
 
     // Query should show mode 2
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 2,0,0");
+    then_response_is(&mut world, "A", "+COPS: 2,2,0");
     then_response_is(&mut world, "A", "OK");
 
     // 2. Test Auto Register (AT+COPS=0)
@@ -79,7 +79,7 @@ fn test_cops_modes() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
     then_response_is(&mut world, "A", "OK");
 
     // 3. Test Manual Register to wrong operator (AT+COPS=1,2,\"123456\")

@@ -290,7 +290,7 @@ impl DataService {
         let mut responses = Vec::new();
         for (cid, context) in &self.pdp_contexts {
             let state = if context.active { 1 } else { 0 };
-            responses.push(format!("+CGACT: {},{}\r\n", cid, state));
+            responses.push(format!("+CGACT: {cid},{state}\r\n"));
         }
         responses.push("OK\r\n".to_string());
         ExecutionResult::Success(HandledCommand { responses, action: None })

@@ -8,7 +8,7 @@ use tracing::{info, warn};
 
 use crate::{
     parser::Command,
-    types::{ExecutionResult, HandledCommand, SignalStrength},
+    types::{CmeError, ExecutionResult, HandledCommand, SignalStrength},
 };
 
 const DUMMY_LAC: &str = "2142";
@@ -44,7 +44,15 @@ impl Default for NetworkService {
             radio_power: 1,
             plmn: crate::constants::DEFAULT_PLMN.to_string(),
             cops_mode: 0,
-            cops_format: 0,
+            // Non-standard default: While 3GPP TS 27.007 § 7.3 specifies format 0 (long format
+            // alphanumeric) as the default when AT+COPS is queried without setting
+            // format, Goldfish RIL (`reference-ril.c`) in `requestOperator`
+            // (`RIL_REQUEST_OPERATOR`) expects `AT+COPS?` to return `response[2]` (`<oper>`)
+            // as a 6-digit numeric MCC/MNC string (`310260`). If an alphanumeric operator string is
+            // returned, Goldfish RIL logs `requestOperator expected mccmnc to be 6
+            // decimal digits` and returns an error. Therefore, format 2 (numeric
+            // MCC/MNC) must be the default for Goldfish compatibility.
+            cops_format: 2,
             current_network_mode: crate::constants::CTEC_DEFAULT_CURRENT_TECH,
             preferred_network_mode: crate::constants::CTEC_DEFAULT_PREFERRED_MASK,
             is_attached: false,
@@ -238,7 +246,15 @@ impl NetworkService {
     // --- Pure command handlers ---
 
     pub fn handle_query_operator(&self) -> ExecutionResult {
-        let cops_response = if self.is_attached {
+        let is_registered = matches!(
+            self.voice_registration,
+            RegistrationStatus::RegisteredHome | RegistrationStatus::Roaming
+        ) || matches!(
+            self.data_registration,
+            RegistrationStatus::RegisteredHome | RegistrationStatus::Roaming
+        );
+
+        let cops_response = if is_registered && self.cops_mode != 2 {
             match self.cops_format {
                 0 => format!(
                     "+COPS: {},0,\"{}\"\r\n",
@@ -331,7 +347,7 @@ impl NetworkService {
                         if let Some(urc) = self.format_cereg_urc(self.data_registration) {
                             responses.push(urc);
                         }
-                        ExecutionResult::ErrorWithUrc(responses)
+                        ExecutionResult::CmeErrorWithUrc(CmeError::NoNetworkService, responses)
                     }
                 } else {
                     ExecutionResult::Error

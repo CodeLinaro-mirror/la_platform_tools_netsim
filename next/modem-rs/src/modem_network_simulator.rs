@@ -159,7 +159,7 @@ impl ModemNetworkSimulator {
         if self.modems.contains_key(&id) {
             return Err(ModemError::DuplicateModemId(id));
         }
-        let mut modem = crate::modem::ModemImpl::new(id, profile.unwrap_or_default());
+        let mut modem = crate::modem::ModemImpl::new(id, profile.unwrap_or_default(), sim_type);
         if let Some(t) = sim_type {
             modem.set_sim_status(t > 0);
         }
