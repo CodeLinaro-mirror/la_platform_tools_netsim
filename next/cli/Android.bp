@@ -36,6 +36,9 @@ rust_test_host {
     crate_name: "cli",
     edition: "2024",
     crate_root: "src/main.rs",
+    test_suites: [
+        "general_tests",
+    ],
     srcs: [
         "src/main.rs",
     ],

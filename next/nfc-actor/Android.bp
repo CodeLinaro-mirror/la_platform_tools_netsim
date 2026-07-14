@@ -72,6 +72,9 @@ rust_test_host {
     crate_name: "nfc_actor",
     edition: "2024",
     crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
     srcs: [
         "src/lib.rs",
     ],
@@ -106,6 +109,9 @@ rust_test_host {
     crate_name: "nfc_actor_tests",
     edition: "2024",
     crate_root: "tests/mod.rs",
+    test_suites: [
+        "general_tests",
+    ],
     srcs: [
         "tests/mod.rs",
         "tests/nfc_actor_tests.rs",

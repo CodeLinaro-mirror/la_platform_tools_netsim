@@ -23,3 +23,26 @@ rust_library_host {
         "libtracing",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_rootcanal_server_testing",
+    crate_name: "rootcanal_server",
+    edition: "2024",
+    stem: "librootcanal_server_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_model_testing",
+        "librand",
+        "libtokio",
+        "libtracing",
+    ],
+}

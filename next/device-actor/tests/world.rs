@@ -571,8 +571,7 @@ impl World {
     /// BDD Step: When I shut down the actor politely to trigger shutdown hooks
     pub async fn when_shutdown_actor(&self) {
         let _ = self.client.shutdown().await;
-        // Wait for Actor loop to flush and execute on_shutdown
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        self.then_actor_should_shutdown().await;
     }
 
     /// BDD Step: When I delete the device.

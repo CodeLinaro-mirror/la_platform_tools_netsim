@@ -13,6 +13,7 @@ netsim_rust_library(
     test_deps = [
         "@rand",
         "@regex",
+        "@tempfile",
     ],
     deps = [
         "@chrono",

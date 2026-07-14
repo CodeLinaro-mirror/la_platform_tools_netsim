@@ -42,28 +42,32 @@ impl NfcService for NfcServiceImpl {
                         for c in chips {
                             resp.chips.push(to_proto_chip(c));
                         }
-                        sink.success(resp);
+                        let _ = sink.success(resp).await;
                     }
                     Err(e) => {
                         error!("GetStatus list failed: {}", e);
-                        sink.fail(grpcio::RpcStatus::with_message(
-                            grpcio::RpcStatusCode::INTERNAL,
-                            format!("Failed to list NFC chips: {}", e),
-                        ));
+                        let _ = sink
+                            .fail(grpcio::RpcStatus::with_message(
+                                grpcio::RpcStatusCode::INTERNAL,
+                                format!("Failed to list NFC chips: {}", e),
+                            ))
+                            .await;
                     }
                 }
             } else {
                 match client.read(ChipId(req.chip_id)).await {
                     Ok(chip) => {
                         resp.chips.push(to_proto_chip(chip));
-                        sink.success(resp);
+                        let _ = sink.success(resp).await;
                     }
                     Err(e) => {
                         error!("GetStatus read failed: {}", e);
-                        sink.fail(grpcio::RpcStatus::with_message(
-                            grpcio::RpcStatusCode::NOT_FOUND,
-                            format!("Failed to get NFC chip {}: {}", req.chip_id, e),
-                        ));
+                        let _ = sink
+                            .fail(grpcio::RpcStatus::with_message(
+                                grpcio::RpcStatusCode::NOT_FOUND,
+                                format!("Failed to get NFC chip {}: {}", req.chip_id, e),
+                            ))
+                            .await;
                     }
                 }
             }
@@ -83,7 +87,7 @@ impl NfcService for NfcServiceImpl {
                 Ok(chip) => {
                     let mut resp = SetPowerResponse::new();
                     resp.chip = protobuf::MessageField::some(to_proto_chip(chip));
-                    sink.success(resp);
+                    let _ = sink.success(resp).await;
                 }
                 Err(e) => {
                     if req.chip_id == 0 {
@@ -104,13 +108,15 @@ impl NfcService for NfcServiceImpl {
                             ..Default::default()
                         };
                         resp.chip = protobuf::MessageField::some(to_proto_chip(mock_chip));
-                        sink.success(resp);
+                        let _ = sink.success(resp).await;
                     } else {
                         error!("SetPower failed: {}", e);
-                        sink.fail(grpcio::RpcStatus::with_message(
-                            grpcio::RpcStatusCode::INTERNAL,
-                            format!("Failed to set power for NFC chip {}: {}", req.chip_id, e),
-                        ));
+                        let _ = sink
+                            .fail(grpcio::RpcStatus::with_message(
+                                grpcio::RpcStatusCode::INTERNAL,
+                                format!("Failed to set power for NFC chip {}: {}", req.chip_id, e),
+                            ))
+                            .await;
                     }
                 }
             }
@@ -155,12 +161,14 @@ impl NfcService for NfcServiceImpl {
             if chip_exists || req.chip_id == 0 {
                 let mut resp = SendApduResponse::new();
                 resp.response = vec![0x90, 0x00]; // Return status word 90 00 (Success)
-                sink.success(resp);
+                let _ = sink.success(resp).await;
             } else {
-                sink.fail(grpcio::RpcStatus::with_message(
-                    grpcio::RpcStatusCode::NOT_FOUND,
-                    format!("NFC chip {} not found", req.chip_id),
-                ));
+                let _ = sink
+                    .fail(grpcio::RpcStatus::with_message(
+                        grpcio::RpcStatusCode::NOT_FOUND,
+                        format!("NFC chip {} not found", req.chip_id),
+                    ))
+                    .await;
             }
         });
     }

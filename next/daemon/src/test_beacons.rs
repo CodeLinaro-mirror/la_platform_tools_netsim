@@ -33,7 +33,7 @@ async fn spawn_beacon(idx: u32, interval: u64, device_client: &DeviceClient) {
         name: format!("gDevice-beacon-{idx}"),
         visible: true,
         pose: Pose::default(),
-        builtin: false,
+        builtin: true,
         device_info: None,
     };
 

@@ -12,7 +12,14 @@ CURRENT_REL_PATH = ""
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 NEXT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "next")
 
-ALLOWED_TEST_PACKAGES = {"cli", "nfc-actor"}
+ALLOWED_TEST_PACKAGES = {
+    "cli",
+    "nfc-actor",
+    "daemon",
+    "common",
+    "packet-stream",
+    "grpc-server",
+}
 
 
 EXACT_DEP_MAPPING = {
@@ -27,7 +34,7 @@ EXACT_DEP_MAPPING = {
     "@casimir//:casimir_lib": "libcasimir",
     "//next/testing": "libnetsim_next_netsim_testing",
     "//next/daemon": "netsim_next_daemon",
-    "//next/daemon:testing": "libnetsim_next_daemon_lib",
+    "//next/daemon:testing": "libnetsim_next_daemon_lib_testing",
     "//next/testing:testing": "libnetsim_next_netsim_testing_testing",
     "//:netsim_link_layer_packets_rust_gen": (
         "rootcanal_link_layer_packets_rust_gen"
@@ -202,7 +209,7 @@ def rust_test(*args, **kwargs):
   srcs_content = resolve_rust_srcs(srcs, default_file)
   crate_root_mapped = crate_root if crate_root else srcs_content[0]
 
-  soong_targets.append({
+  tgt_dict = {
       "type": "rust_test_host",
       "name": target_name,
       "crate_name": crate_name,
@@ -214,7 +221,12 @@ def rust_test(*args, **kwargs):
       "features": ["cuttlefish", "testing"],
       "edition": kwargs.get("edition", "2024"),
       "test_suites": ["general_tests"],
-  })
+  }
+  if name == "integration-test" and os.path.exists(
+      os.path.join(NEXT_DIR, package_name, "AndroidTest.xml")
+  ):
+    tgt_dict["test_config"] = "AndroidTest.xml"
+  soong_targets.append(tgt_dict)
 
 
 def rust_test_suite(*args, **kwargs):
@@ -293,6 +305,24 @@ ALLOWED_TESTING_TARGETS = {
     "model",
     "types",
     "netsim-testing",
+    "daemon-lib",
+    "packets",
+    "rootcanal",
+    "rootcanal-server",
+    "modem-rs",
+    "websocket-server",
+    "bluetooth-actor",
+    "capture-actor",
+    "cell-actor",
+    "grpc-server",
+    "hci-server",
+    "link-actor",
+    "packet-stream",
+    "ethernet-actor",
+    "uwb-actor",
+    "wifi-actor",
+    "slirp",
+    "slirp-actor",
 }
 
 
@@ -384,7 +414,15 @@ def netsim_rust_library(
       testing_rustlibs.append(lib)
 
   if name in PLATFORM_RUSTLIBS:
-    testing_rustlibs.extend(PLATFORM_RUSTLIBS[name])
+    for lib in PLATFORM_RUSTLIBS[name]:
+      if lib.startswith("libnetsim_next_") and not lib.endswith("_testing"):
+        pkg_base = lib.replace("libnetsim_next_", "").replace("_", "-")
+        if pkg_base in ALLOWED_TESTING_TARGETS:
+          testing_rustlibs.append(lib + "_testing")
+        else:
+          testing_rustlibs.append(lib)
+      else:
+        testing_rustlibs.append(lib)
   testing_rustlibs = sorted(list(set(testing_rustlibs)))
   testing_shared_libs = sorted(list(set(testing_shared_libs)))
 
@@ -440,6 +478,7 @@ def netsim_rust_library(
           "proc_macros": inline_test_proc_macros,
           "features": ["testing", "cuttlefish"],
           "edition": edition,
+          "test_suites": ["general_tests"],
       })
 
   # 2.2. Integration Test Target
@@ -507,7 +546,7 @@ def netsim_rust_library(
 
       package_name = CURRENT_REL_PATH.strip("/")
       if package_name in ALLOWED_TEST_PACKAGES:
-        soong_targets.append({
+        tgt_dict = {
             "type": "rust_test_host",
             "name": (
                 f"libnetsim_next_{name.replace('-', '_')}_integration_tests"
@@ -520,7 +559,9 @@ def netsim_rust_library(
             "proc_macros": integration_test_proc_macros,
             "features": ["testing", "cuttlefish"],
             "edition": edition,
-        })
+            "test_suites": ["general_tests"],
+        }
+        soong_targets.append(tgt_dict)
 
 
 def resolve_rust_srcs(srcs, default_file):
@@ -707,6 +748,15 @@ def main():
 
             if "crate_root" in tgt:
               f.write(f'    crate_root: "{tgt["crate_root"]}",\n')
+
+            if "test_config" in tgt:
+              f.write(f'    test_config: "{tgt["test_config"]}",\n')
+
+            if "test_suites" in tgt:
+              f.write("    test_suites: [\n")
+              for suite in tgt["test_suites"]:
+                f.write(f'        "{suite}",\n')
+              f.write("    ],\n")
 
             f.write("    srcs: [\n")
             for src in tgt["srcs"]:

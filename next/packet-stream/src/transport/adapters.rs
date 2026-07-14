@@ -27,7 +27,11 @@ pub struct TcpTransportListener {
 
 impl TcpTransportListener {
     pub async fn bind(addr: &str, port: u16) -> Result<Self> {
-        let bind_addr = format!("{addr}:{port}");
+        let bind_addr = if addr.contains(':') && !addr.starts_with('[') {
+            format!("[{}]:{}", addr, port)
+        } else {
+            format!("{}:{}", addr, port)
+        };
         let listener = TcpListener::bind(&bind_addr).await?;
         let local_addr = listener.local_addr()?;
 
