@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use modem_rs::{
-    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile,
+    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile, config::PinProfile,
     test_utils::MockModemHandler,
 };
 
@@ -78,4 +78,51 @@ pub fn create_legacy_test_profile() -> SimProfile {
         },
         ..Default::default()
     }
+}
+
+/// Helper function to create a SIM profile with PIN lock enabled but not
+/// verified.
+pub fn create_locked_sim_profile() -> SimProfile {
+    SimProfile {
+        iccid: "89012345678901234567".to_string(),
+        imsi: "123456789012345".to_string(),
+        pin_profile: PinProfile {
+            state: "EnabledNotVerified".to_string(),
+            pin1: "1111".to_string(),
+            puk1: "12345678".to_string(),
+            ..Default::default()
+        },
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: "3F00".to_string(),
+                    files: vec![SimFile::Ef(ElementaryFile {
+                        file_id: "2FE2".to_string(),
+                        size: 10,
+                        data: "89012345678901234567".to_string(),
+                    })],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a locked SIM profile (legacy test profile with PIN
+/// EnabledNotVerified).
+pub fn given_modem_with_locked_sim(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new();
+
+    let profile = create_locked_sim_profile();
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None)
+        .expect("Failed to create modem with locked SIM");
+    world.modems.insert(name.to_string(), (id, handler));
 }

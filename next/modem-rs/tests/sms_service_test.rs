@@ -227,6 +227,44 @@ fn test_smsc_address() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_smsc_address_with_tosca() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Test with explicit tosca 145
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test with explicit tosca 129
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test with empty address and tosca 0 (the failure case)
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"\",0");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"\",0");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test default tosca 129 (no +)
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"1234567890\"");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+}
+
 // Scenario: Remote SMS
 //   Given a modem "A"
 //   When AT command 'AT+REMOTESMS="0011000B915155255155F40000AA01F0"' is sent

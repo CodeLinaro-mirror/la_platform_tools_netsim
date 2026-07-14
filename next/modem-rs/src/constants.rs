@@ -22,6 +22,9 @@ pub fn is_gprs_dial(number: &[u8]) -> bool {
 /// Standard AT signal strength unknown value.
 pub const CSQ_SIGNAL_UNKNOWN: u8 = 99;
 
+/// Facility code for SIM PIN lock (`AT+CLCK="SC"` / `AT+CPWD="SC"`).
+pub const FACILITY_SIM_PIN: &str = "SC";
+
 /// Network Technology indices.
 pub mod modem_tech_index {
     pub const GSM: u8 = 0;

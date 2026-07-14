@@ -158,6 +158,7 @@ pub enum CmeError {
     InvalidCharacters,
     NoNetworkService,
     NoResources,
+    IncorrectParameters,
     Custom(u32, &'static str),
 }
 
@@ -183,6 +184,7 @@ impl CmeError {
             Self::InvalidCharacters => 25,
             Self::NoNetworkService => 30,
             Self::NoResources => 142,
+            Self::IncorrectParameters => 50,
             Self::Custom(c, _) => c,
         }
     }
@@ -208,6 +210,7 @@ impl CmeError {
             Self::InvalidCharacters => "invalid characters in text string",
             Self::NoNetworkService => "no network service",
             Self::NoResources => "no resources",
+            Self::IncorrectParameters => "incorrect parameters",
             Self::Custom(_, msg) => msg,
         }
     }

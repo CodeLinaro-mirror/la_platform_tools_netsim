@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    constants::FACILITY_SIM_PIN,
     parser::{Command, QuotedString},
-    types::{ExecutionResult, HandledCommand},
+    types::{CmeError, ExecutionResult, HandledCommand},
 };
 
 pub const _MODE_ENABLE: u8 = 1;
@@ -120,10 +121,17 @@ impl SupService {
         match command {
             Command::SetFacilityLock(facility, mode, _, _) => {
                 let facility_str = std::str::from_utf8(facility.as_ref()).unwrap_or("");
-                self.handle_set_facility_lock(facility_str, *mode)
+                if facility_str != FACILITY_SIM_PIN {
+                    self.handle_set_facility_lock(facility_str, *mode)
+                } else {
+                    ExecutionResult::Unhandled
+                }
             }
             Command::CallForwarding { reason: _, mode, number, r#type, .. } => {
                 self.handle_call_forwarding(*mode, *number, *r#type)
+            }
+            Command::CallForwardUtility(_) => {
+                ExecutionResult::CmeError(CmeError::OperationNotSupported)
             }
             Command::QueryClir => self.handle_query_clir(),
             Command::SetClir(clir) | Command::SetClirGoldfish(clir) => self.handle_set_clir(*clir),
