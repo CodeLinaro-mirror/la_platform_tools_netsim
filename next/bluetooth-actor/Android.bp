@@ -35,38 +35,3 @@ rust_library_host {
         "libasync_trait",
     ],
 }
-
-rust_library_host {
-    name: "libnetsim_next_bluetooth_actor_testing",
-    crate_name: "bluetooth_actor",
-    edition: "2024",
-    stem: "libbluetooth_actor_testing",
-    crate_root: "src/lib.rs",
-    srcs: [
-        "src/lib.rs",
-    ],
-    features: [
-        "cuttlefish",
-        "testing",
-    ],
-    lints: "none",
-    rustlibs: [
-        "libbytes",
-        "libfutures",
-        "libhex",
-        "libnetsim_next_actor_framework_testing",
-        "libnetsim_next_device_actor_testing",
-        "libnetsim_next_model_testing",
-        "libnetsim_next_packets_testing",
-        "libnetsim_next_rootcanal_testing",
-        "libnetsim_proto",
-        "libserde",
-        "libthiserror",
-        "libtokio",
-        "libtracing",
-        "libzerocopy",
-    ],
-    proc_macros: [
-        "libasync_trait",
-    ],
-}

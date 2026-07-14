@@ -12,7 +12,7 @@ CURRENT_REL_PATH = ""
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 NEXT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "next")
 
-ALLOWED_TEST_PACKAGES = {"cli", "nfc-actor", "daemon"}
+ALLOWED_TEST_PACKAGES = {"cli", "nfc-actor"}
 
 
 EXACT_DEP_MAPPING = {
@@ -27,7 +27,7 @@ EXACT_DEP_MAPPING = {
     "@casimir//:casimir_lib": "libcasimir",
     "//next/testing": "libnetsim_next_netsim_testing",
     "//next/daemon": "netsim_next_daemon",
-    "//next/daemon:testing": "libnetsim_next_daemon_lib_testing",
+    "//next/daemon:testing": "libnetsim_next_daemon_lib",
     "//next/testing:testing": "libnetsim_next_netsim_testing_testing",
     "//:netsim_link_layer_packets_rust_gen": (
         "rootcanal_link_layer_packets_rust_gen"
@@ -293,24 +293,6 @@ ALLOWED_TESTING_TARGETS = {
     "model",
     "types",
     "netsim-testing",
-    "daemon-lib",
-    "packets",
-    "rootcanal",
-    "rootcanal-server",
-    "modem-rs",
-    "websocket-server",
-    "bluetooth-actor",
-    "capture-actor",
-    "cell-actor",
-    "grpc-server",
-    "hci-server",
-    "link-actor",
-    "packet-stream",
-    "ethernet-actor",
-    "uwb-actor",
-    "wifi-actor",
-    "slirp",
-    "slirp-actor",
 }
 
 
@@ -402,15 +384,7 @@ def netsim_rust_library(
       testing_rustlibs.append(lib)
 
   if name in PLATFORM_RUSTLIBS:
-    for lib in PLATFORM_RUSTLIBS[name]:
-      if lib.startswith("libnetsim_next_") and not lib.endswith("_testing"):
-        pkg_base = lib.replace("libnetsim_next_", "").replace("_", "-")
-        if pkg_base in ALLOWED_TESTING_TARGETS:
-          testing_rustlibs.append(lib + "_testing")
-        else:
-          testing_rustlibs.append(lib)
-      else:
-        testing_rustlibs.append(lib)
+    testing_rustlibs.extend(PLATFORM_RUSTLIBS[name])
   testing_rustlibs = sorted(list(set(testing_rustlibs)))
   testing_shared_libs = sorted(list(set(testing_shared_libs)))
 
