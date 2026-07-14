@@ -76,7 +76,7 @@ impl SmsService {
         let response = format!("+CMGS: {mr}\r\n");
         let mut handled = HandledCommand::ok_with_action(action);
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn handle_store_sms(
@@ -89,16 +89,16 @@ impl SmsService {
                 let response = format!("+CMGW: {index}\r\n");
                 let mut handled = HandledCommand::ok();
                 handled.responses.insert(0, response);
-                ExecutionResult::Handled(handled)
+                ExecutionResult::Success(handled)
             } else {
-                ExecutionResult::Handled(HandledCommand::error())
+                ExecutionResult::Error
             }
         } else {
             self.messages.push(pdu.to_vec());
             let response = format!("+CMGW: {}\r\n", self.messages.len());
             let mut handled = HandledCommand::ok();
             handled.responses.insert(0, response);
-            ExecutionResult::Handled(handled)
+            ExecutionResult::Success(handled)
         }
     }
 
@@ -109,15 +109,15 @@ impl SmsService {
     ) -> ExecutionResult {
         if self.storage1 == MessageStorage::Sim {
             if sim_service.delete_sms(index) {
-                ExecutionResult::Handled(HandledCommand::ok())
+                ExecutionResult::Success(HandledCommand::ok())
             } else {
-                ExecutionResult::Handled(HandledCommand::error())
+                ExecutionResult::Error
             }
         } else if (index as usize) > 0 && (index as usize - 1) < self.messages.len() {
             self.messages.remove(index as usize - 1);
-            ExecutionResult::Handled(HandledCommand::ok())
+            ExecutionResult::Success(HandledCommand::ok())
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
@@ -128,15 +128,15 @@ impl SmsService {
             let response = format!("+CMGR: 0,,{}\r\n{}\r\n", pdu.len(), hex::encode_upper(pdu));
             let mut handled = HandledCommand::ok();
             handled.responses.insert(0, response);
-            ExecutionResult::Handled(handled)
+            ExecutionResult::Success(handled)
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
     pub fn handle_set_sms_message_format(&mut self, format: u8) -> ExecutionResult {
         self.message_format = if format == 1 { MessageFormat::Text } else { MessageFormat::Pdu };
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_set_preferred_message_storage(
@@ -151,7 +151,7 @@ impl SmsService {
             if storage2.as_ref() == b"SM" { MessageStorage::Sim } else { MessageStorage::Me };
         self.storage3 =
             if storage3.as_ref() == b"SM" { MessageStorage::Sim } else { MessageStorage::Me };
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_preferred_message_storage(&self) -> ExecutionResult {
@@ -163,17 +163,17 @@ impl SmsService {
         );
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn handle_send_sms_ack(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_wait_for_store_sms(&mut self, len: u8) -> ExecutionResult {
         self.waiting_for_pdu_len = Some(len as usize);
         self.waiting_for_pdu_store = true;
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec!["> \r\n".to_string()],
             action: None,
         })
@@ -192,7 +192,7 @@ impl SmsService {
             self.waiting_for_pdu_len = Some(len);
             self.waiting_for_pdu_store = false;
         }
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec!["> \r\n".to_string()],
             action: None,
         })
@@ -209,7 +209,7 @@ impl SmsService {
             String::from_utf8(mids.to_vec()).unwrap_or_default(),
             String::from_utf8(dcss.to_vec()).unwrap_or_default(),
         );
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_broadcast_config(&self) -> ExecutionResult {
@@ -217,26 +217,26 @@ impl SmsService {
         let response = format!("+CSCB: {mode},\"{mids}\",\"{dcss}\"\r\n");
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn handle_set_smsc_address(&mut self, address: QuotedString) -> ExecutionResult {
         self.smsc_address = String::from_utf8(address.to_vec()).unwrap_or_default();
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_get_smsc_address(&self) -> ExecutionResult {
         let response = format!("+CSCA: \"{}\",145\r\n", self.smsc_address);
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn handle_remote_sms(&self, pdu: QuotedString) -> ExecutionResult {
         let pdu_bytes = pdu.to_vec();
         let processed = crate::pdu::process_outgoing_sms(&pdu_bytes);
         let action = CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu };
-        ExecutionResult::Handled(HandledCommand::ok_with_action(action))
+        ExecutionResult::Success(HandledCommand::ok_with_action(action))
     }
 
     // Explicit execute method instead of Trait

@@ -359,6 +359,12 @@ pub enum Command<'a> {
     /// Report mobile equipment error
     #[command(tag = "AT+CMEE=")]
     SetReportMobileEquipmentError(u8),
+    /// Query report mobile equipment error
+    #[command(tag = "AT+CMEE?")]
+    QueryReportMobileEquipmentError,
+    /// Query supported report mobile equipment error modes
+    #[command(tag = "AT+CMEE=?")]
+    QuerySupportedReportMobileEquipmentError,
     /// Goldfish specific concatenated init command
     #[command(tag = "ATE0Q0V1")]
     GoldfishInitSequence,
@@ -482,6 +488,14 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+CMEE=1").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::SetReportMobileEquipmentError(1));
+
+        let (rem, cmd) = Command::parse(b"AT+CMEE?").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::QueryReportMobileEquipmentError);
+
+        let (rem, cmd) = Command::parse(b"AT+CMEE=?").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::QuerySupportedReportMobileEquipmentError);
     }
 
     #[test]

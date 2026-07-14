@@ -114,9 +114,9 @@ impl CallService {
 
     pub fn ring(&mut self, number: String) -> ExecutionResult {
         if self.add_call(CallState::Incoming, CallDirection::Incoming, number, None).is_none() {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec!["RING\r\n".to_string()],
             action: None,
         })
@@ -202,7 +202,7 @@ impl CallService {
         }
 
         let Some(dial_str) = parse_number(number) else {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         };
         let mut is_emergency = false;
         let clean_number = if let Some(pos) = dial_str.find('@') {
@@ -227,18 +227,18 @@ impl CallService {
             });
 
         if !is_valid {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
 
         if is_emergency {
-            return ExecutionResult::Handled(HandledCommand::ok_with_action(
+            return ExecutionResult::Success(HandledCommand::ok_with_action(
                 CommandAction::InitiateEmergencyCall,
             ));
         }
 
         debug!("[CallService] Calls before dial: {:?}", self.calls);
         if self.is_dialing() {
-            return ExecutionResult::Handled(HandledCommand::default());
+            return ExecutionResult::Success(HandledCommand::default());
         }
 
         let mut did_hold = false;
@@ -254,7 +254,7 @@ impl CallService {
             .add_call(CallState::Dialing, CallDirection::Outgoing, clean_number_str.clone(), None)
             .is_none()
         {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
         debug!("[CallService] Calls after dial: {:?}", self.calls);
 
@@ -264,7 +264,7 @@ impl CallService {
             CommandAction::InitiateCall(clean_number_str)
         };
 
-        ExecutionResult::Handled(HandledCommand::ok_with_action(action))
+        ExecutionResult::Success(HandledCommand::ok_with_action(action))
     }
 
     pub fn handle_answer(&mut self, id: ModemId) -> ExecutionResult {
@@ -275,19 +275,19 @@ impl CallService {
         {
             call.state = CallState::Active;
             debug!("[CallService] Calls after answer: {:?}", self.calls);
-            return ExecutionResult::Handled(HandledCommand::ok_with_action(
+            return ExecutionResult::Success(HandledCommand::ok_with_action(
                 CommandAction::AnswerCall(id),
             ));
         }
-        ExecutionResult::Handled(HandledCommand::error())
+        ExecutionResult::Error
     }
 
     pub fn handle_hangup(&mut self, id: ModemId) -> ExecutionResult {
         if self.is_idle() {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
         self.calls.clear();
-        ExecutionResult::Handled(HandledCommand::ok_with_action(CommandAction::HangupCall(id)))
+        ExecutionResult::Success(HandledCommand::ok_with_action(CommandAction::HangupCall(id)))
     }
 
     pub fn handle_call_hold(&mut self, raw_chld_op: u8, id: ModemId) -> ExecutionResult {
@@ -304,7 +304,7 @@ impl CallService {
 
         // Validate index for ops that require it (1 and 2)
         if index.is_some_and(|idx| (op == 1 || op == 2) && !self.has_call(idx)) {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
 
         match op {
@@ -312,7 +312,7 @@ impl CallService {
                 let prev_len = self.calls.len();
                 self.calls.retain(|c| c.state != CallState::Held && !c.state.is_waiting());
                 if self.calls.len() < prev_len {
-                    return ExecutionResult::Handled(HandledCommand::ok_with_action(
+                    return ExecutionResult::Success(HandledCommand::ok_with_action(
                         CommandAction::HangupCall(id),
                     ));
                 }
@@ -331,7 +331,7 @@ impl CallService {
                     }
                 }
                 if self.calls.len() < prev_len {
-                    return ExecutionResult::Handled(HandledCommand::ok_with_action(
+                    return ExecutionResult::Success(HandledCommand::ok_with_action(
                         CommandAction::HangupCall(id),
                     ));
                 }
@@ -359,7 +359,7 @@ impl CallService {
             }
             3 => {
                 if !self.is_active() || !self.is_held() {
-                    return ExecutionResult::Handled(HandledCommand::error());
+                    return ExecutionResult::Error;
                 }
                 for call in self.calls.iter_mut() {
                     if call.state == CallState::Held {
@@ -377,10 +377,10 @@ impl CallService {
                 // For now, we hang up to avoid leaking state.
                 return self.handle_hangup(id);
             }
-            _ => return ExecutionResult::Handled(HandledCommand::error()),
+            _ => return ExecutionResult::Error,
         }
         debug!("[CallService] Calls after hold op: {:?}", self.calls);
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_current_calls(&self) -> ExecutionResult {
@@ -400,56 +400,56 @@ impl CallService {
             responses.push(response);
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     pub fn handle_remote_call(&mut self, number: &[u8]) -> ExecutionResult {
         let Some(number_str) = parse_number(number) else {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         };
         if self
             .add_call(CallState::Incoming, CallDirection::Incoming, number_str.clone(), None)
             .is_none()
         {
-            return ExecutionResult::Handled(HandledCommand::error());
+            return ExecutionResult::Error;
         }
-        ExecutionResult::Handled(HandledCommand::ok_with_action(CommandAction::InitiateRemoteCall(
+        ExecutionResult::Success(HandledCommand::ok_with_action(CommandAction::InitiateRemoteCall(
             number_str,
         )))
     }
 
     pub fn handle_set_mute(&mut self, mute: u8) -> ExecutionResult {
         self.mute = mute == 1;
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_mute(&self) -> ExecutionResult {
         let response = format!("+CMUT: {}\r\n", if self.mute { 1 } else { 0 });
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn handle_send_dtmf(&self, dtmf: &[u8]) -> ExecutionResult {
         debug!("[CallService] Send DTMF: {}", String::from_utf8_lossy(dtmf));
 
         if std::str::from_utf8(dtmf).is_ok_and(is_valid_dtmf_format) {
-            ExecutionResult::Handled(HandledCommand::ok())
+            ExecutionResult::Success(HandledCommand::ok())
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
     pub fn handle_set_emergency_mode(&mut self, mode: u8) -> ExecutionResult {
         self.emergency_mode = mode == 1;
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_emergency_mode(&self) -> ExecutionResult {
         let response = format!("+WSOS: {}\r\n", if self.emergency_mode { 1 } else { 0 });
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn execute(&mut self, command: &Command, id: ModemId) -> ExecutionResult {
