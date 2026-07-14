@@ -32,35 +32,3 @@ rust_library_host {
         "libasync_trait",
     ],
 }
-
-rust_library_host {
-    name: "libnetsim_next_packet_stream_testing",
-    crate_name: "packet_stream",
-    edition: "2024",
-    stem: "libpacket_stream_testing",
-    crate_root: "src/lib.rs",
-    srcs: [
-        "src/lib.rs",
-    ],
-    features: [
-        "cuttlefish",
-        "testing",
-    ],
-    lints: "none",
-    rustlibs: [
-        "libbytes",
-        "libcommand_fds",
-        "libfutures",
-        "libnetsim_next_types_testing",
-        "libnix",
-        "libserde",
-        "libserde_json",
-        "libthiserror",
-        "libtokio",
-        "libtokio_util",
-        "libtracing",
-    ],
-    proc_macros: [
-        "libasync_trait",
-    ],
-}

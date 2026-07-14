@@ -30,33 +30,3 @@ rust_library_host {
         "libnetsim_next_modem_rs_derive",
     ],
 }
-
-rust_library_host {
-    name: "libnetsim_next_modem_rs_testing",
-    crate_name: "modem_rs",
-    edition: "2024",
-    stem: "libmodem_rs_testing",
-    crate_root: "src/lib.rs",
-    srcs: [
-        "src/lib.rs",
-    ],
-    features: [
-        "cuttlefish",
-        "testing",
-    ],
-    lints: "none",
-    rustlibs: [
-        "libbytes",
-        "libchrono",
-        "libhex",
-        "libnetsim_next_model_testing",
-        "libnom",
-        "libserde",
-        "libserde_json",
-        "libtokio",
-        "libtracing",
-    ],
-    proc_macros: [
-        "libnetsim_next_modem_rs_derive",
-    ],
-}
