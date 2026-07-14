@@ -108,6 +108,24 @@ impl NetworkService {
         responses
     }
 
+    fn rssi_to_rsrp(rssi: u8) -> i32 {
+        if rssi == crate::constants::CSQ_SIGNAL_UNKNOWN {
+            return i32::MAX;
+        }
+        // Convert CSQ RSSI (0-31) to dBm
+        // 0 -> -113 dBm, 31 -> -51 dBm, step 2
+        let rssi_dbm = -113 + (rssi as i32 * 2);
+
+        // Estimate RSRP = RSSI - 15 dBm
+        let rsrp_dbm = rssi_dbm - 15;
+
+        // AIDL expects -1 * rsrp_dbm
+        let rsrp_csq = -rsrp_dbm;
+
+        // Clamp to valid range [44, 140]
+        rsrp_csq.clamp(44, 140)
+    }
+
     /// Formats the unsolicited signal quality (CSQ) report according to the
     /// extended 22-field layout.
     ///
@@ -118,21 +136,20 @@ impl NetworkService {
     fn build_csq_response(&self, rssi: u8, ber: u8) -> String {
         let mut ss = SignalStrength::default();
         match self.act {
-            crate::constants::access_technology::GSM
-            | crate::constants::access_technology::WCDMA => {
+            crate::constants::access_technology::GSM => {
                 ss.gsm_rssi = rssi as i32;
                 ss.gsm_ber = ber as i32;
             }
+            crate::constants::access_technology::WCDMA => {
+                ss.wcdma_rssi = rssi as i32;
+                ss.wcdma_ber = ber as i32;
+            }
             crate::constants::access_technology::LTE => {
-                if rssi != crate::constants::CSQ_SIGNAL_UNKNOWN {
-                    ss.lte_rssi = rssi as i32;
-                    ss.lte_rsrp = rssi as i32;
-                }
+                ss.lte_rssi = rssi as i32;
+                ss.lte_rsrp = Self::rssi_to_rsrp(rssi);
             }
             crate::constants::access_technology::NR => {
-                if rssi != crate::constants::CSQ_SIGNAL_UNKNOWN {
-                    ss.nr_ss_rsrp = rssi as i32;
-                }
+                ss.nr_ss_rsrp = Self::rssi_to_rsrp(rssi);
             }
             _ => {}
         }
