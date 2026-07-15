@@ -99,8 +99,12 @@ impl ActorService for CellActor {
                 error!("Failed to remove modem: {:?}", e);
             }
 
-            // Notify DeviceClient
-            let _ = self.device_client.notify_chip_removed(state.device_id, id).await;
+            // Notify DeviceClient asynchronously
+            let dc = self.device_client.clone();
+            let device_id = state.device_id;
+            tokio::spawn(async move {
+                let _ = dc.notify_chip_removed(device_id, id).await;
+            });
         }
         Ok(())
     }

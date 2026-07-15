@@ -188,8 +188,12 @@ impl ActorService for NfcActor {
     ) -> Result<(), Self::Error> {
         if let Some(state) = self.active_chips.remove(&id) {
             info!("Deleting NFC chip {}", id);
-            // Notify DeviceClient
-            let _ = self.device_client.notify_chip_removed(state.device_id, id).await;
+            // Notify DeviceClient asynchronously
+            let dc = self.device_client.clone();
+            let device_id = state.device_id;
+            tokio::spawn(async move {
+                let _ = dc.notify_chip_removed(device_id, id).await;
+            });
 
             // Abort the Casimir -> Guest task
             ctx.abort(id);
