@@ -130,6 +130,53 @@ message WifiStats {
   optional float max_upload_throughput = 18;
 }
 
+// Detailed NFC stats
+message NfcStats {
+  // === Error Counters ===
+  // Errors encountered while parsing, decoding, or handling NCI packets.
+  optional int32 nci_errors = 1;
+  // Errors related to Casimir simulation backend or RF scene routing.
+  optional int32 casimir_errors = 2;
+  // Errors related to contactless RF transmission or tag emulation.
+  optional int32 rf_errors = 3;
+  // Other uncategorized NFC errors.
+  optional int32 other_errors = 4;
+
+  // === Core Traffic Flow & Type Counters ===
+  // NCI control command packets received from guest OS.
+  // Mapped to Android NFC HAL / stack control operations (e.g., adapter
+  // enable/disable, RF discovery configuration, routing updates).
+  optional int32 nci_commands_rx = 5;
+  // NCI control response packets transmitted to guest OS.
+  optional int32 nci_responses_tx = 6;
+  // NCI notification packets transmitted to guest OS.
+  optional int32 nci_notifications_tx = 7;
+  // NCI data packets received from guest OS.
+  optional int32 nci_data_rx = 8;
+  // NCI data packets transmitted to guest OS.
+  // Mapped to Android NFC HAL / Framework API payload I/O operations (e.g.,
+  // Ndef read/write, IsoDep/Tag transceive, HostApduService APDU exchanges).
+  optional int32 nci_data_tx = 9;
+  // Over-the-air RF contactless tap events transmitted via Casimir.
+  optional int32 rf_taps_tx = 10;
+  // Over-the-air RF contactless tap events received via Casimir.
+  optional int32 rf_taps_rx = 11;
+
+  // === Simulation & Emulation Transaction Counters ===
+  // Number of Card Emulation (HCE) transactions simulated.
+  optional int32 card_emulation_count = 12;
+  // Number of Tag Emulation transactions simulated.
+  optional int32 tag_emulation_count = 13;
+}
+
+// Frontend statistics for NfcService gRPC API calls
+message NfcServiceStats {
+  optional uint32 get_status = 1;
+  optional uint32 set_power = 2;
+  optional uint32 poll = 3;
+  optional uint32 send_apdu = 4;
+}
+
 // Statistics for a netsim session.
 message NetsimStats {
   // The length of the session in seconds
@@ -148,4 +195,8 @@ message NetsimStats {
   repeated NetsimDeviceStats device_stats = 7;
   // Wi-Fi statistics
   optional WifiStats wifi_stats = 8;
+  // NFC statistics
+  optional NfcStats nfc_stats = 9;
+  // NFC Service API statistics
+  optional NfcServiceStats nfc_service_stats = 10;
 }
