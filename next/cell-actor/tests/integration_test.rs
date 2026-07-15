@@ -184,3 +184,52 @@ async fn test_get_chip() {
         other => panic!("Expected ChipNotFound error, got {:?}", other),
     }
 }
+
+// T014: Test that delete chip does not block the actor loop while waiting for
+// DeviceActor
+#[tokio::test]
+async fn test_delete_chip_non_blocking() {
+    let mut harness = setup_test_harness().await;
+    let chip_id = ChipId(2);
+    let (stream, sink, _, _) = create_dummy_stream_sink();
+    let params = create_params(chip_id, stream, sink);
+    harness.client.create(chip_id, params).await.unwrap();
+
+    let client = harness.client.clone();
+    // Start delete in a spawned task so we don't block the test
+    let delete_handle = tokio::spawn(async move { client.delete(chip_id).await });
+
+    // Wait for the NotifyChipRemoved message to arrive at the mock DeviceActor
+    let msg =
+        tokio::time::timeout(std::time::Duration::from_secs(1), harness.device_server_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+    let ResourceRequest::Action {
+        action: DeviceAction::NotifyChipRemoved(_device_id, id),
+        respond_to,
+        ..
+    } = msg
+    else {
+        panic!("Unexpected message");
+    };
+    assert_eq!(id, chip_id);
+
+    // At this point, NotifyChipRemoved has been sent, but we have NOT responded.
+    // If CellActor is non-blocking (async), it should be able to process other
+    // requests.
+    let read_client = harness.client.clone();
+    let read_handle = tokio::spawn(async move { read_client.read(chip_id).await });
+
+    // Verify read completes (it might return error/NotFound, but it should NOT
+    // hang)
+    let read_res = tokio::time::timeout(std::time::Duration::from_millis(200), read_handle).await;
+    assert!(read_res.is_ok(), "Read call was blocked by pending delete notification!");
+
+    // Now respond to NotifyChipRemoved to let delete finish
+    let _ = respond_to.send(Ok(DeviceActionResult::Success));
+
+    // Verify delete finishes
+    delete_handle.await.unwrap().unwrap();
+}
