@@ -69,7 +69,7 @@ fn test_cops_modes() {
 
     // Query should show mode 2
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 2");
+    then_response_is(&mut world, "A", "+COPS: 2,0,0");
     then_response_is(&mut world, "A", "OK");
 
     // 2. Test Auto Register (AT+COPS=0)
@@ -90,7 +90,7 @@ fn test_cops_modes() {
 
     // Query should show mode 0 (reverted from 1)
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0");
+    then_response_is(&mut world, "A", "+COPS: 0,2,0");
     then_response_is(&mut world, "A", "OK");
 
     // 4. Test Manual Register to correct operator (AT+COPS=1,0,\"Android Virtual
@@ -113,7 +113,7 @@ fn test_cops_modes() {
 
     // Query should show mode 0 (fallback to 0, even though previous was 1)
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0");
+    then_response_is(&mut world, "A", "+COPS: 0,2,0");
     then_response_is(&mut world, "A", "OK");
 }
 
