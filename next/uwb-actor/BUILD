@@ -9,6 +9,7 @@ DEPS = [
     "//next/actor-framework",
     "//next/device-actor",
     "//next/model",
+    "//proto",
     "@bytes",
     "@thiserror",
     "@futures",

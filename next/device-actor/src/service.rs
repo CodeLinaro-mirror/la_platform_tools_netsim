@@ -101,6 +101,10 @@ impl DeviceActor {
             wifi_stats = ipc.wifi_stats.take();
             wifi_api = ipc.wifi_api_stats.take();
         }
+        // Collect UWB specific stats (Global)
+        let uwb_api = self
+            .collect_chip_stats::<netsim_proto::stats::UwbApiStats>(netsim_model::ChipKind::UWB)
+            .await;
 
         // Collect NFC specific stats (Global)
         let nfc_stats = self.collect_nfc_stats_async().await;
@@ -110,6 +114,7 @@ impl DeviceActor {
             active_stats: active_proto_stats,
             wifi_stats,
             wifi_api,
+            uwb_api,
             nfc_stats,
             nfc_service_stats,
         });

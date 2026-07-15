@@ -23,4 +23,7 @@ pub enum UwbError {
 
     #[error("Packet sink is missing")]
     PacketSinkMissing,
+
+    #[error("Internal error: {0}")]
+    Internal(Box<str>),
 }

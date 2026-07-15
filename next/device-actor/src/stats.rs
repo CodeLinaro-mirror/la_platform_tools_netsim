@@ -20,6 +20,7 @@ pub struct CombinedStatsInputs {
     pub active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
     pub wifi_stats: Option<netsim_proto::stats::WifiStats>,
     pub wifi_api: Option<netsim_proto::stats::WifiApiStats>,
+    pub uwb_api: Option<netsim_proto::stats::UwbApiStats>,
     pub nfc_stats: Option<netsim_proto::stats::NfcStats>,
     pub nfc_service_stats: Option<netsim_proto::stats::NfcServiceStats>,
 }
@@ -97,6 +98,7 @@ impl Stats {
             mut active_stats,
             wifi_stats,
             wifi_api,
+            uwb_api,
             nfc_stats,
             nfc_service_stats,
         } = inputs;
@@ -106,9 +108,14 @@ impl Stats {
         let mut combined = self.proto.clone();
         combined.radio_stats.extend(self.archived_radio_stats.clone());
         combined.radio_stats.append(&mut active_stats);
-        if let Some(wa) = wifi_api {
-            let mut api_stats = netsim_proto::stats::ApiStats::new();
-            api_stats.wifi = netsim_proto::protobuf::MessageField::some(wa);
+        if wifi_api.is_some() || uwb_api.is_some() {
+            let mut api_stats = combined.api_stats.take().unwrap_or_default();
+            if let Some(wa) = wifi_api {
+                api_stats.wifi = netsim_proto::protobuf::MessageField::some(wa);
+            }
+            if let Some(ua) = uwb_api {
+                api_stats.uwb = netsim_proto::protobuf::MessageField::some(ua);
+            }
             combined.api_stats = netsim_proto::protobuf::MessageField::some(api_stats);
         }
 
@@ -233,6 +240,7 @@ mod tests {
             active_stats: vec![],
             wifi_stats: None,
             wifi_api: None,
+            uwb_api: None,
             nfc_stats: None,
             nfc_service_stats: None,
         });

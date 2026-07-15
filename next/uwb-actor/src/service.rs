@@ -43,8 +43,16 @@ impl ActorService for UwbActor {
         let mut chip = params.chip;
         chip.id = chip_id.0;
 
-        let stream =
-            params.packet_stream.ok_or(UwbError::PacketStreamMissing)?.map(|b| b.to_vec()).boxed();
+        let stats_clone = self.uwb_stats.clone();
+        let stream = params
+            .packet_stream
+            .ok_or(UwbError::PacketStreamMissing)?
+            .map(move |b| {
+                let v = b.to_vec();
+                parse_and_count_uci_command(&v, &stats_clone);
+                v
+            })
+            .boxed();
 
         let p2p_tx_count = Arc::new(AtomicU64::new(0));
         let p2p_rx_count = Arc::new(AtomicU64::new(0));
@@ -52,6 +60,7 @@ impl ActorService for UwbActor {
         let rx_clone = p2p_rx_count.clone();
 
         // Pica wants a Sink<Vec<u8>>.
+        let stats_clone_sink = self.uwb_stats.clone();
         let sink = Box::pin(params.packet_sink.ok_or(UwbError::PacketSinkMissing)?.with(
             move |v: Vec<u8>| {
                 if let Some(count) = count_p2p_ranging_measurements(&v).ok().filter(|&c| c > 0) {
@@ -62,6 +71,7 @@ impl ActorService for UwbActor {
                     tx_clone.fetch_add(count, Ordering::Relaxed);
                     rx_clone.fetch_add(count, Ordering::Relaxed);
                 }
+                parse_and_count_uci_data_receive(&v, &stats_clone_sink);
                 async move { Ok(Bytes::from(v)) }
             },
         ));
@@ -213,6 +223,14 @@ impl ActorService for UwbActor {
                 }
                 Ok(UwbActionResult::Success)
             }
+            UwbAction::GetGlobalStats => {
+                use netsim_proto::protobuf::Message;
+                let proto = self.uwb_stats.to_proto();
+                let bytes = proto.write_to_bytes().map_err(|e| {
+                    UwbError::Internal(Box::from(format!("Failed to serialize UwbStats: {}", e)))
+                })?;
+                Ok(UwbActionResult::GlobalStats(bytes))
+            }
         }
     }
 
@@ -257,6 +275,99 @@ fn count_p2p_ranging_measurements(bytes: &[u8]) -> Result<u64, ()> {
         return Ok(m.owr_aoa_ranging_measurements.len() as u64);
     }
     Err(())
+}
+
+#[allow(clippy::collapsible_if)]
+fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
+    use pica::packets::uci::{
+        ControlPacket, ControlPacketChild, DataPacket, DataPacketChild, SessionConfigPacketChild,
+        SessionControlPacketChild, UpdateMulticastListAction,
+    };
+
+    use crate::stats::UwbApi;
+
+    if bytes.is_empty() {
+        return;
+    }
+
+    let mt = (bytes[0] >> 5) & 0x07;
+    let dpf_or_gid = bytes[0] & 0x0f;
+
+    if mt == 1 {
+        if let Ok((packet, _)) = ControlPacket::decode(bytes) {
+            match packet.specialize() {
+                Ok(ControlPacketChild::SessionConfigPacket(cfg_pkt)) => {
+                    match cfg_pkt.specialize() {
+                        Ok(SessionConfigPacketChild::SessionInitCmd(_)) => {
+                            stats.incr(UwbApi::Open);
+                        }
+                        Ok(SessionConfigPacketChild::SessionDeinitCmd(_)) => {
+                            stats.incr(UwbApi::Close);
+                        }
+                        Ok(SessionConfigPacketChild::SessionSetAppConfigCmd(_)) => {
+                            stats.incr(UwbApi::Reconfigure);
+                        }
+                        Ok(SessionConfigPacketChild::SessionGetAppConfigCmd(_)) => {
+                            stats.incr(UwbApi::SessionGetAppConfig);
+                        }
+                        Ok(SessionConfigPacketChild::SessionUpdateControllerMulticastListCmd(
+                            cmd,
+                        )) => match cmd.action {
+                            UpdateMulticastListAction::AddControlee
+                            | UpdateMulticastListAction::AddControleeWithShortSubSessionKey
+                            | UpdateMulticastListAction::AddControleeWithExtendedSubSessionKey => {
+                                stats.incr(UwbApi::AddControlee)
+                            }
+                            UpdateMulticastListAction::RemoveControlee => {
+                                stats.incr(UwbApi::RemoveControlee)
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+                Ok(ControlPacketChild::SessionControlPacket(ctrl_pkt)) => {
+                    match ctrl_pkt.specialize() {
+                        Ok(SessionControlPacketChild::SessionStartCmd(_)) => {
+                            stats.incr(UwbApi::Start);
+                        }
+                        Ok(SessionControlPacketChild::SessionStopCmd(_)) => {
+                            stats.incr(UwbApi::Stop);
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+    } else if mt == 0 && dpf_or_gid == 1 {
+        if let Ok((packet, _)) = DataPacket::decode(bytes) {
+            if let Ok(DataPacketChild::DataMessageSnd(_)) = packet.specialize() {
+                stats.incr(UwbApi::SendData);
+            }
+        }
+    }
+}
+
+#[allow(clippy::collapsible_if)]
+fn parse_and_count_uci_data_receive(bytes: &[u8], stats: &crate::stats::UwbStats) {
+    use pica::packets::uci::{DataPacket, DataPacketChild};
+
+    use crate::stats::UwbApi;
+
+    if bytes.is_empty() {
+        return;
+    }
+
+    let mt = (bytes[0] >> 5) & 0x07;
+    let dpf = bytes[0] & 0x0f;
+
+    if mt == 0 && dpf == 2 {
+        if let Ok((packet, _)) = DataPacket::decode(bytes) {
+            if let Ok(DataPacketChild::DataMessageRcv(_)) = packet.specialize() {
+                stats.incr(UwbApi::OnDataReceived);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

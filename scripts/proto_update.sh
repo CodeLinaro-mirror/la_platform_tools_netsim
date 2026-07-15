@@ -93,6 +93,9 @@ find "$PROTO_SRC_DIR" -name '*.rs' \
 
 # Find the most recent rustfmt available in prebuilts for the detected OS
 RUSTFMT="../../prebuilts/rust-toolchain/linux-x86/stable/rustfmt"
+if [ ! -f "$RUSTFMT" ]; then
+    RUSTFMT="rustfmt"
+fi
 find "$PROTO_SRC_DIR" -name '*.rs' -exec "$RUSTFMT" {} \;
 
 # --- Step 3. Add license headers ---
