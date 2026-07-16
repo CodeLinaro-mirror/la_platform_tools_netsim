@@ -15,6 +15,8 @@ pub struct World {
     pub modems: HashMap<String, (ModemId, MockModemHandler)>,
     /// Counter for generating unique ModemIds.
     pub modem_id_counter: usize,
+    /// Keep the host event receiver alive to prevent channel closure.
+    pub _host_event_rx: tokio::sync::mpsc::UnboundedReceiver<modem_rs::HostEvent>,
 }
 
 impl World {
@@ -25,10 +27,10 @@ impl World {
         // If tests need to inspect network events, they should capture them from
         // dispatch output. For now, we assume tests rely on modem responses.
         let clock = Arc::new(MockClock::default());
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let manager = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
 
-        World { manager, clock, modems: HashMap::new(), modem_id_counter: 0 }
+        World { manager, clock, modems: HashMap::new(), modem_id_counter: 0, _host_event_rx: rx }
     }
 
     pub fn next_modem_id(&mut self) -> ModemId {
@@ -41,7 +43,7 @@ impl World {
         if let Some((id, handler)) = self.modems.get_mut(name) {
             (*id, handler)
         } else {
-            panic!("Modem '{}' not found", name);
+            panic!("Modem '{name}' not found");
         }
     }
 }

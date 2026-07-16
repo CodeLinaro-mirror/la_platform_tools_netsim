@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn test_sockaddr_v6() {
-        let sockaddr = SocketAddrV6::new(Ipv6Addr::new(1, 2, 3, 4, 5, 6, 7, 8).into(), 8080, 1, 2);
+        let sockaddr = SocketAddrV6::new(Ipv6Addr::new(1, 2, 3, 4, 5, 6, 7, 8), 8080, 1, 2);
         let in_v6: sockaddr_in6 = sockaddr.into();
 
         // Pointer to the sockaddr_in6 ip address raw octets
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_sockaddr_v4() {
-        let sockaddr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+        let sockaddr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
         let in_v4: sockaddr_in = sockaddr.into();
 
         // Pointer to the sockaddr_in ip address raw octets

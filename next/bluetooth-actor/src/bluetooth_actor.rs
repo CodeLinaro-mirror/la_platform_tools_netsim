@@ -69,6 +69,20 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
             Some(tx_power)
         }
     }
+
+    fn estimate_distance(&self, source_id: u32, destination_id: u32) -> u32 {
+        let src_id = source_id.into();
+        let dst_id = destination_id.into();
+        let chips = self.chips.lock().unwrap();
+        let src_chip = chips.get(&src_id);
+        let dst_chip = chips.get(&dst_id);
+        if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
+            let dist = ranging::distance(&src.pose.position, &dst.pose.position);
+            (dist * 100.0).round() as u32
+        } else {
+            100
+        }
+    }
 }
 
 /// The context for the Bluetooth actor.
@@ -96,6 +110,7 @@ impl BluetoothActor {
             Box::new(RootcanalCallbacksImpl { chips: chips.clone() }),
             disable_address_reuse,
         );
+
         Self { rootcanal, chips, initial_chips, device_client }
     }
 }

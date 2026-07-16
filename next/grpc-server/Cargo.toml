@@ -19,6 +19,7 @@ grpcio = { version = "0.13", default-features = false, features = [
 ] }
 link-actor = { path = "../link-actor" }
 link-api = { path = "../link-api" }
+nfc-actor = { path = "../nfc-actor" }
 
 actor-framework = { path = "../actor-framework" }
 netsim-model = { path = "../model" }

@@ -35,6 +35,7 @@ netsim_rust_library(
         "@hex",
         "@nom",
         "@serde",
+        "@serde_json",
         "@tokio",
         "@tracing",
     ],

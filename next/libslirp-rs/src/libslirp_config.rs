@@ -339,6 +339,7 @@ impl SlirpConfigs {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::needless_range_loop)]
     use tokio::runtime::Runtime;
 
     use super::*;

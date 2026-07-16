@@ -55,6 +55,17 @@ impl SlirpClient {
         Ok(())
     }
 
+    pub async fn switch_backend(
+        &self,
+        backend: crate::slirp_actor::SlirpBackend,
+    ) -> Result<(), ClientError> {
+        self.client
+            .perform_action(None, SlirpReq::SwitchBackend(backend))
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        Ok(())
+    }
+
     pub async fn shutdown(&self) -> Result<(), ClientError> {
         self.client.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }

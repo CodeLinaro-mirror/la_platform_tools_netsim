@@ -5,6 +5,7 @@
 
 pub mod access_point;
 pub mod ble_service;
+pub mod casimir_control;
 pub mod cell;
 pub mod common;
 pub mod config;
@@ -12,6 +13,7 @@ pub mod configuration;
 pub mod frontend;
 pub mod hci_packet;
 pub mod model;
+pub mod nfc_service;
 pub mod packet_streamer;
 pub mod startup;
 pub mod stats;

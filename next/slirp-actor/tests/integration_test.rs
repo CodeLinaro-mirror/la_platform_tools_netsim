@@ -43,7 +43,6 @@ async fn test_slirp_actor_lifecycle() {
 
     // Register Sink
     let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
-    use tokio_stream::StreamExt;
     let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
     let sink: netsim_model::PacketSink =
         Box::pin(futures::sink::unfold(tx_out, |tx, bytes| async move {
@@ -151,4 +150,56 @@ async fn test_slirp_mac_learning_and_switching() {
     // Verify both clients receive it
     assert!(rx_out1.try_recv().is_ok());
     assert!(rx_out2.try_recv().is_ok());
+}
+
+#[tokio::test]
+async fn test_slirp_native_backend() {
+    let (tx_out, _rx_out) = mpsc::unbounded_channel::<bytes::Bytes>();
+    let mut actor = SlirpActor::new_with_backend(
+        Default::default(),
+        None,
+        None,
+        slirp_actor::SlirpBackend::Native,
+    )
+    .await;
+    let mut ctx = MockContext;
+
+    let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
+    let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
+    let sink: netsim_model::PacketSink =
+        Box::pin(futures::sink::unfold(tx_out, |tx, bytes| async move {
+            let _ = tx.send(bytes);
+            Ok(tx)
+        }));
+    let result = actor
+        .handle_action(
+            None,
+            SlirpReq::Register { client_id: 0, stream, sink, notifier: None },
+            &mut ctx,
+        )
+        .await;
+    assert!(result.is_ok());
+
+    actor.on_start(&mut ctx).await;
+
+    let status = actor.handle_get(0, &mut ctx).await;
+    assert!(status.is_ok());
+    assert!(status.unwrap().unwrap().initialized);
+
+    let dummy_packet = bytes::Bytes::from(vec![0u8; 64]);
+    let req = SlirpReq::SendPacket(dummy_packet);
+    let result = actor.handle_action(None, req, &mut ctx).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_switch_backend() {
+    let mut actor = SlirpActor::new(Default::default(), None, None).await;
+    let mut ctx = MockContext;
+
+    let result = actor
+        .handle_action(None, SlirpReq::SwitchBackend(slirp_actor::SlirpBackend::Native), &mut ctx)
+        .await;
+    assert!(result.is_ok());
+    assert_eq!(actor.backend(), slirp_actor::SlirpBackend::Native);
 }

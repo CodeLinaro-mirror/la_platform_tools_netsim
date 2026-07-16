@@ -340,18 +340,18 @@ impl PacketBuilder {
     ) -> Self {
         use zerocopy::{IntoBytes, U16};
 
-        use crate::ethernet::arp::ArpHeader;
+        use crate::ethernet::{ArpPacket, MacAddr};
 
-        let arp_header = ArpHeader {
+        let arp_header = ArpPacket {
             hardware_type: U16::new(1),      // Ethernet
             protocol_type: U16::new(0x0800), // IPv4
-            hardware_len: 6,
-            protocol_len: 4,
+            hardware_addr_len: 6,
+            protocol_addr_len: 4,
             opcode: U16::new(opcode),
-            sender_mac,
-            sender_ip,
-            target_mac,
-            target_ip,
+            sender_hardware_addr: MacAddr::new(sender_mac),
+            sender_protocol_addr: sender_ip,
+            target_hardware_addr: MacAddr::new(target_mac),
+            target_protocol_addr: target_ip,
         };
         self.buffer.extend_from_slice(arp_header.as_bytes());
         self

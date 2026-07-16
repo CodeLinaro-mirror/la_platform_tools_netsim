@@ -425,3 +425,17 @@ fn test_dtmf_validation() {
     when_at_command_sent(&mut world, "A", "AT+VTS=1,A");
     then_response_is(&mut world, "A", "ERROR");
 }
+
+#[test]
+fn test_standard_call_with_leading_plus_routing() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", "15555215554");
+    given_modem_with_number(&mut world, "B", "15555215556");
+
+    // A dials B's number with leading '+'
+    when_at_command_sent(&mut world, "A", "ATD+15555215556;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify B receives the incoming RING
+    then_response_is(&mut world, "B", "RING");
+}

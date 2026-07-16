@@ -24,11 +24,13 @@ fn create_test_chip_info() -> ChipInfo {
             manufacturer: "Test WiFi Corp".to_string(),
             product_name: "Test WiFi Chip v1.0".to_string(),
             address: "".to_string(),
+            sim_type: None,
         }),
         device_info: Some(DeviceInfo {
             name: "test-init-info-device".to_string(),
             id: "test-init-info-device".to_string(),
             avd_path: "".to_string(),
+            ..Default::default()
         }),
     }
 }
@@ -49,7 +51,7 @@ async fn test_normal_init_info_protocol() {
     .unwrap()
     .unwrap();
 
-    let (_name, (mut server_stream, mut server_sink, chip_info, _guid)) =
+    let (_name, (_server_stream, _server_sink, chip_info, _guid)) =
         streams.accept_any().await.unwrap();
 
     assert_eq!(chip_info.device_info.as_ref().unwrap().name, "test-init-info-device");

@@ -31,7 +31,7 @@ impl SupService {
         } else {
             vec!["OK\r\n".to_string()]
         };
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     fn handle_call_forwarding(
@@ -54,26 +54,26 @@ impl SupService {
         // MODE_QUERY in original code was reading it? Wait, MODE_QUERY is 2.
 
         self.call_forwarding_info = Some(info);
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_query_clir(&self) -> ExecutionResult {
         let responses = vec!["+CLIR: 0,0\r\n".to_string(), "OK\r\n".to_string()];
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     fn handle_set_clir(&self, _clir: u8) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_set_clip(&mut self, enabled: u8) -> ExecutionResult {
         self.clip_enabled = enabled;
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_query_clip(&self) -> ExecutionResult {
         let response = format!("+CLIP: {},1\r\n", self.clip_enabled);
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
@@ -91,7 +91,7 @@ impl SupService {
         } else {
             vec!["OK\r\n".to_string()]
         };
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     fn handle_set_ussd(
@@ -105,20 +105,20 @@ impl SupService {
             responses.push("+CUSD: 0,\"OK\",15\r\n".to_string());
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     fn handle_supp_service_notification(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_set_colp(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
-            Command::SetFacilityLock(facility, mode, _) => {
+            Command::SetFacilityLock(facility, mode, _, _) => {
                 let facility_str = std::str::from_utf8(facility.as_ref()).unwrap_or("");
                 self.handle_set_facility_lock(facility_str, *mode)
             }

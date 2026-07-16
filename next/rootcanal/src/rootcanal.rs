@@ -37,6 +37,9 @@ pub trait Callbacks: Send + Sync {
         phy: Phy,
         tx_power: i32,
     ) -> Option<i32>;
+
+    /// Called by the controller to estimate distance to a destination address.
+    fn estimate_distance(&self, source_id: u32, destination_id: u32) -> u32;
 }
 
 /// The Bluetooth subsystem.
@@ -68,6 +71,27 @@ impl BtOps for BtOpsWrapper {
             // rootcanal peer messages from a controller.
             bluetooth.broadcast_to_peers(sender_id, packet, phy, tx_power);
         }
+    }
+
+    fn estimate_distance(
+        &self,
+        source_id: u32,
+        source_addr: &[u8; 6],
+        destination_addr: &[u8; 6],
+    ) -> u32 {
+        if let Some(bluetooth) = self.bluetooth.upgrade() {
+            for controller in bluetooth.cloned_controllers() {
+                if controller.get_id() == source_id {
+                    continue;
+                }
+
+                if controller.has_le_connection(source_addr, destination_addr) {
+                    let peer_id = controller.get_id();
+                    return bluetooth.callbacks.estimate_distance(source_id, peer_id);
+                }
+            }
+        }
+        100
     }
 }
 
@@ -251,6 +275,10 @@ mod tests {
         ) -> Option<i32> {
             self.packets_sent.fetch_add(1, Ordering::Relaxed);
             if self.drop_packet { None } else { Some(tx_power) }
+        }
+
+        fn estimate_distance(&self, _source_id: u32, _destination_id: u32) -> u32 {
+            0
         }
     }
 

@@ -35,116 +35,101 @@ mod hostap_ffi {
     unsafe extern "C++" {
         include!("crypto_ffi.h");
 
-        fn Hmac(digest_type: u8, key: &Vec<u8>, data: &Vec<u8>) -> Vec<u8>;
-        fn Sha(digest_type: u8, data: &Vec<u8>) -> Vec<u8>;
-        fn AesWrap(kek: &Vec<u8>, plain: &Vec<u8>) -> Vec<u8>;
-        fn AesUnwrap(kek: &Vec<u8>, cipher: &Vec<u8>) -> Vec<u8>;
+        fn Hmac(digest_type: u8, key: &[u8], data: &[u8]) -> Vec<u8>;
+        fn Sha(digest_type: u8, data: &[u8]) -> Vec<u8>;
+        fn AesWrap(kek: &[u8], plain: &[u8]) -> Vec<u8>;
+        fn AesUnwrap(kek: &[u8], cipher: &[u8]) -> Vec<u8>;
         fn AesCcmEncrypt(
-            key: &Vec<u8>,
-            nonce: &Vec<u8>,
-            aad: &Vec<u8>,
-            plain: &Vec<u8>,
-            out_cipher: &mut Vec<u8>,
-            out_tag: &mut Vec<u8>,
+            key: &[u8],
+            nonce: &[u8],
+            aad: &[u8],
+            plain: &[u8],
+            out_data: &mut Vec<u8>,
             tag_len: usize,
         ) -> bool;
         fn AesCcmDecrypt(
-            key: &Vec<u8>,
-            nonce: &Vec<u8>,
-            aad: &Vec<u8>,
-            cipher: &Vec<u8>,
-            tag: &Vec<u8>,
+            key: &[u8],
+            nonce: &[u8],
+            aad: &[u8],
+            cipher_with_tag: &[u8],
             out_plain: &mut Vec<u8>,
+            tag_len: usize,
         ) -> bool;
         fn RandBytes(len: usize) -> Vec<u8>;
         // PBKDF2
-        fn Pbkdf2HmacSha1(
-            password: &Vec<u8>,
-            salt: &Vec<u8>,
-            iterations: u32,
-            key_len: usize,
-        ) -> Vec<u8>;
+        fn Pbkdf2HmacSha1(password: &[u8], salt: &[u8], iterations: u32, key_len: usize)
+        -> Vec<u8>;
         // SAE / ECC P-256
-        fn EcP256CalculatePwe(
-            password: &Vec<u8>,
-            address1: &Vec<u8>,
-            address2: &Vec<u8>,
-        ) -> Vec<u8>;
-        fn EcP256PointMul(point_src: &Vec<u8>, scalar: &Vec<u8>) -> Vec<u8>;
-        fn EcP256PointAdd(point_a: &Vec<u8>, point_b: &Vec<u8>) -> Vec<u8>;
-        fn BnModAdd(a: &Vec<u8>, b: &Vec<u8>, m: &Vec<u8>) -> Vec<u8>;
-        fn BnModSub(a: &Vec<u8>, b: &Vec<u8>, m: &Vec<u8>) -> Vec<u8>;
+        fn EcP256CalculatePwe(password: &[u8], address1: &[u8], address2: &[u8]) -> Vec<u8>;
+        fn EcP256PointMul(point_src: &[u8], scalar: &[u8]) -> Vec<u8>;
+        fn EcP256PointAdd(point_a: &[u8], point_b: &[u8]) -> Vec<u8>;
+        fn BnModAdd(a: &[u8], b: &[u8], m: &[u8]) -> Vec<u8>;
+        fn BnModSub(a: &[u8], b: &[u8], m: &[u8]) -> Vec<u8>;
     }
 }
 
-pub fn Hmac(digest_type: DigestType, key: &Vec<u8>, data: &Vec<u8>) -> Vec<u8> {
+pub fn Hmac(digest_type: DigestType, key: &[u8], data: &[u8]) -> Vec<u8> {
     self::hostap_ffi::Hmac(digest_type as u8, key, data)
 }
 
-pub fn Sha(digest_type: DigestType, data: &Vec<u8>) -> Vec<u8> {
+pub fn Sha(digest_type: DigestType, data: &[u8]) -> Vec<u8> {
     self::hostap_ffi::Sha(digest_type as u8, data)
 }
 
-pub fn AesWrap(kek: &Vec<u8>, plain: &Vec<u8>) -> Vec<u8> {
+pub fn AesWrap(kek: &[u8], plain: &[u8]) -> Vec<u8> {
     self::hostap_ffi::AesWrap(kek, plain)
 }
 
-pub fn AesUnwrap(kek: &Vec<u8>, cipher: &Vec<u8>) -> Vec<u8> {
+pub fn AesUnwrap(kek: &[u8], cipher: &[u8]) -> Vec<u8> {
     self::hostap_ffi::AesUnwrap(kek, cipher)
 }
 
 pub fn AesCcmEncrypt(
-    key: &Vec<u8>,
-    nonce: &Vec<u8>,
-    aad: &Vec<u8>,
-    plain: &Vec<u8>,
-    out_cipher: &mut Vec<u8>,
-    out_tag: &mut Vec<u8>,
+    key: &[u8],
+    nonce: &[u8],
+    aad: &[u8],
+    plain: &[u8],
+    out_data: &mut Vec<u8>,
     tag_len: usize,
 ) -> bool {
-    self::hostap_ffi::AesCcmEncrypt(key, nonce, aad, plain, out_cipher, out_tag, tag_len)
+    self::hostap_ffi::AesCcmEncrypt(key, nonce, aad, plain, out_data, tag_len)
 }
 
 pub fn AesCcmDecrypt(
-    key: &Vec<u8>,
-    nonce: &Vec<u8>,
-    aad: &Vec<u8>,
-    cipher: &Vec<u8>,
-    tag: &Vec<u8>,
+    key: &[u8],
+    nonce: &[u8],
+    aad: &[u8],
+    cipher_with_tag: &[u8],
     out_plain: &mut Vec<u8>,
+    tag_len: usize,
 ) -> bool {
-    self::hostap_ffi::AesCcmDecrypt(key, nonce, aad, cipher, tag, out_plain)
+    self::hostap_ffi::AesCcmDecrypt(key, nonce, aad, cipher_with_tag, out_plain, tag_len)
 }
 
 pub fn RandBytes(len: usize) -> Vec<u8> {
     self::hostap_ffi::RandBytes(len)
 }
 
-pub fn Pbkdf2HmacSha1(
-    password: &Vec<u8>,
-    salt: &Vec<u8>,
-    iterations: u32,
-    key_len: usize,
-) -> Vec<u8> {
+pub fn Pbkdf2HmacSha1(password: &[u8], salt: &[u8], iterations: u32, key_len: usize) -> Vec<u8> {
     self::hostap_ffi::Pbkdf2HmacSha1(password, salt, iterations, key_len)
 }
 
-pub fn EcP256CalculatePwe(password: &Vec<u8>, address1: &Vec<u8>, address2: &Vec<u8>) -> Vec<u8> {
+pub fn EcP256CalculatePwe(password: &[u8], address1: &[u8], address2: &[u8]) -> Vec<u8> {
     self::hostap_ffi::EcP256CalculatePwe(password, address1, address2)
 }
 
-pub fn EcP256PointMul(point_src: &Vec<u8>, scalar: &Vec<u8>) -> Vec<u8> {
+pub fn EcP256PointMul(point_src: &[u8], scalar: &[u8]) -> Vec<u8> {
     self::hostap_ffi::EcP256PointMul(point_src, scalar)
 }
 
-pub fn EcP256PointAdd(point_a: &Vec<u8>, point_b: &Vec<u8>) -> Vec<u8> {
+pub fn EcP256PointAdd(point_a: &[u8], point_b: &[u8]) -> Vec<u8> {
     self::hostap_ffi::EcP256PointAdd(point_a, point_b)
 }
 
-pub fn BnModAdd(a: &Vec<u8>, b: &Vec<u8>, m: &Vec<u8>) -> Vec<u8> {
+pub fn BnModAdd(a: &[u8], b: &[u8], m: &[u8]) -> Vec<u8> {
     self::hostap_ffi::BnModAdd(a, b, m)
 }
 
-pub fn BnModSub(a: &Vec<u8>, b: &Vec<u8>, m: &Vec<u8>) -> Vec<u8> {
+pub fn BnModSub(a: &[u8], b: &[u8], m: &[u8]) -> Vec<u8> {
     self::hostap_ffi::BnModSub(a, b, m)
 }
