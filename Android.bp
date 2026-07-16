@@ -323,7 +323,6 @@ rust_library_host {
         "libprotobuf",
         "libgrpcio",
     ],
-    native_coverage: false,
 }
 
 rust_defaults {
