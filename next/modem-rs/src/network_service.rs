@@ -254,7 +254,7 @@ impl NetworkService {
                 _ => format!("+COPS: {}\r\n", self.cops_mode),
             }
         } else {
-            format!("+COPS: {}\r\n", self.cops_mode)
+            format!("+COPS: {},{},0\r\n", self.cops_mode, self.cops_format)
         };
         ExecutionResult::Success(HandledCommand {
             responses: vec![cops_response, "OK\r\n".to_string()],
