@@ -9,6 +9,9 @@ use crate::{
     types::{CommandAction, ExecutionResult, HandledCommand},
 };
 
+const TOSCA_INTERNATIONAL: u8 = 145;
+const TOSCA_NATIONAL: u8 = 129;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageStorage {
     Sim,
@@ -30,6 +33,7 @@ pub struct SmsService {
     storage2: MessageStorage,
     storage3: MessageStorage,
     smsc_address: String,
+    smsc_tosca: u8,
     pub(crate) message_format: MessageFormat,
     pending_sms_destination: Option<String>,
     pub waiting_for_pdu_len: Option<usize>,
@@ -46,6 +50,7 @@ impl Default for SmsService {
             storage2: MessageStorage::Me,
             storage3: MessageStorage::Me,
             smsc_address: "".to_string(),
+            smsc_tosca: TOSCA_INTERNATIONAL,
             message_format: MessageFormat::Pdu,
             pending_sms_destination: None,
             waiting_for_pdu_len: None,
@@ -220,13 +225,24 @@ impl SmsService {
         ExecutionResult::Success(handled)
     }
 
-    pub fn handle_set_smsc_address(&mut self, address: QuotedString) -> ExecutionResult {
+    pub fn handle_set_smsc_address(
+        &mut self,
+        address: QuotedString,
+        tosca: Option<u8>,
+    ) -> ExecutionResult {
         self.smsc_address = String::from_utf8(address.to_vec()).unwrap_or_default();
+        if let Some(t) = tosca {
+            self.smsc_tosca = t;
+        } else if self.smsc_address.starts_with('+') {
+            self.smsc_tosca = TOSCA_INTERNATIONAL;
+        } else {
+            self.smsc_tosca = TOSCA_NATIONAL;
+        }
         ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_get_smsc_address(&self) -> ExecutionResult {
-        let response = format!("+CSCA: \"{}\",145\r\n", self.smsc_address);
+        let response = format!("+CSCA: \"{}\",{}\r\n", self.smsc_address, self.smsc_tosca);
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
         ExecutionResult::Success(handled)
@@ -256,7 +272,9 @@ impl SmsService {
                 self.handle_broadcast_config(*mode, *mids, *dcss)
             }
             Command::QueryBroadcastConfig => self.handle_query_broadcast_config(),
-            Command::SetSmscAddress(address) => self.handle_set_smsc_address(*address),
+            Command::SetSmscAddress(address, tosca) => {
+                self.handle_set_smsc_address(*address, *tosca)
+            }
             Command::GetSmscAddress => self.handle_get_smsc_address(),
             Command::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
             _ => ExecutionResult::Unhandled,

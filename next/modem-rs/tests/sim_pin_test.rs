@@ -15,7 +15,7 @@ use crate::{steps::*, world::World};
 #[test]
 fn test_pin_retry_counter() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_modem_with_locked_sim(&mut world, "A");
 
     // First failed attempt
     when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");

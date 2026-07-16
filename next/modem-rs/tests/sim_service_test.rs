@@ -29,6 +29,33 @@ fn test_cpin_set() {
     then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: CPIN in READY State
+//   Given a modem "A"
+//   When AT command "AT+SPIC" is sent to "A"
+//   Then response from "A" is "+SPIC: 3"
+//   And response from "A" is "OK"
+//   When AT command 'AT+CPIN="0000"' is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+SPIC" is sent to "A"
+//   Then response from "A" is "+SPIC: 3"
+//   And response from "A" is "OK"
+#[test]
+fn test_cpin_in_ready_state_does_not_consume_retry() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    when_at_command_sent(&mut world, "A", "AT+SPIC");
+    then_response_is(&mut world, "A", "+SPIC: 3");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+SPIC");
+    then_response_is(&mut world, "A", "+SPIC: 3");
+    then_response_is(&mut world, "A", "OK");
+}
+
 // Scenario: Request IMSI
 //   Given a modem "A"
 //   When AT command "AT+CIMI" is sent to "A"
@@ -54,28 +81,6 @@ fn test_cicc() {
     given_modem_with_sim_profile(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CICCID");
     then_response_is(&mut world, "A", "89012345678901234567");
-    then_response_is(&mut world, "A", "OK");
-}
-
-// Scenario: Verify PIN Retry Counter
-//   Given a modem "A"
-//   When AT command 'AT+CPIN="0000"' is sent to "A"
-//   Then response from "A" is "ERROR"
-//   When AT command 'AT+CPIN="0000"' is sent to "A"
-//   Then response from "A" is "ERROR"
-//   When AT command "AT+SPIC" is sent to "A"
-//   Then response from "A" is "+SPIC: 1"
-//   And response from "A" is "OK"
-#[test]
-fn test_pin_retry_counter() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
-    then_response_is(&mut world, "A", "ERROR");
-    when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
-    then_response_is(&mut world, "A", "ERROR");
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", "+SPIC: 1");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -141,22 +146,22 @@ fn test_transmit_logical_channel() {
 }
 
 // Scenario: Change Password
-//   Given a modem "A"
-//   When AT command 'AT+CPWD="SC","1234","4321"' is sent to "A"
+//   Given a modem "A" with locked SIM
+//   When AT command 'AT+CPWD="SC","1111","4321"' is sent to "A"
 //   Then response from "A" is "OK"
-//   When AT command 'AT+CPIN="1234"' is sent to "A"
+//   When AT command 'AT+CPIN="1111"' is sent to "A"
 //   Then response from "A" is "ERROR"
 //   When AT command 'AT+CPIN="4321"' is sent to "A"
 //   Then response from "A" is "OK"
 #[test]
 fn test_change_password() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_modem_with_locked_sim(&mut world, "A");
 
-    when_at_command_sent(&mut world, "A", "AT+CPWD=\"SC\",\"1234\",\"4321\"");
+    when_at_command_sent(&mut world, "A", "AT+CPWD=\"SC\",\"1111\",\"4321\"");
     then_response_is(&mut world, "A", "OK");
 
-    when_at_command_sent(&mut world, "A", "AT+CPIN=\"1234\"");
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"1111\"");
     then_response_is(&mut world, "A", "ERROR");
 
     when_at_command_sent(&mut world, "A", "AT+CPIN=\"4321\"");
