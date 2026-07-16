@@ -33,3 +33,36 @@ rust_library_host {
         "libasync_trait",
     ],
 }
+
+rust_library_host {
+    name: "libnetsim_next_cell_actor_testing",
+    crate_name: "cell_actor",
+    edition: "2024",
+    stem: "libcell_actor_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_device_api_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_modem_rs_testing",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

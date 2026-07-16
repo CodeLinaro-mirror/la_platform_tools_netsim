@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use netsim_proto::stats::NetsimStats as ProtoNetsimStats;
 use protobuf_json_mapping::{PrintOptions, print_to_string_with_options};
+use tracing::warn;
 
 const STATS_PRINT_OPTIONS: PrintOptions = PrintOptions {
     enum_values_int: false,
@@ -138,7 +139,22 @@ impl Stats {
             return Err(e);
         }
 
-        if let Err(e) = std::fs::rename(&tmp_path, path) {
+        let mut rename_res = std::fs::rename(&tmp_path, path);
+        if rename_res.is_err() {
+            // On Windows, renaming to an existing file can fail if the destination file
+            // handle is momentarily held or locked. Retry after removing destination.
+            for _ in 0..5 {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                let _ = std::fs::remove_file(path);
+                rename_res = std::fs::rename(&tmp_path, path);
+                if rename_res.is_ok() {
+                    break;
+                }
+            }
+        }
+
+        if let Err(e) = rename_res {
+            warn!("Failed to replace stats file {:?} with {:?}: {}", tmp_path, path, e);
             let _ = std::fs::remove_file(&tmp_path);
             return Err(e);
         }

@@ -25,4 +25,3 @@ rustfmt_test(
         "//rust/packets:netsim_packets",
     ],
 )
-
