@@ -1,4 +1,4 @@
-// Copyright 2022, 2026 The Android Open Source Project
+// Copyright 2022 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
 syntax = "proto2";
@@ -177,113 +177,6 @@ message NfcServiceStats {
   optional uint32 send_apdu = 4;
 }
 
-// Wi-Fi IPC statistics. Used for transport between wifi-actor and device-actor.
-message WifiIpcStats {
-  optional WifiStats wifi_stats = 1;
-  optional WifiApiStats wifi_api_stats = 2;
-}
-
-// Application-level API Counters for all technologies.
-message ApiStats {
-  // 1-99 reserved for Bluetooth
-  optional WifiApiStats wifi = 100;
-  optional int32 wifi_total_calls = 101;
-
-  optional UwbApiStats uwb = 200;
-  optional int32 uwb_total_calls = 201;
-
-  optional NfcApiStats nfc = 300;
-  optional int32 nfc_total_calls = 301;
-}
-
-// Wi-Fi API Counters
-message WifiApiStats {
-  optional WifiAwareSessionStats wifi_aware_session = 1;
-  optional WifiAwareDiscoverySessionStats wifi_aware_discovery_session = 2;
-  optional WifiAwareNdpStats wifi_aware_ndp = 3;
-  optional WifiP2pManagerStats wifi_p2p_manager = 4;
-  optional WifiRttManagerStats wifi_rtt_manager = 5;
-  optional WifiEasyConnectStats wifi_easy_connect = 6;
-}
-
-message WifiAwareSessionStats {
-  optional int32 publish_unsolicited = 1;
-  optional int32 publish_solicited = 2;
-  optional int32 subscribe_active = 3;
-}
-
-message WifiAwareDiscoverySessionStats {
-  optional int32 send_message = 1;
-}
-
-message WifiAwareNdpStats {
-  optional int32 request = 1;
-  optional int32 response = 2;
-  optional int32 confirm = 3;
-  optional int32 terminate = 4;
-}
-
-message WifiP2pManagerStats {
-  optional int32 create_group = 1;
-  optional int32 connect = 2;
-  optional int32 discover_peers = 3;
-  optional int32 discover_services = 4;
-}
-
-message WifiRttManagerStats {
-  optional int32 start_ranging = 1;
-  optional int32 on_ranging_results = 2;
-}
-
-message WifiEasyConnectStats {
-  optional int32 auth_request = 1;
-  optional int32 auth_response = 2;
-  optional int32 auth_confirm = 3;
-}
-
-// UWB API Counters
-message UwbApiStats {
-  optional UwbManagerStats uwb_manager = 1;
-  optional RangingSessionStats ranging_session = 2;
-}
-
-message UwbManagerStats {
-  optional int32 open_ranging_session = 1;
-}
-
-message RangingSessionStats {
-  optional int32 close = 1;
-  optional int32 start = 2;
-  optional int32 stop = 3;
-  optional int32 reconfigure = 4;
-  optional int32 get_config = 5;
-  optional int32 send_data = 6;
-  optional int32 on_data_received = 7;
-}
-
-// NFC API Counters
-message NfcApiStats {
-  optional NciCoreStats nci_core = 1;
-  optional NciRfStats nci_rf = 2;
-  optional NciDataStats nci_data = 3;
-}
-
-message NciCoreStats {
-  optional int32 reset = 1;
-  optional int32 init = 2;
-}
-
-message NciRfStats {
-  optional int32 discover = 1;
-  optional int32 discover_select = 2;
-  optional int32 deactivate = 3;
-}
-
-message NciDataStats {
-  optional int32 send = 1;
-  optional int32 receive = 2;
-}
-
 // Statistics for a netsim session.
 message NetsimStats {
   // The length of the session in seconds
@@ -306,6 +199,4 @@ message NetsimStats {
   optional NfcStats nfc_stats = 9;
   // NFC Service API statistics
   optional NfcServiceStats nfc_service_stats = 10;
-  // Combined API statistics
-  optional ApiStats api_stats = 11;
 }
