@@ -21,6 +21,7 @@ ALLOWED_TEST_PACKAGES = {
     "grpc-server",
     "bluetooth-actor",
     "uwb-actor",
+    "cell-actor",
 }
 
 
