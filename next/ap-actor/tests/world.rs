@@ -10,12 +10,12 @@ use netsim_packets::{
     AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
     MacAddr, MacHeader3Addr, SequenceControl, management_subtype,
 };
+use rand::prelude::*;
 use tokio::sync::mpsc;
 use tracing::info;
 use zerocopy::{IntoBytes, Ref, U16};
 
 pub fn generate_random_mac() -> [u8; 6] {
-    use rand::Rng;
     let mut rng = rand::rng();
     [0x02, 0x00, 0x00, 0x00, rng.random(), rng.random()]
 }
