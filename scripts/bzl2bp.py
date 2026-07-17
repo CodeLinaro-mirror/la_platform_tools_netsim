@@ -19,6 +19,7 @@ ALLOWED_TEST_PACKAGES = {
     "common",
     "packet-stream",
     "grpc-server",
+    "bluetooth-actor",
 }
 
 
@@ -151,6 +152,17 @@ def exports_files(*args, **kwargs):
   pass
 
 
+def redirect_dep_to_testing(d):
+  if d.startswith("//next"):
+    if d.endswith(":testing"):
+      return d
+    elif ":" in d:
+      return d + "_testing"
+    else:
+      return d + ":testing"
+  return d
+
+
 def rust_test(*args, **kwargs):
   name = kwargs.get("name")
   srcs = kwargs.get("srcs")
@@ -158,6 +170,7 @@ def rust_test(*args, **kwargs):
     return
 
   deps = kwargs.get("deps", [])
+  redirected_deps = [redirect_dep_to_testing(d) for d in deps]
   proc_macro_deps = kwargs.get("proc_macro_deps", [])
 
   pkg_name = CURRENT_REL_PATH.strip("/")
@@ -174,7 +187,7 @@ def rust_test(*args, **kwargs):
 
   rustlibs = []
   shared_libs = []
-  for lib in transform_deps(deps):
+  for lib in transform_deps(redirected_deps):
     if lib in SHARED_LIB_OVERRIDES:
       shared_libs.append(lib)
     else:
@@ -375,6 +388,12 @@ def netsim_rust_library(
         f"Target '{name}' has an empty source list, cannot resolve crate_root."
     )
 
+  features = ["cuttlefish"]
+  crate_features = kwargs.get("crate_features", [])
+  if crate_features:
+    features.extend(crate_features)
+  features = sorted(list(set(features)))
+
   # 1. Main Library Target
   soong_targets.append({
       "type": "rust_library_host",
@@ -386,23 +405,13 @@ def netsim_rust_library(
       "rustlibs": rustlibs,
       "shared_libs": shared_libs,
       "proc_macros": proc_macros,
-      "features": ["cuttlefish"],
+      "features": features,
       "edition": edition or "2021",
   })
 
   # 1.5. Testing Library Target (mimicking defs.bzl)
   testing_deps = kwargs.get("testing_deps", [])
-  redirected_deps = []
-  for d in deps:
-    if d.startswith("//next"):
-      if d.endswith(":testing"):
-        redirected_deps.append(d)
-      elif ":" in d:
-        redirected_deps.append(d + "_testing")
-      else:
-        redirected_deps.append(d + ":testing")
-    else:
-      redirected_deps.append(d)
+  redirected_deps = [redirect_dep_to_testing(d) for d in deps]
 
   combined_testing_deps = testing_deps + redirected_deps
   testing_rustlibs = []
@@ -445,9 +454,11 @@ def netsim_rust_library(
   enable_unit_test = kwargs.get("enable_unit_test", True)
   enable_integration_test = kwargs.get("enable_integration_test", True)
   test_deps = kwargs.get("test_deps", [])
+  redirected_test_deps = [redirect_dep_to_testing(d) for d in test_deps]
+
   test_rustlibs = []
   test_shared_libs = []
-  for lib in transform_deps(test_deps):
+  for lib in transform_deps(redirected_test_deps):
     if lib in SHARED_LIB_OVERRIDES:
       test_shared_libs.append(lib)
     else:
