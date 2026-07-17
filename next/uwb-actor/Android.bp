@@ -13,7 +13,10 @@ rust_library_host {
     srcs: [
         "src/lib.rs",
     ],
-    features: ["cuttlefish"],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
     lints: "none",
     rustlibs: [
         "libbytes",
