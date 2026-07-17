@@ -20,6 +20,7 @@ ALLOWED_TEST_PACKAGES = {
     "packet-stream",
     "grpc-server",
     "bluetooth-actor",
+    "uwb-actor",
 }
 
 
