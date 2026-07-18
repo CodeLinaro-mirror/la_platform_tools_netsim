@@ -244,7 +244,7 @@ impl ModemImpl {
                 self.sms_service.waiting_for_pdu_len = None;
                 self.sms_service.waiting_for_pdu_store = false;
 
-                Some(result)
+                Some(result.into())
             } else if command_bytes.contains(&0x1b) {
                 // ESC
                 // Abort
