@@ -18,6 +18,9 @@ pub enum HwsimCmd {
     GetRadio = 6,
     AddMacAddr = 7,
     DelMacAddr = 8,
+    StartPmsr = 9,
+    AbortPmsr = 10,
+    ReportPmsr = 11,
 }
 
 #[derive(FromPrimitive, ToPrimitive, PartialEq, Eq, Debug, Copy, Clone)]
