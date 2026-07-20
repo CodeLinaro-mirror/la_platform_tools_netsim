@@ -79,7 +79,7 @@ impl ModemImpl {
 
     pub fn trigger_incoming_call(&mut self, number: &str) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
-        let result = self.call_service.ring(number.to_string());
+        let result: ExecutionResult = self.call_service.ring(number.to_string()).into();
         if let ExecutionResult::Success(handled) = result {
             for response in handled.responses {
                 if !response.is_empty() {
