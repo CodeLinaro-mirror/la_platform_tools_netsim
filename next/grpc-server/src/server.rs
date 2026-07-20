@@ -12,13 +12,14 @@ use netsim_proto::{
     access_point_grpc::create_access_point_service, ble_service_grpc::create_ble_service,
     casimir_control_grpc::create_casimir_control_service, cell_grpc::create_cell_service,
     frontend_grpc::create_frontend_service, nfc_service_grpc::create_nfc_service,
-    packet_streamer_grpc::create_packet_streamer,
+    packet_streamer_grpc::create_packet_streamer, wifi_service_grpc::create_wifi_service,
 };
 use tracing::{error, info, warn};
 
 use crate::{
     access_point::AccessPointServiceImpl, ble_service::BleServiceImpl, cell::CellServiceImpl,
     frontend::FrontendClient, nfc::NfcServiceImpl, packet_streamer::PacketStreamerService,
+    wifi::WifiServiceImpl,
 };
 
 // Share a single gRPC Environment across all server instances within the same
@@ -36,6 +37,7 @@ pub fn start(
     ap_client: ap_actor::ApClient,
     cell_client: cell_actor::CellClient,
     nfc_client: nfc_actor::NfcClient,
+    wifi_client: wifi_actor::WifiClient,
 
     packet_streamer_service: PacketStreamerService,
 
@@ -51,6 +53,7 @@ pub fn start(
         crate::casimir::CasimirControlServiceImpl::new(nfc_client.clone()),
     );
     let nfc_service = create_nfc_service(NfcServiceImpl::new(nfc_client));
+    let wifi_service = create_wifi_service(WifiServiceImpl::new(wifi_client));
 
     let ble_service = create_ble_service(BleServiceImpl::new(device_client.clone()));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
@@ -60,7 +63,8 @@ pub fn start(
         .register_service(ble_service)
         .register_service(cell_service)
         .register_service(casimir_service)
-        .register_service(nfc_service);
+        .register_service(nfc_service)
+        .register_service(wifi_service);
 
     server_builder = server_builder.register_service(access_point_service);
 
@@ -161,6 +165,10 @@ mod tests {
         let (nfc_tx, nfc_rx) = mpsc::channel(100);
         let nfc_client = nfc_actor::NfcClient::new(actor_framework::ResourceClient::new(nfc_tx));
 
+        let (wifi_tx, _wifi_rx) = mpsc::channel(10);
+        let wifi_client =
+            wifi_actor::WifiClient::new(actor_framework::ResourceClient::new(wifi_tx));
+
         let (new_connection_tx, _new_connection_rx) = mpsc::channel(10);
         let packet_streamer_service =
             crate::packet_streamer::PacketStreamerService::new(new_connection_tx);
@@ -175,6 +183,7 @@ mod tests {
             ap_client,
             cell_client,
             nfc_client,
+            wifi_client,
             packet_streamer_service,
             "test_version".to_string(),
             Arc::new(netsim_model::FrontendStats::default()),
@@ -353,6 +362,8 @@ mod tests {
             cell_actor::CellClient(actor_framework::ResourceClient::new(mpsc::channel(1).0));
         let nfc_client =
             nfc_actor::NfcClient::new(actor_framework::ResourceClient::new(mpsc::channel(1).0));
+        let wifi_client =
+            wifi_actor::WifiClient::new(actor_framework::ResourceClient::new(mpsc::channel(1).0));
         let (new_connection_tx, _new_connection_rx) = mpsc::channel(1);
         let packet_streamer_service =
             crate::packet_streamer::PacketStreamerService::new(new_connection_tx);
@@ -367,6 +378,7 @@ mod tests {
             ap_client,
             cell_client,
             nfc_client,
+            wifi_client,
             packet_streamer_service,
             "test_version".to_string(),
             Arc::new(netsim_model::FrontendStats::default()),

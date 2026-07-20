@@ -162,9 +162,26 @@ impl WifiActor {
         }
     }
 
-    // this is the input router
+    #[allow(clippy::collapsible_if)]
     pub(crate) async fn process_guest_packet(&mut self, chip_id: u32, packet: bytes::Bytes) {
         trace!("WifiActor: Packet from Guest (Chip {}) len {}", chip_id, packet.len());
+
+        // Fast path: Avoid full PDL decode overhead for standard data packets.
+        // HwsimMsg format: NlMsgHdr (16 bytes) + HwsimMsgHdr (hwsim_cmd at offset 16).
+        // HwsimCmd::StartPmsr relies on netsim_packets::HwsimCmd::StartPmsr as u8.
+        if packet.len() >= 20 && packet[16] == netsim_packets::HwsimCmd::StartPmsr as u8 {
+            if let Ok(hwsim_msg) = netsim_packets::HwsimMsg::decode_full(&packet) {
+                if hwsim_msg.hwsim_hdr.hwsim_cmd == netsim_packets::HwsimCmd::StartPmsr {
+                    if let Some(resp) =
+                        crate::pmsr::handle_start_pmsr(&hwsim_msg, chip_id, &self.active_chips)
+                    {
+                        self.out_queue.push((chip_id, resp));
+                    }
+                    self.flush_out_queue();
+                    return;
+                }
+            }
+        }
 
         match self.medium.resolve_tx_packet(chip_id, &packet) {
             Ok(tx_state) => {

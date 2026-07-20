@@ -10,6 +10,7 @@ pub(crate) mod cell;
 pub(crate) mod frontend_converter;
 pub mod nfc;
 pub(crate) mod packet_stream_converter;
+pub(crate) mod wifi;
 
 pub(crate) mod packet_streamer;
 pub(crate) mod server;
