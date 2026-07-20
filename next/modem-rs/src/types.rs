@@ -244,6 +244,10 @@ impl HandledCommand {
     pub fn ok_with_action(action: CommandAction) -> Self {
         Self { responses: vec!["OK\r\n".to_string()], action: Some(action) }
     }
+    /// Creates a result with a simple "ERROR" response and no follow-up action.
+    pub fn error() -> Self {
+        Self { responses: vec!["ERROR\r\n".to_string()], action: None }
+    }
 }
 
 /// Represents the outcome of a command execution from the new parser.
@@ -260,6 +264,10 @@ pub enum ExecutionResult {
 
     /// The command failed with a structured Mobile Equipment (ME) error.
     CmeError(CmeError),
+
+    /// The command failed with a structured Mobile Equipment (ME) error, after
+    /// emitting one or more URC strings.
+    CmeErrorWithUrc(CmeError, Vec<String>),
 
     /// This command has not been refactored yet and should be handled by the
     /// legacy system.

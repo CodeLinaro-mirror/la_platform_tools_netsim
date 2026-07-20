@@ -17,7 +17,7 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    types::{AT_OK, CommandAction, ExecutionResult, ModemId},
+    types::{AT_OK, CmeError, CommandAction, ExecutionResult, ModemId},
 };
 
 /// Represents a single modem device.
@@ -55,12 +55,16 @@ pub enum ModemEffect {
 }
 
 impl ModemImpl {
-    pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile) -> Self {
+    pub(crate) fn new(
+        id: ModemId,
+        profile: crate::config::SimProfile,
+        sim_type: Option<i32>,
+    ) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         Self {
             id,
             enable_unsolicited_urcs: enable_unsol,
-            sim_service: SimService::new(&profile),
+            sim_service: SimService::new(&profile, sim_type),
             network_service: NetworkService::default(),
             sms_service: SmsService::default(),
             stk_service: StkService::default(),
@@ -275,6 +279,13 @@ impl ModemImpl {
                     let resp = err.format_response(self.misc_service.cmee_mode());
                     effects.push(ModemEffect::Response(resp.into_bytes()));
                 }
+                ExecutionResult::CmeErrorWithUrc(err, urcs) => {
+                    for urc in urcs {
+                        effects.push(ModemEffect::Response(urc.into_bytes()));
+                    }
+                    let resp = err.format_response(self.misc_service.cmee_mode());
+                    effects.push(ModemEffect::Response(resp.into_bytes()));
+                }
                 ExecutionResult::Unhandled => {
                     effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
                 }
@@ -400,7 +411,10 @@ impl ModemImpl {
                             String::from_utf8_lossy(cmd_bytes),
                             String::from_utf8_lossy(rem)
                         );
-                        combined_responses.push("ERROR\r\n".to_string());
+                        combined_responses.push(
+                            CmeError::IncorrectParameters
+                                .format_response(self.misc_service.cmee_mode()),
+                        );
                         stop_chain = true;
                     } else {
                         match self.execute_and_schedule(&command, &mut combined_effects) {
@@ -425,6 +439,12 @@ impl ModemImpl {
                                 stop_chain = true;
                             }
                             ExecutionResult::CmeError(err) => {
+                                combined_responses
+                                    .push(err.format_response(self.misc_service.cmee_mode()));
+                                stop_chain = true;
+                            }
+                            ExecutionResult::CmeErrorWithUrc(err, mut urcs) => {
+                                combined_responses.append(&mut urcs);
                                 combined_responses
                                     .push(err.format_response(self.misc_service.cmee_mode()));
                                 stop_chain = true;

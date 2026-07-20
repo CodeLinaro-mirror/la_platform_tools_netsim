@@ -25,6 +25,19 @@ pub fn given_modem(world: &mut World, name: &str) {
     world.modems.insert(name.to_string(), (id, handler));
 }
 
+/// Creates a modem with the given name and SIM type.
+pub fn given_modem_with_sim_type(world: &mut World, name: &str, sim_type: i32) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new();
+
+    world.manager.new_modem(id, sink, Some(sim_type)).expect("Failed to create new modem");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
 /// Creates a modem with the given name and phone number.
 ///
 /// This first creates the modem, then sets its phone number via `ModemImpl`.
@@ -71,6 +84,7 @@ pub fn create_legacy_test_profile() -> SimProfile {
                     files: vec![SimFile::Ef(ElementaryFile {
                         file_id: "2FE2".to_string(),
                         size: 10,
+                        record_len: None,
                         data: "89012345678901234567".to_string(),
                     })],
                 },
@@ -99,6 +113,7 @@ pub fn create_locked_sim_profile() -> SimProfile {
                     files: vec![SimFile::Ef(ElementaryFile {
                         file_id: "2FE2".to_string(),
                         size: 10,
+                        record_len: None,
                         data: "89012345678901234567".to_string(),
                     })],
                 },
