@@ -32,6 +32,9 @@ ALLOWED_TEST_PACKAGES = {
     "capture-actor",
     "packets",
     "websocket-server",
+    "rootcanal",
+    "rootcanal-server",
+    "slirp",
 }
 
 
