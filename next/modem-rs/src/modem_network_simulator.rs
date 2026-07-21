@@ -607,3 +607,156 @@ fn replace_crlf_with_cr(packet: &[u8]) -> Vec<u8> {
     result.shrink_to_fit();
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use netsim_model::{ChipId, ModemAction};
+
+    use super::*;
+    use crate::{
+        modem_network::ModemNetworkInterface, test_utils::MockModemHandler, time::MockClock,
+    };
+
+    #[test]
+    fn test_event_loop_tick_and_duration() {
+        let clock = Arc::new(MockClock::default());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
+
+        let modem_id: ModemId = 1;
+        let (mut modem_handler, sink) = MockModemHandler::new(false);
+        simulator.new_modem(modem_id, sink, None, Quirks::default()).unwrap();
+
+        // 1. Schedule an event 100ms in the future.
+        let event_duration = Duration::from_millis(100);
+        simulator.schedule_event(modem_id, event_duration, ModemEvent::TestEvent);
+
+        // 2. Tick before the event is due.
+        // It should return the duration until the next event.
+        let (events, next_duration) = simulator.tick();
+        assert!(events.is_empty());
+        assert_eq!(next_duration, Some(event_duration));
+
+        // 3. Advance the clock manually.
+        clock.advance(event_duration);
+
+        // 4. Tick again. The event should fire now.
+        let (_events_after, next_duration_after) = simulator.tick();
+        assert!(next_duration_after.is_none());
+
+        // 5. Check that the event was handled.
+        let response = modem_handler.wait_for_response();
+        assert_eq!(response, b"TEST_EVENT_FIRED\r\n");
+    }
+
+    #[test]
+    fn test_modem_simulator_constructor_real_clock() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let sim = ModemNetworkSimulator::new(tx);
+        assert_eq!(sim.get_modem_count(), 0);
+    }
+
+    #[test]
+    fn test_add_duplicate_modem() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+        let id = 1;
+        let (_, sink1) = MockModemHandler::new(false);
+        let (_, sink2) = MockModemHandler::new(false);
+
+        simulator.new_modem(id, sink1, None, Quirks::default()).unwrap();
+        let res = simulator.new_modem(id, sink2, None, Quirks::default());
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(matches!(err, ModemError::DuplicateModemId(1)));
+    }
+
+    #[test]
+    fn test_tick_missing_modem() {
+        let clock = Arc::new(MockClock::default());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
+        let id = 1;
+        let (_, sink) = MockModemHandler::new(false);
+        simulator.new_modem(id, sink, None, Quirks::default()).unwrap();
+
+        // Schedule an event
+        simulator.schedule_event(id, Duration::from_millis(10), ModemEvent::TestEvent);
+
+        // Remove modem
+        simulator.remove_modem(id);
+
+        // Advance clock and tick
+        clock.advance(Duration::from_millis(10));
+        let (events, _) = simulator.tick();
+
+        // Verify it doesn't panic and returns no events
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_simulator_getters_and_debug() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+        let (_, sink1) = MockModemHandler::new(false);
+        let (_, sink2) = MockModemHandler::new(false);
+        simulator.new_modem(1, sink1, None, Quirks::default()).unwrap();
+        simulator.new_modem(2, sink2, None, Quirks::default()).unwrap();
+
+        let ids = simulator.get_modem_ids();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&2));
+
+        simulator.external_echo_for_debug("Test debug echo".to_string());
+    }
+
+    #[test]
+    fn test_modem_network_interface_delegation() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+        let interface: &mut dyn ModemNetworkInterface = &mut simulator;
+
+        // 1. Add modem
+        let chip_id = 99;
+        let (mut handler, sink) = MockModemHandler::new(false);
+        let res = interface.add_modem(chip_id, sink, None, Quirks::default());
+        assert!(res.is_ok());
+
+        // 2. Get modem info
+        let info = interface.get_modem_info(chip_id).unwrap();
+        assert_eq!(info.id, chip_id);
+        assert!(info.connections.is_empty());
+        assert!(!info.ringing);
+        assert_eq!(info.sms_count, 0);
+
+        // 3. Send data
+        let res = interface.send_data(chip_id, b"AT\r\n");
+        assert!(res.is_ok());
+
+        let response = handler.wait_for_response();
+        assert_eq!(response, b"OK\r\n");
+
+        // 4. Perform action
+        let action =
+            ModemAction::IncomingCall { target_id: ChipId(chip_id), number: "12345".to_string() };
+        let _events = interface.perform_action(action).unwrap();
+        let response = handler.wait_for_response();
+        assert!(String::from_utf8_lossy(&response).contains("RING"));
+
+        let info = interface.get_modem_info(chip_id).unwrap();
+        assert!(info.ringing);
+
+        let res = interface.on_timer(chip_id);
+        assert!(res.is_ok());
+
+        // 5. Remove modem
+        let res = interface.remove_modem(chip_id);
+        assert!(res.is_ok());
+
+        let res = interface.get_modem_info(chip_id);
+        assert!(res.is_err());
+    }
+}

@@ -440,3 +440,14 @@ fn test_get_product_serial_number_gsm_with_type() {
     then_response_is(&mut world, "A", "86740002204719901");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_command_parse_failure() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Sending a command without "AT" prefix should fail parsing immediately and
+    // return ERROR.
+    when_at_command_sent(&mut world, "A", "INVALID");
+    then_response_is(&mut world, "A", "ERROR");
+}
