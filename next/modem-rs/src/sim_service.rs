@@ -259,18 +259,11 @@ impl SimService {
         Some(index)
     }
 
-    pub fn read_sms(&self, index: u8) -> ExecutionResult {
+    pub fn read_sms(&self, index: u8) -> Result<Option<Vec<u8>>, CmeError> {
         if !self.is_present() {
-            return ExecutionResult::CmeError(CmeError::SimNotInserted);
+            return Err(CmeError::SimNotInserted);
         }
-        if let Some(pdu) = self.sms_messages.get(&index) {
-            let response = format!("+CMGR: 0,,{}\r\n{}\r\n", pdu.len(), hex::encode_upper(pdu));
-            let mut handled = HandledCommand::ok();
-            handled.responses.insert(0, response);
-            ExecutionResult::Success(handled)
-        } else {
-            ExecutionResult::CmeError(CmeError::Custom(100, "unknown"))
-        }
+        if let Some(pdu) = self.sms_messages.get(&index) { Ok(Some(pdu.clone())) } else { Ok(None) }
     }
 
     pub fn delete_sms(&mut self, index: u8) -> bool {
