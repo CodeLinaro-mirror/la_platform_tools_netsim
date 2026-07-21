@@ -71,12 +71,7 @@ impl TransportType {
     pub async fn create_stream(&self) -> Result<(PacketStream, PacketSink)> {
         match self {
             TransportType::Tcp { addr, port } => {
-                let connect_addr = if addr.contains(':') && !addr.starts_with('[') {
-                    format!("[{}]:{}", addr, port)
-                } else {
-                    format!("{}:{}", addr, port)
-                };
-                let stream = TcpStream::connect(connect_addr).await?;
+                let stream = TcpStream::connect(format!("{addr}:{port}")).await?;
                 let framed = Framed::new(stream, LengthDelimitedCodec::new());
                 let (sink, stream) = framed.split();
                 let stream =
@@ -102,13 +97,7 @@ impl TransportType {
 
     pub fn description(&self) -> String {
         match self {
-            TransportType::Tcp { addr, port } => {
-                if addr.contains(':') && !addr.starts_with('[') {
-                    format!("TCP [{}]:{}", addr, port)
-                } else {
-                    format!("TCP {addr}:{port}")
-                }
-            }
+            TransportType::Tcp { addr, port } => format!("TCP {addr}:{port}"),
             #[cfg(unix)]
             TransportType::Uds { path } => format!("UDS {path}"),
             TransportType::Fd { in_fd, out_fd } => match out_fd {
@@ -160,29 +149,5 @@ impl ListenerConfig {
         #[cfg(unix)]
         config.add_listener("uds", TransportType::uds("/tmp/packetstream.sock"));
         config
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::TransportType;
-
-    #[test]
-    fn test_transport_type_description() {
-        // Test IPv4 format (should not wrap)
-        let t_v4 = TransportType::tcp("127.0.0.1", 1234);
-        assert_eq!(t_v4.description(), "TCP 127.0.0.1:1234");
-
-        // Test IPv6 format without brackets (should wrap)
-        let t_v6_raw = TransportType::tcp("::1", 1234);
-        assert_eq!(t_v6_raw.description(), "TCP [::1]:1234");
-
-        // Test IPv6 format with brackets (should not double wrap)
-        let t_v6_brackets = TransportType::tcp("[::1]", 1234);
-        assert_eq!(t_v6_brackets.description(), "TCP [::1]:1234");
-
-        // Test domain names
-        let t_domain = TransportType::tcp("localhost", 1234);
-        assert_eq!(t_domain.description(), "TCP localhost:1234");
     }
 }

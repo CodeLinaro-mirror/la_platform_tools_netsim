@@ -107,14 +107,12 @@ pub fn get_ini_filepath(instance_num: u16) -> PathBuf {
 
 /// Get the grpc server address for netsim
 pub fn get_server_address(instance_num: u16) -> Option<String> {
-    get_address_by_key(instance_num, "grpc.address")
-        .or_else(|| get_address_by_key(instance_num, "grpc.port"))
+    get_address_by_key(instance_num, "grpc.port")
 }
 
-/// Get the tcp server address for netsim packet stream
+/// Get the TCP server address for netsim packet stream
 pub fn get_tcp_server_address(instance_num: u16) -> Option<String> {
-    get_address_by_key(instance_num, "tcp.address")
-        .or_else(|| get_address_by_key(instance_num, "tcp.port"))
+    get_address_by_key(instance_num, "tcp.port")
 }
 
 fn get_address_by_key(instance_num: u16, key: &str) -> Option<String> {
@@ -137,7 +135,11 @@ fn get_address_by_key(instance_num: u16, key: &str) -> Option<String> {
             error!("Error parsing ini file: {err}");
         })
         .ok()?;
-    ini_map.get(key).map(|s| if s.contains(':') { s.to_string() } else { format!("127.0.0.1:{s}") })
+    // Return the address constructed from ini_file. Format: localhost:{port}
+    // If it starts with a port like "8888", we prepend localhost: to it.
+    // If it's already a full address like ":8888" or "127.0.0.1:8888" we return it
+    // as is.
+    ini_map.get(key).map(|s| if s.contains(':') { s.to_string() } else { format!("localhost:{s}") })
 }
 
 #[cfg(test)]
@@ -238,40 +240,5 @@ mod tests {
         assert_eq!(map.get("").unwrap(), "value");
         assert_eq!(map.get("key").unwrap(), "value2");
         assert_eq!(map.len(), 2);
-    }
-
-    #[test]
-    fn test_get_server_address() {
-        let _locked = ENV_MUTEX.lock();
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("TMPDIR");
-        }
-        let temp_dir = tempfile::tempdir().unwrap();
-        let tmp_dir_path = temp_dir.path().to_path_buf();
-
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::set_var("TMPDIR", tmp_dir_path.to_str().unwrap());
-        }
-
-        // Test case 1: Only grpc.port exists
-        let ini_content = "grpc.port=1234\ntcp.port=5678\n";
-        std::fs::write(tmp_dir_path.join("netsim.ini"), ini_content).unwrap();
-        assert_eq!(super::get_server_address(1).unwrap(), "127.0.0.1:1234");
-        assert_eq!(super::get_tcp_server_address(1).unwrap(), "127.0.0.1:5678");
-
-        // Test case 2: Both grpc.address and grpc.port exist (address priority)
-        let ini_content =
-            "grpc.port=1234\ngrpc.address=[::1]:1235\ntcp.port=5678\ntcp.address=1.2.3.4:5679\n";
-        std::fs::write(tmp_dir_path.join("netsim.ini"), ini_content).unwrap();
-        assert_eq!(super::get_server_address(1).unwrap(), "[::1]:1235");
-        assert_eq!(super::get_tcp_server_address(1).unwrap(), "1.2.3.4:5679");
-
-        // Test case 3: Port is numeric without colon, should format to
-        // localhost/127.0.0.1
-        let ini_content = "grpc.port=8888\n";
-        std::fs::write(tmp_dir_path.join("netsim.ini"), ini_content).unwrap();
-        assert_eq!(super::get_server_address(1).unwrap(), "127.0.0.1:8888");
     }
 }

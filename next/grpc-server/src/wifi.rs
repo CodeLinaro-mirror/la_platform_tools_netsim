@@ -167,7 +167,7 @@ mod tests {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         // Spawn mock actor response
@@ -194,7 +194,7 @@ mod tests {
         let mut req = GetStatusRequest::new();
         req.chip_id = 0; // all
         let response = client.get_status(&req);
-        assert!(response.is_ok());
+        assert!(response.is_ok(), "{:?}", response);
         let status = response.unwrap();
         assert_eq!(status.chips.len(), 2);
         assert_eq!(status.chips[0].id, 1);
@@ -208,7 +208,7 @@ mod tests {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -228,7 +228,7 @@ mod tests {
         let mut req = GetStatusRequest::new();
         req.chip_id = 1;
         let response = client.get_status(&req);
-        assert!(response.is_ok());
+        assert!(response.is_ok(), "{:?}", response);
         let status = response.unwrap();
         assert_eq!(status.chips.len(), 1);
         assert_eq!(status.chips[0].id, 1);
@@ -241,7 +241,7 @@ mod tests {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -265,7 +265,7 @@ mod tests {
         req.chip_id = 1;
         req.power_on = true;
         let response = client.set_power(&req);
-        assert!(response.is_ok());
+        assert!(response.is_ok(), "{:?}", response);
         let power_res = response.unwrap();
         assert!(power_res.chip.is_some());
         assert_eq!(power_res.chip.unwrap().id, 1);
@@ -278,7 +278,7 @@ mod tests {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -317,7 +317,7 @@ mod tests {
         req.chip_id = 0; // all
         req.power_on = true;
         let response = client.set_power(&req);
-        assert!(response.is_ok());
+        assert!(response.is_ok(), "{:?}", response);
         let power_res = response.unwrap();
         assert!(power_res.chip.is_some());
         // Should return the last chip updated
@@ -330,7 +330,7 @@ mod tests {
     async fn test_get_status_all_chips_fail() {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -350,7 +350,7 @@ mod tests {
     async fn test_get_status_single_chip_fail() {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -370,7 +370,7 @@ mod tests {
     async fn test_set_power_single_chip_fail() {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -393,7 +393,7 @@ mod tests {
     async fn test_set_power_all_chips_list_fail() {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -414,7 +414,7 @@ mod tests {
     async fn test_set_power_all_chips_update_fail() {
         let (server, addr, mut wifi_rx) = setup_test_server().await;
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&addr);
         let client = WifiServiceClient::new(ch);
 
         tokio::spawn(async move {

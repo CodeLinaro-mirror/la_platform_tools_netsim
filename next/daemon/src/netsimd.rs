@@ -218,13 +218,14 @@ async fn setup_grpc_listener(
     wifi_client: wifi_actor::WifiClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
-) -> Result<(std::net::SocketAddr, grpcio::Server), RunResult> {
+) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
     let (new_connection_tx, new_connection_rx) = mpsc::channel(100);
     let packet_streamer_service = PacketStreamerService::new(new_connection_tx);
 
     // Start the gRPC server
-    let (server, grpc_socket_addr) = grpc_server::start(
+    let (server, port) = grpc_server::start(
+        "localhost",
         requested_port.into(),
         #[cfg(unix)]
         grpc_uds_path.clone(),
@@ -241,17 +242,24 @@ async fn setup_grpc_listener(
     )
     .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
-    let port = grpc_socket_addr.port();
-
     let listener = grpc_server::ChannelTransportListener {
         rx: new_connection_rx,
-        local_addr: StreamAddress::Grpc(grpc_socket_addr),
+        local_addr: StreamAddress::Grpc(std::net::SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+            port,
+        )),
     };
 
     let _ = streams.add_listener("netsim_grpc", Box::new(listener));
 
     info!("gRPC port: {}", port);
-    listener_addresses.insert("netsim_grpc".to_string(), StreamAddress::Grpc(grpc_socket_addr));
+    listener_addresses.insert(
+        "netsim_grpc".to_string(),
+        StreamAddress::Grpc(std::net::SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+            port,
+        )),
+    );
     #[cfg(unix)]
     if let Some(ref uds_path) = grpc_uds_path {
         listener_addresses.insert(
@@ -260,7 +268,7 @@ async fn setup_grpc_listener(
         );
     }
 
-    Ok((grpc_socket_addr, server))
+    Ok((port, server))
 }
 
 /// The main daemon for netsim.
@@ -536,7 +544,7 @@ impl NetsimDaemon {
         let resolved_grpc_port =
             resolve_port_with_env(args.grpc_port, "NETSIM_GRPC_PORT", |name| std::env::var(name))
                 .unwrap_or(0);
-        let (grpc_socket_addr, grpc_server) = setup_grpc_listener(
+        let (actual_grpc_port, grpc_server) = setup_grpc_listener(
             &mut streams,
             &mut listener_addresses,
             resolved_grpc_port,
@@ -553,7 +561,6 @@ impl NetsimDaemon {
             frontend_stats.clone(),
         )
         .await?;
-        let actual_grpc_port = grpc_socket_addr.port();
 
         // HCI TCP socket server
         let instance_num = get_instance(args.instance);
@@ -625,7 +632,6 @@ impl NetsimDaemon {
         let mut ini_data = HashMap::from([
             ("pid".to_string(), std::process::id().to_string()),
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
-            ("grpc.address".to_string(), format!("{}", grpc_socket_addr)),
             ("hci.port".to_string(), resolved_hci_port.to_string()),
         ]);
         #[cfg(feature = "cuttlefish")]
@@ -779,16 +785,6 @@ impl NetsimDaemon {
         self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
             StreamAddress::Tcp(socket_addr) | StreamAddress::Grpc(socket_addr) => {
                 Some(socket_addr.port())
-            }
-            _ => None,
-        })
-    }
-
-    /// Gets the gRPC SocketAddr, if the server is running.
-    pub fn grpc_address(&self) -> Option<std::net::SocketAddr> {
-        self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
-            StreamAddress::Tcp(socket_addr) | StreamAddress::Grpc(socket_addr) => {
-                Some(*socket_addr)
             }
             _ => None,
         })
