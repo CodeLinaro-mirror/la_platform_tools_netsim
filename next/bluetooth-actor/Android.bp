@@ -109,7 +109,7 @@ rust_test_host {
 }
 
 rust_test_host {
-    name: "libnetsim_next_bluetooth_actor_integration_test",
+    name: "libnetsim_next_bluetooth_actor_integration_tests",
     crate_name: "bluetooth_actor_tests",
     edition: "2024",
     crate_root: "tests/mod.rs",
