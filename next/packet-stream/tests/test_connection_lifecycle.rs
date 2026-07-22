@@ -24,11 +24,13 @@ fn create_test_chip_info() -> ChipInfo {
             manufacturer: "Test Lifecycle Corp".to_string(),
             product_name: "Test Lifecycle Chip v1.0".to_string(),
             address: "".to_string(),
+            sim_type: None,
         }),
         device_info: Some(DeviceInfo {
             name: "test-lifecycle-device".to_string(),
             id: "test-lifecycle-device".to_string(),
             avd_path: "".to_string(),
+            ..Default::default()
         }),
     }
 }
@@ -41,7 +43,7 @@ async fn test_graceful_client_disconnect() {
     let port = listener_addr.to_string().split(':').last().unwrap().parse::<u16>().unwrap();
 
     let chip_info = create_test_chip_info();
-    let (mut client_stream, mut client_sink) = timeout(
+    let (_client_stream, mut client_sink) = timeout(
         Duration::from_secs(5),
         streams.connect(TransportType::tcp("localhost", port), chip_info),
     )
@@ -73,7 +75,7 @@ async fn test_abrupt_client_disconnect() {
     let port = listener_addr.to_string().split(':').last().unwrap().parse::<u16>().unwrap();
 
     let chip_info = create_test_chip_info();
-    let (mut client_stream, mut client_sink) = timeout(
+    let (client_stream, mut client_sink) = timeout(
         Duration::from_secs(5),
         streams.connect(TransportType::tcp("localhost", port), chip_info),
     )
@@ -128,7 +130,7 @@ async fn test_multiple_client_disconnect() {
     let chip_info1 = create_test_chip_info();
     let chip_info2 = create_test_chip_info();
 
-    let (mut client1_stream, mut client1_sink) = timeout(
+    let (client1_stream, mut client1_sink) = timeout(
         Duration::from_secs(5),
         streams.connect(TransportType::tcp("localhost", port), chip_info1),
     )
@@ -136,7 +138,7 @@ async fn test_multiple_client_disconnect() {
     .unwrap()
     .unwrap();
 
-    let (mut client2_stream, mut client2_sink) = timeout(
+    let (_client2_stream, mut client2_sink) = timeout(
         Duration::from_secs(5),
         streams.connect(TransportType::tcp("localhost", port), chip_info2),
     )

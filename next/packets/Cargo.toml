@@ -1,4 +1,4 @@
-# Copyright 2024 The Android Open Source Project
+# Copyright 2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
@@ -12,6 +12,7 @@ crate-type = ["staticlib", "lib"]
 doctest = false
 
 [dependencies]
+bytes = "1"
 hex = "0.4.3"
 num-derive = "0.4"
 num-traits = "0.2"

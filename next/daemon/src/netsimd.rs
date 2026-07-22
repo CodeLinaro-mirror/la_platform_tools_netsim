@@ -29,7 +29,6 @@ use packet_stream::{
     StreamAddress, Streams,
     transport::traits::{PacketSink, PacketStream},
 };
-#[cfg(not(feature = "cuttlefish"))]
 use slirp_actor::SlirpClient;
 use tokio::{
     signal::{self},
@@ -127,7 +126,10 @@ async fn handle_new_connection(
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
-        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell::default())),
+        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
+            sim_type: chip.sim_type,
+            ..Default::default()
+        })),
         ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
@@ -174,58 +176,89 @@ async fn handle_new_connection(
     }
 }
 
+fn get_env_port_impl<F>(var_name: &str, get_var: F) -> Option<u16>
+where
+    F: Fn(&str) -> Result<String, std::env::VarError>,
+{
+    get_var(var_name).ok().and_then(|val| {
+        let trimmed = val.trim();
+        match trimmed.parse::<u16>() {
+            Ok(port) => Some(port),
+            Err(e) => {
+                warn!("Environment variable {var_name} value '{val}' could not be parsed as a port: {e}");
+                None
+            }
+        }
+    })
+}
+/// Resolves a port number, prioritizing the command line argument (`arg_port`)
+/// over the environment variable (`env_var`).
+///
+/// Returns `None` if neither the argument is provided nor the environment
+/// variable is set/valid.
+fn resolve_port_with_env<F>(arg_port: Option<u16>, env_var: &str, get_var: F) -> Option<u16>
+where
+    F: Fn(&str) -> Result<String, std::env::VarError>,
+{
+    arg_port.or_else(|| get_env_port_impl(env_var, get_var))
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
+    #[cfg(unix)] grpc_uds_path: Option<String>,
     enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: LinkClient,
-    #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
+    ap_client: ap_actor::ApClient,
     cell_client: cell_actor::CellClient,
+    nfc_client: nfc_actor::NfcClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
-) -> Result<(u16, grpcio::Server), RunResult> {
+) -> Result<(std::net::SocketAddr, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
     let (new_connection_tx, new_connection_rx) = mpsc::channel(100);
     let packet_streamer_service = PacketStreamerService::new(new_connection_tx);
 
     // Start the gRPC server
-    let (server, port) = grpc_server::start(
+    let (server, grpc_socket_addr) = grpc_server::start(
         requested_port.into(),
+        #[cfg(unix)]
+        grpc_uds_path.clone(),
         enable_cli_ui,
         device_client,
         link_client,
-        #[cfg(not(feature = "cuttlefish"))]
         ap_client,
         cell_client,
+        nfc_client,
         packet_streamer_service,
         version,
         frontend_stats,
     )
     .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
+    let port = grpc_socket_addr.port();
+
     let listener = grpc_server::ChannelTransportListener {
         rx: new_connection_rx,
-        local_addr: StreamAddress::Grpc(std::net::SocketAddr::new(
-            std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
-            port,
-        )),
+        local_addr: StreamAddress::Grpc(grpc_socket_addr),
     };
 
     let _ = streams.add_listener("netsim_grpc", Box::new(listener));
 
     info!("gRPC port: {}", port);
-    listener_addresses.insert(
-        "netsim_grpc".to_string(),
-        StreamAddress::Grpc(std::net::SocketAddr::new(
-            std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
-            port,
-        )),
-    );
+    listener_addresses.insert("netsim_grpc".to_string(), StreamAddress::Grpc(grpc_socket_addr));
+    #[cfg(unix)]
+    if let Some(ref uds_path) = grpc_uds_path {
+        listener_addresses.insert(
+            "netsim_uds".to_string(),
+            StreamAddress::Uds(std::path::PathBuf::from(uds_path)),
+        );
+    }
 
-    Ok((port, server))
+    Ok((grpc_socket_addr, server))
 }
 
 /// The main daemon for netsim.
@@ -254,8 +287,7 @@ pub struct NetsimDaemon {
     device_task: tokio::task::JoinHandle<()>,
     link_client: Box<dyn link_api::LinkClient>,
 
-    #[cfg(not(feature = "cuttlefish"))]
-    slirp_client: Option<SlirpClient>,
+    slirp_client: SlirpClient,
     chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
 }
 
@@ -416,11 +448,11 @@ impl NetsimDaemon {
 
         let frontend_stats = Arc::new(netsim_model::FrontendStats::default());
 
-        #[cfg(not(feature = "cuttlefish"))]
+        let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
+        let (ap_runner, ap_client) = ap_actor::new();
+        let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
+
         let (
-            ap_runner,
-            ap_client,
-            ap_actor_state,
             slirp_runner,
             slirp_client,
             slirp_actor_state,
@@ -431,10 +463,6 @@ impl NetsimDaemon {
             eth_client,
             eth_actor_state,
         ) = {
-            let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
-            let (ap_runner, ap_client) = ap_actor::new();
-            let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
-
             // Setup Slirp Actor
             let (slirp_runner, slirp_client) = slirp_actor::new();
             let slirp_actor_state = slirp_actor::SlirpActor::new(
@@ -443,8 +471,6 @@ impl NetsimDaemon {
                 args.host_dns.clone(),
             )
             .await;
-
-            // (AP Actor already initialized above)
 
             // Setup Wifi Actor
             let (wifi_runner, wifi_client) = wifi_actor::new();
@@ -486,9 +512,6 @@ impl NetsimDaemon {
                 ethernet_actor::EthernetActor::new(slirp_client.clone(), device_client.clone());
 
             (
-                ap_runner,
-                ap_client,
-                ap_actor_state,
                 slirp_runner,
                 slirp_client,
                 slirp_actor_state,
@@ -501,35 +524,45 @@ impl NetsimDaemon {
             )
         };
 
+        // Setup NFC Server
+        let (nfc_runner, nfc_client) = nfc_actor::new();
+        let mut nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
+        nfc_actor_state.start_casimir();
+
         // gRPC port is determined after the listener starts.
-        let (actual_grpc_port, grpc_server) = setup_grpc_listener(
+        let resolved_grpc_port =
+            resolve_port_with_env(args.grpc_port, "NETSIM_GRPC_PORT", |name| std::env::var(name))
+                .unwrap_or(0);
+        let (grpc_socket_addr, grpc_server) = setup_grpc_listener(
             &mut streams,
             &mut listener_addresses,
-            args.grpc_port.unwrap_or(0),
+            resolved_grpc_port,
+            #[cfg(unix)]
+            args.grpc_uds_path.clone(),
             !args.no_cli_ui,
             device_client.clone(),
             link_client.clone(),
-            #[cfg(not(feature = "cuttlefish"))]
             ap_client.clone(),
             cell_client.clone(),
+            nfc_client.clone(),
             get_version(),
             frontend_stats.clone(),
         )
         .await?;
-
-        listener_addresses.insert(
-            "netsim_grpc".to_string(),
-            StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], actual_grpc_port))),
-        );
+        let actual_grpc_port = grpc_socket_addr.port();
 
         // HCI TCP socket server
         let instance_num = get_instance(args.instance);
-        let hci_port = args.hci_port.unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
-        tokio::spawn(hci_server::server::run(hci_port, device_client.clone()));
+        let resolved_hci_port =
+            resolve_port_with_env(args.hci_port, "NETSIM_HCI_PORT", |name| std::env::var(name))
+                .unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
+        tokio::spawn(hci_server::server::run(resolved_hci_port, device_client.clone()));
 
         // WebSocket server
         let mut actual_ws_port = None;
-        let websocket_port = args.ws_port.map(|p| p + instance_num - 1);
+        let resolved_ws_port_opt =
+            resolve_port_with_env(args.ws_port, "NETSIM_WS_PORT", |name| std::env::var(name));
+        let websocket_port = resolved_ws_port_opt.map(|p| p + instance_num - 1);
         if let Some(ws_port) = websocket_port {
             match websocket_server::server::bind(ws_port) {
                 Ok(listener) => {
@@ -562,11 +595,13 @@ impl NetsimDaemon {
         };
 
         let mut actual_tcp_port = None;
+        let resolved_tcp_port_opt =
+            resolve_port_with_env(args.tcp_port, "NETSIM_TCP_PORT", |name| std::env::var(name));
         let should_start_tcp =
-            if cfg!(feature = "cuttlefish") { true } else { args.tcp_port.is_some() };
+            if cfg!(feature = "cuttlefish") { true } else { resolved_tcp_port_opt.is_some() };
 
         if should_start_tcp {
-            let tcp_port = args.tcp_port.unwrap_or(0);
+            let tcp_port = resolved_tcp_port_opt.unwrap_or(0);
             if let Err(e) = streams
                 .start_listener(
                     "tcp",
@@ -586,7 +621,8 @@ impl NetsimDaemon {
         let mut ini_data = HashMap::from([
             ("pid".to_string(), std::process::id().to_string()),
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
-            ("hci.port".to_string(), hci_port.to_string()),
+            ("grpc.address".to_string(), format!("{}", grpc_socket_addr)),
+            ("hci.port".to_string(), resolved_hci_port.to_string()),
         ]);
         #[cfg(feature = "cuttlefish")]
         if let Some(port) = actual_test_port {
@@ -620,18 +656,11 @@ impl NetsimDaemon {
         let (uwb_runner, uwb_client) = uwb_actor::new();
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
-        // Setup NFC Server
-        let (nfc_runner, nfc_client) = nfc_actor::new();
-        let nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
-
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
-        #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
-        #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::ETHERNET, Box::new(eth_client.clone()));
-        #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::CELLULAR_DATA, Box::new(eth_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
@@ -680,13 +709,9 @@ impl NetsimDaemon {
         // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_runner.run(bt_actor_state));
-        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(wifi_runner.run(wifi_actor_state));
-        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(eth_runner.run(eth_actor_state));
-        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(ap_runner.run(ap_actor_state));
-        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
@@ -699,7 +724,6 @@ impl NetsimDaemon {
         let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
-        #[cfg(not(feature = "cuttlefish"))]
         {
             let mut ap_config = ap_actor::ApConfig::default();
             if let Some(ssid) = &args.wifi.wifi_ssid {
@@ -740,18 +764,28 @@ impl NetsimDaemon {
                 _grpc_server: Some(grpc_server),
                 device_task,
                 link_client: Box::new(link_client),
-                #[cfg(not(feature = "cuttlefish"))]
-                slirp_client: Some(slirp_client.clone()),
+                slirp_client,
                 chip_clients: daemon_chip_clients,
             },
             initialized_guard,
         ))
     }
-
     /// Gets the gRPC port, if the server is running.
     pub fn grpc_port(&self) -> Option<u16> {
         self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
-            StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
+            StreamAddress::Tcp(socket_addr) | StreamAddress::Grpc(socket_addr) => {
+                Some(socket_addr.port())
+            }
+            _ => None,
+        })
+    }
+
+    /// Gets the gRPC SocketAddr, if the server is running.
+    pub fn grpc_address(&self) -> Option<std::net::SocketAddr> {
+        self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
+            StreamAddress::Tcp(socket_addr) | StreamAddress::Grpc(socket_addr) => {
+                Some(*socket_addr)
+            }
             _ => None,
         })
     }
@@ -769,16 +803,11 @@ impl NetsimDaemon {
         info!("Graceful shutdown requested for all actors");
 
         let link_fut = self.link_client.shutdown();
-        #[cfg(not(feature = "cuttlefish"))]
         let slirp_fut = async {
-            if let Some(slirp) = &self.slirp_client
-                && let Err(e) = slirp.shutdown().await
-            {
+            if let Err(e) = self.slirp_client.shutdown().await {
                 warn!("SlirpActor shutdown error: {}", e);
             }
         };
-        #[cfg(feature = "cuttlefish")]
-        let slirp_fut = async {};
         let chips_fut = futures::future::join_all(self.chip_clients.values().map(|c| c.shutdown()));
 
         // Execute all shutdown dispatches concurrently
@@ -1152,5 +1181,51 @@ impl NetsimDaemon {
 
         info!("Connector forwarder disconnected unexpectedly");
         Err("Connector forwarder disconnected unexpectedly from guest FDs".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_env_port_impl() {
+        let mock_env = |name: &str| match name {
+            "VALID" => Ok("1234".to_string()),
+            "WHITESPACE" => Ok("  5678  ".to_string()),
+            "INVALID" => Ok("not_a_port".to_string()),
+            "EMPTY" => Ok("".to_string()),
+            "OVERFLOW" => Ok("999999".to_string()),
+            _ => Err(std::env::VarError::NotPresent),
+        };
+
+        assert_eq!(get_env_port_impl("VALID", mock_env), Some(1234));
+        assert_eq!(get_env_port_impl("WHITESPACE", mock_env), Some(5678));
+        assert_eq!(get_env_port_impl("INVALID", mock_env), None);
+        assert_eq!(get_env_port_impl("EMPTY", mock_env), None);
+        assert_eq!(get_env_port_impl("OVERFLOW", mock_env), None);
+        assert_eq!(get_env_port_impl("NOT_PRESENT", mock_env), None);
+    }
+
+    #[test]
+    fn test_resolve_port_with_env() {
+        let mock_env = |name: &str| match name {
+            "NETSIM_PORT" => Ok("1234".to_string()),
+            "INVALID_PORT" => Ok("invalid".to_string()),
+            _ => Err(std::env::VarError::NotPresent),
+        };
+
+        // Case 1: CLI arg is Some, should ignore environment variable
+        assert_eq!(resolve_port_with_env(Some(5678), "NETSIM_PORT", mock_env), Some(5678));
+        assert_eq!(resolve_port_with_env(Some(5678), "NOT_PRESENT", mock_env), Some(5678));
+
+        // Case 2: CLI arg is None, environment variable is present and valid
+        assert_eq!(resolve_port_with_env(None, "NETSIM_PORT", mock_env), Some(1234));
+
+        // Case 3: CLI arg is None, environment variable is invalid/malformed
+        assert_eq!(resolve_port_with_env(None, "INVALID_PORT", mock_env), None);
+
+        // Case 4: CLI arg is None, environment variable is not present
+        assert_eq!(resolve_port_with_env(None, "NOT_PRESENT", mock_env), None);
     }
 }

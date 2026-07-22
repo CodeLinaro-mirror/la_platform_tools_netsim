@@ -539,7 +539,7 @@ pub use actor::ResourceActor;
 #[cfg(feature = "testing")]
 pub use client::MockActorClient;
 pub use client::{ActorClient, ResourceClient};
-pub use context::{Context, DynContext, TimerKey};
+pub use context::{Context, DynContext, TimerCallback, TimerKey};
 pub use error::FrameworkError;
 pub use lifecycle::ActorLifecycle;
 pub use message::{ResourceRequest, Response};

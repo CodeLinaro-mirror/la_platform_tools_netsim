@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    constants::FACILITY_SIM_PIN,
     parser::{Command, QuotedString},
-    types::{ExecutionResult, HandledCommand},
+    types::{CmeError, ExecutionResult, HandledCommand},
 };
 
 pub const _MODE_ENABLE: u8 = 1;
@@ -31,7 +32,7 @@ impl SupService {
         } else {
             vec!["OK\r\n".to_string()]
         };
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     fn handle_call_forwarding(
@@ -54,26 +55,26 @@ impl SupService {
         // MODE_QUERY in original code was reading it? Wait, MODE_QUERY is 2.
 
         self.call_forwarding_info = Some(info);
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_query_clir(&self) -> ExecutionResult {
         let responses = vec!["+CLIR: 0,0\r\n".to_string(), "OK\r\n".to_string()];
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     fn handle_set_clir(&self, _clir: u8) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_set_clip(&mut self, enabled: u8) -> ExecutionResult {
         self.clip_enabled = enabled;
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_query_clip(&self) -> ExecutionResult {
         let response = format!("+CLIP: {},1\r\n", self.clip_enabled);
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![response, "OK\r\n".to_string()],
             action: None,
         })
@@ -91,7 +92,7 @@ impl SupService {
         } else {
             vec!["OK\r\n".to_string()]
         };
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     fn handle_set_ussd(
@@ -105,25 +106,32 @@ impl SupService {
             responses.push("+CUSD: 0,\"OK\",15\r\n".to_string());
         }
         responses.push("OK\r\n".to_string());
-        ExecutionResult::Handled(HandledCommand { responses, action: None })
+        ExecutionResult::Success(HandledCommand { responses, action: None })
     }
 
     fn handle_supp_service_notification(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_set_colp(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
-            Command::SetFacilityLock(facility, mode, _) => {
+            Command::SetFacilityLock(facility, mode, _, _) => {
                 let facility_str = std::str::from_utf8(facility.as_ref()).unwrap_or("");
-                self.handle_set_facility_lock(facility_str, *mode)
+                if facility_str != FACILITY_SIM_PIN {
+                    self.handle_set_facility_lock(facility_str, *mode)
+                } else {
+                    ExecutionResult::Unhandled
+                }
             }
             Command::CallForwarding { reason: _, mode, number, r#type, .. } => {
                 self.handle_call_forwarding(*mode, *number, *r#type)
+            }
+            Command::CallForwardUtility(_) => {
+                ExecutionResult::CmeError(CmeError::OperationNotSupported)
             }
             Command::QueryClir => self.handle_query_clir(),
             Command::SetClir(clir) | Command::SetClirGoldfish(clir) => self.handle_set_clir(*clir),

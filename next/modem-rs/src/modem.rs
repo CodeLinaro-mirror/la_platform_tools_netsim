@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use netsim_model::{RadioTechnology, RegistrationStatus};
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     call_service::CallService,
@@ -17,7 +17,7 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    types::{AT_ERROR, AT_OK, CommandAction, ExecutionResult, ModemId},
+    types::{AT_OK, CommandAction, ExecutionResult, ModemId},
 };
 
 /// Represents a single modem device.
@@ -67,8 +67,8 @@ impl ModemImpl {
             sup_service: SupService::default(),
             misc_service: MiscService::default(),
             call_service: CallService::default(),
-            data_service: DataService::default(),
-            phone_number: "".to_string(),
+            data_service: DataService::from_env(),
+            phone_number: profile.msisdn.clone(),
             _state: State::Idle,
         }
     }
@@ -76,13 +76,13 @@ impl ModemImpl {
     pub fn trigger_incoming_call(&mut self, number: &str) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
         let result = self.call_service.ring(number.to_string());
-        if let ExecutionResult::Handled(handled) = result {
+        if let ExecutionResult::Success(handled) = result {
             for response in handled.responses {
                 if !response.is_empty() {
                     effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
                 }
             }
-            let clip = format!("+CLIP: \"{}\",129,,,,0\r\n", number);
+            let clip = format!("+CLIP: \"{number}\",129,,,,0\r\n");
             effects.push(ModemEffect::Response(clip.as_bytes().to_vec()));
 
             effects.push(ModemEffect::Schedule {
@@ -118,10 +118,18 @@ impl ModemImpl {
     }
 
     pub fn trigger_incoming_sms(&mut self, sender: &str, text: &str) -> Vec<ModemEffect> {
+        debug!(
+            "trigger_incoming_sms: id = {}, message_format = {:?}",
+            self.id, self.sms_service.message_format
+        );
+        if self.sms_service.message_format == crate::sms_service::MessageFormat::Pdu {
+            let pdu_hex = crate::pdu::create_deliver_pdu_ucs2(sender, text);
+            return self.trigger_incoming_pdu(&pdu_hex);
+        }
         let mut effects = Vec::new();
         // Format: +CMT: "<sender>",,"<timestamp>"\r\n<text>
         let timestamp = "22/01/01,12:00:00+00";
-        let response = format!("+CMT: \"{}\",,\"{}\"\r\n{}\r\n", sender, timestamp, text);
+        let response = format!("+CMT: \"{sender}\",,\"{timestamp}\"\r\n{text}\r\n");
         effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
         effects
     }
@@ -135,7 +143,7 @@ impl ModemImpl {
             let sca_len = bytes[0] as usize;
             if bytes.len() > 1 + sca_len {
                 let tpdu_len = bytes.len() - 1 - sca_len;
-                let response = format!("+CMT: ,{}\r\n{}\r\n", tpdu_len, pdu);
+                let response = format!("+CMT: ,{tpdu_len}\r\n{pdu}\r\n");
                 effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
             }
         }
@@ -150,7 +158,7 @@ impl ModemImpl {
             // Basic check to avoid date separators if any
             if pos > 10 {
                 let zone = &time[pos..];
-                let response = format!("+CTZV: {}\r\n", zone);
+                let response = format!("+CTZV: {zone}\r\n");
                 effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
             }
         }
@@ -159,6 +167,7 @@ impl ModemImpl {
 
     pub fn set_phone_number(&mut self, number: &str) {
         self.phone_number = number.to_string();
+        self.sim_service.set_msisdn(number);
     }
 
     pub fn phone_number(&self) -> String {
@@ -237,7 +246,7 @@ impl ModemImpl {
                 // Abort
                 self.sms_service.waiting_for_pdu_len = None;
                 self.sms_service.waiting_for_pdu_store = false;
-                Some(ExecutionResult::Handled(crate::types::HandledCommand::ok()))
+                Some(ExecutionResult::Success(crate::types::HandledCommand::ok()))
             } else {
                 None // Waiting for more data? Or just ignore for now if
                 // incomplete? The emulator usually
@@ -249,8 +258,26 @@ impl ModemImpl {
 
         if let Some(result) = sms_pdu_action {
             let mut effects = Vec::new();
-            if let ExecutionResult::Handled(handled) = result {
-                Self::append_handled_effects(&mut effects, handled);
+            match result {
+                ExecutionResult::Success(handled) => {
+                    Self::append_handled_effects(&mut effects, handled);
+                }
+                ExecutionResult::Error => {
+                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
+                }
+                ExecutionResult::ErrorWithUrc(urcs) => {
+                    for urc in urcs {
+                        effects.push(ModemEffect::Response(urc.into_bytes()));
+                    }
+                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
+                }
+                ExecutionResult::CmeError(err) => {
+                    let resp = err.format_response(self.misc_service.cmee_mode());
+                    effects.push(ModemEffect::Response(resp.into_bytes()));
+                }
+                ExecutionResult::Unhandled => {
+                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
+                }
             }
             return effects;
         }
@@ -263,7 +290,7 @@ impl ModemImpl {
 
         let sub_commands = split_chained_commands(command_clean);
         if sub_commands.is_empty() {
-            return vec![ModemEffect::Response(AT_ERROR.to_vec())];
+            return Vec::new();
         }
         self.execute_chained_commands(&sub_commands)
     }
@@ -330,7 +357,7 @@ impl ModemImpl {
         effects: &mut Vec<ModemEffect>,
     ) -> ExecutionResult {
         let mut result = self.execute(command);
-        if let ExecutionResult::Handled(ref mut handled) = result {
+        if let ExecutionResult::Success(ref mut handled) = result {
             if let Command::SetRadioPower(1) = command {
                 effects.push(ModemEffect::Schedule {
                     delay: std::time::Duration::from_millis(10),
@@ -366,27 +393,56 @@ impl ModemImpl {
         for (i, cmd_bytes) in sub_commands.iter().enumerate() {
             let is_last = i == sub_commands.len() - 1;
             match Command::parse(cmd_bytes) {
-                Ok((_, command)) => {
-                    match self.execute_and_schedule(&command, &mut combined_effects) {
-                        ExecutionResult::Handled(mut handled) => {
-                            let success =
-                                handled.responses.last().map(|s| s.as_str()) == Some("OK\r\n");
-                            if !is_last && success {
-                                handled.responses.pop();
+                Ok((rem, command)) => {
+                    if !rem.is_empty() {
+                        error!(
+                            "Failed to parse AT command {:?} (trailing garbage: {:?})",
+                            String::from_utf8_lossy(cmd_bytes),
+                            String::from_utf8_lossy(rem)
+                        );
+                        combined_responses.push("ERROR\r\n".to_string());
+                        stop_chain = true;
+                    } else {
+                        match self.execute_and_schedule(&command, &mut combined_effects) {
+                            ExecutionResult::Success(mut handled) => {
+                                let success =
+                                    handled.responses.last().map(|s| s.as_str()) == Some("OK\r\n");
+                                if !is_last && success {
+                                    handled.responses.pop();
+                                }
+                                combined_responses.append(&mut handled.responses);
+                                if !success {
+                                    stop_chain = true;
+                                }
                             }
-                            combined_responses.append(&mut handled.responses);
-                            if !success {
+                            ExecutionResult::Error => {
+                                combined_responses.push("ERROR\r\n".to_string());
+                                stop_chain = true;
+                            }
+                            ExecutionResult::ErrorWithUrc(mut urcs) => {
+                                combined_responses.append(&mut urcs);
+                                combined_responses.push("ERROR\r\n".to_string());
+                                stop_chain = true;
+                            }
+                            ExecutionResult::CmeError(err) => {
+                                combined_responses
+                                    .push(err.format_response(self.misc_service.cmee_mode()));
+                                stop_chain = true;
+                            }
+                            ExecutionResult::Unhandled => {
+                                error!("Unhandled command: {:?}", command);
+                                combined_responses.push("ERROR\r\n".to_string());
                                 stop_chain = true;
                             }
                         }
-                        ExecutionResult::Unhandled => {
-                            error!("Unhandled command: {:?}", command);
-                            combined_responses.push("ERROR\r\n".to_string());
-                            stop_chain = true;
-                        }
                     }
                 }
-                Err(_) => {
+                Err(e) => {
+                    error!(
+                        "Failed to parse AT command {:?}: {:?}",
+                        String::from_utf8_lossy(cmd_bytes),
+                        e
+                    );
                     combined_responses.push("ERROR\r\n".to_string());
                     stop_chain = true;
                 }
@@ -505,6 +561,9 @@ fn split_chained_commands(input: &[u8]) -> Vec<Vec<u8>> {
         }
         if starts_with_ignore_case(trimmed, b"AT") || starts_with_ignore_case(trimmed, b"RING") {
             processed.push(trimmed.to_vec());
+        } else if trimmed.eq_ignore_ascii_case(b"OK") || trimmed.eq_ignore_ascii_case(b"ERROR") {
+            // Ignore echoed responses/URCs
+            debug!("Ignoring echoed response/URC: {:?}", std::str::from_utf8(trimmed));
         } else {
             let mut new_cmd = b"AT".to_vec();
             new_cmd.extend_from_slice(trimmed);

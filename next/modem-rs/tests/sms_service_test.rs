@@ -157,6 +157,14 @@ fn test_cnma() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_cnma_with_val() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CNMA=1");
+    then_response_is(&mut world, "A", "OK");
+}
+
 // Scenario: Set SMS Message Format
 //   Given a modem "A"
 //   When AT command "AT+CMGF=1" is sent to "A"
@@ -219,6 +227,44 @@ fn test_smsc_address() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_smsc_address_with_tosca() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Test with explicit tosca 145
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test with explicit tosca 129
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test with empty address and tosca 0 (the failure case)
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"\",0");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"\",0");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test default tosca 129 (no +)
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"1234567890\"");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+}
+
 // Scenario: Remote SMS
 //   Given a modem "A"
 //   When AT command 'AT+REMOTESMS="0011000B915155255155F40000AA01F0"' is sent
@@ -272,6 +318,9 @@ fn test_send_sms_text_mode() {
     when_at_command_sent(&mut world, "A", "AT+CMGF=1");
     then_response_is(&mut world, "A", "OK");
 
+    when_at_command_sent(&mut world, "B", "AT+CMGF=1");
+    then_response_is(&mut world, "B", "OK");
+
     when_at_command_sent(&mut world, "A", "AT+CMGS=\"12345\"");
     then_response_is(&mut world, "A", "> ");
 
@@ -301,6 +350,9 @@ fn test_incoming_sms() {
     let id_a = world.modems.get("A").unwrap().0;
 
     // 1. Text Mode
+    when_at_command_sent(&mut world, "A", "AT+CMGF=1");
+    then_response_is(&mut world, "A", "OK");
+
     when_incoming_sms_received(&mut world, id_a, "123456", "Hello World");
 
     // Expect +CMT response

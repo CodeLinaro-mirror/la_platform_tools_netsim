@@ -1,16 +1,44 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::HashMap,
+    fmt,
+    net::{IpAddr, SocketAddr},
+};
 
-#[rustfmt::skip]
-use libslirp_rs::{LibSlirp, SlirpConfig, lookup_host_dns};
 use netsim_model::{PacketSink, PacketStream};
 use netsim_packets::MacAddress;
 use tokio::sync::mpsc as tokio_mpsc;
-use tracing::{info, warn};
+use tracing::info;
 
 pub type ClientId = u32;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SlirpBackend {
+    CFfi,
+    Native,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for SlirpBackend {
+    fn default() -> Self {
+        #[cfg(feature = "cuttlefish")]
+        {
+            SlirpBackend::Native
+        }
+        #[cfg(not(feature = "cuttlefish"))]
+        {
+            SlirpBackend::CFfi
+        }
+    }
+}
+
+#[cfg(not(feature = "cuttlefish"))]
+pub type SlirpConfig = libslirp_rs::SlirpConfig;
+
+#[cfg(feature = "cuttlefish")]
+pub type SlirpConfig = slirp::Config;
 
 pub enum SlirpReq {
     SendPacket(bytes::Bytes),
@@ -23,6 +51,7 @@ pub enum SlirpReq {
     Unregister {
         client_id: ClientId,
     },
+    SwitchBackend(SlirpBackend),
 }
 
 impl std::fmt::Debug for SlirpReq {
@@ -34,6 +63,9 @@ impl std::fmt::Debug for SlirpReq {
             }
             SlirpReq::Unregister { client_id } => {
                 write!(f, "SlirpReq::Unregister {{ client_id: {client_id} }}")
+            }
+            SlirpReq::SwitchBackend(backend) => {
+                write!(f, "SlirpReq::SwitchBackend({:?})", backend)
             }
         }
     }
@@ -58,12 +90,80 @@ pub struct ClientInfo {
     pub notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
 }
 
+pub(crate) enum SlirpBackendInstance {
+    #[cfg(not(feature = "cuttlefish"))]
+    CFfi(libslirp_rs::LibSlirp),
+    Native {
+        uplink_tx: tokio_mpsc::UnboundedSender<bytes::Bytes>,
+    },
+}
+
+impl SlirpBackendInstance {
+    pub fn input(&self, msg: bytes::Bytes) {
+        match self {
+            #[cfg(not(feature = "cuttlefish"))]
+            SlirpBackendInstance::CFfi(slirp) => {
+                slirp.input(msg);
+            }
+            SlirpBackendInstance::Native { uplink_tx } => {
+                let _ = uplink_tx.send(msg);
+            }
+        }
+    }
+
+    pub fn shutdown(self) {
+        match self {
+            #[cfg(not(feature = "cuttlefish"))]
+            SlirpBackendInstance::CFfi(slirp) => {
+                slirp.shutdown();
+            }
+            SlirpBackendInstance::Native { .. } => {}
+        }
+    }
+}
+
 pub struct SlirpActor {
-    pub(crate) libslirp: Option<LibSlirp>,
+    pub(crate) backend_type: SlirpBackend,
+    pub(crate) backend_instance: Option<SlirpBackendInstance>,
     pub(crate) config: SlirpConfig,
     pub(crate) http_proxy: Option<String>,
     pub(crate) clients: HashMap<ClientId, ClientInfo>,
     pub(crate) mac_table: HashMap<MacAddress, ClientId>,
+    pub(crate) next_stream_id: usize,
+    pub(crate) active_stream_id: Option<usize>,
+    pub(crate) next_task_id: u32,
+    pub(crate) active_task_id: Option<u32>,
+}
+
+async fn resolve_dns_servers(host_dns: &str) -> Vec<IpAddr> {
+    let mut resolved = Vec::new();
+    if host_dns.is_empty() {
+        return resolved;
+    }
+    let futures = host_dns.split(',').map(|addr| {
+        let addr = addr.trim().to_string();
+        async move {
+            if let Ok(ip) = addr.parse::<IpAddr>() {
+                return vec![ip];
+            }
+            if let Ok(socket) = addr.parse::<SocketAddr>() {
+                return vec![socket.ip()];
+            }
+            let host_port = if addr.contains(':') { addr.clone() } else { format!("{}:53", addr) };
+            match tokio::net::lookup_host(host_port).await {
+                Ok(addrs) => addrs.map(|s| s.ip()).collect::<Vec<_>>(),
+                Err(e) => {
+                    tracing::warn!("Failed to resolve DNS host '{}': {}", addr, e);
+                    vec![]
+                }
+            }
+        }
+    });
+    let results = futures::future::join_all(futures).await;
+    for ip in results.into_iter().flatten() {
+        resolved.push(ip);
+    }
+    resolved
 }
 
 #[derive(Clone, Debug)]
@@ -73,31 +173,60 @@ pub struct SlirpStatus {
 
 impl SlirpActor {
     pub async fn new(
-        mut config: SlirpConfig,
+        config: SlirpConfig,
         http_proxy: Option<String>,
         host_dns: Option<String>,
     ) -> Self {
-        if let Some(host_dns_str) = host_dns {
-            match lookup_host_dns(&host_dns_str).await {
-                Ok(addrs) => config.host_dns = addrs,
-                Err(e) => warn!("Failed to resolve host-dns '{}': {}", host_dns_str, e),
+        Self::new_with_backend(config, http_proxy, host_dns, SlirpBackend::default()).await
+    }
+
+    pub async fn new_with_backend(
+        #[allow(unused_mut)] mut config: SlirpConfig,
+        http_proxy: Option<String>,
+        host_dns: Option<String>,
+        backend_type: SlirpBackend,
+    ) -> Self {
+        let resolved_dns = if let Some(ref host_dns_str) = host_dns {
+            resolve_dns_servers(host_dns_str).await
+        } else {
+            Vec::new()
+        };
+
+        if !resolved_dns.is_empty() {
+            #[cfg(not(feature = "cuttlefish"))]
+            {
+                config.host_dns = resolved_dns.iter().map(|ip| SocketAddr::new(*ip, 53)).collect();
+            }
+            #[cfg(feature = "cuttlefish")]
+            {
+                config.dns_servers = resolved_dns.clone();
             }
         }
+
         Self {
-            libslirp: None,
+            backend_type,
+            backend_instance: None,
             config,
             http_proxy,
             clients: HashMap::new(),
             mac_table: HashMap::new(),
+            next_stream_id: 1,
+            active_stream_id: None,
+            next_task_id: 1,
+            active_task_id: None,
         }
+    }
+
+    pub fn backend(&self) -> SlirpBackend {
+        self.backend_type
     }
 }
 
 impl Drop for SlirpActor {
     fn drop(&mut self) {
-        if let Some(slirp) = self.libslirp.take() {
-            info!("Shutting down LibSlirp");
-            slirp.shutdown();
+        if let Some(instance) = self.backend_instance.take() {
+            info!("Shutting down Slirp backend instance");
+            instance.shutdown();
         }
     }
 }

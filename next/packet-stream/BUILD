@@ -28,14 +28,27 @@ DEPS = [
     "@tracing",
 ]
 
+SELECT_DEPS = select({
+    "@platforms//os:linux": [
+        "@command-fds",
+        "@nix",
+    ],
+    "//conditions:default": [],
+})
+
 netsim_rust_library(
     name = "packet-stream",
     srcs = glob(["src/**/*.rs"]),
+    crate_features = select({
+        "@platforms//os:linux": ["cuttlefish"],
+        "//conditions:default": [],
+    }),
     crate_name = "packet_stream",
     edition = "2024",
     enable_integration_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
+    select_deps = SELECT_DEPS,
     deps = DEPS,
 )

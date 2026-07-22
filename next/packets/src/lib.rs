@@ -1,4 +1,4 @@
-// Copyright 2025 The Android Open Source Project
+// Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
 //! `packets` is a crate for zero-copy parsing and handling of network packets.
@@ -175,7 +175,9 @@ pub(crate) mod transport;
 pub(crate) mod utils;
 
 // Facade
-pub use ethernet::{EthernetFrame, EthernetPacket, MacAddr, frame::ether_type};
+pub use ethernet::{
+    ArpPacket, ArpPacketBuilder, EthernetFrame, EthernetPacket, MacAddr, frame::ether_type,
+};
 // hci commands and types
 pub use hci::commands::{
     HciCommand, HciCommandHeader, LeSetAdvertisingData, LeSetAdvertisingEnable,
@@ -189,6 +191,15 @@ pub use hci::{
         LeAdvertisingEventType, LeScanType, LeScanningFilterPolicy, OwnAddressType,
         PeerAddressType,
     },
+};
+// ICMP and NDP headers/builders
+pub use icmp::{
+    IcmpEcho, IcmpHeader, IcmpType, Icmpv4UnreachableCode as UnreachableCode,
+    Icmpv4UnreachableCode, Icmpv6Echo, Icmpv6Header, Icmpv6ParameterProblemCode,
+    Icmpv6TimeExceededCode, Icmpv6Type, Icmpv6UnreachableCode, NeighborAdvertisement,
+    NeighborAdvertisementBuilder, NeighborSolicitation, NeighborSolicitationBuilder,
+    PrefixInformationOption, RdnssOption, RouterAdvertisement, RouterAdvertisementBuilder,
+    RouterSolicitation, RouterSolicitationBuilder, SourceLinkLayerAddressOption,
 };
 // ieee80211 constants
 pub use ieee80211::{
@@ -216,6 +227,11 @@ pub use ieee80211::{
     ie::{IeIterator, set_ext_cap, tags, write_ie},
     wmm::write_wmm_param_element,
 };
+// IP headers and builders
+pub use ip::{
+    IP_P_HOPOPTS, IP_P_ICMP, IP_P_ICMPV6, IP_P_TCP, IP_P_UDP, Ipv4Builder, Ipv4Header, Ipv6Builder,
+    Ipv6Header, Ipv6HopByHopHeader,
+};
 pub use llc::frame::{LlcSnapHeader, control_field, sap};
 pub use netlink::{
     HwsimAttrSet, HwsimAttrSetBuilder, HwsimFrame, HwsimMsgHdr, Nl80211AttrSetBuilder, NlMsgHdr,
@@ -225,6 +241,36 @@ pub use netlink::{
     nl80211_attr::NlAttrHdr,
     stream::NetlinkStream,
 };
+// Transport headers and builders
+pub use transport::tcp::flags::{
+    ACK as TCP_FLAG_ACK, FIN as TCP_FLAG_FIN, PSH as TCP_FLAG_PSH, RST as TCP_FLAG_RST,
+    SYN as TCP_FLAG_SYN, URG as TCP_FLAG_URG,
+};
+// DHCPv6 and DNS headers/builders
+pub mod dhcpv6 {
+    pub use crate::transport::{
+        DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, Dhcpv6Header, Dhcpv6OptionHeader,
+        Dhcpv6OptionIterator, MSG_INFORMATION_REQUEST, MSG_REPLY, OPTION_CLIENTID,
+        OPTION_DNS_SERVERS, OPTION_DOMAIN_LIST, OPTION_SERVERID,
+    };
+}
+pub mod dns {
+    pub use crate::transport::{
+        DnsFlags, DnsHeader, DnsPacketBuilder, Opcode, Question, ResourceClass, ResourceType,
+        ResponseCode,
+    };
+}
+pub use transport::{
+    DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, Dhcpv6Header, Dhcpv6OptionHeader, Dhcpv6OptionIterator,
+    DnsFlags, DnsHeader, DnsPacketBuilder, MSG_INFORMATION_REQUEST, MSG_REPLY, OPTION_CLIENTID,
+    OPTION_DNS_SERVERS, OPTION_DOMAIN_LIST, OPTION_SERVERID, Opcode, Question, ResourceClass,
+    ResourceType, ResponseCode, TcpBuilder, UdpBuilder, UdpPacketBuilder,
+};
+// Checksum helpers
+pub use utils::checksum::{
+    icmpv6_checksum, ipv4_checksum, tcp_checksum, tcp_checksum_v6, udp_checksum, udp_checksum_v6,
+};
+
 pub mod link_layer {
     #[allow(warnings, clippy::all, clippy::unwrap_in_result, clippy::map_err_ignore)]
     mod pdl_generated {

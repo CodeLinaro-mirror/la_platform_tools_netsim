@@ -1,21 +1,73 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+
 use actor_framework::{ActorService, DynContext};
+use device_actor::DeviceClient;
 use futures::{SinkExt, StreamExt};
-use netsim_model::{ChipCreate, ChipError, ChipId, ChipRequest, ChipUpdate};
+use netsim_model::{ChipCreate, ChipError, ChipId, ChipUpdate, DeviceId};
+use tokio::sync::mpsc::unbounded_channel;
 use tracing::{error, info};
 
 use crate::{
     error::NfcError,
-    nfc_actor::{ChipState, NfcActor},
+    nfc_actor::{ChipState, NfcAction, NfcActor},
 };
+
+impl From<&ChipState> for netsim_model::Chip {
+    fn from(state: &ChipState) -> Self {
+        let is_enabled = state.enabled.load(Ordering::Acquire);
+        netsim_model::Chip {
+            kind: netsim_model::ChipKind::NFC,
+            id: state.id.0,
+            name: format!("nfc-{}", state.id.0),
+            device_id: state.device_id,
+            enabled: is_enabled,
+            variant: Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc {
+                radio: netsim_model::Radio { state: Some(is_enabled), ..Default::default() },
+            })),
+            ..Default::default()
+        }
+    }
+}
+
+/// Helper to check if two Casimir NFC devices are within physical NFC proximity
+/// (<= 0.04m). Returns true if within threshold or if either device is
+/// unmapped/missing (fallback for non-spatial tests).
+async fn is_within_nfc_proximity(
+    sender_casimir_id: u16,
+    receiver_device_id: DeviceId,
+    casimir_to_device: &Arc<Mutex<HashMap<u16, DeviceId>>>,
+    device_client: &DeviceClient,
+) -> bool {
+    let sender_dev_id = casimir_to_device.lock().unwrap().get(&sender_casimir_id).copied();
+    let Some(src_dev) = sender_dev_id else {
+        return true; // Fallback: intentionally allow unmapped control/external test devices
+    };
+
+    let (src_res, dst_res) =
+        tokio::join!(device_client.get(src_dev), device_client.get(receiver_device_id));
+
+    match (src_res, dst_res) {
+        (Ok(Some(src_ent)), Ok(Some(dst_ent))) => {
+            src_ent.pose.position.distance(&dst_ent.pose.position) <= 0.04
+        }
+        _ => true, // Fallback: allow missing positions to bypass spatial filtering
+    }
+}
 
 impl ActorService for NfcActor {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
-    type Action = ChipRequest;
+    type Action = NfcAction;
     type ActionResult = ();
     type Error = NfcError;
     type Entity = netsim_model::Chip;
@@ -49,8 +101,33 @@ impl ActorService for NfcActor {
         let (nfc_io, casimir_io) = tokio::io::duplex(1024);
 
         let (casimir_rx, casimir_tx) = tokio::io::split(casimir_io);
+        let casimir_to_device = self.casimir_to_device.clone();
+        let device_client = self.device_client.clone();
         let casimir_device_id = scene_client
-            .add_device(move |id, rf_tx| casimir::Device::nci(id, casimir_rx, casimir_tx, rf_tx))
+            .add_device(move |id, rf_tx| {
+                casimir_to_device.lock().unwrap().insert(id, device_id);
+                let mut device = casimir::Device::nci(id, casimir_rx, casimir_tx, rf_tx);
+                let (my_rf_tx, mut my_rf_rx) = unbounded_channel();
+                let original_device_rf_tx = device.rf_tx;
+                device.rf_tx = my_rf_tx;
+                let map_clone = casimir_to_device.clone();
+                tokio::spawn(async move {
+                    while let Some(packet) = my_rf_rx.recv().await {
+                        if packet.sender() == id
+                            || is_within_nfc_proximity(
+                                packet.sender(),
+                                device_id,
+                                &map_clone,
+                                &device_client,
+                            )
+                            .await
+                        {
+                            let _ = original_device_rf_tx.send(packet);
+                        }
+                    }
+                });
+                device
+            })
             .await
             .map_err(|e| NfcError::IoError(std::io::Error::other(e)))?;
 
@@ -61,13 +138,19 @@ impl ActorService for NfcActor {
         let mut stream = tokio_util::codec::length_delimited::Builder::new()
             .length_field_offset(2)
             .length_field_length(1)
+            .length_adjustment(3)
             .num_skip(0)
             .new_read(nfc_reader);
+        let enabled = Arc::new(AtomicBool::new(true));
+        let enabled_clone = enabled.clone();
         let chip_id_clone = chip_id;
         let task_1 = Box::pin(async move {
             while let Some(item) = stream.next().await {
                 match item {
                     Ok(bytes_mut) => {
+                        if !enabled_clone.load(Ordering::Acquire) {
+                            continue;
+                        }
                         let bytes = bytes_mut.freeze();
                         if let Err(e) = packet_sink.send(bytes).await {
                             error!("Failed to send packet to guest: {:?}", e);
@@ -88,8 +171,10 @@ impl ActorService for NfcActor {
         // Bridge Guest -> Casimir
         ctx.add_stream(chip_id, Box::pin(packet_stream));
 
-        self.active_chips
-            .insert(chip_id, ChipState { device_id, enabled: true, casimir_device_id, nfc_writer });
+        self.active_chips.insert(
+            chip_id,
+            ChipState { id: chip_id, device_id, enabled, casimir_device_id, nfc_writer },
+        );
 
         info!("NFC chip {} created for device {}", chip_id, device_id);
 
@@ -103,8 +188,12 @@ impl ActorService for NfcActor {
     ) -> Result<(), Self::Error> {
         if let Some(state) = self.active_chips.remove(&id) {
             info!("Deleting NFC chip {}", id);
-            // Notify DeviceClient
-            let _ = self.device_client.notify_chip_removed(state.device_id, id).await;
+            // Notify DeviceClient asynchronously
+            let dc = self.device_client.clone();
+            let device_id = state.device_id;
+            tokio::spawn(async move {
+                let _ = dc.notify_chip_removed(device_id, id).await;
+            });
 
             // Abort the Casimir -> Guest task
             ctx.abort(id);
@@ -112,7 +201,8 @@ impl ActorService for NfcActor {
             // Remove the guest stream
             ctx.remove_stream(id);
 
-            // Remove device from Casimir scene
+            // Remove device mapping and Casimir scene device
+            self.casimir_to_device.lock().unwrap().remove(&state.casimir_device_id);
             if let Some(ref scene_client) = self.scene_client
                 && let Err(e) = scene_client.remove_device(state.casimir_device_id).await
             {
@@ -130,21 +220,7 @@ impl ActorService for NfcActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        if let Some(state) = self.active_chips.get(&id) {
-            Ok(Some(netsim_model::Chip {
-                kind: netsim_model::ChipKind::NFC,
-                id: id.0,
-                name: format!("nfc-{}", id.0),
-                device_id: state.device_id,
-                enabled: state.enabled,
-                variant: Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc {
-                    radio: netsim_model::Radio { state: Some(state.enabled), ..Default::default() },
-                })),
-                ..Default::default()
-            }))
-        } else {
-            Ok(None)
-        }
+        Ok(self.active_chips.get(&id).map(Into::into))
     }
 
     async fn handle_update(
@@ -159,13 +235,13 @@ impl ActorService for NfcActor {
             .ok_or_else(|| NfcError::Chip(ChipError::ChipNotFound(id)))?;
 
         if let Some(enabled) = update.enabled {
-            state.enabled = enabled;
+            state.enabled.store(enabled, Ordering::Release);
         }
         if let Some(netsim_model::ChipVariantUpdate::Nfc(netsim_model::NfcUpdate {
             radio: netsim_model::RadioUpdate { state: Some(enabled), .. },
         })) = &update.variant
         {
-            state.enabled = *enabled;
+            state.enabled.store(*enabled, Ordering::Release);
         }
 
         self.handle_get(id, ctx).await?.ok_or_else(|| NfcError::Chip(ChipError::ChipNotFound(id)))
@@ -174,30 +250,90 @@ impl ActorService for NfcActor {
     async fn handle_action(
         &mut self,
         _id: Option<Self::Id>,
-        _action: Self::Action,
+        action: Self::Action,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
-        Ok(())
+        match action {
+            NfcAction::Generic(_req) => Ok(()),
+            NfcAction::CreateControlChannel { respond_to } => {
+                info!("NfcActor: Received CreateControlChannel action");
+                let (grpc_io, casimir_io) = tokio::io::duplex(1024);
+                if let Some(ref scene_client) = self.scene_client {
+                    info!("NfcActor: Calling scene_client.add_device...");
+                    let add_result = scene_client
+                        .add_device(move |id, rf_tx| {
+                            let (rx, tx) = tokio::io::split(casimir_io);
+                            casimir::Device::rf(id, rx, tx, rf_tx)
+                        })
+                        .await;
+                    info!("NfcActor: scene_client.add_device returned: {:?}", add_result);
+                    match add_result {
+                        Ok(id) => {
+                            info!(
+                                "NfcActor: Sending success response to grpc-server with ID {}",
+                                id
+                            );
+                            let _ = respond_to.send(Ok((grpc_io, id)));
+                            Ok(())
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to add RF device to Casimir: {e}");
+                            error!("NfcActor: {}", err_msg);
+                            let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
+                            Ok(())
+                        }
+                    }
+                } else {
+                    let err_msg = "Casimir scene not started".to_string();
+                    error!("NfcActor: {}", err_msg);
+                    let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
+                    Ok(())
+                }
+            }
+        }
     }
 
     async fn handle_list(
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        let mut chips = Vec::new();
-        for (id, state) in &self.active_chips {
-            chips.push(netsim_model::Chip {
-                kind: netsim_model::ChipKind::NFC,
-                id: id.0,
-                name: format!("nfc-{}", id.0),
-                device_id: state.device_id,
-                enabled: state.enabled,
-                variant: Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc {
-                    radio: netsim_model::Radio { state: Some(state.enabled), ..Default::default() },
-                })),
-                ..Default::default()
-            });
-        }
-        Ok(chips)
+        Ok(self.active_chips.values().map(Into::into).collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncWriteExt, duplex};
+    use tokio_stream::StreamExt;
+    use tokio_util::codec::length_delimited::Builder;
+
+    #[tokio::test]
+    async fn test_nci_codec_length_adjustment() -> Result<(), Box<dyn std::error::Error>> {
+        // This test documents and verifies the correct configuration of the
+        // LengthDelimitedCodec used in service.rs to read NCI packets.
+        // NCI header is 3 bytes (offset 2 + len 1). We must use length_adjustment(3)
+        // to include the header in the returned bytes when num_skip(0) is used.
+
+        let (mut writer, reader) = duplex(1024);
+        let mut stream = Builder::new()
+            .length_field_offset(2)
+            .length_field_length(1)
+            .length_adjustment(3) // Crucial fix!
+            .num_skip(0)
+            .new_read(reader);
+
+        // Packet: header [0x40, 0x00], len 1, payload [0xaa]
+        let packet = &[0x40, 0x00, 1, 0xaa];
+        writer.write_all(packet).await?;
+        drop(writer);
+
+        // Verify we receive the full 4 bytes (header + payload)
+        let bytes = stream.next().await.ok_or("Stream ended prematurely")??;
+        assert_eq!(bytes.len(), 4);
+        assert_eq!(bytes.as_ref(), packet);
+
+        // Verify the stream terminates cleanly (EOF) on next read without looping
+        assert!(stream.next().await.is_none());
+        Ok(())
     }
 }

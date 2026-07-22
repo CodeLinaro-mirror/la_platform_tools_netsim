@@ -29,12 +29,18 @@ fn test_two_modem_end_to_end_scenario() {
     given_modem_with_number(&mut world, "B", "12345");
 
     // Power On Checks
+    when_at_command_sent(&mut world, "A", "AT");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+INVALID");
+    then_response_is(&mut world, "A", "ERROR");
+
     when_at_command_sent(&mut world, "A", "AT+CPIN?");
     then_response_is(&mut world, "A", "+CPIN: READY");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "+COPS: 0,0,0");
     then_response_is(&mut world, "A", "OK");
 
     // Make Call
@@ -55,6 +61,9 @@ fn test_two_modem_end_to_end_scenario() {
     when_at_command_sent(&mut world, "A", "ATH");
     then_response_is(&mut world, "A", "OK");
 
+    // B receives NO CARRIER asynchronously
+    then_wait_for_response_containing(&mut world, "B", "NO CARRIER");
+
     // Verify Idle
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     then_response_is(&mut world, "A", "OK");
@@ -72,6 +81,9 @@ fn test_two_modem_end_to_end_scenario() {
     // PDU mode: `AT+CMGS=<length>`. PDU contains address.
     // Original test: `manager.send_at_command(modem_b_id, b"AT+CMGS=5\r\n");`
     // Then sent "hello".
+
+    when_at_command_sent(&mut world, "A", "AT+CMGF=1");
+    then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "B", "AT+CMGF=1");
     then_response_is(&mut world, "B", "OK");
@@ -153,7 +165,7 @@ fn test_remote_sms_injection() {
     // Case A: Inject SMS-SUBMIT targeting B. It should be converted and routed to
     // B.
     let pdu_submit = "00010005812143F5000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
-    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{}\"", pdu_submit));
+    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{pdu_submit}\""));
     then_response_is(&mut world, "A", "OK");
 
     // Verify B receives the SMS-DELIVER PDU with OA copied from DA
@@ -169,7 +181,7 @@ fn test_remote_sms_injection() {
     // to loopback to A.
     let pdu_deliver =
         "002405812143F500002660901230000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
-    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{}\"", pdu_deliver));
+    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{pdu_deliver}\""));
     then_response_is(&mut world, "A", "OK");
 
     then_wait_for_response_containing(&mut world, "A", "+CMT: ,37");

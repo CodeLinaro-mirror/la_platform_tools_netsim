@@ -29,6 +29,7 @@ netsim_rust_library(
         "@async-trait",
     ],
     test_deps = [
+        "@tokio-stream",
         "@tracing-subscriber",
     ],
     deps = DEPS,

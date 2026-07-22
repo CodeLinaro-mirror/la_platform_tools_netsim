@@ -11,6 +11,7 @@ authors = ["The Android Open Source Project"]
 testing = ["dep:mockall"]
 
 [dependencies]
+actor-framework = { path = "../actor-framework" }
 async-trait = "0.1.73"
 bytes = { version = "1.10.1", features = ["serde"] }
 futures = "0.3"

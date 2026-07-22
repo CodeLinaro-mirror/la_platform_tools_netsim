@@ -21,12 +21,84 @@ impl<'a> AsRef<[u8]> for QuotedString<'a> {
     }
 }
 
+impl<'a> std::ops::Deref for QuotedString<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
 impl<'a> Parsable<'a> for QuotedString<'a> {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         use nom::{bytes::complete::take_while, sequence::delimited};
         let (input, content) =
             delimited(tag(br#"""#), take_while(|c| c != b'"'), tag(br#"""#))(input)?;
         Ok((input, QuotedString(content)))
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct PinString<'a>(pub &'a [u8]);
+
+impl<'a> PinString<'a> {
+    pub fn to_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}
+
+impl<'a> AsRef<[u8]> for PinString<'a> {
+    fn as_ref(&self) -> &[u8] {
+        self.0
+    }
+}
+
+impl<'a> std::ops::Deref for PinString<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+impl<'a> Parsable<'a> for PinString<'a> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        if let Ok((rem, quoted)) = QuotedString::parse(input) {
+            return Ok((rem, PinString(quoted.0)));
+        }
+        use nom::bytes::complete::take_while1;
+        let (input, content) =
+            take_while1(|c: u8| c != b',' && c != b';' && c != b'\r' && c != b'\n')(input)?;
+        Ok((input, PinString(content)))
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct ApduData<'a>(pub &'a [u8]);
+
+impl<'a> ApduData<'a> {
+    pub fn to_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}
+
+impl<'a> AsRef<[u8]> for ApduData<'a> {
+    fn as_ref(&self) -> &[u8] {
+        self.0
+    }
+}
+
+impl<'a> Parsable<'a> for ApduData<'a> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        use nom::{
+            branch::alt,
+            bytes::complete::{take_while, take_while1},
+            sequence::delimited,
+        };
+        let parse_quoted = delimited(tag(br#"""#), take_while(|c| c != b'"'), tag(br#"""#));
+        let parse_unquoted = take_while1(|c: u8| c.is_ascii_hexdigit());
+        let (input, content) = alt((parse_quoted, parse_unquoted))(input)?;
+        Ok((input, ApduData(content)))
     }
 }
 
@@ -37,8 +109,12 @@ pub fn parse_raw_data(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 pub fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    use nom::bytes::complete::take_while;
+    use nom::{
+        bytes::complete::{tag, take_while},
+        combinator::opt,
+    };
     let (input, content) = take_while(|c: u8| c != b';' && c != b'\r' && c != b'\n')(input)?;
+    let (input, _) = opt(tag(b";"))(input)?;
     Ok((input, content))
 }
 
@@ -50,16 +126,30 @@ pub enum Command<'a> {
     GetSimStatus,
     /// Enter PIN or PUK
     #[command(tag = "AT+CPIN=")]
-    EnterPin(QuotedString<'a>, Option<QuotedString<'a>>),
+    EnterPin(PinString<'a>, Option<PinString<'a>>),
+    /// Query PIN retries
+    #[command(tag = "AT+CPINR=")]
+    QueryPinRetries(QuotedString<'a>),
     /// Restricted SIM access
     #[command(tag = "AT+CRSM=")]
-    SimIo { command: u16, file_id: u16, p1: u8, p2: u8, p3: u8, data: Option<QuotedString<'a>> },
+    SimIo {
+        command: u16,
+        file_id: u16,
+        p1: u8,
+        p2: u8,
+        p3: u8,
+        data: Option<ApduData<'a>>,
+        path: Option<ApduData<'a>>,
+    },
     /// Request International Mobile Subscriber Identity
     #[command(tag = "AT+CIMI")]
     GetImsi,
     /// Request ICCID
     #[command(tag = "AT+CICCID")]
     GetIccid,
+    /// Call forwarding utility
+    #[command(tag = "AT+CCFCU=")]
+    CallForwardUtility(#[parser(parse_raw_data)] &'a [u8]),
     /// Open logical channel
     #[command(tag = "AT+CCHO=")]
     OpenLogicalChannel(#[parser(parse_raw_data)] &'a [u8]),
@@ -74,7 +164,7 @@ pub enum Command<'a> {
     ChangePassword(QuotedString<'a>, QuotedString<'a>, QuotedString<'a>),
     /// VENDOR: Query PIN retries
     #[command(tag = "AT+SPIC")]
-    QueryPinRetries,
+    QueryPinRetriesSpic,
     /// 3GPP2 C.S0023: Set CDMA subscription source
     #[command(tag = "AT+CCSS=")]
     SetCdmaSubscriptionSource(u8),
@@ -84,12 +174,18 @@ pub enum Command<'a> {
     /// 3GPP2 C.S0023: Set CDMA roaming preference
     #[command(tag = "AT+WRMP=")]
     SetCdmaRoamingPreference(u8),
+    /// Generic SIM access (+CSIM)
+    #[command(tag = "AT+CSIM=")]
+    GenericSimAccess(u32, ApduData<'a>),
     /// 3GPP2 C.S0023: Query CDMA roaming preference
     #[command(tag = "AT+WRMP?")]
     QueryCdmaRoamingPreference,
     /// SIM authentication
     #[command(tag = "AT+MBAU=")]
     SimAuthentication(#[parser(parse_raw_data)] &'a [u8]),
+    /// SIM authentication (Vendor caret version)
+    #[command(tag = "AT^MBAU=")]
+    SimAuthenticationVendor(#[parser(parse_raw_data)] &'a [u8]),
     /// VENDOR: Update phone number
     #[command(tag = "AT+REMOTEUPADATEPHONENUMBER")]
     UpdatePhoneNumber(#[parser(parse_raw_data)] &'a [u8]),
@@ -177,6 +273,9 @@ pub enum Command<'a> {
     /// 3GPP TS 27.005: Delete SMS Message
     #[command(tag = "AT+CMGD=")]
     DeleteSms(u8),
+    /// 3GPP TS 27.005: New message acknowledgement with value (e.g. AT+CNMA=1)
+    #[command(tag = "AT+CNMA=")]
+    SendSmsAckWithVal(u8),
     /// 3GPP TS 27.005: New message acknowledgement
     #[command(tag = "AT+CNMA")]
     SendSmsAck,
@@ -188,10 +287,19 @@ pub enum Command<'a> {
     SendStkEnvelope(QuotedString<'a>),
     /// Facility lock
     #[command(tag = "AT+CLCK=")]
-    SetFacilityLock(QuotedString<'a>, u8, Option<QuotedString<'a>>),
+    SetFacilityLock(QuotedString<'a>, u8, Option<QuotedString<'a>>, Option<u8>),
     /// Call forwarding
     #[command(tag = "AT+CCFC=")]
-    CallForwarding { reason: u8, mode: u8, number: Option<QuotedString<'a>>, r#type: Option<u8> },
+    CallForwarding {
+        reason: u8,
+        mode: u8,
+        number: Option<QuotedString<'a>>,
+        r#type: Option<u8>,
+        class: Option<u8>,
+        subaddr: Option<QuotedString<'a>>,
+        satype: Option<u8>,
+        time: Option<u8>,
+    },
     /// Calling line identification restriction
     #[command(tag = "AT+CLIR?")]
     QueryClir,
@@ -228,7 +336,14 @@ pub enum Command<'a> {
     SetUssd { mode: u8, message: Option<QuotedString<'a>>, dcs: Option<u8> },
     /// Define PDP context
     #[command(tag = "AT+CGDCONT=")]
-    DefinePdpContext(u8, QuotedString<'a>, QuotedString<'a>),
+    DefinePdpContext(
+        u8,
+        QuotedString<'a>,
+        QuotedString<'a>,
+        Option<QuotedString<'a>>,
+        Option<u8>,
+        Option<u8>,
+    ),
     /// Read PDP context
     #[command(tag = "AT+CGDCONT?")]
     QueryPdpContext,
@@ -259,9 +374,15 @@ pub enum Command<'a> {
     /// PDP context activate
     #[command(tag = "AT+CGACT=")]
     SetPdpContextActivate(u8, u8),
+    /// Query PDP context activate status
+    #[command(tag = "AT+CGACT?")]
+    QueryPdpContextActivate,
     /// PS attach or detach
     #[command(tag = "AT+CGATT=")]
     SetPsAttach(u8),
+    /// Query PS attach status
+    #[command(tag = "AT+CGATT?")]
+    QueryPsAttach,
     /// PDP context modify
     #[command(tag = "AT+CGCMOD=")]
     SetPdpContextModify(u8),
@@ -303,7 +424,7 @@ pub enum Command<'a> {
     QueryBroadcastConfig,
     /// 3GPP TS 27.005: Set SMSC address
     #[command(tag = "AT+CSCA=")]
-    SetSmscAddress(QuotedString<'a>),
+    SetSmscAddress(QuotedString<'a>, Option<u8>),
     /// 3GPP TS 27.005: Get SMSC address
     #[command(tag = "AT+CSCA?")]
     GetSmscAddress,
@@ -322,6 +443,15 @@ pub enum Command<'a> {
     /// Report mobile equipment error
     #[command(tag = "AT+CMEE=")]
     SetReportMobileEquipmentError(u8),
+    /// Query report mobile equipment error
+    #[command(tag = "AT+CMEE?")]
+    QueryReportMobileEquipmentError,
+    /// Query supported report mobile equipment error modes
+    #[command(tag = "AT+CMEE=?")]
+    QuerySupportedReportMobileEquipmentError,
+    /// Goldfish specific concatenated init command
+    #[command(tag = "ATE0Q0V1")]
+    GoldfishInitSequence,
     /// Set echo
     #[command(tag = "ATE")]
     SetEcho(u8),
@@ -412,9 +542,9 @@ pub enum Command<'a> {
     /// Query clock
     #[command(tag = "AT+CCLK?")]
     QueryTime,
-    /// Goldfish specific concatenated init command
-    #[command(tag = "ATE0Q0V1")]
-    GoldfishInitSequence,
+    /// Test command
+    #[command(tag = "AT")]
+    Test,
 }
 
 impl<'a> Command<'a> {}
@@ -442,13 +572,49 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+CMEE=1").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::SetReportMobileEquipmentError(1));
+
+        let (rem, cmd) = Command::parse(b"AT+CMEE?").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::QueryReportMobileEquipmentError);
+
+        let (rem, cmd) = Command::parse(b"AT+CMEE=?").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::QuerySupportedReportMobileEquipmentError);
     }
 
     #[test]
     fn test_parse_cgdcont() {
         let (rem, cmd) = Command::parse(b"AT+CGDCONT=1,\"IP\",\"apn\"").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::DefinePdpContext(1, QuotedString(b"IP"), QuotedString(b"apn")));
+        assert_eq!(
+            cmd,
+            Command::DefinePdpContext(
+                1,
+                QuotedString(b"IP"),
+                QuotedString(b"apn"),
+                None,
+                None,
+                None
+            )
+        );
+    }
+
+    #[test]
+    fn test_parse_cgdcont_extra() {
+        let (rem, cmd) =
+            Command::parse(b"AT+CGDCONT=1,\"IPV6\",\"fast.t-mobile.com\",,0,0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::DefinePdpContext(
+                1,
+                QuotedString(b"IPV6"),
+                QuotedString(b"fast.t-mobile.com"),
+                None,
+                Some(0),
+                Some(0)
+            )
+        );
     }
 
     #[test]
@@ -555,7 +721,30 @@ mod tests {
         assert!(rem.is_empty());
         assert_eq!(
             cmd,
-            Command::SimIo { command: 176, file_id: 28480, p1: 0, p2: 0, p3: 7, data: None }
+            Command::SimIo {
+                command: 176,
+                file_id: 28480,
+                p1: 0,
+                p2: 0,
+                p3: 7,
+                data: None,
+                path: None,
+            }
+        );
+
+        let (rem2, cmd2) = Command::parse(b"AT+CRSM=176,28480,0,0,7,,").unwrap();
+        assert!(rem2.is_empty());
+        assert_eq!(
+            cmd2,
+            Command::SimIo {
+                command: 176,
+                file_id: 28480,
+                p1: 0,
+                p2: 0,
+                p3: 7,
+                data: None,
+                path: None,
+            }
         );
     }
 
@@ -634,5 +823,19 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+COPS=3,2").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::SetOperator { mode: 3, format: Some(2), oper: None });
+    }
+
+    #[test]
+    fn test_parse_at() {
+        let (rem, cmd) = Command::parse(b"AT").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Test);
+    }
+
+    #[test]
+    fn test_parse_at_invalid() {
+        let (rem, cmd) = Command::parse(b"AT+INVALID").unwrap();
+        assert!(!rem.is_empty());
+        assert_eq!(cmd, Command::Test);
     }
 }

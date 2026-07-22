@@ -69,6 +69,15 @@ pub enum Command {
     /// Manage Bluetooth Low Energy (BLE) properties
     #[command(subcommand)]
     Ble(crate::ble::args::BleCommand),
+    /// Manage GSM properties (cellular/modem)
+    #[command(subcommand, visible_aliases(["cell", "modem"]))]
+    Gsm(crate::gsm::args::GsmCommand),
+    /// Manage SMS properties
+    #[command(subcommand)]
+    Sms(crate::sms::args::SmsCommand),
+    /// Manage Near-Field Communication (NFC) properties
+    #[command(subcommand)]
+    Nfc(crate::nfc::args::NfcCommand),
 }
 
 #[derive(Debug, Args, PartialEq)]

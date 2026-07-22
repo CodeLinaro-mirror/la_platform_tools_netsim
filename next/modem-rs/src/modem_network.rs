@@ -9,7 +9,12 @@ pub use crate::types::ModemError;
 use crate::types::{ModemId, ModemInfo, ModemSink};
 
 pub trait ModemNetworkInterface: Send + Sync {
-    fn add_modem(&mut self, chip_id: ModemId, sink: ModemSink) -> Result<(), ModemError>;
+    fn add_modem(
+        &mut self,
+        chip_id: ModemId,
+        sink: ModemSink,
+        sim_type: Option<i32>,
+    ) -> Result<(), ModemError>;
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError>;
     fn send_data(&mut self, chip_id: ModemId, data: &[u8]) -> Result<(), ModemError>;
     fn get_modem_info(&self, chip_id: ModemId) -> Result<ModemInfo, ModemError>;
@@ -20,8 +25,13 @@ pub trait ModemNetworkInterface: Send + Sync {
 use crate::modem_network_simulator::ModemNetworkSimulator;
 
 impl ModemNetworkInterface for ModemNetworkSimulator {
-    fn add_modem(&mut self, chip_id: ModemId, sink: ModemSink) -> Result<(), ModemError> {
-        self.new_modem(chip_id, sink)
+    fn add_modem(
+        &mut self,
+        chip_id: ModemId,
+        sink: ModemSink,
+        sim_type: Option<i32>,
+    ) -> Result<(), ModemError> {
+        self.new_modem(chip_id, sink, sim_type)
     }
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError> {
         self.remove_modem(chip_id);
