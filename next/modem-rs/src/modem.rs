@@ -67,7 +67,7 @@ impl ModemImpl {
             sup_service: SupService::default(),
             misc_service: MiscService::default(),
             call_service: CallService::default(),
-            data_service: DataService::default(),
+            data_service: DataService::from_env(),
             phone_number: profile.msisdn.clone(),
             _state: State::Idle,
         }
@@ -76,7 +76,7 @@ impl ModemImpl {
     pub fn trigger_incoming_call(&mut self, number: &str) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
         let result = self.call_service.ring(number.to_string());
-        if let ExecutionResult::Handled(handled) = result {
+        if let ExecutionResult::Success(handled) = result {
             for response in handled.responses {
                 if !response.is_empty() {
                     effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
@@ -246,7 +246,7 @@ impl ModemImpl {
                 // Abort
                 self.sms_service.waiting_for_pdu_len = None;
                 self.sms_service.waiting_for_pdu_store = false;
-                Some(ExecutionResult::Handled(crate::types::HandledCommand::ok()))
+                Some(ExecutionResult::Success(crate::types::HandledCommand::ok()))
             } else {
                 None // Waiting for more data? Or just ignore for now if
                 // incomplete? The emulator usually
@@ -258,8 +258,26 @@ impl ModemImpl {
 
         if let Some(result) = sms_pdu_action {
             let mut effects = Vec::new();
-            if let ExecutionResult::Handled(handled) = result {
-                Self::append_handled_effects(&mut effects, handled);
+            match result {
+                ExecutionResult::Success(handled) => {
+                    Self::append_handled_effects(&mut effects, handled);
+                }
+                ExecutionResult::Error => {
+                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
+                }
+                ExecutionResult::ErrorWithUrc(urcs) => {
+                    for urc in urcs {
+                        effects.push(ModemEffect::Response(urc.into_bytes()));
+                    }
+                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
+                }
+                ExecutionResult::CmeError(err) => {
+                    let resp = err.format_response(self.misc_service.cmee_mode());
+                    effects.push(ModemEffect::Response(resp.into_bytes()));
+                }
+                ExecutionResult::Unhandled => {
+                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
+                }
             }
             return effects;
         }
@@ -339,7 +357,7 @@ impl ModemImpl {
         effects: &mut Vec<ModemEffect>,
     ) -> ExecutionResult {
         let mut result = self.execute(command);
-        if let ExecutionResult::Handled(ref mut handled) = result {
+        if let ExecutionResult::Success(ref mut handled) = result {
             if let Command::SetRadioPower(1) = command {
                 effects.push(ModemEffect::Schedule {
                     delay: std::time::Duration::from_millis(10),
@@ -386,7 +404,7 @@ impl ModemImpl {
                         stop_chain = true;
                     } else {
                         match self.execute_and_schedule(&command, &mut combined_effects) {
-                            ExecutionResult::Handled(mut handled) => {
+                            ExecutionResult::Success(mut handled) => {
                                 let success =
                                     handled.responses.last().map(|s| s.as_str()) == Some("OK\r\n");
                                 if !is_last && success {
@@ -396,6 +414,20 @@ impl ModemImpl {
                                 if !success {
                                     stop_chain = true;
                                 }
+                            }
+                            ExecutionResult::Error => {
+                                combined_responses.push("ERROR\r\n".to_string());
+                                stop_chain = true;
+                            }
+                            ExecutionResult::ErrorWithUrc(mut urcs) => {
+                                combined_responses.append(&mut urcs);
+                                combined_responses.push("ERROR\r\n".to_string());
+                                stop_chain = true;
+                            }
+                            ExecutionResult::CmeError(err) => {
+                                combined_responses
+                                    .push(err.format_response(self.misc_service.cmee_mode()));
+                                stop_chain = true;
                             }
                             ExecutionResult::Unhandled => {
                                 error!("Unhandled command: {:?}", command);

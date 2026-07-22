@@ -42,6 +42,14 @@ pub trait BtOps: Send + Sync {
     /// Controller received a LL packet from rootcanal that needs to be
     /// broadcasted
     fn broadcast_rootcanal_ll_packet(&self, send_id: Id, packet: &[u8], phy: Phy, tx_power: i32);
+
+    /// Controller needs distance to another device by address
+    fn estimate_distance(
+        &self,
+        source_id: u32,
+        source_addr: &[u8; 6],
+        destination_addr: &[u8; 6],
+    ) -> u32;
 }
 
 // A wrapper around the raw C++ controller pointer.
@@ -178,7 +186,7 @@ impl ControllerImpl {
                     Some(send_hci_trampoline),
                     Some(send_ll_trampoline),
                     Some(invalid_packet_trampoline),
-                    None,
+                    Some(ranging_estimator_trampoline),
                     context_ptr.cast::<c_void>(),
                     proto_ptr,
                     proto_len,
@@ -273,6 +281,25 @@ impl ControllerImpl {
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
         // as long as `self` exists, as its lifetime is tied to the `ControllerImpl`.
         unsafe { ffi::ffi_controller_tick(controller.0) };
+    }
+
+    /// Returns true if the controller has a connection to the given address.
+    pub(crate) fn has_le_connection(
+        &self,
+        source_addr: &[u8; 6],
+        destination_addr: &[u8; 6],
+    ) -> bool {
+        let controller = self.controller.lock();
+        // SAFETY: The `controller.0` pointer is guaranteed to be valid
+        // as long as `self` exists, as its lifetime is tied to the `ControllerImpl`.
+        // The address slices are also guaranteed to be valid.
+        unsafe {
+            ffi::ffi_controller_has_le_connection(
+                controller.0,
+                source_addr.as_ptr(),
+                destination_addr.as_ptr(),
+            )
+        }
     }
 
     /// Returns the controller's address.
@@ -441,6 +468,43 @@ extern "C" fn send_ll_trampoline(
     }
 }
 
+// The trampoline function that is called by the C++ code for ranging.
+//
+// # Safety
+// `cookie` must be a valid pointer to a `CallbackContext` created by
+// `ControllerImpl::new`. The `source_addr` and `destination_addr` must be valid
+// pointers to 6-byte arrays representing Bluetooth addresses.
+unsafe extern "C" fn ranging_estimator_trampoline(
+    cookie: *mut c_void,
+    source_addr: *const u8,
+    destination_addr: *const u8,
+) -> u32 {
+    if cookie.is_null() {
+        return 100;
+    }
+
+    // SAFETY: We verified `cookie` is not null. The C++ caller is contractually
+    // bound to pass back the exact, unmodified `cookie` pointer that was
+    // originally created by `Box::into_raw` and passed to `ffi_controller_new`.
+    // This guarantees it is a valid pointer to a `CallbackContext`
+    // (Weak<ControllerImpl>
+    let context = unsafe { context_from_cookie(cookie) };
+
+    if let Some(controller) = context.upgrade() {
+        let source_id = controller.get_id();
+
+        // SAFETY: The C++ FFI layer guarantees that `source_addr` and
+        // `destination_addr` are valid, non-null pointers to 6-byte arrays
+        // containing MAC addresses.
+        let (source, destination): (&[u8; 6], &[u8; 6]) =
+            unsafe { (&*(source_addr.cast::<[u8; 6]>()), &*(destination_addr.cast::<[u8; 6]>())) };
+
+        controller.bt_ops.estimate_distance(source_id, source, destination)
+    } else {
+        100
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -472,6 +536,15 @@ mod tests {
             _phy: Phy,
             _tx_power: i32,
         ) {
+        }
+
+        fn estimate_distance(
+            &self,
+            _source_id: u32,
+            _source_addr: &[u8; 6],
+            _destination_addr: &[u8; 6],
+        ) -> u32 {
+            0
         }
     }
 

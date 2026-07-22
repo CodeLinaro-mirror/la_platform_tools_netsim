@@ -21,6 +21,14 @@ impl<'a> AsRef<[u8]> for QuotedString<'a> {
     }
 }
 
+impl<'a> std::ops::Deref for QuotedString<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
 impl<'a> Parsable<'a> for QuotedString<'a> {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         use nom::{bytes::complete::take_while, sequence::delimited};
@@ -181,6 +189,9 @@ pub enum Command<'a> {
     /// 3GPP TS 27.005: Delete SMS Message
     #[command(tag = "AT+CMGD=")]
     DeleteSms(u8),
+    /// 3GPP TS 27.005: New message acknowledgement with value (e.g. AT+CNMA=1)
+    #[command(tag = "AT+CNMA=")]
+    SendSmsAckWithVal(u8),
     /// 3GPP TS 27.005: New message acknowledgement
     #[command(tag = "AT+CNMA")]
     SendSmsAck,
@@ -279,9 +290,15 @@ pub enum Command<'a> {
     /// PDP context activate
     #[command(tag = "AT+CGACT=")]
     SetPdpContextActivate(u8, u8),
+    /// Query PDP context activate status
+    #[command(tag = "AT+CGACT?")]
+    QueryPdpContextActivate,
     /// PS attach or detach
     #[command(tag = "AT+CGATT=")]
     SetPsAttach(u8),
+    /// Query PS attach status
+    #[command(tag = "AT+CGATT?")]
+    QueryPsAttach,
     /// PDP context modify
     #[command(tag = "AT+CGCMOD=")]
     SetPdpContextModify(u8),
@@ -342,6 +359,12 @@ pub enum Command<'a> {
     /// Report mobile equipment error
     #[command(tag = "AT+CMEE=")]
     SetReportMobileEquipmentError(u8),
+    /// Query report mobile equipment error
+    #[command(tag = "AT+CMEE?")]
+    QueryReportMobileEquipmentError,
+    /// Query supported report mobile equipment error modes
+    #[command(tag = "AT+CMEE=?")]
+    QuerySupportedReportMobileEquipmentError,
     /// Goldfish specific concatenated init command
     #[command(tag = "ATE0Q0V1")]
     GoldfishInitSequence,
@@ -465,6 +488,14 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+CMEE=1").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::SetReportMobileEquipmentError(1));
+
+        let (rem, cmd) = Command::parse(b"AT+CMEE?").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::QueryReportMobileEquipmentError);
+
+        let (rem, cmd) = Command::parse(b"AT+CMEE=?").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::QuerySupportedReportMobileEquipmentError);
     }
 
     #[test]
@@ -480,6 +511,24 @@ mod tests {
                 None,
                 None,
                 None
+            )
+        );
+    }
+
+    #[test]
+    fn test_parse_cgdcont_extra() {
+        let (rem, cmd) =
+            Command::parse(b"AT+CGDCONT=1,\"IPV6\",\"fast.t-mobile.com\",,0,0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::DefinePdpContext(
+                1,
+                QuotedString(b"IPV6"),
+                QuotedString(b"fast.t-mobile.com"),
+                None,
+                Some(0),
+                Some(0)
             )
         );
     }

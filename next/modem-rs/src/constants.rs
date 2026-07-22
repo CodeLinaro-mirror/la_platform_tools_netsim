@@ -19,10 +19,8 @@ pub fn is_gprs_dial(number: &[u8]) -> bool {
         && number.get(3).is_some_and(|&c| c == b'*' || c == b'#')
 }
 
-/// Default LTE RSSI value (99 represents unknown/unavailable).
-pub const CSQ_LTE_RSSI_DEFAULT: u8 = 99;
-/// Default LTE RSRP value (44 represents typical strong signal).
-pub const CSQ_LTE_RSRP_DEFAULT: u8 = 44;
+/// Standard AT signal strength unknown value.
+pub const CSQ_SIGNAL_UNKNOWN: u8 = 99;
 
 /// Network Technology indices.
 pub mod modem_tech_index {

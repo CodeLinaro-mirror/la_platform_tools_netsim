@@ -27,6 +27,7 @@ fn create_test_chip_info() -> ChipInfo {
             name: "test-device".to_string(),
             id: "test-device".to_string(),
             avd_path: "".to_string(),
+            ..Default::default()
         }),
     }
 }
@@ -71,7 +72,7 @@ async fn test_uds_transport_echo() {
     streams.start_listener("uds", TransportType::uds(socket_path.to_string_lossy())).await.unwrap();
 
     let chip_info = create_test_chip_info();
-    let (mut client_stream, mut client_sink) = timeout(
+    let (_client_stream, mut client_sink) = timeout(
         Duration::from_secs(5),
         streams.connect(TransportType::uds(socket_path.to_string_lossy()), chip_info),
     )
@@ -79,7 +80,7 @@ async fn test_uds_transport_echo() {
     .unwrap()
     .unwrap();
 
-    let (_name, (mut server_stream, _server_sink, chip_info, _guid)) =
+    let (_name, (mut server_stream, _server_sink, _chip_info, _guid)) =
         streams.accept_any().await.unwrap();
 
     let test_data = Bytes::from(&b"Zero-copy test!"[..]);

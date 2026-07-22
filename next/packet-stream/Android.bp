@@ -20,6 +20,7 @@ rust_library_host {
         "libcommand_fds",
         "libfutures",
         "libnetsim_next_types",
+        "libnix",
         "libserde",
         "libserde_json",
         "libthiserror",

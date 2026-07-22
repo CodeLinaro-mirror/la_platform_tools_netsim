@@ -1,7 +1,10 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, atomic::AtomicBool},
+};
 
 use device_actor::DeviceClient;
 use netsim_model::ChipId;
@@ -9,8 +12,9 @@ use tokio::io::{DuplexStream, WriteHalf};
 use tracing::info;
 
 pub struct ChipState {
+    pub id: ChipId,
     pub device_id: device_api::DeviceId,
-    pub enabled: bool,
+    pub enabled: Arc<AtomicBool>,
     pub casimir_device_id: u16,
     pub nfc_writer: WriteHalf<DuplexStream>,
 }
@@ -18,13 +22,20 @@ pub struct ChipState {
 pub struct NfcActor {
     pub device_client: DeviceClient,
     pub active_chips: HashMap<ChipId, ChipState>,
+    pub casimir_to_device: Arc<Mutex<HashMap<u16, device_api::DeviceId>>>,
     pub scene_client: Option<crate::scene::SceneClient>,
     pub scene_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl NfcActor {
     pub fn new(device_client: DeviceClient) -> Self {
-        Self { device_client, active_chips: HashMap::new(), scene_client: None, scene_task: None }
+        Self {
+            device_client,
+            active_chips: HashMap::new(),
+            casimir_to_device: Arc::new(Mutex::new(HashMap::new())),
+            scene_client: None,
+            scene_task: None,
+        }
     }
 
     pub fn start_casimir(&mut self) {

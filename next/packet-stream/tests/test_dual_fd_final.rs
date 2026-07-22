@@ -1,7 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(all(unix, feature = "cuttlefish"))]
+#[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 mod tests {
     //=============================================================================
     // tests/test_dual_fd_final.rs - DualFd transport tests (Public API only)
@@ -16,8 +16,8 @@ mod tests {
     /// parent processes (like Cuttlefish). Most functionality requires internal
     /// APIs.
 
-    #[tokio::test]
-    async fn test_dual_fd_transport_creation() {
+    #[test]
+    fn test_dual_fd_transport_creation() {
         // Test that we can create DualFd TransportType instances
 
         // Test dual FD (separate input and output)
@@ -33,8 +33,8 @@ mod tests {
         assert!(!single_fd_transport.supports_listener());
     }
 
-    #[tokio::test]
-    async fn test_dual_fd_config_parsing() {
+    #[test]
+    fn test_dual_fd_config_parsing() {
         // Test JSON configuration parsing for Cuttlefish integration
         let json_config = r#"
     {
@@ -84,8 +84,8 @@ mod tests {
         assert_eq!(wifi_chip.model, Some("WiFi Controller".to_string()));
     }
 
-    #[tokio::test]
-    async fn test_dual_fd_config_single_device_multiple_chips() {
+    #[test]
+    fn test_dual_fd_config_single_device_multiple_chips() {
         // Test configuration with multiple chips per device (realistic Cuttlefish
         // scenario)
         let json_config = r#"
@@ -139,8 +139,8 @@ mod tests {
         assert_eq!(chips[2].model, Some("UWB Chip v2.0".to_string()));
     }
 
-    #[tokio::test]
-    async fn test_dual_fd_config_multiple_devices() {
+    #[test]
+    fn test_dual_fd_config_multiple_devices() {
         // Test configuration with multiple devices (multi-instance Cuttlefish)
         let json_config = r#"
     {
@@ -190,8 +190,8 @@ mod tests {
         assert_eq!(device2.chips[0].fd_out, Some(21));
     }
 
-    #[tokio::test]
-    async fn test_dual_fd_config_optional_fields() {
+    #[test]
+    fn test_dual_fd_config_optional_fields() {
         // Test configuration with optional fields missing
         let json_config = r#"
     {
@@ -217,8 +217,8 @@ mod tests {
         assert_eq!(chip.fd_out, Some(51)); // fdOut is present
     }
 
-    #[tokio::test]
-    async fn test_dual_fd_config_single_fd() {
+    #[test]
+    fn test_dual_fd_config_single_fd() {
         // Test configuration with only input FD (bidirectional mode)
         let json_config = r#"
     {
@@ -243,8 +243,8 @@ mod tests {
         assert_eq!(chip.fd_out, None); // Should be None when not specified
     }
 
-    #[tokio::test]
-    async fn test_dual_fd_transport_type_equality() {
+    #[test]
+    fn test_dual_fd_transport_type_equality() {
         // Test TransportType equality for DualFd
         let transport1 = TransportType::fd(10, Some(11));
         let transport2 = TransportType::fd(10, Some(11));
@@ -257,10 +257,9 @@ mod tests {
         assert_ne!(transport1.description(), transport4.description());
     }
 
-    #[tokio::test]
-    async fn test_dual_fd_config_serialization_round_trip() {
+    #[test]
+    fn test_dual_fd_config_serialization_round_trip() {
         // Test that we can serialize and deserialize DualFd configuration
-        use packet_stream::DualFdConfig;
 
         let original_config =
             r#"{"devices":[{"name":"test","chips":[{"kind":"BLUETOOTH","fdIn":10,"fdOut":11}]}]}"#;
@@ -280,5 +279,18 @@ mod tests {
         assert_eq!(config.devices[0].chips[0].kind, config2.devices[0].chips[0].kind);
         assert_eq!(config.devices[0].chips[0].fd_in, config2.devices[0].chips[0].fd_in);
         assert_eq!(config.devices[0].chips[0].fd_out, config2.devices[0].chips[0].fd_out);
+    }
+
+    #[test]
+    fn test_dual_fd_config_aliases() {
+        let vsock_json = r#"{"devices":[{"name":"cvd-1","chips":[{"kind":"CELLULAR","vsockFd":42,"simType":1}]}]}"#;
+        let config: DualFdConfig = serde_json::from_str(vsock_json).unwrap();
+        assert_eq!(config.devices[0].chips[0].fd_in, 42);
+        assert_eq!(config.devices[0].chips[0].sim_type, Some(1));
+
+        let virtio_json =
+            r#"{"devices":[{"name":"cvd-1","chips":[{"kind":"CELLULAR","virtioFd":99}]}]}"#;
+        let config2: DualFdConfig = serde_json::from_str(virtio_json).unwrap();
+        assert_eq!(config2.devices[0].chips[0].fd_in, 99);
     }
 }

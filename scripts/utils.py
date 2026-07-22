@@ -92,6 +92,22 @@ def binary_extension(filename):
   return filename
 
 
+def get_netsim_binaries():
+  """Returns a dictionary mapping netsim binary names to their Bazel output paths."""
+  if platform.system().lower() in ["linux", "darwin"]:
+    return {
+        "netsim": "_stripped/netsim",
+        "netsimd": "_stripped/netsimd",
+        "netsimdx": "next/daemon/_stripped/daemon",
+    }
+  else:
+    return {
+        "netsim": "next/cli/netsim",
+        "netsimd": "netsimd",
+        "netsimdx": "next/daemon/daemon",
+    }
+
+
 def platform_to_target_name(target):
   """Translates platform to target name"""
   return TARGET_MAP[target.lower().replace("-", "_")]
