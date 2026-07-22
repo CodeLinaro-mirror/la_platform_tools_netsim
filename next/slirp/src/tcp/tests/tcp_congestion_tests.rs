@@ -6,12 +6,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use netsim_packets::{EthernetFrame, IpPacket, Ipv4Header, NetworkPacket, TcpHeader};
+use netsim_packets::{EthernetFrame, Ipv4Header, TcpHeader};
 
 use crate::{
     TimerManager,
     clock::MockClock,
-    packet::ParsedPacket,
+    packet::{IpPacket, NetworkPacket, ParsedPacket},
     tcp::{
         congestion::{CongestionControl, INITIAL_CWND_PACKETS, INITIAL_SSTHRESH},
         tests::tcp_test_utils::{

@@ -5,3 +5,6 @@ mod icmp_impl;
 mod icmpv6_impl;
 pub use icmp_impl::IcmpManager;
 pub use icmpv6_impl::Icmpv6Manager;
+
+#[cfg(test)]
+mod tests;

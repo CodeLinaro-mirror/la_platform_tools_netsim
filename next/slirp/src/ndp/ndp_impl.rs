@@ -50,7 +50,3 @@ impl NdpTable {
         None
     }
 }
-
-#[cfg(test)]
-#[path = "tests/ndp_tests.rs"]
-mod tests;

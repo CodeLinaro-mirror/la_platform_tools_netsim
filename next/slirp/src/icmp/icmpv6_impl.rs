@@ -329,7 +329,3 @@ impl Icmpv6Manager {
         responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer)));
     }
 }
-
-#[cfg(test)]
-#[path = "tests/icmpv6_tests.rs"]
-mod tests;

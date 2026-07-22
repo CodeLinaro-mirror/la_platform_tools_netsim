@@ -191,7 +191,3 @@ impl Dhcpv6Manager {
         responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer)));
     }
 }
-
-#[cfg(test)]
-#[path = "tests/dhcpv6_tests.rs"]
-mod tests;

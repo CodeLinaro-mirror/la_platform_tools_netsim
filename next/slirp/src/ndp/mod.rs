@@ -3,3 +3,6 @@
 
 mod ndp_impl;
 pub use ndp_impl::NdpTable;
+
+#[cfg(test)]
+mod tests;
