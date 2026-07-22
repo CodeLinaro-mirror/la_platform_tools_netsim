@@ -14,7 +14,9 @@ use netsim_proto::{
     frontend_grpc::create_frontend_service, nfc_service_grpc::create_nfc_service,
     packet_streamer_grpc::create_packet_streamer, wifi_service_grpc::create_wifi_service,
 };
-use tracing::{error, info, warn};
+#[cfg(unix)]
+use tracing::warn;
+use tracing::{error, info};
 
 use crate::{
     access_point::AccessPointServiceImpl, ble_service::BleServiceImpl, cell::CellServiceImpl,
@@ -29,6 +31,7 @@ static SHARED_ENV: OnceLock<Arc<Environment>> = OnceLock::new();
 
 #[allow(clippy::too_many_arguments)]
 pub fn start(
+    host: &str,
     port: u32,
     #[cfg(unix)] grpc_uds_path: Option<String>,
     enable_cli_ui: bool,
@@ -43,7 +46,7 @@ pub fn start(
 
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
-) -> Result<(Server, std::net::SocketAddr), grpcio::Error> {
+) -> Result<(Server, u16), grpcio::Error> {
     let env = SHARED_ENV.get_or_init(|| Arc::new(Environment::new(1))).clone();
     let backend_service = create_packet_streamer(packet_streamer_service);
     let access_point_service =
@@ -90,43 +93,23 @@ pub fn start(
         }
     }
 
-    let addr_v4 = format!("127.0.0.1:{port}");
-    let (port, ip) = match server.add_listening_port(&addr_v4, ServerCredentials::insecure()) {
-        Ok(p) => {
-            info!("Rust gRPC listening on {addr_v4}");
-            Ok((p, std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))))
+    let addr = format!("{host}:{port}");
+    let port = match server.add_listening_port(&addr, ServerCredentials::insecure()) {
+        Ok(p) if p > 0 => {
+            info!("Rust gRPC listening on {addr}");
+            Ok(p)
         }
-        Err(e) => {
-            let addr_v6 = format!("[::1]:{port}");
-            info!(
-                "Failed to bind Rust gRPC on v4 {addr_v4}. Trying v6 {addr_v6} next. Err: {:?}",
-                e
-            );
-            server
-                .add_listening_port(&addr_v6, ServerCredentials::insecure())
-                .inspect_err(|_| match std::net::TcpListener::bind(&addr_v6) {
-                    Ok(listener) => drop(listener),
-                    Err(bind_e) => {
-                        if bind_e.kind() == std::io::ErrorKind::AddrInUse {
-                            warn!("Rust gRPC Address {addr_v6} is already in use.");
-                        } else {
-                            error!("Rust gRPC bind error on v6: {bind_e:?}")
-                        }
-                    }
-                })
-                .map(|p| (p, std::net::IpAddr::V6(std::net::Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))))
-                .map_err(|v6_err| {
-                    warn!(
-                        "Failed to bind Rust gRPC to both IPv4 and IPv6: v4_err={:?}, v6_err={:?}",
-                        e, v6_err
-                    );
-                    e // Return original v4 error
-                })
+        err => {
+            error!("Failed to bind Rust gRPC on {addr}. Status: {:?}", err);
+            Err(grpcio::Error::BindFail(
+                std::ffi::CString::new("Failed to bind Rust gRPC server to any interface.")
+                    .unwrap_or_default(),
+            ))
         }
     }?;
 
     server.start();
-    Ok((server, std::net::SocketAddr::new(ip, port)))
+    Ok((server, port))
 }
 
 #[cfg(test)]
@@ -146,7 +129,7 @@ mod tests {
 
     async fn setup_test_server() -> (
         grpcio::Server,
-        std::net::SocketAddr,
+        u16,
         mpsc::Receiver<actor_framework::ResourceRequest<cell_actor::CellActor>>,
         mpsc::Receiver<actor_framework::ResourceRequest<nfc_actor::NfcActor>>,
     ) {
@@ -174,6 +157,7 @@ mod tests {
             crate::packet_streamer::PacketStreamerService::new(new_connection_tx);
 
         let (server, addr) = super::start(
+            "localhost",
             0, // ephemeral port
             #[cfg(unix)]
             None, // UDS
@@ -196,7 +180,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_server_start_stop() {
         let (server, addr, _, _) = setup_test_server().await;
-        assert!(addr.port() > 0);
+        assert!(addr > 0);
         drop(server);
     }
 
@@ -205,7 +189,7 @@ mod tests {
         let (server, addr, mut cell_rx, _) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = CellServiceClient::new(ch);
 
         // Spawn mock actor response
@@ -244,7 +228,7 @@ mod tests {
         let (server, addr, mut cell_rx, _) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = CellServiceClient::new(ch);
 
         // Spawn mock actor response returning error
@@ -279,7 +263,7 @@ mod tests {
         let (server, addr, mut cell_rx, _) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = CellServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -315,7 +299,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -348,60 +332,11 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_server_start_binding_fallback() {
-        let (server1, addr1, _, _) = setup_test_server().await;
-
-        let ap_client =
-            ap_actor::ApClient::new(actor_framework::ResourceClient::new(mpsc::channel(1).0));
-        let device_client = device_actor::DeviceClient::new(Box::new(
-            actor_framework::ResourceClient::new(mpsc::channel(1).0),
-        ));
-        let link_client =
-            link_actor::LinkClient::new(actor_framework::ResourceClient::new(mpsc::channel(1).0));
-        let cell_client =
-            cell_actor::CellClient(actor_framework::ResourceClient::new(mpsc::channel(1).0));
-        let nfc_client =
-            nfc_actor::NfcClient::new(actor_framework::ResourceClient::new(mpsc::channel(1).0));
-        let wifi_client =
-            wifi_actor::WifiClient::new(actor_framework::ResourceClient::new(mpsc::channel(1).0));
-        let (new_connection_tx, _new_connection_rx) = mpsc::channel(1);
-        let packet_streamer_service =
-            crate::packet_streamer::PacketStreamerService::new(new_connection_tx);
-
-        match super::start(
-            addr1.port() as u32,
-            #[cfg(unix)]
-            None,
-            false,
-            device_client,
-            link_client,
-            ap_client,
-            cell_client,
-            nfc_client,
-            wifi_client,
-            packet_streamer_service,
-            "test_version".to_string(),
-            Arc::new(netsim_model::FrontendStats::default()),
-        ) {
-            Ok((server2, addr2)) => {
-                assert_eq!(addr2.port(), addr1.port());
-                assert!(addr1.ip().is_ipv4());
-                assert!(addr2.ip().is_ipv6());
-                drop(server2);
-            }
-            Err(grpcio::Error::BindFail(_)) => {}
-            Err(e) => panic!("Unexpected error: {:?}", e),
-        }
-
-        drop(server1);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
     async fn test_cell_service_execute_success() {
         let (server, addr, mut cell_rx, _) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = CellServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -432,7 +367,7 @@ mod tests {
         let (server, addr, mut cell_rx, _) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = CellServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -471,7 +406,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -506,7 +441,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -538,7 +473,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -572,7 +507,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -611,7 +546,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -646,7 +581,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -681,7 +616,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -719,7 +654,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -751,7 +686,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -787,7 +722,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -821,7 +756,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
@@ -849,7 +784,7 @@ mod tests {
         let (server, addr, _, mut nfc_rx) = setup_test_server().await;
 
         let env = Arc::new(Environment::new(1));
-        let ch = ChannelBuilder::new(env).connect(&format!("{}", addr));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
         let client = NfcServiceClient::new(ch);
 
         tokio::spawn(async move {
