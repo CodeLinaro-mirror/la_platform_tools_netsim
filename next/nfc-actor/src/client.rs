@@ -13,6 +13,12 @@ use crate::NfcActor;
 #[derive(Clone, Debug)]
 pub struct NfcClient(pub ResourceClient<NfcActor>);
 
+impl NfcClient {
+    pub async fn list(&self) -> Result<Vec<Chip>, ClientError> {
+        self.0.list().err_into::<ClientError>().await
+    }
+}
+
 #[async_trait]
 impl ChipClient for NfcClient {
     async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
@@ -55,5 +61,20 @@ impl ChipClient for NfcClient {
 
     fn clone_box(&self) -> Box<dyn ChipClient> {
         Box::new(self.clone())
+    }
+}
+
+impl NfcClient {
+    pub async fn create_control_channel(
+        &self,
+    ) -> Result<(tokio::io::DuplexStream, u16), ClientError> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let action = crate::nfc_actor::NfcAction::CreateControlChannel { respond_to: tx };
+
+        self.0.perform_action(None, action).await.map_err(|e| ClientError::Send(e.to_string()))?;
+
+        rx.await
+            .map_err(|e| ClientError::Recv(e.to_string()))?
+            .map_err(|e| ClientError::Chip(netsim_model::ChipError::Internal(Box::new(e))))
     }
 }

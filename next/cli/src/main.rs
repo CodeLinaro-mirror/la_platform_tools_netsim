@@ -7,12 +7,16 @@ mod ap;
 mod args;
 mod ble;
 mod browser;
+mod cell_helper;
 mod display;
 mod error;
 mod file_handler;
 mod grpc_client;
+mod gsm;
+mod nfc;
 mod requests;
 mod response;
+mod sms;
 
 use std::{env, fs::File, path::PathBuf};
 
@@ -22,12 +26,14 @@ use common::util::{ini_file::get_server_address, netsim_logger, os_utils::get_in
 use file_handler::FileHandler;
 use grpcio::{ChannelBuilder, EnvBuilder};
 use netsim_proto::{
-    access_point_grpc::AccessPointServiceClient, ble_service_grpc::BleServiceClient, frontend,
-    frontend_grpc::FrontendServiceClient,
+    access_point_grpc::AccessPointServiceClient, ble_service_grpc::BleServiceClient,
+    cell_grpc::CellServiceClient, frontend, frontend_grpc::FrontendServiceClient,
+    nfc_service_grpc::NfcServiceClient,
 };
 use tracing::error;
 
 use crate::{
+    cell_helper::CellClient,
     error::{Error, Result},
     grpc_client::{ClientResponseReader, GrpcRequest, GrpcResponse},
 };
@@ -39,7 +45,7 @@ fn perform_streaming_request(
     filename: &str,
 ) -> Result<()> {
     let dir = if let Some(location) = cmd.location.as_ref() {
-        PathBuf::from(location.clone())
+        PathBuf::from(location)
     } else {
         env::current_dir()?
     };
@@ -64,8 +70,11 @@ fn perform_streaming_request(
 fn perform_command(
     command: &mut args::Command,
     client: FrontendServiceClient,
+    cell_client: impl CellClient,
     verbose: bool,
 ) -> Result<()> {
+    let cell_client =
+        if matches!(command, args::Command::Devices(_)) { Some(cell_client) } else { None };
     // Get command's gRPC request(s)
     let requests = match command {
         args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_))
@@ -76,16 +85,33 @@ fn perform_command(
         _ => Ok(vec![command.get_request()]),
     }?;
     let mut process_error = false;
+    let is_continuous = match command {
+        args::Command::Devices(cmd) => cmd.continuous,
+        _ => false,
+    };
+    let cells = if is_continuous {
+        None
+    } else {
+        cell_client.as_ref().and_then(|cc| {
+            cc.list(&netsim_proto::cell::ListCellsRequest::new()).map(|res| res.cells).ok()
+        })
+    };
     // Process each request
     for (i, req) in requests.iter().enumerate() {
         let result = match command {
             // Continuous option sends the gRPC call every second
             &mut args::Command::Devices(ref cmd) if cmd.continuous => {
-                continuous_perform_command(command, &client, req, verbose)?;
+                continuous_perform_command(command, &client, cell_client.as_ref(), req, verbose)?;
                 unreachable!("Continuous command should loop forever until error");
             }
             &mut args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
-                continuous_perform_command(command, &client, req, verbose)?;
+                continuous_perform_command(
+                    command,
+                    &client,
+                    None::<&CellServiceClient>,
+                    req,
+                    verbose,
+                )?;
                 unreachable!("Continuous command should loop forever until error");
             }
             // Get Capture use streaming gRPC reader request
@@ -117,7 +143,7 @@ fn perform_command(
                 Ok(Some(response))
             }
         };
-        if let Err(e) = process_result(command, result, Some(req), verbose) {
+        if let Err(e) = process_result(command, result, cells.as_deref(), Some(req), verbose) {
             error!("{e}");
             process_error = true;
         };
@@ -144,12 +170,16 @@ fn find_id_for_remove(
 fn continuous_perform_command(
     command: &args::Command,
     client: &FrontendServiceClient,
+    cell_client: Option<&impl CellClient>,
     grpc_request: &GrpcRequest,
     verbose: bool,
 ) -> Result<()> {
     loop {
         let response = grpc_client::send_grpc(client, grpc_request)?;
-        process_result(command, Ok(Some(response)), Some(grpc_request), verbose)?;
+        let cells = cell_client.and_then(|cc| {
+            cc.list(&netsim_proto::cell::ListCellsRequest::new()).map(|res| res.cells).ok()
+        });
+        process_result(command, Ok(Some(response)), cells.as_deref(), Some(grpc_request), verbose)?;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
@@ -157,13 +187,14 @@ fn continuous_perform_command(
 fn process_result(
     command: &args::Command,
     result: Result<Option<GrpcResponse>>,
+    cells: Option<&[netsim_proto::cell::Cell]>,
     request: Option<&GrpcRequest>,
     verbose: bool,
 ) -> Result<()> {
     match result {
         Ok(grpc_response) => {
             let response = grpc_response.unwrap_or(GrpcResponse::Unknown);
-            command.print_response(&response, request, verbose)
+            command.print_response(&response, cells, request, verbose)
         }
         Err(e) => Err(format!("Grpc call error: {e}").into()),
     }
@@ -195,7 +226,8 @@ fn main() {
         ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build())).connect(&server);
     let frontend_client = FrontendServiceClient::new(channel.clone());
     let access_point_client = AccessPointServiceClient::new(channel.clone());
-    let ble_client = BleServiceClient::new(channel);
+    let nfc_client = NfcServiceClient::new(channel.clone());
+    let ble_client = BleServiceClient::new(channel.clone());
 
     if let args::Command::Ap(ap_cmd) = &args.command {
         if let Err(e) = crate::ap::client::execute(ap_cmd, &access_point_client, args.verbose) {
@@ -211,7 +243,33 @@ fn main() {
         return;
     }
 
-    if let Err(e) = perform_command(&mut args.command, frontend_client, args.verbose) {
+    let cell_client = CellServiceClient::new(channel.clone());
+
+    if matches!(&args.command, args::Command::Gsm(_) | args::Command::Sms(_)) {
+        match args.command {
+            args::Command::Gsm(gsm_cmd) => {
+                if let Err(e) = crate::gsm::client::execute(gsm_cmd, &cell_client, args.verbose) {
+                    error!("{e}");
+                }
+            }
+            args::Command::Sms(sms_cmd) => {
+                if let Err(e) = crate::sms::client::execute(sms_cmd, &cell_client, args.verbose) {
+                    error!("{e}");
+                }
+            }
+            _ => unreachable!(),
+        }
+        return;
+    }
+
+    if let args::Command::Nfc(nfc_cmd) = &args.command {
+        if let Err(e) = crate::nfc::client::execute(nfc_cmd, &nfc_client, args.verbose) {
+            error!("{e}");
+        }
+        return;
+    }
+
+    if let Err(e) = perform_command(&mut args.command, frontend_client, cell_client, args.verbose) {
         error!("{e}");
     }
 }

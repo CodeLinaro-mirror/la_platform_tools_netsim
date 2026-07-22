@@ -118,7 +118,7 @@ impl SupService {
 
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
-            Command::SetFacilityLock(facility, mode, _) => {
+            Command::SetFacilityLock(facility, mode, _, _) => {
                 let facility_str = std::str::from_utf8(facility.as_ref()).unwrap_or("");
                 self.handle_set_facility_lock(facility_str, *mode)
             }

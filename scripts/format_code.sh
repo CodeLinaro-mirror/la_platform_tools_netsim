@@ -97,7 +97,6 @@ CMake_REGEX="CMakeLists\.txt$|\.cmake$"
 Blueprint_CMD="$BPFMT -w"
 Blueprint_DIRS="."
 Blueprint_EXTS="-name Android.bp"
-Blueprint_FLAGS="-maxdepth 1"
 Blueprint_REGEX="Android\.bp$"
 
 # Bazel
@@ -173,6 +172,88 @@ format_files() {
   fi
 }
 
+regenerate_touched_bps() {
+  local -n candidates_ref="$1"
+  local mode="$2"
+
+  if [[ "$mode" != "DIFF" && "$mode" != "HOOK" ]]; then
+    echo "Regenerating Android.bp files..."
+    python3 "$SCRIPT_DIR/bzl2bp.py"
+    return 0
+  fi
+
+  local diff_flags=()
+  if [[ "$mode" == "HOOK" ]]; then
+    diff_flags+=("--cached")
+  elif [[ "$mode" == "DIFF" ]]; then
+    diff_flags+=("HEAD")
+  fi
+
+  # Gather all touched files under next/ (including deleted and untracked ones) via a single pipeline
+  local touched_files=()
+  mapfile -d '' touched_files < <(
+    git diff "${diff_flags[@]}" -z --name-only next/ 2>/dev/null
+    if [[ "$mode" == "DIFF" ]]; then
+      git ls-files -z --others --exclude-standard next/ 2>/dev/null
+    fi
+  )
+
+  # Extract unique package names
+  local pkgs=()
+  local f
+  for f in "${touched_files[@]}"; do
+    local pkg="${f#next/}"
+    if [[ "$pkg" != */* ]]; then
+      pkg="." # Top-level file modified under next/, fallback to scanning the whole tree
+    else
+      pkg="${pkg%%/*}"
+    fi
+    if [[ -n "$pkg" ]]; then
+      pkgs+=("$pkg")
+    fi
+  done
+
+  if [[ ${#pkgs[@]} -eq 0 ]]; then
+    echo "No touched packages under next/."
+    return 0
+  fi
+
+  # Uniq the packages safely using mapfile to avoid word splitting
+  local touched_pkgs=()
+  mapfile -t touched_pkgs < <(printf "%s\n" "${pkgs[@]}" | sort -u)
+
+  # If '.' is present, it means a top-level file was modified, requiring a full regeneration.
+  # In this case, we can discard all other packages and only run globally for '.' to avoid redundant runs.
+  local pkg
+  for pkg in "${touched_pkgs[@]}"; do
+    if [[ "$pkg" == "." ]]; then
+      touched_pkgs=(".")
+      break
+    fi
+  done
+
+  # Initialize seen map with existing candidates to prevent duplicates in O(1) time
+  local -A seen_candidates=()
+  local existing
+  for existing in "${candidates_ref[@]}"; do
+    seen_candidates["$existing"]=1
+  done
+
+  echo "Regenerating Android.bp for touched packages: ${touched_pkgs[*]}"
+  for pkg in "${touched_pkgs[@]}"; do
+    python3 "$SCRIPT_DIR/bzl2bp.py" --package "$pkg"
+
+    # Append all regenerated Android.bp files (including nested ones) to candidates_ref
+    local bp_file
+    while IFS= read -r -d '' bp_file; do
+      if [[ -z "${seen_candidates["$bp_file"]:-}" ]]; then
+        seen_candidates["$bp_file"]=1
+        candidates_ref+=("$bp_file")
+      fi
+    done < <(find "next/$pkg" -name "Android.bp" -print0 2>/dev/null)
+  done
+}
+
 check_taplo_version
 
 # --- Main Logic ---
@@ -183,8 +264,12 @@ for lang in "${LANGS[@]}"; do
 done
 
 pids=()
+all_candidates=()
 
 if [[ "$MODE" == "ALL" ]]; then
+  # Run global regeneration first
+  regenerate_touched_bps all_candidates "$MODE"
+
   echo "Gathering all files to format..."
   for lang in "${LANGS[@]}"; do
     declare -n dirs_ref="${lang}_DIRS"
@@ -211,7 +296,6 @@ if [[ "$MODE" == "ALL" ]]; then
 
 else
   echo "Gathering files to format..."
-  all_candidates=()
 
   if [[ "$MODE" == "DIFF" ]]; then
     mapfile -d '' all_candidates < <(git diff -z --name-only \
@@ -220,6 +304,9 @@ else
   else # HOOK
     all_candidates=("$@")
   fi
+
+  # --- Regenerate touched Android.bp files ---
+  regenerate_touched_bps all_candidates "$MODE"
 
   if [ ${#all_candidates[@]} -eq 0 ]; then
     echo "No files to format."

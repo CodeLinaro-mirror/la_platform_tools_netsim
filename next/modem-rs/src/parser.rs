@@ -37,8 +37,12 @@ pub fn parse_raw_data(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 pub fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    use nom::bytes::complete::take_while;
+    use nom::{
+        bytes::complete::{tag, take_while},
+        combinator::opt,
+    };
     let (input, content) = take_while(|c: u8| c != b';' && c != b'\r' && c != b'\n')(input)?;
+    let (input, _) = opt(tag(b";"))(input)?;
     Ok((input, content))
 }
 
@@ -188,10 +192,19 @@ pub enum Command<'a> {
     SendStkEnvelope(QuotedString<'a>),
     /// Facility lock
     #[command(tag = "AT+CLCK=")]
-    SetFacilityLock(QuotedString<'a>, u8, Option<QuotedString<'a>>),
+    SetFacilityLock(QuotedString<'a>, u8, Option<QuotedString<'a>>, Option<u8>),
     /// Call forwarding
     #[command(tag = "AT+CCFC=")]
-    CallForwarding { reason: u8, mode: u8, number: Option<QuotedString<'a>>, r#type: Option<u8> },
+    CallForwarding {
+        reason: u8,
+        mode: u8,
+        number: Option<QuotedString<'a>>,
+        r#type: Option<u8>,
+        class: Option<u8>,
+        subaddr: Option<QuotedString<'a>>,
+        satype: Option<u8>,
+        time: Option<u8>,
+    },
     /// Calling line identification restriction
     #[command(tag = "AT+CLIR?")]
     QueryClir,
@@ -228,7 +241,14 @@ pub enum Command<'a> {
     SetUssd { mode: u8, message: Option<QuotedString<'a>>, dcs: Option<u8> },
     /// Define PDP context
     #[command(tag = "AT+CGDCONT=")]
-    DefinePdpContext(u8, QuotedString<'a>, QuotedString<'a>),
+    DefinePdpContext(
+        u8,
+        QuotedString<'a>,
+        QuotedString<'a>,
+        Option<QuotedString<'a>>,
+        Option<u8>,
+        Option<u8>,
+    ),
     /// Read PDP context
     #[command(tag = "AT+CGDCONT?")]
     QueryPdpContext,
@@ -322,6 +342,9 @@ pub enum Command<'a> {
     /// Report mobile equipment error
     #[command(tag = "AT+CMEE=")]
     SetReportMobileEquipmentError(u8),
+    /// Goldfish specific concatenated init command
+    #[command(tag = "ATE0Q0V1")]
+    GoldfishInitSequence,
     /// Set echo
     #[command(tag = "ATE")]
     SetEcho(u8),
@@ -412,9 +435,9 @@ pub enum Command<'a> {
     /// Query clock
     #[command(tag = "AT+CCLK?")]
     QueryTime,
-    /// Goldfish specific concatenated init command
-    #[command(tag = "ATE0Q0V1")]
-    GoldfishInitSequence,
+    /// Test command
+    #[command(tag = "AT")]
+    Test,
 }
 
 impl<'a> Command<'a> {}
@@ -448,7 +471,17 @@ mod tests {
     fn test_parse_cgdcont() {
         let (rem, cmd) = Command::parse(b"AT+CGDCONT=1,\"IP\",\"apn\"").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::DefinePdpContext(1, QuotedString(b"IP"), QuotedString(b"apn")));
+        assert_eq!(
+            cmd,
+            Command::DefinePdpContext(
+                1,
+                QuotedString(b"IP"),
+                QuotedString(b"apn"),
+                None,
+                None,
+                None
+            )
+        );
     }
 
     #[test]
@@ -634,5 +667,19 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+COPS=3,2").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::SetOperator { mode: 3, format: Some(2), oper: None });
+    }
+
+    #[test]
+    fn test_parse_at() {
+        let (rem, cmd) = Command::parse(b"AT").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Test);
+    }
+
+    #[test]
+    fn test_parse_at_invalid() {
+        let (rem, cmd) = Command::parse(b"AT+INVALID").unwrap();
+        assert!(!rem.is_empty());
+        assert_eq!(cmd, Command::Test);
     }
 }

@@ -155,7 +155,6 @@ cc_binary(
         "src/util/log.h",
         ":netsim_daemon_cc",
         ":netsim_daemon_h",
-        "//rust:cxx-bridge-header",
         "//rust:netsimd.cc",
     ] + select({
         "@platforms//os:windows": ["src/hci/async_manager.cc"],
@@ -174,6 +173,7 @@ cc_binary(
         "@aemu//base:aemu-base",
         "@aemu//base:aemu-base-socket-utils",
         "@c-ares//:ares",
+        "@cxx.rs//:core",
         "@glib//glib",
         "@rootcanal//:libbt-rootcanal",
         "@wpa_supplicant_8//:hostapd_c_lib",

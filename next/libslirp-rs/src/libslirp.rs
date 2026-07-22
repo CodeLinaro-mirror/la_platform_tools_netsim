@@ -472,7 +472,7 @@ fn slirp_thread(
         let command = rx.recv_timeout(min_duration);
         let start = Instant::now();
 
-        let cmd_str = format!("{:?}", command);
+        let cmd_str = format!("{command:?}");
         match command {
             // The dance to tell libslirp which FDs have IO ready
             // starts with a response from a worker thread sending a
@@ -1230,7 +1230,7 @@ mod tests {
 
         let tx_cmds_clone = tx_cmds.clone();
         let handle = thread::Builder::new()
-            .name(format!("test_slirp_poll"))
+            .name("test_slirp_poll".to_string())
             .spawn(move || slirp_poll_thread(rx_poll, tx_cmds_clone, signal_rx))
             .unwrap();
 
@@ -1239,11 +1239,11 @@ mod tests {
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn to_os_fd(stream: &impl AsRawFd) -> i32 {
-        return stream.as_raw_fd() as i32;
+        stream.as_raw_fd()
     }
     #[cfg(target_os = "windows")]
     fn to_os_fd(stream: &impl AsRawSocket) -> i32 {
-        return stream.as_raw_socket() as i32;
+        stream.as_raw_socket() as i32
     }
 
     /// Polls a file descriptor and asserts the received events.
@@ -1271,8 +1271,8 @@ mod tests {
                 Ok(SlirpCmd::PollResult(mut poll_fds, _)) if poll_fds.len() == 1 => {
                     poll_fds.remove(0)
                 }
-                Ok(other) => panic!("unexpected command from poll thread: {:?}", other),
-                Err(e) => panic!("failed to receive command from poll thread: {}", e),
+                Ok(other) => panic!("unexpected command from poll thread: {other:?}"),
+                Err(e) => panic!("failed to receive command from poll thread: {e}"),
             };
 
             assert_eq!(poll_fd.fd, fd, "poll fd mismatch");

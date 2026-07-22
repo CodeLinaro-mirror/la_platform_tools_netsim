@@ -3,19 +3,19 @@
 
 use actor_framework::{ActorService, DynContext};
 use futures::{SinkExt, StreamExt};
-use netsim_model::{ChipCreate, ChipError, ChipId, ChipRequest, ChipUpdate};
+use netsim_model::{ChipCreate, ChipError, ChipId, ChipUpdate};
 use tracing::{error, info};
 
 use crate::{
     error::NfcError,
-    nfc_actor::{ChipState, NfcActor},
+    nfc_actor::{ChipState, NfcAction, NfcActor},
 };
 
 impl ActorService for NfcActor {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
-    type Action = ChipRequest;
+    type Action = NfcAction;
     type ActionResult = ();
     type Error = NfcError;
     type Entity = netsim_model::Chip;
@@ -61,6 +61,7 @@ impl ActorService for NfcActor {
         let mut stream = tokio_util::codec::length_delimited::Builder::new()
             .length_field_offset(2)
             .length_field_length(1)
+            .length_adjustment(3)
             .num_skip(0)
             .new_read(nfc_reader);
         let chip_id_clone = chip_id;
@@ -69,12 +70,6 @@ impl ActorService for NfcActor {
                 match item {
                     Ok(bytes_mut) => {
                         let bytes = bytes_mut.freeze();
-                        if bytes.is_empty() {
-                            tracing::warn!(
-                                "Received empty bytes from NFC stream! Casimir connection lost?"
-                            );
-                            break;
-                        }
                         if let Err(e) = packet_sink.send(bytes).await {
                             error!("Failed to send packet to guest: {:?}", e);
                             break;
@@ -180,10 +175,47 @@ impl ActorService for NfcActor {
     async fn handle_action(
         &mut self,
         _id: Option<Self::Id>,
-        _action: Self::Action,
+        action: Self::Action,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
-        Ok(())
+        match action {
+            NfcAction::Generic(_req) => Ok(()),
+            NfcAction::CreateControlChannel { respond_to } => {
+                info!("NfcActor: Received CreateControlChannel action");
+                let (grpc_io, casimir_io) = tokio::io::duplex(1024);
+                if let Some(ref scene_client) = self.scene_client {
+                    info!("NfcActor: Calling scene_client.add_device...");
+                    let add_result = scene_client
+                        .add_device(move |id, rf_tx| {
+                            let (rx, tx) = tokio::io::split(casimir_io);
+                            casimir::Device::rf(id, rx, tx, rf_tx)
+                        })
+                        .await;
+                    info!("NfcActor: scene_client.add_device returned: {:?}", add_result);
+                    match add_result {
+                        Ok(id) => {
+                            info!(
+                                "NfcActor: Sending success response to grpc-server with ID {}",
+                                id
+                            );
+                            let _ = respond_to.send(Ok((grpc_io, id)));
+                            Ok(())
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Failed to add RF device to Casimir: {e}");
+                            error!("NfcActor: {}", err_msg);
+                            let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
+                            Ok(())
+                        }
+                    }
+                } else {
+                    let err_msg = "Casimir scene not started".to_string();
+                    error!("NfcActor: {}", err_msg);
+                    let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
+                    Ok(())
+                }
+            }
+        }
     }
 
     async fn handle_list(
@@ -205,5 +237,42 @@ impl ActorService for NfcActor {
             });
         }
         Ok(chips)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncWriteExt, duplex};
+    use tokio_stream::StreamExt;
+    use tokio_util::codec::length_delimited::Builder;
+
+    #[tokio::test]
+    async fn test_nci_codec_length_adjustment() -> Result<(), Box<dyn std::error::Error>> {
+        // This test documents and verifies the correct configuration of the
+        // LengthDelimitedCodec used in service.rs to read NCI packets.
+        // NCI header is 3 bytes (offset 2 + len 1). We must use length_adjustment(3)
+        // to include the header in the returned bytes when num_skip(0) is used.
+
+        let (mut writer, reader) = duplex(1024);
+        let mut stream = Builder::new()
+            .length_field_offset(2)
+            .length_field_length(1)
+            .length_adjustment(3) // Crucial fix!
+            .num_skip(0)
+            .new_read(reader);
+
+        // Packet: header [0x40, 0x00], len 1, payload [0xaa]
+        let packet = &[0x40, 0x00, 1, 0xaa];
+        writer.write_all(packet).await?;
+        drop(writer);
+
+        // Verify we receive the full 4 bytes (header + payload)
+        let bytes = stream.next().await.ok_or("Stream ended prematurely")??;
+        assert_eq!(bytes.len(), 4);
+        assert_eq!(bytes.as_ref(), packet);
+
+        // Verify the stream terminates cleanly (EOF) on next read without looping
+        assert!(stream.next().await.is_none());
+        Ok(())
     }
 }

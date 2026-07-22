@@ -11,7 +11,7 @@ use zerocopy::{
 use crate::utils::general::ParseResult;
 
 /// Represents the ICMP header.
-#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
 #[repr(C)]
 pub struct IcmpHeader {
     /// The type of the ICMP message.
@@ -38,14 +38,31 @@ impl IcmpHeader {
 
 /// Represents the header for an ICMP Echo (ping) request or reply message.
 /// This structure follows the main `IcmpHeader`.
-#[cfg(test)]
-#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug, Clone, Copy)]
 #[repr(C)]
-pub struct IcmpEchoHeader {
+pub struct IcmpEcho {
     /// The identifier used to match echo requests and replies.
-    pub id: U16<NetworkEndian>,
+    pub identifier: U16<NetworkEndian>,
     /// The sequence number used to match echo requests and replies.
-    pub sequence: U16<NetworkEndian>,
+    pub sequence_number: U16<NetworkEndian>,
+}
+
+/// Represents the type of the ICMP message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum IcmpType {
+    EchoReply = 0,
+    DestUnreachable = 3,
+    EchoRequest = 8,
+    TimeExceeded = 11,
+}
+
+/// Represents the code of the ICMP Destination Unreachable message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Icmpv4UnreachableCode {
+    HostUnreachable = 1,
+    PortUnreachable = 3,
 }
 
 #[cfg(test)]
@@ -66,10 +83,10 @@ mod tests {
         assert_eq!(rest.len(), 0);
 
         // Check the `rest` field, which contains the echo header data
-        let echo_header = Ref::<&[u8], IcmpEchoHeader>::from_bytes(&header.rest)
+        let echo_header = Ref::<&[u8], IcmpEcho>::from_bytes(&header.rest)
             .expect("Failed to parse echo header from rest");
-        assert_eq!(echo_header.id.get(), 0x5678);
-        assert_eq!(echo_header.sequence.get(), 0x9ABC);
+        assert_eq!(echo_header.identifier.get(), 0x5678);
+        assert_eq!(echo_header.sequence_number.get(), 0x9ABC);
     }
 
     #[test]

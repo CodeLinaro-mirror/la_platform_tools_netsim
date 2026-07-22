@@ -186,7 +186,7 @@ message Chip {
     Radio wifi = 8;
     // ETHERNET
     Radio ethernet = 10;
-    // CELLULAR
+    // CELLULAR. Chip ID matches Cell ID in cell.proto.
     Radio cellular = 11;
     // CELLULAR_DATA
     Radio cellular_data = 12;

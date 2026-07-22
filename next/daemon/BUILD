@@ -37,7 +37,6 @@ DAEMON_DEPS = [
     "//next/bluetooth-actor",
     "//next/capture-actor",
     "//next/cell-actor",
-    "//next/nfc-actor",
     "//next/common",
     "//next/device-actor",
     "//next/device-api",
@@ -46,6 +45,7 @@ DAEMON_DEPS = [
     "//next/link-actor",
     "//next/link-api",
     "//next/model",
+    "//next/nfc-actor",
     "//next/packet-stream",
     "//next/slirp-actor",
     "//next/ethernet-actor",
@@ -65,9 +65,6 @@ netsim_rust_library(
     crate_name = "daemon",
     edition = "2024",
     proc_macro_deps = [],
-    select_deps = select({
-        "//conditions:default": [],
-    }),
     test_deps = [
         "//proto",
         "@bytes",

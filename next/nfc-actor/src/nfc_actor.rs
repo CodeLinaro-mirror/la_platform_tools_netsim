@@ -45,6 +45,16 @@ impl NfcActor {
     }
 }
 
+#[derive(Debug)]
+pub enum NfcAction {
+    Generic(netsim_model::ChipRequest),
+    CreateControlChannel {
+        respond_to: tokio::sync::oneshot::Sender<
+            Result<(tokio::io::DuplexStream, u16), crate::error::NfcError>,
+        >,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -9,9 +9,17 @@ edition = "2024"
 [dependencies]
 actor-framework = { path = "../actor-framework" }
 bytes = "1.4"
-http-proxy = { path = "../http-proxy" }
-libslirp-rs = { path = "../libslirp-rs" }
+futures = "0.3"
+http-proxy = { path = "../http-proxy", optional = true }
+libslirp-rs = { path = "../libslirp-rs", optional = true }
 netsim-model = { path = "../model" }
 netsim-packets = { path = "../packets" }
+slirp = { path = "../slirp", optional = true }
+thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
 tracing = "0.1"
+
+[features]
+default = ["libslirp-rs", "http-proxy", "slirp"]
+cuttlefish = ["slirp"]

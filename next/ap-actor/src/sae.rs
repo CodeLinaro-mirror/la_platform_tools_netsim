@@ -330,7 +330,7 @@ impl SaeStateMachine {
             data.extend_from_slice(context);
             data.extend_from_slice(&len_le);
 
-            let hash = ffi::Hmac(ffi::DigestType::SHA256, &key.to_vec(), &data);
+            let hash = ffi::Hmac(ffi::DigestType::SHA256, key, &data);
 
             let needed = buf_len - pos;
             let copy = std::cmp::min(needed, hash.len());

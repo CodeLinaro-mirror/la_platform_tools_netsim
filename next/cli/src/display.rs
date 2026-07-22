@@ -4,6 +4,7 @@
 use std::fmt;
 
 use netsim_proto::{
+    cell::{Cell, RegistrationStatus},
     frontend::{ListDeviceResponse, ListLinkResponse},
     model::{
         self,
@@ -14,18 +15,47 @@ use protobuf::MessageField;
 
 const INDENT_WIDTH: usize = 2;
 
-/// # Invariants
-/// Displayed values **do not** end in a newline.
-pub struct Displayer<T> {
-    value: T,
-    verbose: bool,
-    indent: usize,
+pub fn format_registration_status(status: RegistrationStatus) -> &'static str {
+    match status {
+        RegistrationStatus::NOT_REGISTERED => "unregistered",
+        RegistrationStatus::REGISTERED_HOME => "home",
+        RegistrationStatus::SEARCHING => "searching",
+        RegistrationStatus::DENIED => "denied",
+        RegistrationStatus::UNKNOWN => "unknown",
+        RegistrationStatus::ROAMING => "roaming",
+    }
 }
 
-impl<T> Displayer<T> {
+pub fn format_call_state(state: netsim_proto::cell::call::State) -> &'static str {
+    match state {
+        netsim_proto::cell::call::State::UNKNOWN => "unknown",
+        netsim_proto::cell::call::State::ACTIVE => "active",
+        netsim_proto::cell::call::State::HOLDING => "holding",
+        netsim_proto::cell::call::State::DIALING => "dialing",
+        netsim_proto::cell::call::State::ALERTING => "alerting",
+        netsim_proto::cell::call::State::INCOMING => "incoming",
+        netsim_proto::cell::call::State::WAITING => "waiting",
+    }
+}
+
+/// # Invariants
+/// Displayed values **do not** end in a newline.
+pub struct Displayer<'a, T> {
+    pub(crate) value: T,
+    pub(crate) verbose: bool,
+    pub(crate) indent: usize,
+    pub(crate) cells: Option<&'a [Cell]>,
+}
+
+impl<'a, T> Displayer<'a, T> {
     /// Returns a new displayer for values of the provided type.
     pub fn new(value: T, verbose: bool) -> Self {
-        Displayer { value, verbose, indent: 0 }
+        Displayer { value, verbose, indent: 0, cells: None }
+    }
+
+    pub fn with_cells(mut self, cells: &'a [Cell]) -> Self {
+        self.cells = Some(cells);
+        self
     }
 
     pub fn indent(&mut self, current_indent: usize) -> &Self {
@@ -34,13 +64,17 @@ impl<T> Displayer<T> {
     }
 }
 
-impl fmt::Display for Displayer<ListDeviceResponse> {
+impl fmt::Display for Displayer<'_, &ListDeviceResponse> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
 
         let mut devices = self.value.devices.iter().peekable();
         while let Some(device) = devices.next() {
-            write!(f, "{:indent$}{}", "", Displayer::new(device, self.verbose))?;
+            let mut device_displayer = Displayer::new(device, self.verbose);
+            if let Some(cells) = self.cells {
+                device_displayer = device_displayer.with_cells(cells);
+            }
+            write!(f, "{:indent$}{}", "", device_displayer)?;
             if devices.peek().is_some() {
                 // We print the newline here instead of in the Device displayer because we don't
                 // want a newline before the very first device.
@@ -52,7 +86,7 @@ impl fmt::Display for Displayer<ListDeviceResponse> {
     }
 }
 
-impl fmt::Display for Displayer<&model::Device> {
+impl fmt::Display for Displayer<'_, &model::Device> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 9;
@@ -66,14 +100,18 @@ impl fmt::Display for Displayer<&model::Device> {
         )?;
 
         for chip in self.value.chips.iter() {
-            write!(f, "{:indent$}{}", "", Displayer::new(chip, self.verbose).indent(self.indent))?;
+            let mut chip_displayer = Displayer::new(chip, self.verbose);
+            if let Some(cells) = self.cells {
+                chip_displayer = chip_displayer.with_cells(cells);
+            }
+            write!(f, "{:indent$}{}", "", chip_displayer.indent(self.indent))?;
         }
 
         Ok(())
     }
 }
 
-impl fmt::Display for Displayer<&model::Chip> {
+impl fmt::Display for Displayer<'_, &model::Chip> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 9;
@@ -146,13 +184,44 @@ impl fmt::Display for Displayer<&model::Chip> {
             }
             Some(model::chip::Chip::Cellular(cell)) => {
                 writeln!(f)?;
-                write!(
-                    f,
-                    "{:indent$}{:width$}{}",
-                    "",
-                    "cellular: ",
-                    Displayer::new(cell, self.verbose)
-                )?;
+                write!(f, "{:indent$}{:width$}", "", "cellular: ",)?;
+                // Note: The Chip ID matches the Cell ID. This is guaranteed by the backend
+                // (next/grpc-server/src/cell.rs setting cell.id = chip.id).
+                let cell_detail =
+                    self.cells.and_then(|cells| cells.iter().find(|c| c.id == self.value.id));
+                if let Some(detail) = cell_detail {
+                    write!(f, "state: {} | rssi: {}", detail.state, detail.rssi,)?;
+                    if self.verbose {
+                        write!(f, " | ber: {} | sms_count: {}", detail.ber, detail.sms_count,)?;
+                    }
+                    write!(
+                        f,
+                        " | voice: {} | data: {}",
+                        format_registration_status(
+                            detail.voice_registration.enum_value_or_default()
+                        ),
+                        format_registration_status(
+                            detail.data_registration.enum_value_or_default()
+                        )
+                    )?;
+                    if !detail.active_calls.is_empty() {
+                        write!(f, " | active_calls: ")?;
+                        let mut calls = detail.active_calls.iter().peekable();
+                        while let Some(call) = calls.next() {
+                            write!(
+                                f,
+                                "{}({})",
+                                call.number,
+                                format_call_state(call.state.enum_value_or_default())
+                            )?;
+                            if calls.peek().is_some() {
+                                write!(f, ", ")?;
+                            }
+                        }
+                    }
+                } else {
+                    write!(f, "{}", Displayer::new(cell, self.verbose))?;
+                }
             }
             Some(model::chip::Chip::CellularData(cell_data)) => {
                 writeln!(f)?;
@@ -185,7 +254,7 @@ impl fmt::Display for Displayer<&model::Chip> {
     }
 }
 
-impl fmt::Display for Displayer<&model::chip::BleBeacon> {
+impl fmt::Display for Displayer<'_, &model::chip::BleBeacon> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let address_width = 16;
@@ -223,7 +292,7 @@ impl fmt::Display for Displayer<&model::chip::BleBeacon> {
     }
 }
 
-impl fmt::Display for Displayer<&model::Position> {
+impl fmt::Display for Displayer<'_, &model::Position> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let precision = 2;
@@ -244,7 +313,7 @@ impl fmt::Display for Displayer<&model::Position> {
     }
 }
 
-impl fmt::Display for Displayer<&model::chip::ble_beacon::AdvertiseSettings> {
+impl fmt::Display for Displayer<'_, &model::chip::ble_beacon::AdvertiseSettings> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 25;
@@ -273,7 +342,7 @@ impl fmt::Display for Displayer<&model::chip::ble_beacon::AdvertiseSettings> {
     }
 }
 
-impl fmt::Display for Displayer<&model::chip::ble_beacon::AdvertiseData> {
+impl fmt::Display for Displayer<'_, &model::chip::ble_beacon::AdvertiseData> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 25;
@@ -311,7 +380,7 @@ impl fmt::Display for Displayer<&model::chip::ble_beacon::AdvertiseData> {
     }
 }
 
-impl fmt::Display for Displayer<&advertise_settings::Interval> {
+impl fmt::Display for Displayer<'_, &advertise_settings::Interval> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 25;
@@ -328,7 +397,7 @@ impl fmt::Display for Displayer<&advertise_settings::Interval> {
     }
 }
 
-impl fmt::Display for Displayer<&advertise_settings::Tx_power> {
+impl fmt::Display for Displayer<'_, &advertise_settings::Tx_power> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 25;
@@ -345,7 +414,7 @@ impl fmt::Display for Displayer<&advertise_settings::Tx_power> {
     }
 }
 
-impl fmt::Display for Displayer<&model::chip::Radio> {
+impl fmt::Display for Displayer<'_, &model::chip::Radio> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let count_width = 9;
@@ -361,7 +430,7 @@ impl fmt::Display for Displayer<&model::chip::Radio> {
     }
 }
 
-impl fmt::Display for Displayer<&Option<bool>> {
+impl fmt::Display for Displayer<'_, &Option<bool>> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 9;
@@ -397,7 +466,7 @@ fn format_phy_kind(kind: netsim_proto::model::PhyKind) -> String {
     }
 }
 
-impl fmt::Display for Displayer<ListLinkResponse> {
+impl fmt::Display for Displayer<'_, &ListLinkResponse> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let chip_width = 10;
@@ -463,5 +532,97 @@ impl fmt::Display for Displayer<ListLinkResponse> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use netsim_proto::{
+        cell::{Call, Cell, RegistrationStatus, call::State as CallState},
+        model::{
+            Chip as ChipMsg,
+            chip::{Chip as ChipProto, Radio},
+        },
+    };
+    use protobuf::EnumOrUnknown;
+
+    use super::*;
+
+    #[test]
+    fn test_display_cellular_chip_no_detail() {
+        let mut chip = ChipMsg::new();
+        chip.id = 1;
+        chip.name = "cellular-chip".to_string();
+        let mut radio = Radio::new();
+        radio.state = Some(true).into();
+        radio.rx_count = 10;
+        radio.tx_count = 20;
+        chip.chip = Some(ChipProto::Cellular(radio));
+
+        // We need to set indent to 2 to match how it is printed in Device
+        let mut displayer = Displayer::new(&chip, false);
+        displayer.indent = 2;
+        let output = format!("{}", displayer);
+
+        // Expect: \n  cellular: up       | rx_count:        10 | tx_count:        20
+        let expected = "\n  cellular: up       | rx_count:        10 | tx_count:        20";
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_display_cellular_chip_with_detail() {
+        let mut chip = ChipMsg::new();
+        chip.id = 42;
+        chip.name = "cellular-chip".to_string();
+        let mut radio = Radio::new();
+        radio.state = Some(true).into();
+        chip.chip = Some(ChipProto::Cellular(radio));
+
+        let mut cell = Cell::new();
+        cell.id = 42;
+        cell.state = "idle".to_string();
+        cell.rssi = 15;
+        cell.voice_registration = EnumOrUnknown::new(RegistrationStatus::REGISTERED_HOME);
+        cell.data_registration = EnumOrUnknown::new(RegistrationStatus::ROAMING);
+
+        let cells = vec![cell];
+        let mut displayer = Displayer::new(&chip, false).with_cells(&cells);
+        displayer.indent = 2;
+        let output = format!("{}", displayer);
+
+        let expected = "\n  cellular: state: idle | rssi: 15 | voice: home | data: roaming";
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_display_cellular_chip_with_detail_verbose_and_calls() {
+        let mut chip = ChipMsg::new();
+        chip.id = 42;
+        chip.name = "cellular-chip".to_string();
+        let mut radio = Radio::new();
+        radio.state = Some(true).into();
+        chip.chip = Some(ChipProto::Cellular(radio));
+
+        let mut cell = Cell::new();
+        cell.id = 42;
+        cell.state = "active".to_string();
+        cell.rssi = 15;
+        cell.ber = 2;
+        cell.sms_count = 5;
+        cell.voice_registration = EnumOrUnknown::new(RegistrationStatus::REGISTERED_HOME);
+        cell.data_registration = EnumOrUnknown::new(RegistrationStatus::ROAMING);
+
+        let mut call = Call::new();
+        call.number = "12345".to_string();
+        call.state = EnumOrUnknown::new(CallState::ACTIVE);
+        cell.active_calls.push(call);
+
+        let cells = vec![cell];
+        let mut displayer = Displayer::new(&chip, true).with_cells(&cells); // verbose = true
+        displayer.indent = 2;
+        let output = format!("{}", displayer);
+
+        let expected = "\n  cellular: state: active | rssi: 15 | ber: 2 | sms_count: 5 | voice: home | data: roaming | active_calls: 12345(active)";
+        assert_eq!(output, expected);
     }
 }

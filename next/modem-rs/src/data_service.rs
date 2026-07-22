@@ -280,7 +280,7 @@ impl DataService {
 
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
-            Command::DefinePdpContext(cid, pdp_type, apn) => {
+            Command::DefinePdpContext(cid, pdp_type, apn, _, _, _) => {
                 self.handle_define_pdp_context(*cid, *pdp_type, *apn)
             }
             Command::QueryPdpContext => self.handle_query_pdp_context(),

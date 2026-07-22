@@ -15,13 +15,13 @@ use crate::world::World;
 /// Panics if a modem with the same name already exists or if creation fails.
 pub fn given_modem(world: &mut World, name: &str) {
     if world.modems.contains_key(name) {
-        panic!("Modem with name '{}' already exists", name);
+        panic!("Modem with name '{name}' already exists");
     }
 
     let id = world.next_modem_id();
     let (handler, sink) = MockModemHandler::new();
 
-    world.manager.new_modem(id, sink).expect("Failed to create new modem");
+    world.manager.new_modem(id, sink, None).expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -34,7 +34,7 @@ pub fn given_modem_with_number(world: &mut World, name: &str, number: &str) {
     if let Some(modem) = world.manager.get_modem_mut(id) {
         modem.set_phone_number(number);
     } else {
-        panic!("Failed to retrieve modem '{}' after creation", name);
+        panic!("Failed to retrieve modem '{name}' after creation");
     }
 }
 
@@ -44,7 +44,7 @@ pub fn given_modem_with_number(world: &mut World, name: &str, number: &str) {
 /// system with `2FE2`.
 pub fn given_modem_with_sim_profile(world: &mut World, name: &str) {
     if world.modems.contains_key(name) {
-        panic!("Modem with name '{}' already exists", name);
+        panic!("Modem with name '{name}' already exists");
     }
 
     let id = world.next_modem_id();
@@ -54,7 +54,7 @@ pub fn given_modem_with_sim_profile(world: &mut World, name: &str) {
 
     world
         .manager
-        .new_modem_with_profile(id, sink, Some(profile))
+        .new_modem_with_profile(id, sink, Some(profile), None)
         .expect("Failed to create modem with profile");
     world.modems.insert(name.to_string(), (id, handler));
 }

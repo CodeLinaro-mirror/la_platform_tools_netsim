@@ -80,6 +80,11 @@ pub struct Args {
     #[arg(long, alias = "grpc_port")]
     pub grpc_port: Option<u16>,
 
+    /// Unix Domain Socket path for the netsim gRPC service.
+    #[cfg(unix)]
+    #[arg(long, alias = "grpc_uds_path")]
+    pub grpc_uds_path: Option<String>,
+
     /// HCI port for the raw TCP socket. Overrides env var NETSIM_HCI_PORT
     #[arg(long, alias = "hci_port")]
     pub hci_port: Option<u16>,

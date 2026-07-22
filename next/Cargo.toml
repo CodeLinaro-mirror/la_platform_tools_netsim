@@ -26,9 +26,13 @@ members = [
   "device-actor",
   "device-api",
 
+  "slirp",
+  "slirp/host",
+
   "rootcanal",
   "rootcanal-server",
   "testing",
+  "cli",
 ]
 
 [workspace.doc]

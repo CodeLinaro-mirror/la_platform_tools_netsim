@@ -29,7 +29,6 @@ use packet_stream::{
     StreamAddress, Streams,
     transport::traits::{PacketSink, PacketStream},
 };
-#[cfg(not(feature = "cuttlefish"))]
 use slirp_actor::SlirpClient;
 use tokio::{
     signal::{self},
@@ -127,7 +126,10 @@ async fn handle_new_connection(
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
-        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell::default())),
+        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
+            sim_type: chip.sim_type,
+            ..Default::default()
+        })),
         ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
@@ -206,11 +208,13 @@ async fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
+    #[cfg(unix)] grpc_uds_path: Option<String>,
     enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: LinkClient,
-    #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
+    ap_client: ap_actor::ApClient,
     cell_client: cell_actor::CellClient,
+    nfc_client: nfc_actor::NfcClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(u16, grpcio::Server), RunResult> {
@@ -221,12 +225,14 @@ async fn setup_grpc_listener(
     // Start the gRPC server
     let (server, port) = grpc_server::start(
         requested_port.into(),
+        #[cfg(unix)]
+        grpc_uds_path.clone(),
         enable_cli_ui,
         device_client,
         link_client,
-        #[cfg(not(feature = "cuttlefish"))]
         ap_client,
         cell_client,
+        nfc_client,
         packet_streamer_service,
         version,
         frontend_stats,
@@ -251,6 +257,13 @@ async fn setup_grpc_listener(
             port,
         )),
     );
+    #[cfg(unix)]
+    if let Some(ref uds_path) = grpc_uds_path {
+        listener_addresses.insert(
+            "netsim_uds".to_string(),
+            StreamAddress::Uds(std::path::PathBuf::from(uds_path)),
+        );
+    }
 
     Ok((port, server))
 }
@@ -281,8 +294,7 @@ pub struct NetsimDaemon {
     device_task: tokio::task::JoinHandle<()>,
     link_client: Box<dyn link_api::LinkClient>,
 
-    #[cfg(not(feature = "cuttlefish"))]
-    slirp_client: Option<SlirpClient>,
+    slirp_client: SlirpClient,
     chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
 }
 
@@ -443,11 +455,11 @@ impl NetsimDaemon {
 
         let frontend_stats = Arc::new(netsim_model::FrontendStats::default());
 
-        #[cfg(not(feature = "cuttlefish"))]
+        let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
+        let (ap_runner, ap_client) = ap_actor::new();
+        let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
+
         let (
-            ap_runner,
-            ap_client,
-            ap_actor_state,
             slirp_runner,
             slirp_client,
             slirp_actor_state,
@@ -458,10 +470,6 @@ impl NetsimDaemon {
             eth_client,
             eth_actor_state,
         ) = {
-            let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
-            let (ap_runner, ap_client) = ap_actor::new();
-            let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
-
             // Setup Slirp Actor
             let (slirp_runner, slirp_client) = slirp_actor::new();
             let slirp_actor_state = slirp_actor::SlirpActor::new(
@@ -470,8 +478,6 @@ impl NetsimDaemon {
                 args.host_dns.clone(),
             )
             .await;
-
-            // (AP Actor already initialized above)
 
             // Setup Wifi Actor
             let (wifi_runner, wifi_client) = wifi_actor::new();
@@ -513,9 +519,6 @@ impl NetsimDaemon {
                 ethernet_actor::EthernetActor::new(slirp_client.clone(), device_client.clone());
 
             (
-                ap_runner,
-                ap_client,
-                ap_actor_state,
                 slirp_runner,
                 slirp_client,
                 slirp_actor_state,
@@ -528,6 +531,11 @@ impl NetsimDaemon {
             )
         };
 
+        // Setup NFC Server
+        let (nfc_runner, nfc_client) = nfc_actor::new();
+        let mut nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
+        nfc_actor_state.start_casimir();
+
         // gRPC port is determined after the listener starts.
         let resolved_grpc_port =
             resolve_port_with_env(args.grpc_port, "NETSIM_GRPC_PORT", |name| std::env::var(name))
@@ -536,21 +544,18 @@ impl NetsimDaemon {
             &mut streams,
             &mut listener_addresses,
             resolved_grpc_port,
+            #[cfg(unix)]
+            args.grpc_uds_path.clone(),
             !args.no_cli_ui,
             device_client.clone(),
             link_client.clone(),
-            #[cfg(not(feature = "cuttlefish"))]
             ap_client.clone(),
             cell_client.clone(),
+            nfc_client.clone(),
             get_version(),
             frontend_stats.clone(),
         )
         .await?;
-
-        listener_addresses.insert(
-            "netsim_grpc".to_string(),
-            StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], actual_grpc_port))),
-        );
 
         // HCI TCP socket server
         let instance_num = get_instance(args.instance);
@@ -656,18 +661,11 @@ impl NetsimDaemon {
         let (uwb_runner, uwb_client) = uwb_actor::new();
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
-        // Setup NFC Server
-        let (nfc_runner, nfc_client) = nfc_actor::new();
-        let nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
-
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
-        #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
-        #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::ETHERNET, Box::new(eth_client.clone()));
-        #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::CELLULAR_DATA, Box::new(eth_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
@@ -716,13 +714,9 @@ impl NetsimDaemon {
         // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_runner.run(bt_actor_state));
-        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(wifi_runner.run(wifi_actor_state));
-        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(eth_runner.run(eth_actor_state));
-        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(ap_runner.run(ap_actor_state));
-        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
@@ -735,7 +729,6 @@ impl NetsimDaemon {
         let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
-        #[cfg(not(feature = "cuttlefish"))]
         {
             let mut ap_config = ap_actor::ApConfig::default();
             if let Some(ssid) = &args.wifi.wifi_ssid {
@@ -776,8 +769,7 @@ impl NetsimDaemon {
                 _grpc_server: Some(grpc_server),
                 device_task,
                 link_client: Box::new(link_client),
-                #[cfg(not(feature = "cuttlefish"))]
-                slirp_client: Some(slirp_client.clone()),
+                slirp_client,
                 chip_clients: daemon_chip_clients,
             },
             initialized_guard,
@@ -787,7 +779,9 @@ impl NetsimDaemon {
     /// Gets the gRPC port, if the server is running.
     pub fn grpc_port(&self) -> Option<u16> {
         self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
-            StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
+            StreamAddress::Tcp(socket_addr) | StreamAddress::Grpc(socket_addr) => {
+                Some(socket_addr.port())
+            }
             _ => None,
         })
     }
@@ -805,16 +799,11 @@ impl NetsimDaemon {
         info!("Graceful shutdown requested for all actors");
 
         let link_fut = self.link_client.shutdown();
-        #[cfg(not(feature = "cuttlefish"))]
         let slirp_fut = async {
-            if let Some(slirp) = &self.slirp_client
-                && let Err(e) = slirp.shutdown().await
-            {
+            if let Err(e) = self.slirp_client.shutdown().await {
                 warn!("SlirpActor shutdown error: {}", e);
             }
         };
-        #[cfg(feature = "cuttlefish")]
-        let slirp_fut = async {};
         let chips_fut = futures::future::join_all(self.chip_clients.values().map(|c| c.shutdown()));
 
         // Execute all shutdown dispatches concurrently

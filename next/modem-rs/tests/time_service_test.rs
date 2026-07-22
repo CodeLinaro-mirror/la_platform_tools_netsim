@@ -16,13 +16,13 @@ fn test_set_and_query_time() {
     given_modem(&mut world, "A");
 
     let time_str = "\"25/08/02,12:30:00+00\"";
-    let set_cmd = format!("AT+CCLK={}", time_str);
+    let set_cmd = format!("AT+CCLK={time_str}");
 
     when_at_command_sent(&mut world, "A", &set_cmd);
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CCLK?");
-    then_response_is(&mut world, "A", &format!("+CCLK: {}", time_str));
+    then_response_is(&mut world, "A", &format!("+CCLK: {time_str}"));
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -47,6 +47,6 @@ fn test_update_network_time() {
 
     // Expect CCLK updated
     when_at_command_sent(&mut world, "A", "AT+CCLK?");
-    then_response_is(&mut world, "A", &format!("+CCLK: \"{}\"", time_str));
+    then_response_is(&mut world, "A", &format!("+CCLK: \"{time_str}\""));
     then_response_is(&mut world, "A", "OK");
 }

@@ -1,0 +1,60 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package casimircontrolserver;
+
+service CasimirControlService {
+  rpc SendApdu(SendApduRequest) returns (SendApduReply) {}
+  rpc PollA(Void) returns (SenderId) {}
+  rpc SetRadioState(RadioState) returns (Void) {}
+  rpc SetPowerLevel(PowerLevel) returns (Void) {}
+  rpc SendBroadcast(SendBroadcastRequest) returns (SendBroadcastResponse) {}
+  rpc Init(Void) returns (Void) {}
+  rpc Close(Void) returns (Void) {}
+}
+
+message SendApduRequest {
+  repeated string apdu_hex_strings = 1;
+  optional uint32 sender_id = 2;
+}
+
+message SendApduReply {
+  repeated string response_hex_strings = 1;
+}
+
+message SenderId {
+  uint32 sender_id = 1;
+}
+
+message Void {}
+
+message RadioState {
+  bool radio_on = 1;
+}
+
+message PowerLevel {
+  uint32 power_level = 1;
+}
+
+message TransceiveConfiguration {
+  // A, B, F, V
+  optional string type = 1;
+  optional bool crc = 2;
+  // 0 to 8
+  optional uint32 bits = 3;
+  // 106, 212, 424, 848, 53, 26
+  optional uint32 bitrate = 4;
+  // value in microseconds
+  optional uint32 timeout = 5;
+  // 0 to 100
+  optional double power = 6;
+}
+
+message SendBroadcastRequest {
+  string data = 1;
+  optional TransceiveConfiguration configuration = 2;
+}
+
+message SendBroadcastResponse {}
