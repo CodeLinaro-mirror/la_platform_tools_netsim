@@ -813,6 +813,19 @@ fn test_apdu_update_file_not_found() {
 }
 
 #[test]
+fn test_cgla_close_closed_channel() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH1}\""),
+    );
+    then_response_is(&mut world, "A", &format!("+CGLA: 4,{}", RESP_ERROR_NO_CHANNEL_AVAILABLE));
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
 fn test_cgla_validation_errors() {
     let mut world = World::new();
     given_modem(&mut world, "A");
@@ -861,5 +874,102 @@ fn test_csim_manage_channel_limits() {
     // Try to open 5th channel (index 4, but limit is 4 channels (0-3))
     when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"0070000000\"");
     then_response_is(&mut world, "A", "+CSIM: 4,6A81");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_csim_close_closed_channel_and_invalid_action() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Close closed channel 1
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CSIM=10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH1}\""),
+    );
+    then_response_is(&mut world, "A", &format!("+CSIM: 4,{}", RESP_ERROR_NO_CHANNEL_AVAILABLE));
+    then_response_is(&mut world, "A", "OK");
+
+    // Close channel 0 (invalid operation)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CSIM=10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH0}\""),
+    );
+    then_response_is(&mut world, "A", &format!("+CSIM: 4,{}", RESP_ERROR_INCORRECT_PARAMS));
+    then_response_is(&mut world, "A", "OK");
+
+    // Close channel 4 (out of bounds)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CSIM=10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH4}\""),
+    );
+    then_response_is(&mut world, "A", &format!("+CSIM: 4,{}", RESP_ERROR_OUT_OF_BOUNDS));
+    then_response_is(&mut world, "A", "OK");
+
+    // Invalid action (P1=01)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CSIM=10,\"{APDU_MANAGE_CHANNEL_INVALID_P1}\""),
+    );
+    then_response_is(&mut world, "A", &format!("+CSIM: 4,{}", RESP_ERROR_INCORRECT_PARAMS));
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_manage_channel_open_and_close() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Open channel via CGLA on channel 0
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_OPEN}\""));
+    // Should return channel ID "01" and SW_SUCCESS "9000" -> combined "019000",
+    // length is 6 chars.
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Verify we can transmit on the new channel 1 (e.g. SELECT EF_ICCID)
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=1,14,\"{APDU_SELECT_EF_ICCID}\""));
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Close channel 1 via CGLA on channel 0
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH1}\""),
+    );
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Verify channel 1 is now closed (transmitting on it should fail)
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=1,14,\"{APDU_SELECT_EF_ICCID}\""));
+    then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_cgla_close_invalid_channels() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Close channel 0 -> 6A86 (Incorrect params)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH0}\""),
+    );
+    then_response_is(&mut world, "A", &format!("+CGLA: 4,{}", RESP_ERROR_INCORRECT_PARAMS));
+    then_response_is(&mut world, "A", "OK");
+
+    // Close channel 4 -> 6A88 (Out of bounds)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH4}\""),
+    );
+    then_response_is(&mut world, "A", &format!("+CGLA: 4,{}", RESP_ERROR_OUT_OF_BOUNDS));
     then_response_is(&mut world, "A", "OK");
 }

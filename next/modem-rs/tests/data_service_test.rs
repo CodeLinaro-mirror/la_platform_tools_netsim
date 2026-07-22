@@ -592,3 +592,62 @@ fn test_qos_queries_when_empty() {
     when_at_command_sent(&mut world, "A", "AT+CGQREQ?");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_data_commands_invalid_cid() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // CID 2 does not exist (no contexts defined at all, or we only define CID 1)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGDCONT={TEST_PDP_CID},\"{TEST_PDP_TYPE}\",\"{TEST_APN}\""),
+    );
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 1. QoS settings on non-existent CID 2
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGEQMIN={INVALID_PDP_CID},{TEST_QOS_PARAMS_GPRS}"),
+    );
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGEQREQ={INVALID_PDP_CID},{TEST_QOS_PARAMS_GPRS}"),
+    );
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGQMIN={INVALID_PDP_CID},{TEST_QOS_PARAMS_GPRS}"),
+    );
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGQREQ={INVALID_PDP_CID},{TEST_QOS_PARAMS_GPRS}"),
+    );
+    then_response_is(&mut world, "A", "ERROR");
+
+    // 2. Data commands on non-existent CID 2
+    when_at_command_sent(&mut world, "A", &format!("AT+CGACT=1,{INVALID_PDP_CID}")); // Activate CID 2 (state=1, cid=2)
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", &format!("AT+CGCMOD={INVALID_PDP_CID}")); // Modify CID 2
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", &format!("AT+CGPADDR={INVALID_PDP_CID}")); // Show address for CID 2
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", &format!("AT+CGCONTRDP={INVALID_PDP_CID}")); // Read dynamic param for CID 2
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={INVALID_PDP_CID}")); // Enter data state for CID 2
+    then_response_is(&mut world, "A", "ERROR");
+}
