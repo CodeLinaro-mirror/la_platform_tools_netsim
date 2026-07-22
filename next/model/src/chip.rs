@@ -340,6 +340,7 @@ impl From<ChipKind> for ChipVariant {
                 radio: Default::default(),
                 state: "unknown".into(),
                 sim_type: None,
+                quirks: Default::default(),
             }),
             ChipKind::CELLULAR_DATA => ChipVariant::CellularData(Default::default()),
             ChipKind::ETHERNET => ChipVariant::Ethernet(Default::default()),

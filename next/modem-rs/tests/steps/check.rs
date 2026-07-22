@@ -1,8 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use modem_rs::AT_OK;
-
 use crate::world::World;
 
 /// Check for expected modem count.
@@ -34,9 +32,12 @@ pub fn then_metrics_are(world: &World, at_commands: u64, calls: u64) {
 /// Use this when testing synchronous command responses where order is
 /// guaranteed.
 pub fn then_response_is(world: &mut World, name: &str, expected: &str) {
-    let (_, handler) = world.get_modem(name);
-    let expected_bytes = normalize_expected_response(expected);
+    let id = world.modems.get(name).map(|(id, _)| *id).expect("Modem not found");
+    let goldfish_37 =
+        world.manager.get_modem(id).is_some_and(|m| m.quirks.goldfish_ril_37_or_earlier);
+    let expected_bytes = normalize_expected_response(expected, goldfish_37);
 
+    let (_, handler) = world.get_modem(name);
     let response = handler.wait_for_response();
     assert_eq!(
         response,
@@ -81,11 +82,12 @@ pub fn then_wait_for_response_containing(world: &mut World, name: &str, expected
 }
 
 /// Normalizes the expected response string to bytes.
-/// Adds \r\n unless it's "OK" or already present.
-fn normalize_expected_response(expected: &str) -> Vec<u8> {
+/// Adds \r\n (or \r for Goldfish 37) unless it's "OK" or already present.
+fn normalize_expected_response(expected: &str, goldfish_37: bool) -> Vec<u8> {
+    let suffix: &[u8] = if goldfish_37 { b"\r" } else { b"\r\n" };
     match expected {
-        "OK" => AT_OK.to_vec(),
-        _ => [expected.trim_end_matches(['\r', '\n']).as_bytes(), b"\r\n"].concat(),
+        "OK" => [b"OK", suffix].concat(),
+        _ => [expected.trim_end_matches(['\r', '\n']).as_bytes(), suffix].concat(),
     }
 }
 

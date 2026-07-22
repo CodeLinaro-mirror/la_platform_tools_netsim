@@ -3,6 +3,7 @@
 
 use std::{str, time::Duration};
 
+use netsim_model::Quirks;
 use nom::IResult;
 
 pub trait Parsable<'a>: Sized {
@@ -286,6 +287,7 @@ pub struct ModemInfo {
     pub connections: Vec<String>, // Placeholder for actual connection info
     pub ringing: bool,
     pub sms_count: usize,
+    pub quirks: Quirks,
 }
 
 /// Represents the signal strength parameters for all supported tech layout (22

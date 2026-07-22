@@ -6,6 +6,7 @@ use std::{sync::Arc, time::Duration};
 use modem_rs::{
     ModemEvent, ModemId, ModemNetworkSimulator, test_utils::MockModemHandler, time::MockClock,
 };
+use netsim_model::Quirks;
 
 #[test]
 fn test_event_loop_tick_and_duration() {
@@ -14,8 +15,8 @@ fn test_event_loop_tick_and_duration() {
     let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
 
     let modem_id: ModemId = 1;
-    let (mut modem_handler, sink) = MockModemHandler::new();
-    simulator.new_modem(modem_id, sink, None).unwrap();
+    let (mut modem_handler, sink) = MockModemHandler::new(false);
+    simulator.new_modem(modem_id, sink, None, Quirks::default()).unwrap();
 
     // 1. Schedule an event 100ms in the future.
     let event_duration = Duration::from_millis(100);

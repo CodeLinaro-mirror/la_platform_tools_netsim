@@ -126,10 +126,18 @@ async fn handle_new_connection(
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
-        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
-            sim_type: chip.sim_type,
-            ..Default::default()
-        })),
+        ChipKind::CELLULAR => {
+            let goldfish_ril_37_or_earlier = chip_info.device_info.as_ref().is_some_and(|d| {
+                let is_emulator = d.kind == "EMULATOR";
+                let sdk_version = d.sdk_version.parse::<i32>().unwrap_or(0);
+                is_emulator && sdk_version < 38
+            });
+            Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
+                sim_type: chip.sim_type,
+                quirks: netsim_model::Quirks { goldfish_ril_37_or_earlier },
+                ..Default::default()
+            }))
+        }
         ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {

@@ -97,7 +97,7 @@ pub use crate::{
     },
     cell::{
         Cell, CellCreate, CellUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING,
-        ModemAction, RadioTechnology, RegistrationStatus,
+        ModemAction, Quirks, RadioTechnology, RegistrationStatus,
     },
     cellular_data::{CellularData, CellularDataCreate, CellularDataUpdate},
     chip::{

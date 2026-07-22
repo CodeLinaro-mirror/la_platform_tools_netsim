@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use netsim_model::{RadioTechnology, RegistrationStatus};
+use netsim_model::{Quirks, RadioTechnology, RegistrationStatus};
 use tracing::{debug, error};
 
 use crate::{
@@ -33,6 +33,7 @@ pub struct ModemImpl {
     pub misc_service: MiscService,
     pub data_service: DataService,
     phone_number: String,
+    pub quirks: Quirks,
     _state: State,
 }
 
@@ -59,13 +60,14 @@ impl ModemImpl {
         id: ModemId,
         profile: crate::config::SimProfile,
         sim_type: Option<i32>,
+        quirks: Quirks,
     ) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         Self {
             id,
             enable_unsolicited_urcs: enable_unsol,
             sim_service: SimService::new(&profile, sim_type),
-            network_service: NetworkService::default(),
+            network_service: NetworkService::new(quirks),
             sms_service: SmsService::default(),
             stk_service: StkService::default(),
             sup_service: SupService::default(),
@@ -73,6 +75,7 @@ impl ModemImpl {
             call_service: CallService::default(),
             data_service: DataService::from_env(),
             phone_number: profile.msisdn.clone(),
+            quirks,
             _state: State::Idle,
         }
     }
@@ -147,7 +150,9 @@ impl ModemImpl {
             let sca_len = bytes[0] as usize;
             if bytes.len() > 1 + sca_len {
                 let tpdu_len = bytes.len() - 1 - sca_len;
-                let response = format!("+CMT: ,{tpdu_len}\r\n{pdu}\r\n");
+                let omit_cmt_leading_comma = self.quirks.goldfish_ril_37_or_earlier;
+                let comma = if omit_cmt_leading_comma { "" } else { "," };
+                let response = format!("+CMT: {comma}{tpdu_len}\r\n{pdu}\r\n");
                 effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
             }
         }

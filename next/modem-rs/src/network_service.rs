@@ -3,7 +3,7 @@
 
 // src/network_service.rs
 
-use netsim_model::RegistrationStatus;
+use netsim_model::{Quirks, RegistrationStatus};
 use tracing::{info, warn};
 
 use crate::{
@@ -80,6 +80,7 @@ pub enum NetworkResponse {
         lac: Option<String>,
         cid: Option<String>,
         act: Option<u8>,
+        quirks: Quirks,
     },
     Ctec {
         current: u8,
@@ -119,18 +120,30 @@ impl std::fmt::Display for NetworkResponse {
             NetworkResponse::SignalStrength { rssi, ber, act } => {
                 write!(f, "{}", build_csq_response_string(*rssi, *ber, *act))
             }
-            NetworkResponse::RegistrationQuery { reg_type, unsol_mode, status, lac, cid, act } => {
+            NetworkResponse::RegistrationQuery {
+                reg_type,
+                unsol_mode,
+                status,
+                lac,
+                cid,
+                act,
+                quirks,
+            } => {
                 let prefix = match reg_type {
                     RegistrationType::Voice => "+CREG",
                     RegistrationType::Data => "+CGREG",
                     RegistrationType::Lte => "+CEREG",
                 };
                 let stat = *status as u8;
-                if *unsol_mode == 2 {
+                let force_location_info = quirks.goldfish_ril_37_or_earlier;
+                if *unsol_mode == 2 || force_location_info {
                     let lac_str = lac.as_deref().unwrap_or(DUMMY_LAC);
                     let cid_str = cid.as_deref().unwrap_or(DUMMY_CID);
                     let act_val = act.unwrap_or(crate::constants::access_technology::LTE);
-                    write!(f, "{prefix}: 2,{stat},\"{lac_str}\",\"{cid_str}\",{act_val}\r\n")
+                    write!(
+                        f,
+                        "{prefix}: {unsol_mode},{stat},\"{lac_str}\",\"{cid_str}\",{act_val}\r\n"
+                    )
                 } else {
                     write!(f, "{prefix}: {unsol_mode},{stat}\r\n")
                 }
@@ -249,10 +262,11 @@ pub struct NetworkService {
     preferred_network_mode: u32,
     is_attached: bool,
     act: u8,
+    pub(crate) quirks: Quirks,
 }
 
-impl Default for NetworkService {
-    fn default() -> Self {
+impl NetworkService {
+    pub fn new(quirks: Quirks) -> Self {
         Self {
             voice_registration: RegistrationStatus::NotRegistered,
             data_registration: RegistrationStatus::NotRegistered,
@@ -276,6 +290,7 @@ impl Default for NetworkService {
             preferred_network_mode: crate::constants::CTEC_DEFAULT_PREFERRED_MASK,
             is_attached: false,
             act: crate::constants::access_technology::LTE,
+            quirks,
         }
     }
 }
@@ -597,6 +612,7 @@ impl NetworkService {
             lac: Some(DUMMY_LAC.to_string()),
             cid: Some(DUMMY_CID.to_string()),
             act: Some(self.act),
+            quirks: self.quirks,
         }))
     }
 
@@ -628,6 +644,7 @@ impl NetworkService {
             lac: Some(DUMMY_LAC.to_string()),
             cid: Some(DUMMY_CID.to_string()),
             act: Some(self.act),
+            quirks: self.quirks,
         }))
     }
 
@@ -655,6 +672,7 @@ impl NetworkService {
             lac: Some(DUMMY_LAC.to_string()),
             cid: Some(DUMMY_CID.to_string()),
             act: Some(self.act),
+            quirks: self.quirks,
         }))
     }
 
@@ -794,9 +812,10 @@ impl NetworkService {
     }
 
     fn format_creg_urc(&self, status: RegistrationStatus) -> Option<NetworkUrc> {
+        let force_location_info = self.quirks.goldfish_ril_37_or_earlier;
         if self.voice_unsol_mode == 0 {
             None
-        } else if self.voice_unsol_mode == 2 {
+        } else if self.voice_unsol_mode == 2 || force_location_info {
             Some(NetworkUrc::Registration {
                 reg_type: RegistrationType::Voice,
                 status,
@@ -816,9 +835,10 @@ impl NetworkService {
     }
 
     fn format_cgreg_urc(&self, status: RegistrationStatus) -> Option<NetworkUrc> {
+        let force_location_info = self.quirks.goldfish_ril_37_or_earlier;
         if self.data_unsol_mode == 0 {
             None
-        } else if self.data_unsol_mode == 2 {
+        } else if self.data_unsol_mode == 2 || force_location_info {
             Some(NetworkUrc::Registration {
                 reg_type: RegistrationType::Data,
                 status,
@@ -838,9 +858,10 @@ impl NetworkService {
     }
 
     fn format_cereg_urc(&self, status: RegistrationStatus) -> Option<NetworkUrc> {
+        let force_location_info = self.quirks.goldfish_ril_37_or_earlier;
         if self.lte_unsol_mode == 0 {
             None
-        } else if self.lte_unsol_mode == 2 {
+        } else if self.lte_unsol_mode == 2 || force_location_info {
             Some(NetworkUrc::Registration {
                 reg_type: RegistrationType::Lte,
                 status,

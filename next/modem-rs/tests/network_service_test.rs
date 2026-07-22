@@ -609,3 +609,43 @@ fn test_network_registration_radio_cycle_cfun_4() {
         "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
     );
 }
+
+#[test]
+fn test_legacy_creg_format() {
+    let mut world = World::new();
+    given_goldfish_37_modem(&mut world, "A");
+
+    // 1. Query CREG with default unsol_mode (0)
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    // Should return full format even with unsol_mode=0
+    then_response_is(&mut world, "A", "+CREG: 0,0,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Enable unsolicited reports (mode 1)
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CEREG=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Turn radio ON and wait for attachment
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+
+    // URC should be full format even though unsol_mode=1
+    then_response_is(&mut world, "A", "+CREG: 1,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "+CGREG: 1,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "+CEREG: 1,\"2142\",\"0000B804\",7");
+
+    // Consume CSQ report
+    let csq_response = "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647";
+    then_response_is(&mut world, "A", csq_response);
+
+    // 4. Query CREG again (now registered, unsol_mode=1)
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    // Should return full format with unsol_mode=1
+    then_response_is(&mut world, "A", "+CREG: 1,1,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "OK");
+}
