@@ -615,3 +615,26 @@ fn trim_slice(s: &[u8]) -> &[u8] {
 fn starts_with_ignore_case(s: &[u8], prefix: &[u8]) -> bool {
     s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::SimProfile;
+
+    #[test]
+    fn test_execute_chained_commands_parse_error() {
+        let mut modem = ModemImpl::new(1, SimProfile::default(), None, Quirks::default());
+        // We pass a command Y that returns Err on Command::parse(Y).
+        // Since Y does not start with AT or RING, and we bypass split_chained_commands,
+        // we can pass it directly to execute_chained_commands.
+        let sub_commands = vec![b"INVALID".to_vec()];
+        let effects = modem.execute_chained_commands(&sub_commands);
+
+        assert_eq!(effects.len(), 1);
+        if let ModemEffect::Response(resp) = &effects[0] {
+            assert_eq!(resp, b"ERROR\r\n");
+        } else {
+            panic!("Expected Response effect");
+        }
+    }
+}

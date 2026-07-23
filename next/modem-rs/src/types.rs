@@ -226,7 +226,7 @@ impl CmeError {
 }
 
 /// Contains all the results of a successfully executed command.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct HandledCommand {
     /// The immediate response to send back to the client (e.g., "OK\r\n").
     pub responses: Vec<String>,

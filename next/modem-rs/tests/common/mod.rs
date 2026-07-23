@@ -3,6 +3,8 @@
 
 // tests/common/mod.rs
 
+pub mod constants;
+
 static LOG_INIT: std::sync::Once = std::sync::Once::new();
 
 pub fn init_logger() {

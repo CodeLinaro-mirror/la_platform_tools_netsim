@@ -3,7 +3,7 @@
 
 use netsim_model::RegistrationStatus;
 
-use crate::{steps::*, world::World};
+use crate::{common::constants::*, steps::*, world::World};
 
 // Scenario: Trigger Incoming Call via Action
 //   Given a modem "A"
@@ -15,7 +15,7 @@ fn test_action_incoming_call() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    when_action_incoming_call(&mut world, "A", "123456");
+    when_incoming_call_received(&mut world, "A", "123456");
 
     then_response_is(&mut world, "A", "RING");
     then_response_is(&mut world, "A", "+CLIP: \"123456\",129,,,,0");
@@ -35,7 +35,7 @@ fn test_action_incoming_sms() {
     when_at_command_sent(&mut world, "A", "AT+CMGF=1");
     then_response_is(&mut world, "A", "OK");
 
-    when_action_incoming_sms(&mut world, "A", "5555", "Hello");
+    when_incoming_sms_received(&mut world, "A", "5555", "Hello");
 
     then_wait_for_response_containing(&mut world, "A", "+CMT: \"5555\"");
     then_response_is(&mut world, "A", "Hello");
@@ -54,7 +54,87 @@ fn test_action_set_registration() {
     when_at_command_sent(&mut world, "A", "AT+CREG=1");
     then_response_is(&mut world, "A", "OK");
 
-    when_action_set_voice_registration(&mut world, "A", RegistrationStatus::Roaming);
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::Roaming);
 
     then_response_is(&mut world, "A", "+CREG: 5");
+}
+
+#[test]
+fn test_sim_hot_plugging() {
+    let mut world = World::new();
+    // Start with a locked SIM (PIN enabled, state PinRequired)
+    given_modem_with_locked_sim(&mut world, "A");
+
+    // Enable unsolicited registration reports and verbose errors
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Advance time to allow AttachNetwork to run (10ms delay)
+    when_time_advances_ms(&mut world, 15);
+    // Consume the initial attachment URC
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_wait_for_response_containing(&mut world, "A", "+CSQ:");
+
+    // Initial state check: PinRequired
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: SIM PIN");
+    then_response_is(&mut world, "A", "OK");
+
+    // Initial registration check: it should be registered because it's present
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    then_response_is(&mut world, "A", "+CREG: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 1. Remove SIM
+    when_sim_status_set(&mut world, "A", false);
+    // Should receive unsolicited CREG report: +CREG: 0 (not registered)
+    then_wait_for_response_containing(&mut world, "A", "+CREG: 0");
+
+    // Verify CPIN fails with SIM not inserted
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CME ERROR: 10");
+
+    // Verify CREG is 0
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    then_response_is(&mut world, "A", "+CREG: 1,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Re-insert SIM
+    when_sim_status_set(&mut world, "A", true);
+    // Advance time to allow AttachNetwork event to run (10ms delay)
+    when_time_advances_ms(&mut world, 15);
+
+    // Should receive unsolicited CREG report: +CREG: 1 (registered home)
+    then_wait_for_response_containing(&mut world, "A", "+CREG: 1");
+    then_wait_for_response_containing(&mut world, "A", "+CSQ:");
+
+    // Verify CPIN is back to SIM PIN
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: SIM PIN");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Unlock PIN
+    when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{LOCKED_PIN}\""));
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify CPIN is READY
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: READY");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Remove SIM again
+    when_sim_status_set(&mut world, "A", false);
+    then_wait_for_response_containing(&mut world, "A", "+CREG: 0");
+
+    // 5. Re-insert SIM again -> should go back to PinRequired (not READY)
+    when_sim_status_set(&mut world, "A", true);
+    when_time_advances_ms(&mut world, 15);
+    then_wait_for_response_containing(&mut world, "A", "+CREG: 1");
+    then_wait_for_response_containing(&mut world, "A", "+CSQ:");
+
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: SIM PIN"); // Back to locked!
+    then_response_is(&mut world, "A", "OK");
 }

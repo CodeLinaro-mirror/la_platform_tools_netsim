@@ -579,19 +579,8 @@ fn parse_cid_from_gprs_dial(number: &[u8]) -> Result<u8, ()> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
     use super::*;
     use crate::parser::QuotedString;
-
-    static TEST_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    struct TempFileGuard(std::path::PathBuf);
-    impl Drop for TempFileGuard {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(&self.0);
-        }
-    }
 
     #[test]
     fn test_data_service_dial_direct() {
@@ -641,11 +630,7 @@ mod tests {
     #[test]
     fn test_cuttlefish_config_parsing() {
         use std::io::Write;
-        let mut path = std::env::temp_dir();
-        let file_id = TEST_FILE_COUNTER.fetch_add(1, Ordering::SeqCst);
-        path.push(format!("cuttlefish_config_test_{}_{file_id}.json", std::process::id()));
-        let _guard = TempFileGuard(path.clone());
-        let mut file = std::fs::File::create(&path).unwrap();
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
         let config_json = r#"{
             "instances": {
                 "1": {
@@ -656,10 +641,9 @@ mod tests {
                 }
             }
         }"#;
-        file.write_all(config_json.as_bytes()).unwrap();
-        drop(file);
+        temp_file.write_all(config_json.as_bytes()).unwrap();
 
-        let config_path_str = path.to_str().unwrap();
+        let config_path_str = temp_file.path().to_str().unwrap();
         let config =
             crate::cuttlefish::read_cuttlefish_config_with_params(config_path_str, "1").unwrap();
 

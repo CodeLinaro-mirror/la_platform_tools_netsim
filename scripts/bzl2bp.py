@@ -22,6 +22,7 @@ ALLOWED_TEST_PACKAGES = {
     "bluetooth-actor",
     "uwb-actor",
     "cell-actor",
+    "modem-rs",
     "wifi-actor",
     "ap-actor",
     "ethernet-actor",
