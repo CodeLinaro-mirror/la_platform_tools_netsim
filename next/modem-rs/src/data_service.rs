@@ -417,12 +417,15 @@ impl DataService {
         }
     }
 
-    pub fn handle_set_pdp_context_modify(&self) -> DataResult {
-        Ok(None)
+    pub fn handle_set_pdp_context_modify(&self, cid: u8) -> DataResult {
+        if self.pdp_contexts.contains_key(&cid) { Ok(None) } else { Err(DataError::Error) }
     }
 
-    pub fn handle_enter_data_state(&self) -> DataResult {
-        Ok(Some(DataResponse::Connect))
+    pub fn handle_enter_data_state(&self, cid: u8) -> DataResult {
+        match self.pdp_contexts.get(&cid) {
+            Some(context) if context.active => Ok(Some(DataResponse::Connect)),
+            _ => Err(DataError::Error),
+        }
     }
 
     pub fn handle_set_packet_event_reporting(&self) -> DataResult {
@@ -525,8 +528,8 @@ impl DataService {
             Command::QueryPdpContextActivate => self.handle_query_pdp_context_activate(),
             Command::SetPsAttach(state) => self.handle_set_ps_attach(*state),
             Command::QueryPsAttach => self.handle_query_ps_attach(),
-            Command::SetPdpContextModify(_) => self.handle_set_pdp_context_modify(),
-            Command::EnterDataState(_) => self.handle_enter_data_state(),
+            Command::SetPdpContextModify(cid) => self.handle_set_pdp_context_modify(*cid),
+            Command::EnterDataState(cid) => self.handle_enter_data_state(*cid),
             Command::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
             Command::ShowPdpAddress(cid) => self.handle_show_pdp_address(*cid),
             Command::ReadDynamicParam(cid) => self.handle_read_dynamic_param(*cid),

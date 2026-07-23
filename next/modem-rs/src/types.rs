@@ -252,6 +252,7 @@ impl HandledCommand {
 }
 
 /// Represents the outcome of a command execution from the new parser.
+#[derive(Debug)]
 pub enum ExecutionResult {
     /// The command was successfully handled, yielding a response and/or action.
     Success(HandledCommand),

@@ -703,6 +703,8 @@ impl SimService {
                                 if let Some(fid) = selected_fid
                                     && (find_ef(&self.fs.master_file, &format!("{fid:04X}"))
                                         .is_some()
+                                        || find_df(&self.fs.master_file, &format!("{fid:04X}"))
+                                            .is_some()
                                         || matches!(
                                             fid,
                                             EF_ICCID_ID
@@ -721,21 +723,47 @@ impl SimService {
                             INS_STATUS => {
                                 format_sim_response_hex("+CGLA", STATUS_FCP_HEX, SW_SUCCESS)
                             }
-                            INS_MANAGE_CHANNEL => {
-                                if p1 == 0x00 || p1 == 0x80 {
-                                    if p1 == 0x80 && !self.logical_channels[idx] {
+                            INS_MANAGE_CHANNEL => match p1 {
+                                MANAGE_CHANNEL_ACTION_OPEN => {
+                                    if let Some(channel_idx) =
+                                        self.logical_channels.iter().position(|&open| !open)
+                                    {
+                                        self.logical_channels[channel_idx] = true;
+                                        let channel_hex = format!("{channel_idx:02X}");
+                                        format_sim_response_hex("+CGLA", &channel_hex, SW_SUCCESS)
+                                    } else {
                                         format_sim_response_hex(
                                             "+CGLA",
                                             "",
                                             SW_NO_CHANNEL_AVAILABLE,
                                         )
+                                    }
+                                }
+                                MANAGE_CHANNEL_ACTION_CLOSE => {
+                                    let target_idx = p2 as usize;
+                                    if target_idx == 0 {
+                                        format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS) // 6A86
+                                    } else if target_idx >= self.logical_channels.len() {
+                                        format_sim_response_hex(
+                                            "+CGLA",
+                                            "",
+                                            SW_REFERENCED_DATA_NOT_FOUND,
+                                        ) // 6A88
+                                    } else if !self.logical_channels[target_idx] {
+                                        format_sim_response_hex(
+                                            "+CGLA",
+                                            "",
+                                            SW_NO_CHANNEL_AVAILABLE,
+                                        ) // 6A81
                                     } else {
+                                        self.logical_channels[target_idx] = false;
+                                        self.selected_aids[target_idx] = None;
+                                        self.selected_files[target_idx] = None;
                                         format_sim_response_hex("+CGLA", "", SW_SUCCESS)
                                     }
-                                } else {
-                                    format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS)
                                 }
-                            }
+                                _ => format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS),
+                            },
                             _ => {
                                 warn!(
                                     "[SimService] Transmit logical channel: command not found in profile: {}, ins: {:02X}",
