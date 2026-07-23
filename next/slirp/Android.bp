@@ -50,3 +50,32 @@ rust_library_host {
         "libzerocopy",
     ],
 }
+
+rust_test_host {
+    name: "libnetsim_next_slirp_tests",
+    crate_name: "slirp",
+    edition: "2024",
+    crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "liblog_rust",
+        "libnetsim_next_packets_testing",
+        "librand",
+        "libserde",
+        "libserde_json",
+        "libtempfile",
+        "libtokio",
+        "libzerocopy",
+    ],
+}
