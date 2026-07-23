@@ -68,3 +68,80 @@ rust_library_host {
         "libasync_trait",
     ],
 }
+
+rust_test_host {
+    name: "libnetsim_next_capture_actor_tests",
+    crate_name: "capture_actor",
+    edition: "2024",
+    crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_capture_api_testing",
+        "libnetsim_next_common_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_packets_testing",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+        "libzerocopy",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}
+
+rust_test_host {
+    name: "libnetsim_next_capture_actor_integration_tests",
+    crate_name: "capture_actor_tests",
+    edition: "2024",
+    crate_root: "tests/mod.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "tests/flush_test.rs",
+        "tests/format_test.rs",
+        "tests/lifecycle_test.rs",
+        "tests/mod.rs",
+        "tests/world.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_capture_actor_testing",
+        "libnetsim_next_capture_api_testing",
+        "libnetsim_next_common_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_packets_testing",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+        "libzerocopy",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

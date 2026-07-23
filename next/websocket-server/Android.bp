@@ -68,3 +68,83 @@ rust_library_host {
         "libtungstenite",
     ],
 }
+
+rust_test_host {
+    name: "libnetsim_next_websocket_server_tests",
+    crate_name: "websocket_server",
+    edition: "2024",
+    crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libanyhow",
+        "libbase64_rust",
+        "libbytes",
+        "libfutures",
+        "libhttp",
+        "libhttparse",
+        "libmockall",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_device_api_testing",
+        "libnetsim_next_model_testing",
+        "libring",
+        "libsocket2",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+        "libtungstenite",
+    ],
+}
+
+rust_test_host {
+    name: "libnetsim_next_websocket_server_integration_tests",
+    crate_name: "websocket_server_tests",
+    edition: "2024",
+    crate_root: "tests/mod.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "tests/edge_cases.rs",
+        "tests/happy_path.rs",
+        "tests/mod.rs",
+        "tests/world.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libanyhow",
+        "libbase64_rust",
+        "libbytes",
+        "libfutures",
+        "libhttp",
+        "libhttparse",
+        "libmockall",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_device_api_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_websocket_server_testing",
+        "libring",
+        "libsocket2",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+        "libtungstenite",
+    ],
+}

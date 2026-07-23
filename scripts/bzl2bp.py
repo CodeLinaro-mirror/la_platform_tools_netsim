@@ -26,6 +26,13 @@ ALLOWED_TEST_PACKAGES = {
     "wifi-actor",
     "ap-actor",
     "ethernet-actor",
+    "actor-framework",
+    "device-actor",
+    "link-actor",
+    "slirp-actor",
+    "capture-actor",
+    "packets",
+    "websocket-server",
 }
 
 
@@ -328,8 +335,15 @@ def rust_test(*args, **kwargs):
       crate_name = f"{module_name}_tests"
 
   default_file = os.path.basename(crate_root) if crate_root else "lib.rs"
+  all_inputs = (
+      list(srcs)
+      + list(kwargs.get("data", []))
+      + list(kwargs.get("compile_data", []))
+  )
   srcs_content = resolve_rust_srcs(srcs, default_file)
-  crate_root_mapped = crate_root if crate_root else srcs_content[0]
+  data_content = resolve_rust_data(all_inputs)
+  all_srcs = sorted(list(set(srcs_content + data_content)))
+  crate_root_mapped = crate_root if crate_root else resolve_crate_root(all_srcs)
 
   # Deduplicate: if soong_targets already has a test with matching crate_root or srcs, skip
   for existing in soong_targets:
@@ -349,7 +363,7 @@ def rust_test(*args, **kwargs):
       "type": "rust_test_host",
       "name": target_name,
       "crate_name": crate_name,
-      "srcs": sorted(list(set(srcs_content))),
+      "srcs": sorted(list(set(srcs_content + data_content))),
       "crate_root": crate_root_mapped,
       "rustlibs": sorted(list(set(rustlibs))),
       "shared_libs": sorted(list(set(shared_libs))),
@@ -358,6 +372,8 @@ def rust_test(*args, **kwargs):
       "edition": kwargs.get("edition", "2024"),
       "test_suites": ["general_tests"],
   }
+  if data_content:
+    tgt_dict["data"] = data_content
   if static_libs:
     tgt_dict["static_libs"] = sorted(list(set(static_libs)))
   if name == "integration-test" and os.path.exists(
@@ -441,8 +457,12 @@ def netsim_rust_library(
     rustlibs.extend(PLATFORM_RUSTLIBS[name])
   rustlibs = sorted(list(set(rustlibs)))
   proc_macros = transform_deps(proc_macro_deps)
+  all_inputs = list(srcs) + list(compile_data) + list(kwargs.get("data", []))
   srcs_content = resolve_rust_srcs(srcs, "lib.rs")
-  data_content = resolve_rust_srcs(compile_data, "") if compile_data else []
+  data_content = resolve_rust_data(all_inputs)
+  crate_root_mapped = resolve_crate_root(
+      srcs_content, ["src/lib.rs", "src/main.rs"]
+  )
 
   if not srcs_content:
     raise ValueError(
@@ -467,7 +487,7 @@ def netsim_rust_library(
       "name": f"libnetsim_next_{name.replace('-', '_')}",
       "crate_name": crate_name,
       "stem": f"lib{crate_name}",
-      "crate_root": srcs_content[0],
+      "crate_root": crate_root_mapped,
       "srcs": srcs_content + data_content,
       "rustlibs": rustlibs,
       "shared_libs": sorted(list(set(shared_libs))),
@@ -521,7 +541,7 @@ def netsim_rust_library(
         "name": f"libnetsim_next_{name.replace('-', '_')}_testing",
         "crate_name": crate_name,
         "stem": f"lib{crate_name}_testing",
-        "crate_root": srcs_content[0],
+        "crate_root": crate_root_mapped,
         "srcs": srcs_content + data_content,
         "rustlibs": testing_rustlibs,
         "shared_libs": testing_shared_libs,
@@ -577,7 +597,7 @@ def netsim_rust_library(
           "type": "rust_test_host",
           "name": f"libnetsim_next_{name.replace('-', '_')}_tests",
           "crate_name": crate_name,
-          "crate_root": srcs_content[0],
+          "crate_root": crate_root_mapped,
           "srcs": srcs_content + data_content,
           "rustlibs": inline_test_rustlibs,
           "shared_libs": inline_test_shared_libs,
@@ -586,6 +606,8 @@ def netsim_rust_library(
           "edition": edition or "2024",
           "test_suites": ["general_tests"],
       }
+      if data_content:
+        unit_tgt["data"] = data_content
       if inline_test_static_libs:
         unit_tgt["static_libs"] = inline_test_static_libs
       soong_targets.append(unit_tgt)
@@ -671,7 +693,7 @@ def netsim_rust_library(
             ),
             "crate_name": f"{crate_name}_tests",
             "crate_root": crate_root,
-            "srcs": integration_test_srcs,
+            "srcs": sorted(list(set(integration_test_srcs))),
             "rustlibs": integration_test_rustlibs,
             "shared_libs": integration_test_shared_libs,
             "proc_macros": integration_test_proc_macros,
@@ -679,9 +701,29 @@ def netsim_rust_library(
             "edition": edition or "2024",
             "test_suites": ["general_tests"],
         }
+        if data_content:
+          integ_dict["data"] = data_content
         if integration_test_static_libs:
           integ_dict["static_libs"] = integration_test_static_libs
         soong_targets.append(integ_dict)
+
+
+def resolve_crate_root(srcs_content, preferred_candidates=None):
+  if preferred_candidates is None:
+    preferred_candidates = [
+        "src/lib.rs",
+        "src/main.rs",
+        "tests/integration_tests.rs",
+        "tests/integration_test.rs",
+        "tests/mod.rs",
+    ]
+  for cand in preferred_candidates:
+    if cand in srcs_content:
+      return cand
+  rs_files = [s for s in srcs_content if s.endswith(".rs")]
+  if rs_files:
+    return rs_files[0]
+  return "src/lib.rs"
 
 
 def resolve_rust_srcs(srcs, default_file):
@@ -693,9 +735,21 @@ def resolve_rust_srcs(srcs, default_file):
       mapped_srcs.append(src.replace("**/*.rs", default_file))
     elif "*.rs" in src:
       mapped_srcs.append(src.replace("*.rs", default_file))
-    elif "main.rs" in src or "lib.rs" in src or not src.endswith(".rs"):
+    elif src.endswith(".rs") or src.startswith(":"):
       mapped_srcs.append(src)
-  return mapped_srcs
+  return sorted(list(set(mapped_srcs)))
+
+
+def resolve_rust_data(items):
+  mapped_data = []
+  for item in items:
+    if (
+        not item.endswith(".rs")
+        and not item.startswith(":")
+        and item not in EXACT_DEP_MAPPING
+    ):
+      mapped_data.append(item)
+  return sorted(list(set(mapped_data)))
 
 
 def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
@@ -713,8 +767,16 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
   if name in PLATFORM_RUSTLIBS:
     rustlibs.extend(PLATFORM_RUSTLIBS[name])
   rustlibs = sorted(list(set(rustlibs)))
+  all_inputs = (
+      list(srcs)
+      + list(kwargs.get("compile_data", []))
+      + list(kwargs.get("data", []))
+  )
   srcs_content = resolve_rust_srcs(srcs, "main.rs")
-  data_content = resolve_rust_srcs(kwargs.get("compile_data", []), "")
+  data_content = resolve_rust_data(all_inputs)
+  crate_root_mapped = resolve_crate_root(
+      srcs_content, ["src/main.rs", "src/lib.rs"]
+  )
 
   if not srcs_content:
     raise ValueError(
@@ -725,16 +787,17 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
       "netsimd" if name == "daemon" else f"netsim_next_{name.replace('-', '_')}"
   )
 
-  soong_targets.append({
+  bin_dict = {
       "type": "rust_binary_host",
       "name": soong_name,
       "stem": soong_name,
-      "crate_root": srcs_content[0],
-      "srcs": srcs_content + data_content,
+      "crate_root": crate_root_mapped,
+      "srcs": sorted(list(set(srcs_content + data_content))),
       "rustlibs": rustlibs,
       "features": ["cuttlefish"],
       "edition": kwargs.get("edition", "2021"),
-  })
+  }
+  soong_targets.append(bin_dict)
 
 
 def rust_proc_macro(name, srcs=None, deps=None, **kwargs):
@@ -744,25 +807,34 @@ def rust_proc_macro(name, srcs=None, deps=None, **kwargs):
     srcs = ["src/**/*.rs"]
 
   rustlibs = transform_deps(deps)
+  all_inputs = (
+      list(srcs)
+      + list(kwargs.get("compile_data", []))
+      + list(kwargs.get("data", []))
+  )
   srcs_content = resolve_rust_srcs(srcs, "lib.rs")
-  data_content = resolve_rust_srcs(kwargs.get("compile_data", []), "")
+  data_content = resolve_rust_data(all_inputs)
+  crate_root_mapped = resolve_crate_root(
+      srcs_content, ["src/lib.rs", "src/main.rs"]
+  )
 
   if not srcs_content:
     raise ValueError(
         f"Target '{name}' has an empty source list, cannot resolve crate_root."
     )
 
-  soong_targets.append({
+  macro_dict = {
       "type": "rust_proc_macro",
       "name": f"libnetsim_next_{name.replace('-', '_')}",
       "crate_name": name.replace("-", "_"),
       "stem": f"lib{name.replace('-', '_')}",
       "edition": kwargs.get("edition"),
-      "crate_root": srcs_content[0],
-      "srcs": srcs_content + data_content,
+      "crate_root": crate_root_mapped,
+      "srcs": sorted(list(set(srcs_content + data_content))),
       "rustlibs": rustlibs,
       "features": ["cuttlefish"],
-  })
+  }
+  soong_targets.append(macro_dict)
 
 
 # Map rust_binary exactly to netsim_rust_binary
@@ -1017,6 +1089,12 @@ def main():
             for src in tgt["srcs"]:
               f.write(f'        "{src}",\n')
             f.write("    ],\n")
+
+            if tgt.get("data"):
+              f.write("    data: [\n")
+              for d in sorted(list(set(tgt["data"]))):
+                f.write(f'        "{d}",\n')
+              f.write("    ],\n")
 
             if tgt["type"].startswith("rust_"):
               features = tgt.get("features", ["cuttlefish"])
