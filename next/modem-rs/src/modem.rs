@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::{fmt::Write, time::Duration};
 
 use netsim_model::{Quirks, RadioTechnology, RegistrationStatus};
 use tracing::{debug, error};
@@ -17,7 +17,7 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    types::{AT_OK, CmeError, CommandAction, ExecutionResult, ModemId},
+    types::{AT_OK, CmeError, CommandAction, ExecutionResult, HandledCommand, ModemId, Response},
 };
 
 /// Represents a single modem device.
@@ -82,11 +82,13 @@ impl ModemImpl {
 
     pub fn trigger_incoming_call(&mut self, number: &str) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
-        let result: ExecutionResult = self.call_service.ring(number.to_string()).into();
+        let call_res = self.call_service.ring(number.to_string());
+        let result: ExecutionResult = call_res.into();
         if let ExecutionResult::Success(handled) = result {
             for response in handled.responses {
-                if !response.is_empty() {
-                    effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+                let resp_str = response.to_string();
+                if !resp_str.is_empty() {
+                    effects.push(ModemEffect::Response(resp_str.into_bytes()));
                 }
             }
             let clip = format!("+CLIP: \"{number}\",129,,,,0\r\n");
@@ -239,23 +241,25 @@ impl ModemImpl {
                 let pdu = &command_bytes[..command_bytes.len() - 1];
                 let store = self.sms_service.waiting_for_pdu_store;
 
-                let result = if store {
+                let sms_res = if store {
                     self.sms_service.handle_store_sms(&mut self.sim_service, pdu)
                 } else {
                     self.sms_service.handle_sms_body(pdu)
                 };
 
+                let exec_res: ExecutionResult = sms_res.into();
+
                 // Clear waiting state
                 self.sms_service.waiting_for_pdu_len = None;
                 self.sms_service.waiting_for_pdu_store = false;
 
-                Some(result.into())
+                Some(exec_res)
             } else if command_bytes.contains(&0x1b) {
                 // ESC
                 // Abort
                 self.sms_service.waiting_for_pdu_len = None;
                 self.sms_service.waiting_for_pdu_store = false;
-                Some(ExecutionResult::Success(crate::types::HandledCommand::ok()))
+                Some(ExecutionResult::Success(HandledCommand::ok()))
             } else {
                 None // Waiting for more data? Or just ignore for now if
                 // incomplete? The emulator usually
@@ -269,27 +273,28 @@ impl ModemImpl {
             let mut effects = Vec::new();
             match result {
                 ExecutionResult::Success(handled) => {
-                    Self::append_handled_effects(&mut effects, handled);
-                }
-                ExecutionResult::Error => {
-                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
-                }
-                ExecutionResult::ErrorWithUrc(urcs) => {
-                    for urc in urcs {
-                        effects.push(ModemEffect::Response(urc.into_bytes()));
+                    let mut combined = String::new();
+                    for r in &handled.responses {
+                        write!(combined, "{r}").unwrap();
                     }
-                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
-                }
-                ExecutionResult::CmeError(err) => {
-                    let resp = err.format_response(self.misc_service.cmee_mode());
-                    effects.push(ModemEffect::Response(resp.into_bytes()));
-                }
-                ExecutionResult::CmeErrorWithUrc(err, urcs) => {
-                    for urc in urcs {
-                        effects.push(ModemEffect::Response(urc.into_bytes()));
+                    if !combined.is_empty() {
+                        effects.push(ModemEffect::Response(combined.into_bytes()));
                     }
-                    let resp = err.format_response(self.misc_service.cmee_mode());
-                    effects.push(ModemEffect::Response(resp.into_bytes()));
+                    if let Some(act) = handled.action {
+                        effects.push(ModemEffect::Action(act));
+                    }
+                }
+                ExecutionResult::Error { cme, urcs } => {
+                    let mut combined = String::new();
+                    for r in &urcs {
+                        write!(combined, "{r}").unwrap();
+                    }
+                    let err_str = match cme {
+                        Some(err) => err.format_response(self.misc_service.cmee_mode()),
+                        None => "ERROR\r\n".to_string(),
+                    };
+                    combined.push_str(&err_str);
+                    effects.push(ModemEffect::Response(combined.into_bytes()));
                 }
                 ExecutionResult::Unhandled => {
                     effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
@@ -402,7 +407,7 @@ impl ModemImpl {
     /// Executes a list of chained commands sequentially, halting on error and
     /// merging responses.
     fn execute_chained_commands(&mut self, sub_commands: &[Vec<u8>]) -> Vec<ModemEffect> {
-        let mut combined_responses = Vec::new();
+        let mut combined_responses = String::new();
         let mut combined_effects = Vec::new();
         let mut stop_chain = false;
 
@@ -416,47 +421,43 @@ impl ModemImpl {
                             String::from_utf8_lossy(cmd_bytes),
                             String::from_utf8_lossy(rem)
                         );
-                        combined_responses.push(
+                        write!(
+                            combined_responses,
+                            "{}",
                             CmeError::IncorrectParameters
-                                .format_response(self.misc_service.cmee_mode()),
-                        );
+                                .format_response(self.misc_service.cmee_mode())
+                        )
+                        .unwrap();
                         stop_chain = true;
                     } else {
-                        match self.execute_and_schedule(&command, &mut combined_effects) {
-                            ExecutionResult::Success(mut handled) => {
-                                let success =
-                                    handled.responses.last().map(|s| s.as_str()) == Some("OK\r\n");
+                        let exec_res = self.execute_and_schedule(&command, &mut combined_effects);
+                        match exec_res {
+                            ExecutionResult::Success(handled) => {
+                                let mut responses = handled.responses;
+                                let success = responses.last() == Some(&Response::Ok);
                                 if !is_last && success {
-                                    handled.responses.pop();
+                                    responses.pop();
                                 }
-                                combined_responses.append(&mut handled.responses);
+                                for r in responses {
+                                    write!(combined_responses, "{r}").unwrap();
+                                }
                                 if !success {
                                     stop_chain = true;
                                 }
                             }
-                            ExecutionResult::Error => {
-                                combined_responses.push("ERROR\r\n".to_string());
-                                stop_chain = true;
-                            }
-                            ExecutionResult::ErrorWithUrc(mut urcs) => {
-                                combined_responses.append(&mut urcs);
-                                combined_responses.push("ERROR\r\n".to_string());
-                                stop_chain = true;
-                            }
-                            ExecutionResult::CmeError(err) => {
-                                combined_responses
-                                    .push(err.format_response(self.misc_service.cmee_mode()));
-                                stop_chain = true;
-                            }
-                            ExecutionResult::CmeErrorWithUrc(err, mut urcs) => {
-                                combined_responses.append(&mut urcs);
-                                combined_responses
-                                    .push(err.format_response(self.misc_service.cmee_mode()));
+                            ExecutionResult::Error { cme, urcs } => {
+                                for r in urcs {
+                                    write!(combined_responses, "{r}").unwrap();
+                                }
+                                let err_str = match cme {
+                                    Some(err) => err.format_response(self.misc_service.cmee_mode()),
+                                    None => "ERROR\r\n".to_string(),
+                                };
+                                combined_responses.push_str(&err_str);
                                 stop_chain = true;
                             }
                             ExecutionResult::Unhandled => {
-                                error!("Unhandled command: {:?}", command);
-                                combined_responses.push("ERROR\r\n".to_string());
+                                combined_responses.push_str("ERROR\r\n");
                                 stop_chain = true;
                             }
                         }
@@ -468,7 +469,7 @@ impl ModemImpl {
                         String::from_utf8_lossy(cmd_bytes),
                         e
                     );
-                    combined_responses.push("ERROR\r\n".to_string());
+                    combined_responses.push_str("ERROR\r\n");
                     stop_chain = true;
                 }
             }
@@ -477,19 +478,13 @@ impl ModemImpl {
             }
         }
 
-        let combined = combined_responses
-            .iter()
-            .filter(|r| !r.is_empty())
-            .cloned()
-            .collect::<Vec<String>>()
-            .join("");
-        if !combined.is_empty() {
-            combined_effects.insert(0, ModemEffect::Response(combined.into_bytes()));
+        if !combined_responses.is_empty() {
+            combined_effects.insert(0, ModemEffect::Response(combined_responses.into_bytes()));
         }
         combined_effects
     }
 
-    pub fn execute(&mut self, command: &Command) -> crate::types::ExecutionResult {
+    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         let result = self.misc_service.execute(command);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
@@ -533,25 +528,6 @@ impl ModemImpl {
         }
 
         ExecutionResult::Unhandled
-    }
-
-    fn append_handled_effects(
-        effects: &mut Vec<ModemEffect>,
-        handled: crate::types::HandledCommand,
-    ) {
-        let combined = handled
-            .responses
-            .iter()
-            .filter(|r| !r.is_empty())
-            .cloned()
-            .collect::<Vec<String>>()
-            .join("");
-        if !combined.is_empty() {
-            effects.push(ModemEffect::Response(combined.into_bytes()));
-        }
-        if let Some(action) = handled.action {
-            effects.push(ModemEffect::Action(action));
-        }
     }
 }
 

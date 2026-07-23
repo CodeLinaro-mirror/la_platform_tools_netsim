@@ -6,6 +6,12 @@ use std::{str, time::Duration};
 use netsim_model::Quirks;
 use nom::IResult;
 
+use crate::{
+    call_service::CallResponse, data_service::DataResponse, misc_service::MiscResponse,
+    network_service::NetworkResponse, sim_service::SimResponse, sms_service::SmsResponse,
+    stk_service::StkResponse, sup_service::SupResponse,
+};
+
 pub trait Parsable<'a>: Sized {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self>;
 }
@@ -70,7 +76,7 @@ impl fmt::Display for ModemError {
 
 // Actions that a command can request to be executed by the
 // CellularNetworkSimulator.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandAction {
     InitiateCall(String),
     InitiateRemoteCall(String),
@@ -225,11 +231,89 @@ impl CmeError {
     }
 }
 
+/// Combined structured response enum across all modem-rs services.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Response {
+    Sim(SimResponse),
+    Call(CallResponse),
+    Sms(SmsResponse),
+    Network(NetworkResponse),
+    Data(DataResponse),
+    Misc(MiscResponse),
+    Sup(SupResponse),
+    Stk(StkResponse),
+    Ok,
+}
+
+impl fmt::Display for Response {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Sim(resp) => write!(f, "{resp}"),
+            Self::Call(resp) => write!(f, "{resp}"),
+            Self::Sms(resp) => write!(f, "{resp}"),
+            Self::Network(resp) => write!(f, "{resp}"),
+            Self::Data(resp) => write!(f, "{resp}"),
+            Self::Misc(resp) => write!(f, "{resp}"),
+            Self::Sup(resp) => write!(f, "{resp}"),
+            Self::Stk(resp) => write!(f, "{resp}"),
+            Self::Ok => write!(f, "OK\r\n"),
+        }
+    }
+}
+
+impl From<SimResponse> for Response {
+    fn from(r: SimResponse) -> Self {
+        Self::Sim(r)
+    }
+}
+
+impl From<CallResponse> for Response {
+    fn from(r: CallResponse) -> Self {
+        Self::Call(r)
+    }
+}
+
+impl From<SmsResponse> for Response {
+    fn from(r: SmsResponse) -> Self {
+        Self::Sms(r)
+    }
+}
+
+impl From<NetworkResponse> for Response {
+    fn from(r: NetworkResponse) -> Self {
+        Self::Network(r)
+    }
+}
+
+impl From<DataResponse> for Response {
+    fn from(r: DataResponse) -> Self {
+        Self::Data(r)
+    }
+}
+
+impl From<MiscResponse> for Response {
+    fn from(r: MiscResponse) -> Self {
+        Self::Misc(r)
+    }
+}
+
+impl From<SupResponse> for Response {
+    fn from(r: SupResponse) -> Self {
+        Self::Sup(r)
+    }
+}
+
+impl From<StkResponse> for Response {
+    fn from(r: StkResponse) -> Self {
+        Self::Stk(r)
+    }
+}
+
 /// Contains all the results of a successfully executed command.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct HandledCommand {
-    /// The immediate response to send back to the client (e.g., "OK\r\n").
-    pub responses: Vec<String>,
+    /// The immediate responses to send back to the client.
+    pub responses: Vec<Response>,
     /// An optional follow-up action for the CellularNetworkSimulator to
     /// perform.
     pub action: Option<CommandAction>,
@@ -238,42 +322,79 @@ pub struct HandledCommand {
 impl HandledCommand {
     /// Creates a result with a simple "OK" response and no follow-up action.
     pub fn ok() -> Self {
-        Self { responses: vec!["OK\r\n".to_string()], action: None }
+        Self { responses: vec![Response::Ok], action: None }
     }
 
     /// Creates a result with a simple "OK" response AND a follow-up action.
     pub fn ok_with_action(action: CommandAction) -> Self {
-        Self { responses: vec!["OK\r\n".to_string()], action: Some(action) }
-    }
-    /// Creates a result with a simple "ERROR" response and no follow-up action.
-    pub fn error() -> Self {
-        Self { responses: vec!["ERROR\r\n".to_string()], action: None }
+        Self { responses: vec![Response::Ok], action: Some(action) }
     }
 }
 
-/// Represents the outcome of a command execution from the new parser.
-#[derive(Debug)]
+/// Represents the outcome of a command execution from the parser.
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionResult {
-    /// The command was successfully handled, yielding a response and/or action.
+    /// The command was successfully handled, yielding responses and/or action.
     Success(HandledCommand),
 
-    /// The command failed with a standard generic AT error ("ERROR\r\n").
-    Error,
-
-    /// The command failed with a standard generic AT error ("ERROR\r\n"), after
-    /// emitting one or more URC strings.
-    ErrorWithUrc(Vec<String>),
-
-    /// The command failed with a structured Mobile Equipment (ME) error.
-    CmeError(CmeError),
-
-    /// The command failed with a structured Mobile Equipment (ME) error, after
-    /// emitting one or more URC strings.
-    CmeErrorWithUrc(CmeError, Vec<String>),
+    /// The command failed, optionally with a structured Mobile Equipment error
+    /// and/or URCs emitted prior to failure.
+    Error { cme: Option<CmeError>, urcs: Vec<Response> },
 
     /// This command has not been refactored yet and should be handled by the
     /// legacy system.
     Unhandled,
+}
+
+impl ExecutionResult {
+    pub fn ok() -> Self {
+        Self::Success(HandledCommand::ok())
+    }
+
+    pub fn ok_with_action(action: CommandAction) -> Self {
+        Self::Success(HandledCommand::ok_with_action(action))
+    }
+
+    pub fn error() -> Self {
+        Self::Error { cme: None, urcs: Vec::new() }
+    }
+
+    pub fn cme_error(cme: CmeError) -> Self {
+        Self::Error { cme: Some(cme), urcs: Vec::new() }
+    }
+}
+
+impl<T: Into<Response>> From<Option<T>> for ExecutionResult {
+    fn from(opt: Option<T>) -> Self {
+        match opt.map(Into::into) {
+            Some(
+                resp @ (Response::Call(CallResponse::Ring) | Response::Data(DataResponse::Connect)),
+            ) => Self::Success(HandledCommand { responses: vec![resp], action: None }),
+            Some(Response::Call(CallResponse::Empty)) => Self::Success(HandledCommand::default()),
+            Some(Response::Call(CallResponse::WithAction(action))) => {
+                Self::Success(HandledCommand::ok_with_action(action))
+            }
+            Some(resp) => {
+                Self::Success(HandledCommand { responses: vec![resp, Response::Ok], action: None })
+            }
+            None => Self::ok(),
+        }
+    }
+}
+
+impl<T: Into<ExecutionResult>> From<Result<T, ExecutionResult>> for ExecutionResult {
+    fn from(res: Result<T, ExecutionResult>) -> Self {
+        match res {
+            Ok(val) => val.into(),
+            Err(err) => err,
+        }
+    }
+}
+
+impl From<CmeError> for ExecutionResult {
+    fn from(err: CmeError) -> Self {
+        Self::cme_error(err)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

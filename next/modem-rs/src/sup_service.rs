@@ -4,11 +4,11 @@
 use crate::{
     constants::FACILITY_SIM_PIN,
     parser::{Command, QuotedString},
-    types::{CmeError, ExecutionResult, HandledCommand},
+    types::{CmeError, ExecutionResult},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum SupResponse {
+pub enum SupResponse {
     FacilityLockStatus(u8),
     Clir { n: u8, m: u8 },
     Clip { status: u8, class: u8 },
@@ -30,38 +30,7 @@ impl std::fmt::Display for SupResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SupError {
-    Cme(CmeError),
-    Unhandled,
-}
-
-impl From<CmeError> for SupError {
-    fn from(err: CmeError) -> Self {
-        SupError::Cme(err)
-    }
-}
-
-type SupResult = Result<Option<SupResponse>, SupError>;
-
-impl From<SupResult> for ExecutionResult {
-    fn from(res: SupResult) -> Self {
-        match res {
-            Ok(opt_resp) => {
-                let mut handled = HandledCommand::ok();
-                if let Some(resp) = opt_resp {
-                    let resp_str = resp.to_string();
-                    if !resp_str.is_empty() {
-                        handled.responses.insert(0, resp_str);
-                    }
-                }
-                ExecutionResult::Success(handled)
-            }
-            Err(SupError::Cme(err)) => ExecutionResult::CmeError(err),
-            Err(SupError::Unhandled) => ExecutionResult::Unhandled,
-        }
-    }
-}
+type SupResult = Result<Option<SupResponse>, ExecutionResult>;
 
 pub const _MODE_ENABLE: u8 = 1;
 pub const _MODE_QUERY: u8 = 2;
@@ -163,13 +132,15 @@ impl SupService {
                 if facility_str != FACILITY_SIM_PIN {
                     self.handle_set_facility_lock(facility_str, *mode)
                 } else {
-                    Err(SupError::Unhandled)
+                    Err(ExecutionResult::Unhandled)
                 }
             }
             Command::CallForwarding { reason: _, mode, number, r#type, .. } => {
                 self.handle_call_forwarding(*mode, *number, *r#type)
             }
-            Command::CallForwardUtility(_) => Err(SupError::Cme(CmeError::OperationNotSupported)),
+            Command::CallForwardUtility(_) => {
+                Err(ExecutionResult::cme_error(CmeError::OperationNotSupported))
+            }
             Command::QueryClir => self.handle_query_clir(),
             Command::SetClir(clir) | Command::SetClirGoldfish(clir) => self.handle_set_clir(*clir),
             Command::SetClip(enabled) => self.handle_set_clip(*enabled),
@@ -180,7 +151,7 @@ impl SupService {
             }
             Command::SuppServiceNotification(_, _) => self.handle_supp_service_notification(),
             Command::SetUssd { mode, message, dcs } => self.handle_set_ussd(*mode, *message, *dcs),
-            _ => Err(SupError::Unhandled),
+            _ => Err(ExecutionResult::Unhandled),
         };
 
         sup_result.into()

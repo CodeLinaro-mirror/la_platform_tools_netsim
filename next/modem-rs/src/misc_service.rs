@@ -3,7 +3,7 @@
 
 use crate::{
     parser::{Command, QuotedString},
-    types::{CmeeMode, ExecutionResult, HandledCommand},
+    types::{CmeeMode, ExecutionResult},
 };
 
 const DEFAULT_IMEI: &str = "867400022047199";
@@ -11,7 +11,7 @@ const DEFAULT_SVN: &str = "01";
 const DEFAULT_INFO: &str = "modem simulator";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum MiscResponse {
+pub enum MiscResponse {
     Clock(String),
     ModelId(String),
     Revision(String),
@@ -72,32 +72,7 @@ impl std::fmt::Display for MiscResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MiscError {
-    Error,
-    Unhandled,
-}
-
-type MiscResult = Result<Option<MiscResponse>, MiscError>;
-
-impl From<MiscResult> for ExecutionResult {
-    fn from(res: MiscResult) -> Self {
-        match res {
-            Ok(opt_resp) => {
-                let mut handled = HandledCommand::ok();
-                if let Some(resp) = opt_resp {
-                    let resp_str = resp.to_string();
-                    if !resp_str.is_empty() {
-                        handled.responses.insert(0, resp_str);
-                    }
-                }
-                ExecutionResult::Success(handled)
-            }
-            Err(MiscError::Error) => ExecutionResult::Error,
-            Err(MiscError::Unhandled) => ExecutionResult::Unhandled,
-        }
-    }
-}
+type MiscResult = Result<Option<MiscResponse>, ExecutionResult>;
 
 pub struct MiscService {
     cmee_mode: CmeeMode,
@@ -190,7 +165,7 @@ impl MiscService {
             self.cmee_mode = m;
             Ok(None)
         } else {
-            Err(MiscError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -371,7 +346,7 @@ impl MiscService {
             Command::SetCallMode(_) => self.handle_set_call_mode(),
             Command::SetCharacterSet(_) => self.handle_set_character_set(),
             Command::Test => Ok(None),
-            _ => Err(MiscError::Unhandled),
+            _ => Err(ExecutionResult::Unhandled),
         };
 
         misc_result.into()

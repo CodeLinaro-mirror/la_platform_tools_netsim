@@ -16,7 +16,7 @@ pub struct CellCreate {
 }
 
 /// Quirks for compatibility with different guest-side implementations.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Quirks {
     /// Flag for compatibility with Goldfish RIL in SDK 37 and earlier.
     pub goldfish_ril_37_or_earlier: bool,
@@ -48,7 +48,7 @@ impl Default for Cell {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum RegistrationStatus {
     NotRegistered = 0,
     RegisteredHome = 1,
@@ -58,7 +58,7 @@ pub enum RegistrationStatus {
     Roaming = 5,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum RadioTechnology {
     Unknown = 0,
     Gsm = 1,

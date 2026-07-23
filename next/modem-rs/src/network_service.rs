@@ -8,7 +8,7 @@ use tracing::{info, warn};
 
 use crate::{
     parser::Command,
-    types::{CmeError, ExecutionResult, HandledCommand, SignalStrength},
+    types::{CmeError, ExecutionResult, Response, SignalStrength},
 };
 
 const DUMMY_LAC: &str = "2142";
@@ -21,7 +21,7 @@ pub enum RegistrationType {
     Lte,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkUrc {
     Registration {
         reg_type: RegistrationType,
@@ -60,7 +60,7 @@ impl std::fmt::Display for NetworkUrc {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkResponse {
     OperatorQuery {
         is_registered: bool,
@@ -175,46 +175,7 @@ impl std::fmt::Display for NetworkResponse {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum NetworkError {
-    Cme(CmeError),
-    CmeWithUrc(CmeError, Vec<NetworkUrc>),
-    Error,
-}
-
-pub type NetworkResult = Result<Option<NetworkResponse>, NetworkError>;
-
-impl From<NetworkResult> for ExecutionResult {
-    fn from(res: NetworkResult) -> Self {
-        match res {
-            Ok(opt_resp) => {
-                let mut handled = HandledCommand::ok();
-                if let Some(resp) = opt_resp {
-                    match resp {
-                        NetworkResponse::Urcs(urcs) => {
-                            for urc in urcs.iter().rev() {
-                                handled.responses.insert(0, urc.to_string());
-                            }
-                        }
-                        _ => {
-                            let resp_str = resp.to_string();
-                            if !resp_str.is_empty() {
-                                handled.responses.insert(0, resp_str);
-                            }
-                        }
-                    }
-                }
-                ExecutionResult::Success(handled)
-            }
-            Err(NetworkError::Cme(err)) => ExecutionResult::CmeError(err),
-            Err(NetworkError::CmeWithUrc(err, urcs)) => {
-                let urc_strings = urcs.iter().map(|u| u.to_string()).collect();
-                ExecutionResult::CmeErrorWithUrc(err, urc_strings)
-            }
-            Err(NetworkError::Error) => ExecutionResult::Error,
-        }
-    }
-}
+type NetworkResult = Result<Option<NetworkResponse>, ExecutionResult>;
 
 /// Formats the unsolicited signal quality (CSQ) report according to the
 /// extended 22-field layout.
@@ -466,7 +427,7 @@ impl NetworkService {
         );
 
         if format.is_some_and(|fmt| fmt > 2) {
-            return Err(NetworkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         match mode {
@@ -485,7 +446,7 @@ impl NetworkService {
                 if let Some(op_bytes) = oper {
                     let op_str = match std::str::from_utf8(op_bytes) {
                         Ok(s) => s,
-                        Err(_) => return Err(NetworkError::Error),
+                        Err(_) => return Err(ExecutionResult::error()),
                     };
 
                     self.cops_mode = 1;
@@ -523,10 +484,13 @@ impl NetworkService {
                         if let Some(urc) = self.format_cereg_urc(self.data_registration) {
                             urcs.push(urc);
                         }
-                        Err(NetworkError::CmeWithUrc(CmeError::NoNetworkService, urcs))
+                        Err(ExecutionResult::Error {
+                            cme: Some(CmeError::NoNetworkService),
+                            urcs: vec![Response::Network(NetworkResponse::Urcs(urcs))],
+                        })
                     }
                 } else {
-                    Err(NetworkError::Error)
+                    Err(ExecutionResult::error())
                 }
             }
             2 => {
@@ -556,14 +520,14 @@ impl NetworkService {
                     self.cops_format = fmt;
                     Ok(None)
                 } else {
-                    Err(NetworkError::Error)
+                    Err(ExecutionResult::error())
                 }
             }
             4 => {
                 if let Some(op_bytes) = oper {
                     let op_str = match std::str::from_utf8(op_bytes) {
                         Ok(s) => s,
-                        Err(_) => return Err(NetworkError::Error),
+                        Err(_) => return Err(ExecutionResult::error()),
                     };
 
                     self.cops_mode = 4;
@@ -588,10 +552,10 @@ impl NetworkService {
                     }
                     if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
                 } else {
-                    Err(NetworkError::Error)
+                    Err(ExecutionResult::error())
                 }
             }
-            _ => Err(NetworkError::Error),
+            _ => Err(ExecutionResult::error()),
         }
     }
 
@@ -632,7 +596,7 @@ impl NetworkService {
             }
             if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
         } else {
-            Err(NetworkError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -660,7 +624,7 @@ impl NetworkService {
             }
             if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
         } else {
-            Err(NetworkError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -688,7 +652,7 @@ impl NetworkService {
             }
             if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
         } else {
-            Err(NetworkError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -706,7 +670,7 @@ impl NetworkService {
     fn handle_set_ctec(&mut self, current: u8, preferred: &[u8]) -> NetworkResult {
         let preferred_str = match std::str::from_utf8(preferred) {
             Ok(s) => s.trim(),
-            Err(_) => return Err(NetworkError::Error),
+            Err(_) => return Err(ExecutionResult::error()),
         };
         let preferred_clean = preferred_str.trim_matches('"').trim();
         // Strip hex prefix "0x" or "0X" if present
@@ -717,7 +681,7 @@ impl NetworkService {
 
         let preferred_mask = match u32::from_str_radix(preferred_clean, 16) {
             Ok(val) => val,
-            Err(_) => return Err(NetworkError::Error),
+            Err(_) => return Err(ExecutionResult::error()),
         };
 
         // Validate allowed technologies mask
@@ -728,12 +692,12 @@ impl NetworkService {
         // Validate current tech is supported (current is a mask, e.g. 32 for LTE)
         let current_u32 = current as u32;
         if current_u32.count_ones() != 1 || (current_u32 & !allowed_mask) != 0 {
-            return Err(NetworkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         // Validate preferred mask only contains supported technologies
         if (preferred_mask & !allowed_mask) != 0 {
-            return Err(NetworkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         info!("handle_set_ctec: current={}, preferred_mask={:#X}", current, preferred_mask);
@@ -779,7 +743,7 @@ impl NetworkService {
         enable_unsolicited_urcs: bool,
     ) -> NetworkResult {
         if power != 0 && power != 1 && power != 4 {
-            return Err(NetworkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         let old_power = self.radio_power;
