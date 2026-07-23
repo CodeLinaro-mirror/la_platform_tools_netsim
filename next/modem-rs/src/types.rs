@@ -85,7 +85,7 @@ pub enum CommandAction {
     HangupCall(ModemId),
     InitiateCallAndHold(String),
     SwapCalls(ModemId, ModemId),
-    ReceiveSms { to: Option<String>, pdu: Vec<u8> },
+    ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
     ReceiveTextSms { to: String, text: String },
     None,
 }

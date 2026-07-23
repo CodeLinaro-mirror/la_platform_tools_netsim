@@ -8,6 +8,7 @@ use netsim_model::{Quirks, RegistrationStatus};
 use tracing::{info, warn};
 
 use crate::{
+    constants::{DEFAULT_OPERATOR_NAME_LONG, DEFAULT_OPERATOR_NAME_SHORT, DEFAULT_PLMN},
     parser::{QuotedString, parse_raw_data},
     types::{CmeError, ExecutionResult, Parsable, Response, SignalStrength},
 };
@@ -103,6 +104,7 @@ pub enum NetworkResponse {
         mode: u8,
         format: u8,
         plmn: String,
+        quirks: Quirks,
     },
     SignalStrength {
         rssi: u8,
@@ -133,22 +135,22 @@ pub enum NetworkResponse {
 impl std::fmt::Display for NetworkResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NetworkResponse::OperatorQuery { is_registered, mode, format, plmn } => {
+            NetworkResponse::OperatorQuery { is_registered, mode, format, plmn, quirks } => {
                 if *is_registered && *mode != 2 {
                     match format {
-                        0 => write!(
-                            f,
-                            "+COPS: {mode},0,\"{}\"\r\n",
-                            crate::constants::DEFAULT_OPERATOR_NAME_LONG
-                        ),
-                        1 => write!(
-                            f,
-                            "+COPS: {mode},1,\"{}\"\r\n",
-                            crate::constants::DEFAULT_OPERATOR_NAME_SHORT
-                        ),
+                        0 => write!(f, "+COPS: {mode},0,\"{DEFAULT_OPERATOR_NAME_LONG}\"\r\n"),
+                        1 => write!(f, "+COPS: {mode},1,\"{DEFAULT_OPERATOR_NAME_SHORT}\"\r\n"),
                         2 => write!(f, "+COPS: {mode},2,{plmn}\r\n"),
                         _ => write!(f, "+COPS: {mode}\r\n"),
                     }
+                } else if quirks.goldfish_ril_37_or_earlier && *format == 2 {
+                    // Legacy Goldfish RIL (SDK 37 and earlier) parses numeric format 2 as
+                    // operatorNumeric. Returning "+COPS: <mode>,2,0" sets
+                    // operatorNumeric to "0" (length 1), causing legacy RIL
+                    // to crash with std::out_of_range in operatorNumeric.substr(0, 3). Returning
+                    // DEFAULT_PLMN ("310260") ensures operatorNumeric has at
+                    // least 3 characters and avoids the RIL crash.
+                    write!(f, "+COPS: {mode},2,\"{DEFAULT_PLMN}\"\r\n")
                 } else {
                     write!(f, "+COPS: {mode},{format},0\r\n")
                 }
@@ -337,17 +339,15 @@ impl NetworkService {
         if rssi == crate::constants::CSQ_SIGNAL_UNKNOWN {
             return i32::MAX;
         }
-        // Convert CSQ RSSI (0-31) to dBm
-        // 0 -> -113 dBm, 31 -> -51 dBm, step 2
-        let rssi_dbm = -113 + (rssi as i32 * 2);
-
-        // Estimate RSRP = RSSI - 15 dBm
-        let rsrp_dbm = rssi_dbm - 15;
+        // Map CSQ (0-31) linearly to LTE RSRP range [-140, -44] dBm (3GPP TS 36.133).
+        // CSQ 0 -> -140 dBm, CSQ 31 -> -47 dBm (step of 3 dBm)
+        // rsrp_dbm = -140 + (rssi * 3)
+        let rsrp_dbm = -140 + (rssi as i32 * 3);
 
         // AIDL expects -1 * rsrp_dbm
         let rsrp_csq = -rsrp_dbm;
 
-        // Clamp to valid range [44, 140]
+        // Clamp to 3GPP TS 36.133 valid RSRP range [44, 140] (-44 dBm to -140 dBm)
         rsrp_csq.clamp(44, 140)
     }
 
@@ -446,6 +446,7 @@ impl NetworkService {
             mode: self.cops_mode,
             format: self.cops_format,
             plmn: self.plmn.clone(),
+            quirks: self.quirks,
         }))
     }
 

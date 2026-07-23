@@ -126,7 +126,7 @@ fn test_query_current_calls() {
 #[test]
 fn test_call_ring_timeout() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_A);
     given_modem_with_number(&mut world, "B", CALL_PEER_B);
     given_modem_with_number(&mut world, "C", CALL_PEER_C);
 
@@ -148,7 +148,11 @@ fn test_call_ring_timeout() {
 
     // Check AT+CLCC on C
     when_at_command_sent(&mut world, "C", "AT+CLCC");
-    then_response_contains(&mut world, "C", &format!("+CLCC: 1,1,4,0,0,\"\",{TOA_NATIONAL}"));
+    then_response_contains(
+        &mut world,
+        "C",
+        &format!("+CLCC: 1,1,4,0,0,\"{}\",{}", TEST_PHONE_NUMBER_LONG_A, TOA_NATIONAL),
+    );
 
     // Advance time > 30s
     when_time_advances_ms(&mut world, 30100);
@@ -243,6 +247,10 @@ fn test_query_emergency_mode() {
 fn test_external_incoming_call() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+
+    // Enable CLIP
+    when_at_command_sent(&mut world, "A", "AT+CLIP=1");
+    then_response_is(&mut world, "A", "OK");
 
     // Inject call
     when_incoming_call_received(&mut world, "A", TEST_PHONE_NUMBER);

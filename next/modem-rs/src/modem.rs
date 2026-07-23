@@ -49,6 +49,7 @@ pub enum ModemEvent {
     TestEvent,
 }
 
+#[derive(Debug)]
 pub enum ModemEffect {
     Action(CommandAction),
     Schedule { delay: Duration, event: ModemEvent },
@@ -80,9 +81,13 @@ impl ModemImpl {
         }
     }
 
-    pub fn trigger_incoming_call(&mut self, number: &str) -> Vec<ModemEffect> {
+    pub fn trigger_incoming_call(
+        &mut self,
+        number: &str,
+        peer_id: Option<ModemId>,
+    ) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
-        let call_res = self.call_service.ring(number.to_string());
+        let call_res = self.call_service.ring(number.to_string(), peer_id);
         let result: ExecutionResult = call_res.into();
         if let ExecutionResult::Success(handled) = result {
             for response in handled.responses {
@@ -91,8 +96,10 @@ impl ModemImpl {
                     effects.push(ModemEffect::Response(resp_str.into_bytes()));
                 }
             }
-            let clip = format!("+CLIP: \"{number}\",129,,,,0\r\n");
-            effects.push(ModemEffect::Response(clip.as_bytes().to_vec()));
+            if self.sup_service.clip_enabled() {
+                let clip = format!("+CLIP: \"{number}\",129,,,,0\r\n");
+                effects.push(ModemEffect::Response(clip.as_bytes().to_vec()));
+            }
 
             effects.push(ModemEffect::Schedule {
                 delay: CALL_RING_TIMEOUT,
@@ -219,6 +226,11 @@ impl ModemImpl {
                     event: ModemEvent::AttachNetwork,
                 });
             }
+            if !self.quirks.goldfish_ril_37_or_earlier
+                && let Some(urc) = self.sim_service.get_cpin_urc()
+            {
+                effects.push(ModemEffect::Response(urc.as_bytes().to_vec()));
+            }
         }
         effects
     }
@@ -244,7 +256,7 @@ impl ModemImpl {
                 let sms_res = if store {
                     self.sms_service.handle_store_sms(&mut self.sim_service, pdu)
                 } else {
-                    self.sms_service.handle_sms_body(pdu)
+                    self.sms_service.handle_sms_body(pdu, &self.phone_number)
                 };
 
                 let exec_res: ExecutionResult = sms_res.into();

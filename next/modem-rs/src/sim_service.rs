@@ -341,6 +341,16 @@ impl SimService {
         self.msisdn = msisdn.to_string();
     }
 
+    pub fn get_cpin_urc(&self) -> Option<String> {
+        let status = match self.state {
+            SimState::Absent => return Some("+CPIN: ABSENT\r\n".to_string()),
+            SimState::Ready => RequiredPin::None,
+            SimState::PinRequired => RequiredPin::SimPin,
+            SimState::PukRequired => RequiredPin::SimPuk,
+        };
+        Some(format!("{}", SimResponse::PinStatus(status)))
+    }
+
     pub fn is_present(&self) -> bool {
         self.state != SimState::Absent
     }

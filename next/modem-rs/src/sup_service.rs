@@ -91,6 +91,10 @@ pub struct SupService {
 }
 
 impl SupService {
+    pub fn clip_enabled(&self) -> bool {
+        self.clip_enabled == 1
+    }
+
     // --- Pure command handlers ---
 
     fn handle_set_facility_lock(&self, _facility: &str, mode: u8) -> SupResult {

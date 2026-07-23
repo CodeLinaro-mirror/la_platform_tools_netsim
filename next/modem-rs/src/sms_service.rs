@@ -187,17 +187,21 @@ impl SmsService {
         self.messages.len()
     }
 
-    pub fn handle_sms_body(&mut self, pdu: &[u8]) -> SmsResult {
+    pub fn handle_sms_body(&mut self, pdu: &[u8], sender: &str) -> SmsResult {
+        let mr = self.message_reference.fetch_add(1, Ordering::Relaxed);
         let action = if self.message_format == MessageFormat::Text {
             let to = self.pending_sms_destination.take().unwrap_or_default();
             let text = std::str::from_utf8(pdu).unwrap_or_default().to_string();
             CommandAction::ReceiveTextSms { to, text }
         } else {
-            let processed = crate::pdu::process_outgoing_sms(pdu);
-            CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu }
+            let processed = crate::pdu::process_outgoing_sms(pdu, Some(sender), mr);
+            CommandAction::ReceiveSms {
+                to: processed.to,
+                pdu: processed.pdu,
+                status_report: processed.status_report,
+            }
         };
 
-        let mr = self.message_reference.fetch_add(1, Ordering::Relaxed);
         Ok(SmsSuccess::with_action(Some(SmsResponse::SendSms { mr }), action))
     }
 
@@ -346,8 +350,12 @@ impl SmsService {
 
     pub fn handle_remote_sms(&self, pdu: QuotedString) -> SmsResult {
         let pdu_bytes = pdu.to_vec();
-        let processed = crate::pdu::process_outgoing_sms(&pdu_bytes);
-        let action = CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu };
+        let processed = crate::pdu::process_outgoing_sms(&pdu_bytes, None, 0);
+        let action = CommandAction::ReceiveSms {
+            to: processed.to,
+            pdu: processed.pdu,
+            status_report: processed.status_report,
+        };
         Ok(SmsSuccess::with_action(None, action))
     }
 

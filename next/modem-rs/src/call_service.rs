@@ -191,8 +191,8 @@ impl CallService {
         self.calls.retain(|c| c.state != CallState::Incoming);
     }
 
-    pub fn ring(&mut self, number: String) -> CallResult {
-        if self.add_call(CallState::Incoming, CallDirection::Incoming, number, None).is_none() {
+    pub fn ring(&mut self, number: String, peer_id: Option<ModemId>) -> CallResult {
+        if self.add_call(CallState::Incoming, CallDirection::Incoming, number, peer_id).is_none() {
             return Err(ExecutionResult::error());
         }
         Ok(Some(CallResponse::Ring))
@@ -521,7 +521,7 @@ impl CallService {
             CallCommand::Hangup => self.handle_hangup(id),
             CallCommand::CallHold(op) => self.handle_call_hold(*op, id),
             CallCommand::QueryCurrentCalls => self.handle_query_current_calls(),
-            CallCommand::Ring => self.ring("".to_string()),
+            CallCommand::Ring => self.ring("".to_string(), None),
             CallCommand::RemoteCall(number) => self.handle_remote_call(number),
             CallCommand::SetMute(mute) => self.handle_set_mute(*mute),
             CallCommand::QueryMute => self.handle_query_mute(),

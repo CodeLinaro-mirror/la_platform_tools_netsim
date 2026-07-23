@@ -427,6 +427,7 @@ fn test_sms_pdu_error_when_sim_absent() {
 
     // Remove SIM
     when_sim_status_set(&mut world, "A", false);
+    then_wait_for_response_containing(&mut world, "A", "+CPIN: ABSENT");
 
     // Set PDU Mode
     when_at_command_sent(&mut world, "A", "AT+CMGF=0");
@@ -481,4 +482,36 @@ fn test_legacy_sms() {
     // Expect +CMT: 15 (no comma) and PDU
     then_wait_for_response_containing(&mut world, "B", "+CMT: 15");
     then_response_is(&mut world, "B", TEST_SMS_PDU);
+}
+
+#[test]
+fn test_sms_status_report() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_B);
+    given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_A);
+
+    // Set A and B to PDU mode
+    when_at_command_sent(&mut world, "A", "AT+CMGF=0");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "B", "AT+CMGF=0");
+    then_response_is(&mut world, "B", "OK");
+
+    // Send SMS with SRR from A to B
+    when_at_command_sent(&mut world, "A", "AT+CMGS=15");
+    then_response_is(&mut world, "A", "> ");
+
+    // PDU with SRR (0x31)
+    let pdu_with_srr_ctrl_z = "0031000B915155255155F40000AA01F01A";
+    when_hex_bytes_sent(&mut world, "A", pdu_with_srr_ctrl_z);
+
+    // A should get CMGS success response
+    then_response_contains(&mut world, "A", "+CMGS: ");
+    then_response_is(&mut world, "A", "OK");
+
+    // B should receive the CMT unsolicited response
+    then_wait_for_response_containing(&mut world, "B", "+CMT: ,20");
+
+    // A should receive the CDS unsolicited response (Status Report)
+    then_wait_for_response_containing(&mut world, "A", "+CDS: 25");
+    then_response_contains(&mut world, "A", "0002010B915155255155F4");
 }

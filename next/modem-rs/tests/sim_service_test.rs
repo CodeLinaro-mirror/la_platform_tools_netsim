@@ -318,6 +318,7 @@ fn test_cmee_error_formatting_across_modes() {
     given_modem(&mut world, "A");
     let (id, _) = world.get_modem("A");
     world.manager.set_sim_status(id, false);
+    then_wait_for_response_containing(&mut world, "A", "+CPIN: ABSENT");
 
     // Mode 0 (Disable): Returns standard ERROR
     when_at_command_sent(&mut world, "A", "AT+CMEE=0");
@@ -736,6 +737,7 @@ fn test_sim_status_change_action() {
 
     // Remove SIM
     when_sim_status_set(&mut world, "A", false);
+    then_wait_for_response_containing(&mut world, "A", "+CPIN: ABSENT");
 
     // CPIN should fail
     when_at_command_sent(&mut world, "A", "AT+CPIN?");
@@ -743,6 +745,7 @@ fn test_sim_status_change_action() {
 
     // Re-insert SIM
     when_sim_status_set(&mut world, "A", true);
+    then_wait_for_response_containing(&mut world, "A", "+CPIN: READY");
 
     // CPIN should work again
     when_at_command_sent(&mut world, "A", "AT+CPIN?");

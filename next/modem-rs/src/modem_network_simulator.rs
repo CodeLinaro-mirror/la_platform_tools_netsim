@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
 use crate::{
-    constants::CALL_RING_TIMEOUT,
+    call_service::CallState,
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
     time::{Clock, SystemClock},
@@ -360,7 +360,7 @@ impl ModemNetworkSimulator {
                 events.push(NetworkEvent::ModemHungUp { id: hung_up_modem_id });
             }
             CommandAction::InitiateEmergencyCall => {} // No-op
-            CommandAction::ReceiveSms { to, pdu } => {
+            CommandAction::ReceiveSms { to, pdu, status_report } => {
                 self.metrics.sms_sent.fetch_add(1, AtomicOrdering::Relaxed);
                 let peer_id = if let Some(ref num) = to {
                     let sender_num = self.modems.get(&id).map(|m| m.phone_number());
@@ -398,6 +398,15 @@ impl ModemNetworkSimulator {
                     response.extend_from_slice(&pdu);
                     response.extend_from_slice(b"\r\n");
                     effects.push((peer_id, ModemEffect::Response(response)));
+
+                    // Send status report back to sender if requested and message was routed
+                    if let Some(report_pdu) = status_report {
+                        let report_tpdu_len = crate::pdu::calculate_tpdu_len(&report_pdu);
+                        let report_str = std::str::from_utf8(&report_pdu).unwrap_or_default();
+                        let report_response =
+                            format!("+CDS: {report_tpdu_len}\r\n{report_str}\r\n").into_bytes();
+                        effects.push((id, ModemEffect::Response(report_response)));
+                    }
                 }
             }
             CommandAction::ReceiveTextSms { to, text } => {
@@ -453,7 +462,7 @@ impl ModemNetworkSimulator {
         target_id: ModemId,
         number: &str,
     ) -> Vec<NetworkEvent> {
-        self.apply_to_modem(target_id, |modem| modem.trigger_incoming_call(number))
+        self.apply_to_modem(target_id, |modem| modem.trigger_incoming_call(number, None))
     }
 
     pub fn initiate_external_answer(&mut self, id: ModemId) -> Vec<NetworkEvent> {
@@ -508,18 +517,23 @@ impl ModemNetworkSimulator {
         let target_id = self
             .find_peer_id(caller_id, |m| normalize_number(&m.phone_number()) == normalized_target);
 
-        if let Some(tid) = target_id
-            && let Some(modem) = self.modems.get_mut(&tid)
-        {
-            // Send RING
-            let mut effects = modem.receive_at_command(b"RING\r\n");
+        if let Some(tid) = target_id {
+            // 1. Set peer_id on Caller's dialing call
+            if let Some(caller) = self.modems.get_mut(&caller_id)
+                && let Some(call) =
+                    caller.call_service.calls.iter_mut().find(|c| c.state == CallState::Dialing)
+            {
+                call.peer_id = Some(tid);
+                debug!("[Network] Set peer_id of caller {} to {} for dialing call", caller_id, tid);
+            }
 
-            // Also schedule RING timeout on TARGET
-            effects.push(ModemEffect::Schedule {
-                delay: CALL_RING_TIMEOUT,
-                event: ModemEvent::CallRingTimeout { call_token: 1 },
-            });
-            return effects.into_iter().map(|e| (tid, e)).collect();
+            // 2. Trigger incoming call on Callee (RING + CLIP + peer_id)
+            let caller_number =
+                self.modems.get(&caller_id).map(|m| m.phone_number()).unwrap_or_default();
+            if let Some(callee) = self.modems.get_mut(&tid) {
+                let effects = callee.trigger_incoming_call(&caller_number, Some(caller_id));
+                return effects.into_iter().map(|e| (tid, e)).collect();
+            }
         }
         Vec::new()
     }
