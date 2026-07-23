@@ -283,6 +283,25 @@ impl World {
         self.sinks.insert(name.to_string(), sink_rx);
     }
 
+    pub async fn given_active_scanner(&mut self, name: &str) {
+        if self.chips.contains_key(name) {
+            panic!("Chip with name '{}' already exists", name);
+        }
+
+        let (sink, sink_rx) = crate::test_utils::mock_sink();
+
+        self.create_chip(
+            name,
+            BluetoothMode::Scanner(ScannerParams { active: true }),
+            None,
+            Some(sink),
+            self.device_id,
+        )
+        .await;
+
+        self.sinks.insert(name.to_string(), sink_rx);
+    }
+
     // --- When Steps ---
 
     pub async fn when_delete_chip(

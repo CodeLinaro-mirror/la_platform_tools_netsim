@@ -129,58 +129,23 @@ impl ControllerImpl {
         bt_ops: Box<dyn BtOps>,
         properties: Option<&[u8]>,
     ) -> Controller {
-        // The initialization process is carefully ordered to manage lifetimes
-        // across the FFI boundary and avoid memory leaks or reference cycles.
-        // 1. A placeholder `ControllerImpl` is created with a null pointer.
-        // 2. A `CallbackContext` is created with a `Weak` pointer back to the
-        //    `ControllerImpl` to prevent ownership cycles.
-        // 3. The `CallbackContext` is passed to the C++ FFI, which takes ownership.
-        // 4. The FFI returns a real C++ controller pointer.
-        // 5. The real pointer is stored in the `ControllerImpl`, replacing the null.
-        // The C++ side is responsible for eventually calling `ffi_controller_delete`,
-        // which frees the C++ controller and drops the `CallbackContext`.
+        Arc::new_cyclic(|weak| {
+            // Create the context for the C++ side, using a Weak pointer to avoid cycles.
+            let context = Box::new(weak.clone());
+            let context_ptr = Box::into_raw(context);
 
-        // Create the ControllerImpl with a placeholder (null) controller pointer
-        // inside the Mutex.
-        let controller_impl = Arc::new(ControllerImpl {
-            controller: Mutex::new(FfiController(std::ptr::null_mut())),
-            id,
-            address,
-            callbacks,
-            bt_ops,
-            hci_commands_in: AtomicU64::new(0),
-            hci_events_out: AtomicU64::new(0),
-            invalid_packets: AtomicU64::new(0),
-            ll_packets_in: AtomicU64::new(0),
-            ll_packets_out: AtomicU64::new(0),
-            ll_packets_dropped: AtomicU64::new(0),
-            ll_packets_in_ble: AtomicU64::new(0),
-            ll_packets_in_classic: AtomicU64::new(0),
-            ll_packets_out_ble: AtomicU64::new(0),
-            ll_packets_out_classic: AtomicU64::new(0),
-            ble_p2p_tx_count: AtomicU64::new(0),
-            ble_p2p_rx_count: AtomicU64::new(0),
-            classic_p2p_tx_count: AtomicU64::new(0),
-            classic_p2p_rx_count: AtomicU64::new(0),
-        });
+            let (proto_ptr, proto_len) = match properties {
+                Some(bytes) => (bytes.as_ptr(), bytes.len()),
+                None => (std::ptr::null(), 0),
+            };
 
-        // Create the context for the C++ side, using a Weak pointer to avoid cycles.
-        let context = Box::new(Arc::downgrade(&controller_impl));
-        let context_ptr = Box::into_raw(context);
-
-        let (proto_ptr, proto_len) = match properties {
-            Some(bytes) => (bytes.as_ptr(), bytes.len()),
-            None => (std::ptr::null(), 0),
-        };
-
-        // Call the FFI to get the real controller pointer.
-        let controller_ptr =
+            // Call the FFI to get the real controller pointer.
             // SAFETY: The `address` pointer is valid for the duration of this call.
             // The C++ side is expected to copy the address data, not store the pointer.
             // We transfer ownership of `context_ptr` to the C++ library. The C++
             // library is responsible for calling `ffi_controller_delete`, which
             // will eventually drop the `CallbackContext` and its contents.
-            unsafe {
+            let controller_ptr = unsafe {
                 ffi::ffi_controller_new(
                     address.as_bytes().as_ptr(),
                     Some(send_hci_trampoline),
@@ -193,14 +158,28 @@ impl ControllerImpl {
                 )
             };
 
-        // Lock the mutex and store the real controller pointer. This is safe
-        // because no other thread can have access to the `controller_impl` yet.
-        {
-            let mut controller_guard = controller_impl.controller.lock();
-            *controller_guard = FfiController(controller_ptr);
-        }
-
-        controller_impl
+            ControllerImpl {
+                controller: Mutex::new(FfiController(controller_ptr)),
+                id,
+                address,
+                callbacks,
+                bt_ops,
+                hci_commands_in: AtomicU64::new(0),
+                hci_events_out: AtomicU64::new(0),
+                invalid_packets: AtomicU64::new(0),
+                ll_packets_in: AtomicU64::new(0),
+                ll_packets_out: AtomicU64::new(0),
+                ll_packets_dropped: AtomicU64::new(0),
+                ll_packets_in_ble: AtomicU64::new(0),
+                ll_packets_in_classic: AtomicU64::new(0),
+                ll_packets_out_ble: AtomicU64::new(0),
+                ll_packets_out_classic: AtomicU64::new(0),
+                ble_p2p_tx_count: AtomicU64::new(0),
+                ble_p2p_rx_count: AtomicU64::new(0),
+                classic_p2p_tx_count: AtomicU64::new(0),
+                classic_p2p_rx_count: AtomicU64::new(0),
+            }
+        })
     }
 
     /// Receives an HCI packet from the host.

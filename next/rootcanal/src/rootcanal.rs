@@ -47,6 +47,7 @@ pub struct Rootcanal {
     controllers: Mutex<HashMap<ControllerId, Controller>>,
     callbacks: Box<dyn Callbacks>,
     disable_address_reuse: bool,
+    on_packet: Box<dyn Fn(ControllerId, Bytes, Phy, i32) + Send + Sync>,
 }
 
 // A wrapper around the Bluetooth ops that a controller uses.  It
@@ -97,8 +98,17 @@ impl BtOps for BtOpsWrapper {
 
 impl Rootcanal {
     /// Creates a new Bluetooth subsystem.
-    pub fn new(callbacks: Box<dyn Callbacks>, disable_address_reuse: bool) -> Arc<Self> {
-        Arc::new(Self { controllers: Mutex::new(HashMap::new()), callbacks, disable_address_reuse })
+    pub fn new(
+        callbacks: Box<dyn Callbacks>,
+        disable_address_reuse: bool,
+        on_packet: Box<dyn Fn(ControllerId, Bytes, Phy, i32) + Send + Sync>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            controllers: Mutex::new(HashMap::new()),
+            callbacks,
+            disable_address_reuse,
+            on_packet,
+        })
     }
 
     /// Creates a new Bluetooth controller with a unique id and possibly
@@ -138,7 +148,8 @@ impl Rootcanal {
 
     /// Removes a Bluetooth controller.
     pub fn remove_controller(&self, id: ControllerId) -> Result<()> {
-        self.controllers.lock().remove(&id).ok_or(Error::ControllerNotFound(id)).map(|_| ())
+        let controller = self.controllers.lock().remove(&id);
+        controller.ok_or(Error::ControllerNotFound(id)).map(|_| ())
     }
 
     /// Injects a link layer packet from an external source into the simulation.
@@ -157,11 +168,19 @@ impl Rootcanal {
                 {
                     // sniffer controllers want to track packets received
                     controller.callbacks.on_receive_ll(sender_id, packet, phy, new_rssi);
-                    controller.receive_ll(packet, phy, new_rssi);
+                    (self.on_packet)(receiver_id, Bytes::copy_from_slice(packet), phy, new_rssi);
                 } else {
                     controller.increment_ll_packets_dropped();
                 }
             }
+        }
+    }
+
+    /// Delivers a packet to a specific controller.
+    pub fn deliver_packet(&self, receiver_id: ControllerId, packet: &[u8], phy: Phy, rssi: i32) {
+        let controller = self.controllers.lock().get(&receiver_id).cloned();
+        if let Some(controller) = controller {
+            controller.receive_ll(packet, phy, rssi);
         }
     }
 
@@ -196,11 +215,14 @@ impl Rootcanal {
 
     /// Receives an HCI packet from the host for a specific controller.
     pub fn receive_hci(&self, controller_id: ControllerId, h4_packet: Bytes) -> Result<()> {
-        self.controllers
+        let controller = self
+            .controllers
             .lock()
             .get(&controller_id)
-            .ok_or(Error::ControllerNotFound(controller_id))
-            .map(|controller| controller.receive_hci(h4_packet))
+            .cloned()
+            .ok_or(Error::ControllerNotFound(controller_id))?;
+        controller.receive_hci(h4_packet);
+        Ok(())
     }
 
     /// Returns the address of a specific controller.
@@ -340,7 +362,15 @@ mod tests {
     fn test_send_ll_packet() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth_weak = Arc::new(Mutex::new(Weak::<Rootcanal>::new()));
+        let bluetooth_weak_clone = bluetooth_weak.clone();
+        let on_packet = Box::new(move |receiver_id, packet: Bytes, phy, rssi| {
+            if let Some(bluetooth) = bluetooth_weak_clone.lock().upgrade() {
+                bluetooth.deliver_packet(receiver_id, &packet, phy, rssi);
+            }
+        });
+        let bluetooth = Rootcanal::new(callbacks, false, on_packet);
+        *bluetooth_weak.lock() = Arc::downgrade(&bluetooth);
         setup_bluetooth_with_controllers(&bluetooth, 2);
 
         // TODO: Send valid link layer packets.
@@ -356,7 +386,7 @@ mod tests {
     fn test_send_ll_packet_dropped() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: true, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth = Rootcanal::new(callbacks, false, Box::new(|_, _, _, _| {}));
         setup_bluetooth_with_controllers(&bluetooth, 2);
 
         // TODO: Send valid link layer packets.
@@ -372,7 +402,7 @@ mod tests {
     fn test_delete_controller() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth = Rootcanal::new(callbacks, false, Box::new(|_, _, _, _| {}));
         setup_bluetooth_with_controllers(&bluetooth, 2);
 
         assert_eq!(bluetooth.len(), 2);
@@ -390,7 +420,7 @@ mod tests {
     fn test_delete_controller_invalid_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth = Rootcanal::new(callbacks, false, Box::new(|_, _, _, _| {}));
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let result = bluetooth.remove_controller(2);
@@ -405,7 +435,7 @@ mod tests {
     fn test_add_controller_duplicate_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth = Rootcanal::new(callbacks, false, Box::new(|_, _, _, _| {}));
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let addr = Address::from_str("01:02:03:04:05:06").unwrap();
@@ -423,7 +453,7 @@ mod tests {
     fn test_receive_hci_invalid_controller() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth = Rootcanal::new(callbacks, false, Box::new(|_, _, _, _| {}));
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let result = bluetooth.receive_hci(2, Bytes::from_static(&[1, 1, 2, 3]));
@@ -438,7 +468,7 @@ mod tests {
     fn test_clear_stats() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth = Rootcanal::new(callbacks, false, Box::new(|_, _, _, _| {}));
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         // Clear stats for a valid controller.
@@ -457,7 +487,7 @@ mod tests {
     fn test_get_address_invalid_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth = Rootcanal::new(callbacks, false, Box::new(|_, _, _, _| {}));
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let result = bluetooth.get_address(2);
@@ -472,7 +502,7 @@ mod tests {
     fn test_get_stats_invalid_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
-        let bluetooth = Rootcanal::new(callbacks, false);
+        let bluetooth = Rootcanal::new(callbacks, false, Box::new(|_, _, _, _| {}));
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
         let result = bluetooth.get_stats(2);
@@ -488,7 +518,7 @@ mod tests {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
         // Create with disable_address_reuse = true
-        let bluetooth = Rootcanal::new(callbacks, true);
+        let bluetooth = Rootcanal::new(callbacks, true, Box::new(|_, _, _, _| {}));
 
         let addr = Address::from_str("01:02:03:04:05:06").unwrap();
 
