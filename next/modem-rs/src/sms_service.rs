@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use crate::{
     parser::{Command, QuotedString},
     sim_service::SimService, // Required for Sim storage
-    types::{CmeError, CommandAction, ExecutionResult, HandledCommand},
+    types::{CommandAction, ExecutionResult, HandledCommand, Response},
 };
 
 const TOSCA_INTERNATIONAL: u8 = 145;
@@ -77,19 +77,7 @@ impl std::fmt::Display for SmsResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SmsError {
-    Cme(CmeError),
-    Unhandled,
-    Generic,
-}
-
-impl From<CmeError> for SmsError {
-    fn from(err: CmeError) -> Self {
-        SmsError::Cme(err)
-    }
-}
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsSuccess {
     pub response: Option<SmsResponse>,
     pub action: CommandAction,
@@ -105,36 +93,7 @@ impl SmsSuccess {
     }
 }
 
-pub type SmsResult = Result<SmsSuccess, SmsError>;
-
-impl From<SmsResult> for ExecutionResult {
-    fn from(res: SmsResult) -> Self {
-        match res {
-            Ok(success) => {
-                let mut responses = Vec::new();
-                let mut add_ok = true;
-                if let Some(resp) = success.response {
-                    if resp == SmsResponse::Prompt {
-                        add_ok = false;
-                    }
-                    let resp_str = resp.to_string();
-                    if !resp_str.is_empty() {
-                        responses.push(resp_str);
-                    }
-                }
-                if add_ok {
-                    responses.push("OK\r\n".to_string());
-                }
-                let action =
-                    if success.action != CommandAction::None { Some(success.action) } else { None };
-                ExecutionResult::Success(HandledCommand { responses, action })
-            }
-            Err(SmsError::Cme(err)) => ExecutionResult::CmeError(err),
-            Err(SmsError::Unhandled) => ExecutionResult::Unhandled,
-            Err(SmsError::Generic) => ExecutionResult::Error,
-        }
-    }
-}
+type SmsResult = Result<SmsSuccess, ExecutionResult>;
 
 // Holds all state related to the SMS service.
 pub struct SmsService {
@@ -198,7 +157,7 @@ impl SmsService {
             if let Some(index) = sim_service.store_sms(pdu) {
                 Ok(SmsSuccess::new(Some(SmsResponse::WriteSms { index: index as usize })))
             } else {
-                Err(SmsError::Generic)
+                Err(ExecutionResult::error())
             }
         } else {
             self.messages.push(pdu.to_vec());
@@ -212,13 +171,13 @@ impl SmsService {
             if sim_service.delete_sms(index) {
                 Ok(SmsSuccess::new(None))
             } else {
-                Err(SmsError::Generic)
+                Err(ExecutionResult::error())
             }
         } else if (index as usize) > 0 && (index as usize - 1) < self.messages.len() {
             self.messages.remove(index as usize - 1);
             Ok(SmsSuccess::new(None))
         } else {
-            Err(SmsError::Generic)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -226,13 +185,13 @@ impl SmsService {
         if self.storage1 == MessageStorage::Sim {
             match sim_service.read_sms(index) {
                 Ok(Some(pdu)) => Ok(SmsSuccess::new(Some(SmsResponse::ReadSms { pdu }))),
-                Ok(None) => Err(SmsError::Generic),
-                Err(err) => Err(SmsError::Cme(err)),
+                Ok(None) => Err(ExecutionResult::error()),
+                Err(err) => Err(ExecutionResult::cme_error(err)),
             }
         } else if let Some(pdu) = index.checked_sub(1).and_then(|i| self.messages.get(i as usize)) {
             Ok(SmsSuccess::new(Some(SmsResponse::ReadSms { pdu: pdu.clone() })))
         } else {
-            Err(SmsError::Generic)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -365,8 +324,27 @@ impl SmsService {
             }
             Command::GetSmscAddress => self.handle_get_smsc_address(),
             Command::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
-            _ => Err(SmsError::Unhandled),
+            _ => Err(ExecutionResult::Unhandled),
         };
-        sms_result.into()
+        sms_result.map_or_else(|e| e, ExecutionResult::from)
+    }
+}
+
+impl From<SmsSuccess> for ExecutionResult {
+    fn from(success: SmsSuccess) -> Self {
+        let mut responses = Vec::new();
+        let mut add_ok = true;
+        if let Some(resp) = success.response {
+            if resp == SmsResponse::Prompt {
+                add_ok = false;
+            }
+            responses.push(resp.into());
+        }
+        if add_ok {
+            responses.push(Response::Ok);
+        }
+        let action =
+            if success.action != CommandAction::None { Some(success.action) } else { None };
+        ExecutionResult::Success(HandledCommand { responses, action })
     }
 }

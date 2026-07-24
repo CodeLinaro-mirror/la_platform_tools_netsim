@@ -9,7 +9,7 @@ use crate::{
     cuttlefish::read_cuttlefish_config,
     modem::ModemImpl,
     parser::{Command, QuotedString},
-    types::{DEFAULT_DNS, DEFAULT_GATEWAY, ExecutionResult, HandledCommand},
+    types::{DEFAULT_DNS, DEFAULT_GATEWAY, ExecutionResult},
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -141,39 +141,7 @@ impl std::fmt::Display for DataResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DataError {
-    Error,
-    Unhandled,
-}
-
-pub type DataResult = Result<Option<DataResponse>, DataError>;
-
-impl From<DataResult> for ExecutionResult {
-    fn from(res: DataResult) -> Self {
-        match res {
-            Ok(opt_resp) => {
-                if let Some(DataResponse::Connect) = opt_resp {
-                    ExecutionResult::Success(HandledCommand {
-                        responses: vec!["CONNECT\r\n".to_string()],
-                        action: None,
-                    })
-                } else {
-                    let mut handled = HandledCommand::ok();
-                    if let Some(resp) = opt_resp {
-                        let resp_str = resp.to_string();
-                        if !resp_str.is_empty() {
-                            handled.responses.insert(0, resp_str);
-                        }
-                    }
-                    ExecutionResult::Success(handled)
-                }
-            }
-            Err(DataError::Error) => ExecutionResult::Error,
-            Err(DataError::Unhandled) => ExecutionResult::Unhandled,
-        }
-    }
-}
+type DataResult = Result<Option<DataResponse>, ExecutionResult>;
 
 pub struct DataService {
     pdp_contexts: BTreeMap<u8, PdpContext>,
@@ -279,7 +247,7 @@ impl DataService {
             context.qos = Qos { precedence, delay, reliability, peak, mean };
             Ok(None)
         } else {
-            Err(DataError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -308,7 +276,7 @@ impl DataService {
             context.req_qos = Qos { precedence, delay, reliability, peak, mean };
             Ok(None)
         } else {
-            Err(DataError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -337,7 +305,7 @@ impl DataService {
             context.gprs_qos = Qos { precedence, delay, reliability, peak, mean };
             Ok(None)
         } else {
-            Err(DataError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -366,7 +334,7 @@ impl DataService {
             context.gprs_req_qos = Qos { precedence, delay, reliability, peak, mean };
             Ok(None)
         } else {
-            Err(DataError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -387,7 +355,7 @@ impl DataService {
             context.active = state == 1;
             Ok(None)
         } else {
-            Err(DataError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -418,13 +386,13 @@ impl DataService {
     }
 
     pub fn handle_set_pdp_context_modify(&self, cid: u8) -> DataResult {
-        if self.pdp_contexts.contains_key(&cid) { Ok(None) } else { Err(DataError::Error) }
+        if self.pdp_contexts.contains_key(&cid) { Ok(None) } else { Err(ExecutionResult::error()) }
     }
 
     pub fn handle_enter_data_state(&self, cid: u8) -> DataResult {
         match self.pdp_contexts.get(&cid) {
             Some(context) if context.active => Ok(Some(DataResponse::Connect)),
-            _ => Err(DataError::Error),
+            _ => Err(ExecutionResult::error()),
         }
     }
 
@@ -466,7 +434,7 @@ impl DataService {
                 if context.active { self.get_ip_address(cid) } else { "0.0.0.0".to_string() };
             Ok(Some(DataResponse::PdpAddress { cid, ip_address }))
         } else {
-            Err(DataError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -480,10 +448,10 @@ impl DataService {
                 let prefix = self.prefixlen.unwrap_or(24);
                 Ok(Some(DataResponse::DynamicParam { cid, apn, ip_address, prefix, gateway, dns }))
             } else {
-                Err(DataError::Error)
+                Err(ExecutionResult::error())
             }
         } else {
-            Err(DataError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -541,16 +509,16 @@ impl DataService {
                                 context.active = true;
                                 Ok(Some(DataResponse::Connect))
                             } else {
-                                Err(DataError::Error)
+                                Err(ExecutionResult::error())
                             }
                         }
-                        Err(_) => Err(DataError::Error),
+                        Err(_) => Err(ExecutionResult::error()),
                     }
                 } else {
-                    Err(DataError::Unhandled)
+                    Err(ExecutionResult::Unhandled)
                 }
             }
-            _ => Err(DataError::Unhandled),
+            _ => Err(ExecutionResult::Unhandled),
         };
         result.into()
     }
@@ -583,7 +551,7 @@ fn parse_cid_from_gprs_dial(number: &[u8]) -> Result<u8, ()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::QuotedString;
+    use crate::{parser::QuotedString, types::Response};
 
     #[test]
     fn test_data_service_dial_direct() {
@@ -594,7 +562,7 @@ mod tests {
         // Dial
         let res = service.execute(&Command::Dial(b"*99***1#"));
         if let ExecutionResult::Success(handled) = res {
-            assert_eq!(handled.responses, vec!["CONNECT\r\n".to_string()]);
+            assert_eq!(handled.responses, vec![Response::Data(DataResponse::Connect)]);
         } else {
             panic!("Expected Success");
         }
@@ -608,11 +576,11 @@ mod tests {
 
         // Dial malformed alphanumeric CID
         let res = service.execute(&Command::Dial(b"*99*abc#"));
-        assert!(matches!(res, ExecutionResult::Error));
+        assert!(matches!(res, ExecutionResult::Error { .. }));
 
         // Dial empty trailing CID
         let res = service.execute(&Command::Dial(b"*99*#"));
-        assert!(matches!(res, ExecutionResult::Error));
+        assert!(matches!(res, ExecutionResult::Error { .. }));
     }
 
     #[test]
