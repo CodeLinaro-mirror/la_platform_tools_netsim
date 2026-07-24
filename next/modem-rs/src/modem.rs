@@ -11,7 +11,7 @@ use crate::{
     constants::CALL_RING_TIMEOUT,
     data_service::DataService,
     misc_service::MiscService,
-    network_service::NetworkService,
+    network_service::{NetworkCommand, NetworkService},
     parser::Command,
     sim_service::SimService,
     sms_service::SmsService,
@@ -379,16 +379,18 @@ impl ModemImpl {
     ) -> ExecutionResult {
         let mut result = self.execute(command);
         if let ExecutionResult::Success(ref mut handled) = result {
-            if let Command::SetRadioPower(1) = command {
+            if let Command::Network(NetworkCommand::SetRadioPower(1)) = command {
                 effects.push(ModemEffect::Schedule {
                     delay: std::time::Duration::from_millis(10),
                     event: ModemEvent::AttachNetwork,
                 });
             }
             let mode_active = match command {
-                Command::SetVoiceNetworkRegistration(m)
-                | Command::SetDataNetworkRegistration(m)
-                | Command::SetLteNetworkRegistration(m) => *m > 0,
+                Command::Network(
+                    NetworkCommand::SetVoiceNetworkRegistration(m)
+                    | NetworkCommand::SetDataNetworkRegistration(m)
+                    | NetworkCommand::SetLteNetworkRegistration(m),
+                ) => *m > 0,
                 _ => false,
             };
             if mode_active && !self.network_service.is_attached() {
@@ -485,49 +487,16 @@ impl ModemImpl {
     }
 
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
-        let result = self.misc_service.execute(command);
-        if !matches!(result, ExecutionResult::Unhandled) {
-            return result;
+        match command {
+            Command::Sim(c) => self.sim_service.execute(c),
+            Command::Call(c) => self.call_service.execute(c, self.id, &mut self.data_service),
+            Command::Sms(c) => self.sms_service.execute(c, &mut self.sim_service),
+            Command::Network(c) => self.network_service.execute(c, self.enable_unsolicited_urcs),
+            Command::Data(c) => self.data_service.execute(c),
+            Command::Misc(c) => self.misc_service.execute(c),
+            Command::Sup(c) => self.sup_service.execute(c, &mut self.sim_service),
+            Command::Stk(c) => self.stk_service.execute(c),
         }
-
-        // SMS Service needs SimService
-        let result = self.sms_service.execute(command, &mut self.sim_service);
-        if !matches!(result, ExecutionResult::Unhandled) {
-            return result;
-        }
-
-        // Call Service needs ModemId
-        let result = self.call_service.execute(command, self.id);
-        if !matches!(result, ExecutionResult::Unhandled) {
-            return result;
-        }
-
-        let result = self.data_service.execute(command);
-        if !matches!(result, ExecutionResult::Unhandled) {
-            return result;
-        }
-
-        let result = self.network_service.execute(command, self.enable_unsolicited_urcs);
-        if !matches!(result, ExecutionResult::Unhandled) {
-            return result;
-        }
-
-        let result = self.sim_service.execute(command);
-        if !matches!(result, ExecutionResult::Unhandled) {
-            return result;
-        }
-
-        let result = self.stk_service.execute(command);
-        if !matches!(result, ExecutionResult::Unhandled) {
-            return result;
-        }
-
-        let result = self.sup_service.execute(command);
-        if !matches!(result, ExecutionResult::Unhandled) {
-            return result;
-        }
-
-        ExecutionResult::Unhandled
     }
 }
 

@@ -3,11 +3,60 @@
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use modem_rs_derive::CommandParser;
+
 use crate::{
-    parser::{Command, QuotedString},
+    parser::{QuotedString, parse_raw_data},
     sim_service::SimService, // Required for Sim storage
-    types::{CommandAction, ExecutionResult, HandledCommand, Response},
+    types::{CommandAction, ExecutionResult, HandledCommand, Parsable, Response},
 };
+
+/// SMS service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum SmsCommand<'a> {
+    /// 3GPP TS 27.005: Send message
+    #[command(tag = "AT+CMGS=")]
+    SendSms(#[parser(parse_raw_data)] &'a [u8]),
+    /// 3GPP TS 27.005: Write message to memory
+    #[command(tag = "AT+CMGW=")]
+    StoreSms(u8),
+    /// 3GPP TS 27.005: Read message
+    #[command(tag = "AT+CMGR=")]
+    ReadSms(u8),
+    /// 3GPP TS 27.005: Delete SMS Message
+    #[command(tag = "AT+CMGD=")]
+    DeleteSms(u8),
+    /// 3GPP TS 27.005: New message acknowledgement with value (e.g. AT+CNMA=1)
+    #[command(tag = "AT+CNMA=")]
+    SendSmsAckWithVal(u8),
+    /// 3GPP TS 27.005: New message acknowledgement
+    #[command(tag = "AT+CNMA")]
+    SendSmsAck,
+    /// 3GPP TS 27.005: Set SMS message format
+    #[command(tag = "AT+CMGF=")]
+    SetSmsMessageFormat(u8),
+    /// 3GPP TS 27.005: Set preferred message storage
+    #[command(tag = "AT+CPMS=")]
+    SetPreferredMessageStorage(QuotedString<'a>, QuotedString<'a>, QuotedString<'a>),
+    /// 3GPP TS 27.005: Query preferred message storage
+    #[command(tag = "AT+CPMS?")]
+    QueryPreferredMessageStorage,
+    /// 3GPP TS 27.005: Set broadcast config
+    #[command(tag = "AT+CSCB=")]
+    BroadcastConfig(u8, QuotedString<'a>, QuotedString<'a>),
+    /// 3GPP TS 27.005: Query broadcast config
+    #[command(tag = "AT+CSCB?")]
+    QueryBroadcastConfig,
+    /// 3GPP TS 27.005: Set SMSC address
+    #[command(tag = "AT+CSCA=")]
+    SetSmscAddress(QuotedString<'a>, Option<u8>),
+    /// 3GPP TS 27.005: Get SMSC address
+    #[command(tag = "AT+CSCA?")]
+    GetSmscAddress,
+    /// VENDOR: Remote SMS
+    #[command(tag = "AT+REMOTESMS=")]
+    RemoteSms(QuotedString<'a>),
+}
 
 const TOSCA_INTERNATIONAL: u8 = 145;
 const TOSCA_NATIONAL: u8 = 129;
@@ -303,30 +352,35 @@ impl SmsService {
     }
 
     // Explicit execute method instead of Trait
-    pub fn execute(&mut self, command: &Command, sim_service: &mut SimService) -> ExecutionResult {
+    pub fn execute<'a>(
+        &mut self,
+        command: &SmsCommand<'a>,
+        sim_service: &mut SimService,
+    ) -> ExecutionResult {
         let sms_result = match command {
-            Command::SendSms(data) => self.handle_cmgs(data),
-            Command::StoreSms(len) => self.handle_wait_for_store_sms(*len),
-            Command::ReadSms(index) => self.handle_read_sms(sim_service, *index),
-            Command::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
-            Command::SendSmsAck | Command::SendSmsAckWithVal(_) => self.handle_send_sms_ack(),
-            Command::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
-            Command::SetPreferredMessageStorage(storage1, storage2, storage3) => {
+            SmsCommand::SendSms(data) => self.handle_cmgs(data),
+            SmsCommand::StoreSms(len) => self.handle_wait_for_store_sms(*len),
+            SmsCommand::ReadSms(index) => self.handle_read_sms(sim_service, *index),
+            SmsCommand::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
+            SmsCommand::SendSmsAck | SmsCommand::SendSmsAckWithVal(_) => self.handle_send_sms_ack(),
+            SmsCommand::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
+            SmsCommand::SetPreferredMessageStorage(storage1, storage2, storage3) => {
                 self.handle_set_preferred_message_storage(*storage1, *storage2, *storage3)
             }
-            Command::QueryPreferredMessageStorage => self.handle_query_preferred_message_storage(),
-            Command::BroadcastConfig(mode, mids, dcss) => {
+            SmsCommand::QueryPreferredMessageStorage => {
+                self.handle_query_preferred_message_storage()
+            }
+            SmsCommand::BroadcastConfig(mode, mids, dcss) => {
                 self.handle_broadcast_config(*mode, *mids, *dcss)
             }
-            Command::QueryBroadcastConfig => self.handle_query_broadcast_config(),
-            Command::SetSmscAddress(address, tosca) => {
+            SmsCommand::QueryBroadcastConfig => self.handle_query_broadcast_config(),
+            SmsCommand::SetSmscAddress(address, tosca) => {
                 self.handle_set_smsc_address(*address, *tosca)
             }
-            Command::GetSmscAddress => self.handle_get_smsc_address(),
-            Command::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
-            _ => Err(ExecutionResult::Unhandled),
+            SmsCommand::GetSmscAddress => self.handle_get_smsc_address(),
+            SmsCommand::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
         };
-        sms_result.map_or_else(|e| e, ExecutionResult::from)
+        sms_result.into()
     }
 }
 

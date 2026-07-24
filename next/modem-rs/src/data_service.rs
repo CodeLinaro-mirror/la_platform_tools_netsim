@@ -5,12 +5,64 @@
 
 use std::collections::BTreeMap;
 
+use modem_rs_derive::CommandParser;
+
 use crate::{
     cuttlefish::read_cuttlefish_config,
     modem::ModemImpl,
-    parser::{Command, QuotedString},
-    types::{DEFAULT_DNS, DEFAULT_GATEWAY, ExecutionResult},
+    parser::QuotedString,
+    types::{DEFAULT_DNS, DEFAULT_GATEWAY, ExecutionResult, Parsable},
 };
+
+/// Data service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum DataCommand<'a> {
+    #[command(tag = "AT+CGDCONT=")]
+    DefinePdpContext(
+        u8,
+        QuotedString<'a>,
+        QuotedString<'a>,
+        Option<QuotedString<'a>>,
+        Option<u8>,
+        Option<u8>,
+    ),
+    #[command(tag = "AT+CGDCONT?")]
+    QueryPdpContext,
+    #[command(tag = "AT+CGEQMIN=")]
+    SetQualityOfServiceMinimum(u8, u8, u8, u8, u8, u8),
+    #[command(tag = "AT+CGEQMIN?")]
+    QueryQualityOfServiceMinimum,
+    #[command(tag = "AT+CGEQREQ=")]
+    SetQualityOfServiceRequested(u8, u8, u8, u8, u8, u8),
+    #[command(tag = "AT+CGEQREQ?")]
+    QueryQualityOfServiceRequested,
+    #[command(tag = "AT+CGQMIN=")]
+    SetQualityOfServiceMinimumGprs(u8, u8, u8, u8, u8, u8),
+    #[command(tag = "AT+CGQMIN?")]
+    QueryQualityOfServiceMinimumGprs,
+    #[command(tag = "AT+CGQREQ=")]
+    SetQualityOfServiceRequestedGprs(u8, u8, u8, u8, u8, u8),
+    #[command(tag = "AT+CGQREQ?")]
+    QueryQualityOfServiceRequestedGprs,
+    #[command(tag = "AT+CGACT=")]
+    SetPdpContextActivate(u8, u8),
+    #[command(tag = "AT+CGACT?")]
+    QueryPdpContextActivate,
+    #[command(tag = "AT+CGATT=")]
+    SetPsAttach(u8),
+    #[command(tag = "AT+CGATT?")]
+    QueryPsAttach,
+    #[command(tag = "AT+CGCMOD=")]
+    SetPdpContextModify(u8),
+    #[command(tag = "AT+CGDATA=")]
+    EnterDataState(u8),
+    #[command(tag = "AT+CGEREP=")]
+    SetPacketEventReporting(u8, u8),
+    #[command(tag = "AT+CGPADDR=")]
+    ShowPdpAddress(u8),
+    #[command(tag = "AT+CGCONTRDP=")]
+    ReadDynamicParam(u8),
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Qos {
@@ -455,36 +507,53 @@ impl DataService {
         }
     }
 
-    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
+    pub fn handle_gprs_dial(&mut self, number: &[u8]) -> DataResult {
+        match parse_cid_from_gprs_dial(number) {
+            Ok(cid) => {
+                if let Some(context) = self.pdp_contexts.get_mut(&cid) {
+                    context.active = true;
+                    Ok(Some(DataResponse::Connect))
+                } else {
+                    Err(ExecutionResult::error())
+                }
+            }
+            Err(_) => Err(ExecutionResult::error()),
+        }
+    }
+
+    pub fn execute<'a>(&mut self, command: &DataCommand<'a>) -> ExecutionResult {
         let result: DataResult = match command {
-            Command::DefinePdpContext(cid, pdp_type, apn, ..) => {
+            DataCommand::DefinePdpContext(cid, pdp_type, apn, ..) => {
                 self.handle_define_pdp_context(*cid, *pdp_type, *apn)
             }
-            Command::QueryPdpContext => self.handle_query_pdp_context(),
-            Command::QueryQualityOfServiceMinimum => self.handle_query_quality_of_service_minimum(),
-            Command::SetQualityOfServiceMinimum(cid, prec, delay, rel, peak, mean) => {
+            DataCommand::QueryPdpContext => self.handle_query_pdp_context(),
+            DataCommand::QueryQualityOfServiceMinimum => {
+                self.handle_query_quality_of_service_minimum()
+            }
+            DataCommand::SetQualityOfServiceMinimum(cid, prec, delay, rel, peak, mean) => {
                 self.handle_set_quality_of_service_minimum(*cid, *prec, *delay, *rel, *peak, *mean)
             }
-            Command::SetQualityOfServiceRequested(cid, prec, delay, rel, peak, mean) => self
+            DataCommand::SetQualityOfServiceRequested(cid, prec, delay, rel, peak, mean) => self
                 .handle_set_quality_of_service_requested(*cid, *prec, *delay, *rel, *peak, *mean),
-            Command::QueryQualityOfServiceRequested => {
+            DataCommand::QueryQualityOfServiceRequested => {
                 self.handle_query_quality_of_service_requested()
             }
-            Command::SetQualityOfServiceMinimumGprs(cid, prec, delay, rel, peak, mean) => self
+            DataCommand::SetQualityOfServiceMinimumGprs(cid, prec, delay, rel, peak, mean) => self
                 .handle_set_quality_of_service_minimum_gprs(
                     *cid, *prec, *delay, *rel, *peak, *mean,
                 ),
-            Command::QueryQualityOfServiceMinimumGprs => {
+            DataCommand::QueryQualityOfServiceMinimumGprs => {
                 self.handle_query_quality_of_service_minimum_gprs()
             }
-            Command::SetQualityOfServiceRequestedGprs(cid, prec, delay, rel, peak, mean) => self
-                .handle_set_quality_of_service_requested_gprs(
+            DataCommand::SetQualityOfServiceRequestedGprs(cid, prec, delay, rel, peak, mean) => {
+                self.handle_set_quality_of_service_requested_gprs(
                     *cid, *prec, *delay, *rel, *peak, *mean,
-                ),
-            Command::QueryQualityOfServiceRequestedGprs => {
+                )
+            }
+            DataCommand::QueryQualityOfServiceRequestedGprs => {
                 self.handle_query_quality_of_service_requested_gprs()
             }
-            Command::SetPdpContextActivate(state, cid) => {
+            DataCommand::SetPdpContextActivate(state, cid) => {
                 // Compatibility hack for legacy Goldfish/Reference RIL.
                 // It sends AT+CGACT using non-standard <cid>,<state> format.
                 // We detect this by checking if the parsed state is > 1 (which means it's
@@ -493,32 +562,14 @@ impl DataService {
                     if *state > 1 || *cid == 0 { (*state, *cid) } else { (*cid, *state) };
                 self.handle_set_pdp_context_activate(real_cid, real_state)
             }
-            Command::QueryPdpContextActivate => self.handle_query_pdp_context_activate(),
-            Command::SetPsAttach(state) => self.handle_set_ps_attach(*state),
-            Command::QueryPsAttach => self.handle_query_ps_attach(),
-            Command::SetPdpContextModify(cid) => self.handle_set_pdp_context_modify(*cid),
-            Command::EnterDataState(cid) => self.handle_enter_data_state(*cid),
-            Command::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
-            Command::ShowPdpAddress(cid) => self.handle_show_pdp_address(*cid),
-            Command::ReadDynamicParam(cid) => self.handle_read_dynamic_param(*cid),
-            Command::Dial(number) => {
-                if crate::constants::is_gprs_dial(number) {
-                    match parse_cid_from_gprs_dial(number) {
-                        Ok(cid) => {
-                            if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-                                context.active = true;
-                                Ok(Some(DataResponse::Connect))
-                            } else {
-                                Err(ExecutionResult::error())
-                            }
-                        }
-                        Err(_) => Err(ExecutionResult::error()),
-                    }
-                } else {
-                    Err(ExecutionResult::Unhandled)
-                }
-            }
-            _ => Err(ExecutionResult::Unhandled),
+            DataCommand::QueryPdpContextActivate => self.handle_query_pdp_context_activate(),
+            DataCommand::SetPsAttach(state) => self.handle_set_ps_attach(*state),
+            DataCommand::QueryPsAttach => self.handle_query_ps_attach(),
+            DataCommand::SetPdpContextModify(cid) => self.handle_set_pdp_context_modify(*cid),
+            DataCommand::EnterDataState(cid) => self.handle_enter_data_state(*cid),
+            DataCommand::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
+            DataCommand::ShowPdpAddress(cid) => self.handle_show_pdp_address(*cid),
+            DataCommand::ReadDynamicParam(cid) => self.handle_read_dynamic_param(*cid),
         };
         result.into()
     }
@@ -560,7 +611,7 @@ mod tests {
         assert!(res.is_ok());
 
         // Dial
-        let res = service.execute(&Command::Dial(b"*99***1#"));
+        let res: ExecutionResult = service.handle_gprs_dial(b"*99***1#").into();
         if let ExecutionResult::Success(handled) = res {
             assert_eq!(handled.responses, vec![Response::Data(DataResponse::Connect)]);
         } else {
@@ -575,11 +626,11 @@ mod tests {
         assert!(res.is_ok());
 
         // Dial malformed alphanumeric CID
-        let res = service.execute(&Command::Dial(b"*99*abc#"));
+        let res: ExecutionResult = service.handle_gprs_dial(b"*99*abc#").into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
 
         // Dial empty trailing CID
-        let res = service.execute(&Command::Dial(b"*99*#"));
+        let res: ExecutionResult = service.handle_gprs_dial(b"*99*#").into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
     }
 

@@ -3,15 +3,74 @@
 
 use std::collections::HashMap;
 
+use modem_rs_derive::CommandParser;
 use tracing::{info, warn};
 
 use crate::{
     config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
-    constants::FACILITY_SIM_PIN,
-    parser::{ApduData, Command, PinString, QuotedString},
+    parser::{ApduData, PinString, QuotedString, parse_raw_data},
     profiles::Profile,
-    types::{CmeError, DEFAULT_PIN, ExecutionResult},
+    types::{CmeError, DEFAULT_PIN, ExecutionResult, Parsable},
 };
+
+/// SIM service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum SimCommand<'a> {
+    #[command(tag = "AT+CPIN?")]
+    GetSimStatus,
+    #[command(tag = "AT+CPINR=")]
+    QueryPinRetries(QuotedString<'a>),
+    #[command(tag = "AT+CPIN=")]
+    EnterPin(PinString<'a>, Option<PinString<'a>>),
+    #[command(tag = "AT+CRSM=")]
+    SimIo {
+        command: u16,
+        file_id: u16,
+        p1: u8,
+        p2: u8,
+        p3: u8,
+        data: Option<ApduData<'a>>,
+        path: Option<ApduData<'a>>,
+    },
+    #[command(tag = "AT+CIMI")]
+    GetImsi,
+    #[command(tag = "AT+CICCID")]
+    GetIccid,
+    #[command(tag = "AT+CCHO=")]
+    OpenLogicalChannel(#[parser(parse_raw_data)] &'a [u8]),
+    #[command(tag = "AT+CCHC=")]
+    CloseLogicalChannel(u8),
+    #[command(tag = "AT+CGLA=")]
+    TransmitLogicalChannel(u8, u8, #[parser(parse_raw_data)] &'a [u8]),
+    #[command(tag = "AT+CPWD=")]
+    ChangePassword(QuotedString<'a>, QuotedString<'a>, QuotedString<'a>),
+    /// VENDOR: Query PIN retries
+    #[command(tag = "AT+SPIC")]
+    QueryPinRetriesSpic,
+    /// 3GPP2 C.S0023: Set CDMA subscription source
+    #[command(tag = "AT+CCSS=")]
+    SetCdmaSubscriptionSource(u8),
+    /// 3GPP2 C.S0023: Query CDMA subscription source
+    #[command(tag = "AT+CCSS?")]
+    QueryCdmaSubscriptionSource,
+    /// 3GPP2 C.S0023: Set CDMA roaming preference
+    #[command(tag = "AT+WRMP=")]
+    SetCdmaRoamingPreference(u8),
+    /// 3GPP2 C.S0023: Query CDMA roaming preference
+    #[command(tag = "AT+WRMP?")]
+    QueryCdmaRoamingPreference,
+    /// Generic SIM access (+CSIM)
+    #[command(tag = "AT+CSIM=")]
+    GenericSimAccess(u32, ApduData<'a>),
+    #[command(tag = "AT+MBAU=")]
+    SimAuthentication(#[parser(parse_raw_data)] &'a [u8]),
+    /// SIM authentication (Vendor caret version)
+    #[command(tag = "AT^MBAU=")]
+    SimAuthenticationVendor(#[parser(parse_raw_data)] &'a [u8]),
+    /// VENDOR: Update phone number
+    #[command(tag = "AT+REMOTEUPADATEPHONENUMBER")]
+    UpdatePhoneNumber(#[parser(parse_raw_data)] &'a [u8]),
+}
 
 const MIN_PIN_LEN: usize = 4;
 const MAX_PIN_LEN: usize = 8;
@@ -974,7 +1033,11 @@ impl SimService {
         format!("{alpha}{bcd_len_hex}{ton_npi}{dialing_number}{suffix}")
     }
 
-    fn handle_set_facility_lock(&mut self, mode: u8, passwd: Option<QuotedString>) -> SimResult {
+    pub fn handle_set_facility_lock(
+        &mut self,
+        mode: u8,
+        passwd: Option<QuotedString>,
+    ) -> SimResult {
         if (mode == 0 || mode == 1) && self.state == SimState::PukRequired {
             return Err(ExecutionResult::cme_error(CmeError::SimPukRequired));
         }
@@ -1077,80 +1140,46 @@ impl SimService {
         format!("{len_byte:02X}{encoded_hex}")
     }
 
-    fn is_sim_command(command: &Command) -> bool {
-        match command {
-            Command::SetFacilityLock(facility, ..) | Command::ChangePassword(facility, ..) => {
-                std::str::from_utf8(facility.as_ref()).unwrap_or("") == FACILITY_SIM_PIN
-            }
-            Command::GetSimStatus
-            | Command::EnterPin(_, _)
-            | Command::SimIo { .. }
-            | Command::GetImsi
-            | Command::GetIccid
-            | Command::OpenLogicalChannel(_)
-            | Command::CloseLogicalChannel(_)
-            | Command::TransmitLogicalChannel(_, _, _)
-            | Command::QueryPinRetries(_)
-            | Command::QueryPinRetriesSpic
-            | Command::SetCdmaSubscriptionSource(_)
-            | Command::QueryCdmaSubscriptionSource
-            | Command::SetCdmaRoamingPreference(_)
-            | Command::QueryCdmaRoamingPreference
-            | Command::SimAuthentication(_)
-            | Command::SimAuthenticationVendor(_)
-            | Command::UpdatePhoneNumber(_)
-            | Command::GenericSimAccess(_, _) => true,
-            _ => false,
-        }
-    }
-
-    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
-        if !Self::is_sim_command(command) {
-            return ExecutionResult::Unhandled;
-        }
+    pub fn execute<'a>(&mut self, command: &SimCommand<'a>) -> ExecutionResult {
         info!("[SimService] Executing SIM command: {:?}", command);
         if self.state == SimState::Absent {
             return ExecutionResult::cme_error(CmeError::SimNotInserted); /* SIM not inserted */
         }
         let sim_result = match command {
-            Command::GenericSimAccess(len, apdu) => self.handle_generic_sim_access(*len, *apdu),
-            Command::GetSimStatus => self.handle_get_sim_status(),
-            Command::EnterPin(pin, new_pin) => self.handle_enter_pin(*pin, *new_pin),
-            Command::SimIo { command, file_id, p1, p2, p3, data, path: _ } => {
+            SimCommand::GenericSimAccess(len, apdu) => self.handle_generic_sim_access(*len, *apdu),
+            SimCommand::GetSimStatus => self.handle_get_sim_status(),
+            SimCommand::EnterPin(pin, new_pin) => self.handle_enter_pin(*pin, *new_pin),
+            SimCommand::SimIo { command, file_id, p1, p2, p3, data, path: _ } => {
                 let data_str = data.and_then(|d| String::from_utf8(d.0.to_vec()).ok());
                 self.handle_sim_io(*command, *file_id, *p1, *p2, *p3, data_str)
             }
-            Command::GetImsi => self.handle_get_imsi(),
-            Command::GetIccid => self.handle_get_iccid(),
-            Command::OpenLogicalChannel(aid) => self.handle_open_logical_channel(aid),
-            Command::CloseLogicalChannel(channel_id) => {
+            SimCommand::GetImsi => self.handle_get_imsi(),
+            SimCommand::GetIccid => self.handle_get_iccid(),
+            SimCommand::OpenLogicalChannel(aid) => self.handle_open_logical_channel(aid),
+            SimCommand::CloseLogicalChannel(channel_id) => {
                 self.handle_close_logical_channel(*channel_id)
             }
-            Command::TransmitLogicalChannel(channel_id, _, data) => {
+            SimCommand::TransmitLogicalChannel(channel_id, _, data) => {
                 self.handle_transmit_logical_channel(*channel_id, data)
             }
-            Command::ChangePassword(facility, old_password, new_password) => {
+            SimCommand::ChangePassword(facility, old_password, new_password) => {
                 self.handle_change_password(*facility, *old_password, *new_password)
             }
-            Command::QueryPinRetries(pin_type) => self.handle_query_pin_retries_cpinr(*pin_type),
-            Command::QueryPinRetriesSpic => self.handle_query_pin_retries_spic(),
-            Command::SetFacilityLock(_, mode, passwd, _) => {
-                self.handle_set_facility_lock(*mode, *passwd)
-            }
-            Command::SetCdmaSubscriptionSource(source) => {
+            SimCommand::QueryPinRetries(pin_type) => self.handle_query_pin_retries_cpinr(*pin_type),
+            SimCommand::QueryPinRetriesSpic => self.handle_query_pin_retries_spic(),
+            SimCommand::SetCdmaSubscriptionSource(source) => {
                 self.handle_set_cdma_subscription_source(*source)
             }
-            Command::QueryCdmaSubscriptionSource => self.handle_query_cdma_subscription_source(),
-            Command::SetCdmaRoamingPreference(preference) => {
+            SimCommand::QueryCdmaSubscriptionSource => self.handle_query_cdma_subscription_source(),
+            SimCommand::SetCdmaRoamingPreference(preference) => {
                 self.handle_set_cdma_roaming_preference(*preference)
             }
-            Command::QueryCdmaRoamingPreference => self.handle_query_cdma_roaming_preference(),
-            Command::SimAuthentication(data) => self.handle_sim_authentication(data),
-            Command::SimAuthenticationVendor(data) => self.handle_sim_authentication(data),
-            Command::UpdatePhoneNumber(phone_number) => {
+            SimCommand::QueryCdmaRoamingPreference => self.handle_query_cdma_roaming_preference(),
+            SimCommand::SimAuthentication(data) => self.handle_sim_authentication(data),
+            SimCommand::SimAuthenticationVendor(data) => self.handle_sim_authentication(data),
+            SimCommand::UpdatePhoneNumber(phone_number) => {
                 self.handle_update_phone_number(phone_number)
             }
-            _ => Err(ExecutionResult::Unhandled),
         };
 
         sim_result.into()

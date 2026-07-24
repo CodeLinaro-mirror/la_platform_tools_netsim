@@ -3,13 +3,49 @@
 
 // src/network_service.rs
 
+use modem_rs_derive::CommandParser;
 use netsim_model::{Quirks, RegistrationStatus};
 use tracing::{info, warn};
 
 use crate::{
-    parser::Command,
-    types::{CmeError, ExecutionResult, Response, SignalStrength},
+    parser::{QuotedString, parse_raw_data},
+    types::{CmeError, ExecutionResult, Parsable, Response, SignalStrength},
 };
+
+/// Network service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum NetworkCommand<'a> {
+    #[command(tag = "AT+COPS?")]
+    QueryOperator,
+    #[command(tag = "AT+COPS=")]
+    SetOperator { mode: u8, format: Option<u8>, oper: Option<QuotedString<'a>> },
+    #[command(tag = "AT+CREG?")]
+    QueryVoiceNetworkRegistration,
+    #[command(tag = "AT+CREG=")]
+    SetVoiceNetworkRegistration(u8),
+    #[command(tag = "AT+CGREG?")]
+    QueryDataNetworkRegistration,
+    #[command(tag = "AT+CGREG=")]
+    SetDataNetworkRegistration(u8),
+    #[command(tag = "AT+CEREG?")]
+    QueryLteNetworkRegistration,
+    #[command(tag = "AT+CEREG=")]
+    SetLteNetworkRegistration(u8),
+    #[command(tag = "AT+CFUN?")]
+    QueryRadioPower,
+    #[command(tag = "AT+CFUN=")]
+    SetRadioPower(u8),
+    #[command(tag = "AT+CSQ")]
+    QuerySignalStrength,
+    #[command(tag = "AT+CESQ")]
+    QueryExtendedSignalQuality,
+    #[command(tag = "AT+CTEC?")]
+    QueryCurrentNetworkTechnology,
+    #[command(tag = "AT+CTEC=?")]
+    QuerySupportedNetworkTechnology,
+    #[command(tag = "AT+CTEC=")]
+    SetNetworkTechnology(u8, #[parser(parse_raw_data)] &'a [u8]),
+}
 
 const DUMMY_LAC: &str = "2142";
 const DUMMY_CID: &str = "0000B804";
@@ -844,30 +880,41 @@ impl NetworkService {
         }
     }
 
-    pub fn execute(&mut self, command: &Command, enable_unsolicited_urcs: bool) -> ExecutionResult {
+    pub fn execute<'a>(
+        &mut self,
+        command: &NetworkCommand<'a>,
+        enable_unsolicited_urcs: bool,
+    ) -> ExecutionResult {
         let res = match command {
-            Command::QueryOperator => self.handle_query_operator(),
-            Command::SetOperator { mode, format, oper } => {
+            NetworkCommand::QueryOperator => self.handle_query_operator(),
+            NetworkCommand::SetOperator { mode, format, oper } => {
                 self.handle_set_operator(*mode, *format, oper.as_deref())
             }
-            Command::QuerySignalStrength => self.handle_query_signal_strength(),
-            Command::QueryExtendedSignalQuality => self.handle_query_extended_signal_quality(),
-            Command::QueryVoiceNetworkRegistration => self.handle_query_voice_registration(),
-            Command::SetVoiceNetworkRegistration(mode) => self.handle_set_voice_registration(*mode),
-            Command::QueryDataNetworkRegistration => self.handle_query_data_registration(),
-            Command::SetDataNetworkRegistration(mode) => self.handle_set_data_registration(*mode),
-            Command::QueryLteNetworkRegistration => self.handle_query_lte_registration(),
-            Command::SetLteNetworkRegistration(mode) => self.handle_set_lte_registration(*mode),
-            Command::QueryRadioPower => self.handle_query_radio_power(),
-            Command::SetRadioPower(power) => {
+            NetworkCommand::QuerySignalStrength => self.handle_query_signal_strength(),
+            NetworkCommand::QueryExtendedSignalQuality => {
+                self.handle_query_extended_signal_quality()
+            }
+            NetworkCommand::QueryVoiceNetworkRegistration => self.handle_query_voice_registration(),
+            NetworkCommand::SetVoiceNetworkRegistration(mode) => {
+                self.handle_set_voice_registration(*mode)
+            }
+            NetworkCommand::QueryDataNetworkRegistration => self.handle_query_data_registration(),
+            NetworkCommand::SetDataNetworkRegistration(mode) => {
+                self.handle_set_data_registration(*mode)
+            }
+            NetworkCommand::QueryLteNetworkRegistration => self.handle_query_lte_registration(),
+            NetworkCommand::SetLteNetworkRegistration(mode) => {
+                self.handle_set_lte_registration(*mode)
+            }
+            NetworkCommand::QueryRadioPower => self.handle_query_radio_power(),
+            NetworkCommand::SetRadioPower(power) => {
                 self.handle_set_radio_power(*power, enable_unsolicited_urcs)
             }
-            Command::QueryCurrentNetworkTechnology => self.handle_query_current_ctec(),
-            Command::QuerySupportedNetworkTechnology => self.handle_query_supported_ctec(),
-            Command::SetNetworkTechnology(current, preferred) => {
+            NetworkCommand::QueryCurrentNetworkTechnology => self.handle_query_current_ctec(),
+            NetworkCommand::QuerySupportedNetworkTechnology => self.handle_query_supported_ctec(),
+            NetworkCommand::SetNetworkTechnology(current, preferred) => {
                 self.handle_set_ctec(*current, preferred.as_ref())
             }
-            _ => return ExecutionResult::Unhandled,
         };
         res.into()
     }

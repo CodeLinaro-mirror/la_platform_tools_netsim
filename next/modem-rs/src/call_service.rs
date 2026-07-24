@@ -1,12 +1,47 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use modem_rs_derive::CommandParser;
 use tracing::debug;
 
 use crate::{
-    parser::Command,
-    types::{AT_OK, CommandAction, ExecutionResult, ModemId},
+    data_service::DataService,
+    parser::{parse_raw_data, parse_until_semicolon},
+    types::{AT_OK, CommandAction, ExecutionResult, ModemId, Parsable},
 };
+
+/// Call service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum CallCommand<'a> {
+    #[command(tag = "ATD")]
+    Dial(#[parser(parse_until_semicolon)] &'a [u8]),
+    #[command(tag = "ATA")]
+    Answer,
+    #[command(tag = "ATH")]
+    Hangup,
+    #[command(tag = "AT+CHLD=")]
+    CallHold(u8),
+    #[command(tag = "AT+CLCC")]
+    QueryCurrentCalls,
+    #[command(tag = "AT+CMUT=")]
+    SetMute(u8),
+    #[command(tag = "AT+CMUT?")]
+    QueryMute,
+    #[command(tag = "AT+VTS=")]
+    SendDtmf(#[parser(parse_raw_data)] &'a [u8]),
+    /// VENDOR: Set emergency mode
+    #[command(tag = "AT+WSOS=")]
+    SetEmergencyMode(u8),
+    /// VENDOR: Query emergency mode
+    #[command(tag = "AT+WSOS?")]
+    QueryEmergencyMode,
+    /// VENDOR: Remote call
+    #[command(tag = "AT+REMOTECALL=")]
+    RemoteCall(#[parser(parse_raw_data)] &'a [u8]),
+    /// VENDOR: Ring indication
+    #[command(tag = "RING")]
+    Ring,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CallDirection {
@@ -234,14 +269,23 @@ impl CallService {
 
     // --- Pure command handlers ---
 
-    pub fn handle_dial(&mut self, number: &[u8]) -> CallResult {
+    pub fn handle_dial(
+        &mut self,
+        number: &[u8],
+        data_service: &mut DataService,
+    ) -> ExecutionResult {
         debug!("[CallService] Dialing number: {}", String::from_utf8_lossy(number));
-        // GPRS dial commands (e.g. ATD*99#) are GPRS packet-data requests and should
-        // fall back to DataService.
+        // GPRS dial commands (e.g. ATD*99#) are GPRS packet-data requests and are
+        // handled by DataService.
         if crate::constants::is_gprs_dial(number) {
-            return Err(ExecutionResult::Unhandled);
+            return data_service.handle_gprs_dial(number).into();
         }
 
+        let result = self.handle_voice_dial(number);
+        result.into()
+    }
+
+    fn handle_voice_dial(&mut self, number: &[u8]) -> CallResult {
         let Some(dial_str) = parse_number(number) else {
             return Err(ExecutionResult::error());
         };
@@ -465,21 +509,25 @@ impl CallService {
         Ok(Some(CallResponse::EmergencyMode(self.emergency_mode)))
     }
 
-    pub fn execute(&mut self, command: &Command, id: ModemId) -> ExecutionResult {
+    pub fn execute<'a>(
+        &mut self,
+        command: &CallCommand<'a>,
+        id: ModemId,
+        data_service: &mut DataService,
+    ) -> ExecutionResult {
         let res = match command {
-            Command::Dial(number) => self.handle_dial(number),
-            Command::Answer => self.handle_answer(id),
-            Command::Hangup => self.handle_hangup(id),
-            Command::CallHold(op) => self.handle_call_hold(*op, id),
-            Command::QueryCurrentCalls => self.handle_query_current_calls(),
-            Command::Ring => self.ring("".to_string()),
-            Command::RemoteCall(number) => self.handle_remote_call(number),
-            Command::SetMute(mute) => self.handle_set_mute(*mute),
-            Command::QueryMute => self.handle_query_mute(),
-            Command::SendDtmf(dtmf) => self.handle_send_dtmf(dtmf),
-            Command::SetEmergencyMode(mode) => self.handle_set_emergency_mode(*mode),
-            Command::QueryEmergencyMode => self.handle_query_emergency_mode(),
-            _ => Err(ExecutionResult::Unhandled),
+            CallCommand::Dial(number) => return self.handle_dial(number, data_service),
+            CallCommand::Answer => self.handle_answer(id),
+            CallCommand::Hangup => self.handle_hangup(id),
+            CallCommand::CallHold(op) => self.handle_call_hold(*op, id),
+            CallCommand::QueryCurrentCalls => self.handle_query_current_calls(),
+            CallCommand::Ring => self.ring("".to_string()),
+            CallCommand::RemoteCall(number) => self.handle_remote_call(number),
+            CallCommand::SetMute(mute) => self.handle_set_mute(*mute),
+            CallCommand::QueryMute => self.handle_query_mute(),
+            CallCommand::SendDtmf(dtmf) => self.handle_send_dtmf(dtmf),
+            CallCommand::SetEmergencyMode(mode) => self.handle_set_emergency_mode(*mode),
+            CallCommand::QueryEmergencyMode => self.handle_query_emergency_mode(),
         };
         res.into()
     }

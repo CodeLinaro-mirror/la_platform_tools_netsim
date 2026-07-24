@@ -1,10 +1,27 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use modem_rs_derive::CommandParser;
+
 use crate::{
-    parser::{Command, QuotedString},
-    types::{ExecutionResult, HandledCommand},
+    parser::QuotedString,
+    types::{ExecutionResult, HandledCommand, Parsable},
 };
+
+/// STK (SIM Toolkit) service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum StkCommand<'a> {
+    #[command(tag = "AT+CUSATD?")]
+    QueryStkReady,
+    #[command(tag = "AT+CUSATE=")]
+    SendStkEnvelope(QuotedString<'a>),
+    #[command(tag = "AT+STKEN=")]
+    SetStkEnabled(u8),
+    #[command(tag = "AT+STKUR=")]
+    SetStkUnsolicitedResult(u8),
+    #[command(tag = "AT+STK=")]
+    SetStk(u8),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StkResponse {
@@ -111,18 +128,17 @@ impl StkService {
         self.handle_envelope_command(envelope_command.as_ref())
     }
 
-    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
+    pub fn execute<'a>(&mut self, command: &StkCommand<'a>) -> ExecutionResult {
         let res = match command {
-            Command::QueryStkReady => self.handle_query_stk_ready(),
-            Command::SendStkEnvelope(envelope_command) => {
+            StkCommand::QueryStkReady => self.handle_query_stk_ready(),
+            StkCommand::SendStkEnvelope(envelope_command) => {
                 self.handle_send_stk_envelope_command(*envelope_command)
             }
-            Command::SetStk(_) => self.handle_set_stk(),
-            Command::SetStkEnabled(_) => self.handle_set_stk_enabled(),
-            Command::SetStkUnsolicitedResult(_) => self.handle_set_stk_unsolicited_result(),
-            _ => Err(ExecutionResult::Unhandled),
+            StkCommand::SetStk(_) => self.handle_set_stk(),
+            StkCommand::SetStkEnabled(_) => self.handle_set_stk_enabled(),
+            StkCommand::SetStkUnsolicitedResult(_) => self.handle_set_stk_unsolicited_result(),
         };
-        res.map_or_else(|e| e, ExecutionResult::from)
+        res.into()
     }
 }
 
