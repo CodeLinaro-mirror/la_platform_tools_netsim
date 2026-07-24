@@ -19,17 +19,19 @@ pub struct ChipState {
     pub nfc_writer: WriteHalf<DuplexStream>,
 }
 
+use crate::stats::NfcStats;
+
 pub struct NfcActor {
     pub device_client: DeviceClient,
     pub active_chips: HashMap<ChipId, ChipState>,
     pub casimir_to_device: Arc<Mutex<HashMap<u16, device_api::DeviceId>>>,
     pub scene_client: Option<crate::scene::SceneClient>,
     pub scene_task: Option<tokio::task::JoinHandle<()>>,
-    pub nfc_stats: Arc<crate::stats::NfcStats>,
+    pub nfc_stats: Arc<NfcStats>,
 }
 
 impl NfcActor {
-    pub fn new(device_client: DeviceClient, nfc_stats: Arc<crate::stats::NfcStats>) -> Self {
+    pub fn new(device_client: DeviceClient, nfc_stats: Arc<NfcStats>) -> Self {
         Self {
             device_client,
             active_chips: HashMap::new(),

@@ -39,6 +39,7 @@ pub struct UwbActor {
     pub(super) pica_on_tick_events: broadcast::Receiver<PicaEvent>,
     /// Used to detect when a chip is connected after [`PicaCommand::Connect`].
     pub(super) pica_connect_events: broadcast::Receiver<PicaEvent>,
+    pub(crate) uwb_stats: crate::stats::UwbStats,
 }
 
 impl UwbActor {
@@ -61,6 +62,7 @@ impl UwbActor {
             pica_on_tick_events: pica.events(),
             pica_connect_events: pica.events(),
             pica: Some(pica),
+            uwb_stats: crate::stats::UwbStats::new(),
         }
     }
 }

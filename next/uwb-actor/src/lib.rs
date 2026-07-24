@@ -8,12 +8,14 @@ mod lifecycle;
 mod ranging;
 mod ranging_estimator;
 mod service;
+mod stats;
 mod uwb_actor;
 
 pub use actions::{UwbAction, UwbActionResult};
 use actor_framework::ResourceActor;
 pub use client::UwbClient;
 pub use error::UwbError;
+pub use stats::{UwbApi, UwbStats};
 pub use uwb_actor::UwbActor;
 
 /// Creates a new UWB actor runner and its client.

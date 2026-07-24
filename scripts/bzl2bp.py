@@ -49,9 +49,10 @@ EXACT_DEP_MAPPING = {
     "@rootcanal//:lib_rootcanal_ffi": "lib_rootcanal_ffi",
     "@cxx.rs//:cxx": "libcxx",
     "@casimir//:casimir_lib": "libcasimir",
-    "//next/testing": "libnetsim_next_netsim_testing",
+    "//next/testing": "libnetsim_next_netsim_testing_testing",
     "//next/daemon": "netsim_next_daemon",
     "//next/daemon:testing": "libnetsim_next_daemon_lib_testing",
+    "//next/testing:netsim-testing": "libnetsim_next_netsim_testing",
     "//next/testing:testing": "libnetsim_next_netsim_testing_testing",
     "//:netsim_link_layer_packets_rust_gen": (
         "rootcanal_link_layer_packets_rust_gen"

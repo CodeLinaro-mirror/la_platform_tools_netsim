@@ -19,6 +19,7 @@ use tracing::{error, info};
 use crate::{
     error::NfcError,
     nfc_actor::{ChipState, NfcAction, NfcActor},
+    stats::NfcApi,
 };
 
 const NCI_MT_DATA: u8 = 0;
@@ -159,8 +160,11 @@ impl ActorService for NfcActor {
                         }
                         let bytes = bytes_mut.freeze();
                         if bytes.len() >= 3 {
-                            match (bytes[0] >> 6) & 0x03 {
-                                NCI_MT_DATA => nfc_stats_clone.incr_nci_data_tx(),
+                            match (bytes[0] >> 5) & 0x07 {
+                                NCI_MT_DATA => {
+                                    nfc_stats_clone.incr_nci_data_tx();
+                                    nfc_stats_clone.incr(NfcApi::DataReceive);
+                                }
                                 NCI_MT_RSP => nfc_stats_clone.incr_nci_responses_tx(),
                                 NCI_MT_NTF => nfc_stats_clone.incr_nci_notifications_tx(),
                                 _ => {}
@@ -187,7 +191,7 @@ impl ActorService for NfcActor {
         let nfc_stats_rx = self.nfc_stats.clone();
         let packet_stream = packet_stream.inspect(move |bytes| {
             if bytes.len() >= 3 {
-                match (bytes[0] >> 6) & 0x03 {
+                match (bytes[0] >> 5) & 0x07 {
                     NCI_MT_DATA => nfc_stats_rx.incr_nci_data_rx(),
                     NCI_MT_CMD => nfc_stats_rx.incr_nci_commands_rx(),
                     _ => {}

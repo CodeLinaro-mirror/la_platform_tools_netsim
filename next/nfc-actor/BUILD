@@ -19,6 +19,7 @@ DEPS = [
     "@tokio",
     "@tokio-util",
     "@casimir//:casimir_lib",
+    "@pdl-runtime",
 ]
 
 netsim_rust_library(

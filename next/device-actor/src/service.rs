@@ -101,15 +101,28 @@ impl DeviceActor {
             wifi_stats = ipc.wifi_stats.take();
             wifi_api = ipc.wifi_api_stats.take();
         }
-
+        // Collect UWB specific stats (Global)
+        let uwb_api = self
+            .collect_chip_stats::<netsim_proto::stats::UwbApiStats>(netsim_model::ChipKind::UWB)
+            .await;
         // Collect NFC specific stats (Global)
-        let nfc_stats = self.collect_nfc_stats_async().await;
+        let nfc_ipc_stats = self
+            .collect_chip_stats::<netsim_proto::stats::NfcIpcStats>(netsim_model::ChipKind::NFC)
+            .await;
+        let mut nfc_stats = None;
+        let mut nfc_api = None;
+        if let Some(mut ipc) = nfc_ipc_stats {
+            nfc_stats = ipc.nfc_stats.take();
+            nfc_api = ipc.nfc_api_stats.take();
+        }
         let nfc_service_stats = self.collect_nfc_service_stats_async().await;
 
         let combined_stats = self.stats.get_combined_stats(crate::stats::CombinedStatsInputs {
             active_stats: active_proto_stats,
             wifi_stats,
             wifi_api,
+            uwb_api,
+            nfc_api,
             nfc_stats,
             nfc_service_stats,
         });
@@ -315,30 +328,6 @@ impl DeviceActor {
         T::parse_from_bytes(&stats_bytes)
             .inspect_err(|e| error!("DeviceActor: Failed to parse {:?}Stats: {}", kind, e))
             .ok()
-    }
-
-    async fn collect_nfc_stats_async(&self) -> Option<netsim_proto::stats::NfcStats> {
-        let client = self.chip_clients.get(&netsim_model::ChipKind::NFC)?;
-        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_global_stats()).await {
-            Ok(Ok(Some(stats_bytes))) => {
-                match netsim_proto::stats::NfcStats::parse_from_bytes(&stats_bytes) {
-                    Ok(stats) => Some(stats),
-                    Err(e) => {
-                        error!("DeviceActor: Failed to parse NfcStats: {}", e);
-                        None
-                    }
-                }
-            }
-            Ok(Ok(None)) => None,
-            Ok(Err(e)) => {
-                warn!("DeviceActor: Failed to get NFC global stats: {}", e);
-                None
-            }
-            Err(_) => {
-                debug!("DeviceActor: Timeout getting NFC global stats");
-                None
-            }
-        }
     }
 
     async fn collect_nfc_service_stats_async(

@@ -69,9 +69,16 @@ impl World {
     }
 
     pub async fn new_with_args(mut args: daemon::Args) -> Self {
+        static LOG_INIT: std::sync::Once = std::sync::Once::new();
+        LOG_INIT.call_once(common::util::netsim_logger::init_for_test);
+
         if args.hci_port.is_none() {
             args.hci_port = Some(0); // Let the OS assign a random available
             // port
+        }
+        #[cfg(feature = "cuttlefish")]
+        if args.test_port.is_none() {
+            args.test_port = Some(0);
         }
         let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
