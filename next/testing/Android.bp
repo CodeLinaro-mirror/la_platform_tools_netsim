@@ -49,3 +49,28 @@ rust_library_host {
         "libtokio_stream",
     ],
 }
+
+rust_test_host {
+    name: "libnetsim_next_netsim_testing_tests",
+    crate_name: "netsim_testing",
+    edition: "2024",
+    crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_common_testing",
+        "libtokio",
+        "libtokio_stream",
+    ],
+}

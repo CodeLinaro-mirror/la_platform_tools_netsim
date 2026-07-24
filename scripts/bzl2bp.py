@@ -12,31 +12,20 @@ CURRENT_REL_PATH = ""
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 NEXT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "next")
 
-ALLOWED_TEST_PACKAGES = {
-    "cli",
-    "nfc-actor",
-    "daemon",
-    "common",
-    "packet-stream",
-    "grpc-server",
-    "bluetooth-actor",
-    "uwb-actor",
-    "cell-actor",
-    "modem-rs",
-    "wifi-actor",
-    "ap-actor",
-    "ethernet-actor",
-    "actor-framework",
-    "device-actor",
-    "link-actor",
-    "slirp-actor",
-    "capture-actor",
-    "packets",
-    "websocket-server",
-    "rootcanal",
-    "rootcanal-server",
-    "slirp",
+SKIPPED_TEST_PACKAGES = {
+    "http-proxy",
+    "libslirp-rs",
+    "verify",
 }
+
+
+def is_test_package_allowed(package_name):
+    if not package_name:
+        return True
+    for skipped in SKIPPED_TEST_PACKAGES:
+        if package_name == skipped or package_name.startswith(skipped + "/"):
+            return False
+    return True
 
 
 EXACT_DEP_MAPPING = {
@@ -286,7 +275,7 @@ def rust_test(*args, **kwargs):
     pkg_name = name
 
   package_name = CURRENT_REL_PATH.strip("/")
-  if package_name not in ALLOWED_TEST_PACKAGES:
+  if not is_test_package_allowed(package_name):
     return
 
   module_name = pkg_name.replace("-", "_")
@@ -596,7 +585,7 @@ def netsim_rust_library(
     inline_test_proc_macros = sorted(list(set(inline_test_proc_macros)))
 
     package_name = CURRENT_REL_PATH.strip("/")
-    if package_name in ALLOWED_TEST_PACKAGES:
+    if is_test_package_allowed(package_name):
       unit_tgt = {
           "type": "rust_test_host",
           "name": f"libnetsim_next_{name.replace('-', '_')}_tests",
@@ -689,7 +678,7 @@ def netsim_rust_library(
       )
 
       package_name = CURRENT_REL_PATH.strip("/")
-      if package_name in ALLOWED_TEST_PACKAGES:
+      if is_test_package_allowed(package_name):
         integ_dict = {
             "type": "rust_test_host",
             "name": (
