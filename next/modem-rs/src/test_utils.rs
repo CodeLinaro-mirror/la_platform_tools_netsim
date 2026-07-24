@@ -13,13 +13,14 @@ pub struct MockModemHandler {
 }
 
 impl MockModemHandler {
-    pub fn new() -> (Self, ModemSink) {
+    pub fn new(goldfish_37: bool) -> (Self, ModemSink) {
         let (tx, rx) = mpsc::channel();
         let sink = ModemSink::new(move |item: Bytes| {
             let data = item.to_vec();
+            let delimiter = if goldfish_37 { b'\r' } else { b'\n' };
             let mut start = 0;
             for i in 0..data.len() {
-                if data[i] == b'\n' {
+                if data[i] == delimiter {
                     let line = data[start..=i].to_vec();
                     if let Err(e) = tx.send(line) {
                         return Err(e.to_string());

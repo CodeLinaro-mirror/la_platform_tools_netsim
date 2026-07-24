@@ -3,7 +3,7 @@
 
 #![allow(deprecated)]
 
-use rand::{prelude::*, rngs::ThreadRng, thread_rng};
+use rand::{prelude::*, rng, rngs::ThreadRng};
 
 use std::collections::BTreeMap;
 
@@ -67,7 +67,7 @@ impl RangingDataSet {
         option_rng: Option<ThreadRng>,
     ) -> EstimatedDistance {
         // Generate a new ThreadRng if not provided
-        let mut rng = option_rng.unwrap_or(thread_rng());
+        let mut rng = option_rng.unwrap_or(rng());
         // Convert TrueDistance into u16 centimeters.
         let distance_u16 = (distance * 100.0).round() as u16;
 

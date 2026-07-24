@@ -9,7 +9,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use netsim_model::{ModemAction, RadioTechnology, RegistrationStatus};
+use netsim_model::{ModemAction, Quirks, RadioTechnology, RegistrationStatus};
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
@@ -144,8 +144,9 @@ impl ModemNetworkSimulator {
         id: ModemId,
         sink: ModemSink,
         sim_type: Option<i32>,
+        quirks: Quirks,
     ) -> Result<(), ModemError> {
-        self.new_modem_with_profile(id, sink, None, sim_type)
+        self.new_modem_with_profile(id, sink, None, sim_type, quirks)
     }
 
     /// Creates a new modem instance with a specific SIM profile.
@@ -155,11 +156,13 @@ impl ModemNetworkSimulator {
         sink: ModemSink,
         profile: Option<crate::config::SimProfile>,
         sim_type: Option<i32>,
+        quirks: Quirks,
     ) -> Result<(), ModemError> {
         if self.modems.contains_key(&id) {
             return Err(ModemError::DuplicateModemId(id));
         }
-        let mut modem = crate::modem::ModemImpl::new(id, profile.unwrap_or_default());
+        let mut modem =
+            crate::modem::ModemImpl::new(id, profile.unwrap_or_default(), sim_type, quirks);
         if let Some(t) = sim_type {
             modem.set_sim_status(t > 0);
         }
@@ -207,6 +210,17 @@ impl ModemNetworkSimulator {
                     self.schedule_event(id, delay, event);
                 }
                 ModemEffect::Response(packet) => {
+                    let mut packet = packet;
+                    if let Some(modem) = self.modems.get(&id) {
+                        // Goldfish RIL in SDK 37 and earlier (without TTY raw mode) translates \r
+                        // to \n on input, turning \r\n into \n\n and
+                        // corrupting stream. We work around this by
+                        // only sending \r (which translates to a single \n on the guest).
+                        let translate_crlf_to_cr = modem.quirks.goldfish_ril_37_or_earlier;
+                        if translate_crlf_to_cr {
+                            packet = replace_crlf_with_cr(&packet);
+                        }
+                    }
                     debug!("Sending response to {}: {:?}", id, std::str::from_utf8(&packet));
                     if let Some(sink) = self.sinks.get_mut(&id)
                         && let Err(e) = sink.send(Bytes::from(packet))
@@ -367,8 +381,18 @@ impl ModemNetworkSimulator {
 
                 if let Some(peer_id) = peer_id {
                     let tpdu_len = crate::pdu::calculate_tpdu_len(&pdu);
+                    let peer_is_goldfish_37 = self
+                        .modems
+                        .get(&peer_id)
+                        .is_some_and(|m| m.quirks.goldfish_ril_37_or_earlier);
 
-                    let mut response = b"+CMT: ,".to_vec();
+                    // Goldfish RIL in SDK 37 and earlier expects "+CMT: <len>" (no leading comma)
+                    // for incoming PDU.
+                    let omit_cmt_leading_comma = peer_is_goldfish_37;
+                    let mut response = b"+CMT: ".to_vec();
+                    if !omit_cmt_leading_comma {
+                        response.push(b',');
+                    }
                     response.extend_from_slice(tpdu_len.to_string().as_bytes());
                     response.extend_from_slice(b"\r\n");
                     response.extend_from_slice(&pdu);
@@ -567,4 +591,19 @@ impl ModemNetworkSimulator {
 
 fn normalize_number(num: &str) -> &str {
     num.strip_prefix('+').unwrap_or(num)
+}
+
+fn replace_crlf_with_cr(packet: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(packet.len());
+    let mut iter = packet.iter().peekable();
+
+    while let Some(&b) = iter.next() {
+        if b == b'\r' && iter.peek() == Some(&&b'\n') {
+            iter.next(); // Consume and skip the '\n'
+        }
+        result.push(b);
+    }
+
+    result.shrink_to_fit();
+    result
 }

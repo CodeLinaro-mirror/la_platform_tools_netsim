@@ -105,5 +105,7 @@ pub struct ElementaryFile {
     #[serde(default)]
     pub size: usize,
     #[serde(default)]
+    pub record_len: Option<usize>,
+    #[serde(default)]
     pub data: String,
 }

@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use netsim_model::{RadioTechnology, RegistrationStatus};
+use netsim_model::{Quirks, RadioTechnology, RegistrationStatus};
 use tracing::{debug, error};
 
 use crate::{
@@ -17,7 +17,7 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    types::{AT_OK, CommandAction, ExecutionResult, ModemId},
+    types::{AT_OK, CmeError, CommandAction, ExecutionResult, ModemId},
 };
 
 /// Represents a single modem device.
@@ -33,6 +33,7 @@ pub struct ModemImpl {
     pub misc_service: MiscService,
     pub data_service: DataService,
     phone_number: String,
+    pub quirks: Quirks,
     _state: State,
 }
 
@@ -55,13 +56,18 @@ pub enum ModemEffect {
 }
 
 impl ModemImpl {
-    pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile) -> Self {
+    pub(crate) fn new(
+        id: ModemId,
+        profile: crate::config::SimProfile,
+        sim_type: Option<i32>,
+        quirks: Quirks,
+    ) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         Self {
             id,
             enable_unsolicited_urcs: enable_unsol,
-            sim_service: SimService::new(&profile),
-            network_service: NetworkService::default(),
+            sim_service: SimService::new(&profile, sim_type),
+            network_service: NetworkService::new(quirks),
             sms_service: SmsService::default(),
             stk_service: StkService::default(),
             sup_service: SupService::default(),
@@ -69,13 +75,14 @@ impl ModemImpl {
             call_service: CallService::default(),
             data_service: DataService::from_env(),
             phone_number: profile.msisdn.clone(),
+            quirks,
             _state: State::Idle,
         }
     }
 
     pub fn trigger_incoming_call(&mut self, number: &str) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
-        let result = self.call_service.ring(number.to_string());
+        let result: ExecutionResult = self.call_service.ring(number.to_string()).into();
         if let ExecutionResult::Success(handled) = result {
             for response in handled.responses {
                 if !response.is_empty() {
@@ -143,7 +150,9 @@ impl ModemImpl {
             let sca_len = bytes[0] as usize;
             if bytes.len() > 1 + sca_len {
                 let tpdu_len = bytes.len() - 1 - sca_len;
-                let response = format!("+CMT: ,{tpdu_len}\r\n{pdu}\r\n");
+                let omit_cmt_leading_comma = self.quirks.goldfish_ril_37_or_earlier;
+                let comma = if omit_cmt_leading_comma { "" } else { "," };
+                let response = format!("+CMT: {comma}{tpdu_len}\r\n{pdu}\r\n");
                 effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
             }
         }
@@ -240,7 +249,7 @@ impl ModemImpl {
                 self.sms_service.waiting_for_pdu_len = None;
                 self.sms_service.waiting_for_pdu_store = false;
 
-                Some(result)
+                Some(result.into())
             } else if command_bytes.contains(&0x1b) {
                 // ESC
                 // Abort
@@ -272,6 +281,13 @@ impl ModemImpl {
                     effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
                 }
                 ExecutionResult::CmeError(err) => {
+                    let resp = err.format_response(self.misc_service.cmee_mode());
+                    effects.push(ModemEffect::Response(resp.into_bytes()));
+                }
+                ExecutionResult::CmeErrorWithUrc(err, urcs) => {
+                    for urc in urcs {
+                        effects.push(ModemEffect::Response(urc.into_bytes()));
+                    }
                     let resp = err.format_response(self.misc_service.cmee_mode());
                     effects.push(ModemEffect::Response(resp.into_bytes()));
                 }
@@ -400,7 +416,10 @@ impl ModemImpl {
                             String::from_utf8_lossy(cmd_bytes),
                             String::from_utf8_lossy(rem)
                         );
-                        combined_responses.push("ERROR\r\n".to_string());
+                        combined_responses.push(
+                            CmeError::IncorrectParameters
+                                .format_response(self.misc_service.cmee_mode()),
+                        );
                         stop_chain = true;
                     } else {
                         match self.execute_and_schedule(&command, &mut combined_effects) {
@@ -425,6 +444,12 @@ impl ModemImpl {
                                 stop_chain = true;
                             }
                             ExecutionResult::CmeError(err) => {
+                                combined_responses
+                                    .push(err.format_response(self.misc_service.cmee_mode()));
+                                stop_chain = true;
+                            }
+                            ExecutionResult::CmeErrorWithUrc(err, mut urcs) => {
+                                combined_responses.append(&mut urcs);
                                 combined_responses
                                     .push(err.format_response(self.misc_service.cmee_mode()));
                                 stop_chain = true;

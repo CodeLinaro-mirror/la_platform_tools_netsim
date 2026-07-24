@@ -126,10 +126,18 @@ async fn handle_new_connection(
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
-        ChipKind::CELLULAR => Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
-            sim_type: chip.sim_type,
-            ..Default::default()
-        })),
+        ChipKind::CELLULAR => {
+            let goldfish_ril_37_or_earlier = chip_info.device_info.as_ref().is_some_and(|d| {
+                let is_emulator = d.kind == "EMULATOR";
+                let sdk_version = d.sdk_version.parse::<i32>().unwrap_or(0);
+                is_emulator && sdk_version < 38
+            });
+            Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
+                sim_type: chip.sim_type,
+                quirks: netsim_model::Quirks { goldfish_ril_37_or_earlier },
+                ..Default::default()
+            }))
+        }
         ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
@@ -215,6 +223,7 @@ async fn setup_grpc_listener(
     ap_client: ap_actor::ApClient,
     cell_client: cell_actor::CellClient,
     nfc_client: nfc_actor::NfcClient,
+    wifi_client: wifi_actor::WifiClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(u16, grpcio::Server), RunResult> {
@@ -224,6 +233,7 @@ async fn setup_grpc_listener(
 
     // Start the gRPC server
     let (server, port) = grpc_server::start(
+        "localhost",
         requested_port.into(),
         #[cfg(unix)]
         grpc_uds_path.clone(),
@@ -233,6 +243,7 @@ async fn setup_grpc_listener(
         ap_client,
         cell_client,
         nfc_client,
+        wifi_client,
         packet_streamer_service,
         version,
         frontend_stats,
@@ -242,7 +253,7 @@ async fn setup_grpc_listener(
     let listener = grpc_server::ChannelTransportListener {
         rx: new_connection_rx,
         local_addr: StreamAddress::Grpc(std::net::SocketAddr::new(
-            std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
             port,
         )),
     };
@@ -253,7 +264,7 @@ async fn setup_grpc_listener(
     listener_addresses.insert(
         "netsim_grpc".to_string(),
         StreamAddress::Grpc(std::net::SocketAddr::new(
-            std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
             port,
         )),
     );
@@ -533,7 +544,8 @@ impl NetsimDaemon {
 
         // Setup NFC Server
         let (nfc_runner, nfc_client) = nfc_actor::new();
-        let mut nfc_actor_state = nfc_actor::NfcActor::new(device_client.clone());
+        let mut nfc_actor_state =
+            nfc_actor::NfcActor::new(device_client.clone(), nfc_client.stats.clone());
         nfc_actor_state.start_casimir();
 
         // gRPC port is determined after the listener starts.
@@ -552,6 +564,7 @@ impl NetsimDaemon {
             ap_client.clone(),
             cell_client.clone(),
             nfc_client.clone(),
+            wifi_client.clone(),
             get_version(),
             frontend_stats.clone(),
         )
@@ -775,7 +788,6 @@ impl NetsimDaemon {
             initialized_guard,
         ))
     }
-
     /// Gets the gRPC port, if the server is running.
     pub fn grpc_port(&self) -> Option<u16> {
         self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {

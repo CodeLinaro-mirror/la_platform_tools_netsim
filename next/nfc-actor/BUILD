@@ -10,6 +10,7 @@ DEPS = [
     "//next/device-actor",
     "//next/device-api",
     "//next/model",
+    "//proto",
     "@tracing",
     "@anyhow",
     "@bytes",

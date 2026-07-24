@@ -8,6 +8,7 @@ pub(crate) mod gateway;
 pub(crate) mod lifecycle;
 pub(crate) mod mdns_forwarder;
 pub(crate) mod medium;
+pub(crate) mod pmsr;
 pub(crate) mod service;
 pub(crate) mod slirp_gateway;
 pub(crate) mod stats;

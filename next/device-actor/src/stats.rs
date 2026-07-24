@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use netsim_proto::stats::NetsimStats as ProtoNetsimStats;
 use protobuf_json_mapping::{PrintOptions, print_to_string_with_options};
+use tracing::warn;
 
 const STATS_PRINT_OPTIONS: PrintOptions = PrintOptions {
     enum_values_int: false,
@@ -87,6 +88,8 @@ impl Stats {
         &mut self,
         mut active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
         wifi_stats: Option<netsim_proto::stats::WifiStats>,
+        nfc_stats: Option<netsim_proto::stats::NfcStats>,
+        nfc_service_stats: Option<netsim_proto::stats::NfcServiceStats>,
     ) -> ProtoNetsimStats {
         if let Some(start) = self.start_time {
             self.proto.set_duration_secs(start.elapsed().as_secs());
@@ -96,6 +99,12 @@ impl Stats {
         combined.radio_stats.append(&mut active_stats);
         if let Some(ws) = wifi_stats {
             combined.wifi_stats = Some(ws).into();
+        }
+        if let Some(ns) = nfc_stats {
+            combined.nfc_stats = Some(ns).into();
+        }
+        if let Some(nss) = nfc_service_stats {
+            combined.nfc_service_stats = Some(nss).into();
         }
 
         let frontend_snap = self.frontend_stats.snapshot();
@@ -138,7 +147,22 @@ impl Stats {
             return Err(e);
         }
 
-        if let Err(e) = std::fs::rename(&tmp_path, path) {
+        let mut rename_res = std::fs::rename(&tmp_path, path);
+        if rename_res.is_err() {
+            // On Windows, renaming to an existing file can fail if the destination file
+            // handle is momentarily held or locked. Retry after removing destination.
+            for _ in 0..5 {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                let _ = std::fs::remove_file(path);
+                rename_res = std::fs::rename(&tmp_path, path);
+                if rename_res.is_ok() {
+                    break;
+                }
+            }
+        }
+
+        if let Err(e) = rename_res {
+            warn!("Failed to replace stats file {:?} with {:?}: {}", tmp_path, path, e);
             let _ = std::fs::remove_file(&tmp_path);
             return Err(e);
         }
@@ -190,7 +214,7 @@ mod tests {
         frontend_stats.delete_device.store(11, Ordering::SeqCst);
 
         let mut stats = Stats::new("1.0.0".to_string(), None, frontend_stats);
-        let proto = stats.get_combined_stats(vec![], None);
+        let proto = stats.get_combined_stats(vec![], None, None, None);
 
         let frontend_proto = proto.frontend_stats.as_ref().expect("Frontend stats missing");
         assert_eq!(frontend_proto.get_version(), 1);

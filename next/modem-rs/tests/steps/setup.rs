@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use modem_rs::{
-    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile,
+    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile, config::PinProfile,
     test_utils::MockModemHandler,
 };
+use netsim_model::Quirks;
 
 use crate::world::World;
 
@@ -19,9 +20,39 @@ pub fn given_modem(world: &mut World, name: &str) {
     }
 
     let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new();
+    let (handler, sink) = MockModemHandler::new(false);
 
-    world.manager.new_modem(id, sink, None).expect("Failed to create new modem");
+    world.manager.new_modem(id, sink, None, Quirks::default()).expect("Failed to create new modem");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Creates a Goldfish 37 (or earlier) modem with the given name.
+pub fn given_goldfish_37_modem(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(true);
+
+    let quirks = Quirks { goldfish_ril_37_or_earlier: true };
+    world.manager.new_modem(id, sink, None, quirks).expect("Failed to create new modem");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Creates a modem with the given name and SIM type.
+pub fn given_modem_with_sim_type(world: &mut World, name: &str, sim_type: i32) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    world
+        .manager
+        .new_modem(id, sink, Some(sim_type), Quirks::default())
+        .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -48,13 +79,13 @@ pub fn given_modem_with_sim_profile(world: &mut World, name: &str) {
     }
 
     let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new();
+    let (handler, sink) = MockModemHandler::new(false);
 
     let profile = create_legacy_test_profile();
 
     world
         .manager
-        .new_modem_with_profile(id, sink, Some(profile), None)
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
         .expect("Failed to create modem with profile");
     world.modems.insert(name.to_string(), (id, handler));
 }
@@ -71,6 +102,7 @@ pub fn create_legacy_test_profile() -> SimProfile {
                     files: vec![SimFile::Ef(ElementaryFile {
                         file_id: "2FE2".to_string(),
                         size: 10,
+                        record_len: None,
                         data: "89012345678901234567".to_string(),
                     })],
                 },
@@ -78,4 +110,52 @@ pub fn create_legacy_test_profile() -> SimProfile {
         },
         ..Default::default()
     }
+}
+
+/// Helper function to create a SIM profile with PIN lock enabled but not
+/// verified.
+pub fn create_locked_sim_profile() -> SimProfile {
+    SimProfile {
+        iccid: "89012345678901234567".to_string(),
+        imsi: "123456789012345".to_string(),
+        pin_profile: PinProfile {
+            state: "EnabledNotVerified".to_string(),
+            pin1: "1111".to_string(),
+            puk1: "12345678".to_string(),
+            ..Default::default()
+        },
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: "3F00".to_string(),
+                    files: vec![SimFile::Ef(ElementaryFile {
+                        file_id: "2FE2".to_string(),
+                        size: 10,
+                        record_len: None,
+                        data: "89012345678901234567".to_string(),
+                    })],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a locked SIM profile (legacy test profile with PIN
+/// EnabledNotVerified).
+pub fn given_modem_with_locked_sim(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    let profile = create_locked_sim_profile();
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+        .expect("Failed to create modem with locked SIM");
+    world.modems.insert(name.to_string(), (id, handler));
 }

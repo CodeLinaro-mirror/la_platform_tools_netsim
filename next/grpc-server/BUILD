@@ -27,6 +27,7 @@ netsim_rust_library(
         "//next/nfc-actor",
         "//next/packet-stream",
         "//next/packets",
+        "//next/wifi-actor",
         "//proto",
         "@bytes",
         "@futures",

@@ -31,6 +31,10 @@ impl WifiClient {
         Self { inner: client }
     }
 
+    pub async fn list(&self) -> Result<Vec<Chip>, ClientError> {
+        self.inner.list().await.map_err(|e| ClientError::Send(e.to_string()))
+    }
+
     pub async fn set_rf_state(&self, id: ChipId, enabled: bool) -> Result<(), ClientError> {
         let patch = ChipUpdate {
             variant: Some(ChipVariantUpdate::Wifi(Default::default())),
