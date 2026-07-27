@@ -6,9 +6,9 @@ The TAP feature allows the emulated Android device (Goldfish) to have a direct l
 
 ## How it Works
 
-When enabled, the next-gen Netsim daemon (`netsimdx`) manages a TAP interface (or a pool of interfaces) on the host.
-- Packets from the emulator's Wi-Fi interface are sent to `netsimdx` via gRPC.
-- `netsimdx` writes these packets to the host TAP interface.
+When enabled, the Netsim daemon (`netsimd`) manages a TAP interface (or a pool of interfaces) on the host.
+- Packets from the emulator's Wi-Fi interface are sent to `netsimd` via gRPC.
+- `netsimd` writes these packets to the host TAP interface.
 - Packets received on the host TAP interface are sent back to the emulator via gRPC.
 
 This enables features like DHCP, IPv6, and direct connectivity between the emulator and other devices on the host network.
@@ -38,7 +38,7 @@ ip link show | grep cvd-etap
 
 *(Note: If the interfaces are not visible or are DOWN, ensure you have completed the setup in [go/cuttlefish-glinux](http://go/cuttlefish-glinux) and rebooted your host machine.)*
 
-`netsimdx` will automatically use the sub-range `cvd-etap-06` to `cvd-etap-10` to avoid conflicts with active Cuttlefish instances.
+`netsimd` will automatically use the sub-range `cvd-etap-06` to `cvd-etap-10` to avoid conflicts with active Cuttlefish instances.
 
 ### Option 2: Manual Setup (Custom TAP)
 
@@ -69,23 +69,20 @@ If you don't have Cuttlefish installed, you can set up a manual TAP interface.
 
 ## How to Run
 
-To run the emulator with the TAP gateway, you must ensure you are using a compatible emulator version and enable the next-gen Netsim feature.
+To run the emulator with the TAP gateway, you must ensure you are using a compatible emulator version.
 
 ### 1. Emulator Version Requirement
 Ensure you are using Android Emulator version **`37.1.1.0`** or newer. You can check your version by running `emulator -version`.
 
-### 2. Start the Emulator with NetsimX enabled
-Use the `-feature NetsimX` flag to launch `netsimdx` (the next-gen Netsim daemon) instead of the legacy `netsimd`.
-
-*(Note: Next-gen Netsim is enabled by default on google3 development environments, but currently requires the `-feature NetsimX` flag on Android SDK / Canary emulators).*
+### 2. Start the Emulator
 
 *   **For Option 1 (Cuttlefish pool - Recommended)**:
     ```bash
-    emulator @Pixel_6 -feature NetsimX -netsim-args "--wifi-cvd-tap"
+    emulator @Pixel_6 -netsim-args "--wifi-cvd-tap"
     ```
 *   **For Option 2 (Custom TAP)**:
     ```bash
-    emulator @Pixel_6 -feature NetsimX -netsim-args "--wifi-tap tap0"
+    emulator @Pixel_6 -netsim-args "--wifi-tap tap0"
     ```
 
 ## How to Verify It Works
@@ -110,13 +107,13 @@ You should see a line showing a global IP address matching your network:
     inet 192.168.1.21/24 brd 192.168.1.255 scope global wlan0
     ```
 
-### 2. Check the `netsimdx` Logs (Host)
-Verify that `netsimdx` successfully bound to the TAP interface by inspecting its stdout log (grep for both `tap0` and Cuttlefish's `cvd-etap`). Note that the log directory remains `netsimd`:
+### 2. Check the `netsimd` Logs (Host)
+Verify that `netsimd` successfully bound to the TAP interface by inspecting its stdout log (grep for both `tap0` and Cuttlefish's `cvd-etap`). Note that the log directory remains `netsimd`:
 ```bash
 cat /tmp/android-$USER/netsimd/netsim_stdout.log | grep -E "tap0|cvd-etap"
 ```
 **Expected Output:**
-You should see logs indicating `netsimdx` opened and attached the TAP interface:
+You should see logs indicating `netsimd` opened and attached the TAP interface:
 *   **For Option 1 (Cuttlefish)**:
     ```
     netsim I ... tap_gateway.rs:114 - Opened TAP interface: cvd-etap-06
