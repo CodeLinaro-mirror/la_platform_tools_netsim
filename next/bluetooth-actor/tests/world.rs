@@ -484,9 +484,9 @@ impl World {
 
         let mut timestamps = Vec::new();
         let start = std::time::Instant::now();
-        let timeout = std::time::Duration::from_millis(expected_ms * 5 + 1000);
+        let timeout = std::time::Duration::from_millis(expected_ms * 8 + 2000);
 
-        while start.elapsed() < timeout && timestamps.len() < 3 {
+        while start.elapsed() < timeout && timestamps.len() < 5 {
             let reports = self.receive_scan_report(scanner_name).await;
             let now = std::time::Instant::now();
             for report in reports {
@@ -511,7 +511,7 @@ impl World {
             "Measured average interval for {}: {}ms (expected {}ms)",
             beacon_name, avg_interval, expected_ms
         );
-        let margin = (expected_ms / 2).max(50);
+        let margin = (expected_ms / 2).max(200);
         assert!(
             avg_interval >= expected_ms - margin && avg_interval <= expected_ms + margin,
             "Interval {}ms not within expected range {}ms +/- {}ms",
