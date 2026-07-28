@@ -15,6 +15,13 @@ pub struct CellCreate {
     // Future Cellular specific properties.
 }
 
+/// Quirks for compatibility with different guest-side implementations.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Quirks {
+    /// Flag for compatibility with Goldfish RIL in SDK 37 and earlier.
+    pub goldfish_ril_37_or_earlier: bool,
+}
+
 /// Cellular technology specific chip information.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cell {
@@ -25,11 +32,19 @@ pub struct Cell {
     /// SIM card type (0 = No SIM, 1 = Normal SIM, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sim_type: Option<i32>,
+    /// Quirks for compatibility with different guest-side implementations.
+    #[serde(default)]
+    pub quirks: Quirks,
 }
 
 impl Default for Cell {
     fn default() -> Self {
-        Self { radio: crate::chip::Radio::default(), state: "idle".to_string(), sim_type: None }
+        Self {
+            radio: crate::chip::Radio::default(),
+            state: "idle".to_string(),
+            sim_type: None,
+            quirks: Quirks::default(),
+        }
     }
 }
 

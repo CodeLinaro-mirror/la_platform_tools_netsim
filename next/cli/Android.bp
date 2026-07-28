@@ -36,6 +36,9 @@ rust_test_host {
     crate_name: "cli",
     edition: "2024",
     crate_root: "src/main.rs",
+    test_suites: [
+        "general_tests",
+    ],
     srcs: [
         "src/main.rs",
     ],
@@ -50,8 +53,8 @@ rust_test_host {
         "libfutures_util",
         "libgrpcio",
         "libhex",
-        "libnetsim_next_common",
-        "libnetsim_next_packets",
+        "libnetsim_next_common_testing",
+        "libnetsim_next_packets_testing",
         "libnetsim_proto",
         "libprotobuf",
         "libprotobuf_json_mapping",

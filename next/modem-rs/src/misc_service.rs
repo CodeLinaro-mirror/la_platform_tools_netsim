@@ -7,10 +7,97 @@ use crate::{
 };
 
 const DEFAULT_IMEI: &str = "867400022047199";
-const DEFAULT_IMEI_CRLF: &str = "867400022047199\r\n";
 const DEFAULT_SVN: &str = "01";
-const DEFAULT_SVN_CRLF: &str = "01\r\n";
 const DEFAULT_INFO: &str = "modem simulator";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MiscResponse {
+    Clock(String),
+    ModelId(String),
+    Revision(String),
+    SerialNumber(String),
+    ProductSerialNumberGsm(u8),
+    ErrorReportingMode(u8),
+    ErrorReportingSupported,
+    ActiveConfiguration {
+        speaker_volume: u8,
+        speaker_mute: u8,
+        quiet_mode: u8,
+        verbose_mode: u8,
+        icf_format: u8,
+        icf_parity: u8,
+        ifc_dce: u8,
+        ifc_dte: u8,
+    },
+    ManufacturerIdentification(String),
+    Capabilities,
+}
+
+impl std::fmt::Display for MiscResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MiscResponse::Clock(clock) => write!(f, "+CCLK: \"{clock}\"\r\n"),
+            MiscResponse::ModelId(model_id) => write!(f, "{model_id}\r\n"),
+            MiscResponse::Revision(revision) => write!(f, "{revision}\r\n"),
+            MiscResponse::SerialNumber(serial_number) => write!(f, "{serial_number}\r\n"),
+            MiscResponse::ProductSerialNumberGsm(snt) => match snt {
+                0 => write!(f, "{DEFAULT_IMEI}{DEFAULT_INFO}\r\n"),
+                1 => write!(f, "{DEFAULT_IMEI}\r\n"),
+                2 => write!(f, "{DEFAULT_IMEI}{DEFAULT_SVN}\r\n"),
+                3 => write!(f, "{DEFAULT_SVN}\r\n"),
+                _ => write!(f, "{DEFAULT_IMEI}\r\n"),
+            },
+            MiscResponse::ErrorReportingMode(mode) => write!(f, "+CMEE: {mode}\r\n"),
+            MiscResponse::ErrorReportingSupported => write!(f, "+CMEE: (0-2)\r\n"),
+            MiscResponse::ActiveConfiguration {
+                speaker_volume,
+                speaker_mute,
+                quiet_mode,
+                verbose_mode,
+                icf_format,
+                icf_parity,
+                ifc_dce,
+                ifc_dte,
+            } => {
+                write!(
+                    f,
+                    "ACTIVE PROFILE:\r\nL:{speaker_volume} M:{speaker_mute} Q:{quiet_mode} V:{verbose_mode} ICF:{icf_format},{icf_parity} IFC:{ifc_dce},{ifc_dte}\r\n"
+                )
+            }
+            MiscResponse::ManufacturerIdentification(manufacturer) => {
+                write!(f, "{manufacturer}\r\n")
+            }
+            MiscResponse::Capabilities => write!(f, "+GCAP: +FCLASS,+DS\r\n"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MiscError {
+    Error,
+    Unhandled,
+}
+
+type MiscResult = Result<Option<MiscResponse>, MiscError>;
+
+impl From<MiscResult> for ExecutionResult {
+    fn from(res: MiscResult) -> Self {
+        match res {
+            Ok(opt_resp) => {
+                let mut handled = HandledCommand::ok();
+                if let Some(resp) = opt_resp {
+                    let resp_str = resp.to_string();
+                    if !resp_str.is_empty() {
+                        handled.responses.insert(0, resp_str);
+                    }
+                }
+                ExecutionResult::Success(handled)
+            }
+            Err(MiscError::Error) => ExecutionResult::Error,
+            Err(MiscError::Unhandled) => ExecutionResult::Unhandled,
+        }
+    }
+}
 
 pub struct MiscService {
     cmee_mode: CmeeMode,
@@ -49,135 +136,101 @@ impl MiscService {
 
     // --- Pure command handlers ---
 
-    pub fn handle_set_time(&mut self, time: QuotedString) -> ExecutionResult {
+    fn handle_set_time(&mut self, time: QuotedString) -> MiscResult {
         self.clock = String::from_utf8(time.to_vec()).unwrap_or_default();
-        ExecutionResult::Success(HandledCommand::ok())
+        Ok(None)
     }
 
     pub fn set_time(&mut self, time: String) {
         self.clock = time;
     }
 
-    pub fn handle_query_time(&self) -> ExecutionResult {
-        let response_data = format!("+CCLK: \"{}\"\r\n", self.clock);
-        ExecutionResult::Success(HandledCommand {
-            responses: vec![response_data, "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_query_time(&self) -> MiscResult {
+        Ok(Some(MiscResponse::Clock(self.clock.clone())))
     }
 
-    pub fn handle_get_model_id(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand {
-            responses: vec!["gLinux\r\n".to_string(), "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_get_model_id(&self) -> MiscResult {
+        Ok(Some(MiscResponse::ModelId("gLinux".to_string())))
     }
 
-    pub fn handle_get_revision(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand {
-            responses: vec!["1.0\r\n".to_string(), "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_get_revision(&self) -> MiscResult {
+        Ok(Some(MiscResponse::Revision("1.0".to_string())))
     }
 
-    pub fn handle_get_serial_number(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand {
-            responses: vec!["0123456789\r\n".to_string(), "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_get_serial_number(&self) -> MiscResult {
+        Ok(Some(MiscResponse::SerialNumber("0123456789".to_string())))
     }
 
-    pub fn handle_get_product_serial_number_gsm(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand {
-            responses: vec![DEFAULT_IMEI_CRLF.to_string(), "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_get_product_serial_number_gsm(&self) -> MiscResult {
+        Ok(Some(MiscResponse::ProductSerialNumberGsm(1)))
     }
 
-    pub fn handle_get_product_serial_number_gsm_with_type(&self, snt: u8) -> ExecutionResult {
-        let response = match snt {
-            0 => format!("{DEFAULT_IMEI}{DEFAULT_INFO}\r\n"),
-            1 => DEFAULT_IMEI_CRLF.to_string(),
-            2 => format!("{DEFAULT_IMEI}{DEFAULT_SVN}\r\n"),
-            3 => DEFAULT_SVN_CRLF.to_string(),
-            _ => DEFAULT_IMEI_CRLF.to_string(),
-        };
-
-        ExecutionResult::Success(HandledCommand {
-            responses: vec![response, "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_get_product_serial_number_gsm_with_type(&self, snt: u8) -> MiscResult {
+        Ok(Some(MiscResponse::ProductSerialNumberGsm(snt)))
     }
 
-    pub fn handle_set_icf(&mut self, format: u8, parity: u8) -> ExecutionResult {
+    fn handle_set_icf(&mut self, format: u8, parity: u8) -> MiscResult {
         self.icf_format = format;
         self.icf_parity = parity;
-        ExecutionResult::Success(HandledCommand::ok())
+        Ok(None)
     }
 
-    pub fn handle_set_ifc(&mut self, dce: u8, dte: u8) -> ExecutionResult {
+    fn handle_set_ifc(&mut self, dce: u8, dte: u8) -> MiscResult {
         self.ifc_dce = dce;
         self.ifc_dte = dte;
-        ExecutionResult::Success(HandledCommand::ok())
+        Ok(None)
     }
 
-    pub fn handle_set_ipr(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_ipr(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_report_mobile_equipment_error(&mut self, mode: u8) -> ExecutionResult {
+    fn handle_set_report_mobile_equipment_error(&mut self, mode: u8) -> MiscResult {
         if let Some(m) = CmeeMode::from_u8(mode) {
             self.cmee_mode = m;
-            ExecutionResult::Success(HandledCommand::ok())
+            Ok(None)
         } else {
-            ExecutionResult::Error
+            Err(MiscError::Error)
         }
     }
 
-    pub fn handle_query_report_mobile_equipment_error(&self) -> ExecutionResult {
-        let response_data = format!("+CMEE: {}\r\n", self.cmee_mode as u8);
-        ExecutionResult::Success(HandledCommand {
-            responses: vec![response_data, "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_query_report_mobile_equipment_error(&self) -> MiscResult {
+        Ok(Some(MiscResponse::ErrorReportingMode(self.cmee_mode as u8)))
     }
 
-    pub fn handle_query_supported_report_mobile_equipment_error(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand {
-            responses: vec!["+CMEE: (0-2)\r\n".to_string(), "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_query_supported_report_mobile_equipment_error(&self) -> MiscResult {
+        Ok(Some(MiscResponse::ErrorReportingSupported))
     }
 
-    pub fn handle_goldfish_init_sequence(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_goldfish_init_sequence(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_echo(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_echo(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_speaker_volume(&mut self, vol: u8) -> ExecutionResult {
+    fn handle_set_speaker_volume(&mut self, vol: u8) -> MiscResult {
         self.speaker_volume = vol;
-        ExecutionResult::Success(HandledCommand::ok())
+        Ok(None)
     }
 
-    pub fn handle_set_speaker_mute(&mut self, mute: u8) -> ExecutionResult {
+    fn handle_set_speaker_mute(&mut self, mute: u8) -> MiscResult {
         self.speaker_mute = mute;
-        ExecutionResult::Success(HandledCommand::ok())
+        Ok(None)
     }
 
-    pub fn handle_set_quiet_mode(&mut self, quiet: u8) -> ExecutionResult {
+    fn handle_set_quiet_mode(&mut self, quiet: u8) -> MiscResult {
         self.quiet_mode = quiet;
-        ExecutionResult::Success(HandledCommand::ok())
+        Ok(None)
     }
 
-    pub fn handle_set_verbose_mode(&mut self, verbose: u8) -> ExecutionResult {
+    fn handle_set_verbose_mode(&mut self, verbose: u8) -> MiscResult {
         self.verbose_mode = verbose;
-        ExecutionResult::Success(HandledCommand::ok())
+        Ok(None)
     }
 
-    pub fn handle_reset_to_factory_defaults(&mut self) -> ExecutionResult {
+    fn handle_reset_to_factory_defaults(&mut self) -> MiscResult {
         self.cmee_mode = CmeeMode::default();
         self.speaker_volume = 1;
         self.speaker_mute = 1;
@@ -187,93 +240,84 @@ impl MiscService {
         self.icf_parity = 3;
         self.ifc_dce = 2;
         self.ifc_dte = 2;
-        ExecutionResult::Success(HandledCommand::ok())
+        Ok(None)
     }
 
-    pub fn handle_view_active_configuration(&self) -> ExecutionResult {
-        let config_str = format!(
-            "ACTIVE PROFILE:\r\nL:{} M:{} Q:{} V:{} ICF:{},{} IFC:{},{}\r\nOK\r\n",
-            self.speaker_volume,
-            self.speaker_mute,
-            self.quiet_mode,
-            self.verbose_mode,
-            self.icf_format,
-            self.icf_parity,
-            self.ifc_dce,
-            self.ifc_dte
-        );
-
-        ExecutionResult::Success(HandledCommand { responses: vec![config_str], action: None })
+    fn handle_view_active_configuration(&self) -> MiscResult {
+        Ok(Some(MiscResponse::ActiveConfiguration {
+            speaker_volume: self.speaker_volume,
+            speaker_mute: self.speaker_mute,
+            quiet_mode: self.quiet_mode,
+            verbose_mode: self.verbose_mode,
+            icf_format: self.icf_format,
+            icf_parity: self.icf_parity,
+            ifc_dce: self.ifc_dce,
+            ifc_dte: self.ifc_dte,
+        }))
     }
 
-    pub fn handle_write_active_configuration(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_write_active_configuration(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_reset(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_reset(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_get_identification_information(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_get_identification_information(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_auto_answer(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_auto_answer(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_command_termination_character(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_command_termination_character(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_response_formatting_character(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_response_formatting_character(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_command_line_editing_character(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_command_line_editing_character(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_pause_before_blind_dialing(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_pause_before_blind_dialing(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_connection_completion_timeout(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_connection_completion_timeout(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_comma_dial_modifier_time(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_comma_dial_modifier_time(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_automatic_disconnect_delay(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_automatic_disconnect_delay(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_call_mode(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_call_mode(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_set_character_set(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand::ok())
+    fn handle_set_character_set(&self) -> MiscResult {
+        Ok(None)
     }
 
-    pub fn handle_get_manufacturer_identification(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand {
-            responses: vec!["Android\r\n".to_string(), "OK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_get_manufacturer_identification(&self) -> MiscResult {
+        Ok(Some(MiscResponse::ManufacturerIdentification("Android".to_string())))
     }
 
-    pub fn handle_get_capabilities(&self) -> ExecutionResult {
-        ExecutionResult::Success(HandledCommand {
-            responses: vec!["+GCAP: +FCLASS,+DS\r\nOK\r\n".to_string()],
-            action: None,
-        })
+    fn handle_get_capabilities(&self) -> MiscResult {
+        Ok(Some(MiscResponse::Capabilities))
     }
 
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
-        match command {
+        let misc_result = match command {
             Command::GetManufacturerIdentification => self.handle_get_manufacturer_identification(),
             Command::GetCapabilities => self.handle_get_capabilities(),
             Command::GetModelId => self.handle_get_model_id(),
@@ -326,8 +370,10 @@ impl MiscService {
             Command::SetAutomaticDisconnectDelay(_) => self.handle_set_automatic_disconnect_delay(),
             Command::SetCallMode(_) => self.handle_set_call_mode(),
             Command::SetCharacterSet(_) => self.handle_set_character_set(),
-            Command::Test => ExecutionResult::Success(HandledCommand::ok()),
-            _ => ExecutionResult::Unhandled,
-        }
+            Command::Test => Ok(None),
+            _ => Err(MiscError::Unhandled),
+        };
+
+        misc_result.into()
     }
 }

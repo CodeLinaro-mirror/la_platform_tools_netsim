@@ -6,7 +6,8 @@ use futures::SinkExt;
 use modem_rs::ModemSink;
 use netsim_model::{
     Cell, Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipUpdate, ChipVariant,
-    ChipVariantUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING, ModemAction, Radio,
+    ChipVariantUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING, ModemAction,
+    Quirks, Radio,
 };
 use tracing::{debug, error, info};
 
@@ -72,12 +73,11 @@ impl ActorService for CellActor {
         ctx.add_stream(chip_id, Box::pin(stream));
 
         // 2. Add to Controller directly (Sync)
-        let sim_type = if let Some(ChipVariant::Cell(cell)) = params.chip.variant.as_ref() {
-            cell.sim_type
-        } else {
-            None
+        let (sim_type, quirks) = match params.chip.variant.as_ref() {
+            Some(ChipVariant::Cell(cell)) => (cell.sim_type, cell.quirks),
+            _ => (None, Quirks::default()),
         };
-        if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink, sim_type) {
+        if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink, sim_type, quirks) {
             return Err(CellError::ModemError(e));
         }
 
@@ -131,6 +131,7 @@ impl ActorService for CellActor {
                         MODEM_STATE_IDLE.to_string()
                     },
                     sim_type: None,
+                    quirks: info.quirks,
                 })),
                 ..Default::default()
             }))
@@ -244,6 +245,7 @@ impl ActorService for CellActor {
                             MODEM_STATE_IDLE.to_string()
                         },
                         sim_type: None,
+                        quirks: info.quirks,
                     })),
                     ..Default::default()
                 });

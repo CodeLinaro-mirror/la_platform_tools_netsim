@@ -143,3 +143,23 @@ fn test_query_facility_lock() {
     then_response_is(&mut world, "A", "+CLCK: 0");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_call_forward_utility() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CCFCU=0,3,2,129,\"54321\",1,\"\",\"\",,1");
+    then_response_is(&mut world, "A", "+CME ERROR: 4");
+}
+
+#[test]
+fn test_call_forward_utility_cmee_disabled() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CMEE=0");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CCFCU=0,3,2,129,\"54321\",1,\"\",\"\",,1");
+    then_response_is(&mut world, "A", "ERROR");
+}

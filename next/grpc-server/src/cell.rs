@@ -56,7 +56,7 @@ impl CellService for CellServiceImpl {
                         cell.state = cell_info.state;
                         cell.ringing = cell.state == MODEM_STATE_RINGING;
                     }
-                    sink.success(cell);
+                    let _ = sink.success(cell).await;
                 }
                 Err(e) => {
                     error!("Get cell failed: {}", e);
@@ -64,7 +64,7 @@ impl CellService for CellServiceImpl {
                         grpcio::RpcStatusCode::NOT_FOUND,
                         format!("Failed to get cell: {}", e),
                     );
-                    sink.fail(status);
+                    let _ = sink.fail(status).await;
                 }
             }
         });
@@ -90,15 +90,15 @@ impl CellService for CellServiceImpl {
                             response.cells.push(cell);
                         }
                     }
-                    sink.success(response);
+                    let _ = sink.success(response).await;
                 }
                 Err(e) => {
                     error!("List cells failed: {}", e);
                     let status = grpcio::RpcStatus::with_message(
                         grpcio::RpcStatusCode::INTERNAL,
-                        format!("List cells failed: {}", e),
+                        format!("Failed to list cells: {}", e),
                     );
-                    sink.fail(status);
+                    let _ = sink.fail(status).await;
                 }
             }
         });
@@ -162,31 +162,37 @@ impl CellService for CellServiceImpl {
                     CellAction::SetNetworkTechnology { tech }
                 }
                 Some(_) => {
-                    sink.fail(grpcio::RpcStatus::with_message(
-                        grpcio::RpcStatusCode::UNIMPLEMENTED,
-                        "unsupported action".into(),
-                    ));
+                    let _ = sink
+                        .fail(grpcio::RpcStatus::with_message(
+                            grpcio::RpcStatusCode::UNIMPLEMENTED,
+                            "unsupported action".into(),
+                        ))
+                        .await;
                     return;
                 }
                 None => {
-                    sink.fail(grpcio::RpcStatus::with_message(
-                        grpcio::RpcStatusCode::INVALID_ARGUMENT,
-                        "missing action".into(),
-                    ));
+                    let _ = sink
+                        .fail(grpcio::RpcStatus::with_message(
+                            grpcio::RpcStatusCode::INVALID_ARGUMENT,
+                            "missing action".into(),
+                        ))
+                        .await;
                     return;
                 }
             };
 
             match client.perform_action(chip_id, action).await {
                 Ok(_) => {
-                    sink.success(Empty::new());
+                    let _ = sink.success(Empty::new()).await;
                 }
                 Err(e) => {
                     error!("Execute cell action failed: {}", e);
-                    sink.fail(grpcio::RpcStatus::with_message(
-                        grpcio::RpcStatusCode::INTERNAL,
-                        format!("Failed to execute action: {}", e),
-                    ));
+                    let _ = sink
+                        .fail(grpcio::RpcStatus::with_message(
+                            grpcio::RpcStatusCode::INTERNAL,
+                            format!("Failed to execute action: {}", e),
+                        ))
+                        .await;
                 }
             }
         });

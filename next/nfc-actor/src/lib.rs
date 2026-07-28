@@ -6,6 +6,7 @@ mod lifecycle;
 mod nfc_actor;
 mod scene;
 mod service;
+mod stats;
 
 mod client;
 
@@ -16,9 +17,12 @@ pub use client::NfcClient;
 pub use error::NfcError;
 pub use nfc_actor::NfcActor;
 pub use scene::SceneClient;
+pub use stats::{NfcServiceStats, NfcStats};
 
 /// Creates a new NFC actor framework instance and client.
 pub fn new() -> (ResourceActor<NfcActor>, NfcClient) {
     let (runner, client) = ResourceActor::new(32);
-    (runner, NfcClient(client))
+    let stats = std::sync::Arc::new(stats::NfcStats::new());
+    let service_stats = std::sync::Arc::new(stats::NfcServiceStats::new());
+    (runner, NfcClient { client, stats, service_stats })
 }

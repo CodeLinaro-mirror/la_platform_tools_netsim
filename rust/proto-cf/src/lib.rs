@@ -28,6 +28,8 @@ pub mod packet_streamer;
 pub mod packet_streamer_grpc;
 pub mod startup;
 pub mod stats;
+pub mod wifi_service;
+pub mod wifi_service_grpc;
 
 pub use casimir_control as casimircontrolserver;
 

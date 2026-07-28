@@ -3,6 +3,7 @@
 
 use std::{str, time::Duration};
 
+use netsim_model::Quirks;
 use nom::IResult;
 
 pub trait Parsable<'a>: Sized {
@@ -158,6 +159,7 @@ pub enum CmeError {
     InvalidCharacters,
     NoNetworkService,
     NoResources,
+    IncorrectParameters,
     Custom(u32, &'static str),
 }
 
@@ -183,6 +185,7 @@ impl CmeError {
             Self::InvalidCharacters => 25,
             Self::NoNetworkService => 30,
             Self::NoResources => 142,
+            Self::IncorrectParameters => 50,
             Self::Custom(c, _) => c,
         }
     }
@@ -208,6 +211,7 @@ impl CmeError {
             Self::InvalidCharacters => "invalid characters in text string",
             Self::NoNetworkService => "no network service",
             Self::NoResources => "no resources",
+            Self::IncorrectParameters => "incorrect parameters",
             Self::Custom(_, msg) => msg,
         }
     }
@@ -241,6 +245,10 @@ impl HandledCommand {
     pub fn ok_with_action(action: CommandAction) -> Self {
         Self { responses: vec!["OK\r\n".to_string()], action: Some(action) }
     }
+    /// Creates a result with a simple "ERROR" response and no follow-up action.
+    pub fn error() -> Self {
+        Self { responses: vec!["ERROR\r\n".to_string()], action: None }
+    }
 }
 
 /// Represents the outcome of a command execution from the new parser.
@@ -257,6 +265,10 @@ pub enum ExecutionResult {
 
     /// The command failed with a structured Mobile Equipment (ME) error.
     CmeError(CmeError),
+
+    /// The command failed with a structured Mobile Equipment (ME) error, after
+    /// emitting one or more URC strings.
+    CmeErrorWithUrc(CmeError, Vec<String>),
 
     /// This command has not been refactored yet and should be handled by the
     /// legacy system.
@@ -275,6 +287,7 @@ pub struct ModemInfo {
     pub connections: Vec<String>, // Placeholder for actual connection info
     pub ringing: bool,
     pub sms_count: usize,
+    pub quirks: Quirks,
 }
 
 /// Represents the signal strength parameters for all supported tech layout (22

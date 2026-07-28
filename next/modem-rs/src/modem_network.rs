@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::ModemAction;
+use netsim_model::{ModemAction, Quirks};
 
 // ...
 use crate::modem_network_simulator::NetworkEvent;
@@ -14,6 +14,7 @@ pub trait ModemNetworkInterface: Send + Sync {
         chip_id: ModemId,
         sink: ModemSink,
         sim_type: Option<i32>,
+        quirks: Quirks,
     ) -> Result<(), ModemError>;
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError>;
     fn send_data(&mut self, chip_id: ModemId, data: &[u8]) -> Result<(), ModemError>;
@@ -30,8 +31,9 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
         chip_id: ModemId,
         sink: ModemSink,
         sim_type: Option<i32>,
+        quirks: Quirks,
     ) -> Result<(), ModemError> {
-        self.new_modem(chip_id, sink, sim_type)
+        self.new_modem(chip_id, sink, sim_type, quirks)
     }
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError> {
         self.remove_modem(chip_id);
@@ -50,6 +52,7 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
                 connections: modem.get_active_calls(),
                 ringing: modem.is_ringing(),
                 sms_count: modem.get_sms_count(),
+                quirks: modem.quirks,
             })
         } else {
             Err(ModemError::NotFound)

@@ -17,3 +17,4 @@ pub mod nfc_service;
 pub mod packet_streamer;
 pub mod startup;
 pub mod stats;
+pub mod wifi_service;

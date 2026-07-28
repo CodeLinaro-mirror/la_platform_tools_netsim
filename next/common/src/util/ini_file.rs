@@ -110,7 +110,7 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
     get_address_by_key(instance_num, "grpc.port")
 }
 
-/// Get the tcp server address for netsim packet stream
+/// Get the TCP server address for netsim packet stream
 pub fn get_tcp_server_address(instance_num: u16) -> Option<String> {
     get_address_by_key(instance_num, "tcp.port")
 }
@@ -135,6 +135,10 @@ fn get_address_by_key(instance_num: u16, key: &str) -> Option<String> {
             error!("Error parsing ini file: {err}");
         })
         .ok()?;
+    // Return the address constructed from ini_file. Format: localhost:{port}
+    // If it starts with a port like "8888", we prepend localhost: to it.
+    // If it's already a full address like ":8888" or "127.0.0.1:8888" we return it
+    // as is.
     ini_map.get(key).map(|s| if s.contains(':') { s.to_string() } else { format!("localhost:{s}") })
 }
 

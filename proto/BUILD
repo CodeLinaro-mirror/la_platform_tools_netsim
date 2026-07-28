@@ -105,6 +105,7 @@ genrule(
         "netsim/cell_grpc.rs",
         "netsim/casimir_control_grpc.rs",
         "netsim/nfc_service_grpc.rs",
+        "netsim/wifi_service_grpc.rs",
     ],
     cmd = """
         NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(location netsim/common.proto)))
@@ -149,6 +150,7 @@ genrule(
         "netsim/cell.rs",
         "netsim/casimir_control.rs",
         "netsim/nfc_service.rs",
+        "netsim/wifi_service.rs",
         "rootcanal/configuration.rs",
         "lib.rs",
     ],
@@ -199,6 +201,8 @@ rust_library(
         "netsim/packet_streamer_grpc.rs",
         "netsim/startup.rs",
         "netsim/stats.rs",
+        "netsim/wifi_service.rs",
+        "netsim/wifi_service_grpc.rs",
         "rootcanal/configuration.rs",
     ],
     crate_name = "netsim_proto",

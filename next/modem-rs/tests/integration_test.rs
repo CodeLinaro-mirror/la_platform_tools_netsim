@@ -40,7 +40,7 @@ fn test_two_modem_end_to_end_scenario() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0");
+    then_response_is(&mut world, "A", "+COPS: 0,2,0");
     then_response_is(&mut world, "A", "OK");
 
     // Make Call

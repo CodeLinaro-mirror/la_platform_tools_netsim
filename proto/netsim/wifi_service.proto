@@ -1,0 +1,35 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package netsim.wifi_service;
+
+import "netsim/model.proto";
+
+// Service to manage Wifi capabilities in the simulation
+service WifiService {
+  // Get status of one or all Wifi chips.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  // Set RF power state (on/off) of a Wifi chip.
+  rpc SetPower(SetPowerRequest) returns (SetPowerResponse);
+}
+
+message GetStatusRequest {
+  // Optional ID of the specific chip to get status for. If 0, returns all Wifi
+  // chips.
+  uint32 chip_id = 1;
+}
+
+message GetStatusResponse {
+  repeated netsim.model.Chip chips = 1;
+}
+
+message SetPowerRequest {
+  uint32 chip_id = 1;
+  bool power_on = 2;
+}
+
+message SetPowerResponse {
+  netsim.model.Chip chip = 1;
+}

@@ -12,7 +12,20 @@ CURRENT_REL_PATH = ""
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 NEXT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "next")
 
-ALLOWED_TEST_PACKAGES = {"cli", "nfc-actor"}
+ALLOWED_TEST_PACKAGES = {
+    "cli",
+    "nfc-actor",
+    "daemon",
+    "common",
+    "packet-stream",
+    "grpc-server",
+    "bluetooth-actor",
+    "uwb-actor",
+    "cell-actor",
+    "wifi-actor",
+    "ap-actor",
+    "ethernet-actor",
+}
 
 
 EXACT_DEP_MAPPING = {
@@ -27,11 +40,14 @@ EXACT_DEP_MAPPING = {
     "@casimir//:casimir_lib": "libcasimir",
     "//next/testing": "libnetsim_next_netsim_testing",
     "//next/daemon": "netsim_next_daemon",
-    "//next/daemon:testing": "libnetsim_next_daemon_lib",
+    "//next/daemon:testing": "libnetsim_next_daemon_lib_testing",
     "//next/testing:testing": "libnetsim_next_netsim_testing_testing",
     "//:netsim_link_layer_packets_rust_gen": (
         "rootcanal_link_layer_packets_rust_gen"
     ),
+    ":ap_actor_cxx": "libnetsim_next_ap_actor_cxx",
+    ":hostap_crypto_shim": "libnetsim_next_ap_actor_cxx",
+    "@boringssl//:crypto": "libcrypto",
 }
 
 IGNORED_DEPS = {
@@ -39,6 +55,10 @@ IGNORED_DEPS = {
     "@libslirp",
     "http-proxy",
     "@libglib",
+    "@aes",
+    "@ccm",
+    "aes",
+    "ccm",
 }
 
 
@@ -46,6 +66,9 @@ def translate_dep(dep):
   for ignored in IGNORED_DEPS:
     if ignored in dep:
       return None
+
+  if dep in EXACT_DEP_MAPPING:
+    return EXACT_DEP_MAPPING[dep]
 
   # Resolve relative labels starting with ":" to absolute
   if dep.startswith(":"):
@@ -103,7 +126,6 @@ def glob(include, exclude=None):
 
 
 def select(items):
-  # Prioritize Linux/Android for Soong generation
   for key in items:
     if "linux" in key or "android" in key:
       return items[key]
@@ -132,100 +154,15 @@ def netsim_cc_library_static(*args, **kwargs):
   pass
 
 
-def cc_library_static(*args, **kwargs):
+def genrule(*args, **kwargs):
   pass
 
 
-def cc_library(*args, **kwargs):
+def rust_library(*args, **kwargs):
   pass
 
 
 def exports_files(*args, **kwargs):
-  pass
-
-
-def rust_test(*args, **kwargs):
-  name = kwargs.get("name")
-  srcs = kwargs.get("srcs")
-  if not name or not srcs or name in IGNORED_TARGETS:
-    return
-
-  deps = kwargs.get("deps", [])
-  proc_macro_deps = kwargs.get("proc_macro_deps", [])
-
-  pkg_name = CURRENT_REL_PATH.strip("/")
-  if not pkg_name:
-    pkg_name = name
-
-  package_name = CURRENT_REL_PATH.strip("/")
-  if package_name not in ALLOWED_TEST_PACKAGES:
-    return
-
-  module_name = pkg_name.replace("-", "_")
-  module_prefix = f"{module_name}_" if module_name else ""
-  target_name = f"libnetsim_next_{module_prefix}{name.replace('-', '_')}"
-
-  rustlibs = []
-  shared_libs = []
-  for lib in transform_deps(deps):
-    if lib in SHARED_LIB_OVERRIDES:
-      shared_libs.append(lib)
-    else:
-      rustlibs.append(lib)
-  proc_macros = transform_deps(proc_macro_deps)
-
-  crate_root = kwargs.get("crate_root")
-  if not crate_root:
-    for opt in ["tests/mod.rs", "tests/integration_tests.rs"]:
-      if opt in srcs:
-        crate_root = opt
-        break
-    if not crate_root:
-      if srcs:
-        crate_root = srcs[0]
-      else:
-        print(
-            f"Warning: rust_test {name} in {CURRENT_REL_PATH} lacks a valid "
-            "crate root and has no sources. Skipping.",
-            file=sys.stderr,
-        )
-        return
-
-  crate_name = kwargs.get("crate_name")
-  if not crate_name:
-    if crate_root == "src/lib.rs" or crate_root == "src/main.rs":
-      crate_name = module_name
-    else:
-      crate_name = f"{module_name}_tests"
-
-  default_file = os.path.basename(crate_root) if crate_root else "lib.rs"
-  srcs_content = resolve_rust_srcs(srcs, default_file)
-  crate_root_mapped = crate_root if crate_root else srcs_content[0]
-
-  soong_targets.append({
-      "type": "rust_test_host",
-      "name": target_name,
-      "crate_name": crate_name,
-      "srcs": sorted(list(set(srcs_content))),
-      "crate_root": crate_root_mapped,
-      "rustlibs": sorted(list(set(rustlibs))),
-      "shared_libs": sorted(list(set(shared_libs))),
-      "proc_macros": sorted(list(set(proc_macros))),
-      "features": ["cuttlefish", "testing"],
-      "edition": kwargs.get("edition", "2024"),
-      "test_suites": ["general_tests"],
-  })
-
-
-def rust_test_suite(*args, **kwargs):
-  pass
-
-
-def rust_protobuf(*args, **kwargs):
-  pass
-
-
-def genrule(*args, **kwargs):
   pass
 
 
@@ -234,10 +171,6 @@ def cc_binary(*args, **kwargs):
 
 
 def kt_android_library(*args, **kwargs):
-  pass
-
-
-def rust_cxx_bridge(*args, **kwargs):
   pass
 
 
@@ -265,7 +198,19 @@ def stripped_binaries(*args, **kwargs):
   pass
 
 
-SHARED_LIB_OVERRIDES = {"lib_rootcanal_ffi"}
+def redirect_dep_to_testing(d):
+  if d.startswith("//next"):
+    if d.endswith(":testing"):
+      return d
+    elif ":" in d:
+      return d + "_testing"
+    else:
+      return d + ":testing"
+  return d
+
+
+STATIC_LIB_OVERRIDES = {"libnetsim_next_ap_actor_cxx"}
+SHARED_LIB_OVERRIDES = {"lib_rootcanal_ffi", "libcrypto"}
 PLATFORM_RUSTLIBS = {
     "daemon": ["libcommand_fds"],
     "daemon-lib": [
@@ -279,7 +224,6 @@ PLATFORM_RUSTLIBS = {
 }
 IGNORED_TARGETS = {
     "libslirp-rs",
-    "ap-actor",
     "http-proxy",
 }
 ALLOWED_TESTING_TARGETS = {
@@ -293,7 +237,163 @@ ALLOWED_TESTING_TARGETS = {
     "model",
     "types",
     "netsim-testing",
+    "daemon-lib",
+    "packets",
+    "rootcanal",
+    "rootcanal-server",
+    "modem-rs",
+    "websocket-server",
+    "bluetooth-actor",
+    "capture-actor",
+    "cell-actor",
+    "grpc-server",
+    "hci-server",
+    "link-actor",
+    "packet-stream",
+    "ethernet-actor",
+    "uwb-actor",
+    "wifi-actor",
+    "ap-actor",
+    "slirp",
+    "slirp-actor",
 }
+
+
+def rust_test(*args, **kwargs):
+  name = kwargs.get("name")
+  srcs = kwargs.get("srcs")
+  if not name or not srcs or name in IGNORED_TARGETS:
+    return
+
+  deps = kwargs.get("deps", [])
+  redirected_deps = [redirect_dep_to_testing(d) for d in deps]
+  proc_macro_deps = kwargs.get("proc_macro_deps", [])
+
+  pkg_name = CURRENT_REL_PATH.strip("/")
+  if not pkg_name:
+    pkg_name = name
+
+  package_name = CURRENT_REL_PATH.strip("/")
+  if package_name not in ALLOWED_TEST_PACKAGES:
+    return
+
+  module_name = pkg_name.replace("-", "_")
+  module_prefix = f"{module_name}_" if module_name else ""
+
+  crate_root = kwargs.get("crate_root")
+  if not crate_root:
+    for opt in ["tests/mod.rs", "tests/integration_tests.rs"]:
+      if opt in srcs:
+        crate_root = opt
+        break
+    if not crate_root:
+      if srcs:
+        crate_root = srcs[0]
+      else:
+        print(
+            f"Warning: rust_test {name} in {CURRENT_REL_PATH} lacks a valid "
+            "crate root and has no sources. Skipping.",
+            file=sys.stderr,
+        )
+        return
+
+  if name in ("tests", "test", "integration_tests", "integration-test"):
+    if crate_root and "tests/" in crate_root:
+      test_suffix = "integration_tests"
+    else:
+      test_suffix = "tests"
+  else:
+    test_suffix = name.replace("-", "_")
+
+  target_name = f"libnetsim_next_{module_prefix}{test_suffix}"
+
+  rustlibs = []
+  shared_libs = []
+  static_libs = []
+  for lib in transform_deps(redirected_deps):
+    if lib in STATIC_LIB_OVERRIDES:
+      static_libs.append(lib)
+    elif lib in SHARED_LIB_OVERRIDES:
+      shared_libs.append(lib)
+    else:
+      rustlibs.append(lib)
+  proc_macros = transform_deps(proc_macro_deps)
+
+  crate_name = kwargs.get("crate_name")
+  if not crate_name:
+    if crate_root == "src/lib.rs" or crate_root == "src/main.rs":
+      crate_name = module_name
+    else:
+      crate_name = f"{module_name}_tests"
+
+  default_file = os.path.basename(crate_root) if crate_root else "lib.rs"
+  srcs_content = resolve_rust_srcs(srcs, default_file)
+  crate_root_mapped = crate_root if crate_root else srcs_content[0]
+
+  # Deduplicate: if soong_targets already has a test with matching crate_root or srcs, skip
+  for existing in soong_targets:
+    if existing.get("type") == "rust_test_host" and (
+        existing.get("crate_root") == crate_root_mapped
+        or existing.get("srcs") == sorted(list(set(srcs_content)))
+    ):
+      return
+
+  if (
+      "libnetsim_next_ap_actor_cxx" in static_libs
+      and "libcrypto" not in shared_libs
+  ):
+    shared_libs.append("libcrypto")
+
+  tgt_dict = {
+      "type": "rust_test_host",
+      "name": target_name,
+      "crate_name": crate_name,
+      "srcs": sorted(list(set(srcs_content))),
+      "crate_root": crate_root_mapped,
+      "rustlibs": sorted(list(set(rustlibs))),
+      "shared_libs": sorted(list(set(shared_libs))),
+      "proc_macros": sorted(list(set(proc_macros))),
+      "features": ["cuttlefish", "testing"],
+      "edition": kwargs.get("edition", "2024"),
+      "test_suites": ["general_tests"],
+  }
+  if static_libs:
+    tgt_dict["static_libs"] = sorted(list(set(static_libs)))
+  if name == "integration-test" and os.path.exists(
+      os.path.join(NEXT_DIR, package_name, "AndroidTest.xml")
+  ):
+    tgt_dict["test_config"] = "AndroidTest.xml"
+
+  if not any(t["name"] == target_name for t in soong_targets):
+    soong_targets.append(tgt_dict)
+
+
+def rust_test_suite(*args, **kwargs):
+  pass
+
+
+def rust_protobuf(*args, **kwargs):
+  name = kwargs.get("name")
+  srcs = kwargs.get("srcs", [])
+  if not name or not srcs or name in IGNORED_TARGETS:
+    return
+
+  package_name = CURRENT_REL_PATH.strip("/")
+  module_name = package_name.replace("-", "_")
+  module_prefix = f"{module_name}_" if module_name else ""
+  target_name = f"libnetsim_next_{module_prefix}{name.replace('-', '_')}"
+
+  proto_file = srcs[0] if srcs else "proto/packet.proto"
+
+  soong_targets.append({
+      "type": "rust_protobuf",
+      "name": target_name,
+      "crate_name": name.replace("-", "_"),
+      "protos": [proto_file],
+      "source_stem": f"{name.replace('-', '_')}_proto",
+      "host_supported": True,
+      "features": ["cuttlefish"],
+  })
 
 
 def netsim_rust_library(
@@ -327,8 +427,11 @@ def netsim_rust_library(
 
   rustlibs = []
   shared_libs = []
+  static_libs = []
   for lib in transform_deps(deps):
-    if lib in SHARED_LIB_OVERRIDES:
+    if lib in STATIC_LIB_OVERRIDES:
+      static_libs.append(lib)
+    elif lib in SHARED_LIB_OVERRIDES:
       shared_libs.append(lib)
     else:
       rustlibs.append(lib)
@@ -345,8 +448,20 @@ def netsim_rust_library(
         f"Target '{name}' has an empty source list, cannot resolve crate_root."
     )
 
+  features = ["cuttlefish"]
+  crate_features = kwargs.get("crate_features", [])
+  if crate_features:
+    features.extend(crate_features)
+  features = sorted(list(set(features)))
+
+  if (
+      "libnetsim_next_ap_actor_cxx" in static_libs
+      and "libcrypto" not in shared_libs
+  ):
+    shared_libs.append("libcrypto")
+
   # 1. Main Library Target
-  soong_targets.append({
+  main_tgt = {
       "type": "rust_library_host",
       "name": f"libnetsim_next_{name.replace('-', '_')}",
       "crate_name": crate_name,
@@ -354,42 +469,53 @@ def netsim_rust_library(
       "crate_root": srcs_content[0],
       "srcs": srcs_content + data_content,
       "rustlibs": rustlibs,
-      "shared_libs": shared_libs,
+      "shared_libs": sorted(list(set(shared_libs))),
       "proc_macros": proc_macros,
-      "features": ["cuttlefish"],
+      "features": features,
       "edition": edition or "2021",
-  })
+  }
+  if static_libs:
+    main_tgt["static_libs"] = static_libs
+  soong_targets.append(main_tgt)
 
   # 1.5. Testing Library Target (mimicking defs.bzl)
   testing_deps = kwargs.get("testing_deps", [])
-  redirected_deps = []
-  for d in deps:
-    if d.startswith("//next"):
-      if d.endswith(":testing"):
-        redirected_deps.append(d)
-      elif ":" in d:
-        redirected_deps.append(d + "_testing")
-      else:
-        redirected_deps.append(d + ":testing")
-    else:
-      redirected_deps.append(d)
+  redirected_deps = [redirect_dep_to_testing(d) for d in deps]
 
   combined_testing_deps = testing_deps + redirected_deps
   testing_rustlibs = []
   testing_shared_libs = []
+  testing_static_libs = []
   for lib in transform_deps(combined_testing_deps):
-    if lib in SHARED_LIB_OVERRIDES:
+    if lib in STATIC_LIB_OVERRIDES:
+      testing_static_libs.append(lib)
+    elif lib in SHARED_LIB_OVERRIDES:
       testing_shared_libs.append(lib)
     else:
       testing_rustlibs.append(lib)
 
+  if (
+      "libnetsim_next_ap_actor_cxx" in testing_static_libs
+      and "libcrypto" not in testing_shared_libs
+  ):
+    testing_shared_libs.append("libcrypto")
+
   if name in PLATFORM_RUSTLIBS:
-    testing_rustlibs.extend(PLATFORM_RUSTLIBS[name])
+    for lib in PLATFORM_RUSTLIBS[name]:
+      if lib.startswith("libnetsim_next_") and not lib.endswith("_testing"):
+        pkg_base = lib.replace("libnetsim_next_", "").replace("_", "-")
+        if pkg_base in ALLOWED_TESTING_TARGETS:
+          testing_rustlibs.append(lib + "_testing")
+        else:
+          testing_rustlibs.append(lib)
+      else:
+        testing_rustlibs.append(lib)
   testing_rustlibs = sorted(list(set(testing_rustlibs)))
   testing_shared_libs = sorted(list(set(testing_shared_libs)))
+  testing_static_libs = sorted(list(set(testing_static_libs)))
 
   if name in ALLOWED_TESTING_TARGETS:
-    soong_targets.append({
+    testing_tgt = {
         "type": "rust_library_host",
         "name": f"libnetsim_next_{name.replace('-', '_')}_testing",
         "crate_name": crate_name,
@@ -401,16 +527,24 @@ def netsim_rust_library(
         "proc_macros": proc_macros,
         "features": ["testing", "cuttlefish"],
         "edition": edition,
-    })
+    }
+    if testing_static_libs:
+      testing_tgt["static_libs"] = testing_static_libs
+    soong_targets.append(testing_tgt)
 
   # 2. Automatic Test Targets (mimicking defs.bzl)
   enable_unit_test = kwargs.get("enable_unit_test", True)
   enable_integration_test = kwargs.get("enable_integration_test", True)
   test_deps = kwargs.get("test_deps", [])
+  redirected_test_deps = [redirect_dep_to_testing(d) for d in test_deps]
+
   test_rustlibs = []
   test_shared_libs = []
-  for lib in transform_deps(test_deps):
-    if lib in SHARED_LIB_OVERRIDES:
+  test_static_libs = []
+  for lib in transform_deps(redirected_test_deps):
+    if lib in STATIC_LIB_OVERRIDES:
+      test_static_libs.append(lib)
+    elif lib in SHARED_LIB_OVERRIDES:
       test_shared_libs.append(lib)
     else:
       test_rustlibs.append(lib)
@@ -422,6 +556,15 @@ def netsim_rust_library(
     inline_test_shared_libs = sorted(
         list(set(testing_shared_libs + test_shared_libs))
     )
+    inline_test_static_libs = sorted(
+        list(set(testing_static_libs + test_static_libs))
+    )
+
+    if (
+        "libnetsim_next_ap_actor_cxx" in inline_test_static_libs
+        and "libcrypto" not in inline_test_shared_libs
+    ):
+      inline_test_shared_libs.append("libcrypto")
 
     inline_test_proc_macros = list(proc_macros)
     inline_test_proc_macros.extend(transform_deps(proc_macro_test_deps))
@@ -429,7 +572,7 @@ def netsim_rust_library(
 
     package_name = CURRENT_REL_PATH.strip("/")
     if package_name in ALLOWED_TEST_PACKAGES:
-      soong_targets.append({
+      unit_tgt = {
           "type": "rust_test_host",
           "name": f"libnetsim_next_{name.replace('-', '_')}_tests",
           "crate_name": crate_name,
@@ -439,8 +582,12 @@ def netsim_rust_library(
           "shared_libs": inline_test_shared_libs,
           "proc_macros": inline_test_proc_macros,
           "features": ["testing", "cuttlefish"],
-          "edition": edition,
-      })
+          "edition": edition or "2024",
+          "test_suites": ["general_tests"],
+      }
+      if inline_test_static_libs:
+        unit_tgt["static_libs"] = inline_test_static_libs
+      soong_targets.append(unit_tgt)
 
   # 2.2. Integration Test Target
   current_dir = os.path.join(NEXT_DIR, CURRENT_REL_PATH)
@@ -498,6 +645,15 @@ def netsim_rust_library(
       integration_test_shared_libs = sorted(
           list(set(testing_shared_libs + test_shared_libs))
       )
+      integration_test_static_libs = sorted(
+          list(set(testing_static_libs + test_static_libs))
+      )
+
+      if (
+          "libnetsim_next_ap_actor_cxx" in integration_test_static_libs
+          and "libcrypto" not in integration_test_shared_libs
+      ):
+        integration_test_shared_libs.append("libcrypto")
 
       integration_test_proc_macros = list(proc_macros)
       integration_test_proc_macros.extend(transform_deps(proc_macro_test_deps))
@@ -507,7 +663,7 @@ def netsim_rust_library(
 
       package_name = CURRENT_REL_PATH.strip("/")
       if package_name in ALLOWED_TEST_PACKAGES:
-        soong_targets.append({
+        integ_dict = {
             "type": "rust_test_host",
             "name": (
                 f"libnetsim_next_{name.replace('-', '_')}_integration_tests"
@@ -519,8 +675,12 @@ def netsim_rust_library(
             "shared_libs": integration_test_shared_libs,
             "proc_macros": integration_test_proc_macros,
             "features": ["testing", "cuttlefish"],
-            "edition": edition,
-        })
+            "edition": edition or "2024",
+            "test_suites": ["general_tests"],
+        }
+        if integration_test_static_libs:
+          integ_dict["static_libs"] = integration_test_static_libs
+        soong_targets.append(integ_dict)
 
 
 def resolve_rust_srcs(srcs, default_file):
@@ -609,6 +769,91 @@ def rust_binary(*args, **kwargs):
   netsim_rust_binary(*args, **kwargs)
 
 
+def rust_cxx_bridge(name, src=None, deps=None, **kwargs):
+  if not src:
+    return
+  stem = os.path.splitext(os.path.basename(src))[0]
+  package_name = CURRENT_REL_PATH.strip("/")
+  module_name = package_name.replace("-", "_")
+
+  soong_targets.append({
+      "type": "genrule",
+      "name": f"libnetsim_next_{module_name}_bridge_header",
+      "tools": ["cxxbridge"],
+      "cmd": "$(location cxxbridge) $(in) --header > $(out)",
+      "srcs": [src],
+      "out": [f"{module_name}/{stem}.rs.h"],
+  })
+
+  soong_targets.append({
+      "type": "genrule",
+      "name": f"libnetsim_next_{module_name}_bridge_code",
+      "tools": ["cxxbridge"],
+      "cmd": "$(location cxxbridge) $(in) > $(out)",
+      "srcs": [src],
+      "out": [f"{module_name}/{stem}.rs.cc"],
+  })
+
+
+def cc_library_static(name, srcs=None, hdrs=None, deps=None, **kwargs):
+  package_name = CURRENT_REL_PATH.strip("/")
+  module_name = package_name.replace("-", "_")
+  if name.startswith(module_name) or name == "ap_actor_cxx":
+    target_name = f"libnetsim_next_{name.replace('-', '_')}"
+  else:
+    target_name = f"libnetsim_next_{module_name}_{name.replace('-', '_')}"
+
+  # Deduplicate: if target already exists in soong_targets, skip or merge
+  for existing in soong_targets:
+    if existing["name"] == target_name:
+      return
+
+  srcs_content = []
+  if srcs:
+    for s in srcs:
+      if s.startswith(":") or "bridge" in s:
+        srcs_content.append(f":libnetsim_next_{module_name}_bridge_code")
+      else:
+        srcs_content.append(s)
+
+  if package_name == "ap-actor":
+    target_name = "libnetsim_next_ap_actor_cxx"
+    srcs_content = [
+        "src/crypto_ffi.cc",
+        ":libnetsim_next_ap_actor_bridge_code",
+    ]
+
+  for existing in soong_targets:
+    if existing["name"] == target_name:
+      return
+
+  generated_headers = [
+      f"libnetsim_next_{module_name}_bridge_header",
+      "cxx-bridge-header",
+  ]
+
+  shared_libs = []
+  if deps:
+    for d in deps:
+      if "crypto" in d or "boringssl" in d:
+        shared_libs.append("libcrypto")
+
+  soong_targets.append({
+      "type": "cc_library_static",
+      "name": target_name,
+      "host_supported": True,
+      "device_supported": False,
+      "cflags": [
+          "-DRUST_CXX_NO_EXCEPTIONS",
+          "-DCONFIG_OPENSSL_INTERNAL_AES_WRAP",
+      ],
+      "srcs": srcs_content,
+      "generated_headers": generated_headers,
+      "local_include_dirs": ["src"],
+      "shared_libs": sorted(list(set(shared_libs))),
+  })
+
+
 SANDBOX = {
     "glob": glob,
     "select": select,
@@ -618,7 +863,7 @@ SANDBOX = {
     "filegroup": filegroup,
     "netsim_cc_library_static": netsim_cc_library_static,
     "cc_library_static": cc_library_static,
-    "cc_library": cc_library,
+    "cc_library": cc_library_static,
     "exports_files": exports_files,
     "rust_test": rust_test,
     "rust_test_suite": rust_test_suite,
@@ -672,7 +917,6 @@ def main():
       else:
         rel_path += "/"
 
-      # Skip test and verification binaries for daemon MVP
       if "verify/" in rel_path:
         continue
 
@@ -696,6 +940,15 @@ def main():
             f.write(f'{tgt["type"]} {{\n')
             f.write(f'    name: "{tgt["name"]}",\n')
 
+            if tgt.get("host_supported") is not None:
+              f.write(
+                  f'    host_supported: {str(tgt["host_supported"]).lower()},\n'
+              )
+            if tgt.get("device_supported") is not None:
+              f.write(
+                  "    device_supported:"
+                  f' {str(tgt["device_supported"]).lower()},\n'
+              )
             if "crate_name" in tgt:
               f.write(f'    crate_name: "{tgt["crate_name"]}",\n')
 
@@ -708,38 +961,106 @@ def main():
             if "crate_root" in tgt:
               f.write(f'    crate_root: "{tgt["crate_root"]}",\n')
 
+            if "test_config" in tgt:
+              f.write(f'    test_config: "{tgt["test_config"]}",\n')
+
+            if "test_suites" in tgt:
+              f.write("    test_suites: [\n")
+              for suite in tgt["test_suites"]:
+                f.write(f'        "{suite}",\n')
+              f.write("    ],\n")
+
+            if tgt.get("cflags"):
+              f.write("    cflags: [\n")
+              for cf in tgt["cflags"]:
+                f.write(f'        "{cf}",\n')
+              f.write("    ],\n")
+
+            if tgt.get("protos"):
+              f.write("    protos: [\n")
+              for pr in tgt["protos"]:
+                f.write(f'        "{pr}",\n')
+              f.write("    ],\n")
+
+            if tgt.get("source_stem"):
+              f.write(f'    source_stem: "{tgt["source_stem"]}",\n')
+
+            if tgt.get("tools"):
+              f.write("    tools: [\n")
+              for tl in tgt["tools"]:
+                f.write(f'        "{tl}",\n')
+              f.write("    ],\n")
+
+            if tgt.get("cmd"):
+              f.write(f'    cmd: "{tgt["cmd"]}",\n')
+
+            if tgt.get("out"):
+              f.write("    out: [\n")
+              for o in tgt["out"]:
+                f.write(f'        "{o}",\n')
+              f.write("    ],\n")
+
+            if tgt.get("generated_headers"):
+              f.write("    generated_headers: [\n")
+              for gh in tgt["generated_headers"]:
+                f.write(f'        "{gh}",\n')
+              f.write("    ],\n")
+
+            if tgt.get("local_include_dirs"):
+              f.write("    local_include_dirs: [\n")
+              for lid in tgt["local_include_dirs"]:
+                f.write(f'        "{lid}",\n')
+              f.write("    ],\n")
+
             f.write("    srcs: [\n")
             for src in tgt["srcs"]:
               f.write(f'        "{src}",\n')
             f.write("    ],\n")
 
-            features = tgt.get("features", ["cuttlefish"])
-            if len(features) == 1:
-              f.write(f'    features: ["{features[0]}"],\n')
-            else:
-              f.write("    features: [\n")
-              for feat in sorted(list(set(features))):
-                f.write(f'        "{feat}",\n')
-              f.write("    ],\n")
+            if tgt["type"].startswith("rust_"):
+              features = tgt.get("features", ["cuttlefish"])
+              if len(features) == 1:
+                f.write(f'    features: ["{features[0]}"],\n')
+              else:
+                f.write("    features: [\n")
+                for feat in sorted(list(set(features))):
+                  f.write(f'        "{feat}",\n')
+                f.write("    ],\n")
 
-            f.write('    lints: "none",\n')
+              f.write('    lints: "none",\n')
 
-            if tgt.get("rustlibs"):
-              f.write("    rustlibs: [\n")
-              for lib in sorted(list(set(tgt["rustlibs"]))):
-                f.write(f'        "{lib}",\n')
-              f.write("    ],\n")
-            if tgt.get("shared_libs"):
-              f.write("    shared_libs: [\n")
-              for lib in sorted(list(set(tgt["shared_libs"]))):
-                f.write(f'        "{lib}",\n')
-              f.write("    ],\n")
+              if tgt.get("rustlibs"):
+                f.write("    rustlibs: [\n")
+                for lib in sorted(list(set(tgt["rustlibs"]))):
+                  f.write(f'        "{lib}",\n')
+                f.write("    ],\n")
+              if tgt.get("static_libs"):
+                f.write("    static_libs: [\n")
+                for lib in sorted(list(set(tgt["static_libs"]))):
+                  f.write(f'        "{lib}",\n')
+                f.write("    ],\n")
+              if tgt.get("shared_libs"):
+                f.write("    shared_libs: [\n")
+                for lib in sorted(list(set(tgt["shared_libs"]))):
+                  f.write(f'        "{lib}",\n')
+                f.write("    ],\n")
 
-            if tgt.get("proc_macros"):
-              f.write("    proc_macros: [\n")
-              for mac in sorted(list(set(tgt["proc_macros"]))):
-                f.write(f'        "{mac}",\n')
-              f.write("    ],\n")
+              if tgt.get("proc_macros"):
+                f.write("    proc_macros: [\n")
+                for mac in sorted(list(set(tgt["proc_macros"]))):
+                  f.write(f'        "{mac}",\n')
+                f.write("    ],\n")
+            elif tgt["type"] == "cc_library_static":
+              if tgt.get("static_libs"):
+                f.write("    static_libs: [\n")
+                for lib in sorted(list(set(tgt["static_libs"]))):
+                  f.write(f'        "{lib}",\n')
+                f.write("    ],\n")
+              if tgt.get("shared_libs"):
+                f.write("    shared_libs: [\n")
+                for lib in sorted(list(set(tgt["shared_libs"]))):
+                  f.write(f'        "{lib}",\n')
+                f.write("    ],\n")
 
             if i == len(soong_targets) - 1:
               f.write("}\n")

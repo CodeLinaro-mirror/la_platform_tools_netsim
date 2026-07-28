@@ -227,6 +227,44 @@ fn test_smsc_address() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_smsc_address_with_tosca() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Test with explicit tosca 145
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test with explicit tosca 129
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test with empty address and tosca 0 (the failure case)
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"\",0");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"\",0");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test default tosca 129 (no +)
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"1234567890\"");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+}
+
 // Scenario: Remote SMS
 //   Given a modem "A"
 //   When AT command 'AT+REMOTESMS="0011000B915155255155F40000AA01F0"' is sent
@@ -330,4 +368,43 @@ fn test_incoming_sms() {
 
     then_wait_for_response_containing(&mut world, "A", "+CMT: ,15");
     then_response_is(&mut world, "A", PDU_HEX);
+}
+
+#[test]
+fn test_legacy_sms() {
+    let mut world = World::new();
+    given_goldfish_37_modem(&mut world, "A");
+    given_goldfish_37_modem(&mut world, "B");
+    let id_a = world.modems.get("A").unwrap().0;
+    let id_b = world.modems.get("B").unwrap().0;
+
+    // Set phone numbers
+    if let Some(modem) = world.manager.get_modem_mut(id_a) {
+        modem.set_phone_number("98765");
+    }
+    if let Some(modem) = world.manager.get_modem_mut(id_b) {
+        modem.set_phone_number("12345");
+    }
+
+    // 1. Text Mode SMS Reception (B receives from A)
+    when_at_command_sent(&mut world, "B", "AT+CMGF=1");
+    then_response_is(&mut world, "B", "OK");
+
+    when_incoming_sms_received(&mut world, id_b, "98765", "Hello");
+    // Should receive with \r delimiters and NO \n (handled by
+    // then_response_is/normalize)
+    then_wait_for_response_containing(&mut world, "B", "+CMT: \"98765\"");
+    then_response_is(&mut world, "B", "Hello");
+
+    // 2. PDU Mode SMS Reception (B receives from A, via incoming PDU injection)
+    // Switch B back to PDU mode
+    when_at_command_sent(&mut world, "B", "AT+CMGF=0");
+    then_response_is(&mut world, "B", "OK");
+
+    // PDU_HEX = "0011000B915155255155F40000AA01F0" (tpdu_len = 15)
+    when_incoming_pdu_received(&mut world, id_b, PDU_HEX);
+
+    // Expect +CMT: 15 (no comma) and PDU
+    then_wait_for_response_containing(&mut world, "B", "+CMT: 15");
+    then_response_is(&mut world, "B", PDU_HEX);
 }
