@@ -198,8 +198,12 @@ pub mod api {
                 ChipCreateVariant::Uwb(_uwb) => {
                     crate::chip::ChipVariant::Uwb(crate::uwb::Uwb { radio: Default::default() })
                 }
-                ChipCreateVariant::Cell(_cell) => {
-                    crate::chip::ChipVariant::Cell(crate::cell::Cell::default())
+                ChipCreateVariant::Cell(cell) => {
+                    crate::chip::ChipVariant::Cell(crate::cell::Cell {
+                        sim_type: cell.sim_type,
+                        sim_profile: cell.sim_profile,
+                        ..Default::default()
+                    })
                 }
                 ChipCreateVariant::CellularData(cell_data) => {
                     crate::chip::ChipVariant::CellularData(
@@ -249,8 +253,11 @@ pub mod api {
                     Some(crate::chip::ChipVariant::Uwb(_uwb)) => {
                         ChipCreateVariant::Uwb(crate::chip::UwbCreate::default())
                     }
-                    Some(crate::chip::ChipVariant::Cell(_cell)) => {
-                        ChipCreateVariant::Cell(crate::chip::CellCreate::default())
+                    Some(crate::chip::ChipVariant::Cell(cell)) => {
+                        ChipCreateVariant::Cell(crate::chip::CellCreate {
+                            sim_type: cell.sim_type,
+                            sim_profile: cell.sim_profile,
+                        })
                     }
                     Some(crate::chip::ChipVariant::CellularData(_cell_data)) => {
                         ChipCreateVariant::CellularData(

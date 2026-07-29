@@ -134,6 +134,7 @@ async fn handle_new_connection(
             });
             Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
                 sim_type: chip.sim_type,
+                sim_profile: chip.sim_profile.clone(),
                 quirks: netsim_model::Quirks { goldfish_ril_37_or_earlier },
                 ..Default::default()
             }))

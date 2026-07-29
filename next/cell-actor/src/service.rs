@@ -73,11 +73,13 @@ impl ActorService for CellActor {
         ctx.add_stream(chip_id, Box::pin(stream));
 
         // 2. Add to Controller directly (Sync)
-        let (sim_type, quirks) = match params.chip.variant.as_ref() {
-            Some(ChipVariant::Cell(cell)) => (cell.sim_type, cell.quirks),
-            _ => (None, Quirks::default()),
+        let (sim_type, sim_profile, quirks) = match params.chip.variant.as_ref() {
+            Some(ChipVariant::Cell(cell)) => (cell.sim_type, cell.sim_profile.clone(), cell.quirks),
+            _ => (None, None, Quirks::default()),
         };
-        if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink, sim_type, quirks) {
+        if let Err(e) =
+            self.controller.add_modem(chip_id.0, modem_sink, sim_type, sim_profile, quirks)
+        {
             return Err(CellError::ModemError(e));
         }
 
@@ -131,6 +133,7 @@ impl ActorService for CellActor {
                         MODEM_STATE_IDLE.to_string()
                     },
                     sim_type: None,
+                    sim_profile: None,
                     quirks: info.quirks,
                 })),
                 ..Default::default()
@@ -245,6 +248,7 @@ impl ActorService for CellActor {
                             MODEM_STATE_IDLE.to_string()
                         },
                         sim_type: None,
+                        sim_profile: None,
                         quirks: info.quirks,
                     })),
                     ..Default::default()

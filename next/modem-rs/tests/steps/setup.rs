@@ -22,7 +22,10 @@ pub fn given_modem(world: &mut World, name: &str) {
     let id = world.next_modem_id();
     let (handler, sink) = MockModemHandler::new(false);
 
-    world.manager.new_modem(id, sink, None, Quirks::default()).expect("Failed to create new modem");
+    world
+        .manager
+        .new_modem(id, sink, None, None, Quirks::default())
+        .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -36,7 +39,7 @@ pub fn given_goldfish_37_modem(world: &mut World, name: &str) {
     let (handler, sink) = MockModemHandler::new(true);
 
     let quirks = Quirks { goldfish_ril_37_or_earlier: true };
-    world.manager.new_modem(id, sink, None, quirks).expect("Failed to create new modem");
+    world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -51,7 +54,7 @@ pub fn given_modem_with_sim_type(world: &mut World, name: &str, sim_type: i32) {
 
     world
         .manager
-        .new_modem(id, sink, Some(sim_type), Quirks::default())
+        .new_modem(id, sink, None, Some(sim_type), Quirks::default())
         .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }

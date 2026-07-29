@@ -12,7 +12,8 @@ pub const MODEM_STATE_IDLE: &str = "idle";
 /// Parameters for creating a Cellular chip.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CellCreate {
-    // Future Cellular specific properties.
+    pub sim_type: Option<i32>,
+    pub sim_profile: Option<String>,
 }
 
 /// Quirks for compatibility with different guest-side implementations.
@@ -32,6 +33,9 @@ pub struct Cell {
     /// SIM card type (0 = No SIM, 1 = Normal SIM, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sim_type: Option<i32>,
+    /// XML SIM ICC profile content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_profile: Option<String>,
     /// Quirks for compatibility with different guest-side implementations.
     #[serde(default)]
     pub quirks: Quirks,
@@ -43,6 +47,7 @@ impl Default for Cell {
             radio: crate::chip::Radio::default(),
             state: "idle".to_string(),
             sim_type: None,
+            sim_profile: None,
             quirks: Quirks::default(),
         }
     }
