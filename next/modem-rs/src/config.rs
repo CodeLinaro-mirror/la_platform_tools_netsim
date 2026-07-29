@@ -116,6 +116,7 @@ pub struct DedicatedFile {
 pub struct ElementaryFile {
     #[serde(deserialize_with = "deserialize_hex_u16")]
     pub file_id: u16,
+
     #[serde(default)]
     pub record_len: Option<usize>,
     #[serde(default)]

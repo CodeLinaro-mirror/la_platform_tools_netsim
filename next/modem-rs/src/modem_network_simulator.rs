@@ -143,13 +143,29 @@ impl ModemNetworkSimulator {
         &mut self,
         id: ModemId,
         sink: ModemSink,
-        sim_profile: Option<String>,
         sim_type: Option<i32>,
+        sim_profile: Option<String>,
         quirks: Quirks,
     ) -> Result<(), ModemError> {
-        // TODO(b/540029089): Support XML SIM profile in modem-rs
-        let _ = sim_profile;
-        self.new_modem_with_profile(id, sink, None, sim_type, quirks)
+        let xml_content = match &sim_profile {
+            Some(xml) => xml.as_str(),
+            None => match sim_type {
+                Some(2) => crate::profiles::PROFILE_CTS_XML,
+                _ => crate::profiles::PROFILE_DEFAULT_XML,
+            },
+        };
+
+        let profile = match crate::xml_profile::parse_xml_profile(xml_content) {
+            Ok(p) => p,
+            Err(e) => {
+                return Err(ModemError::InvalidConfig(format!(
+                    "Failed to parse SIM profile XML: {}",
+                    e
+                )));
+            }
+        };
+
+        self.new_modem_with_profile(id, sink, Some(profile), sim_type, quirks)
     }
 
     /// Creates a new modem instance with a specific SIM profile.
@@ -164,21 +180,22 @@ impl ModemNetworkSimulator {
         if self.modems.contains_key(&id) {
             return Err(ModemError::DuplicateModemId(id));
         }
-        let mut modem =
-            crate::modem::ModemImpl::new(id, profile.unwrap_or_default(), sim_type, quirks);
+        let mut profile = profile.unwrap_or_default();
+        if profile.msisdn.is_empty() {
+            let num_modems = self.modems.len();
+            profile.msisdn =
+                format!("{}{:03}", crate::constants::DEFAULT_MSISDN_PREFIX, num_modems + 1);
+        }
+        let target_msisdn = profile.msisdn.clone();
+        let mut modem = crate::modem::ModemImpl::new(id, profile, quirks);
+        // Override the default dummy number with a unique generated one to prevent
+        // conflicts when launching multiple default emulators. Custom profiles are
+        // preserved.
+        if normalize_number(&modem.phone_number()) == crate::constants::DEFAULT_FALLBACK_MSISDN {
+            modem.set_phone_number(&target_msisdn);
+        }
         if let Some(t) = sim_type {
             modem.set_sim_status(t > 0);
-        }
-        if modem.phone_number().is_empty() {
-            let num_modems = self.modems.len();
-            let default_num = match num_modems {
-                0 => "15555211001",
-                1 => "15555211002",
-                _ => "",
-            };
-            if !default_num.is_empty() {
-                modem.set_phone_number(default_num);
-            }
         }
         self.modems.insert(id, modem);
         self.sinks.insert(id, sink);

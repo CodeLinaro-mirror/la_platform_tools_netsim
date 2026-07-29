@@ -30,29 +30,14 @@ pub struct ParsedAdf {
 }
 
 pub fn normalize_command(cmd: &str) -> String {
-    let mut normalized = if let Some(start) = cmd.find('"')
+    if let Some(start) = cmd.find('"')
         && let Some(end) = cmd.rfind('"')
         && start < end
     {
         cmd[start + 1..end].trim().to_ascii_uppercase()
     } else {
         cmd.trim().to_ascii_uppercase()
-    };
-
-    // Prepend '00' CLA if command is missing it (4 or 6 bytes long)
-    if (normalized.len() == 8 || normalized.len() == 12)
-        && !normalized.starts_with("00")
-        && !normalized.starts_with("80")
-        && !normalized.starts_with("81")
-        && !normalized.starts_with("82")
-        && !normalized.starts_with("83")
-        && !normalized.starts_with("A0")
-        && !normalized.starts_with("FF")
-    {
-        normalized = format!("00{normalized}");
     }
-
-    normalized
 }
 
 impl TryFrom<XmlApplicationDedicatedFile> for ParsedAdf {

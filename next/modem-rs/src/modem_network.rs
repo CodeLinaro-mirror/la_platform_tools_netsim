@@ -35,7 +35,7 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
         sim_profile: Option<String>,
         quirks: Quirks,
     ) -> Result<(), ModemError> {
-        self.new_modem(chip_id, sink, sim_profile, sim_type, quirks)
+        self.new_modem(chip_id, sink, sim_type, sim_profile, quirks)
     }
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError> {
         self.remove_modem(chip_id);

@@ -20,8 +20,7 @@ mod sms_service;
 mod stk_service;
 mod sup_service;
 pub mod time;
-// Remove once xml profiles are enabled in modem-rs
-#[allow(dead_code)]
+
 mod xml_profile;
 
 pub mod test_utils;
