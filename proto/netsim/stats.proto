@@ -189,7 +189,6 @@ message NfcIpcStats {
   optional NfcApiStats nfc_api_stats = 2;
 }
 
-
 // Application-level API Counters for all technologies.
 message ApiStats {
   // 1-99 reserved for Bluetooth

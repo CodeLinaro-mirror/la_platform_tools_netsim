@@ -3,3 +3,6 @@
 
 mod udp_impl;
 pub use udp_impl::UdpManager;
+
+#[cfg(test)]
+mod tests;

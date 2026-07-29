@@ -20,12 +20,12 @@ SKIPPED_TEST_PACKAGES = {
 
 
 def is_test_package_allowed(package_name):
-    if not package_name:
-        return True
-    for skipped in SKIPPED_TEST_PACKAGES:
-        if package_name == skipped or package_name.startswith(skipped + "/"):
-            return False
+  if not package_name:
     return True
+  for skipped in SKIPPED_TEST_PACKAGES:
+    if package_name == skipped or package_name.startswith(skipped + "/"):
+      return False
+  return True
 
 
 EXACT_DEP_MAPPING = {
