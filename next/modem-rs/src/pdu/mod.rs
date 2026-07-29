@@ -9,7 +9,7 @@ use nom::{
 };
 use tracing::{debug, warn};
 
-mod bcd;
+pub(crate) mod bcd;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseError {

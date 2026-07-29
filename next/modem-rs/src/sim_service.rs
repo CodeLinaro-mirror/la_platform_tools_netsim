@@ -321,13 +321,11 @@ impl SimService {
 
     fn lookup_cgla(&self, aid: &str, file_id: Option<u16>, command: &str) -> Option<String> {
         let adf = self.profile.adfs.iter().find(|am| am.aid == aid)?;
-        if let Some(fid) = file_id {
-            let fid_str = format!("{fid:04X}");
-            if let Some(file_mock) = adf.files.iter().find(|f| f.id == fid_str)
-                && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd == command)
-            {
-                return Some(m.response.to_string());
-            }
+        if let Some(fid) = file_id
+            && let Some(file_mock) = adf.files.iter().find(|f| f.id == fid)
+            && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd == command)
+        {
+            return Some(m.response.to_string());
         }
         adf.cgla.iter().find(|m| m.cmd == command).map(|m| m.response.to_string())
     }
@@ -510,7 +508,7 @@ impl SimService {
         }
 
         // Update in the file system if it exists there
-        if let Some(ef) = find_ef_mut(&mut self.fs.master_file, &format!("{file_id:04X}")) {
+        if let Some(ef) = find_ef_mut(&mut self.fs.master_file, file_id) {
             if command == APDU_UPDATE_BINARY {
                 let offset = ((p1 as usize) << 8) | (p2 as usize);
                 let mut ef_bytes = hex::decode(&ef.data).unwrap_or_default();
@@ -585,7 +583,7 @@ impl SimService {
 
         // 2. Try to read from the loaded FileSystem first (for READ BINARY and SELECT)
         if command == APDU_READ_BINARY {
-            if let Some(ef) = find_ef(&self.fs.master_file, &format!("{file_id:04X}")) {
+            if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
                 let offset = ((p1 as usize) << 8) | (p2 as usize);
                 let length = p3 as usize;
                 let ef_bytes = hex::decode(&ef.data).unwrap_or_default();
@@ -597,9 +595,7 @@ impl SimService {
                     data: Some(hex::encode_upper(sliced)),
                 }));
             }
-        } else if command == APDU_SELECT
-            && find_df(&self.fs.master_file, &format!("{file_id:04X}")).is_some()
-        {
+        } else if command == APDU_SELECT && find_df(&self.fs.master_file, file_id).is_some() {
             return Ok(Some(SimResponse::RestrictedSimAccess {
                 status_byte_1: 144,
                 status_byte_2: 0,
@@ -739,10 +735,8 @@ impl SimService {
                         match ins {
                             INS_SELECT => {
                                 if let Some(fid) = selected_fid
-                                    && (find_ef(&self.fs.master_file, &format!("{fid:04X}"))
-                                        .is_some()
-                                        || find_df(&self.fs.master_file, &format!("{fid:04X}"))
-                                            .is_some()
+                                    && (find_ef(&self.fs.master_file, fid).is_some()
+                                        || find_df(&self.fs.master_file, fid).is_some()
                                         || matches!(
                                             fid,
                                             EF_ICCID_ID
@@ -1127,27 +1121,7 @@ impl SimService {
         if imsi.is_empty() {
             return "083901621032547698".to_string(); // Fallback encoded imsi
         }
-        let digits: String = imsi.chars().filter(|c| c.is_ascii_digit()).collect();
-        if digits.is_empty() {
-            return "083901621032547698".to_string();
-        }
-
-        #[allow(clippy::manual_is_multiple_of)]
-        let is_odd = (digits.len() % 2) != 0;
-        let odd_even_indicator = if is_odd { 1 } else { 0 };
-        // Identity type for IMSI is 1 (001 binary)
-        let identity_type = 1;
-        let flags = (odd_even_indicator << 3) | identity_type;
-
-        let first_digit = digits.chars().next().unwrap().to_digit(10).unwrap_or(0) as u8;
-        let byte_2 = (first_digit << 4) | flags;
-
-        let remaining_digits = &digits[1..];
-        let swapped_remaining = swap_bcd_digits(remaining_digits);
-
-        let encoded_hex = format!("{byte_2:02X}{swapped_remaining}");
-        let len_byte = (encoded_hex.len() / 2) as u8;
-        format!("{len_byte:02X}{encoded_hex}")
+        crate::pdu::bcd::encode_imsi(imsi).unwrap_or_else(|| "083901621032547698".to_string())
     }
 
     pub fn execute<'a>(&mut self, command: &SimCommand<'a>) -> ExecutionResult {
@@ -1196,7 +1170,7 @@ impl SimService {
     }
 }
 
-fn find_df<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a DedicatedFile> {
+pub(crate) fn find_df(df: &DedicatedFile, id: u16) -> Option<&DedicatedFile> {
     if df.file_id == id {
         return Some(df);
     }
@@ -1210,7 +1184,7 @@ fn find_df<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a DedicatedFile> {
     None
 }
 
-fn find_ef<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a ElementaryFile> {
+pub(crate) fn find_ef(df: &DedicatedFile, id: u16) -> Option<&ElementaryFile> {
     for file in &df.files {
         match file {
             SimFile::Ef(ef) => {
@@ -1228,7 +1202,7 @@ fn find_ef<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a ElementaryFile> {
     None
 }
 
-fn find_ef_mut<'a>(df: &'a mut DedicatedFile, id: &str) -> Option<&'a mut ElementaryFile> {
+pub(crate) fn find_ef_mut(df: &mut DedicatedFile, id: u16) -> Option<&mut ElementaryFile> {
     for file in &mut df.files {
         match file {
             SimFile::Ef(ef) => {

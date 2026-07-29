@@ -3,7 +3,15 @@
 
 // src/config.rs
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+
+fn deserialize_hex_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    u16::from_str_radix(&s, 16).map_err(serde::de::Error::custom)
+}
 
 /// Represents the SIM profile configuration.
 #[derive(Debug, Deserialize, Default)]
@@ -93,7 +101,8 @@ impl SimFile {
 /// system.
 #[derive(Debug, Deserialize, Default, Clone)]
 pub struct DedicatedFile {
-    pub file_id: String,
+    #[serde(deserialize_with = "deserialize_hex_u16")]
+    pub file_id: u16,
     #[serde(default)]
     pub files: Vec<SimFile>,
 }
@@ -101,7 +110,8 @@ pub struct DedicatedFile {
 /// Represents an Elementary File (EF), which contains the actual data.
 #[derive(Debug, Deserialize, Default, Clone)]
 pub struct ElementaryFile {
-    pub file_id: String,
+    #[serde(deserialize_with = "deserialize_hex_u16")]
+    pub file_id: u16,
     #[serde(default)]
     pub size: usize,
     #[serde(default)]

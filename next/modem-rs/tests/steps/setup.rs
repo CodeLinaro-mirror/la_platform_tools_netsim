@@ -98,9 +98,9 @@ pub fn create_legacy_test_profile() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: "3F00".to_string(),
+                    file_id: 0x3F00,
                     files: vec![SimFile::Ef(ElementaryFile {
-                        file_id: "2FE2".to_string(),
+                        file_id: 0x2FE2,
                         size: 10,
                         record_len: None,
                         data: TEST_ICCID.to_string(),
@@ -127,9 +127,9 @@ pub fn create_locked_sim_profile() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: "3F00".to_string(),
+                    file_id: 0x3F00,
                     files: vec![SimFile::Ef(ElementaryFile {
-                        file_id: "2FE2".to_string(),
+                        file_id: 0x2FE2,
                         size: 10,
                         record_len: None,
                         data: TEST_ICCID.to_string(),
@@ -168,16 +168,16 @@ pub fn create_profile_with_msisdn() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: "3F00".to_string(),
+                    file_id: 0x3F00,
                     files: vec![
                         SimFile::Ef(ElementaryFile {
-                            file_id: "2FE2".to_string(),
+                            file_id: 0x2FE2,
                             size: 10,
                             record_len: None,
                             data: TEST_ICCID.to_string(),
                         }),
                         SimFile::Ef(ElementaryFile {
-                            file_id: "6F40".to_string(), // EF_MSISDN
+                            file_id: 0x6F40, // EF_MSISDN
                             size: 28,
                             record_len: Some(28),
                             data: "F".repeat(56), // empty record (all F)
@@ -217,22 +217,22 @@ pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: "3F00".to_string(),
+                    file_id: 0x3F00,
                     files: vec![
                         SimFile::Ef(ElementaryFile {
-                            file_id: "2FE2".to_string(),
+                            file_id: 0x2FE2,
                             size: 10,
                             record_len: None,
                             data: TEST_ICCID.to_string(),
                         }),
                         SimFile::Ef(ElementaryFile {
-                            file_id: "6F7B".to_string(), // EF_FPLMN
+                            file_id: 0x6F7B, // EF_FPLMN
                             size: 12,
                             record_len: None,
                             data: "F".repeat(24),
                         }),
                         SimFile::Ef(ElementaryFile {
-                            file_id: "6FC7".to_string(), // EF_MBDN
+                            file_id: 0x6FC7, // EF_MBDN
                             size: 152,
                             record_len: Some(38),
                             data: "F".repeat(304),
