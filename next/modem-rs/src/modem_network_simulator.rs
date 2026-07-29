@@ -784,7 +784,7 @@ mod tests {
 
         let chip_id = 1;
         let (mut handler, sink) = MockModemHandler::new(false);
-        interface.add_modem(chip_id, sink, None, Quirks::default()).unwrap();
+        interface.add_modem(chip_id, sink, None, None, Quirks::default()).unwrap();
 
         interface.send_data(chip_id, b"ATD12345;\r\n").unwrap();
         let response = handler.wait_for_response();

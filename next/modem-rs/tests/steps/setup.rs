@@ -1,6 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use hex;
 use modem_rs::{
     DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile, config::PinProfile,
     test_utils::MockModemHandler,
@@ -102,11 +103,10 @@ pub fn create_legacy_test_profile() -> SimProfile {
             file_system: FileSystem {
                 master_file: DedicatedFile {
                     file_id: 0x3F00,
-                    files: vec![SimFile::Ef(ElementaryFile {
+                    files: vec![SimFile::ElementaryFile(ElementaryFile {
                         file_id: 0x2FE2,
-                        size: 10,
                         record_len: None,
-                        data: TEST_ICCID.to_string(),
+                        data: hex::decode(TEST_ICCID).unwrap(),
                     })],
                 },
             },
@@ -131,11 +131,10 @@ pub fn create_locked_sim_profile() -> SimProfile {
             file_system: FileSystem {
                 master_file: DedicatedFile {
                     file_id: 0x3F00,
-                    files: vec![SimFile::Ef(ElementaryFile {
+                    files: vec![SimFile::ElementaryFile(ElementaryFile {
                         file_id: 0x2FE2,
-                        size: 10,
                         record_len: None,
-                        data: TEST_ICCID.to_string(),
+                        data: hex::decode(TEST_ICCID).unwrap(),
                     })],
                 },
             },
@@ -173,17 +172,15 @@ pub fn create_profile_with_msisdn() -> SimProfile {
                 master_file: DedicatedFile {
                     file_id: 0x3F00,
                     files: vec![
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x2FE2,
-                            size: 10,
                             record_len: None,
-                            data: TEST_ICCID.to_string(),
+                            data: hex::decode(TEST_ICCID).unwrap(),
                         }),
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x6F40, // EF_MSISDN
-                            size: 28,
                             record_len: Some(28),
-                            data: "F".repeat(56), // empty record (all F)
+                            data: vec![0xFF; 28],
                         }),
                     ],
                 },
@@ -222,23 +219,20 @@ pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
                 master_file: DedicatedFile {
                     file_id: 0x3F00,
                     files: vec![
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x2FE2,
-                            size: 10,
                             record_len: None,
-                            data: TEST_ICCID.to_string(),
+                            data: hex::decode(TEST_ICCID).unwrap(),
                         }),
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x6F7B, // EF_FPLMN
-                            size: 12,
                             record_len: None,
-                            data: "F".repeat(24),
+                            data: vec![0xFF; 12],
                         }),
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x6FC7, // EF_MBDN
-                            size: 152,
                             record_len: Some(38),
-                            data: "F".repeat(304),
+                            data: vec![0xFF; 152],
                         }),
                     ],
                 },

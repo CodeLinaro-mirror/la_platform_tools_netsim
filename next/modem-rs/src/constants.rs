@@ -60,3 +60,10 @@ pub mod access_technology {
     pub const LTE: u8 = 7;
     pub const NR: u8 = 11;
 }
+
+pub const MF_FILE_ID: u16 = 0x3F00;
+pub const ADF_DEFAULT_FILE_ID: u16 = 0x7FFF;
+
+pub const INS_READ_BINARY: u8 = 0xB0;
+pub const INS_READ_RECORD: u8 = 0xB2;
+pub const INS_UPDATE_RECORD: u8 = 0xDC;

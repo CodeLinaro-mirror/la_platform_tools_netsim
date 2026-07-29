@@ -98,8 +98,8 @@ const EF_MSISDN_RECORD_FALLBACK: &str = "000000000000000000000000000007915155214
 const STATUS_FCP_HEX: &str = "62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF";
 
 // SIM Elementary File IDs (EF IDs)
-const EF_IMSI_ID: u16 = 0x6F07;
-const EF_ICCID_ID: u16 = 0x2FE2;
+pub(crate) const EF_IMSI_ID: u16 = 0x6F07;
+pub(crate) const EF_ICCID_ID: u16 = 0x2FE2;
 const EF_FPLMN_ID: u16 = 0x6F7B;
 const EF_MSISDN_ID: u16 = 0x6F40;
 const EF_MBDN_ID: u16 = 0x6FC7;
@@ -286,10 +286,10 @@ impl SimService {
             } else {
                 DEFAULT_PUK.to_string()
             },
-            pin1_retries: DEFAULT_PIN_RETRIES,
-            puk1_retries: DEFAULT_PUK_RETRIES,
-            pin2_retries: DEFAULT_PIN_RETRIES,
-            puk2_retries: DEFAULT_PUK_RETRIES,
+            pin1_retries: profile.pin_profile.pin1_retries.unwrap_or(DEFAULT_PIN_RETRIES),
+            puk1_retries: profile.pin_profile.puk1_retries.unwrap_or(DEFAULT_PUK_RETRIES),
+            pin2_retries: profile.pin_profile.pin2_retries.unwrap_or(DEFAULT_PIN_RETRIES),
+            puk2_retries: profile.pin_profile.puk2_retries.unwrap_or(DEFAULT_PUK_RETRIES),
             fs: profile.sim_io.file_system.clone(),
             sms_messages: HashMap::new(),
             // Channel 0 is the basic channel and is always open by default.
@@ -511,36 +511,38 @@ impl SimService {
         if let Some(ef) = find_ef_mut(&mut self.fs.master_file, file_id) {
             if command == APDU_UPDATE_BINARY {
                 let offset = ((p1 as usize) << 8) | (p2 as usize);
-                let mut ef_bytes = hex::decode(&ef.data).unwrap_or_default();
-                let new_bytes = hex::decode(hex_str).unwrap_or_default();
-                if offset + new_bytes.len() > ef_bytes.len() {
-                    ef_bytes.resize(offset + new_bytes.len(), 0xFF);
+                let Ok(new_bytes) = hex::decode(hex_str) else {
+                    return Err((106, 134));
+                };
+                if offset + new_bytes.len() > ef.data.len() {
+                    ef.data.resize(offset + new_bytes.len(), 0xFF);
                 }
-                ef_bytes[offset..offset + new_bytes.len()].copy_from_slice(&new_bytes);
-                ef.data = hex::encode_upper(ef_bytes);
+                ef.data[offset..offset + new_bytes.len()].copy_from_slice(&new_bytes);
                 Ok(())
             } else if command == APDU_UPDATE_RECORD {
                 // UPDATE RECORD
+                let Ok(new_bytes) = hex::decode(hex_str) else {
+                    return Err((106, 134));
+                };
                 if let Some(rec_len) = ef.record_len
                     && rec_len > 0
                 {
                     if p1 == 0 {
                         return Err((106, 134)); // 0x6A86 SW_INCORRECT_PARAMS
                     }
-                    let rec_len_hex = rec_len * 2;
-                    if hex_str.len() != rec_len_hex {
+                    if new_bytes.len() != rec_len {
                         return Err((103, 0)); // 0x6700 SW_WRONG_LENGTH
                     }
                     let record_num = p1 as usize;
-                    let start = (record_num - 1) * rec_len_hex;
-                    let end = start + rec_len_hex;
+                    let start = (record_num - 1) * rec_len;
+                    let end = start + rec_len;
                     if end > ef.data.len() {
                         return Err((106, 136)); // 0x6A88 SW_REFERENCED_DATA_NOT_FOUND
                     }
-                    ef.data.replace_range(start..end, &hex_str.to_ascii_uppercase());
+                    ef.data[start..end].copy_from_slice(&new_bytes);
                     return Ok(());
                 }
-                ef.data = hex_str.to_ascii_uppercase();
+                ef.data = new_bytes;
                 Ok(())
             } else {
                 Err((106, 134)) // 0x6A86 SW_INCORRECT_PARAMS
@@ -586,9 +588,8 @@ impl SimService {
             if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
                 let offset = ((p1 as usize) << 8) | (p2 as usize);
                 let length = p3 as usize;
-                let ef_bytes = hex::decode(&ef.data).unwrap_or_default();
-                let end = std::cmp::min(offset + length, ef_bytes.len());
-                let sliced = if offset < ef_bytes.len() { &ef_bytes[offset..end] } else { &[] };
+                let end = std::cmp::min(offset + length, ef.data.len());
+                let sliced = if offset < ef.data.len() { &ef.data[offset..end] } else { &[] };
                 return Ok(Some(SimResponse::RestrictedSimAccess {
                     status_byte_1: 144,
                     status_byte_2: 0,
@@ -1121,7 +1122,9 @@ impl SimService {
         if imsi.is_empty() {
             return "083901621032547698".to_string(); // Fallback encoded imsi
         }
-        crate::pdu::bcd::encode_imsi(imsi).unwrap_or_else(|| "083901621032547698".to_string())
+        crate::pdu::bcd::encode_imsi(imsi)
+            .map(hex::encode_upper)
+            .unwrap_or_else(|| "083901621032547698".to_string())
     }
 
     pub fn execute<'a>(&mut self, command: &SimCommand<'a>) -> ExecutionResult {
@@ -1175,7 +1178,7 @@ pub(crate) fn find_df(df: &DedicatedFile, id: u16) -> Option<&DedicatedFile> {
         return Some(df);
     }
     for file in &df.files {
-        if let SimFile::Df(df) = file
+        if let SimFile::DedicatedFile(df) = file
             && let Some(found) = find_df(df, id)
         {
             return Some(found);
@@ -1187,12 +1190,12 @@ pub(crate) fn find_df(df: &DedicatedFile, id: u16) -> Option<&DedicatedFile> {
 pub(crate) fn find_ef(df: &DedicatedFile, id: u16) -> Option<&ElementaryFile> {
     for file in &df.files {
         match file {
-            SimFile::Ef(ef) => {
+            SimFile::ElementaryFile(ef) => {
                 if ef.file_id == id {
                     return Some(ef);
                 }
             }
-            SimFile::Df(df) => {
+            SimFile::DedicatedFile(df) => {
                 if let Some(ef) = find_ef(df, id) {
                     return Some(ef);
                 }
@@ -1205,12 +1208,12 @@ pub(crate) fn find_ef(df: &DedicatedFile, id: u16) -> Option<&ElementaryFile> {
 pub(crate) fn find_ef_mut(df: &mut DedicatedFile, id: u16) -> Option<&mut ElementaryFile> {
     for file in &mut df.files {
         match file {
-            SimFile::Ef(ef) => {
+            SimFile::ElementaryFile(ef) => {
                 if ef.file_id == id {
                     return Some(ef);
                 }
             }
-            SimFile::Df(df) => {
+            SimFile::DedicatedFile(df) => {
                 if let Some(ef) = find_ef_mut(df, id) {
                     return Some(ef);
                 }
