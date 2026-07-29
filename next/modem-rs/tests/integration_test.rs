@@ -25,16 +25,22 @@ use crate::{steps::*, world::World};
 #[test]
 fn test_two_modem_end_to_end_scenario() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_modem_with_number(&mut world, "A", "54321");
     given_modem_with_number(&mut world, "B", "12345");
 
     // Power On Checks
+    when_at_command_sent(&mut world, "A", "AT");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+INVALID");
+    then_response_is(&mut world, "A", "ERROR");
+
     when_at_command_sent(&mut world, "A", "AT+CPIN?");
     then_response_is(&mut world, "A", "+CPIN: READY");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "+COPS: 0,0,0");
     then_response_is(&mut world, "A", "OK");
 
     // Make Call
@@ -55,6 +61,9 @@ fn test_two_modem_end_to_end_scenario() {
     when_at_command_sent(&mut world, "A", "ATH");
     then_response_is(&mut world, "A", "OK");
 
+    // B receives NO CARRIER asynchronously
+    then_wait_for_response_containing(&mut world, "B", "NO CARRIER");
+
     // Verify Idle
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     then_response_is(&mut world, "A", "OK");
@@ -72,37 +81,163 @@ fn test_two_modem_end_to_end_scenario() {
     // PDU mode: `AT+CMGS=<length>`. PDU contains address.
     // Original test: `manager.send_at_command(modem_b_id, b"AT+CMGS=5\r\n");`
     // Then sent "hello".
-    // "hello" is length 5.
-    // Is this PDU or Text?
-    // "hello" is NOT a valid PDU hex string.
-    // Unless in text mode? B didn't set text mode. Default is PDU?
-    // If PDU mode, "hello" (68656C6C6F) is invalid PDU.
-    // BUT original test verified: `+CMT: ,5\r\nhello\r\n`.
-    // This looks like `Text Mode` response? Or a custom simplied mode?
-    // Netsim `sms_service.rs` might support raw text in PDU mode for testing?
-    // Or previous test set text mode on B? No.
 
-    // I will emulate EXACTLY what the original test did.
-    // `AT+CMGS=5`. Then `hello`.
-    // And expect `+CMT: ,5\r\nhello\r\n` on A.
-    // This implies A received it.
-    // Note: B calls A. But A has no number. PDU has no destination?
-    // `ModemNetworkSimulator` likely broadcasts if no destination or handles
-    // "loopback" or "default peer"? Harness `manager.get_peer(modem_id)`?
+    when_at_command_sent(&mut world, "A", "AT+CMGF=1");
+    then_response_is(&mut world, "A", "OK");
 
-    when_at_command_sent(&mut world, "B", "AT+CMGS=5");
+    when_at_command_sent(&mut world, "B", "AT+CMGF=1");
+    then_response_is(&mut world, "B", "OK");
+
+    when_at_command_sent(&mut world, "B", "AT+CMGS=\"54321\"");
     then_response_is(&mut world, "B", "> ");
 
-    // Send "hello" + Ctrl-Z.
-    // I use hex bytes helper. "hello" -> 68656C6C6F. + 1A.
     let hello_hex = "68656C6C6F1A";
     when_hex_bytes_sent(&mut world, "B", hello_hex);
 
     then_wait_for_response_containing(&mut world, "B", "+CMGS: ");
     then_response_is(&mut world, "B", "OK");
 
-    // Verify A received
-    // Expect: "+CMT: ,5\r\nhello"
-    let resp = then_wait_for_response_containing(&mut world, "A", "+CMT:");
-    assert!(resp.contains("hello"));
+    then_wait_for_response_containing(&mut world, "A", "+CMT: \"12345\"");
+    then_response_is(&mut world, "A", "hello");
+}
+
+#[test]
+fn test_pdu_mode_end_to_end_scenario() {
+    let mut world = World::new();
+    // Modem A (receiver): Matches DA in the hardcoded PDU
+    given_modem_with_number(&mut world, "A", "18810189440");
+    given_modem_with_number(&mut world, "B", "12345");
+
+    when_at_command_sent(&mut world, "B", "AT+CPIN?");
+    then_response_is(&mut world, "B", "+CPIN: READY");
+    then_response_is(&mut world, "B", "OK");
+
+    when_at_command_sent(&mut world, "B", "AT+CMGS=35");
+    then_response_is(&mut world, "B", "> ");
+
+    // Send PDU targeting "18810189440" containing 23 chars of 7-bit text.
+    let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE97011A";
+    when_hex_bytes_sent(&mut world, "B", pdu_hex);
+
+    then_wait_for_response_containing(&mut world, "B", "+CMGS: ");
+    then_response_is(&mut world, "B", "OK");
+
+    // Verify A receives the converted SMS-DELIVER PDU.
+    // SCTS timestamp is dynamic, so we match static prefix and suffix.
+    then_wait_for_response_containing(&mut world, "A", "+CMT: ,41");
+    let response = then_wait_for_response_containing(
+        &mut world,
+        "A",
+        "17AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701",
+    );
+    assert!(response.contains("00240D91688118109844F00000"));
+}
+
+#[test]
+fn test_sms_routing_failure_dropped() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "B", "12345");
+    given_modem_with_number(&mut world, "A", "54321");
+
+    when_at_command_sent(&mut world, "B", "AT+CMGF=1");
+    then_response_is(&mut world, "B", "OK");
+
+    when_at_command_sent(&mut world, "B", "AT+CMGS=\"99999\"");
+    then_response_is(&mut world, "B", "> ");
+
+    let hello_hex = "68656C6C6F1A";
+    when_hex_bytes_sent(&mut world, "B", hello_hex);
+
+    // B should still get OK because the command was accepted and processed
+    then_wait_for_response_containing(&mut world, "B", "+CMGS: ");
+    then_response_is(&mut world, "B", "OK");
+
+    then_no_response(&mut world, "A");
+    then_no_response(&mut world, "B");
+}
+
+#[test]
+fn test_remote_sms_injection() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", "18810189440");
+    given_modem_with_number(&mut world, "B", "12345");
+
+    // Case A: Inject SMS-SUBMIT targeting B. It should be converted and routed to
+    // B.
+    let pdu_submit = "00010005812143F5000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
+    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{pdu_submit}\""));
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify B receives the SMS-DELIVER PDU with OA copied from DA
+    then_wait_for_response_containing(&mut world, "B", "+CMT: ,37");
+    let response_b = then_wait_for_response_containing(
+        &mut world,
+        "B",
+        "17AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701",
+    );
+    assert!(response_b.contains("002405812143F50000"));
+
+    // Case B: Inject SMS-DELIVER. It fails to parse (SMS-SUBMIT only), falling back
+    // to loopback to A.
+    let pdu_deliver =
+        "002405812143F500002660901230000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
+    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{pdu_deliver}\""));
+    then_response_is(&mut world, "A", "OK");
+
+    then_wait_for_response_containing(&mut world, "A", "+CMT: ,37");
+    then_wait_for_response_containing(&mut world, "A", pdu_deliver);
+}
+
+#[test]
+fn test_read_sms_zero_index_does_not_panic() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", "12345");
+
+    // AT+CMGR=0 should fail gracefully and not panic the simulator
+    when_at_command_sent(&mut world, "A", "AT+CMGR=0");
+    then_wait_for_response_containing(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_text_mode_loopback() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", "12345");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGF=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGS=\"12345\"");
+    then_response_is(&mut world, "A", "> ");
+
+    let hello_hex = "68656C6C6F1A";
+    when_hex_bytes_sent(&mut world, "A", hello_hex);
+
+    then_wait_for_response_containing(&mut world, "A", "+CMGS: ");
+    then_response_is(&mut world, "A", "OK");
+
+    then_wait_for_response_containing(&mut world, "A", "+CMT: \"12345\"");
+    then_response_is(&mut world, "A", "hello");
+}
+
+#[test]
+fn test_pdu_mode_loopback() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", "18810189440");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGS=35");
+    then_response_is(&mut world, "A", "> ");
+
+    let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE97011A";
+    when_hex_bytes_sent(&mut world, "A", pdu_hex);
+
+    then_wait_for_response_containing(&mut world, "A", "+CMGS: ");
+    then_response_is(&mut world, "A", "OK");
+
+    then_wait_for_response_containing(&mut world, "A", "+CMT: ,41");
+    let response = then_wait_for_response_containing(
+        &mut world,
+        "A",
+        "17AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701",
+    );
+    assert!(response.contains("00240D91688118109844F00000"));
 }

@@ -155,6 +155,7 @@ impl fmt::Debug for ChipCreate {
 pub use crate::{
     bluetooth::{BeaconParams, BluetoothCreate, BluetoothMode, beacon::BleBeacon},
     cell::CellCreate,
+    nfc::{Nfc, NfcUpdate},
     uwb::{Uwb, UwbCreate},
     wifi::WifiCreate,
 };
@@ -187,7 +188,7 @@ impl fmt::Display for ChipId {
 ///
 /// Use `Chip` for generic operations (positioning, lifecycle) and access
 /// `variant` for technology-specific state.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Chip {
     pub id: u32,
     pub kind: ChipKind,
@@ -200,6 +201,23 @@ pub struct Chip {
     pub links: Vec<(ChipId, i8)>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+}
+
+impl Default for Chip {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            kind: ChipKind::default(),
+            name: String::default(),
+            manufacturer: String::default(),
+            product_name: String::default(),
+            pose: Pose::default(),
+            device_id: DeviceId::default(),
+            variant: None,
+            links: Vec::default(),
+            enabled: true,
+        }
+    }
 }
 
 impl Chip {
@@ -221,6 +239,13 @@ impl Chip {
         matches!(
             self.variant,
             Some(ChipVariant::Uwb(Uwb { radio: Radio { state: Some(true) | None, .. } }))
+        )
+    }
+
+    pub fn is_nfc_enabled(&self) -> bool {
+        matches!(
+            self.variant,
+            Some(ChipVariant::Nfc(Nfc { radio: Radio { state: Some(true) | None, .. } }))
         )
     }
 }
@@ -259,6 +284,17 @@ impl Chip {
             ..Default::default()
         }
     }
+
+    pub fn new_test_nfc(name: impl Into<String>) -> Self {
+        Self {
+            kind: ChipKind::NFC,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim NFC".into(),
+            variant: Some(ChipVariant::from(ChipKind::NFC)),
+            ..Default::default()
+        }
+    }
 }
 
 fn default_enabled() -> bool {
@@ -282,6 +318,9 @@ pub enum ChipVariant {
     Wifi(crate::wifi::Wifi),
     Uwb(crate::uwb::Uwb),
     Cell(crate::cell::Cell),
+    CellularData(crate::cellular_data::CellularData),
+    Ethernet(crate::ethernet::Ethernet),
+    Nfc(Nfc),
 }
 
 impl From<ChipKind> for ChipVariant {
@@ -293,10 +332,18 @@ impl From<ChipKind> for ChipVariant {
                 address: String::new(),
                 bt_properties: Default::default(),
                 mode: crate::chip::BluetoothMode::Device(Default::default()),
+                preset: None,
             })),
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),
-            ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell { state: "unknown".into() }),
+            ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell {
+                radio: Default::default(),
+                state: "unknown".into(),
+                sim_type: None,
+            }),
+            ChipKind::CELLULAR_DATA => ChipVariant::CellularData(Default::default()),
+            ChipKind::ETHERNET => ChipVariant::Ethernet(Default::default()),
+            ChipKind::NFC => ChipVariant::Nfc(Default::default()),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
             // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
             // types.
@@ -369,12 +416,16 @@ impl RadioUpdate {
     }
 }
 
-/// The techbology variant specific fields
+/// The technology variant specific fields
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariantUpdate {
     Bluetooth(crate::bluetooth::BluetoothUpdate),
     Wifi(crate::wifi::WifiUpdate),
     Uwb(crate::uwb::UwbUpdate),
+    Cell(crate::cell::CellUpdate),
+    CellularData(crate::cellular_data::CellularDataUpdate),
+    Ethernet(crate::ethernet::EthernetUpdate),
+    Nfc(NfcUpdate),
 }
 
 impl ChipVariantUpdate {
@@ -383,6 +434,10 @@ impl ChipVariantUpdate {
             ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
             ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
             ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
+            ChipVariantUpdate::Cell(_) => ChipKind::CELLULAR,
+            ChipVariantUpdate::CellularData(_) => ChipKind::CELLULAR_DATA,
+            ChipVariantUpdate::Ethernet(_) => ChipKind::ETHERNET,
+            ChipVariantUpdate::Nfc(_) => ChipKind::NFC,
         }
     }
 
@@ -396,6 +451,18 @@ impl ChipVariantUpdate {
             }
             (ChipVariantUpdate::Uwb(update), ChipVariant::Uwb(uwb)) => {
                 update.apply(uwb);
+            }
+            (ChipVariantUpdate::Cell(update), ChipVariant::Cell(cell)) => {
+                update.apply(cell);
+            }
+            (ChipVariantUpdate::CellularData(update), ChipVariant::CellularData(cellular_data)) => {
+                update.apply(cellular_data);
+            }
+            (ChipVariantUpdate::Ethernet(update), ChipVariant::Ethernet(ethernet)) => {
+                update.apply(ethernet);
+            }
+            (ChipVariantUpdate::Nfc(update), ChipVariant::Nfc(nfc)) => {
+                update.apply(nfc);
             }
             (u, v) => {
                 tracing::warn!("ChipVariantUpdate mismatch with ChipVariant: {:?} vs {:?}", u, v);
@@ -540,5 +607,16 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
 impl Clone for Box<dyn ChipClient> {
     fn clone(&self) -> Box<dyn ChipClient> {
         self.clone_box()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chip_default_enabled() {
+        let chip = Chip::default();
+        assert!(chip.enabled);
     }
 }

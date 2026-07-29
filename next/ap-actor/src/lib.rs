@@ -3,20 +3,17 @@
 
 mod ap_actor;
 mod ap_client;
-
+mod eap_auth;
 mod error;
 #[doc(hidden)]
 pub mod ffi;
+mod ftm;
 mod ieee802_11;
 mod lifecycle;
-
-mod service;
-mod shared;
-
-mod eap_auth;
-mod ftm;
 mod rsn;
 mod sae;
+mod service;
+mod shared;
 mod wpa_auth;
 
 use actor_framework::ResourceActor;

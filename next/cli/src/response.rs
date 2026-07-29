@@ -18,7 +18,7 @@ impl args::Command {
     pub fn print_response(
         &self,
         response: &GrpcResponse,
-
+        cells: Option<&[netsim_proto::cell::Cell]>,
         request: Option<&GrpcRequest>,
         verbose: bool,
     ) -> crate::error::Result<()> {
@@ -64,7 +64,11 @@ impl args::Command {
                     })?;
                     println!("{json}");
                 } else {
-                    println!("{}", Displayer::new(res.clone(), verbose));
+                    let mut displayer = Displayer::new(res, verbose);
+                    if let Some(cells) = cells {
+                        displayer = displayer.with_cells(cells);
+                    }
+                    println!("{}", displayer);
                 }
             }
             Command::Reset => {
@@ -203,7 +207,7 @@ impl args::Command {
                         )
                         .into());
                     };
-                    println!("{}", Displayer::new(res.clone(), verbose));
+                    println!("{}", Displayer::new(res, verbose));
                 }
                 Link::Patch(args) => {
                     if let Some(rssi) = args.rssi

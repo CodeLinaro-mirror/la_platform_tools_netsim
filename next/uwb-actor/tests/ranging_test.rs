@@ -73,4 +73,14 @@ async fn test_ranging_between_two_chips() {
     // Then
     // distance = 1m = 1000cm
     world.then_ranging_measurement_is_received(chip_a, 1000).await;
+
+    // Verify telemetry
+    use netsim_model::ChipClient;
+    let stats = world.client.read_statistics().await.expect("Failed to read statistics");
+    let stats_a = stats.iter().find(|s| s.id == chip_a).unwrap();
+    let stats_b = stats.iter().find(|s| s.id == chip_b).unwrap();
+    assert_eq!(stats_a.p2p_tx_count, 1);
+    assert_eq!(stats_a.p2p_rx_count, 1);
+    assert_eq!(stats_b.p2p_tx_count, 0);
+    assert_eq!(stats_b.p2p_rx_count, 0);
 }

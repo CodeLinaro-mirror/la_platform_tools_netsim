@@ -184,7 +184,15 @@ message Chip {
     Radio uwb = 7;
     // WIFI
     Radio wifi = 8;
-    // Reserved fields 10 to 14
+    // ETHERNET
+    Radio ethernet = 10;
+    // CELLULAR. Chip ID matches Cell ID in cell.proto.
+    Radio cellular = 11;
+    // CELLULAR_DATA
+    Radio cellular_data = 12;
+    // NFC
+    Radio nfc = 13;
+    // Reserved fields 14
   }
   // Offset of the chip position from center of device
   optional Position offset = 15;

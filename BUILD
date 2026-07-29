@@ -1,6 +1,7 @@
 # Copyright 2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 
+load("@goldfish_build//rules/native:native_binaries.bzl", "stripped_binaries")
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_license//rules:license.bzl", "license")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
@@ -154,7 +155,6 @@ cc_binary(
         "src/util/log.h",
         ":netsim_daemon_cc",
         ":netsim_daemon_h",
-        "//rust:cxx-bridge-header",
         "//rust:netsimd.cc",
     ] + select({
         "@platforms//os:windows": ["src/hci/async_manager.cc"],
@@ -173,6 +173,7 @@ cc_binary(
         "@aemu//base:aemu-base",
         "@aemu//base:aemu-base-socket-utils",
         "@c-ares//:ares",
+        "@cxx.rs//:core",
         "@glib//glib",
         "@rootcanal//:libbt-rootcanal",
         "@wpa_supplicant_8//:hostapd_c_lib",
@@ -220,4 +221,14 @@ genrule(
       dist_dir=$${source_path%/dist/*}/dist
       cp -r $${dist_dir}/. $(@D)/netsim-ui/
     """,
+)
+
+stripped_binaries(
+    name = "netsim_stripped",
+    srcs = [":netsim"],
+)
+
+stripped_binaries(
+    name = "netsimd_stripped",
+    srcs = [":netsimd"],
 )

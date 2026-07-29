@@ -9,6 +9,9 @@ use crate::{
     types::{CommandAction, ExecutionResult, HandledCommand},
 };
 
+const TOSCA_INTERNATIONAL: u8 = 145;
+const TOSCA_NATIONAL: u8 = 129;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageStorage {
     Sim,
@@ -30,10 +33,12 @@ pub struct SmsService {
     storage2: MessageStorage,
     storage3: MessageStorage,
     smsc_address: String,
-    message_format: MessageFormat,
+    smsc_tosca: u8,
+    pub(crate) message_format: MessageFormat,
     pending_sms_destination: Option<String>,
     pub waiting_for_pdu_len: Option<usize>,
     pub waiting_for_pdu_store: bool,
+    broadcast_config: (u8, String, String),
 }
 
 impl Default for SmsService {
@@ -45,10 +50,12 @@ impl Default for SmsService {
             storage2: MessageStorage::Me,
             storage3: MessageStorage::Me,
             smsc_address: "".to_string(),
+            smsc_tosca: TOSCA_INTERNATIONAL,
             message_format: MessageFormat::Pdu,
             pending_sms_destination: None,
             waiting_for_pdu_len: None,
             waiting_for_pdu_store: false,
+            broadcast_config: (0, "".to_string(), "".to_string()),
         }
     }
 }
@@ -63,17 +70,18 @@ impl SmsService {
     pub fn handle_sms_body(&mut self, pdu: &[u8]) -> ExecutionResult {
         let action = if self.message_format == MessageFormat::Text {
             let to = self.pending_sms_destination.take().unwrap_or_default();
-            let text = String::from_utf8(pdu.to_vec()).unwrap_or_default();
+            let text = std::str::from_utf8(pdu).unwrap_or_default().to_string();
             CommandAction::ReceiveTextSms { to, text }
         } else {
-            CommandAction::ReceiveSms(pdu.to_vec())
+            let processed = crate::pdu::process_outgoing_sms(pdu);
+            CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu }
         };
 
         let mr = self.message_reference.fetch_add(1, Ordering::Relaxed);
-        let response = format!("+CMGS: {}\r\n", mr);
+        let response = format!("+CMGS: {mr}\r\n");
         let mut handled = HandledCommand::ok_with_action(action);
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn handle_store_sms(
@@ -83,19 +91,19 @@ impl SmsService {
     ) -> ExecutionResult {
         if self.storage1 == MessageStorage::Sim {
             if let Some(index) = sim_service.store_sms(pdu) {
-                let response = format!("+CMGW: {}\r\n", index);
+                let response = format!("+CMGW: {index}\r\n");
                 let mut handled = HandledCommand::ok();
                 handled.responses.insert(0, response);
-                ExecutionResult::Handled(handled)
+                ExecutionResult::Success(handled)
             } else {
-                ExecutionResult::Handled(HandledCommand::error())
+                ExecutionResult::Error
             }
         } else {
             self.messages.push(pdu.to_vec());
             let response = format!("+CMGW: {}\r\n", self.messages.len());
             let mut handled = HandledCommand::ok();
             handled.responses.insert(0, response);
-            ExecutionResult::Handled(handled)
+            ExecutionResult::Success(handled)
         }
     }
 
@@ -106,34 +114,34 @@ impl SmsService {
     ) -> ExecutionResult {
         if self.storage1 == MessageStorage::Sim {
             if sim_service.delete_sms(index) {
-                ExecutionResult::Handled(HandledCommand::ok())
+                ExecutionResult::Success(HandledCommand::ok())
             } else {
-                ExecutionResult::Handled(HandledCommand::error())
+                ExecutionResult::Error
             }
         } else if (index as usize) > 0 && (index as usize - 1) < self.messages.len() {
             self.messages.remove(index as usize - 1);
-            ExecutionResult::Handled(HandledCommand::ok())
+            ExecutionResult::Success(HandledCommand::ok())
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
     pub fn handle_read_sms(&mut self, sim_service: &mut SimService, index: u8) -> ExecutionResult {
         if self.storage1 == MessageStorage::Sim {
             sim_service.read_sms(index)
-        } else if let Some(pdu) = self.messages.get(index as usize - 1) {
+        } else if let Some(pdu) = index.checked_sub(1).and_then(|i| self.messages.get(i as usize)) {
             let response = format!("+CMGR: 0,,{}\r\n{}\r\n", pdu.len(), hex::encode_upper(pdu));
             let mut handled = HandledCommand::ok();
             handled.responses.insert(0, response);
-            ExecutionResult::Handled(handled)
+            ExecutionResult::Success(handled)
         } else {
-            ExecutionResult::Handled(HandledCommand::error())
+            ExecutionResult::Error
         }
     }
 
     pub fn handle_set_sms_message_format(&mut self, format: u8) -> ExecutionResult {
         self.message_format = if format == 1 { MessageFormat::Text } else { MessageFormat::Pdu };
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_set_preferred_message_storage(
@@ -148,7 +156,7 @@ impl SmsService {
             if storage2.as_ref() == b"SM" { MessageStorage::Sim } else { MessageStorage::Me };
         self.storage3 =
             if storage3.as_ref() == b"SM" { MessageStorage::Sim } else { MessageStorage::Me };
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_query_preferred_message_storage(&self) -> ExecutionResult {
@@ -160,17 +168,17 @@ impl SmsService {
         );
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn handle_send_sms_ack(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_wait_for_store_sms(&mut self, len: u8) -> ExecutionResult {
         self.waiting_for_pdu_len = Some(len as usize);
         self.waiting_for_pdu_store = true;
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec!["> \r\n".to_string()],
             action: None,
         })
@@ -189,36 +197,62 @@ impl SmsService {
             self.waiting_for_pdu_len = Some(len);
             self.waiting_for_pdu_store = false;
         }
-        ExecutionResult::Handled(HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec!["> \r\n".to_string()],
             action: None,
         })
     }
 
     pub fn handle_broadcast_config(
-        &self,
-        _mode: u8,
-        _mids: QuotedString,
-        _dcss: QuotedString,
+        &mut self,
+        mode: u8,
+        mids: QuotedString,
+        dcss: QuotedString,
     ) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        self.broadcast_config = (
+            mode,
+            String::from_utf8(mids.to_vec()).unwrap_or_default(),
+            String::from_utf8(dcss.to_vec()).unwrap_or_default(),
+        );
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
-    pub fn handle_set_smsc_address(&mut self, address: QuotedString) -> ExecutionResult {
+    pub fn handle_query_broadcast_config(&self) -> ExecutionResult {
+        let (mode, mids, dcss) = &self.broadcast_config;
+        let response = format!("+CSCB: {mode},\"{mids}\",\"{dcss}\"\r\n");
+        let mut handled = HandledCommand::ok();
+        handled.responses.insert(0, response);
+        ExecutionResult::Success(handled)
+    }
+
+    pub fn handle_set_smsc_address(
+        &mut self,
+        address: QuotedString,
+        tosca: Option<u8>,
+    ) -> ExecutionResult {
         self.smsc_address = String::from_utf8(address.to_vec()).unwrap_or_default();
-        ExecutionResult::Handled(HandledCommand::ok())
+        if let Some(t) = tosca {
+            self.smsc_tosca = t;
+        } else if self.smsc_address.starts_with('+') {
+            self.smsc_tosca = TOSCA_INTERNATIONAL;
+        } else {
+            self.smsc_tosca = TOSCA_NATIONAL;
+        }
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     pub fn handle_get_smsc_address(&self) -> ExecutionResult {
-        let response = format!("+CSCA: \"{}\",145\r\n", self.smsc_address);
+        let response = format!("+CSCA: \"{}\",{}\r\n", self.smsc_address, self.smsc_tosca);
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
-        ExecutionResult::Handled(handled)
+        ExecutionResult::Success(handled)
     }
 
     pub fn handle_remote_sms(&self, pdu: QuotedString) -> ExecutionResult {
-        let action = CommandAction::ReceiveSms(pdu.to_vec());
-        ExecutionResult::Handled(HandledCommand::ok_with_action(action))
+        let pdu_bytes = pdu.to_vec();
+        let processed = crate::pdu::process_outgoing_sms(&pdu_bytes);
+        let action = CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu };
+        ExecutionResult::Success(HandledCommand::ok_with_action(action))
     }
 
     // Explicit execute method instead of Trait
@@ -228,7 +262,7 @@ impl SmsService {
             Command::StoreSms(len) => self.handle_wait_for_store_sms(*len),
             Command::ReadSms(index) => self.handle_read_sms(sim_service, *index),
             Command::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
-            Command::SendSmsAck => self.handle_send_sms_ack(),
+            Command::SendSmsAck | Command::SendSmsAckWithVal(_) => self.handle_send_sms_ack(),
             Command::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
             Command::SetPreferredMessageStorage(storage1, storage2, storage3) => {
                 self.handle_set_preferred_message_storage(*storage1, *storage2, *storage3)
@@ -237,7 +271,10 @@ impl SmsService {
             Command::BroadcastConfig(mode, mids, dcss) => {
                 self.handle_broadcast_config(*mode, *mids, *dcss)
             }
-            Command::SetSmscAddress(address) => self.handle_set_smsc_address(*address),
+            Command::QueryBroadcastConfig => self.handle_query_broadcast_config(),
+            Command::SetSmscAddress(address, tosca) => {
+                self.handle_set_smsc_address(*address, *tosca)
+            }
             Command::GetSmscAddress => self.handle_get_smsc_address(),
             Command::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
             _ => ExecutionResult::Unhandled,

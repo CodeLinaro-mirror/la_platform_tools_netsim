@@ -45,6 +45,7 @@ impl DeviceActor {
         version: String,
         stats_path: Option<std::path::PathBuf>,
         stats_interval: Option<std::time::Duration>,
+        frontend_stats: std::sync::Arc<netsim_model::FrontendStats>,
     ) -> Self {
         Self {
             chip_clients,
@@ -61,7 +62,7 @@ impl DeviceActor {
             has_seen_device: false,
             guid_to_id: HashMap::new(),
             stats_write_task: None,
-            stats: crate::stats::Stats::new(version.clone(), stats_path),
+            stats: crate::stats::Stats::new(version.clone(), stats_path, frontend_stats),
             stats_interval: stats_interval.unwrap_or(std::time::Duration::from_secs(10)),
             self_client: None,
         }

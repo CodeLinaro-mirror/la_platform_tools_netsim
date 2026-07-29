@@ -5,8 +5,10 @@ const HCI_EVENT_PACKET: u8 = 0x04;
 const HCI_LE_META_EVENT: u8 = 0x3E;
 const HCI_LE_ADVERTISING_REPORT: u8 = 0x02;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScanResult {
     pub mac: [u8; 6],
+    pub event_type: u8,
     pub rssi: i8,
     pub payload: Vec<u8>,
 }
@@ -43,6 +45,7 @@ pub fn parse_hci_scan_report(data: &[u8]) -> Result<Vec<ScanResult>, &'static st
             return Err("Packet truncated: header exceeds buffer");
         }
 
+        let event_type = data[cursor];
         let mut mac = [0u8; 6];
         mac.copy_from_slice(&data[cursor + 2..cursor + 8]);
         // Packet is already Big Endian (human readable), do not reverse.
@@ -59,7 +62,7 @@ pub fn parse_hci_scan_report(data: &[u8]) -> Result<Vec<ScanResult>, &'static st
         let payload = data[payload_start..payload_end].to_vec();
         let rssi = data[payload_end] as i8;
 
-        results.push(ScanResult { mac, rssi, payload });
+        results.push(ScanResult { mac, event_type, rssi, payload });
 
         // Advance cursor: Header (9) + Payload (len) + RSSI (1)
         cursor += 9 + payload_len + 1;

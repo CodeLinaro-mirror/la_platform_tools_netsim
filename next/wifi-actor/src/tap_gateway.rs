@@ -474,6 +474,12 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
                 ))));
             };
 
+            // Drop QosNodata frames (keep-alives/null data) as they contain no payload
+            // and cannot be converted to Ethernet.
+            if ieee80211.is_qos_nodata() {
+                return Ok(0);
+            }
+
             let eth = ieee80211.to_ieee8023().map_err(|e| {
                 crate::error::WifiError::Frame(Box::from(format!("TAP conversion failed: {}", e)))
             })?;

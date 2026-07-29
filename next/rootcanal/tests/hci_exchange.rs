@@ -41,6 +41,10 @@ impl RootcanalCallbacks for TestCallbacks {
     ) -> Option<i32> {
         Some(tx_power)
     }
+
+    fn estimate_distance(&self, _source_id: u32, _destination_id: u32) -> u32 {
+        0
+    }
 }
 
 /// Callbacks for the sniffer controller, which forwards received LL packets.
@@ -113,7 +117,7 @@ async fn test_hci_exchange() {
 
 async fn test_hci_exchange_internal() {
     setup();
-    let rootcanal = Arc::new(Rootcanal::new(Box::new(TestCallbacks)));
+    let rootcanal = Arc::new(Rootcanal::new(Box::new(TestCallbacks), false));
     let (ll_sender, mut ll_receiver) = mpsc::channel(10);
     let (hci_sender, mut hci_receiver) = mpsc::channel(10);
 

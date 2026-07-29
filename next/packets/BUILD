@@ -8,18 +8,27 @@ package(default_visibility = ["//:__subpackages__"])
 
 netsim_rust_library(
     name = "packets",
-    srcs = glob(["src/**/*.rs"]),
+    srcs = glob(["src/**/*.rs"]) + [
+        "//:netsim_link_layer_packets_rust_gen",
+    ],
     compile_data = glob([
         "src/**/test_data/**",
     ]),
     crate_name = "netsim_packets",
     edition = "2024",
+    enable_doc_test = False,
     proc_macro_deps = [
         "@num-derive",
     ],
+    rustc_env = {
+        "OUT_DIR": "../../..",
+    },
+    rustc_flags = ["--cap-lints=allow"],
     deps = [
+        "@bytes",
         "@hex",
         "@num-traits",
+        "@pdl-runtime",
         "@serde",
         "@serde_json",
         "@zerocopy",

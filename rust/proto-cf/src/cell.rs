@@ -31,6 +31,7 @@ const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_3_7_2;
 #[derive(PartialEq,Clone,Default,Debug)]
 pub struct GetCellRequest {
     // message fields
+    ///  Matches the Chip ID of the cellular chip.
     // @@protoc_insertion_point(field:netsim.cell.GetCellRequest.id)
     pub id: u32,
     // special fields
@@ -379,6 +380,7 @@ impl ::protobuf::reflect::ProtobufValue for ListCellsResponse {
 #[derive(PartialEq,Clone,Default,Debug)]
 pub struct ExecuteCellRequest {
     // message fields
+    ///  Matches the Chip ID of the cellular chip.
     // @@protoc_insertion_point(field:netsim.cell.ExecuteCellRequest.id)
     pub id: u32,
     // message oneof groups
@@ -840,8 +842,155 @@ impl ExecuteCellRequest {
         }
     }
 
+    // .netsim.cell.SetSimStatus set_sim_status = 11;
+
+    pub fn set_sim_status(&self) -> &SetSimStatus {
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetSimStatus(ref v)) => v,
+            _ => <SetSimStatus as ::protobuf::Message>::default_instance(),
+        }
+    }
+
+    pub fn clear_set_sim_status(&mut self) {
+        self.action = ::std::option::Option::None;
+    }
+
+    pub fn has_set_sim_status(&self) -> bool {
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetSimStatus(..)) => true,
+            _ => false,
+        }
+    }
+
+    // Param is passed by value, moved
+    pub fn set_set_sim_status(&mut self, v: SetSimStatus) {
+        self.action = ::std::option::Option::Some(execute_cell_request::Action::SetSimStatus(v))
+    }
+
+    // Mutable pointer to the field.
+    pub fn mut_set_sim_status(&mut self) -> &mut SetSimStatus {
+        if let ::std::option::Option::Some(execute_cell_request::Action::SetSimStatus(_)) = self.action {
+        } else {
+            self.action = ::std::option::Option::Some(execute_cell_request::Action::SetSimStatus(SetSimStatus::new()));
+        }
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetSimStatus(ref mut v)) => v,
+            _ => panic!(),
+        }
+    }
+
+    // Take field
+    pub fn take_set_sim_status(&mut self) -> SetSimStatus {
+        if self.has_set_sim_status() {
+            match self.action.take() {
+                ::std::option::Option::Some(execute_cell_request::Action::SetSimStatus(v)) => v,
+                _ => panic!(),
+            }
+        } else {
+            SetSimStatus::new()
+        }
+    }
+
+    // .netsim.cell.SetNetworkTechnology set_network_technology = 12;
+
+    pub fn set_network_technology(&self) -> &SetNetworkTechnology {
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTechnology(ref v)) => v,
+            _ => <SetNetworkTechnology as ::protobuf::Message>::default_instance(),
+        }
+    }
+
+    pub fn clear_set_network_technology(&mut self) {
+        self.action = ::std::option::Option::None;
+    }
+
+    pub fn has_set_network_technology(&self) -> bool {
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTechnology(..)) => true,
+            _ => false,
+        }
+    }
+
+    // Param is passed by value, moved
+    pub fn set_set_network_technology(&mut self, v: SetNetworkTechnology) {
+        self.action = ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTechnology(v))
+    }
+
+    // Mutable pointer to the field.
+    pub fn mut_set_network_technology(&mut self) -> &mut SetNetworkTechnology {
+        if let ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTechnology(_)) = self.action {
+        } else {
+            self.action = ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTechnology(SetNetworkTechnology::new()));
+        }
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTechnology(ref mut v)) => v,
+            _ => panic!(),
+        }
+    }
+
+    // Take field
+    pub fn take_set_network_technology(&mut self) -> SetNetworkTechnology {
+        if self.has_set_network_technology() {
+            match self.action.take() {
+                ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTechnology(v)) => v,
+                _ => panic!(),
+            }
+        } else {
+            SetNetworkTechnology::new()
+        }
+    }
+
+    // .netsim.cell.SetNetworkTimezone set_network_timezone = 13;
+
+    pub fn set_network_timezone(&self) -> &SetNetworkTimezone {
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTimezone(ref v)) => v,
+            _ => <SetNetworkTimezone as ::protobuf::Message>::default_instance(),
+        }
+    }
+
+    pub fn clear_set_network_timezone(&mut self) {
+        self.action = ::std::option::Option::None;
+    }
+
+    pub fn has_set_network_timezone(&self) -> bool {
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTimezone(..)) => true,
+            _ => false,
+        }
+    }
+
+    // Param is passed by value, moved
+    pub fn set_set_network_timezone(&mut self, v: SetNetworkTimezone) {
+        self.action = ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTimezone(v))
+    }
+
+    // Mutable pointer to the field.
+    pub fn mut_set_network_timezone(&mut self) -> &mut SetNetworkTimezone {
+        if let ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTimezone(_)) = self.action {
+        } else {
+            self.action = ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTimezone(SetNetworkTimezone::new()));
+        }
+        match self.action {
+            ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTimezone(ref mut v)) => v,
+            _ => panic!(),
+        }
+    }
+
+    // Take field
+    pub fn take_set_network_timezone(&mut self) -> SetNetworkTimezone {
+        if self.has_set_network_timezone() {
+            match self.action.take() {
+                ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTimezone(v)) => v,
+                _ => panic!(),
+            }
+        } else {
+            SetNetworkTimezone::new()
+        }
+    }
+
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(10);
+        let mut fields = ::std::vec::Vec::with_capacity(13);
         let mut oneofs = ::std::vec::Vec::with_capacity(1);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "id",
@@ -911,6 +1060,27 @@ impl ExecuteCellRequest {
             ExecuteCellRequest::mut_remote_hold,
             ExecuteCellRequest::set_remote_hold,
         ));
+        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, SetSimStatus>(
+            "set_sim_status",
+            ExecuteCellRequest::has_set_sim_status,
+            ExecuteCellRequest::set_sim_status,
+            ExecuteCellRequest::mut_set_sim_status,
+            ExecuteCellRequest::set_set_sim_status,
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, SetNetworkTechnology>(
+            "set_network_technology",
+            ExecuteCellRequest::has_set_network_technology,
+            ExecuteCellRequest::set_network_technology,
+            ExecuteCellRequest::mut_set_network_technology,
+            ExecuteCellRequest::set_set_network_technology,
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, SetNetworkTimezone>(
+            "set_network_timezone",
+            ExecuteCellRequest::has_set_network_timezone,
+            ExecuteCellRequest::set_network_timezone,
+            ExecuteCellRequest::mut_set_network_timezone,
+            ExecuteCellRequest::set_set_network_timezone,
+        ));
         oneofs.push(execute_cell_request::Action::generated_oneof_descriptor_data());
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ExecuteCellRequest>(
             "ExecuteCellRequest",
@@ -959,6 +1129,15 @@ impl ::protobuf::Message for ExecuteCellRequest {
                 },
                 82 => {
                     self.action = ::std::option::Option::Some(execute_cell_request::Action::RemoteHold(is.read_message()?));
+                },
+                90 => {
+                    self.action = ::std::option::Option::Some(execute_cell_request::Action::SetSimStatus(is.read_message()?));
+                },
+                98 => {
+                    self.action = ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTechnology(is.read_message()?));
+                },
+                106 => {
+                    self.action = ::std::option::Option::Some(execute_cell_request::Action::SetNetworkTimezone(is.read_message()?));
                 },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
@@ -1013,6 +1192,18 @@ impl ::protobuf::Message for ExecuteCellRequest {
                     let len = v.compute_size();
                     my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
                 },
+                &execute_cell_request::Action::SetSimStatus(ref v) => {
+                    let len = v.compute_size();
+                    my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+                },
+                &execute_cell_request::Action::SetNetworkTechnology(ref v) => {
+                    let len = v.compute_size();
+                    my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+                },
+                &execute_cell_request::Action::SetNetworkTimezone(ref v) => {
+                    let len = v.compute_size();
+                    my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+                },
             };
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
@@ -1053,6 +1244,15 @@ impl ::protobuf::Message for ExecuteCellRequest {
                 &execute_cell_request::Action::RemoteHold(ref v) => {
                     ::protobuf::rt::write_message_field_with_cached_size(10, v, os)?;
                 },
+                &execute_cell_request::Action::SetSimStatus(ref v) => {
+                    ::protobuf::rt::write_message_field_with_cached_size(11, v, os)?;
+                },
+                &execute_cell_request::Action::SetNetworkTechnology(ref v) => {
+                    ::protobuf::rt::write_message_field_with_cached_size(12, v, os)?;
+                },
+                &execute_cell_request::Action::SetNetworkTimezone(ref v) => {
+                    ::protobuf::rt::write_message_field_with_cached_size(13, v, os)?;
+                },
             };
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
@@ -1073,6 +1273,9 @@ impl ::protobuf::Message for ExecuteCellRequest {
 
     fn clear(&mut self) {
         self.id = 0;
+        self.action = ::std::option::Option::None;
+        self.action = ::std::option::Option::None;
+        self.action = ::std::option::Option::None;
         self.action = ::std::option::Option::None;
         self.action = ::std::option::Option::None;
         self.action = ::std::option::Option::None;
@@ -1137,6 +1340,12 @@ pub mod execute_cell_request {
         RemoteAnswer(super::RemoteAnswer),
         // @@protoc_insertion_point(oneof_field:netsim.cell.ExecuteCellRequest.remote_hold)
         RemoteHold(super::RemoteHold),
+        // @@protoc_insertion_point(oneof_field:netsim.cell.ExecuteCellRequest.set_sim_status)
+        SetSimStatus(super::SetSimStatus),
+        // @@protoc_insertion_point(oneof_field:netsim.cell.ExecuteCellRequest.set_network_technology)
+        SetNetworkTechnology(super::SetNetworkTechnology),
+        // @@protoc_insertion_point(oneof_field:netsim.cell.ExecuteCellRequest.set_network_timezone)
+        SetNetworkTimezone(super::SetNetworkTimezone),
     }
 
     impl ::protobuf::Oneof for Action {
@@ -2237,6 +2446,7 @@ impl ::protobuf::reflect::ProtobufValue for SetDataRegistration {
 #[derive(PartialEq,Clone,Default,Debug)]
 pub struct Cell {
     // message fields
+    ///  Matches the Chip ID of the cellular chip.
     // @@protoc_insertion_point(field:netsim.cell.Cell.id)
     pub id: u32,
     // @@protoc_insertion_point(field:netsim.cell.Cell.state)
@@ -2251,6 +2461,10 @@ pub struct Cell {
     pub ber: u32,
     // @@protoc_insertion_point(field:netsim.cell.Cell.active_calls)
     pub active_calls: ::std::vec::Vec<Call>,
+    // @@protoc_insertion_point(field:netsim.cell.Cell.voice_registration)
+    pub voice_registration: ::protobuf::EnumOrUnknown<RegistrationStatus>,
+    // @@protoc_insertion_point(field:netsim.cell.Cell.data_registration)
+    pub data_registration: ::protobuf::EnumOrUnknown<RegistrationStatus>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.cell.Cell.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -2268,7 +2482,7 @@ impl Cell {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(7);
+        let mut fields = ::std::vec::Vec::with_capacity(9);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "id",
@@ -2304,6 +2518,16 @@ impl Cell {
             "active_calls",
             |m: &Cell| { &m.active_calls },
             |m: &mut Cell| { &mut m.active_calls },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "voice_registration",
+            |m: &Cell| { &m.voice_registration },
+            |m: &mut Cell| { &mut m.voice_registration },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "data_registration",
+            |m: &Cell| { &m.data_registration },
+            |m: &mut Cell| { &mut m.data_registration },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Cell>(
             "Cell",
@@ -2344,6 +2568,12 @@ impl ::protobuf::Message for Cell {
                 58 => {
                     self.active_calls.push(is.read_message()?);
                 },
+                64 => {
+                    self.voice_registration = is.read_enum_or_unknown()?;
+                },
+                72 => {
+                    self.data_registration = is.read_enum_or_unknown()?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -2378,6 +2608,12 @@ impl ::protobuf::Message for Cell {
             let len = value.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         };
+        if self.voice_registration != ::protobuf::EnumOrUnknown::new(RegistrationStatus::NOT_REGISTERED) {
+            my_size += ::protobuf::rt::int32_size(8, self.voice_registration.value());
+        }
+        if self.data_registration != ::protobuf::EnumOrUnknown::new(RegistrationStatus::NOT_REGISTERED) {
+            my_size += ::protobuf::rt::int32_size(9, self.data_registration.value());
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -2405,6 +2641,12 @@ impl ::protobuf::Message for Cell {
         for v in &self.active_calls {
             ::protobuf::rt::write_message_field_with_cached_size(7, v, os)?;
         };
+        if self.voice_registration != ::protobuf::EnumOrUnknown::new(RegistrationStatus::NOT_REGISTERED) {
+            os.write_enum(8, ::protobuf::EnumOrUnknown::value(&self.voice_registration))?;
+        }
+        if self.data_registration != ::protobuf::EnumOrUnknown::new(RegistrationStatus::NOT_REGISTERED) {
+            os.write_enum(9, ::protobuf::EnumOrUnknown::value(&self.data_registration))?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -2429,6 +2671,8 @@ impl ::protobuf::Message for Cell {
         self.rssi = 0;
         self.ber = 0;
         self.active_calls.clear();
+        self.voice_registration = ::protobuf::EnumOrUnknown::new(RegistrationStatus::NOT_REGISTERED);
+        self.data_registration = ::protobuf::EnumOrUnknown::new(RegistrationStatus::NOT_REGISTERED);
         self.special_fields.clear();
     }
 
@@ -2441,6 +2685,8 @@ impl ::protobuf::Message for Cell {
             rssi: 0,
             ber: 0,
             active_calls: ::std::vec::Vec::new(),
+            voice_registration: ::protobuf::EnumOrUnknown::from_i32(0),
+            data_registration: ::protobuf::EnumOrUnknown::from_i32(0),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -2694,6 +2940,512 @@ pub mod call {
     }
 }
 
+// @@protoc_insertion_point(message:netsim.cell.SetSimStatus)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct SetSimStatus {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.cell.SetSimStatus.state)
+    pub state: ::protobuf::EnumOrUnknown<set_sim_status::SimState>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.cell.SetSimStatus.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a SetSimStatus {
+    fn default() -> &'a SetSimStatus {
+        <SetSimStatus as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl SetSimStatus {
+    pub fn new() -> SetSimStatus {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "state",
+            |m: &SetSimStatus| { &m.state },
+            |m: &mut SetSimStatus| { &mut m.state },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<SetSimStatus>(
+            "SetSimStatus",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for SetSimStatus {
+    const NAME: &'static str = "SetSimStatus";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.state = is.read_enum_or_unknown()?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if self.state != ::protobuf::EnumOrUnknown::new(set_sim_status::SimState::ABSENT) {
+            my_size += ::protobuf::rt::int32_size(1, self.state.value());
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if self.state != ::protobuf::EnumOrUnknown::new(set_sim_status::SimState::ABSENT) {
+            os.write_enum(1, ::protobuf::EnumOrUnknown::value(&self.state))?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> SetSimStatus {
+        SetSimStatus::new()
+    }
+
+    fn clear(&mut self) {
+        self.state = ::protobuf::EnumOrUnknown::new(set_sim_status::SimState::ABSENT);
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static SetSimStatus {
+        static instance: SetSimStatus = SetSimStatus {
+            state: ::protobuf::EnumOrUnknown::from_i32(0),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for SetSimStatus {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("SetSimStatus").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for SetSimStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for SetSimStatus {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+/// Nested message and enums of message `SetSimStatus`
+pub mod set_sim_status {
+    #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
+    // @@protoc_insertion_point(enum:netsim.cell.SetSimStatus.SimState)
+    pub enum SimState {
+        // @@protoc_insertion_point(enum_value:netsim.cell.SetSimStatus.SimState.ABSENT)
+        ABSENT = 0,
+        // @@protoc_insertion_point(enum_value:netsim.cell.SetSimStatus.SimState.PRESENT)
+        PRESENT = 1,
+    }
+
+    impl ::protobuf::Enum for SimState {
+        const NAME: &'static str = "SimState";
+
+        fn value(&self) -> i32 {
+            *self as i32
+        }
+
+        fn from_i32(value: i32) -> ::std::option::Option<SimState> {
+            match value {
+                0 => ::std::option::Option::Some(SimState::ABSENT),
+                1 => ::std::option::Option::Some(SimState::PRESENT),
+                _ => ::std::option::Option::None
+            }
+        }
+
+        fn from_str(str: &str) -> ::std::option::Option<SimState> {
+            match str {
+                "ABSENT" => ::std::option::Option::Some(SimState::ABSENT),
+                "PRESENT" => ::std::option::Option::Some(SimState::PRESENT),
+                _ => ::std::option::Option::None
+            }
+        }
+
+        const VALUES: &'static [SimState] = &[
+            SimState::ABSENT,
+            SimState::PRESENT,
+        ];
+    }
+
+    impl ::protobuf::EnumFull for SimState {
+        fn enum_descriptor() -> ::protobuf::reflect::EnumDescriptor {
+            static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::EnumDescriptor> = ::protobuf::rt::Lazy::new();
+            descriptor.get(|| super::file_descriptor().enum_by_package_relative_name("SetSimStatus.SimState").unwrap()).clone()
+        }
+
+        fn descriptor(&self) -> ::protobuf::reflect::EnumValueDescriptor {
+            let index = *self as usize;
+            Self::enum_descriptor().value_by_index(index)
+        }
+    }
+
+    impl ::std::default::Default for SimState {
+        fn default() -> Self {
+            SimState::ABSENT
+        }
+    }
+
+    impl SimState {
+        pub(in super) fn generated_enum_descriptor_data() -> ::protobuf::reflect::GeneratedEnumDescriptorData {
+            ::protobuf::reflect::GeneratedEnumDescriptorData::new::<SimState>("SetSimStatus.SimState")
+        }
+    }
+}
+
+// @@protoc_insertion_point(message:netsim.cell.SetNetworkTechnology)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct SetNetworkTechnology {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.cell.SetNetworkTechnology.tech)
+    pub tech: ::protobuf::EnumOrUnknown<set_network_technology::RadioTechnology>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.cell.SetNetworkTechnology.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a SetNetworkTechnology {
+    fn default() -> &'a SetNetworkTechnology {
+        <SetNetworkTechnology as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl SetNetworkTechnology {
+    pub fn new() -> SetNetworkTechnology {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "tech",
+            |m: &SetNetworkTechnology| { &m.tech },
+            |m: &mut SetNetworkTechnology| { &mut m.tech },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<SetNetworkTechnology>(
+            "SetNetworkTechnology",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for SetNetworkTechnology {
+    const NAME: &'static str = "SetNetworkTechnology";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.tech = is.read_enum_or_unknown()?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if self.tech != ::protobuf::EnumOrUnknown::new(set_network_technology::RadioTechnology::UNKNOWN) {
+            my_size += ::protobuf::rt::int32_size(1, self.tech.value());
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if self.tech != ::protobuf::EnumOrUnknown::new(set_network_technology::RadioTechnology::UNKNOWN) {
+            os.write_enum(1, ::protobuf::EnumOrUnknown::value(&self.tech))?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> SetNetworkTechnology {
+        SetNetworkTechnology::new()
+    }
+
+    fn clear(&mut self) {
+        self.tech = ::protobuf::EnumOrUnknown::new(set_network_technology::RadioTechnology::UNKNOWN);
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static SetNetworkTechnology {
+        static instance: SetNetworkTechnology = SetNetworkTechnology {
+            tech: ::protobuf::EnumOrUnknown::from_i32(0),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for SetNetworkTechnology {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("SetNetworkTechnology").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for SetNetworkTechnology {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for SetNetworkTechnology {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+/// Nested message and enums of message `SetNetworkTechnology`
+pub mod set_network_technology {
+    #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
+    // @@protoc_insertion_point(enum:netsim.cell.SetNetworkTechnology.RadioTechnology)
+    pub enum RadioTechnology {
+        // @@protoc_insertion_point(enum_value:netsim.cell.SetNetworkTechnology.RadioTechnology.UNKNOWN)
+        UNKNOWN = 0,
+        // @@protoc_insertion_point(enum_value:netsim.cell.SetNetworkTechnology.RadioTechnology.GSM)
+        GSM = 1,
+        // @@protoc_insertion_point(enum_value:netsim.cell.SetNetworkTechnology.RadioTechnology.LTE)
+        LTE = 2,
+        // @@protoc_insertion_point(enum_value:netsim.cell.SetNetworkTechnology.RadioTechnology.NR)
+        NR = 3,
+    }
+
+    impl ::protobuf::Enum for RadioTechnology {
+        const NAME: &'static str = "RadioTechnology";
+
+        fn value(&self) -> i32 {
+            *self as i32
+        }
+
+        fn from_i32(value: i32) -> ::std::option::Option<RadioTechnology> {
+            match value {
+                0 => ::std::option::Option::Some(RadioTechnology::UNKNOWN),
+                1 => ::std::option::Option::Some(RadioTechnology::GSM),
+                2 => ::std::option::Option::Some(RadioTechnology::LTE),
+                3 => ::std::option::Option::Some(RadioTechnology::NR),
+                _ => ::std::option::Option::None
+            }
+        }
+
+        fn from_str(str: &str) -> ::std::option::Option<RadioTechnology> {
+            match str {
+                "UNKNOWN" => ::std::option::Option::Some(RadioTechnology::UNKNOWN),
+                "GSM" => ::std::option::Option::Some(RadioTechnology::GSM),
+                "LTE" => ::std::option::Option::Some(RadioTechnology::LTE),
+                "NR" => ::std::option::Option::Some(RadioTechnology::NR),
+                _ => ::std::option::Option::None
+            }
+        }
+
+        const VALUES: &'static [RadioTechnology] = &[
+            RadioTechnology::UNKNOWN,
+            RadioTechnology::GSM,
+            RadioTechnology::LTE,
+            RadioTechnology::NR,
+        ];
+    }
+
+    impl ::protobuf::EnumFull for RadioTechnology {
+        fn enum_descriptor() -> ::protobuf::reflect::EnumDescriptor {
+            static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::EnumDescriptor> = ::protobuf::rt::Lazy::new();
+            descriptor.get(|| super::file_descriptor().enum_by_package_relative_name("SetNetworkTechnology.RadioTechnology").unwrap()).clone()
+        }
+
+        fn descriptor(&self) -> ::protobuf::reflect::EnumValueDescriptor {
+            let index = *self as usize;
+            Self::enum_descriptor().value_by_index(index)
+        }
+    }
+
+    impl ::std::default::Default for RadioTechnology {
+        fn default() -> Self {
+            RadioTechnology::UNKNOWN
+        }
+    }
+
+    impl RadioTechnology {
+        pub(in super) fn generated_enum_descriptor_data() -> ::protobuf::reflect::GeneratedEnumDescriptorData {
+            ::protobuf::reflect::GeneratedEnumDescriptorData::new::<RadioTechnology>("SetNetworkTechnology.RadioTechnology")
+        }
+    }
+}
+
+// @@protoc_insertion_point(message:netsim.cell.SetNetworkTimezone)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct SetNetworkTimezone {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.cell.SetNetworkTimezone.timezone)
+    pub timezone: ::std::string::String,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.cell.SetNetworkTimezone.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a SetNetworkTimezone {
+    fn default() -> &'a SetNetworkTimezone {
+        <SetNetworkTimezone as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl SetNetworkTimezone {
+    pub fn new() -> SetNetworkTimezone {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "timezone",
+            |m: &SetNetworkTimezone| { &m.timezone },
+            |m: &mut SetNetworkTimezone| { &mut m.timezone },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<SetNetworkTimezone>(
+            "SetNetworkTimezone",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for SetNetworkTimezone {
+    const NAME: &'static str = "SetNetworkTimezone";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    self.timezone = is.read_string()?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if !self.timezone.is_empty() {
+            my_size += ::protobuf::rt::string_size(1, &self.timezone);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if !self.timezone.is_empty() {
+            os.write_string(1, &self.timezone)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> SetNetworkTimezone {
+        SetNetworkTimezone::new()
+    }
+
+    fn clear(&mut self) {
+        self.timezone.clear();
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static SetNetworkTimezone {
+        static instance: SetNetworkTimezone = SetNetworkTimezone {
+            timezone: ::std::string::String::new(),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for SetNetworkTimezone {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("SetNetworkTimezone").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for SetNetworkTimezone {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for SetNetworkTimezone {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
 ///  Mirroring netsim_model::cell::RegistrationStatus
 #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
 // @@protoc_insertion_point(enum:netsim.cell.RegistrationStatus)
@@ -2781,7 +3533,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x11netsim/cell.proto\x12\x0bnetsim.cell\x1a\x1bgoogle/protobuf/empty.\
     proto\"\x20\n\x0eGetCellRequest\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02i\
     d\"\x12\n\x10ListCellsRequest\"<\n\x11ListCellsResponse\x12'\n\x05cells\
-    \x18\x01\x20\x03(\x0b2\x11.netsim.cell.CellR\x05cells\"\x9e\x05\n\x12Exe\
+    \x18\x01\x20\x03(\x0b2\x11.netsim.cell.CellR\x05cells\"\x91\x07\n\x12Exe\
     cuteCellRequest\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12@\n\rincomi\
     ng_call\x18\x02\x20\x01(\x0b2\x19.netsim.cell.IncomingCallH\0R\x0cincomi\
     ngCall\x12:\n\x0bupdate_call\x18\x03\x20\x01(\x0b2\x17.netsim.cell.Updat\
@@ -2794,176 +3546,236 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     ata_registration\x18\x08\x20\x01(\x0b2\x20.netsim.cell.SetDataRegistrati\
     onH\0R\x13setDataRegistration\x12@\n\rremote_answer\x18\t\x20\x01(\x0b2\
     \x19.netsim.cell.RemoteAnswerH\0R\x0cremoteAnswer\x12:\n\x0bremote_hold\
-    \x18\n\x20\x01(\x0b2\x17.netsim.cell.RemoteHoldH\0R\nremoteHoldB\x08\n\
-    \x06action\"&\n\x0cIncomingCall\x12\x16\n\x06number\x18\x01\x20\x01(\tR\
-    \x06number\"\x0c\n\nUpdateCall\"\t\n\x07EndCall\"\x0e\n\x0cRemoteAnswer\
-    \"%\n\nRemoteHold\x12\x17\n\x07on_hold\x18\x01\x20\x01(\x08R\x06onHold\"\
-    8\n\nReceiveSms\x12\x16\n\x06sender\x18\x01\x20\x01(\tR\x06sender\x12\
-    \x12\n\x04text\x18\x02\x20\x01(\tR\x04text\"9\n\x11SetSignalStrength\x12\
-    \x12\n\x04rssi\x18\x01\x20\x01(\rR\x04rssi\x12\x10\n\x03ber\x18\x02\x20\
-    \x01(\rR\x03ber\"O\n\x14SetVoiceRegistration\x127\n\x06status\x18\x01\
-    \x20\x01(\x0e2\x1f.netsim.cell.RegistrationStatusR\x06status\"N\n\x13Set\
-    DataRegistration\x127\n\x06status\x18\x01\x20\x01(\x0e2\x1f.netsim.cell.\
-    RegistrationStatusR\x06status\"\xbf\x01\n\x04Cell\x12\x0e\n\x02id\x18\
-    \x01\x20\x01(\rR\x02id\x12\x14\n\x05state\x18\x02\x20\x01(\tR\x05state\
-    \x12\x18\n\x07ringing\x18\x03\x20\x01(\x08R\x07ringing\x12\x1b\n\tsms_co\
-    unt\x18\x04\x20\x01(\rR\x08smsCount\x12\x12\n\x04rssi\x18\x05\x20\x01(\r\
-    R\x04rssi\x12\x10\n\x03ber\x18\x06\x20\x01(\rR\x03ber\x124\n\x0cactive_c\
-    alls\x18\x07\x20\x03(\x0b2\x11.netsim.cell.CallR\x0bactiveCalls\"\xb2\
-    \x01\n\x04Call\x12\x16\n\x06number\x18\x01\x20\x01(\tR\x06number\x12-\n\
-    \x05state\x18\x02\x20\x01(\x0e2\x17.netsim.cell.Call.StateR\x05state\"c\
-    \n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\n\n\x06ACTIVE\x10\x01\x12\x0b\
-    \n\x07HOLDING\x10\x02\x12\x0b\n\x07DIALING\x10\x03\x12\x0c\n\x08ALERTING\
-    \x10\x04\x12\x0c\n\x08INCOMING\x10\x05\x12\x0b\n\x07WAITING\x10\x06*r\n\
-    \x12RegistrationStatus\x12\x12\n\x0eNOT_REGISTERED\x10\0\x12\x13\n\x0fRE\
-    GISTERED_HOME\x10\x01\x12\r\n\tSEARCHING\x10\x02\x12\n\n\x06DENIED\x10\
-    \x03\x12\x0b\n\x07UNKNOWN\x10\x04\x12\x0b\n\x07ROAMING\x10\x052\xcf\x01\
-    \n\x0bCellService\x125\n\x03Get\x12\x1b.netsim.cell.GetCellRequest\x1a\
-    \x11.netsim.cell.Cell\x12E\n\x04List\x12\x1d.netsim.cell.ListCellsReques\
-    t\x1a\x1e.netsim.cell.ListCellsResponse\x12B\n\x07Execute\x12\x1f.netsim\
-    .cell.ExecuteCellRequest\x1a\x16.google.protobuf.EmptyJ\xab\x19\n\x06\
-    \x12\x04\x03\0s\x01\n_\n\x01\x0c\x12\x03\x03\0\x122U\x20Copyright\x20202\
-    6\x20The\x20Android\x20Open\x20Source\x20Project\n\x20SPDX-License-Ident\
-    ifier:\x20Apache-2.0\n\n\x08\n\x01\x02\x12\x03\x05\0\x14\n\t\n\x02\x03\0\
-    \x12\x03\x07\0%\n\n\n\x02\x06\0\x12\x04\t\0\x12\x01\n\n\n\x03\x06\0\x01\
-    \x12\x03\t\x08\x13\n$\n\x04\x06\0\x02\0\x12\x03\x0b\x02)\x1a\x17\x20Get\
-    \x20an\x20existing\x20Cell.\n\n\x0c\n\x05\x06\0\x02\0\x01\x12\x03\x0b\
-    \x06\t\n\x0c\n\x05\x06\0\x02\0\x02\x12\x03\x0b\n\x18\n\x0c\n\x05\x06\0\
-    \x02\0\x03\x12\x03\x0b#'\n\x1e\n\x04\x06\0\x02\x01\x12\x03\x0e\x029\x1a\
-    \x11\x20List\x20all\x20Cells.\n\n\x0c\n\x05\x06\0\x02\x01\x01\x12\x03\
-    \x0e\x06\n\n\x0c\n\x05\x06\0\x02\x01\x02\x12\x03\x0e\x0b\x1b\n\x0c\n\x05\
-    \x06\0\x02\x01\x03\x12\x03\x0e&7\n+\n\x04\x06\0\x02\x02\x12\x03\x11\x02B\
-    \x1a\x1e\x20Execute\x20an\x20action\x20on\x20a\x20Cell.\n\n\x0c\n\x05\
-    \x06\0\x02\x02\x01\x12\x03\x11\x06\r\n\x0c\n\x05\x06\0\x02\x02\x02\x12\
-    \x03\x11\x0e\x20\n\x0c\n\x05\x06\0\x02\x02\x03\x12\x03\x11+@\n\n\n\x02\
-    \x04\0\x12\x04\x14\0\x16\x01\n\n\n\x03\x04\0\x01\x12\x03\x14\x08\x16\n\
-    \x0b\n\x04\x04\0\x02\0\x12\x03\x15\x02\x10\n\x0c\n\x05\x04\0\x02\0\x05\
-    \x12\x03\x15\x02\x08\n\x0c\n\x05\x04\0\x02\0\x01\x12\x03\x15\t\x0b\n\x0c\
-    \n\x05\x04\0\x02\0\x03\x12\x03\x15\x0e\x0f\n\t\n\x02\x04\x01\x12\x03\x18\
-    \0\x1b\n\n\n\x03\x04\x01\x01\x12\x03\x18\x08\x18\n\n\n\x02\x04\x02\x12\
-    \x04\x1a\0\x1c\x01\n\n\n\x03\x04\x02\x01\x12\x03\x1a\x08\x19\n\x0b\n\x04\
-    \x04\x02\x02\0\x12\x03\x1b\x02\x1a\n\x0c\n\x05\x04\x02\x02\0\x04\x12\x03\
-    \x1b\x02\n\n\x0c\n\x05\x04\x02\x02\0\x06\x12\x03\x1b\x0b\x0f\n\x0c\n\x05\
-    \x04\x02\x02\0\x01\x12\x03\x1b\x10\x15\n\x0c\n\x05\x04\x02\x02\0\x03\x12\
-    \x03\x1b\x18\x19\n\n\n\x02\x04\x03\x12\x04\x1e\0+\x01\n\n\n\x03\x04\x03\
-    \x01\x12\x03\x1e\x08\x1a\n\x0b\n\x04\x04\x03\x02\0\x12\x03\x1f\x02\x10\n\
-    \x0c\n\x05\x04\x03\x02\0\x05\x12\x03\x1f\x02\x08\n\x0c\n\x05\x04\x03\x02\
-    \0\x01\x12\x03\x1f\t\x0b\n\x0c\n\x05\x04\x03\x02\0\x03\x12\x03\x1f\x0e\
-    \x0f\n\x0c\n\x04\x04\x03\x08\0\x12\x04\x20\x02*\x03\n\x0c\n\x05\x04\x03\
-    \x08\0\x01\x12\x03\x20\x08\x0e\n\x0b\n\x04\x04\x03\x02\x01\x12\x03!\x04#\
-    \n\x0c\n\x05\x04\x03\x02\x01\x06\x12\x03!\x04\x10\n\x0c\n\x05\x04\x03\
-    \x02\x01\x01\x12\x03!\x11\x1e\n\x0c\n\x05\x04\x03\x02\x01\x03\x12\x03!!\
-    \"\n\x0b\n\x04\x04\x03\x02\x02\x12\x03\"\x04\x1f\n\x0c\n\x05\x04\x03\x02\
-    \x02\x06\x12\x03\"\x04\x0e\n\x0c\n\x05\x04\x03\x02\x02\x01\x12\x03\"\x0f\
-    \x1a\n\x0c\n\x05\x04\x03\x02\x02\x03\x12\x03\"\x1d\x1e\n\x0b\n\x04\x04\
-    \x03\x02\x03\x12\x03#\x04\x19\n\x0c\n\x05\x04\x03\x02\x03\x06\x12\x03#\
-    \x04\x0b\n\x0c\n\x05\x04\x03\x02\x03\x01\x12\x03#\x0c\x14\n\x0c\n\x05\
-    \x04\x03\x02\x03\x03\x12\x03#\x17\x18\n\x0b\n\x04\x04\x03\x02\x04\x12\
-    \x03$\x04\x1f\n\x0c\n\x05\x04\x03\x02\x04\x06\x12\x03$\x04\x0e\n\x0c\n\
-    \x05\x04\x03\x02\x04\x01\x12\x03$\x0f\x1a\n\x0c\n\x05\x04\x03\x02\x04\
-    \x03\x12\x03$\x1d\x1e\n\x0b\n\x04\x04\x03\x02\x05\x12\x03%\x04.\n\x0c\n\
-    \x05\x04\x03\x02\x05\x06\x12\x03%\x04\x15\n\x0c\n\x05\x04\x03\x02\x05\
-    \x01\x12\x03%\x16)\n\x0c\n\x05\x04\x03\x02\x05\x03\x12\x03%,-\n\x0b\n\
-    \x04\x04\x03\x02\x06\x12\x03&\x044\n\x0c\n\x05\x04\x03\x02\x06\x06\x12\
-    \x03&\x04\x18\n\x0c\n\x05\x04\x03\x02\x06\x01\x12\x03&\x19/\n\x0c\n\x05\
-    \x04\x03\x02\x06\x03\x12\x03&23\n\x0b\n\x04\x04\x03\x02\x07\x12\x03'\x04\
-    2\n\x0c\n\x05\x04\x03\x02\x07\x06\x12\x03'\x04\x17\n\x0c\n\x05\x04\x03\
-    \x02\x07\x01\x12\x03'\x18-\n\x0c\n\x05\x04\x03\x02\x07\x03\x12\x03'01\n\
-    \x0b\n\x04\x04\x03\x02\x08\x12\x03(\x04#\n\x0c\n\x05\x04\x03\x02\x08\x06\
-    \x12\x03(\x04\x10\n\x0c\n\x05\x04\x03\x02\x08\x01\x12\x03(\x11\x1e\n\x0c\
-    \n\x05\x04\x03\x02\x08\x03\x12\x03(!\"\n\x0b\n\x04\x04\x03\x02\t\x12\x03\
-    )\x04\x20\n\x0c\n\x05\x04\x03\x02\t\x06\x12\x03)\x04\x0e\n\x0c\n\x05\x04\
-    \x03\x02\t\x01\x12\x03)\x0f\x1a\n\x0c\n\x05\x04\x03\x02\t\x03\x12\x03)\
-    \x1d\x1f\n\n\n\x02\x04\x04\x12\x04-\0/\x01\n\n\n\x03\x04\x04\x01\x12\x03\
-    -\x08\x14\n\x0b\n\x04\x04\x04\x02\0\x12\x03.\x02\x14\n\x0c\n\x05\x04\x04\
-    \x02\0\x05\x12\x03.\x02\x08\n\x0c\n\x05\x04\x04\x02\0\x01\x12\x03.\t\x0f\
-    \n\x0c\n\x05\x04\x04\x02\0\x03\x12\x03.\x12\x13\n,\n\x02\x04\x05\x12\x04\
-    1\03\x01\"\x20\x20Placeholder\x20for\x20future\x20updates\n\n\n\n\x03\
-    \x04\x05\x01\x12\x031\x08\x12\n\x1a\n\x02\x04\x06\x12\x045\07\x01\"\x0e\
-    \x20RemoteHangup\n\n\n\n\x03\x04\x06\x01\x12\x035\x08\x0f\n\t\n\x02\x04\
-    \x07\x12\x039\0\x17\n\n\n\x03\x04\x07\x01\x12\x039\x08\x14\n\n\n\x02\x04\
-    \x08\x12\x04;\0=\x01\n\n\n\x03\x04\x08\x01\x12\x03;\x08\x12\n\x0b\n\x04\
-    \x04\x08\x02\0\x12\x03<\x02\x13\n\x0c\n\x05\x04\x08\x02\0\x05\x12\x03<\
-    \x02\x06\n\x0c\n\x05\x04\x08\x02\0\x01\x12\x03<\x07\x0e\n\x0c\n\x05\x04\
-    \x08\x02\0\x03\x12\x03<\x11\x12\n\n\n\x02\x04\t\x12\x04?\0B\x01\n\n\n\
-    \x03\x04\t\x01\x12\x03?\x08\x12\n\x0b\n\x04\x04\t\x02\0\x12\x03@\x02\x14\
-    \n\x0c\n\x05\x04\t\x02\0\x05\x12\x03@\x02\x08\n\x0c\n\x05\x04\t\x02\0\
-    \x01\x12\x03@\t\x0f\n\x0c\n\x05\x04\t\x02\0\x03\x12\x03@\x12\x13\n\x0b\n\
-    \x04\x04\t\x02\x01\x12\x03A\x02\x12\n\x0c\n\x05\x04\t\x02\x01\x05\x12\
-    \x03A\x02\x08\n\x0c\n\x05\x04\t\x02\x01\x01\x12\x03A\t\r\n\x0c\n\x05\x04\
-    \t\x02\x01\x03\x12\x03A\x10\x11\n\n\n\x02\x04\n\x12\x04D\0G\x01\n\n\n\
-    \x03\x04\n\x01\x12\x03D\x08\x19\n\x0b\n\x04\x04\n\x02\0\x12\x03E\x02\x12\
-    \n\x0c\n\x05\x04\n\x02\0\x05\x12\x03E\x02\x08\n\x0c\n\x05\x04\n\x02\0\
-    \x01\x12\x03E\t\r\n\x0c\n\x05\x04\n\x02\0\x03\x12\x03E\x10\x11\n\x0b\n\
-    \x04\x04\n\x02\x01\x12\x03F\x02\x11\n\x0c\n\x05\x04\n\x02\x01\x05\x12\
-    \x03F\x02\x08\n\x0c\n\x05\x04\n\x02\x01\x01\x12\x03F\t\x0c\n\x0c\n\x05\
-    \x04\n\x02\x01\x03\x12\x03F\x0f\x10\n\n\n\x02\x04\x0b\x12\x04I\0K\x01\n\
-    \n\n\x03\x04\x0b\x01\x12\x03I\x08\x1c\n\x0b\n\x04\x04\x0b\x02\0\x12\x03J\
-    \x02\x20\n\x0c\n\x05\x04\x0b\x02\0\x06\x12\x03J\x02\x14\n\x0c\n\x05\x04\
-    \x0b\x02\0\x01\x12\x03J\x15\x1b\n\x0c\n\x05\x04\x0b\x02\0\x03\x12\x03J\
-    \x1e\x1f\n\n\n\x02\x04\x0c\x12\x04M\0O\x01\n\n\n\x03\x04\x0c\x01\x12\x03\
-    M\x08\x1b\n\x0b\n\x04\x04\x0c\x02\0\x12\x03N\x02\x20\n\x0c\n\x05\x04\x0c\
-    \x02\0\x06\x12\x03N\x02\x14\n\x0c\n\x05\x04\x0c\x02\0\x01\x12\x03N\x15\
-    \x1b\n\x0c\n\x05\x04\x0c\x02\0\x03\x12\x03N\x1e\x1f\n>\n\x02\x05\0\x12\
-    \x04R\0Y\x01\x1a2\x20Mirroring\x20netsim_model::cell::RegistrationStatus\
-    \n\n\n\n\x03\x05\0\x01\x12\x03R\x05\x17\n\x0b\n\x04\x05\0\x02\0\x12\x03S\
-    \x02\x15\n\x0c\n\x05\x05\0\x02\0\x01\x12\x03S\x02\x10\n\x0c\n\x05\x05\0\
-    \x02\0\x02\x12\x03S\x13\x14\n\x0b\n\x04\x05\0\x02\x01\x12\x03T\x02\x16\n\
-    \x0c\n\x05\x05\0\x02\x01\x01\x12\x03T\x02\x11\n\x0c\n\x05\x05\0\x02\x01\
-    \x02\x12\x03T\x14\x15\n\x0b\n\x04\x05\0\x02\x02\x12\x03U\x02\x10\n\x0c\n\
-    \x05\x05\0\x02\x02\x01\x12\x03U\x02\x0b\n\x0c\n\x05\x05\0\x02\x02\x02\
-    \x12\x03U\x0e\x0f\n\x0b\n\x04\x05\0\x02\x03\x12\x03V\x02\r\n\x0c\n\x05\
-    \x05\0\x02\x03\x01\x12\x03V\x02\x08\n\x0c\n\x05\x05\0\x02\x03\x02\x12\
-    \x03V\x0b\x0c\n\x0b\n\x04\x05\0\x02\x04\x12\x03W\x02\x0e\n\x0c\n\x05\x05\
-    \0\x02\x04\x01\x12\x03W\x02\t\n\x0c\n\x05\x05\0\x02\x04\x02\x12\x03W\x0c\
-    \r\n\x0b\n\x04\x05\0\x02\x05\x12\x03X\x02\x0e\n\x0c\n\x05\x05\0\x02\x05\
-    \x01\x12\x03X\x02\t\n\x0c\n\x05\x05\0\x02\x05\x02\x12\x03X\x0c\r\n\n\n\
-    \x02\x04\r\x12\x04[\0e\x01\n\n\n\x03\x04\r\x01\x12\x03[\x08\x0c\n\x0b\n\
-    \x04\x04\r\x02\0\x12\x03\\\x02\x10\n\x0c\n\x05\x04\r\x02\0\x05\x12\x03\\\
-    \x02\x08\n\x0c\n\x05\x04\r\x02\0\x01\x12\x03\\\t\x0b\n\x0c\n\x05\x04\r\
-    \x02\0\x03\x12\x03\\\x0e\x0f\n&\n\x04\x04\r\x02\x01\x12\x03]\x02\x13\"\
+    \x18\n\x20\x01(\x0b2\x17.netsim.cell.RemoteHoldH\0R\nremoteHold\x12A\n\
+    \x0eset_sim_status\x18\x0b\x20\x01(\x0b2\x19.netsim.cell.SetSimStatusH\0\
+    R\x0csetSimStatus\x12Y\n\x16set_network_technology\x18\x0c\x20\x01(\x0b2\
+    !.netsim.cell.SetNetworkTechnologyH\0R\x14setNetworkTechnology\x12S\n\
+    \x14set_network_timezone\x18\r\x20\x01(\x0b2\x1f.netsim.cell.SetNetworkT\
+    imezoneH\0R\x12setNetworkTimezoneB\x08\n\x06action\"&\n\x0cIncomingCall\
+    \x12\x16\n\x06number\x18\x01\x20\x01(\tR\x06number\"\x0c\n\nUpdateCall\"\
+    \t\n\x07EndCall\"\x0e\n\x0cRemoteAnswer\"%\n\nRemoteHold\x12\x17\n\x07on\
+    _hold\x18\x01\x20\x01(\x08R\x06onHold\"8\n\nReceiveSms\x12\x16\n\x06send\
+    er\x18\x01\x20\x01(\tR\x06sender\x12\x12\n\x04text\x18\x02\x20\x01(\tR\
+    \x04text\"9\n\x11SetSignalStrength\x12\x12\n\x04rssi\x18\x01\x20\x01(\rR\
+    \x04rssi\x12\x10\n\x03ber\x18\x02\x20\x01(\rR\x03ber\"O\n\x14SetVoiceReg\
+    istration\x127\n\x06status\x18\x01\x20\x01(\x0e2\x1f.netsim.cell.Registr\
+    ationStatusR\x06status\"N\n\x13SetDataRegistration\x127\n\x06status\x18\
+    \x01\x20\x01(\x0e2\x1f.netsim.cell.RegistrationStatusR\x06status\"\xdd\
+    \x02\n\x04Cell\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12\x14\n\x05st\
+    ate\x18\x02\x20\x01(\tR\x05state\x12\x18\n\x07ringing\x18\x03\x20\x01(\
+    \x08R\x07ringing\x12\x1b\n\tsms_count\x18\x04\x20\x01(\rR\x08smsCount\
+    \x12\x12\n\x04rssi\x18\x05\x20\x01(\rR\x04rssi\x12\x10\n\x03ber\x18\x06\
+    \x20\x01(\rR\x03ber\x124\n\x0cactive_calls\x18\x07\x20\x03(\x0b2\x11.net\
+    sim.cell.CallR\x0bactiveCalls\x12N\n\x12voice_registration\x18\x08\x20\
+    \x01(\x0e2\x1f.netsim.cell.RegistrationStatusR\x11voiceRegistration\x12L\
+    \n\x11data_registration\x18\t\x20\x01(\x0e2\x1f.netsim.cell.Registration\
+    StatusR\x10dataRegistration\"\xb2\x01\n\x04Call\x12\x16\n\x06number\x18\
+    \x01\x20\x01(\tR\x06number\x12-\n\x05state\x18\x02\x20\x01(\x0e2\x17.net\
+    sim.cell.Call.StateR\x05state\"c\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\
+    \x12\n\n\x06ACTIVE\x10\x01\x12\x0b\n\x07HOLDING\x10\x02\x12\x0b\n\x07DIA\
+    LING\x10\x03\x12\x0c\n\x08ALERTING\x10\x04\x12\x0c\n\x08INCOMING\x10\x05\
+    \x12\x0b\n\x07WAITING\x10\x06\"m\n\x0cSetSimStatus\x128\n\x05state\x18\
+    \x01\x20\x01(\x0e2\".netsim.cell.SetSimStatus.SimStateR\x05state\"#\n\
+    \x08SimState\x12\n\n\x06ABSENT\x10\0\x12\x0b\n\x07PRESENT\x10\x01\"\x97\
+    \x01\n\x14SetNetworkTechnology\x12E\n\x04tech\x18\x01\x20\x01(\x0e21.net\
+    sim.cell.SetNetworkTechnology.RadioTechnologyR\x04tech\"8\n\x0fRadioTech\
+    nology\x12\x0b\n\x07UNKNOWN\x10\0\x12\x07\n\x03GSM\x10\x01\x12\x07\n\x03\
+    LTE\x10\x02\x12\x06\n\x02NR\x10\x03\"0\n\x12SetNetworkTimezone\x12\x1a\n\
+    \x08timezone\x18\x01\x20\x01(\tR\x08timezone*r\n\x12RegistrationStatus\
+    \x12\x12\n\x0eNOT_REGISTERED\x10\0\x12\x13\n\x0fREGISTERED_HOME\x10\x01\
+    \x12\r\n\tSEARCHING\x10\x02\x12\n\n\x06DENIED\x10\x03\x12\x0b\n\x07UNKNO\
+    WN\x10\x04\x12\x0b\n\x07ROAMING\x10\x052\xcf\x01\n\x0bCellService\x125\n\
+    \x03Get\x12\x1b.netsim.cell.GetCellRequest\x1a\x11.netsim.cell.Cell\x12E\
+    \n\x04List\x12\x1d.netsim.cell.ListCellsRequest\x1a\x1e.netsim.cell.List\
+    CellsResponse\x12B\n\x07Execute\x12\x1f.netsim.cell.ExecuteCellRequest\
+    \x1a\x16.google.protobuf.EmptyJ\xab!\n\x07\x12\x05\x03\0\x91\x01\x01\n_\
+    \n\x01\x0c\x12\x03\x03\0\x122U\x20Copyright\x202026\x20The\x20Android\
+    \x20Open\x20Source\x20Project\n\x20SPDX-License-Identifier:\x20Apache-2.\
+    0\n\n\x08\n\x01\x02\x12\x03\x05\0\x14\n\t\n\x02\x03\0\x12\x03\x07\0%\n\n\
+    \n\x02\x06\0\x12\x04\t\0\x12\x01\n\n\n\x03\x06\0\x01\x12\x03\t\x08\x13\n\
+    $\n\x04\x06\0\x02\0\x12\x03\x0b\x02)\x1a\x17\x20Get\x20an\x20existing\
+    \x20Cell.\n\n\x0c\n\x05\x06\0\x02\0\x01\x12\x03\x0b\x06\t\n\x0c\n\x05\
+    \x06\0\x02\0\x02\x12\x03\x0b\n\x18\n\x0c\n\x05\x06\0\x02\0\x03\x12\x03\
+    \x0b#'\n\x1e\n\x04\x06\0\x02\x01\x12\x03\x0e\x029\x1a\x11\x20List\x20all\
+    \x20Cells.\n\n\x0c\n\x05\x06\0\x02\x01\x01\x12\x03\x0e\x06\n\n\x0c\n\x05\
+    \x06\0\x02\x01\x02\x12\x03\x0e\x0b\x1b\n\x0c\n\x05\x06\0\x02\x01\x03\x12\
+    \x03\x0e&7\n+\n\x04\x06\0\x02\x02\x12\x03\x11\x02B\x1a\x1e\x20Execute\
+    \x20an\x20action\x20on\x20a\x20Cell.\n\n\x0c\n\x05\x06\0\x02\x02\x01\x12\
+    \x03\x11\x06\r\n\x0c\n\x05\x06\0\x02\x02\x02\x12\x03\x11\x0e\x20\n\x0c\n\
+    \x05\x06\0\x02\x02\x03\x12\x03\x11+@\n\n\n\x02\x04\0\x12\x04\x14\0\x17\
+    \x01\n\n\n\x03\x04\0\x01\x12\x03\x14\x08\x16\n8\n\x04\x04\0\x02\0\x12\
+    \x03\x16\x02\x10\x1a+\x20Matches\x20the\x20Chip\x20ID\x20of\x20the\x20ce\
+    llular\x20chip.\n\n\x0c\n\x05\x04\0\x02\0\x05\x12\x03\x16\x02\x08\n\x0c\
+    \n\x05\x04\0\x02\0\x01\x12\x03\x16\t\x0b\n\x0c\n\x05\x04\0\x02\0\x03\x12\
+    \x03\x16\x0e\x0f\n\t\n\x02\x04\x01\x12\x03\x19\0\x1b\n\n\n\x03\x04\x01\
+    \x01\x12\x03\x19\x08\x18\n\n\n\x02\x04\x02\x12\x04\x1b\0\x1d\x01\n\n\n\
+    \x03\x04\x02\x01\x12\x03\x1b\x08\x19\n\x0b\n\x04\x04\x02\x02\0\x12\x03\
+    \x1c\x02\x1a\n\x0c\n\x05\x04\x02\x02\0\x04\x12\x03\x1c\x02\n\n\x0c\n\x05\
+    \x04\x02\x02\0\x06\x12\x03\x1c\x0b\x0f\n\x0c\n\x05\x04\x02\x02\0\x01\x12\
+    \x03\x1c\x10\x15\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x03\x1c\x18\x19\n\n\n\
+    \x02\x04\x03\x12\x04\x1f\00\x01\n\n\n\x03\x04\x03\x01\x12\x03\x1f\x08\
+    \x1a\n8\n\x04\x04\x03\x02\0\x12\x03!\x02\x10\x1a+\x20Matches\x20the\x20C\
+    hip\x20ID\x20of\x20the\x20cellular\x20chip.\n\n\x0c\n\x05\x04\x03\x02\0\
+    \x05\x12\x03!\x02\x08\n\x0c\n\x05\x04\x03\x02\0\x01\x12\x03!\t\x0b\n\x0c\
+    \n\x05\x04\x03\x02\0\x03\x12\x03!\x0e\x0f\n\x0c\n\x04\x04\x03\x08\0\x12\
+    \x04\"\x02/\x03\n\x0c\n\x05\x04\x03\x08\0\x01\x12\x03\"\x08\x0e\n\x0b\n\
+    \x04\x04\x03\x02\x01\x12\x03#\x04#\n\x0c\n\x05\x04\x03\x02\x01\x06\x12\
+    \x03#\x04\x10\n\x0c\n\x05\x04\x03\x02\x01\x01\x12\x03#\x11\x1e\n\x0c\n\
+    \x05\x04\x03\x02\x01\x03\x12\x03#!\"\n\x0b\n\x04\x04\x03\x02\x02\x12\x03\
+    $\x04\x1f\n\x0c\n\x05\x04\x03\x02\x02\x06\x12\x03$\x04\x0e\n\x0c\n\x05\
+    \x04\x03\x02\x02\x01\x12\x03$\x0f\x1a\n\x0c\n\x05\x04\x03\x02\x02\x03\
+    \x12\x03$\x1d\x1e\n\x0b\n\x04\x04\x03\x02\x03\x12\x03%\x04\x19\n\x0c\n\
+    \x05\x04\x03\x02\x03\x06\x12\x03%\x04\x0b\n\x0c\n\x05\x04\x03\x02\x03\
+    \x01\x12\x03%\x0c\x14\n\x0c\n\x05\x04\x03\x02\x03\x03\x12\x03%\x17\x18\n\
+    \x0b\n\x04\x04\x03\x02\x04\x12\x03&\x04\x1f\n\x0c\n\x05\x04\x03\x02\x04\
+    \x06\x12\x03&\x04\x0e\n\x0c\n\x05\x04\x03\x02\x04\x01\x12\x03&\x0f\x1a\n\
+    \x0c\n\x05\x04\x03\x02\x04\x03\x12\x03&\x1d\x1e\n\x0b\n\x04\x04\x03\x02\
+    \x05\x12\x03'\x04.\n\x0c\n\x05\x04\x03\x02\x05\x06\x12\x03'\x04\x15\n\
+    \x0c\n\x05\x04\x03\x02\x05\x01\x12\x03'\x16)\n\x0c\n\x05\x04\x03\x02\x05\
+    \x03\x12\x03',-\n\x0b\n\x04\x04\x03\x02\x06\x12\x03(\x044\n\x0c\n\x05\
+    \x04\x03\x02\x06\x06\x12\x03(\x04\x18\n\x0c\n\x05\x04\x03\x02\x06\x01\
+    \x12\x03(\x19/\n\x0c\n\x05\x04\x03\x02\x06\x03\x12\x03(23\n\x0b\n\x04\
+    \x04\x03\x02\x07\x12\x03)\x042\n\x0c\n\x05\x04\x03\x02\x07\x06\x12\x03)\
+    \x04\x17\n\x0c\n\x05\x04\x03\x02\x07\x01\x12\x03)\x18-\n\x0c\n\x05\x04\
+    \x03\x02\x07\x03\x12\x03)01\n\x0b\n\x04\x04\x03\x02\x08\x12\x03*\x04#\n\
+    \x0c\n\x05\x04\x03\x02\x08\x06\x12\x03*\x04\x10\n\x0c\n\x05\x04\x03\x02\
+    \x08\x01\x12\x03*\x11\x1e\n\x0c\n\x05\x04\x03\x02\x08\x03\x12\x03*!\"\n\
+    \x0b\n\x04\x04\x03\x02\t\x12\x03+\x04\x20\n\x0c\n\x05\x04\x03\x02\t\x06\
+    \x12\x03+\x04\x0e\n\x0c\n\x05\x04\x03\x02\t\x01\x12\x03+\x0f\x1a\n\x0c\n\
+    \x05\x04\x03\x02\t\x03\x12\x03+\x1d\x1f\n\x0b\n\x04\x04\x03\x02\n\x12\
+    \x03,\x04%\n\x0c\n\x05\x04\x03\x02\n\x06\x12\x03,\x04\x10\n\x0c\n\x05\
+    \x04\x03\x02\n\x01\x12\x03,\x11\x1f\n\x0c\n\x05\x04\x03\x02\n\x03\x12\
+    \x03,\"$\n\x0b\n\x04\x04\x03\x02\x0b\x12\x03-\x045\n\x0c\n\x05\x04\x03\
+    \x02\x0b\x06\x12\x03-\x04\x18\n\x0c\n\x05\x04\x03\x02\x0b\x01\x12\x03-\
+    \x19/\n\x0c\n\x05\x04\x03\x02\x0b\x03\x12\x03-24\n\x0b\n\x04\x04\x03\x02\
+    \x0c\x12\x03.\x041\n\x0c\n\x05\x04\x03\x02\x0c\x06\x12\x03.\x04\x16\n\
+    \x0c\n\x05\x04\x03\x02\x0c\x01\x12\x03.\x17+\n\x0c\n\x05\x04\x03\x02\x0c\
+    \x03\x12\x03..0\n\n\n\x02\x04\x04\x12\x042\04\x01\n\n\n\x03\x04\x04\x01\
+    \x12\x032\x08\x14\n\x0b\n\x04\x04\x04\x02\0\x12\x033\x02\x14\n\x0c\n\x05\
+    \x04\x04\x02\0\x05\x12\x033\x02\x08\n\x0c\n\x05\x04\x04\x02\0\x01\x12\
+    \x033\t\x0f\n\x0c\n\x05\x04\x04\x02\0\x03\x12\x033\x12\x13\n,\n\x02\x04\
+    \x05\x12\x046\08\x01\"\x20\x20Placeholder\x20for\x20future\x20updates\n\
+    \n\n\n\x03\x04\x05\x01\x12\x036\x08\x12\n\x1a\n\x02\x04\x06\x12\x04:\0<\
+    \x01\"\x0e\x20RemoteHangup\n\n\n\n\x03\x04\x06\x01\x12\x03:\x08\x0f\n\t\
+    \n\x02\x04\x07\x12\x03>\0\x17\n\n\n\x03\x04\x07\x01\x12\x03>\x08\x14\n\n\
+    \n\x02\x04\x08\x12\x04@\0B\x01\n\n\n\x03\x04\x08\x01\x12\x03@\x08\x12\n\
+    \x0b\n\x04\x04\x08\x02\0\x12\x03A\x02\x13\n\x0c\n\x05\x04\x08\x02\0\x05\
+    \x12\x03A\x02\x06\n\x0c\n\x05\x04\x08\x02\0\x01\x12\x03A\x07\x0e\n\x0c\n\
+    \x05\x04\x08\x02\0\x03\x12\x03A\x11\x12\n\n\n\x02\x04\t\x12\x04D\0G\x01\
+    \n\n\n\x03\x04\t\x01\x12\x03D\x08\x12\n\x0b\n\x04\x04\t\x02\0\x12\x03E\
+    \x02\x14\n\x0c\n\x05\x04\t\x02\0\x05\x12\x03E\x02\x08\n\x0c\n\x05\x04\t\
+    \x02\0\x01\x12\x03E\t\x0f\n\x0c\n\x05\x04\t\x02\0\x03\x12\x03E\x12\x13\n\
+    \x0b\n\x04\x04\t\x02\x01\x12\x03F\x02\x12\n\x0c\n\x05\x04\t\x02\x01\x05\
+    \x12\x03F\x02\x08\n\x0c\n\x05\x04\t\x02\x01\x01\x12\x03F\t\r\n\x0c\n\x05\
+    \x04\t\x02\x01\x03\x12\x03F\x10\x11\n\n\n\x02\x04\n\x12\x04I\0L\x01\n\n\
+    \n\x03\x04\n\x01\x12\x03I\x08\x19\n\x0b\n\x04\x04\n\x02\0\x12\x03J\x02\
+    \x12\n\x0c\n\x05\x04\n\x02\0\x05\x12\x03J\x02\x08\n\x0c\n\x05\x04\n\x02\
+    \0\x01\x12\x03J\t\r\n\x0c\n\x05\x04\n\x02\0\x03\x12\x03J\x10\x11\n\x0b\n\
+    \x04\x04\n\x02\x01\x12\x03K\x02\x11\n\x0c\n\x05\x04\n\x02\x01\x05\x12\
+    \x03K\x02\x08\n\x0c\n\x05\x04\n\x02\x01\x01\x12\x03K\t\x0c\n\x0c\n\x05\
+    \x04\n\x02\x01\x03\x12\x03K\x0f\x10\n\n\n\x02\x04\x0b\x12\x04N\0P\x01\n\
+    \n\n\x03\x04\x0b\x01\x12\x03N\x08\x1c\n\x0b\n\x04\x04\x0b\x02\0\x12\x03O\
+    \x02\x20\n\x0c\n\x05\x04\x0b\x02\0\x06\x12\x03O\x02\x14\n\x0c\n\x05\x04\
+    \x0b\x02\0\x01\x12\x03O\x15\x1b\n\x0c\n\x05\x04\x0b\x02\0\x03\x12\x03O\
+    \x1e\x1f\n\n\n\x02\x04\x0c\x12\x04R\0T\x01\n\n\n\x03\x04\x0c\x01\x12\x03\
+    R\x08\x1b\n\x0b\n\x04\x04\x0c\x02\0\x12\x03S\x02\x20\n\x0c\n\x05\x04\x0c\
+    \x02\0\x06\x12\x03S\x02\x14\n\x0c\n\x05\x04\x0c\x02\0\x01\x12\x03S\x15\
+    \x1b\n\x0c\n\x05\x04\x0c\x02\0\x03\x12\x03S\x1e\x1f\n>\n\x02\x05\0\x12\
+    \x04W\0^\x01\x1a2\x20Mirroring\x20netsim_model::cell::RegistrationStatus\
+    \n\n\n\n\x03\x05\0\x01\x12\x03W\x05\x17\n\x0b\n\x04\x05\0\x02\0\x12\x03X\
+    \x02\x15\n\x0c\n\x05\x05\0\x02\0\x01\x12\x03X\x02\x10\n\x0c\n\x05\x05\0\
+    \x02\0\x02\x12\x03X\x13\x14\n\x0b\n\x04\x05\0\x02\x01\x12\x03Y\x02\x16\n\
+    \x0c\n\x05\x05\0\x02\x01\x01\x12\x03Y\x02\x11\n\x0c\n\x05\x05\0\x02\x01\
+    \x02\x12\x03Y\x14\x15\n\x0b\n\x04\x05\0\x02\x02\x12\x03Z\x02\x10\n\x0c\n\
+    \x05\x05\0\x02\x02\x01\x12\x03Z\x02\x0b\n\x0c\n\x05\x05\0\x02\x02\x02\
+    \x12\x03Z\x0e\x0f\n\x0b\n\x04\x05\0\x02\x03\x12\x03[\x02\r\n\x0c\n\x05\
+    \x05\0\x02\x03\x01\x12\x03[\x02\x08\n\x0c\n\x05\x05\0\x02\x03\x02\x12\
+    \x03[\x0b\x0c\n\x0b\n\x04\x05\0\x02\x04\x12\x03\\\x02\x0e\n\x0c\n\x05\
+    \x05\0\x02\x04\x01\x12\x03\\\x02\t\n\x0c\n\x05\x05\0\x02\x04\x02\x12\x03\
+    \\\x0c\r\n\x0b\n\x04\x05\0\x02\x05\x12\x03]\x02\x0e\n\x0c\n\x05\x05\0\
+    \x02\x05\x01\x12\x03]\x02\t\n\x0c\n\x05\x05\0\x02\x05\x02\x12\x03]\x0c\r\
+    \n\n\n\x02\x04\r\x12\x04`\0m\x01\n\n\n\x03\x04\r\x01\x12\x03`\x08\x0c\n8\
+    \n\x04\x04\r\x02\0\x12\x03b\x02\x10\x1a+\x20Matches\x20the\x20Chip\x20ID\
+    \x20of\x20the\x20cellular\x20chip.\n\n\x0c\n\x05\x04\r\x02\0\x05\x12\x03\
+    b\x02\x08\n\x0c\n\x05\x04\r\x02\0\x01\x12\x03b\t\x0b\n\x0c\n\x05\x04\r\
+    \x02\0\x03\x12\x03b\x0e\x0f\n&\n\x04\x04\r\x02\x01\x12\x03c\x02\x13\"\
     \x19\x20\"idle\",\x20\"ringing\",\x20etc.\n\n\x0c\n\x05\x04\r\x02\x01\
-    \x05\x12\x03]\x02\x08\n\x0c\n\x05\x04\r\x02\x01\x01\x12\x03]\t\x0e\n\x0c\
-    \n\x05\x04\r\x02\x01\x03\x12\x03]\x11\x12\nE\n\x04\x04\r\x02\x02\x12\x03\
-    ^\x02\x13\"8\x20NOTE:\x20Consider\x20deriving\x20ringing\x20directly\x20\
-    from\x20state\x20to\n\n\x0c\n\x05\x04\r\x02\x02\x05\x12\x03^\x02\x06\n\
-    \x0c\n\x05\x04\r\x02\x02\x01\x12\x03^\x07\x0e\n\x0c\n\x05\x04\r\x02\x02\
-    \x03\x12\x03^\x11\x12\n(\n\x04\x04\r\x02\x03\x12\x03a\x02\x172\x1b\x20re\
-    duce\x20payload\x20redundancy\n\n\x0c\n\x05\x04\r\x02\x03\x05\x12\x03a\
-    \x02\x08\n\x0c\n\x05\x04\r\x02\x03\x01\x12\x03a\t\x12\n\x0c\n\x05\x04\r\
-    \x02\x03\x03\x12\x03a\x15\x16\n\x0b\n\x04\x04\r\x02\x04\x12\x03b\x02\x12\
-    \n\x0c\n\x05\x04\r\x02\x04\x05\x12\x03b\x02\x08\n\x0c\n\x05\x04\r\x02\
-    \x04\x01\x12\x03b\t\r\n\x0c\n\x05\x04\r\x02\x04\x03\x12\x03b\x10\x11\n\
-    \x0b\n\x04\x04\r\x02\x05\x12\x03c\x02\x11\n\x0c\n\x05\x04\r\x02\x05\x05\
-    \x12\x03c\x02\x08\n\x0c\n\x05\x04\r\x02\x05\x01\x12\x03c\t\x0c\n\x0c\n\
-    \x05\x04\r\x02\x05\x03\x12\x03c\x0f\x10\n\x0b\n\x04\x04\r\x02\x06\x12\
-    \x03d\x02!\n\x0c\n\x05\x04\r\x02\x06\x04\x12\x03d\x02\n\n\x0c\n\x05\x04\
-    \r\x02\x06\x06\x12\x03d\x0b\x0f\n\x0c\n\x05\x04\r\x02\x06\x01\x12\x03d\
-    \x10\x1c\n\x0c\n\x05\x04\r\x02\x06\x03\x12\x03d\x1f\x20\n\n\n\x02\x04\
-    \x0e\x12\x04g\0s\x01\n\n\n\x03\x04\x0e\x01\x12\x03g\x08\x0c\n\x0b\n\x04\
-    \x04\x0e\x02\0\x12\x03h\x02\x14\n\x0c\n\x05\x04\x0e\x02\0\x05\x12\x03h\
-    \x02\x08\n\x0c\n\x05\x04\x0e\x02\0\x01\x12\x03h\t\x0f\n\x0c\n\x05\x04\
-    \x0e\x02\0\x03\x12\x03h\x12\x13\n\x0c\n\x04\x04\x0e\x04\0\x12\x04i\x02q\
-    \x03\n\x0c\n\x05\x04\x0e\x04\0\x01\x12\x03i\x07\x0c\n\r\n\x06\x04\x0e\
-    \x04\0\x02\0\x12\x03j\x04\x10\n\x0e\n\x07\x04\x0e\x04\0\x02\0\x01\x12\
-    \x03j\x04\x0b\n\x0e\n\x07\x04\x0e\x04\0\x02\0\x02\x12\x03j\x0e\x0f\n\r\n\
-    \x06\x04\x0e\x04\0\x02\x01\x12\x03k\x04\x0f\n\x0e\n\x07\x04\x0e\x04\0\
-    \x02\x01\x01\x12\x03k\x04\n\n\x0e\n\x07\x04\x0e\x04\0\x02\x01\x02\x12\
-    \x03k\r\x0e\n\r\n\x06\x04\x0e\x04\0\x02\x02\x12\x03l\x04\x10\n\x0e\n\x07\
-    \x04\x0e\x04\0\x02\x02\x01\x12\x03l\x04\x0b\n\x0e\n\x07\x04\x0e\x04\0\
-    \x02\x02\x02\x12\x03l\x0e\x0f\n\r\n\x06\x04\x0e\x04\0\x02\x03\x12\x03m\
-    \x04\x10\n\x0e\n\x07\x04\x0e\x04\0\x02\x03\x01\x12\x03m\x04\x0b\n\x0e\n\
-    \x07\x04\x0e\x04\0\x02\x03\x02\x12\x03m\x0e\x0f\n\r\n\x06\x04\x0e\x04\0\
-    \x02\x04\x12\x03n\x04\x11\n\x0e\n\x07\x04\x0e\x04\0\x02\x04\x01\x12\x03n\
-    \x04\x0c\n\x0e\n\x07\x04\x0e\x04\0\x02\x04\x02\x12\x03n\x0f\x10\n\r\n\
-    \x06\x04\x0e\x04\0\x02\x05\x12\x03o\x04\x11\n\x0e\n\x07\x04\x0e\x04\0\
-    \x02\x05\x01\x12\x03o\x04\x0c\n\x0e\n\x07\x04\x0e\x04\0\x02\x05\x02\x12\
-    \x03o\x0f\x10\n\r\n\x06\x04\x0e\x04\0\x02\x06\x12\x03p\x04\x10\n\x0e\n\
-    \x07\x04\x0e\x04\0\x02\x06\x01\x12\x03p\x04\x0b\n\x0e\n\x07\x04\x0e\x04\
-    \0\x02\x06\x02\x12\x03p\x0e\x0f\n\x0b\n\x04\x04\x0e\x02\x01\x12\x03r\x02\
-    \x12\n\x0c\n\x05\x04\x0e\x02\x01\x06\x12\x03r\x02\x07\n\x0c\n\x05\x04\
-    \x0e\x02\x01\x01\x12\x03r\x08\r\n\x0c\n\x05\x04\x0e\x02\x01\x03\x12\x03r\
-    \x10\x11b\x06proto3\
+    \x05\x12\x03c\x02\x08\n\x0c\n\x05\x04\r\x02\x01\x01\x12\x03c\t\x0e\n\x0c\
+    \n\x05\x04\r\x02\x01\x03\x12\x03c\x11\x12\nE\n\x04\x04\r\x02\x02\x12\x03\
+    d\x02\x13\"8\x20NOTE:\x20Consider\x20deriving\x20ringing\x20directly\x20\
+    from\x20state\x20to\n\n\x0c\n\x05\x04\r\x02\x02\x05\x12\x03d\x02\x06\n\
+    \x0c\n\x05\x04\r\x02\x02\x01\x12\x03d\x07\x0e\n\x0c\n\x05\x04\r\x02\x02\
+    \x03\x12\x03d\x11\x12\n(\n\x04\x04\r\x02\x03\x12\x03g\x02\x172\x1b\x20re\
+    duce\x20payload\x20redundancy\n\n\x0c\n\x05\x04\r\x02\x03\x05\x12\x03g\
+    \x02\x08\n\x0c\n\x05\x04\r\x02\x03\x01\x12\x03g\t\x12\n\x0c\n\x05\x04\r\
+    \x02\x03\x03\x12\x03g\x15\x16\n\x0b\n\x04\x04\r\x02\x04\x12\x03h\x02\x12\
+    \n\x0c\n\x05\x04\r\x02\x04\x05\x12\x03h\x02\x08\n\x0c\n\x05\x04\r\x02\
+    \x04\x01\x12\x03h\t\r\n\x0c\n\x05\x04\r\x02\x04\x03\x12\x03h\x10\x11\n\
+    \x0b\n\x04\x04\r\x02\x05\x12\x03i\x02\x11\n\x0c\n\x05\x04\r\x02\x05\x05\
+    \x12\x03i\x02\x08\n\x0c\n\x05\x04\r\x02\x05\x01\x12\x03i\t\x0c\n\x0c\n\
+    \x05\x04\r\x02\x05\x03\x12\x03i\x0f\x10\n\x0b\n\x04\x04\r\x02\x06\x12\
+    \x03j\x02!\n\x0c\n\x05\x04\r\x02\x06\x04\x12\x03j\x02\n\n\x0c\n\x05\x04\
+    \r\x02\x06\x06\x12\x03j\x0b\x0f\n\x0c\n\x05\x04\r\x02\x06\x01\x12\x03j\
+    \x10\x1c\n\x0c\n\x05\x04\r\x02\x06\x03\x12\x03j\x1f\x20\n\x0b\n\x04\x04\
+    \r\x02\x07\x12\x03k\x02,\n\x0c\n\x05\x04\r\x02\x07\x06\x12\x03k\x02\x14\
+    \n\x0c\n\x05\x04\r\x02\x07\x01\x12\x03k\x15'\n\x0c\n\x05\x04\r\x02\x07\
+    \x03\x12\x03k*+\n\x0b\n\x04\x04\r\x02\x08\x12\x03l\x02+\n\x0c\n\x05\x04\
+    \r\x02\x08\x06\x12\x03l\x02\x14\n\x0c\n\x05\x04\r\x02\x08\x01\x12\x03l\
+    \x15&\n\x0c\n\x05\x04\r\x02\x08\x03\x12\x03l)*\n\n\n\x02\x04\x0e\x12\x04\
+    o\0{\x01\n\n\n\x03\x04\x0e\x01\x12\x03o\x08\x0c\n\x0b\n\x04\x04\x0e\x02\
+    \0\x12\x03p\x02\x14\n\x0c\n\x05\x04\x0e\x02\0\x05\x12\x03p\x02\x08\n\x0c\
+    \n\x05\x04\x0e\x02\0\x01\x12\x03p\t\x0f\n\x0c\n\x05\x04\x0e\x02\0\x03\
+    \x12\x03p\x12\x13\n\x0c\n\x04\x04\x0e\x04\0\x12\x04q\x02y\x03\n\x0c\n\
+    \x05\x04\x0e\x04\0\x01\x12\x03q\x07\x0c\n\r\n\x06\x04\x0e\x04\0\x02\0\
+    \x12\x03r\x04\x10\n\x0e\n\x07\x04\x0e\x04\0\x02\0\x01\x12\x03r\x04\x0b\n\
+    \x0e\n\x07\x04\x0e\x04\0\x02\0\x02\x12\x03r\x0e\x0f\n\r\n\x06\x04\x0e\
+    \x04\0\x02\x01\x12\x03s\x04\x0f\n\x0e\n\x07\x04\x0e\x04\0\x02\x01\x01\
+    \x12\x03s\x04\n\n\x0e\n\x07\x04\x0e\x04\0\x02\x01\x02\x12\x03s\r\x0e\n\r\
+    \n\x06\x04\x0e\x04\0\x02\x02\x12\x03t\x04\x10\n\x0e\n\x07\x04\x0e\x04\0\
+    \x02\x02\x01\x12\x03t\x04\x0b\n\x0e\n\x07\x04\x0e\x04\0\x02\x02\x02\x12\
+    \x03t\x0e\x0f\n\r\n\x06\x04\x0e\x04\0\x02\x03\x12\x03u\x04\x10\n\x0e\n\
+    \x07\x04\x0e\x04\0\x02\x03\x01\x12\x03u\x04\x0b\n\x0e\n\x07\x04\x0e\x04\
+    \0\x02\x03\x02\x12\x03u\x0e\x0f\n\r\n\x06\x04\x0e\x04\0\x02\x04\x12\x03v\
+    \x04\x11\n\x0e\n\x07\x04\x0e\x04\0\x02\x04\x01\x12\x03v\x04\x0c\n\x0e\n\
+    \x07\x04\x0e\x04\0\x02\x04\x02\x12\x03v\x0f\x10\n\r\n\x06\x04\x0e\x04\0\
+    \x02\x05\x12\x03w\x04\x11\n\x0e\n\x07\x04\x0e\x04\0\x02\x05\x01\x12\x03w\
+    \x04\x0c\n\x0e\n\x07\x04\x0e\x04\0\x02\x05\x02\x12\x03w\x0f\x10\n\r\n\
+    \x06\x04\x0e\x04\0\x02\x06\x12\x03x\x04\x10\n\x0e\n\x07\x04\x0e\x04\0\
+    \x02\x06\x01\x12\x03x\x04\x0b\n\x0e\n\x07\x04\x0e\x04\0\x02\x06\x02\x12\
+    \x03x\x0e\x0f\n\x0b\n\x04\x04\x0e\x02\x01\x12\x03z\x02\x12\n\x0c\n\x05\
+    \x04\x0e\x02\x01\x06\x12\x03z\x02\x07\n\x0c\n\x05\x04\x0e\x02\x01\x01\
+    \x12\x03z\x08\r\n\x0c\n\x05\x04\x0e\x02\x01\x03\x12\x03z\x10\x11\n\x0b\n\
+    \x02\x04\x0f\x12\x05}\0\x83\x01\x01\n\n\n\x03\x04\x0f\x01\x12\x03}\x08\
+    \x14\n\r\n\x04\x04\x0f\x04\0\x12\x05~\x02\x81\x01\x03\n\x0c\n\x05\x04\
+    \x0f\x04\0\x01\x12\x03~\x07\x0f\n\r\n\x06\x04\x0f\x04\0\x02\0\x12\x03\
+    \x7f\x04\x0f\n\x0e\n\x07\x04\x0f\x04\0\x02\0\x01\x12\x03\x7f\x04\n\n\x0e\
+    \n\x07\x04\x0f\x04\0\x02\0\x02\x12\x03\x7f\r\x0e\n\x0e\n\x06\x04\x0f\x04\
+    \0\x02\x01\x12\x04\x80\x01\x04\x10\n\x0f\n\x07\x04\x0f\x04\0\x02\x01\x01\
+    \x12\x04\x80\x01\x04\x0b\n\x0f\n\x07\x04\x0f\x04\0\x02\x01\x02\x12\x04\
+    \x80\x01\x0e\x0f\n\x0c\n\x04\x04\x0f\x02\0\x12\x04\x82\x01\x02\x15\n\r\n\
+    \x05\x04\x0f\x02\0\x06\x12\x04\x82\x01\x02\n\n\r\n\x05\x04\x0f\x02\0\x01\
+    \x12\x04\x82\x01\x0b\x10\n\r\n\x05\x04\x0f\x02\0\x03\x12\x04\x82\x01\x13\
+    \x14\n\x0c\n\x02\x04\x10\x12\x06\x85\x01\0\x8d\x01\x01\n\x0b\n\x03\x04\
+    \x10\x01\x12\x04\x85\x01\x08\x1c\n\x0e\n\x04\x04\x10\x04\0\x12\x06\x86\
+    \x01\x02\x8b\x01\x03\n\r\n\x05\x04\x10\x04\0\x01\x12\x04\x86\x01\x07\x16\
+    \n\x0e\n\x06\x04\x10\x04\0\x02\0\x12\x04\x87\x01\x04\x10\n\x0f\n\x07\x04\
+    \x10\x04\0\x02\0\x01\x12\x04\x87\x01\x04\x0b\n\x0f\n\x07\x04\x10\x04\0\
+    \x02\0\x02\x12\x04\x87\x01\x0e\x0f\n\x0e\n\x06\x04\x10\x04\0\x02\x01\x12\
+    \x04\x88\x01\x04\x0c\n\x0f\n\x07\x04\x10\x04\0\x02\x01\x01\x12\x04\x88\
+    \x01\x04\x07\n\x0f\n\x07\x04\x10\x04\0\x02\x01\x02\x12\x04\x88\x01\n\x0b\
+    \n\x0e\n\x06\x04\x10\x04\0\x02\x02\x12\x04\x89\x01\x04\x0c\n\x0f\n\x07\
+    \x04\x10\x04\0\x02\x02\x01\x12\x04\x89\x01\x04\x07\n\x0f\n\x07\x04\x10\
+    \x04\0\x02\x02\x02\x12\x04\x89\x01\n\x0b\n\x0e\n\x06\x04\x10\x04\0\x02\
+    \x03\x12\x04\x8a\x01\x04\x0b\n\x0f\n\x07\x04\x10\x04\0\x02\x03\x01\x12\
+    \x04\x8a\x01\x04\x06\n\x0f\n\x07\x04\x10\x04\0\x02\x03\x02\x12\x04\x8a\
+    \x01\t\n\n\x0c\n\x04\x04\x10\x02\0\x12\x04\x8c\x01\x02\x1b\n\r\n\x05\x04\
+    \x10\x02\0\x06\x12\x04\x8c\x01\x02\x11\n\r\n\x05\x04\x10\x02\0\x01\x12\
+    \x04\x8c\x01\x12\x16\n\r\n\x05\x04\x10\x02\0\x03\x12\x04\x8c\x01\x19\x1a\
+    \n\x0c\n\x02\x04\x11\x12\x06\x8f\x01\0\x91\x01\x01\n\x0b\n\x03\x04\x11\
+    \x01\x12\x04\x8f\x01\x08\x1a\n\x0c\n\x04\x04\x11\x02\0\x12\x04\x90\x01\
+    \x02\x16\n\r\n\x05\x04\x11\x02\0\x05\x12\x04\x90\x01\x02\x08\n\r\n\x05\
+    \x04\x11\x02\0\x01\x12\x04\x90\x01\t\x11\n\r\n\x05\x04\x11\x02\0\x03\x12\
+    \x04\x90\x01\x14\x15b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -2982,7 +3794,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(1);
             deps.push(::protobuf::well_known_types::empty::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(15);
+            let mut messages = ::std::vec::Vec::with_capacity(18);
             messages.push(GetCellRequest::generated_message_descriptor_data());
             messages.push(ListCellsRequest::generated_message_descriptor_data());
             messages.push(ListCellsResponse::generated_message_descriptor_data());
@@ -2998,9 +3810,14 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(SetDataRegistration::generated_message_descriptor_data());
             messages.push(Cell::generated_message_descriptor_data());
             messages.push(Call::generated_message_descriptor_data());
-            let mut enums = ::std::vec::Vec::with_capacity(2);
+            messages.push(SetSimStatus::generated_message_descriptor_data());
+            messages.push(SetNetworkTechnology::generated_message_descriptor_data());
+            messages.push(SetNetworkTimezone::generated_message_descriptor_data());
+            let mut enums = ::std::vec::Vec::with_capacity(4);
             enums.push(RegistrationStatus::generated_enum_descriptor_data());
             enums.push(call::State::generated_enum_descriptor_data());
+            enums.push(set_sim_status::SimState::generated_enum_descriptor_data());
+            enums.push(set_network_technology::RadioTechnology::generated_enum_descriptor_data());
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(
                 file_descriptor_proto(),
                 deps,

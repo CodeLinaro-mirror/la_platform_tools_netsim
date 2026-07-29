@@ -12,6 +12,7 @@ members = [
   "bluetooth-actor",
   "model",
   "cell-actor",
+  "nfc-actor",
   "daemon",
   "hci-server",
   "packets",
@@ -25,8 +26,13 @@ members = [
   "device-actor",
   "device-api",
 
+  "slirp",
+  "slirp/host",
+
   "rootcanal",
+  "rootcanal-server",
   "testing",
+  "cli",
 ]
 
 [workspace.doc]

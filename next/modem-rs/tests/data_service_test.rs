@@ -59,16 +59,25 @@ fn test_update_physical_channel_configs() {
 
 // Scenario: Read Dynamic Parameters
 //   Given a modem "A"
-//   When AT command "AT+CGSCONTRDP=1" is sent to "A"
-//   Then response from "A" is "+CGSCONTRDP: 1, 5, 1500, 300000, 300000, 300000,
-// 300000"   And response from "A" is "OK"
+//   When AT command 'AT+CGDCONT=1,"IP","test"' is sent to "A"
+//   And AT command "ATD*99***1#" is sent to "A"
+//   And AT command "AT+CGCONTRDP=1" is sent to "A"
+//   Then response from "A" is '+CGCONTRDP:
+// 1,5,"test","10.0.2.15/24","10.0.2.2","10.0.2.3"'   And response from "A" is
+// "OK"
 #[test]
 fn test_read_dynamic_param() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    when_at_command_sent(&mut world, "A", "AT+CGSCONTRDP=1");
-    then_response_is(&mut world, "A", "+CGSCONTRDP: 1, 5, 1500, 300000, 300000, 300000, 300000");
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "ATD*99***1#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=1");
+    then_response_is(&mut world, "A", "+CGCONTRDP: 1,5,\"test\",10.0.2.15/24,10.0.2.2,10.0.2.3");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -217,10 +226,224 @@ fn test_show_pdp_address() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
+    // 1. Define context (auto-activated by default)
     when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
     then_wait_for_response_containing(&mut world, "A", "OK");
 
+    // 2. Query address (should be active IP)
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Deactivate context (using Goldfish-style AT+CGACT=cid,state instead of
+    //    standard state,cid)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Query address (should be 0.0.0.0)
     when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
     then_response_is(&mut world, "A", "+CGPADDR: 1,\"0.0.0.0\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Reactivate context (Goldfish-style AT+CGACT=cid,state)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6. Query address (should be active IP again)
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_gprs_dialing_fallback() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Define the context first
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 2. Dial GPRS fallback which should return CONNECT
+    when_at_command_sent(&mut world, "A", "ATD*99***1#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // 3. Verify that the PDP context is indeed active now (returns active IP)
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_dial_non_existent_context() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Dial GPRS context 2 which is undefined -> should return ERROR
+    when_at_command_sent(&mut world, "A", "ATD*99***2#");
+    then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_gprs_dialing_default_cid() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Define PDP context 1
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Dialing *99# without specified CID should default to PDP context 1
+    when_at_command_sent(&mut world, "A", "ATD*99#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Verify PDP context 1 is indeed active
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_multiple_concurrent_pdp_contexts() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Define and activate PDP context 1
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"apn1\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,1");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 2. Define and activate PDP context 2
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=2,\"IP\",\"apn2\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,2"); // Activate CID 2
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 3. Verify unique IP addresses via AT+CGPADDR
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify unique IP addresses via AT+CGPADDR
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=2");
+    then_response_is(&mut world, "A", "+CGPADDR: 2,\"10.0.2.100\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Verify unique IP addresses via AT+CGCONTRDP
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=1");
+    then_response_is(&mut world, "A", "+CGCONTRDP: 1,5,\"apn1\",10.0.2.15/24,10.0.2.2,10.0.2.3");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=2");
+    then_response_is(&mut world, "A", "+CGCONTRDP: 2,5,\"apn2\",10.0.2.100/24,10.0.2.2,10.0.2.3");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_goldfish_ril_compat_incorrect_cgact() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Define and activate PDP context 1
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,1");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Verify it is active
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"10.0.2.15\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Send the goldfish RIL "deactivate CID 1" command: AT+CGACT=1,0
+    // (Standard would be AT+CGACT=0,1)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,0");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 3. Verify it is now inactive (IP is 0.0.0.0)
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"0.0.0.0\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Define CID 2
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=2,\"IP\",\"test2\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 5. Activate CID 2 using legacy format: AT+CGACT=2,1 (Standard is
+    //    AT+CGACT=1,2)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=2,1");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Verify CID 2 is active
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=2");
+    then_response_is(&mut world, "A", "+CGPADDR: 2,\"10.0.2.100\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6. Deactivate CID 2 using legacy format: AT+CGACT=2,0 (Standard is
+    //    AT+CGACT=0,2)
+    when_at_command_sent(&mut world, "A", "AT+CGACT=2,0");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Verify CID 2 is inactive
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=2");
+    then_response_is(&mut world, "A", "+CGPADDR: 2,\"0.0.0.0\"");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_query_pdp_context_activate() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Define context 1 and 2
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"apn1\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=2,\"IP\",\"apn2\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // By default, contexts are auto-activated in Goldfish mode.
+    when_at_command_sent(&mut world, "A", "AT+CGACT?");
+    then_response_is(&mut world, "A", "+CGACT: 1,1");
+    then_response_is(&mut world, "A", "+CGACT: 2,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Deactivate context 1
+    when_at_command_sent(&mut world, "A", "AT+CGACT=1,0");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // Query again
+    when_at_command_sent(&mut world, "A", "AT+CGACT?");
+    then_response_is(&mut world, "A", "+CGACT: 1,0");
+    then_response_is(&mut world, "A", "+CGACT: 2,1");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_ps_attach_detach() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Verify initially attached
+    when_at_command_sent(&mut world, "A", "AT+CGATT?");
+    then_response_is(&mut world, "A", "+CGATT: 1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Define a context
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IP\",\"test\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 3. Detach PS
+    when_at_command_sent(&mut world, "A", "AT+CGATT=0");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    // 4. Verify detached
+    when_at_command_sent(&mut world, "A", "AT+CGATT?");
+    then_response_is(&mut world, "A", "+CGATT: 0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Verify context is deactivated
+    when_at_command_sent(&mut world, "A", "AT+CGACT?");
+    then_response_is(&mut world, "A", "+CGACT: 1,0");
     then_response_is(&mut world, "A", "OK");
 }

@@ -39,7 +39,8 @@ async fn test_bluetooth_hci_reset() {
         // Allow some time for netsimd to fully start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let transport = TransportType::tcp("localhost", world.grpc_port);
+        let ip_str = world.grpc_addr.ip().to_string();
+        let transport = TransportType::tcp(&ip_str, world.grpc_port);
         let chip_info = ChipInfo::new("bt_test", ChipKind::BLUETOOTH);
 
         let streams = Streams::new();

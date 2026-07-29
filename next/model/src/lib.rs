@@ -41,14 +41,17 @@
 pub(crate) mod ap;
 pub(crate) mod bluetooth;
 pub(crate) mod cell;
+pub(crate) mod cellular_data;
 pub(crate) mod chip;
 pub(crate) mod chip_error;
 pub(crate) mod client_error;
 pub(crate) mod device;
 pub(crate) mod device_error;
+pub(crate) mod ethernet;
 pub(crate) mod initial_info;
 pub(crate) mod link;
 pub(crate) mod macros;
+pub(crate) mod nfc;
 pub(crate) mod packet_streamer;
 pub(crate) mod stats;
 pub(crate) mod uwb;
@@ -79,7 +82,9 @@ pub use crate::initial_info::{ChipInfo, ChipKind};
 // From link.rs
 pub use crate::link::{Link, LinkId, LinkUpdate};
 // From stats.rs
-pub use crate::stats::{NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind};
+pub use crate::stats::{
+    FrontendStats, NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind,
+};
 pub use crate::{
     ap::{Ap, ApCreate, ApUpdate, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID, WifiMode},
     bluetooth::{
@@ -90,13 +95,19 @@ pub use crate::{
             Service, TxPower,
         },
     },
-    cell::{Cell, CellCreate, ModemAction, RegistrationStatus},
+    cell::{
+        Cell, CellCreate, CellUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING,
+        ModemAction, RadioTechnology, RegistrationStatus,
+    },
+    cellular_data::{CellularData, CellularDataCreate, CellularDataUpdate},
     chip::{
         Chip, ChipClient, ChipCreate, ChipId, ChipRequest, ChipUpdate, ChipVariant,
         ChipVariantUpdate, PacketSink, PacketStream, Radio, RadioChipClient, RadioUpdate,
         chip_kind_to_radio_kind,
     },
     chip_error::ChipError,
+    ethernet::{Ethernet, EthernetCreate, EthernetUpdate},
+    nfc::{Nfc, NfcCreate, NfcUpdate},
     uwb::{Uwb, UwbCreate, UwbUpdate},
     wifi::{Wifi, WifiCreate, WifiUpdate},
 };

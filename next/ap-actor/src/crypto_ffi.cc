@@ -41,8 +41,8 @@ static const EVP_MD *GetDigest(DigestType type) {
 }
 
 // HMAC
-Vec<uint8_t> Hmac(uint8_t digest_type_u8, const Vec<uint8_t> &key,
-                  const Vec<uint8_t> &data) {
+Vec<uint8_t> Hmac(uint8_t digest_type_u8, rust::Slice<const uint8_t> key,
+                  rust::Slice<const uint8_t> data) {
   DigestType digest_type = static_cast<DigestType>(digest_type_u8);
   Vec<uint8_t> result;
   const EVP_MD *md = GetDigest(digest_type);
@@ -62,7 +62,7 @@ Vec<uint8_t> Hmac(uint8_t digest_type_u8, const Vec<uint8_t> &key,
 }
 
 // SHA Hash
-Vec<uint8_t> Sha(uint8_t digest_type_u8, const Vec<uint8_t> &data) {
+Vec<uint8_t> Sha(uint8_t digest_type_u8, rust::Slice<const uint8_t> data) {
   DigestType digest_type = static_cast<DigestType>(digest_type_u8);
   Vec<uint8_t> result;
   const EVP_MD *md = GetDigest(digest_type);
@@ -84,7 +84,8 @@ Vec<uint8_t> Sha(uint8_t digest_type_u8, const Vec<uint8_t> &data) {
 }
 
 // AES-Wrap (RFC 3394)
-Vec<uint8_t> AesWrap(const Vec<uint8_t> &kek, const Vec<uint8_t> &plain) {
+Vec<uint8_t> AesWrap(rust::Slice<const uint8_t> kek,
+                     rust::Slice<const uint8_t> plain) {
   Vec<uint8_t> result;
   if (plain.size() % 8 != 0 || plain.size() < 16) return result;
 
@@ -104,7 +105,8 @@ Vec<uint8_t> AesWrap(const Vec<uint8_t> &kek, const Vec<uint8_t> &plain) {
   return result;
 }
 
-Vec<uint8_t> AesUnwrap(const Vec<uint8_t> &kek, const Vec<uint8_t> &cipher) {
+Vec<uint8_t> AesUnwrap(rust::Slice<const uint8_t> kek,
+                       rust::Slice<const uint8_t> cipher) {
   Vec<uint8_t> result;
   if (cipher.size() % 8 != 0 || cipher.size() < 24) return result;
 
@@ -130,23 +132,15 @@ Vec<uint8_t> AesUnwrap(const Vec<uint8_t> &kek, const Vec<uint8_t> &cipher) {
 // Bluetooth_8 uses M=8 (MIC length) and L=2 (length field bytes),
 // which matches WPA2-CCMP requirements (8-byte MIC, 13-byte Nonce).
 
-bool AesCcmEncrypt(const Vec<uint8_t> &key, const Vec<uint8_t> &nonce,
-                   const Vec<uint8_t> &aad, const Vec<uint8_t> &plain,
-                   Vec<uint8_t> &out_cipher, Vec<uint8_t> &out_tag,
+bool AesCcmEncrypt(rust::Slice<const uint8_t> key,
+                   rust::Slice<const uint8_t> nonce,
+                   rust::Slice<const uint8_t> aad,
+                   rust::Slice<const uint8_t> plain, Vec<uint8_t> &out_data,
                    size_t tag_len) {
-  // CCMP uses 8-byte MAC (M=8).
-  if (tag_len != 8) {
-    // If caller requests non-8 tag, this AEAD won't work matching expectations
-    // if fixed. However, EVP_AEAD_CTX_init takes tag_len. bluetooth_8
-    // implementation might enforce it.
-  }
-
   const EVP_AEAD *aead = nullptr;
   if (key.size() == 16) {
-    // Fallback or specific selection
     aead = EVP_aead_aes_128_ccm_bluetooth_8();
   } else {
-    // WPA2 is typically 128-bit.
     std::cerr << "AesCcmEncrypt: Unsupported key size " << key.size()
               << std::endl;
     return false;
@@ -158,8 +152,6 @@ bool AesCcmEncrypt(const Vec<uint8_t> &key, const Vec<uint8_t> &nonce,
     return false;
   }
 
-  // Output buffer must be large enough: plain.size() + tag_len + max_overhead
-  // EVP_AEAD_max_overhead is useful.
   size_t max_out_len = plain.size() + EVP_AEAD_max_overhead(aead);
   std::vector<uint8_t> out_buf(max_out_len);
   size_t out_len = 0;
@@ -172,23 +164,17 @@ bool AesCcmEncrypt(const Vec<uint8_t> &key, const Vec<uint8_t> &nonce,
   }
   EVP_AEAD_CTX_cleanup(&ctx);
 
-  // The output contains Ciphertext + Tag (appended).
-  if (out_len < tag_len) return false;
-  size_t cipher_len = out_len - tag_len;
-
-  out_cipher.reserve(cipher_len);
-  out_tag.reserve(tag_len);
-
-  for (size_t i = 0; i < cipher_len; i++) out_cipher.push_back(out_buf[i]);
-  for (size_t i = 0; i < tag_len; i++)
-    out_tag.push_back(out_buf[cipher_len + i]);
+  out_data.reserve(out_len);
+  for (size_t i = 0; i < out_len; i++) out_data.push_back(out_buf[i]);
 
   return true;
 }
 
-bool AesCcmDecrypt(const Vec<uint8_t> &key, const Vec<uint8_t> &nonce,
-                   const Vec<uint8_t> &aad, const Vec<uint8_t> &cipher,
-                   const Vec<uint8_t> &tag, Vec<uint8_t> &out_plain) {
+bool AesCcmDecrypt(rust::Slice<const uint8_t> key,
+                   rust::Slice<const uint8_t> nonce,
+                   rust::Slice<const uint8_t> aad,
+                   rust::Slice<const uint8_t> cipher_with_tag,
+                   Vec<uint8_t> &out_plain, size_t tag_len) {
   const EVP_AEAD *aead = nullptr;
   if (key.size() == 16) {
     aead = EVP_aead_aes_128_ccm_bluetooth_8();
@@ -199,23 +185,18 @@ bool AesCcmDecrypt(const Vec<uint8_t> &key, const Vec<uint8_t> &nonce,
   }
 
   EVP_AEAD_CTX ctx;
-  if (!EVP_AEAD_CTX_init(&ctx, aead, key.data(), key.size(), tag.size(),
+  if (!EVP_AEAD_CTX_init(&ctx, aead, key.data(), key.size(), tag_len,
                          nullptr)) {
     return false;
   }
 
-  std::vector<uint8_t> in_buf;
-  in_buf.reserve(cipher.size() + tag.size());
-  in_buf.insert(in_buf.end(), cipher.begin(), cipher.end());
-  in_buf.insert(in_buf.end(), tag.begin(), tag.end());
-
-  size_t max_out_len = in_buf.size();
+  size_t max_out_len = cipher_with_tag.size();
   std::vector<uint8_t> out_buf(max_out_len);
   size_t out_len = 0;
 
   if (!EVP_AEAD_CTX_open(&ctx, out_buf.data(), &out_len, max_out_len,
-                         nonce.data(), nonce.size(), in_buf.data(),
-                         in_buf.size(), aad.data(), aad.size())) {
+                         nonce.data(), nonce.size(), cipher_with_tag.data(),
+                         cipher_with_tag.size(), aad.data(), aad.size())) {
     EVP_AEAD_CTX_cleanup(&ctx);
     return false;
   }
@@ -290,8 +271,8 @@ static bool Sha256PrfBits(const Vec<uint8_t> &key, const char *label,
 }
 
 // PBKDF2-HMAC-SHA1 for WPA2 PMK Derivation
-rust::Vec<uint8_t> Pbkdf2HmacSha1(const rust::Vec<uint8_t> &password,
-                                  const rust::Vec<uint8_t> &salt,
+rust::Vec<uint8_t> Pbkdf2HmacSha1(rust::Slice<const uint8_t> password,
+                                  rust::Slice<const uint8_t> salt,
                                   uint32_t iterations, size_t key_len) {
   rust::Vec<uint8_t> result;
   std::vector<uint8_t> out_buf(key_len);
@@ -304,9 +285,9 @@ rust::Vec<uint8_t> Pbkdf2HmacSha1(const rust::Vec<uint8_t> &password,
   return result;
 }
 
-rust::Vec<uint8_t> EcP256CalculatePwe(const rust::Vec<uint8_t> &password,
-                                      const rust::Vec<uint8_t> &address1,
-                                      const rust::Vec<uint8_t> &address2) {
+rust::Vec<uint8_t> EcP256CalculatePwe(rust::Slice<const uint8_t> password,
+                                      rust::Slice<const uint8_t> address1,
+                                      rust::Slice<const uint8_t> address2) {
   Vec<uint8_t> result;
   if (address1.size() != 6 || address2.size() != 6) return result;
 
@@ -414,8 +395,8 @@ cleanup:
   return result;
 }
 
-rust::Vec<uint8_t> EcP256PointMul(const rust::Vec<uint8_t> &point_src,
-                                  const rust::Vec<uint8_t> &scalar) {
+rust::Vec<uint8_t> EcP256PointMul(rust::Slice<const uint8_t> point_src,
+                                  rust::Slice<const uint8_t> scalar) {
   Vec<uint8_t> result;
   EC_GROUP *group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
   EC_POINT *p = EC_POINT_new(group);
@@ -444,8 +425,8 @@ rust::Vec<uint8_t> EcP256PointMul(const rust::Vec<uint8_t> &point_src,
   return result;
 }
 
-rust::Vec<uint8_t> EcP256PointAdd(const rust::Vec<uint8_t> &point_a,
-                                  const rust::Vec<uint8_t> &point_b) {
+rust::Vec<uint8_t> EcP256PointAdd(rust::Slice<const uint8_t> point_a,
+                                  rust::Slice<const uint8_t> point_b) {
   Vec<uint8_t> result;
   EC_GROUP *group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
   EC_POINT *a = EC_POINT_new(group);
@@ -474,9 +455,9 @@ rust::Vec<uint8_t> EcP256PointAdd(const rust::Vec<uint8_t> &point_a,
   return result;
 }
 
-rust::Vec<uint8_t> BnModAdd(const rust::Vec<uint8_t> &a,
-                            const rust::Vec<uint8_t> &b,
-                            const rust::Vec<uint8_t> &m) {
+rust::Vec<uint8_t> BnModAdd(rust::Slice<const uint8_t> a,
+                            rust::Slice<const uint8_t> b,
+                            rust::Slice<const uint8_t> m) {
   Vec<uint8_t> result;
   BIGNUM *bn_a = BN_bin2bn(a.data(), a.size(), nullptr);
   BIGNUM *bn_b = BN_bin2bn(b.data(), b.size(), nullptr);
@@ -502,9 +483,9 @@ rust::Vec<uint8_t> BnModAdd(const rust::Vec<uint8_t> &a,
   return result;
 }
 
-rust::Vec<uint8_t> BnModSub(const rust::Vec<uint8_t> &a,
-                            const rust::Vec<uint8_t> &b,
-                            const rust::Vec<uint8_t> &m) {
+rust::Vec<uint8_t> BnModSub(rust::Slice<const uint8_t> a,
+                            rust::Slice<const uint8_t> b,
+                            rust::Slice<const uint8_t> m) {
   Vec<uint8_t> result;
   BIGNUM *bn_a = BN_bin2bn(a.data(), a.size(), nullptr);
   BIGNUM *bn_b = BN_bin2bn(b.data(), b.size(), nullptr);

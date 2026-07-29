@@ -3,15 +3,47 @@
 
 use crate::{steps::*, world::World};
 
-// Scenario: Set CLIP (Calling Line Identification Presentation)
+// Scenario: Set and Query CLIP (Calling Line Identification Presentation)
 //   Given a modem "A"
+//   When AT command "AT+CLIP?" is sent to "A"
+//   Then response from "A" is "+CLIP: 0,1"
+//   And response from "A" is "OK"
 //   When AT command "AT+CLIP=1" is sent to "A"
 //   Then response from "A" is "OK"
+//   When AT command "AT+CLIP?" is sent to "A"
+//   Then response from "A" is "+CLIP: 1,1"
+//   And response from "A" is "OK"
+//   When AT command "AT+CLIP=0" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+CLIP?" is sent to "A"
+//   Then response from "A" is "+CLIP: 0,1"
+//   And response from "A" is "OK"
 #[test]
-fn test_set_clip() {
+fn test_set_and_query_clip() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+
+    // Default query
+    when_at_command_sent(&mut world, "A", "AT+CLIP?");
+    then_response_is(&mut world, "A", "+CLIP: 0,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Enable CLIP
     when_at_command_sent(&mut world, "A", "AT+CLIP=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query enabled state
+    when_at_command_sent(&mut world, "A", "AT+CLIP?");
+    then_response_is(&mut world, "A", "+CLIP: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Disable CLIP
+    when_at_command_sent(&mut world, "A", "AT+CLIP=0");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query disabled state
+    when_at_command_sent(&mut world, "A", "AT+CLIP?");
+    then_response_is(&mut world, "A", "+CLIP: 0,1");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -36,8 +68,8 @@ fn test_set_call_waiting() {
 fn test_send_ussd() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CUSD=1,\"*123#\"");
-    then_response_is(&mut world, "A", "+CUSD: 0,\"OK\",15");
+    when_at_command_sent(&mut world, "A", r#"AT+CUSD=1,"*123#""#);
+    then_response_is(&mut world, "A", r#"+CUSD: 0,"OK",15"#);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -61,7 +93,7 @@ fn test_cancel_ussd() {
 fn test_call_forwarding() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CCFC=1,1,\"+1234567890\",145,20");
+    when_at_command_sent(&mut world, "A", r#"AT+CCFC=1,1,"+1234567890",145,20"#);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -99,6 +131,35 @@ fn test_supp_service_notification() {
 fn test_set_facility_lock() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CLCK=\"SC\",1,\"1234\"");
+    when_at_command_sent(&mut world, "A", r#"AT+CLCK="SC",1,"1234""#);
     then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_query_facility_lock() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", r#"AT+CLCK="FD",2"#);
+    then_response_is(&mut world, "A", "+CLCK: 0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_call_forward_utility() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CCFCU=0,3,2,129,\"54321\",1,\"\",\"\",,1");
+    then_response_is(&mut world, "A", "+CME ERROR: 4");
+}
+
+#[test]
+fn test_call_forward_utility_cmee_disabled() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CMEE=0");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CCFCU=0,3,2,129,\"54321\",1,\"\",\"\",,1");
+    then_response_is(&mut world, "A", "ERROR");
 }

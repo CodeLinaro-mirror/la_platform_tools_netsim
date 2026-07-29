@@ -21,6 +21,7 @@ from utils import (
     get_bazel_path,
     get_bazel_startup_options,
     get_bazel_targets,
+    get_netsim_binaries,
     platform_to_target_name,
     run,
 )
@@ -28,17 +29,12 @@ from utils import (
 
 class CompileInstallTask(Task):
 
-  BINARIES = {
-      "netsim": "next/cli/netsim",
-      "netsimd": "netsimd",
-      "netsimdx": "next/daemon/daemon",
-  }
-
   def __init__(self, args, env):
     super().__init__("CompileInstall")
     self.args = args
     self.out = Path(args.out_dir)
     self.env = env
+    self.binaries = get_netsim_binaries()
 
   def on_rm_error(self, func, path, exc_info):
     """Error handler for ``shutil.rmtree``.
@@ -68,7 +64,7 @@ class CompileInstallTask(Task):
       return
 
     installed_files = []
-    for bin_name in self.BINARIES:
+    for bin_name in self.binaries:
       actual_name = binary_extension(bin_name)
       bin_path = search_dir / actual_name
       if bin_path.is_file():
@@ -129,7 +125,7 @@ class CompileInstallTask(Task):
       dest_dir.mkdir(exist_ok=True, parents=True)
 
       # Copy netsim binaries
-      for binary, src in self.BINARIES.items():
+      for binary, src in self.binaries.items():
         binary_name = binary_extension(binary)
         src_name = binary_extension(src)
 

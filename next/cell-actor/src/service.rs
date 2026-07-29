@@ -4,10 +4,14 @@
 use actor_framework::{ActorService, DynContext};
 use futures::SinkExt;
 use modem_rs::ModemSink;
-use netsim_model::{ChipCreate, ChipError, ChipId, ChipRequest, ChipUpdate};
-use tracing::{error, info};
+use netsim_model::{
+    Cell, Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipUpdate, ChipVariant,
+    ChipVariantUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING, ModemAction, Radio,
+};
+use tracing::{debug, error, info};
 
 use crate::{
+    CellAction, CellActionResult,
     cell_actor::{CellActor, ChipState},
     error::CellError,
 };
@@ -16,10 +20,10 @@ impl ActorService for CellActor {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
-    type Action = ChipRequest;
-    type ActionResult = ();
+    type Action = CellAction;
+    type ActionResult = CellActionResult;
     type Error = CellError;
-    type Entity = netsim_model::Chip;
+    type Entity = Chip;
     type TypedStream = modem_rs::HostEvent;
 
     async fn handle_create(
@@ -46,6 +50,15 @@ impl ActorService for CellActor {
             chip_id,
             Box::pin(async move {
                 while let Some(packet) = rx.recv().await {
+                    debug!(
+                        "CellActor forwarder: raw packet for chip {}: {:?}",
+                        chip_id,
+                        std::str::from_utf8(&packet)
+                    );
+                    // Note: If the underlying transport is a PTY, ensure ONLCR processing
+                    // is disabled on the PTY descriptor (e.g. at PTY creation site when opened
+                    // via openpty/tcsetattr for Casimir or emulator bridge) to prevent '\n' to
+                    // '\r\n' expansion which corrupts the packet framing.
                     if let Err(e) = sink.send(packet).await {
                         error!("PacketSink send error: {}", e);
                     }
@@ -59,11 +72,16 @@ impl ActorService for CellActor {
         ctx.add_stream(chip_id, Box::pin(stream));
 
         // 2. Add to Controller directly (Sync)
-        if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink) {
+        let sim_type = if let Some(ChipVariant::Cell(cell)) = params.chip.variant.as_ref() {
+            cell.sim_type
+        } else {
+            None
+        };
+        if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink, sim_type) {
             return Err(CellError::ModemError(e));
         }
 
-        self.active_chips.insert(chip_id, ChipState { device_id });
+        self.active_chips.insert(chip_id, ChipState { device_id, enabled: true });
 
         Ok(chip_id)
     }
@@ -81,8 +99,12 @@ impl ActorService for CellActor {
                 error!("Failed to remove modem: {:?}", e);
             }
 
-            // Notify DeviceClient
-            let _ = self.device_client.notify_chip_removed(state.device_id, id).await;
+            // Notify DeviceClient asynchronously
+            let dc = self.device_client.clone();
+            let device_id = state.device_id;
+            tokio::spawn(async move {
+                let _ = dc.notify_chip_removed(device_id, id).await;
+            });
         }
         Ok(())
     }
@@ -93,12 +115,22 @@ impl ActorService for CellActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         if let Ok(info) = self.controller.get_modem_info(id.0) {
-            Ok(Some(netsim_model::Chip {
-                kind: netsim_model::ChipKind::CELLULAR,
+            let enabled = self.active_chips.get(&id).map(|s| s.enabled).unwrap_or(true);
+            Ok(Some(Chip {
+                kind: ChipKind::CELLULAR,
                 id: info.id,
                 name: format!("modem-{}", info.id),
-                variant: Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
-                    state: if info.ringing { "ringing".to_string() } else { "idle".to_string() },
+                enabled,
+                variant: Some(ChipVariant::Cell(Cell {
+                    radio: Radio { state: Some(enabled), ..Default::default() },
+                    state: if !enabled {
+                        MODEM_STATE_DOWN.to_string()
+                    } else if info.ringing {
+                        MODEM_STATE_RINGING.to_string()
+                    } else {
+                        MODEM_STATE_IDLE.to_string()
+                    },
+                    sim_type: None,
                 })),
                 ..Default::default()
             }))
@@ -109,20 +141,85 @@ impl ActorService for CellActor {
 
     async fn handle_update(
         &mut self,
-        _id: Self::Id,
-        _update: Self::Update,
-        _ctx: &mut DynContext<Self>,
+        id: Self::Id,
+        update: Self::Update,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        Err(CellError::Chip(ChipError::Unsupported))
+        let state = self
+            .active_chips
+            .get_mut(&id)
+            .ok_or_else(|| CellError::Chip(ChipError::ChipNotFound(id)))?;
+
+        if let Some(enabled) = update.enabled {
+            state.enabled = enabled;
+        }
+        if let Some(ChipVariantUpdate::Cell(cell_update)) = &update.variant {
+            if let Some(s) = &cell_update.state {
+                state.enabled = s != "down";
+            }
+            if let Some(enabled) = cell_update.radio.state {
+                state.enabled = enabled;
+            }
+        }
+
+        self.handle_get(id, ctx).await.map(|opt| opt.unwrap())
     }
 
     async fn handle_action(
         &mut self,
-        _id: Option<Self::Id>,
-        _action: Self::Action,
+        id: Option<Self::Id>,
+        action: Self::Action,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
-        Ok(())
+        let chip_id = id.ok_or_else(|| {
+            CellError::Chip(ChipError::InvalidArguments("missing chip id".into()))
+        })?;
+
+        if !self.active_chips.contains_key(&chip_id) {
+            return Err(CellError::Chip(ChipError::ChipNotFound(chip_id)));
+        }
+
+        let modem_action = match action {
+            CellAction::IncomingCall { number } => {
+                ModemAction::IncomingCall { target_id: chip_id, number }
+            }
+            CellAction::UpdateCall => ModemAction::UpdatePhysicalChannelConfigs { id: chip_id },
+            CellAction::EndCall => ModemAction::RemoteHangup { id: chip_id },
+            CellAction::ReceiveSms { sender, text } => {
+                ModemAction::IncomingSms { id: chip_id, sender, text }
+            }
+            CellAction::SetSignalStrength { rssi, ber } => {
+                let rssi_u8 = u8::try_from(rssi).map_err(|e| {
+                    CellError::Chip(ChipError::InvalidArguments(
+                        format!("rssi out of range ({}): {}", rssi, e).into(),
+                    ))
+                })?;
+                let ber_u8 = u8::try_from(ber).map_err(|e| {
+                    CellError::Chip(ChipError::InvalidArguments(
+                        format!("ber out of range ({}): {}", ber, e).into(),
+                    ))
+                })?;
+                ModemAction::SetSignalStrength { id: chip_id, rssi: rssi_u8, ber: ber_u8 }
+            }
+            CellAction::SetVoiceRegistration { status } => {
+                ModemAction::SetVoiceRegistration { id: chip_id, status }
+            }
+            CellAction::SetDataRegistration { status } => {
+                ModemAction::SetDataRegistration { id: chip_id, status }
+            }
+            CellAction::RemoteAnswer => ModemAction::RemoteAnswer { id: chip_id },
+            CellAction::RemoteHold { on_hold } => ModemAction::RemoteHold { id: chip_id, on_hold },
+            CellAction::SetSimStatus { present } => {
+                ModemAction::SetSimStatus { id: chip_id, present }
+            }
+            CellAction::SetNetworkTechnology { tech } => {
+                ModemAction::SetNetworkTechnology { id: chip_id, tech }
+            }
+        };
+
+        self.controller.perform_action(modem_action)?;
+
+        Ok(CellActionResult::Success)
     }
 
     async fn handle_list(
@@ -130,18 +227,23 @@ impl ActorService for CellActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         let mut chips = Vec::new();
-        for id in self.active_chips.keys() {
+        for (id, state) in &self.active_chips {
             if let Ok(info) = self.controller.get_modem_info(id.0) {
-                chips.push(netsim_model::Chip {
-                    kind: netsim_model::ChipKind::CELLULAR,
+                chips.push(Chip {
+                    kind: ChipKind::CELLULAR,
                     id: info.id,
                     name: format!("modem-{}", info.id),
-                    variant: Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
-                        state: if info.ringing {
-                            "ringing".to_string()
+                    enabled: state.enabled,
+                    variant: Some(ChipVariant::Cell(Cell {
+                        radio: Radio { state: Some(state.enabled), ..Default::default() },
+                        state: if !state.enabled {
+                            MODEM_STATE_DOWN.to_string()
+                        } else if info.ringing {
+                            MODEM_STATE_RINGING.to_string()
                         } else {
-                            "idle".to_string()
+                            MODEM_STATE_IDLE.to_string()
                         },
+                        sim_type: None,
                     })),
                     ..Default::default()
                 });

@@ -23,8 +23,15 @@ fn test_emergency_call() {
 fn test_standard_call() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "ATD1234567;");
+
+    // Dial international number
+    when_at_command_sent(&mut world, "A", "ATD+1234567;");
     then_response_is(&mut world, "A", "OK");
+
+    // Verify CLCC shows Dialing state (2) and International ToA (145)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"+1234567\",145");
+    then_response_contains(&mut world, "A", "OK");
 }
 
 // Scenario: Receive Ring
@@ -32,7 +39,7 @@ fn test_standard_call() {
 //   When AT command "RING" is sent to "A"
 //   Then response from "A" is "RING"
 //   When AT command "AT+CLCC" is sent to "A"
-//   Then response from "A" contains "+CLCC: 1,1,3,0,0,\"\",129"
+//   Then response from "A" contains "+CLCC: 1,1,4,0,0,\"\",129"
 //   And response from "A" contains "OK"
 #[test]
 fn test_ring() {
@@ -41,9 +48,9 @@ fn test_ring() {
     when_at_command_sent(&mut world, "A", "RING");
     then_response_is(&mut world, "A", "RING");
 
-    // Verify call state (Incoming/Alerting)
+    // Verify call state (Incoming)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
-    then_response_contains(&mut world, "A", "+CLCC: 1,1,3,0,0,\"\",129");
+    then_response_contains(&mut world, "A", "+CLCC: 1,1,4,0,0,\"\",129");
 }
 
 // Scenario: Query Current Calls
@@ -101,7 +108,7 @@ fn test_query_current_calls() {
 //   When AT command "ATD111;" is sent to "A"
 //   And AT command "ATA" is sent to "B"
 //   And AT command "ATD222;" is sent to "A"
-//   Then check "C" is ringing (Alerting)
+//   Then check "C" is ringing (Incoming)
 //   When time advances 30100 ms
 //   Then check "C" is idle
 #[test]
@@ -124,12 +131,12 @@ fn test_call_ring_timeout() {
     when_at_command_sent(&mut world, "A", "ATD222;");
     then_response_is(&mut world, "A", "OK");
 
-    // Verify C is alerting (Incoming call) - First consume RING
+    // Verify C has Incoming call - First consume RING
     then_response_is(&mut world, "C", "RING");
 
     // Check AT+CLCC on C
     when_at_command_sent(&mut world, "C", "AT+CLCC");
-    then_response_contains(&mut world, "C", "+CLCC: 1,1,3,0,0,\"\",129");
+    then_response_contains(&mut world, "C", "+CLCC: 1,1,4,0,0,\"\",129");
 
     // Advance time > 30s
     when_time_advances_ms(&mut world, 30100);
@@ -234,11 +241,11 @@ fn test_external_incoming_call() {
     // Expect +CLIP
     then_response_contains(&mut world, "A", "+CLIP: \"123456\",129,,,,0");
 
-    // Verify call state (Alerting)
+    // Verify call state (Incoming)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
-    // ID=1, Direction=1(Incoming), State=3(Alerting), Voice=0(Voice), Multiparty=0,
+    // ID=1, Direction=1(Incoming), State=4(Incoming), Voice=0(Voice), Multiparty=0,
     // Number="123456", Type=129
-    then_response_contains(&mut world, "A", "+CLCC: 1,1,3,0,0,\"123456\",129");
+    then_response_contains(&mut world, "A", "+CLCC: 1,1,4,0,0,\"123456\",129");
 
     // Wait for timeout
     when_time_advances_ms(&mut world, 2000);
@@ -326,4 +333,109 @@ fn test_external_call_hold() {
     // +CLCC: 1,0,0,... (State 0)
     then_response_contains(&mut world, "A", "+CLCC: 1,0,0,0,0,\"123\",129");
     then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_dial_speed_dial_does_not_fallback() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Dial *999# which starts with *99 and ends with #, but is not standard GPRS
+    // dial format. It should NOT fall back, but remain handled by CallService
+    // as a normal voice dial attempt (returns OK). If it had fallen back, it
+    // would have returned CONNECT!
+    when_at_command_sent(&mut world, "A", "ATD*999#");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_emergency_dial_syntax() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Emergency with category and CLIR
+    when_at_command_sent(&mut world, "A", "ATD911@1,#I;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify it is NOT in active calls (InitiateEmergencyCall is no-op)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_is(&mut world, "A", "OK");
+
+    // Normal call to non-existent peer should be in Dialing state
+    when_at_command_sent(&mut world, "A", "ATD12345;");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"12345\",129");
+}
+
+#[test]
+fn test_dial_clir_semicolon() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Dial with CLIR 'i' and semicolon
+    when_at_command_sent(&mut world, "A", "ATD12345i;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify it dialed "12345" (clean number)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"12345\",129");
+}
+
+#[test]
+fn test_invalid_dial_syntax() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Plus in the middle should be rejected
+    when_at_command_sent(&mut world, "A", "ATD123+456;");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Multiple pluses should be rejected
+    when_at_command_sent(&mut world, "A", "ATD++123;");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Plus at the beginning should be accepted
+    when_at_command_sent(&mut world, "A", "ATD+12345;");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_dtmf_validation() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Valid DTMFs
+    when_at_command_sent(&mut world, "A", "AT+VTS=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=*");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=A,10");
+    then_response_is(&mut world, "A", "OK");
+
+    // Invalid DTMFs
+    when_at_command_sent(&mut world, "A", "AT+VTS=X");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=12");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+VTS=1,A");
+    then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_standard_call_with_leading_plus_routing() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", "15555215554");
+    given_modem_with_number(&mut world, "B", "15555215556");
+
+    // A dials B's number with leading '+'
+    when_at_command_sent(&mut world, "A", "ATD+15555215556;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify B receives the incoming RING
+    then_response_is(&mut world, "B", "RING");
 }

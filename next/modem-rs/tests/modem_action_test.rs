@@ -31,11 +31,14 @@ fn test_action_incoming_sms() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
+    // Set to Text Mode first to align with the expected +CMT and text output
+    when_at_command_sent(&mut world, "A", "AT+CMGF=1");
+    then_response_is(&mut world, "A", "OK");
+
     when_action_incoming_sms(&mut world, "A", "5555", "Hello");
 
-    // Check for CMT line and body in the same response
-    let response = then_wait_for_response_containing(&mut world, "A", "+CMT: \"5555\"");
-    assert!(response.contains("Hello"));
+    then_wait_for_response_containing(&mut world, "A", "+CMT: \"5555\"");
+    then_response_is(&mut world, "A", "Hello");
 }
 
 // Scenario: Set Registration Status via Action
@@ -46,6 +49,10 @@ fn test_action_incoming_sms() {
 fn test_action_set_registration() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+
+    // Enable unsolicited reports first to make it spec-compliant
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
 
     when_action_set_voice_registration(&mut world, "A", RegistrationStatus::Roaming);
 

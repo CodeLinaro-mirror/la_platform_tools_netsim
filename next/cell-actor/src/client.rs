@@ -57,3 +57,17 @@ impl ChipClient for CellClient {
         Box::new(self.clone())
     }
 }
+
+impl CellClient {
+    pub async fn list(&self) -> Result<Vec<Chip>, ClientError> {
+        self.0.list().err_into::<ClientError>().await
+    }
+
+    pub async fn perform_action(
+        &self,
+        id: ChipId,
+        action: crate::CellAction,
+    ) -> Result<crate::CellActionResult, ClientError> {
+        self.0.perform_action(Some(id), action).err_into::<ClientError>().await
+    }
+}

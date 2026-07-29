@@ -27,6 +27,7 @@ pub fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
         manufacturer: proto.manufacturer,
         product_name: proto.product_name,
         address: proto.address,
+        sim_type: if proto.sim_type != 0 { Some(proto.sim_type) } else { None },
     }
 }
 

@@ -88,7 +88,9 @@ impl ActorService for BluetoothActor {
                 bluetooth.low_energy.state = Some(true);
             }
             if bluetooth.classic.state.is_none() {
-                bluetooth.classic.state = Some(true);
+                // Beacons are BLE-only and must not respond to classic BR/EDR inquiries
+                let is_beacon = matches!(bluetooth.mode, BluetoothMode::Beacon(_));
+                bluetooth.classic.state = Some(!is_beacon);
             }
         }
 
@@ -181,6 +183,26 @@ impl ActorService for BluetoothActor {
         let mut chip =
             chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
+        // Intercept preset update
+        if let Some(netsim_model::ChipVariantUpdate::Bluetooth(netsim_model::BluetoothUpdate {
+            preset: Some(preset_name),
+            ..
+        })) = &update.variant
+        {
+            let preset = parse_controller_preset(preset_name)?;
+
+            let mut config = netsim_proto::configuration::Controller::new();
+            config.set_preset(preset);
+            let config_bytes =
+                netsim_proto::protobuf::Message::write_to_bytes(&config).map_err(|e| {
+                    BluetoothError::invalid_arg(format!("Failed to serialize config: {e}"))
+                })?;
+
+            self.rootcanal
+                .set_properties(id.0, &config_bytes)
+                .map_err(|e| BluetoothError::Rootcanal(Box::new(e)))?;
+        }
+
         // 1. Update the chip data
         update.apply(&mut chip);
 
@@ -253,6 +275,8 @@ impl ActorService for BluetoothActor {
                         radio_stats.kind = netsim_model::RadioKind::BluetoothLowEnergy;
                         radio_stats.tx_count = stats.ll_packets_out_ble;
                         radio_stats.rx_count = stats.ll_packets_in_ble;
+                        radio_stats.p2p_tx_count = stats.ble_p2p_tx_count;
+                        radio_stats.p2p_rx_count = stats.ble_p2p_rx_count;
                         stats_list.push(radio_stats);
 
                         // Classic Stats
@@ -262,6 +286,8 @@ impl ActorService for BluetoothActor {
                         radio_stats.kind = netsim_model::RadioKind::BluetoothClassic;
                         radio_stats.tx_count = stats.ll_packets_out_classic;
                         radio_stats.rx_count = stats.ll_packets_in_classic;
+                        radio_stats.p2p_tx_count = stats.classic_p2p_tx_count;
+                        radio_stats.p2p_rx_count = stats.classic_p2p_rx_count;
                         stats_list.push(radio_stats);
                     }
                 }
@@ -293,5 +319,20 @@ impl BluetoothActor {
                 warn!("Failed to sync device name for device {}: {:?}", device_id, e);
             }
         });
+    }
+}
+
+/// Maps a string slice representation of a preset to its Protobuf Enum value.
+fn parse_controller_preset(
+    preset_name: &str,
+) -> Result<netsim_proto::configuration::ControllerPreset, BluetoothError> {
+    match preset_name {
+        "default" => Ok(netsim_proto::configuration::ControllerPreset::DEFAULT),
+        "laird_bl654" => Ok(netsim_proto::configuration::ControllerPreset::LAIRD_BL654),
+        "csr_rck_pts_dongle" => {
+            Ok(netsim_proto::configuration::ControllerPreset::CSR_RCK_PTS_DONGLE)
+        }
+        "intel_be200" => Ok(netsim_proto::configuration::ControllerPreset::INTEL_BE200),
+        _ => Err(BluetoothError::invalid_arg(format!("Invalid preset: {preset_name}"))),
     }
 }

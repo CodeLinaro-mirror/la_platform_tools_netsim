@@ -19,6 +19,7 @@ from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
     binary_extension,
+    get_netsim_binaries,
     run,
 )
 
@@ -89,6 +90,7 @@ class InstallEmulatorManager:
     # to ensure all artifacts (netsim + emulator) are in one place.
     # OBJS_DIR is usually args.out_dir.
     self.local_netsim_dir = Path(self.out_dir) / "distribution" / "emulator"
+    self.binaries = get_netsim_binaries()
 
   def __os_name_fetch(self):
     """Obtains the os substring of the emulator artifact"""
@@ -128,8 +130,10 @@ class InstallEmulatorManager:
       # Check if the netsim has been built prior to install_emulator
       if not (
           self.local_netsim_dir.exists()
-          and (self.local_netsim_dir / binary_extension("netsim")).exists()
-          and (self.local_netsim_dir / binary_extension("netsimd")).exists()
+          and all(
+              (self.local_netsim_dir / binary_extension(binary)).exists()
+              for binary in self.binaries.keys()
+          )
       ):
         logging.info(
             "Please run 'scripts/build_tools.py --task Compile' or"
@@ -193,22 +197,29 @@ class InstallEmulatorManager:
     # Copy artifacts
     if self.buildbot:
       # Copy netsim binaries
-      for binary in ["netsim", "netsimd"]:
+      for binary, src in self.binaries.items():
         binary_name = binary_extension(binary)
-        src_file = BAZEL_OUT_DIR / binary_name
+        src_name = binary_extension(src)
+        src_file = self.local_netsim_dir / binary_name
+        if not src_file.exists():
+          src_file = BAZEL_OUT_DIR / src_name
         if src_file.exists():
           shutil.copy(src_file, emulator_filepath / binary_name)
         else:
           logging.warning(f"Binary not found: {src_file}")
 
       # Copy netsim-ui
-      ui_src_dir = BAZEL_OUT_DIR / "netsim-ui"
+      ui_src_dir = self.local_netsim_dir / "netsim-ui"
+      if not ui_src_dir.exists():
+        ui_src_dir = BAZEL_OUT_DIR / "netsim-ui"
       if ui_src_dir.exists():
         shutil.copytree(
             ui_src_dir,
             emulator_filepath / "netsim-ui",
             dirs_exist_ok=True,
         )
+      else:
+        logging.warning(f"Directory not found: {ui_src_dir}")
     else:
       shutil.copytree(
           emulator_filepath,

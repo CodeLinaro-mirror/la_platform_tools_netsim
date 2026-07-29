@@ -12,6 +12,7 @@
 # Run the tests:
 #   bazel test //next/daemon:tests
 
+load("@goldfish_build//rules/native:native_binaries.bzl", "stripped_binaries")
 load(
     "//next:defs.bzl",
     "netsim_rust_binary",
@@ -44,6 +45,7 @@ DAEMON_DEPS = [
     "//next/link-actor",
     "//next/link-api",
     "//next/model",
+    "//next/nfc-actor",
     "//next/packet-stream",
     "//next/slirp-actor",
     "//next/ethernet-actor",
@@ -63,14 +65,12 @@ netsim_rust_library(
     crate_name = "daemon",
     edition = "2024",
     proc_macro_deps = [],
-    select_deps = select({
-        "//conditions:default": [],
-    }),
     test_deps = [
         "//proto",
         "@bytes",
         "@rand",
         "@regex",
+        "@serde_json",
         "@tempfile",
     ],
     deps = DAEMON_DEPS,
@@ -89,4 +89,9 @@ netsim_rust_binary(
     deps = [
         ":daemon-lib",
     ],
+)
+
+stripped_binaries(
+    name = "daemon_stripped",
+    srcs = [":daemon"],
 )

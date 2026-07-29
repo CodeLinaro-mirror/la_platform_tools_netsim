@@ -17,6 +17,7 @@ DEPS = [
     "@futures",
     "@tokio-stream",
     "@thiserror",
+    "@serde",
 ]
 
 netsim_rust_library(

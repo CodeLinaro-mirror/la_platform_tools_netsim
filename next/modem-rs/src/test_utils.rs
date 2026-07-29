@@ -15,8 +15,26 @@ pub struct MockModemHandler {
 impl MockModemHandler {
     pub fn new() -> (Self, ModemSink) {
         let (tx, rx) = mpsc::channel();
-        let sink =
-            ModemSink::new(move |item: Bytes| tx.send(item.to_vec()).map_err(|e| e.to_string()));
+        let sink = ModemSink::new(move |item: Bytes| {
+            let data = item.to_vec();
+            let mut start = 0;
+            for i in 0..data.len() {
+                if data[i] == b'\n' {
+                    let line = data[start..=i].to_vec();
+                    if let Err(e) = tx.send(line) {
+                        return Err(e.to_string());
+                    }
+                    start = i + 1;
+                }
+            }
+            if start < data.len() {
+                let line = data[start..].to_vec();
+                if let Err(e) = tx.send(line) {
+                    return Err(e.to_string());
+                }
+            }
+            Ok(())
+        });
         (Self { rx }, sink)
     }
 

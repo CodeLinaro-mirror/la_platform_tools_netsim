@@ -21,25 +21,20 @@ use crate::frontend_converter::to_proto_device;
 pub struct FrontendClient {
     device_client: DeviceClient,
     link_client: Arc<dyn LinkClient>,
-    #[cfg(not(feature = "cuttlefish"))]
     ap_client: ap_actor::ApClient,
     version: String,
+    frontend_stats: Arc<netsim_model::FrontendStats>,
 }
 
 impl FrontendClient {
     pub fn new(
         device_client: DeviceClient,
         link_client: Arc<dyn LinkClient>,
-        #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
+        ap_client: ap_actor::ApClient,
         version: String,
+        frontend_stats: Arc<netsim_model::FrontendStats>,
     ) -> Self {
-        Self {
-            device_client,
-            link_client,
-            #[cfg(not(feature = "cuttlefish"))]
-            ap_client,
-            version,
-        }
+        Self { device_client, link_client, ap_client, version, frontend_stats }
     }
 
     async fn handle_create_link(
@@ -294,7 +289,7 @@ impl FrontendClient {
 
     async fn handle_reset(
         client: DeviceClient,
-        #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
+        ap_client: ap_actor::ApClient,
     ) -> Result<(), RpcStatus> {
         client.reset(None).await.map_err(|e| {
             RpcStatus::with_message(
@@ -302,29 +297,23 @@ impl FrontendClient {
                 format!("Failed to reset devices: {}", e),
             )
         })?;
-        #[cfg(not(feature = "cuttlefish"))]
-        {
-            let aps = ap_client.list_aps().await.map_err(|e| {
+        let aps = ap_client.list_aps().await.map_err(|e| {
+            RpcStatus::with_message(RpcStatusCode::INTERNAL, format!("Failed to list APs: {}", e))
+        })?;
+
+        let default_ap_bssid = ap_actor::expected_default_ap_bssid();
+        for (id, state) in aps {
+            // The default AP is considered built-in.
+            // TODO(b/499058772): reset default AP back to its original state.
+            if state.config.bssid == default_ap_bssid {
+                continue;
+            }
+            ap_client.destroy_ap(id).await.map_err(|e| {
                 RpcStatus::with_message(
                     RpcStatusCode::INTERNAL,
-                    format!("Failed to list APs: {}", e),
+                    format!("Failed to destroy AP {}: {}", id, e),
                 )
             })?;
-
-            let default_ap_bssid = ap_actor::expected_default_ap_bssid();
-            for (id, state) in aps {
-                // The default AP is considered built-in.
-                // TODO(b/499058772): reset default AP back to its original state.
-                if state.config.bssid == default_ap_bssid {
-                    continue;
-                }
-                ap_client.destroy_ap(id).await.map_err(|e| {
-                    RpcStatus::with_message(
-                        RpcStatusCode::INTERNAL,
-                        format!("Failed to destroy AP {}: {}", id, e),
-                    )
-                })?;
-            }
         }
         Ok(())
     }
@@ -348,6 +337,7 @@ impl FrontendService for FrontendClient {
         _req: netsim_proto::frontend::DeleteDeviceRequest,
         sink: UnarySink<Empty>,
     ) {
+        self.frontend_stats.delete_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_delete_device(client, _req).await.map(|_| Empty::new());
@@ -361,6 +351,7 @@ impl FrontendService for FrontendClient {
         _req: Empty,
         sink: UnarySink<netsim_proto::frontend::VersionResponse>,
     ) {
+        self.frontend_stats.get_version.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut response = netsim_proto::frontend::VersionResponse::new();
         response.version = self.version.clone();
         let f = sink.success(response).map(|_| ());
@@ -368,6 +359,7 @@ impl FrontendService for FrontendClient {
     }
 
     fn list_device(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<ListDeviceResponse>) {
+        self.frontend_stats.list_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_list_device(client).await;
@@ -381,6 +373,7 @@ impl FrontendService for FrontendClient {
         _req: netsim_proto::frontend::SubscribeDeviceRequest,
         sink: UnarySink<netsim_proto::frontend::SubscribeDeviceResponse>,
     ) {
+        self.frontend_stats.subscribe_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let f = sink.fail(RpcStatus::new(RpcStatusCode::UNIMPLEMENTED)).map(|_| ());
         ctx.spawn(f)
     }
@@ -391,6 +384,7 @@ impl FrontendService for FrontendClient {
         req: netsim_proto::frontend::PatchDeviceRequest,
         sink: UnarySink<Empty>,
     ) {
+        self.frontend_stats.patch_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_patch_device(client, req).await.map(|_| Empty::new());
@@ -399,17 +393,11 @@ impl FrontendService for FrontendClient {
     }
 
     fn reset(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<Empty>) {
+        self.frontend_stats.reset.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
-        #[cfg(not(feature = "cuttlefish"))]
         let ap_client = self.ap_client.clone();
         ctx.spawn(async move {
-            let res = Self::handle_reset(
-                client,
-                #[cfg(not(feature = "cuttlefish"))]
-                ap_client,
-            )
-            .await
-            .map(|_| Empty::new());
+            let res = Self::handle_reset(client, ap_client).await.map(|_| Empty::new());
             reply(sink, res).await;
         });
     }
@@ -420,6 +408,7 @@ impl FrontendService for FrontendClient {
         req: netsim_proto::frontend::CreateDeviceRequest,
         sink: UnarySink<netsim_proto::frontend::CreateDeviceResponse>,
     ) {
+        self.frontend_stats.create_device.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_create_device(client, req).await;
@@ -434,6 +423,7 @@ impl FrontendService for FrontendClient {
         req: netsim_proto::frontend::DeleteChipRequest,
         sink: UnarySink<Empty>,
     ) {
+        self.frontend_stats.delete_chip.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
             let res = Self::handle_delete_chip(client, req).await.map(|_| Empty::new());

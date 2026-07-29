@@ -11,7 +11,7 @@ use zerocopy::{
 use crate::utils::general::ParseResult;
 
 /// Represents the ICMPv6 header.
-#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
 #[repr(C)]
 pub struct Icmpv6Header {
     /// The type of the ICMPv6 message.
@@ -32,6 +32,106 @@ impl Icmpv6Header {
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, Icmpv6Header>> {
         Ref::from_prefix(bytes).ok()
     }
+
+    /// Returns the echo fields (identifier, sequence number) if this is an Echo
+    /// Request/Reply.
+    pub fn echo_fields(&self) -> Option<(u16, u16)> {
+        if self.icmpv6_type == Icmpv6Type::EchoRequest as u8
+            || self.icmpv6_type == Icmpv6Type::EchoReply as u8
+        {
+            let echo = Ref::<&[u8], Icmpv6Echo>::from_bytes(&self.rest).ok()?;
+            Some((echo.identifier.get(), echo.sequence_number.get()))
+        } else {
+            None
+        }
+    }
+
+    /// Sets the echo fields (identifier, sequence number).
+    pub fn set_echo_fields(&mut self, id: u16, seq: u16) {
+        if let Ok(echo) = Icmpv6Echo::mut_from_bytes(&mut self.rest[..]) {
+            echo.identifier.set(id);
+            echo.sequence_number.set(seq);
+        }
+    }
+
+    /// Returns the MTU if this is a Packet Too Big message.
+    pub fn mtu(&self) -> Option<u32> {
+        if self.icmpv6_type == Icmpv6Type::PacketTooBig as u8 {
+            Some(u32::from_be_bytes(self.rest))
+        } else {
+            None
+        }
+    }
+
+    /// Sets the MTU.
+    pub fn set_mtu(&mut self, mtu: u32) {
+        self.rest = mtu.to_be_bytes();
+    }
+
+    /// Returns the pointer if this is a Parameter Problem message.
+    pub fn pointer(&self) -> Option<u32> {
+        if self.icmpv6_type == Icmpv6Type::ParameterProblem as u8 {
+            Some(u32::from_be_bytes(self.rest))
+        } else {
+            None
+        }
+    }
+
+    /// Sets the pointer.
+    pub fn set_pointer(&mut self, pointer: u32) {
+        self.rest = pointer.to_be_bytes();
+    }
+}
+
+/// Represents the header for an ICMPv6 Echo request or reply message.
+/// This structure follows the main `Icmpv6Header`.
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug, Clone, Copy)]
+#[repr(C)]
+pub struct Icmpv6Echo {
+    pub identifier: U16<NetworkEndian>,
+    pub sequence_number: U16<NetworkEndian>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Icmpv6Type {
+    DestinationUnreachable = 1,
+    PacketTooBig = 2,
+    TimeExceeded = 3,
+    ParameterProblem = 4,
+    EchoRequest = 128,
+    EchoReply = 129,
+    RouterSolicitation = 133,
+    RouterAdvertisement = 134,
+    NeighborSolicitation = 135,
+    NeighborAdvertisement = 136,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Icmpv6UnreachableCode {
+    NoRoute = 0,
+    AdminProhibited = 1,
+    BeyondScope = 2,
+    AddressUnreachable = 3,
+    PortUnreachable = 4,
+    PolicyFailed = 5,
+    RejectRoute = 6,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Icmpv6TimeExceededCode {
+    HopLimitExceeded = 0,
+    ReassemblyTimeExceeded = 1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Icmpv6ParameterProblemCode {
+    ErroneousHeader = 0,
+    UnrecognizedNextHeader = 1,
+    UnrecognizedOption = 2,
 }
 
 #[cfg(test)]

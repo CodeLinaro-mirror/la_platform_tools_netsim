@@ -30,6 +30,8 @@ pub struct Client {
     pub enabled: bool,
     pub tx_count: u32,
     pub rx_count: u32,
+    pub p2p_tx_count: u64,
+    pub p2p_rx_count: u64,
 }
 
 impl Default for Client {
@@ -40,6 +42,6 @@ impl Default for Client {
 
 impl Client {
     pub fn new() -> Self {
-        Self { enabled: true, tx_count: 0, rx_count: 0 }
+        Self { enabled: true, tx_count: 0, rx_count: 0, p2p_tx_count: 0, p2p_rx_count: 0 }
     }
 }

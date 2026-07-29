@@ -18,6 +18,7 @@ package {
         "//device/google/cuttlefish/build:__subpackages__",
     ],
     default_applicable_licenses: ["tools_netsim_license"],
+    default_team: "trendy_team_betosim",
 }
 
 // Added automatically by a large-scale-change
@@ -238,7 +239,7 @@ netsim_ui_modules = [
 ]
 
 cc_binary_host {
-    name: "netsimd",
+    name: "netsim_classic_daemon",
     defaults: ["netsim_defaults"],
     srcs: [
         "rust/netsimd.cc",
@@ -412,4 +413,10 @@ rust_binary_host {
     rustlibs: [
         "libnetsim_cli",
     ],
+}
+
+team {
+    name: "trendy_team_betosim",
+    // go/trendy/manage/engineers/4827929424265216
+    trendy_team_id: "4827929424265216",
 }

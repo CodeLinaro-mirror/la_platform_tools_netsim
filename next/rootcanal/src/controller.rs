@@ -10,15 +10,17 @@ pub type Id = u32;
 use std::{
     ffi::{c_int, c_void},
     sync::{
-        Arc, Mutex, Weak,
+        Arc, Weak,
         atomic::{AtomicU64, Ordering},
     },
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
+use parking_lot::Mutex;
 use tracing::warn;
 
 use crate::{
+    error::{Error, Result},
     ffi,
     types::{Address, Phy},
 };
@@ -40,6 +42,14 @@ pub trait BtOps: Send + Sync {
     /// Controller received a LL packet from rootcanal that needs to be
     /// broadcasted
     fn broadcast_rootcanal_ll_packet(&self, send_id: Id, packet: &[u8], phy: Phy, tx_power: i32);
+
+    /// Controller needs distance to another device by address
+    fn estimate_distance(
+        &self,
+        source_id: u32,
+        source_addr: &[u8; 6],
+        destination_addr: &[u8; 6],
+    ) -> u32;
 }
 
 // A wrapper around the raw C++ controller pointer.
@@ -66,6 +76,10 @@ pub(crate) struct ControllerImpl {
     ll_packets_in_classic: AtomicU64,
     ll_packets_out_ble: AtomicU64,
     ll_packets_out_classic: AtomicU64,
+    ble_p2p_tx_count: AtomicU64,
+    ble_p2p_rx_count: AtomicU64,
+    classic_p2p_tx_count: AtomicU64,
+    classic_p2p_rx_count: AtomicU64,
 }
 
 /// A Bluetooth controller.
@@ -94,6 +108,14 @@ pub struct Stats {
     pub ll_packets_out_ble: u64,
     /// The number of Classic link layer packets sent.
     pub ll_packets_out_classic: u64,
+    /// The number of payload-bearing BLE P2P packets sent over the air.
+    pub ble_p2p_tx_count: u64,
+    /// The number of payload-bearing BLE P2P packets received over the air.
+    pub ble_p2p_rx_count: u64,
+    /// The number of payload-bearing Classic P2P packets sent over the air.
+    pub classic_p2p_tx_count: u64,
+    /// The number of payload-bearing Classic P2P packets received over the air.
+    pub classic_p2p_rx_count: u64,
 }
 
 // The context that is passed to the C++ code.
@@ -136,6 +158,10 @@ impl ControllerImpl {
             ll_packets_in_classic: AtomicU64::new(0),
             ll_packets_out_ble: AtomicU64::new(0),
             ll_packets_out_classic: AtomicU64::new(0),
+            ble_p2p_tx_count: AtomicU64::new(0),
+            ble_p2p_rx_count: AtomicU64::new(0),
+            classic_p2p_tx_count: AtomicU64::new(0),
+            classic_p2p_rx_count: AtomicU64::new(0),
         });
 
         // Create the context for the C++ side, using a Weak pointer to avoid cycles.
@@ -160,7 +186,7 @@ impl ControllerImpl {
                     Some(send_hci_trampoline),
                     Some(send_ll_trampoline),
                     Some(invalid_packet_trampoline),
-                    None,
+                    Some(ranging_estimator_trampoline),
                     context_ptr.cast::<c_void>(),
                     proto_ptr,
                     proto_len,
@@ -170,7 +196,7 @@ impl ControllerImpl {
         // Lock the mutex and store the real controller pointer. This is safe
         // because no other thread can have access to the `controller_impl` yet.
         {
-            let mut controller_guard = controller_impl.controller.lock().unwrap();
+            let mut controller_guard = controller_impl.controller.lock();
             *controller_guard = FfiController(controller_ptr);
         }
 
@@ -180,7 +206,7 @@ impl ControllerImpl {
     /// Receives an HCI packet from the host.
     pub(crate) fn receive_hci(&self, data: Bytes) {
         self.hci_commands_in.fetch_add(1, Ordering::Relaxed);
-        let controller = self.controller.lock().unwrap();
+        let controller = self.controller.lock();
         let idc = data[0] as c_int;
         let data: &[u8] = &data[1..];
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
@@ -199,15 +225,22 @@ impl ControllerImpl {
     /// Receives a link layer packet from a peer.
     pub(crate) fn receive_ll(&self, data: &[u8], phy: Phy, rssi: i32) {
         self.ll_packets_in.fetch_add(1, Ordering::Relaxed);
+        let is_p2p = netsim_packets::link_layer::fast_inspect_p2p_payload(data);
         match phy {
             Phy::LowEnergy => {
                 self.ll_packets_in_ble.fetch_add(1, Ordering::Relaxed);
+                if is_p2p {
+                    self.ble_p2p_rx_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
             _ => {
                 self.ll_packets_in_classic.fetch_add(1, Ordering::Relaxed);
+                if is_p2p {
+                    self.classic_p2p_rx_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
-        let controller = self.controller.lock().unwrap();
+        let controller = self.controller.lock();
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
         // as long as `self` exists. `data` is a valid slice, and we provide its
         // length to ensure the C++ side does not read out of bounds.
@@ -222,12 +255,51 @@ impl ControllerImpl {
         };
     }
 
+    /// Reconfigures the controller with new properties.
+    pub(crate) fn set_properties(&self, properties: &[u8]) -> Result<()> {
+        let controller = self.controller.lock();
+
+        // Defensively handle empty slices to avoid passing dangling pointers to FFI
+        let (ptr, len) = if properties.is_empty() {
+            (std::ptr::null(), 0)
+        } else {
+            (properties.as_ptr(), properties.len())
+        };
+
+        // SAFETY: The `controller.0` pointer is guaranteed to be valid.
+        // `ptr` is either null (with len 0) or points to a valid slice of bytes.
+        // The C++ function parses the properties synchronously and does not retain the
+        // pointer.
+        let success =
+            unsafe { ffi::ffi_controller_set_properties(controller.0, ptr, len as ffi::size_t) };
+        if success { Ok(()) } else { Err(Error::SetPropertiesFailed) }
+    }
+
     /// Advances the controller's state by one tick.
     pub(crate) fn tick(&self) {
-        let controller = self.controller.lock().unwrap();
+        let controller = self.controller.lock();
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
         // as long as `self` exists, as its lifetime is tied to the `ControllerImpl`.
         unsafe { ffi::ffi_controller_tick(controller.0) };
+    }
+
+    /// Returns true if the controller has a connection to the given address.
+    pub(crate) fn has_le_connection(
+        &self,
+        source_addr: &[u8; 6],
+        destination_addr: &[u8; 6],
+    ) -> bool {
+        let controller = self.controller.lock();
+        // SAFETY: The `controller.0` pointer is guaranteed to be valid
+        // as long as `self` exists, as its lifetime is tied to the `ControllerImpl`.
+        // The address slices are also guaranteed to be valid.
+        unsafe {
+            ffi::ffi_controller_has_le_connection(
+                controller.0,
+                source_addr.as_ptr(),
+                destination_addr.as_ptr(),
+            )
+        }
     }
 
     /// Returns the controller's address.
@@ -253,6 +325,10 @@ impl ControllerImpl {
             ll_packets_in_classic: self.ll_packets_in_classic.load(Ordering::Relaxed),
             ll_packets_out_ble: self.ll_packets_out_ble.load(Ordering::Relaxed),
             ll_packets_out_classic: self.ll_packets_out_classic.load(Ordering::Relaxed),
+            ble_p2p_tx_count: self.ble_p2p_tx_count.load(Ordering::Relaxed),
+            ble_p2p_rx_count: self.ble_p2p_rx_count.load(Ordering::Relaxed),
+            classic_p2p_tx_count: self.classic_p2p_tx_count.load(Ordering::Relaxed),
+            classic_p2p_rx_count: self.classic_p2p_rx_count.load(Ordering::Relaxed),
         }
     }
 
@@ -273,12 +349,16 @@ impl ControllerImpl {
         self.ll_packets_in_classic.store(0, Ordering::Relaxed);
         self.ll_packets_out_ble.store(0, Ordering::Relaxed);
         self.ll_packets_out_classic.store(0, Ordering::Relaxed);
+        self.ble_p2p_tx_count.store(0, Ordering::Relaxed);
+        self.ble_p2p_rx_count.store(0, Ordering::Relaxed);
+        self.classic_p2p_tx_count.store(0, Ordering::Relaxed);
+        self.classic_p2p_rx_count.store(0, Ordering::Relaxed);
     }
 }
 
 impl Drop for ControllerImpl {
     fn drop(&mut self) {
-        let controller = self.controller.lock().unwrap();
+        let controller = self.controller.lock();
         // SAFETY: This is called when the last `Arc<ControllerImpl>` is dropped,
         // ensuring the C++ object is deleted exactly once. The `controller.0`
         // pointer is valid at this point.
@@ -363,12 +443,19 @@ extern "C" fn send_ll_trampoline(
         // least `data_len` bytes that is valid for the duration of this call.
         let data_slice = unsafe { std::slice::from_raw_parts(data, data_len as ffi::size_t) };
         controller.ll_packets_out.fetch_add(1, Ordering::Relaxed);
+        let is_p2p = netsim_packets::link_layer::fast_inspect_p2p_payload(data_slice);
         match Phy::from(phy) {
             Phy::LowEnergy => {
                 controller.ll_packets_out_ble.fetch_add(1, Ordering::Relaxed);
+                if is_p2p {
+                    controller.ble_p2p_tx_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
             _ => {
                 controller.ll_packets_out_classic.fetch_add(1, Ordering::Relaxed);
+                if is_p2p {
+                    controller.classic_p2p_tx_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
         // rootcanal request to send ll through bluetooth medium
@@ -381,9 +468,48 @@ extern "C" fn send_ll_trampoline(
     }
 }
 
+// The trampoline function that is called by the C++ code for ranging.
+//
+// # Safety
+// `cookie` must be a valid pointer to a `CallbackContext` created by
+// `ControllerImpl::new`. The `source_addr` and `destination_addr` must be valid
+// pointers to 6-byte arrays representing Bluetooth addresses.
+unsafe extern "C" fn ranging_estimator_trampoline(
+    cookie: *mut c_void,
+    source_addr: *const u8,
+    destination_addr: *const u8,
+) -> u32 {
+    if cookie.is_null() {
+        return 100;
+    }
+
+    // SAFETY: We verified `cookie` is not null. The C++ caller is contractually
+    // bound to pass back the exact, unmodified `cookie` pointer that was
+    // originally created by `Box::into_raw` and passed to `ffi_controller_new`.
+    // This guarantees it is a valid pointer to a `CallbackContext`
+    // (Weak<ControllerImpl>
+    let context = unsafe { context_from_cookie(cookie) };
+
+    if let Some(controller) = context.upgrade() {
+        let source_id = controller.get_id();
+
+        // SAFETY: The C++ FFI layer guarantees that `source_addr` and
+        // `destination_addr` are valid, non-null pointers to 6-byte arrays
+        // containing MAC addresses.
+        let (source, destination): (&[u8; 6], &[u8; 6]) =
+            unsafe { (&*(source_addr.cast::<[u8; 6]>()), &*(destination_addr.cast::<[u8; 6]>())) };
+
+        controller.bt_ops.estimate_distance(source_id, source, destination)
+    } else {
+        100
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use pdl_runtime::Packet;
 
     use super::*;
     use crate::controller::Id as ControllerId;
@@ -410,6 +536,15 @@ mod tests {
             _phy: Phy,
             _tx_power: i32,
         ) {
+        }
+
+        fn estimate_distance(
+            &self,
+            _source_id: u32,
+            _source_addr: &[u8; 6],
+            _destination_addr: &[u8; 6],
+        ) -> u32 {
+            0
         }
     }
 
@@ -471,5 +606,60 @@ mod tests {
         assert_eq!(controller.get_stats().ll_packets_in, 0);
         controller.receive_ll(&[1, 2, 3], Phy::LowEnergy, -80);
         assert_eq!(controller.get_stats().ll_packets_in, 1);
+    }
+
+    #[test]
+    fn test_receive_ll_p2p_counter() {
+        let address = Address::from_str("01:02:03:04:05:06").unwrap();
+        let controller = ControllerImpl::new(
+            1,
+            address,
+            Box::new(MockControllerCallbacks),
+            Box::new(MockBtOps),
+            None,
+        );
+
+        use netsim_packets::link_layer::{Acl, Address as LlAddress};
+
+        let src = LlAddress::try_from(1).unwrap();
+        let dest = LlAddress::try_from(2).unwrap();
+
+        assert_eq!(controller.get_stats().ble_p2p_rx_count, 0);
+        assert_eq!(controller.get_stats().classic_p2p_rx_count, 0);
+
+        // Payload-bearing empty PDU (ACL empty)
+        let acl_empty = Acl {
+            source_address: src,
+            destination_address: dest,
+            packet_boundary_flag: 0,
+            broadcast_flag: 0,
+            data: vec![].into(),
+        };
+        let mut acl_empty_bytes = Vec::new();
+        acl_empty.encode(&mut acl_empty_bytes).unwrap();
+
+        controller.receive_ll(&acl_empty_bytes, Phy::LowEnergy, -80);
+        assert_eq!(controller.get_stats().ble_p2p_rx_count, 0);
+        assert_eq!(controller.get_stats().classic_p2p_rx_count, 0);
+
+        // Payload-bearing PDU (ACL payload) - BLE
+        let acl_payload = Acl {
+            source_address: src,
+            destination_address: dest,
+            packet_boundary_flag: 0,
+            broadcast_flag: 0,
+            data: vec![1, 2, 3].into(),
+        };
+        let mut acl_payload_bytes = Vec::new();
+        acl_payload.encode(&mut acl_payload_bytes).unwrap();
+
+        controller.receive_ll(&acl_payload_bytes, Phy::LowEnergy, -80);
+        assert_eq!(controller.get_stats().ble_p2p_rx_count, 1);
+        assert_eq!(controller.get_stats().classic_p2p_rx_count, 0);
+
+        // Payload-bearing PDU (ACL payload) - Classic
+        controller.receive_ll(&acl_payload_bytes, Phy::BrEdr, -80);
+        assert_eq!(controller.get_stats().ble_p2p_rx_count, 1);
+        assert_eq!(controller.get_stats().classic_p2p_rx_count, 1);
     }
 }

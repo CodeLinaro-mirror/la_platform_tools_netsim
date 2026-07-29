@@ -218,6 +218,7 @@ impl World {
             "0.0.0-test".to_string(),
             stats_path.clone(),
             stats_interval,
+            Arc::new(netsim_model::FrontendStats::default()),
         );
         actor.set_self_client(client.clone());
         let actor_task = tokio::spawn(runner.run(actor));
@@ -570,8 +571,7 @@ impl World {
     /// BDD Step: When I shut down the actor politely to trigger shutdown hooks
     pub async fn when_shutdown_actor(&self) {
         let _ = self.client.shutdown().await;
-        // Wait for Actor loop to flush and execute on_shutdown
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        self.then_actor_should_shutdown().await;
     }
 
     /// BDD Step: When I delete the device.
@@ -726,6 +726,7 @@ impl World {
             variant: Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate {
                 low_energy: RadioUpdate { state: le_state },
                 classic: RadioUpdate { state: classic_state },
+                ..Default::default()
             })),
             ..Default::default()
         }

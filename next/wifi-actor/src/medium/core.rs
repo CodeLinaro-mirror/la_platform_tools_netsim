@@ -77,6 +77,8 @@ impl Medium {
             client.enabled = true;
             client.tx_count = 0;
             client.rx_count = 0;
+            client.p2p_tx_count = 0;
+            client.p2p_rx_count = 0;
         }
     }
 
@@ -166,5 +168,70 @@ impl Medium {
 
     pub fn get_rx_count(&self, client_id: u32) -> u32 {
         self.clients.get(&client_id).map(|c| c.rx_count).unwrap_or(0)
+    }
+
+    pub(crate) fn incr_p2p_tx(&mut self, client_id: u32) {
+        if let Some(c) = self.clients.get_mut(&client_id) {
+            c.p2p_tx_count += 1;
+        } else {
+            warn!("client {client_id} is missing for incr_p2p_tx");
+        }
+    }
+
+    pub(crate) fn incr_p2p_rx(&mut self, client_id: u32) {
+        if let Some(c) = self.clients.get_mut(&client_id) {
+            c.p2p_rx_count += 1;
+        } else {
+            warn!("client {client_id} is missing for incr_p2p_rx");
+        }
+    }
+
+    pub fn get_p2p_tx_count(&self, client_id: u32) -> u64 {
+        self.clients.get(&client_id).map(|c| c.p2p_tx_count).unwrap_or(0)
+    }
+
+    pub fn get_p2p_rx_count(&self, client_id: u32) -> u64 {
+        self.clients.get(&client_id).map(|c| c.p2p_rx_count).unwrap_or(0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_p2p_telemetry_counters() {
+        use std::sync::Arc;
+
+        use ap_actor::SharedKeyStore;
+
+        use crate::{
+            DebugArgs,
+            stats::{SystemClock, WifiStats},
+        };
+
+        let key_store = Arc::new(SharedKeyStore::new());
+        let clock = Arc::new(SystemClock);
+        let wifi_stats = WifiStats::new(clock);
+        let debug = Arc::new(DebugArgs::default());
+
+        let mut medium = Medium::new(key_store, wifi_stats, debug);
+        let client_id = 1;
+        medium.add(client_id);
+
+        assert_eq!(medium.get_p2p_tx_count(client_id), 0);
+        assert_eq!(medium.get_p2p_rx_count(client_id), 0);
+
+        medium.incr_p2p_tx(client_id);
+        assert_eq!(medium.get_p2p_tx_count(client_id), 1);
+        assert_eq!(medium.get_p2p_rx_count(client_id), 0);
+
+        medium.incr_p2p_rx(client_id);
+        assert_eq!(medium.get_p2p_tx_count(client_id), 1);
+        assert_eq!(medium.get_p2p_rx_count(client_id), 1);
+
+        medium.reset(client_id);
+        assert_eq!(medium.get_p2p_tx_count(client_id), 0);
+        assert_eq!(medium.get_p2p_rx_count(client_id), 0);
     }
 }

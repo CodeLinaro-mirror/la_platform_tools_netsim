@@ -18,6 +18,7 @@ clap = { version = "4.1.8", default-features = false, features = [
   "usage",
   "env",
 ] }
+nfc-actor = { path = "../nfc-actor" }
 
 device-actor = { path = "../device-actor" }
 grpc-server = { path = "../grpc-server" }
@@ -30,6 +31,7 @@ link-actor = { path = "../link-actor" }
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
 packet-stream = { path = "../packet-stream" }
+rootcanal-server = { path = "../rootcanal-server", optional = true }
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
 tracing = "0.1"
 uwb-actor = { path = "../uwb-actor" }
@@ -38,8 +40,9 @@ wifi-actor = { path = "../wifi-actor" }
 
 [dev-dependencies]
 regex = "1"
+serde_json = "1.0"
 tempfile = "3"
 
 [features]
 default = []
-cuttlefish = []
+cuttlefish = ["dep:rootcanal-server"]

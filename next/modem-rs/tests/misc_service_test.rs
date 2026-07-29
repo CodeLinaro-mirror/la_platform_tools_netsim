@@ -15,15 +15,44 @@ fn test_set_ipr() {
     then_response_is(&mut world, "A", "OK");
 }
 
-// Scenario: Set Mobile Equipment Error Reporting
+// Scenario: Set and Query Mobile Equipment Error Reporting
 //   Given a modem "A"
-//   When AT command "AT+CMEE=1" is sent to "A"
-//   Then response from "A" is "OK"
+//   When AT commands for setting and querying +CMEE are sent
+//   Then responses match the spec requirements
 #[test]
-fn test_set_cmee() {
+fn test_cmee_queries_and_set() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+
+    // By default, +CMEE is 0 (disable)
+    when_at_command_sent(&mut world, "A", "AT+CMEE?");
+    then_response_is(&mut world, "A", "+CMEE: 0");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test command returns supported range (0-2)
+    when_at_command_sent(&mut world, "A", "AT+CMEE=?");
+    then_response_is(&mut world, "A", "+CMEE: (0-2)");
+    then_response_is(&mut world, "A", "OK");
+
+    // Set to 1 (numeric)
     when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CMEE?");
+    then_response_is(&mut world, "A", "+CMEE: 1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Set to 2 (verbose)
+    when_at_command_sent(&mut world, "A", "AT+CMEE=2");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CMEE?");
+    then_response_is(&mut world, "A", "+CMEE: 2");
+    then_response_is(&mut world, "A", "OK");
+
+    // Set to invalid value (3) returns ERROR and doesn't change mode
+    when_at_command_sent(&mut world, "A", "AT+CMEE=3");
+    then_response_is(&mut world, "A", "ERROR");
+    when_at_command_sent(&mut world, "A", "AT+CMEE?");
+    then_response_is(&mut world, "A", "+CMEE: 2");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -278,7 +307,8 @@ fn test_get_capabilities() {
     let mut world = World::new();
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+GCAP");
-    then_response_is(&mut world, "A", "+GCAP: +FCLASS,+DS\r\nOK");
+    then_response_is(&mut world, "A", "+GCAP: +FCLASS,+DS");
+    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Set Automatic Disconnect Delay
@@ -381,4 +411,32 @@ fn test_set_te_ta_local_data_flow_control() {
 
     when_at_command_sent(&mut world, "A", "AT&V");
     then_response_contains(&mut world, "A", "IFC:3,4");
+}
+
+// Scenario: Get Product Serial Number (IMEI)
+//   Given a modem "A"
+//   When AT command "AT+CGSN" is sent to "A"
+//   Then response from "A" is "867400022047199"
+//   And response from "A" is "OK"
+#[test]
+fn test_get_product_serial_number_gsm() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CGSN");
+    then_response_is(&mut world, "A", "867400022047199");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Get Product Serial Number with Type (IMEI + SVN)
+//   Given a modem "A"
+//   When AT command "AT+CGSN=2" is sent to "A"
+//   Then response from "A" is "86740002204719901"
+//   And response from "A" is "OK"
+#[test]
+fn test_get_product_serial_number_gsm_with_type() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CGSN=2");
+    then_response_is(&mut world, "A", "86740002204719901");
+    then_response_is(&mut world, "A", "OK");
 }

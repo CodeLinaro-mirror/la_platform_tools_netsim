@@ -27,15 +27,6 @@ use tracing::warn;
 
 // --- INI File Management ---
 
-/// Discovery configuration (must remain readable by all instances).
-const INI_FILENAME: &str = "netsim.ini";
-
-/// File used for primary instance synchronization.
-/// On Windows, locking the discovery file would mean it cannot be read by other
-/// processes hence the separation from [INI_FILENAME].
-const LOCK_FILENAME: &str = "netsim.ini.lock";
-const INIT_LOCK_FILENAME: &str = "netsim.ini.init.lock";
-
 /// Parsed configuration from the INI file.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct NetsimConfig {
@@ -166,16 +157,26 @@ pub enum IniFileAccess {
 pub struct IniFile {
     path: PathBuf,
     lock_path: PathBuf,
+    init_lock_path: PathBuf,
     unlocked_lock_file: File,
 }
 
 impl IniFile {
     /// Creates a new `IniFile` manager for an INI file in the specified
     /// directory.
-    pub fn new_for_dir(dir: PathBuf) -> io::Result<Self> {
+    ///
+    /// `instance_num` is necessary to support Cuttlefish multi-instance
+    /// environments by creating instance-specific INI and lock files.
+    pub fn new_for_dir(dir: PathBuf, instance_num: u16) -> io::Result<Self> {
         fs::create_dir_all(&dir)?;
-        let path = dir.join(INI_FILENAME);
-        let lock_path = dir.join(LOCK_FILENAME);
+        let ini_filename = common::util::ini_file::get_ini_filename(instance_num);
+        let lock_filename = format!("{ini_filename}.lock");
+        let init_lock_filename = format!("{ini_filename}.init.lock");
+
+        let path = dir.join(ini_filename);
+        let lock_path = dir.join(lock_filename);
+        let init_lock_path = dir.join(init_lock_filename);
+
         let unlocked_lock_file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -183,22 +184,24 @@ impl IniFile {
             .truncate(false)
             .open(&lock_path)?;
 
-        Ok(IniFile { path, lock_path, unlocked_lock_file })
+        Ok(IniFile { path, lock_path, init_lock_path, unlocked_lock_file })
     }
 
     /// Attempts to acquire the lock and determine the access level.
     pub fn try_acquire(self) -> io::Result<IniFileAccess> {
-        let init_lock_path = self.path.with_file_name(INIT_LOCK_FILENAME);
         match self.unlocked_lock_file.try_lock() {
             Ok(()) => Ok(IniFileAccess::Writer(IniFileUninitialized::new(
                 self.path,
                 self.lock_path,
-                init_lock_path,
+                self.init_lock_path,
                 self.unlocked_lock_file,
             )?)),
             Err(TryLockError::WouldBlock) => {
-                let init_lock_result =
-                    OpenOptions::new().read(true).write(true).truncate(false).open(&init_lock_path);
+                let init_lock_result = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .truncate(false)
+                    .open(&self.init_lock_path);
 
                 match init_lock_result {
                     Ok(init_lock) => match init_lock.try_lock() {
@@ -292,7 +295,7 @@ mod tests {
     #[test]
     fn test_ini_file_owner_flow() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
+        let ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf(), 1).unwrap();
 
         match ini_file.try_acquire() {
             Ok(IniFileAccess::Writer(guard)) => {
@@ -300,7 +303,7 @@ mod tests {
                 data.insert("grpc.port".to_string(), "8554".to_string());
                 let _initialized_guard = guard.write(&data).unwrap();
 
-                let ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
+                let ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf(), 1).unwrap();
                 match ini_file2.try_acquire() {
                     Ok(IniFileAccess::Reader(config)) => {
                         assert_eq!(config.grpc_port, 8554);
@@ -310,5 +313,13 @@ mod tests {
             }
             _ => panic!("Expected Writer access"),
         }
+    }
+
+    #[test]
+    fn test_ini_file_multi_instance_paths() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf(), 2).unwrap();
+        assert_eq!(ini_file.path.file_name().unwrap(), "netsim_2.ini");
+        assert_eq!(ini_file.lock_path.file_name().unwrap(), "netsim_2.ini.lock");
     }
 }

@@ -21,6 +21,7 @@ use netsim_proto::{
     frontend::{CreateDeviceRequest, DeleteChipRequest, DeleteDeviceRequest},
     frontend_grpc::FrontendServiceClient,
     model::{ChipCreate, DeviceCreate},
+    nfc_service_grpc::NfcServiceClient,
     packet_streamer_grpc::PacketStreamerClient,
     protobuf::{EnumOrUnknown, MessageField},
 };
@@ -36,6 +37,7 @@ pub struct World {
     pub daemon_task: Option<tokio::task::JoinHandle<()>>,
     pub frontend_client: FrontendServiceClient,
     pub access_point_client: AccessPointServiceClient,
+    pub nfc_client: NfcServiceClient,
     pub packet_client: PacketStreamerClient,
     pub capture_client: capture_actor::CaptureClient,
     pub packet_sender:
@@ -44,6 +46,7 @@ pub struct World {
         Option<grpcio::ClientDuplexReceiver<netsim_proto::packet_streamer::PacketResponse>>,
 
     pub grpc_port: u16,
+    pub grpc_addr: std::net::SocketAddr,
     _temp_dir: PathBuf,
     _ini_guard: Option<daemon::IniFileInitialized>,
 }
@@ -83,7 +86,8 @@ impl World {
             _ => panic!("Expected to start as Owner"),
         };
 
-        let grpc_port = daemon.grpc_port().expect("NetsimDaemon has no gRPC port");
+        let grpc_addr = daemon.grpc_address().expect("NetsimDaemon has no gRPC address");
+        let grpc_port = grpc_addr.port();
 
         // Allow some time for bindings
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -91,9 +95,10 @@ impl World {
         let capture_client = daemon.capture_client().clone();
 
         let env = SHARED_ENV.get_or_init(|| Arc::new(grpcio::Environment::new(1))).clone();
-        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", grpc_port));
+        let ch = ChannelBuilder::new(env).connect(&format!("{}", grpc_addr));
         let frontend_client = FrontendServiceClient::new(ch.clone());
         let access_point_client = AccessPointServiceClient::new(ch.clone());
+        let nfc_client = NfcServiceClient::new(ch.clone());
         let packet_client = PacketStreamerClient::new(ch.clone());
 
         World {
@@ -101,14 +106,20 @@ impl World {
             daemon_task: None,
             frontend_client,
             access_point_client,
+            nfc_client,
             packet_client,
             capture_client,
             packet_sender: None,
             packet_receiver: None,
             grpc_port,
+            grpc_addr,
             _temp_dir: temp_dir,
             _ini_guard: Some(ini_guard),
         }
+    }
+
+    pub fn get_temp_dir(&self) -> &std::path::Path {
+        &self._temp_dir
     }
 
     /// When I request the version

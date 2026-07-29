@@ -385,6 +385,12 @@ pub struct NetsimRadioStats {
     ///  Recent Invalid Packets
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.invalid_packets)
     pub invalid_packets: ::std::vec::Vec<InvalidPacket>,
+    ///  Payload messages transmitted on P2P medium
+    // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.p2p_tx_count)
+    pub p2p_tx_count: ::std::option::Option<i32>,
+    ///  Payload messages received on P2P medium
+    // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.p2p_rx_count)
+    pub p2p_rx_count: ::std::option::Option<i32>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.NetsimRadioStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -537,8 +543,46 @@ impl NetsimRadioStats {
         self.rx_bytes = ::std::option::Option::Some(v);
     }
 
+    // optional int32 p2p_tx_count = 9;
+
+    pub fn p2p_tx_count(&self) -> i32 {
+        self.p2p_tx_count.unwrap_or(0)
+    }
+
+    pub fn clear_p2p_tx_count(&mut self) {
+        self.p2p_tx_count = ::std::option::Option::None;
+    }
+
+    pub fn has_p2p_tx_count(&self) -> bool {
+        self.p2p_tx_count.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_p2p_tx_count(&mut self, v: i32) {
+        self.p2p_tx_count = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 p2p_rx_count = 10;
+
+    pub fn p2p_rx_count(&self) -> i32 {
+        self.p2p_rx_count.unwrap_or(0)
+    }
+
+    pub fn clear_p2p_rx_count(&mut self) {
+        self.p2p_rx_count = ::std::option::Option::None;
+    }
+
+    pub fn has_p2p_rx_count(&self) -> bool {
+        self.p2p_rx_count.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_p2p_rx_count(&mut self, v: i32) {
+        self.p2p_rx_count = ::std::option::Option::Some(v);
+    }
+
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(8);
+        let mut fields = ::std::vec::Vec::with_capacity(10);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "device_id",
@@ -579,6 +623,16 @@ impl NetsimRadioStats {
             "invalid_packets",
             |m: &NetsimRadioStats| { &m.invalid_packets },
             |m: &mut NetsimRadioStats| { &mut m.invalid_packets },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "p2p_tx_count",
+            |m: &NetsimRadioStats| { &m.p2p_tx_count },
+            |m: &mut NetsimRadioStats| { &mut m.p2p_tx_count },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "p2p_rx_count",
+            |m: &NetsimRadioStats| { &m.p2p_rx_count },
+            |m: &mut NetsimRadioStats| { &mut m.p2p_rx_count },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimRadioStats>(
             "NetsimRadioStats",
@@ -622,6 +676,12 @@ impl ::protobuf::Message for NetsimRadioStats {
                 66 => {
                     self.invalid_packets.push(is.read_message()?);
                 },
+                72 => {
+                    self.p2p_tx_count = ::std::option::Option::Some(is.read_int32()?);
+                },
+                80 => {
+                    self.p2p_rx_count = ::std::option::Option::Some(is.read_int32()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -659,6 +719,12 @@ impl ::protobuf::Message for NetsimRadioStats {
             let len = value.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         };
+        if let Some(v) = self.p2p_tx_count {
+            my_size += ::protobuf::rt::int32_size(9, v);
+        }
+        if let Some(v) = self.p2p_rx_count {
+            my_size += ::protobuf::rt::int32_size(10, v);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -689,6 +755,12 @@ impl ::protobuf::Message for NetsimRadioStats {
         for v in &self.invalid_packets {
             ::protobuf::rt::write_message_field_with_cached_size(8, v, os)?;
         };
+        if let Some(v) = self.p2p_tx_count {
+            os.write_int32(9, v)?;
+        }
+        if let Some(v) = self.p2p_rx_count {
+            os.write_int32(10, v)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -714,6 +786,8 @@ impl ::protobuf::Message for NetsimRadioStats {
         self.tx_bytes = ::std::option::Option::None;
         self.rx_bytes = ::std::option::Option::None;
         self.invalid_packets.clear();
+        self.p2p_tx_count = ::std::option::Option::None;
+        self.p2p_rx_count = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
@@ -727,6 +801,8 @@ impl ::protobuf::Message for NetsimRadioStats {
             tx_bytes: ::std::option::Option::None,
             rx_bytes: ::std::option::Option::None,
             invalid_packets: ::std::vec::Vec::new(),
+            p2p_tx_count: ::std::option::Option::None,
+            p2p_rx_count: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -866,6 +942,8 @@ pub struct NetsimFrontendStats {
     pub list_capture: ::std::option::Option<u32>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.get_capture)
     pub get_capture: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.delete_device)
+    pub delete_device: ::std::option::Option<u32>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.NetsimFrontendStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -1072,8 +1150,27 @@ impl NetsimFrontendStats {
         self.get_capture = ::std::option::Option::Some(v);
     }
 
+    // optional uint32 delete_device = 11;
+
+    pub fn delete_device(&self) -> u32 {
+        self.delete_device.unwrap_or(0)
+    }
+
+    pub fn clear_delete_device(&mut self) {
+        self.delete_device = ::std::option::Option::None;
+    }
+
+    pub fn has_delete_device(&self) -> bool {
+        self.delete_device.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_delete_device(&mut self, v: u32) {
+        self.delete_device = ::std::option::Option::Some(v);
+    }
+
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(10);
+        let mut fields = ::std::vec::Vec::with_capacity(11);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "get_version",
@@ -1125,6 +1222,11 @@ impl NetsimFrontendStats {
             |m: &NetsimFrontendStats| { &m.get_capture },
             |m: &mut NetsimFrontendStats| { &mut m.get_capture },
         ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "delete_device",
+            |m: &NetsimFrontendStats| { &m.delete_device },
+            |m: &mut NetsimFrontendStats| { &mut m.delete_device },
+        ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimFrontendStats>(
             "NetsimFrontendStats",
             fields,
@@ -1173,6 +1275,9 @@ impl ::protobuf::Message for NetsimFrontendStats {
                 80 => {
                     self.get_capture = ::std::option::Option::Some(is.read_uint32()?);
                 },
+                88 => {
+                    self.delete_device = ::std::option::Option::Some(is.read_uint32()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -1215,6 +1320,9 @@ impl ::protobuf::Message for NetsimFrontendStats {
         if let Some(v) = self.get_capture {
             my_size += ::protobuf::rt::uint32_size(10, v);
         }
+        if let Some(v) = self.delete_device {
+            my_size += ::protobuf::rt::uint32_size(11, v);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -1251,6 +1359,9 @@ impl ::protobuf::Message for NetsimFrontendStats {
         if let Some(v) = self.get_capture {
             os.write_uint32(10, v)?;
         }
+        if let Some(v) = self.delete_device {
+            os.write_uint32(11, v)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -1278,6 +1389,7 @@ impl ::protobuf::Message for NetsimFrontendStats {
         self.patch_capture = ::std::option::Option::None;
         self.list_capture = ::std::option::Option::None;
         self.get_capture = ::std::option::Option::None;
+        self.delete_device = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
@@ -1293,6 +1405,7 @@ impl ::protobuf::Message for NetsimFrontendStats {
             patch_capture: ::std::option::Option::None,
             list_capture: ::std::option::Option::None,
             get_capture: ::std::option::Option::None,
+            delete_device: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -2583,6 +2696,863 @@ impl ::protobuf::reflect::ProtobufValue for WifiStats {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
+///  Detailed NFC stats
+// @@protoc_insertion_point(message:netsim.stats.NfcStats)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct NfcStats {
+    // message fields
+    ///  === Error Counters ===
+    ///  Errors encountered while parsing, decoding, or handling NCI packets.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.nci_errors)
+    pub nci_errors: ::std::option::Option<i32>,
+    ///  Errors related to Casimir simulation backend or RF scene routing.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.casimir_errors)
+    pub casimir_errors: ::std::option::Option<i32>,
+    ///  Errors related to contactless RF transmission or tag emulation.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.rf_errors)
+    pub rf_errors: ::std::option::Option<i32>,
+    ///  Other uncategorized NFC errors.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.other_errors)
+    pub other_errors: ::std::option::Option<i32>,
+    ///  === Core Traffic Flow & Type Counters ===
+    ///  NCI control command packets received from guest OS.
+    ///  Mapped to Android NFC HAL / stack control operations (e.g., adapter enable/disable, RF discovery configuration, routing updates).
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.nci_commands_rx)
+    pub nci_commands_rx: ::std::option::Option<i32>,
+    ///  NCI control response packets transmitted to guest OS.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.nci_responses_tx)
+    pub nci_responses_tx: ::std::option::Option<i32>,
+    ///  NCI notification packets transmitted to guest OS.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.nci_notifications_tx)
+    pub nci_notifications_tx: ::std::option::Option<i32>,
+    ///  NCI data packets received from guest OS.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.nci_data_rx)
+    pub nci_data_rx: ::std::option::Option<i32>,
+    ///  NCI data packets transmitted to guest OS.
+    ///  Mapped to Android NFC HAL / Framework API payload I/O operations (e.g., Ndef read/write, IsoDep/Tag transceive, HostApduService APDU exchanges).
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.nci_data_tx)
+    pub nci_data_tx: ::std::option::Option<i32>,
+    ///  Over-the-air RF contactless tap events transmitted via Casimir.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.rf_taps_tx)
+    pub rf_taps_tx: ::std::option::Option<i32>,
+    ///  Over-the-air RF contactless tap events received via Casimir.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.rf_taps_rx)
+    pub rf_taps_rx: ::std::option::Option<i32>,
+    ///  === Simulation & Emulation Transaction Counters ===
+    ///  Number of Card Emulation (HCE) transactions simulated.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.card_emulation_count)
+    pub card_emulation_count: ::std::option::Option<i32>,
+    ///  Number of Tag Emulation transactions simulated.
+    // @@protoc_insertion_point(field:netsim.stats.NfcStats.tag_emulation_count)
+    pub tag_emulation_count: ::std::option::Option<i32>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.stats.NfcStats.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a NfcStats {
+    fn default() -> &'a NfcStats {
+        <NfcStats as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl NfcStats {
+    pub fn new() -> NfcStats {
+        ::std::default::Default::default()
+    }
+
+    // optional int32 nci_errors = 1;
+
+    pub fn nci_errors(&self) -> i32 {
+        self.nci_errors.unwrap_or(0)
+    }
+
+    pub fn clear_nci_errors(&mut self) {
+        self.nci_errors = ::std::option::Option::None;
+    }
+
+    pub fn has_nci_errors(&self) -> bool {
+        self.nci_errors.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_nci_errors(&mut self, v: i32) {
+        self.nci_errors = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 casimir_errors = 2;
+
+    pub fn casimir_errors(&self) -> i32 {
+        self.casimir_errors.unwrap_or(0)
+    }
+
+    pub fn clear_casimir_errors(&mut self) {
+        self.casimir_errors = ::std::option::Option::None;
+    }
+
+    pub fn has_casimir_errors(&self) -> bool {
+        self.casimir_errors.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_casimir_errors(&mut self, v: i32) {
+        self.casimir_errors = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 rf_errors = 3;
+
+    pub fn rf_errors(&self) -> i32 {
+        self.rf_errors.unwrap_or(0)
+    }
+
+    pub fn clear_rf_errors(&mut self) {
+        self.rf_errors = ::std::option::Option::None;
+    }
+
+    pub fn has_rf_errors(&self) -> bool {
+        self.rf_errors.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_rf_errors(&mut self, v: i32) {
+        self.rf_errors = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 other_errors = 4;
+
+    pub fn other_errors(&self) -> i32 {
+        self.other_errors.unwrap_or(0)
+    }
+
+    pub fn clear_other_errors(&mut self) {
+        self.other_errors = ::std::option::Option::None;
+    }
+
+    pub fn has_other_errors(&self) -> bool {
+        self.other_errors.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_other_errors(&mut self, v: i32) {
+        self.other_errors = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 nci_commands_rx = 5;
+
+    pub fn nci_commands_rx(&self) -> i32 {
+        self.nci_commands_rx.unwrap_or(0)
+    }
+
+    pub fn clear_nci_commands_rx(&mut self) {
+        self.nci_commands_rx = ::std::option::Option::None;
+    }
+
+    pub fn has_nci_commands_rx(&self) -> bool {
+        self.nci_commands_rx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_nci_commands_rx(&mut self, v: i32) {
+        self.nci_commands_rx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 nci_responses_tx = 6;
+
+    pub fn nci_responses_tx(&self) -> i32 {
+        self.nci_responses_tx.unwrap_or(0)
+    }
+
+    pub fn clear_nci_responses_tx(&mut self) {
+        self.nci_responses_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_nci_responses_tx(&self) -> bool {
+        self.nci_responses_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_nci_responses_tx(&mut self, v: i32) {
+        self.nci_responses_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 nci_notifications_tx = 7;
+
+    pub fn nci_notifications_tx(&self) -> i32 {
+        self.nci_notifications_tx.unwrap_or(0)
+    }
+
+    pub fn clear_nci_notifications_tx(&mut self) {
+        self.nci_notifications_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_nci_notifications_tx(&self) -> bool {
+        self.nci_notifications_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_nci_notifications_tx(&mut self, v: i32) {
+        self.nci_notifications_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 nci_data_rx = 8;
+
+    pub fn nci_data_rx(&self) -> i32 {
+        self.nci_data_rx.unwrap_or(0)
+    }
+
+    pub fn clear_nci_data_rx(&mut self) {
+        self.nci_data_rx = ::std::option::Option::None;
+    }
+
+    pub fn has_nci_data_rx(&self) -> bool {
+        self.nci_data_rx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_nci_data_rx(&mut self, v: i32) {
+        self.nci_data_rx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 nci_data_tx = 9;
+
+    pub fn nci_data_tx(&self) -> i32 {
+        self.nci_data_tx.unwrap_or(0)
+    }
+
+    pub fn clear_nci_data_tx(&mut self) {
+        self.nci_data_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_nci_data_tx(&self) -> bool {
+        self.nci_data_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_nci_data_tx(&mut self, v: i32) {
+        self.nci_data_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 rf_taps_tx = 10;
+
+    pub fn rf_taps_tx(&self) -> i32 {
+        self.rf_taps_tx.unwrap_or(0)
+    }
+
+    pub fn clear_rf_taps_tx(&mut self) {
+        self.rf_taps_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_rf_taps_tx(&self) -> bool {
+        self.rf_taps_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_rf_taps_tx(&mut self, v: i32) {
+        self.rf_taps_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 rf_taps_rx = 11;
+
+    pub fn rf_taps_rx(&self) -> i32 {
+        self.rf_taps_rx.unwrap_or(0)
+    }
+
+    pub fn clear_rf_taps_rx(&mut self) {
+        self.rf_taps_rx = ::std::option::Option::None;
+    }
+
+    pub fn has_rf_taps_rx(&self) -> bool {
+        self.rf_taps_rx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_rf_taps_rx(&mut self, v: i32) {
+        self.rf_taps_rx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 card_emulation_count = 12;
+
+    pub fn card_emulation_count(&self) -> i32 {
+        self.card_emulation_count.unwrap_or(0)
+    }
+
+    pub fn clear_card_emulation_count(&mut self) {
+        self.card_emulation_count = ::std::option::Option::None;
+    }
+
+    pub fn has_card_emulation_count(&self) -> bool {
+        self.card_emulation_count.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_card_emulation_count(&mut self, v: i32) {
+        self.card_emulation_count = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 tag_emulation_count = 13;
+
+    pub fn tag_emulation_count(&self) -> i32 {
+        self.tag_emulation_count.unwrap_or(0)
+    }
+
+    pub fn clear_tag_emulation_count(&mut self) {
+        self.tag_emulation_count = ::std::option::Option::None;
+    }
+
+    pub fn has_tag_emulation_count(&self) -> bool {
+        self.tag_emulation_count.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_tag_emulation_count(&mut self, v: i32) {
+        self.tag_emulation_count = ::std::option::Option::Some(v);
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(13);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "nci_errors",
+            |m: &NfcStats| { &m.nci_errors },
+            |m: &mut NfcStats| { &mut m.nci_errors },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "casimir_errors",
+            |m: &NfcStats| { &m.casimir_errors },
+            |m: &mut NfcStats| { &mut m.casimir_errors },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "rf_errors",
+            |m: &NfcStats| { &m.rf_errors },
+            |m: &mut NfcStats| { &mut m.rf_errors },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "other_errors",
+            |m: &NfcStats| { &m.other_errors },
+            |m: &mut NfcStats| { &mut m.other_errors },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "nci_commands_rx",
+            |m: &NfcStats| { &m.nci_commands_rx },
+            |m: &mut NfcStats| { &mut m.nci_commands_rx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "nci_responses_tx",
+            |m: &NfcStats| { &m.nci_responses_tx },
+            |m: &mut NfcStats| { &mut m.nci_responses_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "nci_notifications_tx",
+            |m: &NfcStats| { &m.nci_notifications_tx },
+            |m: &mut NfcStats| { &mut m.nci_notifications_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "nci_data_rx",
+            |m: &NfcStats| { &m.nci_data_rx },
+            |m: &mut NfcStats| { &mut m.nci_data_rx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "nci_data_tx",
+            |m: &NfcStats| { &m.nci_data_tx },
+            |m: &mut NfcStats| { &mut m.nci_data_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "rf_taps_tx",
+            |m: &NfcStats| { &m.rf_taps_tx },
+            |m: &mut NfcStats| { &mut m.rf_taps_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "rf_taps_rx",
+            |m: &NfcStats| { &m.rf_taps_rx },
+            |m: &mut NfcStats| { &mut m.rf_taps_rx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "card_emulation_count",
+            |m: &NfcStats| { &m.card_emulation_count },
+            |m: &mut NfcStats| { &mut m.card_emulation_count },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "tag_emulation_count",
+            |m: &NfcStats| { &m.tag_emulation_count },
+            |m: &mut NfcStats| { &mut m.tag_emulation_count },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NfcStats>(
+            "NfcStats",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for NfcStats {
+    const NAME: &'static str = "NfcStats";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.nci_errors = ::std::option::Option::Some(is.read_int32()?);
+                },
+                16 => {
+                    self.casimir_errors = ::std::option::Option::Some(is.read_int32()?);
+                },
+                24 => {
+                    self.rf_errors = ::std::option::Option::Some(is.read_int32()?);
+                },
+                32 => {
+                    self.other_errors = ::std::option::Option::Some(is.read_int32()?);
+                },
+                40 => {
+                    self.nci_commands_rx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                48 => {
+                    self.nci_responses_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                56 => {
+                    self.nci_notifications_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                64 => {
+                    self.nci_data_rx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                72 => {
+                    self.nci_data_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                80 => {
+                    self.rf_taps_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                88 => {
+                    self.rf_taps_rx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                96 => {
+                    self.card_emulation_count = ::std::option::Option::Some(is.read_int32()?);
+                },
+                104 => {
+                    self.tag_emulation_count = ::std::option::Option::Some(is.read_int32()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.nci_errors {
+            my_size += ::protobuf::rt::int32_size(1, v);
+        }
+        if let Some(v) = self.casimir_errors {
+            my_size += ::protobuf::rt::int32_size(2, v);
+        }
+        if let Some(v) = self.rf_errors {
+            my_size += ::protobuf::rt::int32_size(3, v);
+        }
+        if let Some(v) = self.other_errors {
+            my_size += ::protobuf::rt::int32_size(4, v);
+        }
+        if let Some(v) = self.nci_commands_rx {
+            my_size += ::protobuf::rt::int32_size(5, v);
+        }
+        if let Some(v) = self.nci_responses_tx {
+            my_size += ::protobuf::rt::int32_size(6, v);
+        }
+        if let Some(v) = self.nci_notifications_tx {
+            my_size += ::protobuf::rt::int32_size(7, v);
+        }
+        if let Some(v) = self.nci_data_rx {
+            my_size += ::protobuf::rt::int32_size(8, v);
+        }
+        if let Some(v) = self.nci_data_tx {
+            my_size += ::protobuf::rt::int32_size(9, v);
+        }
+        if let Some(v) = self.rf_taps_tx {
+            my_size += ::protobuf::rt::int32_size(10, v);
+        }
+        if let Some(v) = self.rf_taps_rx {
+            my_size += ::protobuf::rt::int32_size(11, v);
+        }
+        if let Some(v) = self.card_emulation_count {
+            my_size += ::protobuf::rt::int32_size(12, v);
+        }
+        if let Some(v) = self.tag_emulation_count {
+            my_size += ::protobuf::rt::int32_size(13, v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.nci_errors {
+            os.write_int32(1, v)?;
+        }
+        if let Some(v) = self.casimir_errors {
+            os.write_int32(2, v)?;
+        }
+        if let Some(v) = self.rf_errors {
+            os.write_int32(3, v)?;
+        }
+        if let Some(v) = self.other_errors {
+            os.write_int32(4, v)?;
+        }
+        if let Some(v) = self.nci_commands_rx {
+            os.write_int32(5, v)?;
+        }
+        if let Some(v) = self.nci_responses_tx {
+            os.write_int32(6, v)?;
+        }
+        if let Some(v) = self.nci_notifications_tx {
+            os.write_int32(7, v)?;
+        }
+        if let Some(v) = self.nci_data_rx {
+            os.write_int32(8, v)?;
+        }
+        if let Some(v) = self.nci_data_tx {
+            os.write_int32(9, v)?;
+        }
+        if let Some(v) = self.rf_taps_tx {
+            os.write_int32(10, v)?;
+        }
+        if let Some(v) = self.rf_taps_rx {
+            os.write_int32(11, v)?;
+        }
+        if let Some(v) = self.card_emulation_count {
+            os.write_int32(12, v)?;
+        }
+        if let Some(v) = self.tag_emulation_count {
+            os.write_int32(13, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> NfcStats {
+        NfcStats::new()
+    }
+
+    fn clear(&mut self) {
+        self.nci_errors = ::std::option::Option::None;
+        self.casimir_errors = ::std::option::Option::None;
+        self.rf_errors = ::std::option::Option::None;
+        self.other_errors = ::std::option::Option::None;
+        self.nci_commands_rx = ::std::option::Option::None;
+        self.nci_responses_tx = ::std::option::Option::None;
+        self.nci_notifications_tx = ::std::option::Option::None;
+        self.nci_data_rx = ::std::option::Option::None;
+        self.nci_data_tx = ::std::option::Option::None;
+        self.rf_taps_tx = ::std::option::Option::None;
+        self.rf_taps_rx = ::std::option::Option::None;
+        self.card_emulation_count = ::std::option::Option::None;
+        self.tag_emulation_count = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static NfcStats {
+        static instance: NfcStats = NfcStats {
+            nci_errors: ::std::option::Option::None,
+            casimir_errors: ::std::option::Option::None,
+            rf_errors: ::std::option::Option::None,
+            other_errors: ::std::option::Option::None,
+            nci_commands_rx: ::std::option::Option::None,
+            nci_responses_tx: ::std::option::Option::None,
+            nci_notifications_tx: ::std::option::Option::None,
+            nci_data_rx: ::std::option::Option::None,
+            nci_data_tx: ::std::option::Option::None,
+            rf_taps_tx: ::std::option::Option::None,
+            rf_taps_rx: ::std::option::Option::None,
+            card_emulation_count: ::std::option::Option::None,
+            tag_emulation_count: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for NfcStats {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("NfcStats").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for NfcStats {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for NfcStats {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+///  Frontend statistics for NfcService gRPC API calls
+// @@protoc_insertion_point(message:netsim.stats.NfcServiceStats)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct NfcServiceStats {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.stats.NfcServiceStats.get_status)
+    pub get_status: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcServiceStats.set_power)
+    pub set_power: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcServiceStats.poll)
+    pub poll: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcServiceStats.send_apdu)
+    pub send_apdu: ::std::option::Option<u32>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.stats.NfcServiceStats.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a NfcServiceStats {
+    fn default() -> &'a NfcServiceStats {
+        <NfcServiceStats as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl NfcServiceStats {
+    pub fn new() -> NfcServiceStats {
+        ::std::default::Default::default()
+    }
+
+    // optional uint32 get_status = 1;
+
+    pub fn get_status(&self) -> u32 {
+        self.get_status.unwrap_or(0)
+    }
+
+    pub fn clear_get_status(&mut self) {
+        self.get_status = ::std::option::Option::None;
+    }
+
+    pub fn has_get_status(&self) -> bool {
+        self.get_status.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_get_status(&mut self, v: u32) {
+        self.get_status = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 set_power = 2;
+
+    pub fn set_power(&self) -> u32 {
+        self.set_power.unwrap_or(0)
+    }
+
+    pub fn clear_set_power(&mut self) {
+        self.set_power = ::std::option::Option::None;
+    }
+
+    pub fn has_set_power(&self) -> bool {
+        self.set_power.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_set_power(&mut self, v: u32) {
+        self.set_power = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 poll = 3;
+
+    pub fn poll(&self) -> u32 {
+        self.poll.unwrap_or(0)
+    }
+
+    pub fn clear_poll(&mut self) {
+        self.poll = ::std::option::Option::None;
+    }
+
+    pub fn has_poll(&self) -> bool {
+        self.poll.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_poll(&mut self, v: u32) {
+        self.poll = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 send_apdu = 4;
+
+    pub fn send_apdu(&self) -> u32 {
+        self.send_apdu.unwrap_or(0)
+    }
+
+    pub fn clear_send_apdu(&mut self) {
+        self.send_apdu = ::std::option::Option::None;
+    }
+
+    pub fn has_send_apdu(&self) -> bool {
+        self.send_apdu.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_send_apdu(&mut self, v: u32) {
+        self.send_apdu = ::std::option::Option::Some(v);
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(4);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "get_status",
+            |m: &NfcServiceStats| { &m.get_status },
+            |m: &mut NfcServiceStats| { &mut m.get_status },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "set_power",
+            |m: &NfcServiceStats| { &m.set_power },
+            |m: &mut NfcServiceStats| { &mut m.set_power },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "poll",
+            |m: &NfcServiceStats| { &m.poll },
+            |m: &mut NfcServiceStats| { &mut m.poll },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "send_apdu",
+            |m: &NfcServiceStats| { &m.send_apdu },
+            |m: &mut NfcServiceStats| { &mut m.send_apdu },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NfcServiceStats>(
+            "NfcServiceStats",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for NfcServiceStats {
+    const NAME: &'static str = "NfcServiceStats";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.get_status = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                16 => {
+                    self.set_power = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                24 => {
+                    self.poll = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                32 => {
+                    self.send_apdu = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.get_status {
+            my_size += ::protobuf::rt::uint32_size(1, v);
+        }
+        if let Some(v) = self.set_power {
+            my_size += ::protobuf::rt::uint32_size(2, v);
+        }
+        if let Some(v) = self.poll {
+            my_size += ::protobuf::rt::uint32_size(3, v);
+        }
+        if let Some(v) = self.send_apdu {
+            my_size += ::protobuf::rt::uint32_size(4, v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.get_status {
+            os.write_uint32(1, v)?;
+        }
+        if let Some(v) = self.set_power {
+            os.write_uint32(2, v)?;
+        }
+        if let Some(v) = self.poll {
+            os.write_uint32(3, v)?;
+        }
+        if let Some(v) = self.send_apdu {
+            os.write_uint32(4, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> NfcServiceStats {
+        NfcServiceStats::new()
+    }
+
+    fn clear(&mut self) {
+        self.get_status = ::std::option::Option::None;
+        self.set_power = ::std::option::Option::None;
+        self.poll = ::std::option::Option::None;
+        self.send_apdu = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static NfcServiceStats {
+        static instance: NfcServiceStats = NfcServiceStats {
+            get_status: ::std::option::Option::None,
+            set_power: ::std::option::Option::None,
+            poll: ::std::option::Option::None,
+            send_apdu: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for NfcServiceStats {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("NfcServiceStats").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for NfcServiceStats {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for NfcServiceStats {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
 ///  Statistics for a netsim session.
 // @@protoc_insertion_point(message:netsim.stats.NetsimStats)
 #[derive(PartialEq,Clone,Default,Debug)]
@@ -2612,6 +3582,12 @@ pub struct NetsimStats {
     ///  Wi-Fi statistics
     // @@protoc_insertion_point(field:netsim.stats.NetsimStats.wifi_stats)
     pub wifi_stats: ::protobuf::MessageField<WifiStats>,
+    ///  NFC statistics
+    // @@protoc_insertion_point(field:netsim.stats.NetsimStats.nfc_stats)
+    pub nfc_stats: ::protobuf::MessageField<NfcStats>,
+    ///  NFC Service API statistics
+    // @@protoc_insertion_point(field:netsim.stats.NetsimStats.nfc_service_stats)
+    pub nfc_service_stats: ::protobuf::MessageField<NfcServiceStats>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.NetsimStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -2722,7 +3698,7 @@ impl NetsimStats {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(8);
+        let mut fields = ::std::vec::Vec::with_capacity(10);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "duration_secs",
@@ -2763,6 +3739,16 @@ impl NetsimStats {
             "wifi_stats",
             |m: &NetsimStats| { &m.wifi_stats },
             |m: &mut NetsimStats| { &mut m.wifi_stats },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, NfcStats>(
+            "nfc_stats",
+            |m: &NetsimStats| { &m.nfc_stats },
+            |m: &mut NetsimStats| { &mut m.nfc_stats },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, NfcServiceStats>(
+            "nfc_service_stats",
+            |m: &NetsimStats| { &m.nfc_service_stats },
+            |m: &mut NetsimStats| { &mut m.nfc_service_stats },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimStats>(
             "NetsimStats",
@@ -2806,6 +3792,12 @@ impl ::protobuf::Message for NetsimStats {
                 66 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.wifi_stats)?;
                 },
+                74 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.nfc_stats)?;
+                },
+                82 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.nfc_service_stats)?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -2846,6 +3838,14 @@ impl ::protobuf::Message for NetsimStats {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
+        if let Some(v) = self.nfc_stats.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        if let Some(v) = self.nfc_service_stats.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -2876,6 +3876,12 @@ impl ::protobuf::Message for NetsimStats {
         if let Some(v) = self.wifi_stats.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(8, v, os)?;
         }
+        if let Some(v) = self.nfc_stats.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(9, v, os)?;
+        }
+        if let Some(v) = self.nfc_service_stats.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(10, v, os)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -2901,6 +3907,8 @@ impl ::protobuf::Message for NetsimStats {
         self.frontend_stats.clear();
         self.device_stats.clear();
         self.wifi_stats.clear();
+        self.nfc_stats.clear();
+        self.nfc_service_stats.clear();
         self.special_fields.clear();
     }
 
@@ -2914,6 +3922,8 @@ impl ::protobuf::Message for NetsimStats {
             frontend_stats: ::protobuf::MessageField::none(),
             device_stats: ::std::vec::Vec::new(),
             wifi_stats: ::protobuf::MessageField::none(),
+            nfc_stats: ::protobuf::MessageField::none(),
+            nfc_service_stats: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -2944,324 +3954,453 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     on\x12\x16\n\x06packet\x18\x03\x20\x01(\x0cR\x06packet\"P\n\x06Reason\
     \x12\x0b\n\x07UNKNOWN\x10\0\x12\x0f\n\x0bPARSE_ERROR\x10\x01\x12\x0f\n\
     \x0bUNSUPPORTED\x10\x02\x12\n\n\x06OTHERS\x10\x03\x12\x0b\n\x07DELAYED\
-    \x10\x04\"\xb9\x03\n\x10NetsimRadioStats\x12\x1b\n\tdevice_id\x18\x01\
+    \x10\x04\"\xfd\x03\n\x10NetsimRadioStats\x12\x1b\n\tdevice_id\x18\x01\
     \x20\x01(\rR\x08deviceId\x127\n\x04kind\x18\x02\x20\x01(\x0e2#.netsim.st\
     ats.NetsimRadioStats.KindR\x04kind\x12#\n\rduration_secs\x18\x03\x20\x01\
     (\x04R\x0cdurationSecs\x12\x19\n\x08tx_count\x18\x04\x20\x01(\x05R\x07tx\
     Count\x12\x19\n\x08rx_count\x18\x05\x20\x01(\x05R\x07rxCount\x12\x19\n\
     \x08tx_bytes\x18\x06\x20\x01(\x05R\x07txBytes\x12\x19\n\x08rx_bytes\x18\
     \x07\x20\x01(\x05R\x07rxBytes\x12D\n\x0finvalid_packets\x18\x08\x20\x03(\
-    \x0b2\x1b.netsim.stats.InvalidPacketR\x0einvalidPackets\"x\n\x04Kind\x12\
-    \x0f\n\x0bUNSPECIFIED\x10\0\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x01\
-    \x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x02\x12\x12\n\nBLE_BEACON\x10\x03\
-    \x1a\x02\x08\x01\x12\x08\n\x04WIFI\x10\x04\x12\x07\n\x03UWB\x10\x05\x12\
-    \x07\n\x03NFC\x10\x06\"\xea\x02\n\x13NetsimFrontendStats\x12\x1f\n\x0bge\
-    t_version\x18\x01\x20\x01(\rR\ngetVersion\x12#\n\rcreate_device\x18\x02\
-    \x20\x01(\rR\x0ccreateDevice\x12\x1f\n\x0bdelete_chip\x18\x03\x20\x01(\r\
-    R\ndeleteChip\x12!\n\x0cpatch_device\x18\x04\x20\x01(\rR\x0bpatchDevice\
-    \x12\x14\n\x05reset\x18\x05\x20\x01(\rR\x05reset\x12\x1f\n\x0blist_devic\
-    e\x18\x06\x20\x01(\rR\nlistDevice\x12)\n\x10subscribe_device\x18\x07\x20\
-    \x01(\rR\x0fsubscribeDevice\x12#\n\rpatch_capture\x18\x08\x20\x01(\rR\
-    \x0cpatchCapture\x12!\n\x0clist_capture\x18\t\x20\x01(\rR\x0blistCapture\
-    \x12\x1f\n\x0bget_capture\x18\n\x20\x01(\rR\ngetCapture\"\xc8\x01\n\x11N\
-    etsimDeviceStats\x12\x1b\n\tdevice_id\x18\x01\x20\x01(\rR\x08deviceId\
-    \x12\x12\n\x04kind\x18\x02\x20\x01(\tR\x04kind\x12\x18\n\x07version\x18\
-    \x03\x20\x01(\tR\x07version\x12\x1f\n\x0bsdk_version\x18\x04\x20\x01(\tR\
-    \nsdkVersion\x12\x19\n\x08build_id\x18\x05\x20\x01(\tR\x07buildId\x12\
-    \x18\n\x07variant\x18\x06\x20\x01(\tR\x07variant\x12\x12\n\x04arch\x18\
-    \x07\x20\x01(\tR\x04arch\"\x91\x06\n\tWifiStats\x12%\n\x0ehostapd_errors\
-    \x18\x01\x20\x01(\x05R\rhostapdErrors\x12%\n\x0enetwork_errors\x18\x02\
-    \x20\x01(\x05R\rnetworkErrors\x12#\n\rclient_errors\x18\x03\x20\x01(\x05\
-    R\x0cclientErrors\x12!\n\x0cframe_errors\x18\x04\x20\x01(\x05R\x0bframeE\
-    rrors\x12/\n\x13transmission_errors\x18\x05\x20\x01(\x05R\x12transmissio\
-    nErrors\x12!\n\x0cother_errors\x18\x06\x20\x01(\x05R\x0botherErrors\x12&\
-    \n\x0fhwsim_frames_rx\x18\x07\x20\x01(\x05R\rhwsimFramesRx\x12&\n\x0fhws\
-    im_frames_tx\x18\x08\x20\x01(\x05R\rhwsimFramesTx\x12,\n\x12network_pack\
-    ets_tx\x18\t\x20\x01(\x05R\x10networkPacketsTx\x12,\n\x12network_packets\
-    _rx\x18\n\x20\x01(\x05R\x10networkPacketsRx\x12*\n\x11hostapd_frames_tx\
-    \x18\x0b\x20\x01(\x05R\x0fhostapdFramesTx\x12*\n\x11hostapd_frames_rx\
-    \x18\x0c\x20\x01(\x05R\x0fhostapdFramesRx\x12*\n\x11wmedium_frames_tx\
-    \x18\r\x20\x01(\x05R\x0fwmediumFramesTx\x129\n\x19wmedium_unicast_frames\
-    _tx\x18\x0e\x20\x01(\x05R\x16wmediumUnicastFramesTx\x12$\n\x0emgmt_frame\
-    s_rx\x18\x0f\x20\x01(\x05R\x0cmgmtFramesRx\x12\x1d\n\nmdns_count\x18\x10\
-    \x20\x01(\x05R\tmdnsCount\x126\n\x17max_download_throughput\x18\x11\x20\
-    \x01(\x02R\x15maxDownloadThroughput\x122\n\x15max_upload_throughput\x18\
-    \x12\x20\x01(\x02R\x13maxUploadThroughput\"\xae\x03\n\x0bNetsimStats\x12\
-    #\n\rduration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0cdevic\
-    e_count\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurrent_d\
-    evices\x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\x12?\n\x0bradio_st\
-    ats\x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradioStats\
-    \x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07version\x12H\n\x0efrontend_\
-    stats\x18\x06\x20\x01(\x0b2!.netsim.stats.NetsimFrontendStatsR\rfrontend\
-    Stats\x12B\n\x0cdevice_stats\x18\x07\x20\x03(\x0b2\x1f.netsim.stats.Nets\
-    imDeviceStatsR\x0bdeviceStats\x126\n\nwifi_stats\x18\x08\x20\x01(\x0b2\
-    \x17.netsim.stats.WifiStatsR\twifiStatsJ\xd95\n\x07\x12\x05\x03\0\x91\
-    \x01\x01\n_\n\x01\x0c\x12\x03\x03\0\x122U\x20Copyright\x202022\x20The\
-    \x20Android\x20Open\x20Source\x20Project\n\x20SPDX-License-Identifier:\
-    \x20Apache-2.0\n\n\x08\n\x01\x02\x12\x03\x05\0\x15\n(\n\x02\x04\0\x12\
-    \x04\x08\0\x13\x01\x1a\x1c\x20Message\x20for\x20Invalid\x20Packet\n\n\n\
-    \n\x03\x04\0\x01\x12\x03\x08\x08\x15\n\x0c\n\x04\x04\0\x04\0\x12\x04\t\
-    \x02\x0f\x03\n\x0c\n\x05\x04\0\x04\0\x01\x12\x03\t\x07\r\n\r\n\x06\x04\0\
-    \x04\0\x02\0\x12\x03\n\x04\x10\n\x0e\n\x07\x04\0\x04\0\x02\0\x01\x12\x03\
-    \n\x04\x0b\n\x0e\n\x07\x04\0\x04\0\x02\0\x02\x12\x03\n\x0e\x0f\n\r\n\x06\
-    \x04\0\x04\0\x02\x01\x12\x03\x0b\x04\x14\n\x0e\n\x07\x04\0\x04\0\x02\x01\
-    \x01\x12\x03\x0b\x04\x0f\n\x0e\n\x07\x04\0\x04\0\x02\x01\x02\x12\x03\x0b\
-    \x12\x13\n\r\n\x06\x04\0\x04\0\x02\x02\x12\x03\x0c\x04\x14\n\x0e\n\x07\
-    \x04\0\x04\0\x02\x02\x01\x12\x03\x0c\x04\x0f\n\x0e\n\x07\x04\0\x04\0\x02\
-    \x02\x02\x12\x03\x0c\x12\x13\n\r\n\x06\x04\0\x04\0\x02\x03\x12\x03\r\x04\
-    \x0f\n\x0e\n\x07\x04\0\x04\0\x02\x03\x01\x12\x03\r\x04\n\n\x0e\n\x07\x04\
-    \0\x04\0\x02\x03\x02\x12\x03\r\r\x0e\n\r\n\x06\x04\0\x04\0\x02\x04\x12\
-    \x03\x0e\x04\x10\n\x0e\n\x07\x04\0\x04\0\x02\x04\x01\x12\x03\x0e\x04\x0b\
-    \n\x0e\n\x07\x04\0\x04\0\x02\x04\x02\x12\x03\x0e\x0e\x0f\n\x0b\n\x04\x04\
-    \0\x02\0\x12\x03\x10\x02\x1d\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\x10\x02\
-    \n\n\x0c\n\x05\x04\0\x02\0\x06\x12\x03\x10\x0b\x11\n\x0c\n\x05\x04\0\x02\
-    \0\x01\x12\x03\x10\x12\x18\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\x10\x1b\
-    \x1c\n\x0b\n\x04\x04\0\x02\x01\x12\x03\x11\x02\"\n\x0c\n\x05\x04\0\x02\
-    \x01\x04\x12\x03\x11\x02\n\n\x0c\n\x05\x04\0\x02\x01\x05\x12\x03\x11\x0b\
-    \x11\n\x0c\n\x05\x04\0\x02\x01\x01\x12\x03\x11\x12\x1d\n\x0c\n\x05\x04\0\
-    \x02\x01\x03\x12\x03\x11\x20!\n\x0b\n\x04\x04\0\x02\x02\x12\x03\x12\x02\
-    \x1c\n\x0c\n\x05\x04\0\x02\x02\x04\x12\x03\x12\x02\n\n\x0c\n\x05\x04\0\
-    \x02\x02\x05\x12\x03\x12\x0b\x10\n\x0c\n\x05\x04\0\x02\x02\x01\x12\x03\
-    \x12\x11\x17\n\x0c\n\x05\x04\0\x02\x02\x03\x12\x03\x12\x1a\x1b\n4\n\x02\
-    \x04\x01\x12\x04\x16\0-\x01\x1a(\x20Radio\x20statistics\x20for\x20a\x20n\
-    etsim\x20session.\n\n\n\n\x03\x04\x01\x01\x12\x03\x16\x08\x18\n!\n\x04\
-    \x04\x01\x04\0\x12\x04\x18\x02\x20\x03\x1a\x13\x20The\x20kind\x20of\x20r\
-    adio\n\n\x0c\n\x05\x04\x01\x04\0\x01\x12\x03\x18\x07\x0b\n\r\n\x06\x04\
-    \x01\x04\0\x02\0\x12\x03\x19\x04\x14\n\x0e\n\x07\x04\x01\x04\0\x02\0\x01\
-    \x12\x03\x19\x04\x0f\n\x0e\n\x07\x04\x01\x04\0\x02\0\x02\x12\x03\x19\x12\
-    \x13\n\r\n\x06\x04\x01\x04\0\x02\x01\x12\x03\x1a\x04\x1d\n\x0e\n\x07\x04\
-    \x01\x04\0\x02\x01\x01\x12\x03\x1a\x04\x18\n\x0e\n\x07\x04\x01\x04\0\x02\
-    \x01\x02\x12\x03\x1a\x1b\x1c\n\r\n\x06\x04\x01\x04\0\x02\x02\x12\x03\x1b\
-    \x04\x1a\n\x0e\n\x07\x04\x01\x04\0\x02\x02\x01\x12\x03\x1b\x04\x15\n\x0e\
-    \n\x07\x04\x01\x04\0\x02\x02\x02\x12\x03\x1b\x18\x19\n\r\n\x06\x04\x01\
-    \x04\0\x02\x03\x12\x03\x1c\x04'\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x01\
-    \x12\x03\x1c\x04\x0e\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x02\x12\x03\x1c\
-    \x11\x12\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x03\x12\x03\x1c\x13&\n\x0f\n\
-    \x08\x04\x01\x04\0\x02\x03\x03\x01\x12\x03\x1c\x14%\n\r\n\x06\x04\x01\
-    \x04\0\x02\x04\x12\x03\x1d\x04\r\n\x0e\n\x07\x04\x01\x04\0\x02\x04\x01\
-    \x12\x03\x1d\x04\x08\n\x0e\n\x07\x04\x01\x04\0\x02\x04\x02\x12\x03\x1d\
-    \x0b\x0c\n\r\n\x06\x04\x01\x04\0\x02\x05\x12\x03\x1e\x04\x0c\n\x0e\n\x07\
-    \x04\x01\x04\0\x02\x05\x01\x12\x03\x1e\x04\x07\n\x0e\n\x07\x04\x01\x04\0\
-    \x02\x05\x02\x12\x03\x1e\n\x0b\n\r\n\x06\x04\x01\x04\0\x02\x06\x12\x03\
-    \x1f\x04\x0c\n\x0e\n\x07\x04\x01\x04\0\x02\x06\x01\x12\x03\x1f\x04\x07\n\
-    \x0e\n\x07\x04\x01\x04\0\x02\x06\x02\x12\x03\x1f\n\x0b\n\x0b\n\x04\x04\
-    \x01\x02\0\x12\x03!\x02\x20\n\x0c\n\x05\x04\x01\x02\0\x04\x12\x03!\x02\n\
-    \n\x0c\n\x05\x04\x01\x02\0\x05\x12\x03!\x0b\x11\n\x0c\n\x05\x04\x01\x02\
-    \0\x01\x12\x03!\x12\x1b\n\x0c\n\x05\x04\x01\x02\0\x03\x12\x03!\x1e\x1f\n\
-    \x0b\n\x04\x04\x01\x02\x01\x12\x03\"\x02\x19\n\x0c\n\x05\x04\x01\x02\x01\
-    \x04\x12\x03\"\x02\n\n\x0c\n\x05\x04\x01\x02\x01\x06\x12\x03\"\x0b\x0f\n\
-    \x0c\n\x05\x04\x01\x02\x01\x01\x12\x03\"\x10\x14\n\x0c\n\x05\x04\x01\x02\
-    \x01\x03\x12\x03\"\x17\x18\n8\n\x04\x04\x01\x02\x02\x12\x03$\x02$\x1a+\
-    \x20The\x20duration\x20of\x20the\x20controller\x20connection\n\n\x0c\n\
-    \x05\x04\x01\x02\x02\x04\x12\x03$\x02\n\n\x0c\n\x05\x04\x01\x02\x02\x05\
-    \x12\x03$\x0b\x11\n\x0c\n\x05\x04\x01\x02\x02\x01\x12\x03$\x12\x1f\n\x0c\
-    \n\x05\x04\x01\x02\x02\x03\x12\x03$\"#\n+\n\x04\x04\x01\x02\x03\x12\x03&\
-    \x02\x1e\x1a\x1e\x20TX/RX\x20messages\x20for\x20phy\x20layer\n\n\x0c\n\
-    \x05\x04\x01\x02\x03\x04\x12\x03&\x02\n\n\x0c\n\x05\x04\x01\x02\x03\x05\
-    \x12\x03&\x0b\x10\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\x03&\x11\x19\n\x0c\
-    \n\x05\x04\x01\x02\x03\x03\x12\x03&\x1c\x1d\n\x0b\n\x04\x04\x01\x02\x04\
-    \x12\x03'\x02\x1e\n\x0c\n\x05\x04\x01\x02\x04\x04\x12\x03'\x02\n\n\x0c\n\
-    \x05\x04\x01\x02\x04\x05\x12\x03'\x0b\x10\n\x0c\n\x05\x04\x01\x02\x04\
-    \x01\x12\x03'\x11\x19\n\x0c\n\x05\x04\x01\x02\x04\x03\x12\x03'\x1c\x1d\n\
-    -\n\x04\x04\x01\x02\x05\x12\x03)\x02\x1e\x1a\x20\x20TX/RX\x20bytes\x20fo\
-    r\x20HostController\n\n\x0c\n\x05\x04\x01\x02\x05\x04\x12\x03)\x02\n\n\
-    \x0c\n\x05\x04\x01\x02\x05\x05\x12\x03)\x0b\x10\n\x0c\n\x05\x04\x01\x02\
-    \x05\x01\x12\x03)\x11\x19\n\x0c\n\x05\x04\x01\x02\x05\x03\x12\x03)\x1c\
-    \x1d\n\x0b\n\x04\x04\x01\x02\x06\x12\x03*\x02\x1e\n\x0c\n\x05\x04\x01\
-    \x02\x06\x04\x12\x03*\x02\n\n\x0c\n\x05\x04\x01\x02\x06\x05\x12\x03*\x0b\
-    \x10\n\x0c\n\x05\x04\x01\x02\x06\x01\x12\x03*\x11\x19\n\x0c\n\x05\x04\
-    \x01\x02\x06\x03\x12\x03*\x1c\x1d\n%\n\x04\x04\x01\x02\x07\x12\x03,\x02-\
-    \x1a\x18\x20Recent\x20Invalid\x20Packets\n\n\x0c\n\x05\x04\x01\x02\x07\
-    \x04\x12\x03,\x02\n\n\x0c\n\x05\x04\x01\x02\x07\x06\x12\x03,\x0b\x18\n\
-    \x0c\n\x05\x04\x01\x02\x07\x01\x12\x03,\x19(\n\x0c\n\x05\x04\x01\x02\x07\
-    \x03\x12\x03,+,\nV\n\x02\x04\x02\x12\x040\0;\x01\x1aJ\x20Frontend\x20sta\
-    tistics\x20for\x20a\x20netsim\x20session\x20representing\x20count\x20of\
-    \x20API\x20calls\n\n\n\n\x03\x04\x02\x01\x12\x030\x08\x1b\n\x0b\n\x04\
-    \x04\x02\x02\0\x12\x031\x02\"\n\x0c\n\x05\x04\x02\x02\0\x04\x12\x031\x02\
-    \n\n\x0c\n\x05\x04\x02\x02\0\x05\x12\x031\x0b\x11\n\x0c\n\x05\x04\x02\
-    \x02\0\x01\x12\x031\x12\x1d\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x031\x20!\
-    \n\x0b\n\x04\x04\x02\x02\x01\x12\x032\x02$\n\x0c\n\x05\x04\x02\x02\x01\
-    \x04\x12\x032\x02\n\n\x0c\n\x05\x04\x02\x02\x01\x05\x12\x032\x0b\x11\n\
-    \x0c\n\x05\x04\x02\x02\x01\x01\x12\x032\x12\x1f\n\x0c\n\x05\x04\x02\x02\
-    \x01\x03\x12\x032\"#\n\x0b\n\x04\x04\x02\x02\x02\x12\x033\x02\"\n\x0c\n\
-    \x05\x04\x02\x02\x02\x04\x12\x033\x02\n\n\x0c\n\x05\x04\x02\x02\x02\x05\
-    \x12\x033\x0b\x11\n\x0c\n\x05\x04\x02\x02\x02\x01\x12\x033\x12\x1d\n\x0c\
-    \n\x05\x04\x02\x02\x02\x03\x12\x033\x20!\n\x0b\n\x04\x04\x02\x02\x03\x12\
-    \x034\x02#\n\x0c\n\x05\x04\x02\x02\x03\x04\x12\x034\x02\n\n\x0c\n\x05\
-    \x04\x02\x02\x03\x05\x12\x034\x0b\x11\n\x0c\n\x05\x04\x02\x02\x03\x01\
-    \x12\x034\x12\x1e\n\x0c\n\x05\x04\x02\x02\x03\x03\x12\x034!\"\n\x0b\n\
-    \x04\x04\x02\x02\x04\x12\x035\x02\x1c\n\x0c\n\x05\x04\x02\x02\x04\x04\
-    \x12\x035\x02\n\n\x0c\n\x05\x04\x02\x02\x04\x05\x12\x035\x0b\x11\n\x0c\n\
-    \x05\x04\x02\x02\x04\x01\x12\x035\x12\x17\n\x0c\n\x05\x04\x02\x02\x04\
-    \x03\x12\x035\x1a\x1b\n\x0b\n\x04\x04\x02\x02\x05\x12\x036\x02\"\n\x0c\n\
-    \x05\x04\x02\x02\x05\x04\x12\x036\x02\n\n\x0c\n\x05\x04\x02\x02\x05\x05\
-    \x12\x036\x0b\x11\n\x0c\n\x05\x04\x02\x02\x05\x01\x12\x036\x12\x1d\n\x0c\
-    \n\x05\x04\x02\x02\x05\x03\x12\x036\x20!\n\x0b\n\x04\x04\x02\x02\x06\x12\
-    \x037\x02'\n\x0c\n\x05\x04\x02\x02\x06\x04\x12\x037\x02\n\n\x0c\n\x05\
-    \x04\x02\x02\x06\x05\x12\x037\x0b\x11\n\x0c\n\x05\x04\x02\x02\x06\x01\
-    \x12\x037\x12\"\n\x0c\n\x05\x04\x02\x02\x06\x03\x12\x037%&\n\x0b\n\x04\
-    \x04\x02\x02\x07\x12\x038\x02$\n\x0c\n\x05\x04\x02\x02\x07\x04\x12\x038\
-    \x02\n\n\x0c\n\x05\x04\x02\x02\x07\x05\x12\x038\x0b\x11\n\x0c\n\x05\x04\
-    \x02\x02\x07\x01\x12\x038\x12\x1f\n\x0c\n\x05\x04\x02\x02\x07\x03\x12\
-    \x038\"#\n\x0b\n\x04\x04\x02\x02\x08\x12\x039\x02#\n\x0c\n\x05\x04\x02\
-    \x02\x08\x04\x12\x039\x02\n\n\x0c\n\x05\x04\x02\x02\x08\x05\x12\x039\x0b\
-    \x11\n\x0c\n\x05\x04\x02\x02\x08\x01\x12\x039\x12\x1e\n\x0c\n\x05\x04\
-    \x02\x02\x08\x03\x12\x039!\"\n\x0b\n\x04\x04\x02\x02\t\x12\x03:\x02#\n\
-    \x0c\n\x05\x04\x02\x02\t\x04\x12\x03:\x02\n\n\x0c\n\x05\x04\x02\x02\t\
-    \x05\x12\x03:\x0b\x11\n\x0c\n\x05\x04\x02\x02\t\x01\x12\x03:\x12\x1d\n\
-    \x0c\n\x05\x04\x02\x02\t\x03\x12\x03:\x20\"\n(\n\x02\x04\x03\x12\x04>\0M\
-    \x01\x1a\x1c\x20Detailed\x20stats\x20of\x20a\x20device\n\n\n\n\x03\x04\
-    \x03\x01\x12\x03>\x08\x19\n/\n\x04\x04\x03\x02\0\x12\x03@\x02\x20\x1a\"\
-    \x20Netsim\x20assigned\x20unique\x20device\x20id\n\n\x0c\n\x05\x04\x03\
-    \x02\0\x04\x12\x03@\x02\n\n\x0c\n\x05\x04\x03\x02\0\x05\x12\x03@\x0b\x11\
-    \n\x0c\n\x05\x04\x03\x02\0\x01\x12\x03@\x12\x1b\n\x0c\n\x05\x04\x03\x02\
-    \0\x03\x12\x03@\x1e\x1f\nP\n\x04\x04\x03\x02\x01\x12\x03B\x02\x1b\x1aC\
-    \x20Identifier\x20for\x20device\x20kind\x20e.g.\x20EMULATOR,\x20CUTTLEFI\
-    SH,\x20BUMBLE,\x20etc\n\n\x0c\n\x05\x04\x03\x02\x01\x04\x12\x03B\x02\n\n\
-    \x0c\n\x05\x04\x03\x02\x01\x05\x12\x03B\x0b\x11\n\x0c\n\x05\x04\x03\x02\
-    \x01\x01\x12\x03B\x12\x16\n\x0c\n\x05\x04\x03\x02\x01\x03\x12\x03B\x19\
-    \x1a\nV\n\x04\x04\x03\x02\x02\x12\x03D\x02\x1e\x1aI\x20Version\x20info\
-    \x20as\x20applicable\x20e.g.\x20Android\x20emulator\x20version\x2034.1.1\
-    5.0,\x20etc\n\n\x0c\n\x05\x04\x03\x02\x02\x04\x12\x03D\x02\n\n\x0c\n\x05\
-    \x04\x03\x02\x02\x05\x12\x03D\x0b\x11\n\x0c\n\x05\x04\x03\x02\x02\x01\
-    \x12\x03D\x12\x19\n\x0c\n\x05\x04\x03\x02\x02\x03\x12\x03D\x1c\x1d\n>\n\
-    \x04\x04\x03\x02\x03\x12\x03F\x02\"\x1a1\x20SDK\x20version\x20info\x20as\
-    \x20applicable\x20e.g.\x2033,\x2034,\x20etc\n\n\x0c\n\x05\x04\x03\x02\
-    \x03\x04\x12\x03F\x02\n\n\x0c\n\x05\x04\x03\x02\x03\x05\x12\x03F\x0b\x11\
-    \n\x0c\n\x05\x04\x03\x02\x03\x01\x12\x03F\x12\x1d\n\x0c\n\x05\x04\x03\
-    \x02\x03\x03\x12\x03F\x20!\nB\n\x04\x04\x03\x02\x04\x12\x03H\x02\x1f\x1a\
-    5\x20Build\x20ID\x20e.g.\x20TE1A.220922.034,\x20UQ1A.231205.015,\x20etc\
-    \n\n\x0c\n\x05\x04\x03\x02\x04\x04\x12\x03H\x02\n\n\x0c\n\x05\x04\x03\
-    \x02\x04\x05\x12\x03H\x0b\x11\n\x0c\n\x05\x04\x03\x02\x04\x01\x12\x03H\
-    \x12\x1a\n\x0c\n\x05\x04\x03\x02\x04\x03\x12\x03H\x1d\x1e\nX\n\x04\x04\
-    \x03\x02\x05\x12\x03J\x02\x1e\x1aK\x20Model/variant\x20e.g.\x20sdk_gphon\
-    e_x86_64-userdebug,\x20cf_x86_64_phone-user,\x20etc\n\n\x0c\n\x05\x04\
-    \x03\x02\x05\x04\x12\x03J\x02\n\n\x0c\n\x05\x04\x03\x02\x05\x05\x12\x03J\
-    \x0b\x11\n\x0c\n\x05\x04\x03\x02\x05\x01\x12\x03J\x12\x19\n\x0c\n\x05\
-    \x04\x03\x02\x05\x03\x12\x03J\x1c\x1d\n;\n\x04\x04\x03\x02\x06\x12\x03L\
-    \x02\x1b\x1a.\x20CPU\x20architecture\x20e.g.\x20x86_64,\x20arm64-v8a,\
-    \x20etc\n\n\x0c\n\x05\x04\x03\x02\x06\x04\x12\x03L\x02\n\n\x0c\n\x05\x04\
-    \x03\x02\x06\x05\x12\x03L\x0b\x11\n\x0c\n\x05\x04\x03\x02\x06\x01\x12\
-    \x03L\x12\x16\n\x0c\n\x05\x04\x03\x02\x06\x03\x12\x03L\x19\x1a\n\"\n\x02\
-    \x04\x04\x12\x04P\0}\x01\x1a\x16\x20Detailed\x20Wi-Fi\x20stats\n\n\n\n\
-    \x03\x04\x04\x01\x12\x03P\x08\x11\nE\n\x04\x04\x04\x02\0\x12\x03S\x02$\
-    \x1a8\x20===\x20Error\x20Counters\x20===\n\x20Errors\x20related\x20to\
-    \x20the\x20hostapd.\n\n\x0c\n\x05\x04\x04\x02\0\x04\x12\x03S\x02\n\n\x0c\
-    \n\x05\x04\x04\x02\0\x05\x12\x03S\x0b\x10\n\x0c\n\x05\x04\x04\x02\0\x01\
-    \x12\x03S\x11\x1f\n\x0c\n\x05\x04\x04\x02\0\x03\x12\x03S\"#\nR\n\x04\x04\
-    \x04\x02\x01\x12\x03U\x02$\x1aE\x20Errors\x20related\x20to\x20network\
-    \x20connectivity\x20(e.g.,\x20Slirp/Tap\x20interface).\n\n\x0c\n\x05\x04\
-    \x04\x02\x01\x04\x12\x03U\x02\n\n\x0c\n\x05\x04\x04\x02\x01\x05\x12\x03U\
-    \x0b\x10\n\x0c\n\x05\x04\x04\x02\x01\x01\x12\x03U\x11\x1f\n\x0c\n\x05\
-    \x04\x04\x02\x01\x03\x12\x03U\"#\nE\n\x04\x04\x04\x02\x02\x12\x03W\x02#\
-    \x1a8\x20Errors\x20related\x20to\x20client-specific\x20operations\x20or\
-    \x20state.\n\n\x0c\n\x05\x04\x04\x02\x02\x04\x12\x03W\x02\n\n\x0c\n\x05\
-    \x04\x04\x02\x02\x05\x12\x03W\x0b\x10\n\x0c\n\x05\x04\x04\x02\x02\x01\
-    \x12\x03W\x11\x1e\n\x0c\n\x05\x04\x04\x02\x02\x03\x12\x03W!\"\n[\n\x04\
-    \x04\x04\x02\x03\x12\x03Z\x02\"\x1aN\x20Errors\x20encountered\x20while\
-    \x20parsing,\x20decoding,\x20or\x20handling\x20IEEE\x20802.11\n\x20frame\
-    s.\n\n\x0c\n\x05\x04\x04\x02\x03\x04\x12\x03Z\x02\n\n\x0c\n\x05\x04\x04\
-    \x02\x03\x05\x12\x03Z\x0b\x10\n\x0c\n\x05\x04\x04\x02\x03\x01\x12\x03Z\
-    \x11\x1d\n\x0c\n\x05\x04\x04\x02\x03\x03\x12\x03Z\x20!\nD\n\x04\x04\x04\
-    \x02\x04\x12\x03\\\x02)\x1a7\x20Errors\x20related\x20to\x20transmission\
-    \x20or\x20reception\x20of\x20frame.\n\n\x0c\n\x05\x04\x04\x02\x04\x04\
-    \x12\x03\\\x02\n\n\x0c\n\x05\x04\x04\x02\x04\x05\x12\x03\\\x0b\x10\n\x0c\
-    \n\x05\x04\x04\x02\x04\x01\x12\x03\\\x11$\n\x0c\n\x05\x04\x04\x02\x04\
-    \x03\x12\x03\\'(\n*\n\x04\x04\x04\x02\x05\x12\x03^\x02\"\x1a\x1d\x20Othe\
-    r\x20uncategorized\x20errors.\n\n\x0c\n\x05\x04\x04\x02\x05\x04\x12\x03^\
-    \x02\n\n\x0c\n\x05\x04\x04\x02\x05\x05\x12\x03^\x0b\x10\n\x0c\n\x05\x04\
-    \x04\x02\x05\x01\x12\x03^\x11\x1d\n\x0c\n\x05\x04\x04\x02\x05\x03\x12\
-    \x03^\x20!\nq\n\x04\x04\x04\x02\x06\x12\x03b\x02%\x1ad\x20===\x20Core\
-    \x20Traffic\x20Flow\x20&\x20Type\x20Counters\x20===\n\x20802.11\x20frame\
-    s\x20received\x20from\x20clients\x20via\x20Hwsim\x20messages.\n\n\x0c\n\
-    \x05\x04\x04\x02\x06\x04\x12\x03b\x02\n\n\x0c\n\x05\x04\x04\x02\x06\x05\
-    \x12\x03b\x0b\x10\n\x0c\n\x05\x04\x04\x02\x06\x01\x12\x03b\x11\x20\n\x0c\
-    \n\x05\x04\x04\x02\x06\x03\x12\x03b#$\nG\n\x04\x04\x04\x02\x07\x12\x03d\
-    \x02%\x1a:\x20802.11\x20frames\x20transmitted\x20to\x20clients\x20via\
-    \x20Hwsim\x20messages.\n\n\x0c\n\x05\x04\x04\x02\x07\x04\x12\x03d\x02\n\
-    \n\x0c\n\x05\x04\x04\x02\x07\x05\x12\x03d\x0b\x10\n\x0c\n\x05\x04\x04\
-    \x02\x07\x01\x12\x03d\x11\x20\n\x0c\n\x05\x04\x04\x02\x07\x03\x12\x03d#$\
-    \nH\n\x04\x04\x04\x02\x08\x12\x03f\x02(\x1a;\x20L3\x20packets\x20transmi\
-    tted\x20to\x20external\x20network\x20(e.g.,\x20Slirp).\n\n\x0c\n\x05\x04\
-    \x04\x02\x08\x04\x12\x03f\x02\n\n\x0c\n\x05\x04\x04\x02\x08\x05\x12\x03f\
-    \x0b\x10\n\x0c\n\x05\x04\x04\x02\x08\x01\x12\x03f\x11#\n\x0c\n\x05\x04\
-    \x04\x02\x08\x03\x12\x03f&'\n9\n\x04\x04\x04\x02\t\x12\x03h\x02)\x1a,\
-    \x20L3\x20packets\x20received\x20from\x20external\x20network.\n\n\x0c\n\
-    \x05\x04\x04\x02\t\x04\x12\x03h\x02\n\n\x0c\n\x05\x04\x04\x02\t\x05\x12\
-    \x03h\x0b\x10\n\x0c\n\x05\x04\x04\x02\t\x01\x12\x03h\x11#\n\x0c\n\x05\
-    \x04\x04\x02\t\x03\x12\x03h&(\n<\n\x04\x04\x04\x02\n\x12\x03j\x02(\x1a/\
-    \x20802.11\x20frames\x20transmitted\x20to\x20hostapd\x20process.\n\n\x0c\
-    \n\x05\x04\x04\x02\n\x04\x12\x03j\x02\n\n\x0c\n\x05\x04\x04\x02\n\x05\
-    \x12\x03j\x0b\x10\n\x0c\n\x05\x04\x04\x02\n\x01\x12\x03j\x11\"\n\x0c\n\
-    \x05\x04\x04\x02\n\x03\x12\x03j%'\n;\n\x04\x04\x04\x02\x0b\x12\x03l\x02(\
-    \x1a.\x20802.11\x20frames\x20received\x20from\x20hostapd\x20process.\n\n\
-    \x0c\n\x05\x04\x04\x02\x0b\x04\x12\x03l\x02\n\n\x0c\n\x05\x04\x04\x02\
-    \x0b\x05\x12\x03l\x0b\x10\n\x0c\n\x05\x04\x04\x02\x0b\x01\x12\x03l\x11\"\
-    \n\x0c\n\x05\x04\x04\x02\x0b\x03\x12\x03l%'\nG\n\x04\x04\x04\x02\x0c\x12\
-    \x03n\x02(\x1a:\x20Station-to-station\x20802.11\x20frames\x20transmitted\
-    \x20via\x20medium.\n\n\x0c\n\x05\x04\x04\x02\x0c\x04\x12\x03n\x02\n\n\
-    \x0c\n\x05\x04\x04\x02\x0c\x05\x12\x03n\x0b\x10\n\x0c\n\x05\x04\x04\x02\
-    \x0c\x01\x12\x03n\x11\"\n\x0c\n\x05\x04\x04\x02\x0c\x03\x12\x03n%'\nO\n\
-    \x04\x04\x04\x02\r\x12\x03p\x020\x1aB\x20Unicast\x20802.11\x20frames\x20\
+    \x0b2\x1b.netsim.stats.InvalidPacketR\x0einvalidPackets\x12\x20\n\x0cp2p\
+    _tx_count\x18\t\x20\x01(\x05R\np2pTxCount\x12\x20\n\x0cp2p_rx_count\x18\
+    \n\x20\x01(\x05R\np2pRxCount\"x\n\x04Kind\x12\x0f\n\x0bUNSPECIFIED\x10\0\
+    \x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x01\x12\x15\n\x11BLUETOOTH_CLASSI\
+    C\x10\x02\x12\x12\n\nBLE_BEACON\x10\x03\x1a\x02\x08\x01\x12\x08\n\x04WIF\
+    I\x10\x04\x12\x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\x10\x06\"\x8f\x03\n\
+    \x13NetsimFrontendStats\x12\x1f\n\x0bget_version\x18\x01\x20\x01(\rR\nge\
+    tVersion\x12#\n\rcreate_device\x18\x02\x20\x01(\rR\x0ccreateDevice\x12\
+    \x1f\n\x0bdelete_chip\x18\x03\x20\x01(\rR\ndeleteChip\x12!\n\x0cpatch_de\
+    vice\x18\x04\x20\x01(\rR\x0bpatchDevice\x12\x14\n\x05reset\x18\x05\x20\
+    \x01(\rR\x05reset\x12\x1f\n\x0blist_device\x18\x06\x20\x01(\rR\nlistDevi\
+    ce\x12)\n\x10subscribe_device\x18\x07\x20\x01(\rR\x0fsubscribeDevice\x12\
+    #\n\rpatch_capture\x18\x08\x20\x01(\rR\x0cpatchCapture\x12!\n\x0clist_ca\
+    pture\x18\t\x20\x01(\rR\x0blistCapture\x12\x1f\n\x0bget_capture\x18\n\
+    \x20\x01(\rR\ngetCapture\x12#\n\rdelete_device\x18\x0b\x20\x01(\rR\x0cde\
+    leteDevice\"\xc8\x01\n\x11NetsimDeviceStats\x12\x1b\n\tdevice_id\x18\x01\
+    \x20\x01(\rR\x08deviceId\x12\x12\n\x04kind\x18\x02\x20\x01(\tR\x04kind\
+    \x12\x18\n\x07version\x18\x03\x20\x01(\tR\x07version\x12\x1f\n\x0bsdk_ve\
+    rsion\x18\x04\x20\x01(\tR\nsdkVersion\x12\x19\n\x08build_id\x18\x05\x20\
+    \x01(\tR\x07buildId\x12\x18\n\x07variant\x18\x06\x20\x01(\tR\x07variant\
+    \x12\x12\n\x04arch\x18\x07\x20\x01(\tR\x04arch\"\x91\x06\n\tWifiStats\
+    \x12%\n\x0ehostapd_errors\x18\x01\x20\x01(\x05R\rhostapdErrors\x12%\n\
+    \x0enetwork_errors\x18\x02\x20\x01(\x05R\rnetworkErrors\x12#\n\rclient_e\
+    rrors\x18\x03\x20\x01(\x05R\x0cclientErrors\x12!\n\x0cframe_errors\x18\
+    \x04\x20\x01(\x05R\x0bframeErrors\x12/\n\x13transmission_errors\x18\x05\
+    \x20\x01(\x05R\x12transmissionErrors\x12!\n\x0cother_errors\x18\x06\x20\
+    \x01(\x05R\x0botherErrors\x12&\n\x0fhwsim_frames_rx\x18\x07\x20\x01(\x05\
+    R\rhwsimFramesRx\x12&\n\x0fhwsim_frames_tx\x18\x08\x20\x01(\x05R\rhwsimF\
+    ramesTx\x12,\n\x12network_packets_tx\x18\t\x20\x01(\x05R\x10networkPacke\
+    tsTx\x12,\n\x12network_packets_rx\x18\n\x20\x01(\x05R\x10networkPacketsR\
+    x\x12*\n\x11hostapd_frames_tx\x18\x0b\x20\x01(\x05R\x0fhostapdFramesTx\
+    \x12*\n\x11hostapd_frames_rx\x18\x0c\x20\x01(\x05R\x0fhostapdFramesRx\
+    \x12*\n\x11wmedium_frames_tx\x18\r\x20\x01(\x05R\x0fwmediumFramesTx\x129\
+    \n\x19wmedium_unicast_frames_tx\x18\x0e\x20\x01(\x05R\x16wmediumUnicastF\
+    ramesTx\x12$\n\x0emgmt_frames_rx\x18\x0f\x20\x01(\x05R\x0cmgmtFramesRx\
+    \x12\x1d\n\nmdns_count\x18\x10\x20\x01(\x05R\tmdnsCount\x126\n\x17max_do\
+    wnload_throughput\x18\x11\x20\x01(\x02R\x15maxDownloadThroughput\x122\n\
+    \x15max_upload_throughput\x18\x12\x20\x01(\x02R\x13maxUploadThroughput\"\
+    \xf2\x03\n\x08NfcStats\x12\x1d\n\nnci_errors\x18\x01\x20\x01(\x05R\tnciE\
+    rrors\x12%\n\x0ecasimir_errors\x18\x02\x20\x01(\x05R\rcasimirErrors\x12\
+    \x1b\n\trf_errors\x18\x03\x20\x01(\x05R\x08rfErrors\x12!\n\x0cother_erro\
+    rs\x18\x04\x20\x01(\x05R\x0botherErrors\x12&\n\x0fnci_commands_rx\x18\
+    \x05\x20\x01(\x05R\rnciCommandsRx\x12(\n\x10nci_responses_tx\x18\x06\x20\
+    \x01(\x05R\x0enciResponsesTx\x120\n\x14nci_notifications_tx\x18\x07\x20\
+    \x01(\x05R\x12nciNotificationsTx\x12\x1e\n\x0bnci_data_rx\x18\x08\x20\
+    \x01(\x05R\tnciDataRx\x12\x1e\n\x0bnci_data_tx\x18\t\x20\x01(\x05R\tnciD\
+    ataTx\x12\x1c\n\nrf_taps_tx\x18\n\x20\x01(\x05R\x08rfTapsTx\x12\x1c\n\nr\
+    f_taps_rx\x18\x0b\x20\x01(\x05R\x08rfTapsRx\x120\n\x14card_emulation_cou\
+    nt\x18\x0c\x20\x01(\x05R\x12cardEmulationCount\x12.\n\x13tag_emulation_c\
+    ount\x18\r\x20\x01(\x05R\x11tagEmulationCount\"~\n\x0fNfcServiceStats\
+    \x12\x1d\n\nget_status\x18\x01\x20\x01(\rR\tgetStatus\x12\x1b\n\tset_pow\
+    er\x18\x02\x20\x01(\rR\x08setPower\x12\x12\n\x04poll\x18\x03\x20\x01(\rR\
+    \x04poll\x12\x1b\n\tsend_apdu\x18\x04\x20\x01(\rR\x08sendApdu\"\xae\x04\
+    \n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\x01(\x04R\x0cduratio\
+    nSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\
+    \x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\x15peakConcurrentDevic\
+    es\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRa\
+    dioStatsR\nradioStats\x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07versio\
+    n\x12H\n\x0efrontend_stats\x18\x06\x20\x01(\x0b2!.netsim.stats.NetsimFro\
+    ntendStatsR\rfrontendStats\x12B\n\x0cdevice_stats\x18\x07\x20\x03(\x0b2\
+    \x1f.netsim.stats.NetsimDeviceStatsR\x0bdeviceStats\x126\n\nwifi_stats\
+    \x18\x08\x20\x01(\x0b2\x17.netsim.stats.WifiStatsR\twifiStats\x123\n\tnf\
+    c_stats\x18\t\x20\x01(\x0b2\x16.netsim.stats.NfcStatsR\x08nfcStats\x12I\
+    \n\x11nfc_service_stats\x18\n\x20\x01(\x0b2\x1d.netsim.stats.NfcServiceS\
+    tatsR\x0fnfcServiceStatsJ\xa8M\n\x07\x12\x05\x03\0\xc7\x01\x01\n_\n\x01\
+    \x0c\x12\x03\x03\0\x122U\x20Copyright\x202022\x20The\x20Android\x20Open\
+    \x20Source\x20Project\n\x20SPDX-License-Identifier:\x20Apache-2.0\n\n\
+    \x08\n\x01\x02\x12\x03\x05\0\x15\n(\n\x02\x04\0\x12\x04\x08\0\x13\x01\
+    \x1a\x1c\x20Message\x20for\x20Invalid\x20Packet\n\n\n\n\x03\x04\0\x01\
+    \x12\x03\x08\x08\x15\n\x0c\n\x04\x04\0\x04\0\x12\x04\t\x02\x0f\x03\n\x0c\
+    \n\x05\x04\0\x04\0\x01\x12\x03\t\x07\r\n\r\n\x06\x04\0\x04\0\x02\0\x12\
+    \x03\n\x04\x10\n\x0e\n\x07\x04\0\x04\0\x02\0\x01\x12\x03\n\x04\x0b\n\x0e\
+    \n\x07\x04\0\x04\0\x02\0\x02\x12\x03\n\x0e\x0f\n\r\n\x06\x04\0\x04\0\x02\
+    \x01\x12\x03\x0b\x04\x14\n\x0e\n\x07\x04\0\x04\0\x02\x01\x01\x12\x03\x0b\
+    \x04\x0f\n\x0e\n\x07\x04\0\x04\0\x02\x01\x02\x12\x03\x0b\x12\x13\n\r\n\
+    \x06\x04\0\x04\0\x02\x02\x12\x03\x0c\x04\x14\n\x0e\n\x07\x04\0\x04\0\x02\
+    \x02\x01\x12\x03\x0c\x04\x0f\n\x0e\n\x07\x04\0\x04\0\x02\x02\x02\x12\x03\
+    \x0c\x12\x13\n\r\n\x06\x04\0\x04\0\x02\x03\x12\x03\r\x04\x0f\n\x0e\n\x07\
+    \x04\0\x04\0\x02\x03\x01\x12\x03\r\x04\n\n\x0e\n\x07\x04\0\x04\0\x02\x03\
+    \x02\x12\x03\r\r\x0e\n\r\n\x06\x04\0\x04\0\x02\x04\x12\x03\x0e\x04\x10\n\
+    \x0e\n\x07\x04\0\x04\0\x02\x04\x01\x12\x03\x0e\x04\x0b\n\x0e\n\x07\x04\0\
+    \x04\0\x02\x04\x02\x12\x03\x0e\x0e\x0f\n\x0b\n\x04\x04\0\x02\0\x12\x03\
+    \x10\x02\x1d\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\x10\x02\n\n\x0c\n\x05\
+    \x04\0\x02\0\x06\x12\x03\x10\x0b\x11\n\x0c\n\x05\x04\0\x02\0\x01\x12\x03\
+    \x10\x12\x18\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\x10\x1b\x1c\n\x0b\n\x04\
+    \x04\0\x02\x01\x12\x03\x11\x02\"\n\x0c\n\x05\x04\0\x02\x01\x04\x12\x03\
+    \x11\x02\n\n\x0c\n\x05\x04\0\x02\x01\x05\x12\x03\x11\x0b\x11\n\x0c\n\x05\
+    \x04\0\x02\x01\x01\x12\x03\x11\x12\x1d\n\x0c\n\x05\x04\0\x02\x01\x03\x12\
+    \x03\x11\x20!\n\x0b\n\x04\x04\0\x02\x02\x12\x03\x12\x02\x1c\n\x0c\n\x05\
+    \x04\0\x02\x02\x04\x12\x03\x12\x02\n\n\x0c\n\x05\x04\0\x02\x02\x05\x12\
+    \x03\x12\x0b\x10\n\x0c\n\x05\x04\0\x02\x02\x01\x12\x03\x12\x11\x17\n\x0c\
+    \n\x05\x04\0\x02\x02\x03\x12\x03\x12\x1a\x1b\n4\n\x02\x04\x01\x12\x04\
+    \x16\01\x01\x1a(\x20Radio\x20statistics\x20for\x20a\x20netsim\x20session\
+    .\n\n\n\n\x03\x04\x01\x01\x12\x03\x16\x08\x18\n!\n\x04\x04\x01\x04\0\x12\
+    \x04\x18\x02\x20\x03\x1a\x13\x20The\x20kind\x20of\x20radio\n\n\x0c\n\x05\
+    \x04\x01\x04\0\x01\x12\x03\x18\x07\x0b\n\r\n\x06\x04\x01\x04\0\x02\0\x12\
+    \x03\x19\x04\x14\n\x0e\n\x07\x04\x01\x04\0\x02\0\x01\x12\x03\x19\x04\x0f\
+    \n\x0e\n\x07\x04\x01\x04\0\x02\0\x02\x12\x03\x19\x12\x13\n\r\n\x06\x04\
+    \x01\x04\0\x02\x01\x12\x03\x1a\x04\x1d\n\x0e\n\x07\x04\x01\x04\0\x02\x01\
+    \x01\x12\x03\x1a\x04\x18\n\x0e\n\x07\x04\x01\x04\0\x02\x01\x02\x12\x03\
+    \x1a\x1b\x1c\n\r\n\x06\x04\x01\x04\0\x02\x02\x12\x03\x1b\x04\x1a\n\x0e\n\
+    \x07\x04\x01\x04\0\x02\x02\x01\x12\x03\x1b\x04\x15\n\x0e\n\x07\x04\x01\
+    \x04\0\x02\x02\x02\x12\x03\x1b\x18\x19\n\r\n\x06\x04\x01\x04\0\x02\x03\
+    \x12\x03\x1c\x04'\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x01\x12\x03\x1c\x04\
+    \x0e\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x02\x12\x03\x1c\x11\x12\n\x0e\n\
+    \x07\x04\x01\x04\0\x02\x03\x03\x12\x03\x1c\x13&\n\x0f\n\x08\x04\x01\x04\
+    \0\x02\x03\x03\x01\x12\x03\x1c\x14%\n\r\n\x06\x04\x01\x04\0\x02\x04\x12\
+    \x03\x1d\x04\r\n\x0e\n\x07\x04\x01\x04\0\x02\x04\x01\x12\x03\x1d\x04\x08\
+    \n\x0e\n\x07\x04\x01\x04\0\x02\x04\x02\x12\x03\x1d\x0b\x0c\n\r\n\x06\x04\
+    \x01\x04\0\x02\x05\x12\x03\x1e\x04\x0c\n\x0e\n\x07\x04\x01\x04\0\x02\x05\
+    \x01\x12\x03\x1e\x04\x07\n\x0e\n\x07\x04\x01\x04\0\x02\x05\x02\x12\x03\
+    \x1e\n\x0b\n\r\n\x06\x04\x01\x04\0\x02\x06\x12\x03\x1f\x04\x0c\n\x0e\n\
+    \x07\x04\x01\x04\0\x02\x06\x01\x12\x03\x1f\x04\x07\n\x0e\n\x07\x04\x01\
+    \x04\0\x02\x06\x02\x12\x03\x1f\n\x0b\n\x0b\n\x04\x04\x01\x02\0\x12\x03!\
+    \x02\x20\n\x0c\n\x05\x04\x01\x02\0\x04\x12\x03!\x02\n\n\x0c\n\x05\x04\
+    \x01\x02\0\x05\x12\x03!\x0b\x11\n\x0c\n\x05\x04\x01\x02\0\x01\x12\x03!\
+    \x12\x1b\n\x0c\n\x05\x04\x01\x02\0\x03\x12\x03!\x1e\x1f\n\x0b\n\x04\x04\
+    \x01\x02\x01\x12\x03\"\x02\x19\n\x0c\n\x05\x04\x01\x02\x01\x04\x12\x03\"\
+    \x02\n\n\x0c\n\x05\x04\x01\x02\x01\x06\x12\x03\"\x0b\x0f\n\x0c\n\x05\x04\
+    \x01\x02\x01\x01\x12\x03\"\x10\x14\n\x0c\n\x05\x04\x01\x02\x01\x03\x12\
+    \x03\"\x17\x18\n8\n\x04\x04\x01\x02\x02\x12\x03$\x02$\x1a+\x20The\x20dur\
+    ation\x20of\x20the\x20controller\x20connection\n\n\x0c\n\x05\x04\x01\x02\
+    \x02\x04\x12\x03$\x02\n\n\x0c\n\x05\x04\x01\x02\x02\x05\x12\x03$\x0b\x11\
+    \n\x0c\n\x05\x04\x01\x02\x02\x01\x12\x03$\x12\x1f\n\x0c\n\x05\x04\x01\
+    \x02\x02\x03\x12\x03$\"#\n+\n\x04\x04\x01\x02\x03\x12\x03&\x02\x1e\x1a\
+    \x1e\x20TX/RX\x20messages\x20for\x20phy\x20layer\n\n\x0c\n\x05\x04\x01\
+    \x02\x03\x04\x12\x03&\x02\n\n\x0c\n\x05\x04\x01\x02\x03\x05\x12\x03&\x0b\
+    \x10\n\x0c\n\x05\x04\x01\x02\x03\x01\x12\x03&\x11\x19\n\x0c\n\x05\x04\
+    \x01\x02\x03\x03\x12\x03&\x1c\x1d\n\x0b\n\x04\x04\x01\x02\x04\x12\x03'\
+    \x02\x1e\n\x0c\n\x05\x04\x01\x02\x04\x04\x12\x03'\x02\n\n\x0c\n\x05\x04\
+    \x01\x02\x04\x05\x12\x03'\x0b\x10\n\x0c\n\x05\x04\x01\x02\x04\x01\x12\
+    \x03'\x11\x19\n\x0c\n\x05\x04\x01\x02\x04\x03\x12\x03'\x1c\x1d\n-\n\x04\
+    \x04\x01\x02\x05\x12\x03)\x02\x1e\x1a\x20\x20TX/RX\x20bytes\x20for\x20Ho\
+    stController\n\n\x0c\n\x05\x04\x01\x02\x05\x04\x12\x03)\x02\n\n\x0c\n\
+    \x05\x04\x01\x02\x05\x05\x12\x03)\x0b\x10\n\x0c\n\x05\x04\x01\x02\x05\
+    \x01\x12\x03)\x11\x19\n\x0c\n\x05\x04\x01\x02\x05\x03\x12\x03)\x1c\x1d\n\
+    \x0b\n\x04\x04\x01\x02\x06\x12\x03*\x02\x1e\n\x0c\n\x05\x04\x01\x02\x06\
+    \x04\x12\x03*\x02\n\n\x0c\n\x05\x04\x01\x02\x06\x05\x12\x03*\x0b\x10\n\
+    \x0c\n\x05\x04\x01\x02\x06\x01\x12\x03*\x11\x19\n\x0c\n\x05\x04\x01\x02\
+    \x06\x03\x12\x03*\x1c\x1d\n%\n\x04\x04\x01\x02\x07\x12\x03,\x02-\x1a\x18\
+    \x20Recent\x20Invalid\x20Packets\n\n\x0c\n\x05\x04\x01\x02\x07\x04\x12\
+    \x03,\x02\n\n\x0c\n\x05\x04\x01\x02\x07\x06\x12\x03,\x0b\x18\n\x0c\n\x05\
+    \x04\x01\x02\x07\x01\x12\x03,\x19(\n\x0c\n\x05\x04\x01\x02\x07\x03\x12\
+    \x03,+,\n9\n\x04\x04\x01\x02\x08\x12\x03.\x02\"\x1a,\x20Payload\x20messa\
+    ges\x20transmitted\x20on\x20P2P\x20medium\n\n\x0c\n\x05\x04\x01\x02\x08\
+    \x04\x12\x03.\x02\n\n\x0c\n\x05\x04\x01\x02\x08\x05\x12\x03.\x0b\x10\n\
+    \x0c\n\x05\x04\x01\x02\x08\x01\x12\x03.\x11\x1d\n\x0c\n\x05\x04\x01\x02\
+    \x08\x03\x12\x03.\x20!\n6\n\x04\x04\x01\x02\t\x12\x030\x02#\x1a)\x20Payl\
+    oad\x20messages\x20received\x20on\x20P2P\x20medium\n\n\x0c\n\x05\x04\x01\
+    \x02\t\x04\x12\x030\x02\n\n\x0c\n\x05\x04\x01\x02\t\x05\x12\x030\x0b\x10\
+    \n\x0c\n\x05\x04\x01\x02\t\x01\x12\x030\x11\x1d\n\x0c\n\x05\x04\x01\x02\
+    \t\x03\x12\x030\x20\"\nV\n\x02\x04\x02\x12\x044\0@\x01\x1aJ\x20Frontend\
+    \x20statistics\x20for\x20a\x20netsim\x20session\x20representing\x20count\
+    \x20of\x20API\x20calls\n\n\n\n\x03\x04\x02\x01\x12\x034\x08\x1b\n\x0b\n\
+    \x04\x04\x02\x02\0\x12\x035\x02\"\n\x0c\n\x05\x04\x02\x02\0\x04\x12\x035\
+    \x02\n\n\x0c\n\x05\x04\x02\x02\0\x05\x12\x035\x0b\x11\n\x0c\n\x05\x04\
+    \x02\x02\0\x01\x12\x035\x12\x1d\n\x0c\n\x05\x04\x02\x02\0\x03\x12\x035\
+    \x20!\n\x0b\n\x04\x04\x02\x02\x01\x12\x036\x02$\n\x0c\n\x05\x04\x02\x02\
+    \x01\x04\x12\x036\x02\n\n\x0c\n\x05\x04\x02\x02\x01\x05\x12\x036\x0b\x11\
+    \n\x0c\n\x05\x04\x02\x02\x01\x01\x12\x036\x12\x1f\n\x0c\n\x05\x04\x02\
+    \x02\x01\x03\x12\x036\"#\n\x0b\n\x04\x04\x02\x02\x02\x12\x037\x02\"\n\
+    \x0c\n\x05\x04\x02\x02\x02\x04\x12\x037\x02\n\n\x0c\n\x05\x04\x02\x02\
+    \x02\x05\x12\x037\x0b\x11\n\x0c\n\x05\x04\x02\x02\x02\x01\x12\x037\x12\
+    \x1d\n\x0c\n\x05\x04\x02\x02\x02\x03\x12\x037\x20!\n\x0b\n\x04\x04\x02\
+    \x02\x03\x12\x038\x02#\n\x0c\n\x05\x04\x02\x02\x03\x04\x12\x038\x02\n\n\
+    \x0c\n\x05\x04\x02\x02\x03\x05\x12\x038\x0b\x11\n\x0c\n\x05\x04\x02\x02\
+    \x03\x01\x12\x038\x12\x1e\n\x0c\n\x05\x04\x02\x02\x03\x03\x12\x038!\"\n\
+    \x0b\n\x04\x04\x02\x02\x04\x12\x039\x02\x1c\n\x0c\n\x05\x04\x02\x02\x04\
+    \x04\x12\x039\x02\n\n\x0c\n\x05\x04\x02\x02\x04\x05\x12\x039\x0b\x11\n\
+    \x0c\n\x05\x04\x02\x02\x04\x01\x12\x039\x12\x17\n\x0c\n\x05\x04\x02\x02\
+    \x04\x03\x12\x039\x1a\x1b\n\x0b\n\x04\x04\x02\x02\x05\x12\x03:\x02\"\n\
+    \x0c\n\x05\x04\x02\x02\x05\x04\x12\x03:\x02\n\n\x0c\n\x05\x04\x02\x02\
+    \x05\x05\x12\x03:\x0b\x11\n\x0c\n\x05\x04\x02\x02\x05\x01\x12\x03:\x12\
+    \x1d\n\x0c\n\x05\x04\x02\x02\x05\x03\x12\x03:\x20!\n\x0b\n\x04\x04\x02\
+    \x02\x06\x12\x03;\x02'\n\x0c\n\x05\x04\x02\x02\x06\x04\x12\x03;\x02\n\n\
+    \x0c\n\x05\x04\x02\x02\x06\x05\x12\x03;\x0b\x11\n\x0c\n\x05\x04\x02\x02\
+    \x06\x01\x12\x03;\x12\"\n\x0c\n\x05\x04\x02\x02\x06\x03\x12\x03;%&\n\x0b\
+    \n\x04\x04\x02\x02\x07\x12\x03<\x02$\n\x0c\n\x05\x04\x02\x02\x07\x04\x12\
+    \x03<\x02\n\n\x0c\n\x05\x04\x02\x02\x07\x05\x12\x03<\x0b\x11\n\x0c\n\x05\
+    \x04\x02\x02\x07\x01\x12\x03<\x12\x1f\n\x0c\n\x05\x04\x02\x02\x07\x03\
+    \x12\x03<\"#\n\x0b\n\x04\x04\x02\x02\x08\x12\x03=\x02#\n\x0c\n\x05\x04\
+    \x02\x02\x08\x04\x12\x03=\x02\n\n\x0c\n\x05\x04\x02\x02\x08\x05\x12\x03=\
+    \x0b\x11\n\x0c\n\x05\x04\x02\x02\x08\x01\x12\x03=\x12\x1e\n\x0c\n\x05\
+    \x04\x02\x02\x08\x03\x12\x03=!\"\n\x0b\n\x04\x04\x02\x02\t\x12\x03>\x02#\
+    \n\x0c\n\x05\x04\x02\x02\t\x04\x12\x03>\x02\n\n\x0c\n\x05\x04\x02\x02\t\
+    \x05\x12\x03>\x0b\x11\n\x0c\n\x05\x04\x02\x02\t\x01\x12\x03>\x12\x1d\n\
+    \x0c\n\x05\x04\x02\x02\t\x03\x12\x03>\x20\"\n\x0b\n\x04\x04\x02\x02\n\
+    \x12\x03?\x02%\n\x0c\n\x05\x04\x02\x02\n\x04\x12\x03?\x02\n\n\x0c\n\x05\
+    \x04\x02\x02\n\x05\x12\x03?\x0b\x11\n\x0c\n\x05\x04\x02\x02\n\x01\x12\
+    \x03?\x12\x1f\n\x0c\n\x05\x04\x02\x02\n\x03\x12\x03?\"$\n(\n\x02\x04\x03\
+    \x12\x04C\0R\x01\x1a\x1c\x20Detailed\x20stats\x20of\x20a\x20device\n\n\n\
+    \n\x03\x04\x03\x01\x12\x03C\x08\x19\n/\n\x04\x04\x03\x02\0\x12\x03E\x02\
+    \x20\x1a\"\x20Netsim\x20assigned\x20unique\x20device\x20id\n\n\x0c\n\x05\
+    \x04\x03\x02\0\x04\x12\x03E\x02\n\n\x0c\n\x05\x04\x03\x02\0\x05\x12\x03E\
+    \x0b\x11\n\x0c\n\x05\x04\x03\x02\0\x01\x12\x03E\x12\x1b\n\x0c\n\x05\x04\
+    \x03\x02\0\x03\x12\x03E\x1e\x1f\nP\n\x04\x04\x03\x02\x01\x12\x03G\x02\
+    \x1b\x1aC\x20Identifier\x20for\x20device\x20kind\x20e.g.\x20EMULATOR,\
+    \x20CUTTLEFISH,\x20BUMBLE,\x20etc\n\n\x0c\n\x05\x04\x03\x02\x01\x04\x12\
+    \x03G\x02\n\n\x0c\n\x05\x04\x03\x02\x01\x05\x12\x03G\x0b\x11\n\x0c\n\x05\
+    \x04\x03\x02\x01\x01\x12\x03G\x12\x16\n\x0c\n\x05\x04\x03\x02\x01\x03\
+    \x12\x03G\x19\x1a\nV\n\x04\x04\x03\x02\x02\x12\x03I\x02\x1e\x1aI\x20Vers\
+    ion\x20info\x20as\x20applicable\x20e.g.\x20Android\x20emulator\x20versio\
+    n\x2034.1.15.0,\x20etc\n\n\x0c\n\x05\x04\x03\x02\x02\x04\x12\x03I\x02\n\
+    \n\x0c\n\x05\x04\x03\x02\x02\x05\x12\x03I\x0b\x11\n\x0c\n\x05\x04\x03\
+    \x02\x02\x01\x12\x03I\x12\x19\n\x0c\n\x05\x04\x03\x02\x02\x03\x12\x03I\
+    \x1c\x1d\n>\n\x04\x04\x03\x02\x03\x12\x03K\x02\"\x1a1\x20SDK\x20version\
+    \x20info\x20as\x20applicable\x20e.g.\x2033,\x2034,\x20etc\n\n\x0c\n\x05\
+    \x04\x03\x02\x03\x04\x12\x03K\x02\n\n\x0c\n\x05\x04\x03\x02\x03\x05\x12\
+    \x03K\x0b\x11\n\x0c\n\x05\x04\x03\x02\x03\x01\x12\x03K\x12\x1d\n\x0c\n\
+    \x05\x04\x03\x02\x03\x03\x12\x03K\x20!\nB\n\x04\x04\x03\x02\x04\x12\x03M\
+    \x02\x1f\x1a5\x20Build\x20ID\x20e.g.\x20TE1A.220922.034,\x20UQ1A.231205.\
+    015,\x20etc\n\n\x0c\n\x05\x04\x03\x02\x04\x04\x12\x03M\x02\n\n\x0c\n\x05\
+    \x04\x03\x02\x04\x05\x12\x03M\x0b\x11\n\x0c\n\x05\x04\x03\x02\x04\x01\
+    \x12\x03M\x12\x1a\n\x0c\n\x05\x04\x03\x02\x04\x03\x12\x03M\x1d\x1e\nX\n\
+    \x04\x04\x03\x02\x05\x12\x03O\x02\x1e\x1aK\x20Model/variant\x20e.g.\x20s\
+    dk_gphone_x86_64-userdebug,\x20cf_x86_64_phone-user,\x20etc\n\n\x0c\n\
+    \x05\x04\x03\x02\x05\x04\x12\x03O\x02\n\n\x0c\n\x05\x04\x03\x02\x05\x05\
+    \x12\x03O\x0b\x11\n\x0c\n\x05\x04\x03\x02\x05\x01\x12\x03O\x12\x19\n\x0c\
+    \n\x05\x04\x03\x02\x05\x03\x12\x03O\x1c\x1d\n;\n\x04\x04\x03\x02\x06\x12\
+    \x03Q\x02\x1b\x1a.\x20CPU\x20architecture\x20e.g.\x20x86_64,\x20arm64-v8\
+    a,\x20etc\n\n\x0c\n\x05\x04\x03\x02\x06\x04\x12\x03Q\x02\n\n\x0c\n\x05\
+    \x04\x03\x02\x06\x05\x12\x03Q\x0b\x11\n\x0c\n\x05\x04\x03\x02\x06\x01\
+    \x12\x03Q\x12\x16\n\x0c\n\x05\x04\x03\x02\x06\x03\x12\x03Q\x19\x1a\n#\n\
+    \x02\x04\x04\x12\x05U\0\x82\x01\x01\x1a\x16\x20Detailed\x20Wi-Fi\x20stat\
+    s\n\n\n\n\x03\x04\x04\x01\x12\x03U\x08\x11\nE\n\x04\x04\x04\x02\0\x12\
+    \x03X\x02$\x1a8\x20===\x20Error\x20Counters\x20===\n\x20Errors\x20relate\
+    d\x20to\x20the\x20hostapd.\n\n\x0c\n\x05\x04\x04\x02\0\x04\x12\x03X\x02\
+    \n\n\x0c\n\x05\x04\x04\x02\0\x05\x12\x03X\x0b\x10\n\x0c\n\x05\x04\x04\
+    \x02\0\x01\x12\x03X\x11\x1f\n\x0c\n\x05\x04\x04\x02\0\x03\x12\x03X\"#\nR\
+    \n\x04\x04\x04\x02\x01\x12\x03Z\x02$\x1aE\x20Errors\x20related\x20to\x20\
+    network\x20connectivity\x20(e.g.,\x20Slirp/Tap\x20interface).\n\n\x0c\n\
+    \x05\x04\x04\x02\x01\x04\x12\x03Z\x02\n\n\x0c\n\x05\x04\x04\x02\x01\x05\
+    \x12\x03Z\x0b\x10\n\x0c\n\x05\x04\x04\x02\x01\x01\x12\x03Z\x11\x1f\n\x0c\
+    \n\x05\x04\x04\x02\x01\x03\x12\x03Z\"#\nE\n\x04\x04\x04\x02\x02\x12\x03\
+    \\\x02#\x1a8\x20Errors\x20related\x20to\x20client-specific\x20operations\
+    \x20or\x20state.\n\n\x0c\n\x05\x04\x04\x02\x02\x04\x12\x03\\\x02\n\n\x0c\
+    \n\x05\x04\x04\x02\x02\x05\x12\x03\\\x0b\x10\n\x0c\n\x05\x04\x04\x02\x02\
+    \x01\x12\x03\\\x11\x1e\n\x0c\n\x05\x04\x04\x02\x02\x03\x12\x03\\!\"\n[\n\
+    \x04\x04\x04\x02\x03\x12\x03_\x02\"\x1aN\x20Errors\x20encountered\x20whi\
+    le\x20parsing,\x20decoding,\x20or\x20handling\x20IEEE\x20802.11\n\x20fra\
+    mes.\n\n\x0c\n\x05\x04\x04\x02\x03\x04\x12\x03_\x02\n\n\x0c\n\x05\x04\
+    \x04\x02\x03\x05\x12\x03_\x0b\x10\n\x0c\n\x05\x04\x04\x02\x03\x01\x12\
+    \x03_\x11\x1d\n\x0c\n\x05\x04\x04\x02\x03\x03\x12\x03_\x20!\nD\n\x04\x04\
+    \x04\x02\x04\x12\x03a\x02)\x1a7\x20Errors\x20related\x20to\x20transmissi\
+    on\x20or\x20reception\x20of\x20frame.\n\n\x0c\n\x05\x04\x04\x02\x04\x04\
+    \x12\x03a\x02\n\n\x0c\n\x05\x04\x04\x02\x04\x05\x12\x03a\x0b\x10\n\x0c\n\
+    \x05\x04\x04\x02\x04\x01\x12\x03a\x11$\n\x0c\n\x05\x04\x04\x02\x04\x03\
+    \x12\x03a'(\n*\n\x04\x04\x04\x02\x05\x12\x03c\x02\"\x1a\x1d\x20Other\x20\
+    uncategorized\x20errors.\n\n\x0c\n\x05\x04\x04\x02\x05\x04\x12\x03c\x02\
+    \n\n\x0c\n\x05\x04\x04\x02\x05\x05\x12\x03c\x0b\x10\n\x0c\n\x05\x04\x04\
+    \x02\x05\x01\x12\x03c\x11\x1d\n\x0c\n\x05\x04\x04\x02\x05\x03\x12\x03c\
+    \x20!\nq\n\x04\x04\x04\x02\x06\x12\x03g\x02%\x1ad\x20===\x20Core\x20Traf\
+    fic\x20Flow\x20&\x20Type\x20Counters\x20===\n\x20802.11\x20frames\x20rec\
+    eived\x20from\x20clients\x20via\x20Hwsim\x20messages.\n\n\x0c\n\x05\x04\
+    \x04\x02\x06\x04\x12\x03g\x02\n\n\x0c\n\x05\x04\x04\x02\x06\x05\x12\x03g\
+    \x0b\x10\n\x0c\n\x05\x04\x04\x02\x06\x01\x12\x03g\x11\x20\n\x0c\n\x05\
+    \x04\x04\x02\x06\x03\x12\x03g#$\nG\n\x04\x04\x04\x02\x07\x12\x03i\x02%\
+    \x1a:\x20802.11\x20frames\x20transmitted\x20to\x20clients\x20via\x20Hwsi\
+    m\x20messages.\n\n\x0c\n\x05\x04\x04\x02\x07\x04\x12\x03i\x02\n\n\x0c\n\
+    \x05\x04\x04\x02\x07\x05\x12\x03i\x0b\x10\n\x0c\n\x05\x04\x04\x02\x07\
+    \x01\x12\x03i\x11\x20\n\x0c\n\x05\x04\x04\x02\x07\x03\x12\x03i#$\nH\n\
+    \x04\x04\x04\x02\x08\x12\x03k\x02(\x1a;\x20L3\x20packets\x20transmitted\
+    \x20to\x20external\x20network\x20(e.g.,\x20Slirp).\n\n\x0c\n\x05\x04\x04\
+    \x02\x08\x04\x12\x03k\x02\n\n\x0c\n\x05\x04\x04\x02\x08\x05\x12\x03k\x0b\
+    \x10\n\x0c\n\x05\x04\x04\x02\x08\x01\x12\x03k\x11#\n\x0c\n\x05\x04\x04\
+    \x02\x08\x03\x12\x03k&'\n9\n\x04\x04\x04\x02\t\x12\x03m\x02)\x1a,\x20L3\
+    \x20packets\x20received\x20from\x20external\x20network.\n\n\x0c\n\x05\
+    \x04\x04\x02\t\x04\x12\x03m\x02\n\n\x0c\n\x05\x04\x04\x02\t\x05\x12\x03m\
+    \x0b\x10\n\x0c\n\x05\x04\x04\x02\t\x01\x12\x03m\x11#\n\x0c\n\x05\x04\x04\
+    \x02\t\x03\x12\x03m&(\n<\n\x04\x04\x04\x02\n\x12\x03o\x02(\x1a/\x20802.1\
+    1\x20frames\x20transmitted\x20to\x20hostapd\x20process.\n\n\x0c\n\x05\
+    \x04\x04\x02\n\x04\x12\x03o\x02\n\n\x0c\n\x05\x04\x04\x02\n\x05\x12\x03o\
+    \x0b\x10\n\x0c\n\x05\x04\x04\x02\n\x01\x12\x03o\x11\"\n\x0c\n\x05\x04\
+    \x04\x02\n\x03\x12\x03o%'\n;\n\x04\x04\x04\x02\x0b\x12\x03q\x02(\x1a.\
+    \x20802.11\x20frames\x20received\x20from\x20hostapd\x20process.\n\n\x0c\
+    \n\x05\x04\x04\x02\x0b\x04\x12\x03q\x02\n\n\x0c\n\x05\x04\x04\x02\x0b\
+    \x05\x12\x03q\x0b\x10\n\x0c\n\x05\x04\x04\x02\x0b\x01\x12\x03q\x11\"\n\
+    \x0c\n\x05\x04\x04\x02\x0b\x03\x12\x03q%'\nG\n\x04\x04\x04\x02\x0c\x12\
+    \x03s\x02(\x1a:\x20Station-to-station\x20802.11\x20frames\x20transmitted\
+    \x20via\x20medium.\n\n\x0c\n\x05\x04\x04\x02\x0c\x04\x12\x03s\x02\n\n\
+    \x0c\n\x05\x04\x04\x02\x0c\x05\x12\x03s\x0b\x10\n\x0c\n\x05\x04\x04\x02\
+    \x0c\x01\x12\x03s\x11\"\n\x0c\n\x05\x04\x04\x02\x0c\x03\x12\x03s%'\nO\n\
+    \x04\x04\x04\x02\r\x12\x03u\x020\x1aB\x20Unicast\x20802.11\x20frames\x20\
     transmitted\x20to\x20another\x20station\x20via\x20medium.\n\n\x0c\n\x05\
-    \x04\x04\x02\r\x04\x12\x03p\x02\n\n\x0c\n\x05\x04\x04\x02\r\x05\x12\x03p\
-    \x0b\x10\n\x0c\n\x05\x04\x04\x02\r\x01\x12\x03p\x11*\n\x0c\n\x05\x04\x04\
-    \x02\r\x03\x12\x03p-/\n;\n\x04\x04\x04\x02\x0e\x12\x03r\x02%\x1a.\x20802\
+    \x04\x04\x02\r\x04\x12\x03u\x02\n\n\x0c\n\x05\x04\x04\x02\r\x05\x12\x03u\
+    \x0b\x10\n\x0c\n\x05\x04\x04\x02\r\x01\x12\x03u\x11*\n\x0c\n\x05\x04\x04\
+    \x02\r\x03\x12\x03u-/\n;\n\x04\x04\x04\x02\x0e\x12\x03w\x02%\x1a.\x20802\
     .11\x20Management\x20frames\x20received\x20by\x20medium.\n\n\x0c\n\x05\
-    \x04\x04\x02\x0e\x04\x12\x03r\x02\n\n\x0c\n\x05\x04\x04\x02\x0e\x05\x12\
-    \x03r\x0b\x10\n\x0c\n\x05\x04\x04\x02\x0e\x01\x12\x03r\x11\x1f\n\x0c\n\
-    \x05\x04\x04\x02\x0e\x03\x12\x03r\"$\nE\n\x04\x04\x04\x02\x0f\x12\x03v\
+    \x04\x04\x02\x0e\x04\x12\x03w\x02\n\n\x0c\n\x05\x04\x04\x02\x0e\x05\x12\
+    \x03w\x0b\x10\n\x0c\n\x05\x04\x04\x02\x0e\x01\x12\x03w\x11\x1f\n\x0c\n\
+    \x05\x04\x04\x02\x0e\x03\x12\x03w\"$\nE\n\x04\x04\x04\x02\x0f\x12\x03{\
     \x02!\x1a8\x20===\x20Specific\x20Protocol\x20Counters\x20===\n\x20mDNS\
-    \x20frames\x20count.\n\n\x0c\n\x05\x04\x04\x02\x0f\x04\x12\x03v\x02\n\n\
-    \x0c\n\x05\x04\x04\x02\x0f\x05\x12\x03v\x0b\x10\n\x0c\n\x05\x04\x04\x02\
-    \x0f\x01\x12\x03v\x11\x1b\n\x0c\n\x05\x04\x04\x02\x0f\x03\x12\x03v\x1e\
-    \x20\nl\n\x04\x04\x04\x02\x10\x12\x03z\x02.\x1a_\x20===\x20Performance\
-    \x20Statistics\x20===\n\x20Max\x20Throughput\x20from\x20Internet\x20to\
+    \x20frames\x20count.\n\n\x0c\n\x05\x04\x04\x02\x0f\x04\x12\x03{\x02\n\n\
+    \x0c\n\x05\x04\x04\x02\x0f\x05\x12\x03{\x0b\x10\n\x0c\n\x05\x04\x04\x02\
+    \x0f\x01\x12\x03{\x11\x1b\n\x0c\n\x05\x04\x04\x02\x0f\x03\x12\x03{\x1e\
+    \x20\nl\n\x04\x04\x04\x02\x10\x12\x03\x7f\x02.\x1a_\x20===\x20Performanc\
+    e\x20Statistics\x20===\n\x20Max\x20Throughput\x20from\x20Internet\x20to\
     \x20device(s)\x20in\x20Mbits\x20per\x20second\n\n\x0c\n\x05\x04\x04\x02\
-    \x10\x04\x12\x03z\x02\n\n\x0c\n\x05\x04\x04\x02\x10\x05\x12\x03z\x0b\x10\
-    \n\x0c\n\x05\x04\x04\x02\x10\x01\x12\x03z\x11(\n\x0c\n\x05\x04\x04\x02\
-    \x10\x03\x12\x03z+-\nL\n\x04\x04\x04\x02\x11\x12\x03|\x02,\x1a?\x20Max\
-    \x20Throughput\x20from\x20device(s)\x20to\x20Internet\x20in\x20Mbits\x20\
-    per\x20second\n\n\x0c\n\x05\x04\x04\x02\x11\x04\x12\x03|\x02\n\n\x0c\n\
-    \x05\x04\x04\x02\x11\x05\x12\x03|\x0b\x10\n\x0c\n\x05\x04\x04\x02\x11\
-    \x01\x12\x03|\x11&\n\x0c\n\x05\x04\x04\x02\x11\x03\x12\x03|)+\n0\n\x02\
-    \x04\x05\x12\x06\x80\x01\0\x91\x01\x01\x1a\"\x20Statistics\x20for\x20a\
-    \x20netsim\x20session.\n\n\x0b\n\x03\x04\x05\x01\x12\x04\x80\x01\x08\x13\
-    \n4\n\x04\x04\x05\x02\0\x12\x04\x82\x01\x02$\x1a&\x20The\x20length\x20of\
-    \x20the\x20session\x20in\x20seconds\n\n\r\n\x05\x04\x05\x02\0\x04\x12\
-    \x04\x82\x01\x02\n\n\r\n\x05\x04\x05\x02\0\x05\x12\x04\x82\x01\x0b\x11\n\
-    \r\n\x05\x04\x05\x02\0\x01\x12\x04\x82\x01\x12\x1f\n\r\n\x05\x04\x05\x02\
-    \0\x03\x12\x04\x82\x01\"#\n:\n\x04\x04\x05\x02\x01\x12\x04\x84\x01\x02\"\
-    \x1a,\x20The\x20total\x20number\x20of\x20devices\x20that\x20connected\n\
-    \n\r\n\x05\x04\x05\x02\x01\x04\x12\x04\x84\x01\x02\n\n\r\n\x05\x04\x05\
-    \x02\x01\x05\x12\x04\x84\x01\x0b\x10\n\r\n\x05\x04\x05\x02\x01\x01\x12\
-    \x04\x84\x01\x11\x1d\n\r\n\x05\x04\x05\x02\x01\x03\x12\x04\x84\x01\x20!\
-    \n?\n\x04\x04\x05\x02\x02\x12\x04\x86\x01\x02-\x1a1\x20The\x20peak\x20nu\
-    mber\x20of\x20concurrent\x20devices\x20connected\n\n\r\n\x05\x04\x05\x02\
-    \x02\x04\x12\x04\x86\x01\x02\n\n\r\n\x05\x04\x05\x02\x02\x05\x12\x04\x86\
-    \x01\x0b\x10\n\r\n\x05\x04\x05\x02\x02\x01\x12\x04\x86\x01\x11(\n\r\n\
-    \x05\x04\x05\x02\x02\x03\x12\x04\x86\x01+,\n*\n\x04\x04\x05\x02\x03\x12\
-    \x04\x88\x01\x02,\x1a\x1c\x20Individual\x20chip\x20statistics\n\n\r\n\
-    \x05\x04\x05\x02\x03\x04\x12\x04\x88\x01\x02\n\n\r\n\x05\x04\x05\x02\x03\
-    \x06\x12\x04\x88\x01\x0b\x1b\n\r\n\x05\x04\x05\x02\x03\x01\x12\x04\x88\
-    \x01\x1c'\n\r\n\x05\x04\x05\x02\x03\x03\x12\x04\x88\x01*+\n,\n\x04\x04\
-    \x05\x02\x04\x12\x04\x8a\x01\x02\x1e\x1a\x1e\x20The\x20version\x20of\x20\
-    netsim\x20daemon\n\n\r\n\x05\x04\x05\x02\x04\x04\x12\x04\x8a\x01\x02\n\n\
-    \r\n\x05\x04\x05\x02\x04\x05\x12\x04\x8a\x01\x0b\x11\n\r\n\x05\x04\x05\
-    \x02\x04\x01\x12\x04\x8a\x01\x12\x19\n\r\n\x05\x04\x05\x02\x04\x03\x12\
-    \x04\x8a\x01\x1c\x1d\n'\n\x04\x04\x05\x02\x05\x12\x04\x8c\x01\x022\x1a\
-    \x19\x20Frontend\x20API\x20statistics\n\n\r\n\x05\x04\x05\x02\x05\x04\
-    \x12\x04\x8c\x01\x02\n\n\r\n\x05\x04\x05\x02\x05\x06\x12\x04\x8c\x01\x0b\
-    \x1e\n\r\n\x05\x04\x05\x02\x05\x01\x12\x04\x8c\x01\x1f-\n\r\n\x05\x04\
-    \x05\x02\x05\x03\x12\x04\x8c\x0101\n!\n\x04\x04\x05\x02\x06\x12\x04\x8e\
-    \x01\x02.\x1a\x13\x20Device\x20statistics\n\n\r\n\x05\x04\x05\x02\x06\
-    \x04\x12\x04\x8e\x01\x02\n\n\r\n\x05\x04\x05\x02\x06\x06\x12\x04\x8e\x01\
-    \x0b\x1c\n\r\n\x05\x04\x05\x02\x06\x01\x12\x04\x8e\x01\x1d)\n\r\n\x05\
-    \x04\x05\x02\x06\x03\x12\x04\x8e\x01,-\n\x20\n\x04\x04\x05\x02\x07\x12\
-    \x04\x90\x01\x02$\x1a\x12\x20Wi-Fi\x20statistics\n\n\r\n\x05\x04\x05\x02\
-    \x07\x04\x12\x04\x90\x01\x02\n\n\r\n\x05\x04\x05\x02\x07\x06\x12\x04\x90\
-    \x01\x0b\x14\n\r\n\x05\x04\x05\x02\x07\x01\x12\x04\x90\x01\x15\x1f\n\r\n\
-    \x05\x04\x05\x02\x07\x03\x12\x04\x90\x01\"#\
+    \x10\x04\x12\x03\x7f\x02\n\n\x0c\n\x05\x04\x04\x02\x10\x05\x12\x03\x7f\
+    \x0b\x10\n\x0c\n\x05\x04\x04\x02\x10\x01\x12\x03\x7f\x11(\n\x0c\n\x05\
+    \x04\x04\x02\x10\x03\x12\x03\x7f+-\nM\n\x04\x04\x04\x02\x11\x12\x04\x81\
+    \x01\x02,\x1a?\x20Max\x20Throughput\x20from\x20device(s)\x20to\x20Intern\
+    et\x20in\x20Mbits\x20per\x20second\n\n\r\n\x05\x04\x04\x02\x11\x04\x12\
+    \x04\x81\x01\x02\n\n\r\n\x05\x04\x04\x02\x11\x05\x12\x04\x81\x01\x0b\x10\
+    \n\r\n\x05\x04\x04\x02\x11\x01\x12\x04\x81\x01\x11&\n\r\n\x05\x04\x04\
+    \x02\x11\x03\x12\x04\x81\x01)+\n\"\n\x02\x04\x05\x12\x06\x85\x01\0\xa7\
+    \x01\x01\x1a\x14\x20Detailed\x20NFC\x20stats\n\n\x0b\n\x03\x04\x05\x01\
+    \x12\x04\x85\x01\x08\x10\nl\n\x04\x04\x05\x02\0\x12\x04\x88\x01\x02\x20\
+    \x1a^\x20===\x20Error\x20Counters\x20===\n\x20Errors\x20encountered\x20w\
+    hile\x20parsing,\x20decoding,\x20or\x20handling\x20NCI\x20packets.\n\n\r\
+    \n\x05\x04\x05\x02\0\x04\x12\x04\x88\x01\x02\n\n\r\n\x05\x04\x05\x02\0\
+    \x05\x12\x04\x88\x01\x0b\x10\n\r\n\x05\x04\x05\x02\0\x01\x12\x04\x88\x01\
+    \x11\x1b\n\r\n\x05\x04\x05\x02\0\x03\x12\x04\x88\x01\x1e\x1f\nQ\n\x04\
+    \x04\x05\x02\x01\x12\x04\x8a\x01\x02$\x1aC\x20Errors\x20related\x20to\
+    \x20Casimir\x20simulation\x20backend\x20or\x20RF\x20scene\x20routing.\n\
+    \n\r\n\x05\x04\x05\x02\x01\x04\x12\x04\x8a\x01\x02\n\n\r\n\x05\x04\x05\
+    \x02\x01\x05\x12\x04\x8a\x01\x0b\x10\n\r\n\x05\x04\x05\x02\x01\x01\x12\
+    \x04\x8a\x01\x11\x1f\n\r\n\x05\x04\x05\x02\x01\x03\x12\x04\x8a\x01\"#\nO\
+    \n\x04\x04\x05\x02\x02\x12\x04\x8c\x01\x02\x1f\x1aA\x20Errors\x20related\
+    \x20to\x20contactless\x20RF\x20transmission\x20or\x20tag\x20emulation.\n\
+    \n\r\n\x05\x04\x05\x02\x02\x04\x12\x04\x8c\x01\x02\n\n\r\n\x05\x04\x05\
+    \x02\x02\x05\x12\x04\x8c\x01\x0b\x10\n\r\n\x05\x04\x05\x02\x02\x01\x12\
+    \x04\x8c\x01\x11\x1a\n\r\n\x05\x04\x05\x02\x02\x03\x12\x04\x8c\x01\x1d\
+    \x1e\n/\n\x04\x04\x05\x02\x03\x12\x04\x8e\x01\x02\"\x1a!\x20Other\x20unc\
+    ategorized\x20NFC\x20errors.\n\n\r\n\x05\x04\x05\x02\x03\x04\x12\x04\x8e\
+    \x01\x02\n\n\r\n\x05\x04\x05\x02\x03\x05\x12\x04\x8e\x01\x0b\x10\n\r\n\
+    \x05\x04\x05\x02\x03\x01\x12\x04\x8e\x01\x11\x1d\n\r\n\x05\x04\x05\x02\
+    \x03\x03\x12\x04\x8e\x01\x20!\n\xf2\x01\n\x04\x04\x05\x02\x04\x12\x04\
+    \x93\x01\x02%\x1a\xe3\x01\x20===\x20Core\x20Traffic\x20Flow\x20&\x20Type\
+    \x20Counters\x20===\n\x20NCI\x20control\x20command\x20packets\x20receive\
+    d\x20from\x20guest\x20OS.\n\x20Mapped\x20to\x20Android\x20NFC\x20HAL\x20\
+    /\x20stack\x20control\x20operations\x20(e.g.,\x20adapter\x20enable/disab\
+    le,\x20RF\x20discovery\x20configuration,\x20routing\x20updates).\n\n\r\n\
+    \x05\x04\x05\x02\x04\x04\x12\x04\x93\x01\x02\n\n\r\n\x05\x04\x05\x02\x04\
+    \x05\x12\x04\x93\x01\x0b\x10\n\r\n\x05\x04\x05\x02\x04\x01\x12\x04\x93\
+    \x01\x11\x20\n\r\n\x05\x04\x05\x02\x04\x03\x12\x04\x93\x01#$\nE\n\x04\
+    \x04\x05\x02\x05\x12\x04\x95\x01\x02&\x1a7\x20NCI\x20control\x20response\
+    \x20packets\x20transmitted\x20to\x20guest\x20OS.\n\n\r\n\x05\x04\x05\x02\
+    \x05\x04\x12\x04\x95\x01\x02\n\n\r\n\x05\x04\x05\x02\x05\x05\x12\x04\x95\
+    \x01\x0b\x10\n\r\n\x05\x04\x05\x02\x05\x01\x12\x04\x95\x01\x11!\n\r\n\
+    \x05\x04\x05\x02\x05\x03\x12\x04\x95\x01$%\nA\n\x04\x04\x05\x02\x06\x12\
+    \x04\x97\x01\x02*\x1a3\x20NCI\x20notification\x20packets\x20transmitted\
+    \x20to\x20guest\x20OS.\n\n\r\n\x05\x04\x05\x02\x06\x04\x12\x04\x97\x01\
+    \x02\n\n\r\n\x05\x04\x05\x02\x06\x05\x12\x04\x97\x01\x0b\x10\n\r\n\x05\
+    \x04\x05\x02\x06\x01\x12\x04\x97\x01\x11%\n\r\n\x05\x04\x05\x02\x06\x03\
+    \x12\x04\x97\x01()\n8\n\x04\x04\x05\x02\x07\x12\x04\x99\x01\x02!\x1a*\
+    \x20NCI\x20data\x20packets\x20received\x20from\x20guest\x20OS.\n\n\r\n\
+    \x05\x04\x05\x02\x07\x04\x12\x04\x99\x01\x02\n\n\r\n\x05\x04\x05\x02\x07\
+    \x05\x12\x04\x99\x01\x0b\x10\n\r\n\x05\x04\x05\x02\x07\x01\x12\x04\x99\
+    \x01\x11\x1c\n\r\n\x05\x04\x05\x02\x07\x03\x12\x04\x99\x01\x1f\x20\n\xcc\
+    \x01\n\x04\x04\x05\x02\x08\x12\x04\x9c\x01\x02!\x1a\xbd\x01\x20NCI\x20da\
+    ta\x20packets\x20transmitted\x20to\x20guest\x20OS.\n\x20Mapped\x20to\x20\
+    Android\x20NFC\x20HAL\x20/\x20Framework\x20API\x20payload\x20I/O\x20oper\
+    ations\x20(e.g.,\x20Ndef\x20read/write,\x20IsoDep/Tag\x20transceive,\x20\
+    HostApduService\x20APDU\x20exchanges).\n\n\r\n\x05\x04\x05\x02\x08\x04\
+    \x12\x04\x9c\x01\x02\n\n\r\n\x05\x04\x05\x02\x08\x05\x12\x04\x9c\x01\x0b\
+    \x10\n\r\n\x05\x04\x05\x02\x08\x01\x12\x04\x9c\x01\x11\x1c\n\r\n\x05\x04\
+    \x05\x02\x08\x03\x12\x04\x9c\x01\x1f\x20\nO\n\x04\x04\x05\x02\t\x12\x04\
+    \x9e\x01\x02!\x1aA\x20Over-the-air\x20RF\x20contactless\x20tap\x20events\
+    \x20transmitted\x20via\x20Casimir.\n\n\r\n\x05\x04\x05\x02\t\x04\x12\x04\
+    \x9e\x01\x02\n\n\r\n\x05\x04\x05\x02\t\x05\x12\x04\x9e\x01\x0b\x10\n\r\n\
+    \x05\x04\x05\x02\t\x01\x12\x04\x9e\x01\x11\x1b\n\r\n\x05\x04\x05\x02\t\
+    \x03\x12\x04\x9e\x01\x1e\x20\nL\n\x04\x04\x05\x02\n\x12\x04\xa0\x01\x02!\
+    \x1a>\x20Over-the-air\x20RF\x20contactless\x20tap\x20events\x20received\
+    \x20via\x20Casimir.\n\n\r\n\x05\x04\x05\x02\n\x04\x12\x04\xa0\x01\x02\n\
+    \n\r\n\x05\x04\x05\x02\n\x05\x12\x04\xa0\x01\x0b\x10\n\r\n\x05\x04\x05\
+    \x02\n\x01\x12\x04\xa0\x01\x11\x1b\n\r\n\x05\x04\x05\x02\n\x03\x12\x04\
+    \xa0\x01\x1e\x20\n{\n\x04\x04\x05\x02\x0b\x12\x04\xa4\x01\x02+\x1am\x20=\
+    ==\x20Simulation\x20&\x20Emulation\x20Transaction\x20Counters\x20===\n\
+    \x20Number\x20of\x20Card\x20Emulation\x20(HCE)\x20transactions\x20simula\
+    ted.\n\n\r\n\x05\x04\x05\x02\x0b\x04\x12\x04\xa4\x01\x02\n\n\r\n\x05\x04\
+    \x05\x02\x0b\x05\x12\x04\xa4\x01\x0b\x10\n\r\n\x05\x04\x05\x02\x0b\x01\
+    \x12\x04\xa4\x01\x11%\n\r\n\x05\x04\x05\x02\x0b\x03\x12\x04\xa4\x01(*\n?\
+    \n\x04\x04\x05\x02\x0c\x12\x04\xa6\x01\x02*\x1a1\x20Number\x20of\x20Tag\
+    \x20Emulation\x20transactions\x20simulated.\n\n\r\n\x05\x04\x05\x02\x0c\
+    \x04\x12\x04\xa6\x01\x02\n\n\r\n\x05\x04\x05\x02\x0c\x05\x12\x04\xa6\x01\
+    \x0b\x10\n\r\n\x05\x04\x05\x02\x0c\x01\x12\x04\xa6\x01\x11$\n\r\n\x05\
+    \x04\x05\x02\x0c\x03\x12\x04\xa6\x01')\nA\n\x02\x04\x06\x12\x06\xaa\x01\
+    \0\xaf\x01\x01\x1a3\x20Frontend\x20statistics\x20for\x20NfcService\x20gR\
+    PC\x20API\x20calls\n\n\x0b\n\x03\x04\x06\x01\x12\x04\xaa\x01\x08\x17\n\
+    \x0c\n\x04\x04\x06\x02\0\x12\x04\xab\x01\x02!\n\r\n\x05\x04\x06\x02\0\
+    \x04\x12\x04\xab\x01\x02\n\n\r\n\x05\x04\x06\x02\0\x05\x12\x04\xab\x01\
+    \x0b\x11\n\r\n\x05\x04\x06\x02\0\x01\x12\x04\xab\x01\x12\x1c\n\r\n\x05\
+    \x04\x06\x02\0\x03\x12\x04\xab\x01\x1f\x20\n\x0c\n\x04\x04\x06\x02\x01\
+    \x12\x04\xac\x01\x02\x20\n\r\n\x05\x04\x06\x02\x01\x04\x12\x04\xac\x01\
+    \x02\n\n\r\n\x05\x04\x06\x02\x01\x05\x12\x04\xac\x01\x0b\x11\n\r\n\x05\
+    \x04\x06\x02\x01\x01\x12\x04\xac\x01\x12\x1b\n\r\n\x05\x04\x06\x02\x01\
+    \x03\x12\x04\xac\x01\x1e\x1f\n\x0c\n\x04\x04\x06\x02\x02\x12\x04\xad\x01\
+    \x02\x1b\n\r\n\x05\x04\x06\x02\x02\x04\x12\x04\xad\x01\x02\n\n\r\n\x05\
+    \x04\x06\x02\x02\x05\x12\x04\xad\x01\x0b\x11\n\r\n\x05\x04\x06\x02\x02\
+    \x01\x12\x04\xad\x01\x12\x16\n\r\n\x05\x04\x06\x02\x02\x03\x12\x04\xad\
+    \x01\x19\x1a\n\x0c\n\x04\x04\x06\x02\x03\x12\x04\xae\x01\x02\x20\n\r\n\
+    \x05\x04\x06\x02\x03\x04\x12\x04\xae\x01\x02\n\n\r\n\x05\x04\x06\x02\x03\
+    \x05\x12\x04\xae\x01\x0b\x11\n\r\n\x05\x04\x06\x02\x03\x01\x12\x04\xae\
+    \x01\x12\x1b\n\r\n\x05\x04\x06\x02\x03\x03\x12\x04\xae\x01\x1e\x1f\n0\n\
+    \x02\x04\x07\x12\x06\xb2\x01\0\xc7\x01\x01\x1a\"\x20Statistics\x20for\
+    \x20a\x20netsim\x20session.\n\n\x0b\n\x03\x04\x07\x01\x12\x04\xb2\x01\
+    \x08\x13\n4\n\x04\x04\x07\x02\0\x12\x04\xb4\x01\x02$\x1a&\x20The\x20leng\
+    th\x20of\x20the\x20session\x20in\x20seconds\n\n\r\n\x05\x04\x07\x02\0\
+    \x04\x12\x04\xb4\x01\x02\n\n\r\n\x05\x04\x07\x02\0\x05\x12\x04\xb4\x01\
+    \x0b\x11\n\r\n\x05\x04\x07\x02\0\x01\x12\x04\xb4\x01\x12\x1f\n\r\n\x05\
+    \x04\x07\x02\0\x03\x12\x04\xb4\x01\"#\n:\n\x04\x04\x07\x02\x01\x12\x04\
+    \xb6\x01\x02\"\x1a,\x20The\x20total\x20number\x20of\x20devices\x20that\
+    \x20connected\n\n\r\n\x05\x04\x07\x02\x01\x04\x12\x04\xb6\x01\x02\n\n\r\
+    \n\x05\x04\x07\x02\x01\x05\x12\x04\xb6\x01\x0b\x10\n\r\n\x05\x04\x07\x02\
+    \x01\x01\x12\x04\xb6\x01\x11\x1d\n\r\n\x05\x04\x07\x02\x01\x03\x12\x04\
+    \xb6\x01\x20!\n?\n\x04\x04\x07\x02\x02\x12\x04\xb8\x01\x02-\x1a1\x20The\
+    \x20peak\x20number\x20of\x20concurrent\x20devices\x20connected\n\n\r\n\
+    \x05\x04\x07\x02\x02\x04\x12\x04\xb8\x01\x02\n\n\r\n\x05\x04\x07\x02\x02\
+    \x05\x12\x04\xb8\x01\x0b\x10\n\r\n\x05\x04\x07\x02\x02\x01\x12\x04\xb8\
+    \x01\x11(\n\r\n\x05\x04\x07\x02\x02\x03\x12\x04\xb8\x01+,\n*\n\x04\x04\
+    \x07\x02\x03\x12\x04\xba\x01\x02,\x1a\x1c\x20Individual\x20chip\x20stati\
+    stics\n\n\r\n\x05\x04\x07\x02\x03\x04\x12\x04\xba\x01\x02\n\n\r\n\x05\
+    \x04\x07\x02\x03\x06\x12\x04\xba\x01\x0b\x1b\n\r\n\x05\x04\x07\x02\x03\
+    \x01\x12\x04\xba\x01\x1c'\n\r\n\x05\x04\x07\x02\x03\x03\x12\x04\xba\x01*\
+    +\n,\n\x04\x04\x07\x02\x04\x12\x04\xbc\x01\x02\x1e\x1a\x1e\x20The\x20ver\
+    sion\x20of\x20netsim\x20daemon\n\n\r\n\x05\x04\x07\x02\x04\x04\x12\x04\
+    \xbc\x01\x02\n\n\r\n\x05\x04\x07\x02\x04\x05\x12\x04\xbc\x01\x0b\x11\n\r\
+    \n\x05\x04\x07\x02\x04\x01\x12\x04\xbc\x01\x12\x19\n\r\n\x05\x04\x07\x02\
+    \x04\x03\x12\x04\xbc\x01\x1c\x1d\n'\n\x04\x04\x07\x02\x05\x12\x04\xbe\
+    \x01\x022\x1a\x19\x20Frontend\x20API\x20statistics\n\n\r\n\x05\x04\x07\
+    \x02\x05\x04\x12\x04\xbe\x01\x02\n\n\r\n\x05\x04\x07\x02\x05\x06\x12\x04\
+    \xbe\x01\x0b\x1e\n\r\n\x05\x04\x07\x02\x05\x01\x12\x04\xbe\x01\x1f-\n\r\
+    \n\x05\x04\x07\x02\x05\x03\x12\x04\xbe\x0101\n!\n\x04\x04\x07\x02\x06\
+    \x12\x04\xc0\x01\x02.\x1a\x13\x20Device\x20statistics\n\n\r\n\x05\x04\
+    \x07\x02\x06\x04\x12\x04\xc0\x01\x02\n\n\r\n\x05\x04\x07\x02\x06\x06\x12\
+    \x04\xc0\x01\x0b\x1c\n\r\n\x05\x04\x07\x02\x06\x01\x12\x04\xc0\x01\x1d)\
+    \n\r\n\x05\x04\x07\x02\x06\x03\x12\x04\xc0\x01,-\n\x20\n\x04\x04\x07\x02\
+    \x07\x12\x04\xc2\x01\x02$\x1a\x12\x20Wi-Fi\x20statistics\n\n\r\n\x05\x04\
+    \x07\x02\x07\x04\x12\x04\xc2\x01\x02\n\n\r\n\x05\x04\x07\x02\x07\x06\x12\
+    \x04\xc2\x01\x0b\x14\n\r\n\x05\x04\x07\x02\x07\x01\x12\x04\xc2\x01\x15\
+    \x1f\n\r\n\x05\x04\x07\x02\x07\x03\x12\x04\xc2\x01\"#\n\x1e\n\x04\x04\
+    \x07\x02\x08\x12\x04\xc4\x01\x02\"\x1a\x10\x20NFC\x20statistics\n\n\r\n\
+    \x05\x04\x07\x02\x08\x04\x12\x04\xc4\x01\x02\n\n\r\n\x05\x04\x07\x02\x08\
+    \x06\x12\x04\xc4\x01\x0b\x13\n\r\n\x05\x04\x07\x02\x08\x01\x12\x04\xc4\
+    \x01\x14\x1d\n\r\n\x05\x04\x07\x02\x08\x03\x12\x04\xc4\x01\x20!\n*\n\x04\
+    \x04\x07\x02\t\x12\x04\xc6\x01\x022\x1a\x1c\x20NFC\x20Service\x20API\x20\
+    statistics\n\n\r\n\x05\x04\x07\x02\t\x04\x12\x04\xc6\x01\x02\n\n\r\n\x05\
+    \x04\x07\x02\t\x06\x12\x04\xc6\x01\x0b\x1a\n\r\n\x05\x04\x07\x02\t\x01\
+    \x12\x04\xc6\x01\x1b,\n\r\n\x05\x04\x07\x02\t\x03\x12\x04\xc6\x01/1\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -3279,12 +4418,14 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
     file_descriptor.get(|| {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(0);
-            let mut messages = ::std::vec::Vec::with_capacity(6);
+            let mut messages = ::std::vec::Vec::with_capacity(8);
             messages.push(InvalidPacket::generated_message_descriptor_data());
             messages.push(NetsimRadioStats::generated_message_descriptor_data());
             messages.push(NetsimFrontendStats::generated_message_descriptor_data());
             messages.push(NetsimDeviceStats::generated_message_descriptor_data());
             messages.push(WifiStats::generated_message_descriptor_data());
+            messages.push(NfcStats::generated_message_descriptor_data());
+            messages.push(NfcServiceStats::generated_message_descriptor_data());
             messages.push(NetsimStats::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(2);
             enums.push(invalid_packet::Reason::generated_enum_descriptor_data());

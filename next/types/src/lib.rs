@@ -59,6 +59,9 @@ pub struct Chip {
     pub product_name: String,
     /// Address of the chip (e.g. MAC address).
     pub address: String,
+    /// SIM card type (0 = No SIM, 1 = Normal SIM, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_type: Option<i32>,
 }
 
 impl Chip {
@@ -71,6 +74,7 @@ impl Chip {
             manufacturer: "Netsim".to_string(),
             product_name: "Virtual Chip".to_string(),
             address: "".to_string(),
+            sim_type: None,
         }
     }
 }
@@ -139,7 +143,7 @@ impl std::str::FromStr for ChipKind {
             "WIFI" => Ok(ChipKind::WIFI),
             "UWB" => Ok(ChipKind::UWB),
             "NFC" => Ok(ChipKind::NFC),
-            "CELLULAR" => Ok(ChipKind::CELLULAR),
+            "CELLULAR" | "MODEM" => Ok(ChipKind::CELLULAR),
             "CELLULAR_DATA" => Ok(ChipKind::CELLULAR_DATA),
             "ETHERNET" => Ok(ChipKind::ETHERNET),
             _ => Err(format!("invalid chip kind: {}", s)),

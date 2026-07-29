@@ -39,30 +39,34 @@ impl StkService {
     }
 
     fn handle_set_stk(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_set_stk_enabled(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_set_stk_unsolicited_result(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Success(HandledCommand::ok())
     }
 
     fn handle_query_stk_ready(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand {
-            responses: vec!["+CUSATP: \"SETUP MENU\"\r\n".to_string()],
+        ExecutionResult::Success(HandledCommand {
+            responses: vec!["+CUSATD: 1, 1\r\n".to_string(), "OK\r\n".to_string()],
             action: None,
         })
     }
 
     fn handle_send_stk_envelope_command(&self, envelope_command: QuotedString) -> ExecutionResult {
         let response = self.handle_envelope_command(envelope_command.as_ref());
-        ExecutionResult::Handled(HandledCommand {
-            responses: vec![String::from_utf8(response).unwrap_or_default()],
-            action: None,
-        })
+        if response == b"ERROR\r\n" {
+            ExecutionResult::Error
+        } else {
+            ExecutionResult::Success(HandledCommand {
+                responses: vec![String::from_utf8(response).unwrap_or_default()],
+                action: None,
+            })
+        }
     }
 
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {

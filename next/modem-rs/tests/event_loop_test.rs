@@ -15,14 +15,7 @@ fn test_event_loop_tick_and_duration() {
 
     let modem_id: ModemId = 1;
     let (mut modem_handler, sink) = MockModemHandler::new();
-    simulator.new_modem(modem_id, sink).unwrap();
-
-    // Tick once to clear the initial registration event
-    clock.advance(Duration::from_millis(10));
-    simulator.tick();
-    // Consume initial registration response(s)
-    let _ = modem_handler.wait_for_response();
-    while modem_handler.try_get_response().is_some() {}
+    simulator.new_modem(modem_id, sink, None).unwrap();
 
     // 1. Schedule an event 100ms in the future.
     let event_duration = Duration::from_millis(100);

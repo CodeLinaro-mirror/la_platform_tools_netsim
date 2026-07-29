@@ -95,3 +95,40 @@ async fn test_throughput_stats() {
     // Verify
     world.then_max_upload_throughput_is_greater_than(0.0).await;
 }
+
+// Scenario: A Station (Chip) sends a unicast packet to another Station (Chip)
+// and then broadcast packet.
+// When unicast is sent, P2P telemetry counters are updated.
+// When broadcast is sent, P2P telemetry counters are NOT updated.
+#[tokio::test]
+async fn test_p2p_telemetry_in_routing() {
+    let mut world = World::new().await;
+    let _sender = world.given_a_chip(1).await; // Index 0
+    let _receiver = world.given_a_chip(2).await; // Index 1
+
+    // Verify initial state.
+    world.then_p2p_tx_count_is(0, 0).await;
+    world.then_p2p_rx_count_is(0, 0).await;
+    world.then_p2p_tx_count_is(1, 0).await;
+    world.then_p2p_rx_count_is(1, 0).await;
+
+    // 1. Unicast transmission (Direct P2P Link).
+    world.when_chip_transmits_unicast(0, 1, "Direct P2P Hello").await;
+    world.then_chip_receives_payload(1, "Direct P2P Hello").await;
+
+    // Verify counters updated.
+    world.then_p2p_tx_count_is(0, 1).await; // Sender (Index 0) TX incremented.
+    world.then_p2p_rx_count_is(0, 0).await;
+    world.then_p2p_tx_count_is(1, 0).await;
+    world.then_p2p_rx_count_is(1, 1).await; // Receiver (Index 1) RX incremented.
+
+    // 2. Broadcast transmission (Should not increment P2P counters).
+    world.when_chip_transmits_broadcast(0, "Broadcast Message").await;
+    world.then_chip_receives_payload(1, "Broadcast Message").await;
+
+    // Verify counters unchanged.
+    world.then_p2p_tx_count_is(0, 1).await;
+    world.then_p2p_rx_count_is(0, 0).await;
+    world.then_p2p_tx_count_is(1, 0).await;
+    world.then_p2p_rx_count_is(1, 1).await;
+}

@@ -144,12 +144,16 @@ impl ActorService for WifiActor {
                 for (id, chip) in &self.active_chips {
                     let rx_count = self.medium.get_rx_count(id.0);
                     let tx_count = self.medium.get_tx_count(id.0);
+                    let p2p_tx_count = self.medium.get_p2p_tx_count(id.0);
+                    let p2p_rx_count = self.medium.get_p2p_rx_count(id.0);
                     let mut radio_stats = netsim_model::NetsimRadioStats::default();
                     radio_stats.id = id.0;
                     radio_stats.name = chip.name.clone();
                     radio_stats.kind = netsim_model::RadioKind::Wifi;
                     radio_stats.tx_count = tx_count as u64;
                     radio_stats.rx_count = rx_count as u64;
+                    radio_stats.p2p_tx_count = p2p_tx_count;
+                    radio_stats.p2p_rx_count = p2p_rx_count;
                     stats.push(radio_stats);
                 }
                 Ok(WifiResponse::Statistics(stats.into_boxed_slice()))

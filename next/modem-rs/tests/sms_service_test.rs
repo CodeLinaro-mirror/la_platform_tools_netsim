@@ -50,8 +50,8 @@ fn test_store_and_read_sms() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CMGR=1");
-    // Response buffer contains PDU_HEX
-    then_response_contains(&mut world, "A", &format!("+CMGR: 0,,16\r\n{}", PDU_HEX));
+    then_response_contains(&mut world, "A", "+CMGR: 0,,16");
+    then_response_is(&mut world, "A", PDU_HEX);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -81,7 +81,8 @@ fn test_store_and_read_sms_on_sim() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CMGR=1");
-    then_response_contains(&mut world, "A", &format!("+CMGR: 0,,16\r\n{}", PDU_HEX));
+    then_response_contains(&mut world, "A", "+CMGR: 0,,16");
+    then_response_is(&mut world, "A", PDU_HEX);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -156,6 +157,14 @@ fn test_cnma() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_cnma_with_val() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CNMA=1");
+    then_response_is(&mut world, "A", "OK");
+}
+
 // Scenario: Set SMS Message Format
 //   Given a modem "A"
 //   When AT command "AT+CMGF=1" is sent to "A"
@@ -170,13 +179,31 @@ fn test_cmgf() {
 
 // Scenario: Broadcast Configuration
 //   Given a modem "A"
+//   When AT command "AT+CSCB?" is sent to "A"
+//   Then response from "A" is '+CSCB: 0,"",""'
+//   And response from "A" is "OK"
 //   When AT command 'AT+CSCB=0,"1,2,3","4,5,6"' is sent to "A"
 //   Then response from "A" is "OK"
+//   When AT command "AT+CSCB?" is sent to "A"
+//   Then response from "A" is '+CSCB: 0,"1,2,3","4,5,6"'
+//   And response from "A" is "OK"
 #[test]
 fn test_broadcast_config() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+
+    // Default query
+    when_at_command_sent(&mut world, "A", "AT+CSCB?");
+    then_response_is(&mut world, "A", "+CSCB: 0,\"\",\"\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Set config
     when_at_command_sent(&mut world, "A", "AT+CSCB=0,\"1,2,3\",\"4,5,6\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query back
+    when_at_command_sent(&mut world, "A", "AT+CSCB?");
+    then_response_is(&mut world, "A", "+CSCB: 0,\"1,2,3\",\"4,5,6\"");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -197,6 +224,44 @@ fn test_smsc_address() {
 
     when_at_command_sent(&mut world, "A", "AT+CSCA?");
     then_response_is(&mut world, "A", "+CSCA: \"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_smsc_address_with_tosca() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Test with explicit tosca 145
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"+1234567890\",145");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test with explicit tosca 129
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"1234567890\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test with empty address and tosca 0 (the failure case)
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"\",0");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"\",0");
+    then_response_is(&mut world, "A", "OK");
+
+    // Test default tosca 129 (no +)
+    when_at_command_sent(&mut world, "A", "AT+CSCA=\"1234567890\"");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSCA?");
+    then_response_is(&mut world, "A", "+CSCA: \"1234567890\",129");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -253,6 +318,9 @@ fn test_send_sms_text_mode() {
     when_at_command_sent(&mut world, "A", "AT+CMGF=1");
     then_response_is(&mut world, "A", "OK");
 
+    when_at_command_sent(&mut world, "B", "AT+CMGF=1");
+    then_response_is(&mut world, "B", "OK");
+
     when_at_command_sent(&mut world, "A", "AT+CMGS=\"12345\"");
     then_response_is(&mut world, "A", "> ");
 
@@ -265,8 +333,8 @@ fn test_send_sms_text_mode() {
 
     // Verify reception on B
     // CMT unsolicited
-    let resp = then_wait_for_response_containing(&mut world, "B", "+CMT: \"98765\"");
-    assert!(resp.contains("Hello"), "Response should contain message body 'Hello'");
+    then_wait_for_response_containing(&mut world, "B", "+CMT: \"98765\"");
+    then_response_is(&mut world, "B", "Hello");
 }
 
 // Scenario: Incoming SMS (Text and PDU)
@@ -282,11 +350,14 @@ fn test_incoming_sms() {
     let id_a = world.modems.get("A").unwrap().0;
 
     // 1. Text Mode
+    when_at_command_sent(&mut world, "A", "AT+CMGF=1");
+    then_response_is(&mut world, "A", "OK");
+
     when_incoming_sms_received(&mut world, id_a, "123456", "Hello World");
 
     // Expect +CMT response
-    let resp = then_wait_for_response_containing(&mut world, "A", "+CMT: \"123456\"");
-    assert!(resp.contains("Hello World"), "Response should contain message body 'Hello World'");
+    then_wait_for_response_containing(&mut world, "A", "+CMT: \"123456\"");
+    then_response_is(&mut world, "A", "Hello World");
 
     // 2. PDU Mode
     // Construct PDU for "Hello World"
@@ -295,6 +366,6 @@ fn test_incoming_sms() {
 
     when_incoming_pdu_received(&mut world, id_a, PDU_HEX);
 
-    let expected_cmt = format!("+CMT: ,15\r\n{}", PDU_HEX);
-    then_wait_for_response_containing(&mut world, "A", &expected_cmt);
+    then_wait_for_response_containing(&mut world, "A", "+CMT: ,15");
+    then_response_is(&mut world, "A", PDU_HEX);
 }

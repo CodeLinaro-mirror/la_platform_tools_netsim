@@ -15,6 +15,16 @@ pub struct Position {
     pub z: f32,
 }
 
+impl Position {
+    /// Calculate the Euclidean distance between two positions in meters.
+    pub fn distance(&self, other: &Position) -> f32 {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        let dz = self.z - other.z;
+        (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Orientation {
     pub yaw: f32,
@@ -56,6 +66,7 @@ pub mod api {
     use crate::{
         chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate},
         device::{Device, DeviceConfig, Orientation, Position},
+        nfc::{Nfc, NfcCreate},
     };
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -140,6 +151,9 @@ pub mod api {
         Wifi(WifiCreate),
         Uwb(UwbCreate),
         Cell(CellCreate),
+        CellularData(crate::cellular_data::CellularDataCreate),
+        Ethernet(crate::ethernet::EthernetCreate),
+        Nfc(NfcCreate),
     }
 
     impl Default for ChipCreateVariant {
@@ -157,6 +171,9 @@ pub mod api {
                 ChipCreateVariant::Wifi(_) => crate::chip::ChipKind::WIFI,
                 ChipCreateVariant::Uwb(_) => crate::chip::ChipKind::UWB,
                 ChipCreateVariant::Cell(_) => crate::chip::ChipKind::CELLULAR,
+                ChipCreateVariant::CellularData(_) => crate::chip::ChipKind::CELLULAR_DATA,
+                ChipCreateVariant::Ethernet(_) => crate::chip::ChipKind::ETHERNET,
+                ChipCreateVariant::Nfc(_) => crate::chip::ChipKind::NFC,
             }
         }
     }
@@ -182,15 +199,23 @@ pub mod api {
                     crate::chip::ChipVariant::Uwb(crate::uwb::Uwb { radio: Default::default() })
                 }
                 ChipCreateVariant::Cell(_cell) => {
-                    crate::chip::ChipVariant::Cell(crate::cell::Cell { state: "idle".to_string() })
+                    crate::chip::ChipVariant::Cell(crate::cell::Cell::default())
                 }
+                ChipCreateVariant::CellularData(cell_data) => {
+                    crate::chip::ChipVariant::CellularData(
+                        crate::cellular_data::CellularData::from(cell_data),
+                    )
+                }
+                ChipCreateVariant::Ethernet(eth) => {
+                    crate::chip::ChipVariant::Ethernet(crate::ethernet::Ethernet::from(eth))
+                }
+                ChipCreateVariant::Nfc(nfc) => crate::chip::ChipVariant::Nfc(Nfc::from(nfc)),
             }
         }
     }
     impl From<DeviceChipCreate> for crate::chip::Chip {
         fn from(create: DeviceChipCreate) -> Self {
             crate::chip::Chip {
-                id: 0,
                 kind: create.chip.kind(),
                 name: create.name,
                 manufacturer: create.manufacturer,
@@ -226,6 +251,17 @@ pub mod api {
                     }
                     Some(crate::chip::ChipVariant::Cell(_cell)) => {
                         ChipCreateVariant::Cell(crate::chip::CellCreate::default())
+                    }
+                    Some(crate::chip::ChipVariant::CellularData(_cell_data)) => {
+                        ChipCreateVariant::CellularData(
+                            crate::cellular_data::CellularDataCreate::default(),
+                        )
+                    }
+                    Some(crate::chip::ChipVariant::Ethernet(_eth)) => {
+                        ChipCreateVariant::Ethernet(crate::ethernet::EthernetCreate::default())
+                    }
+                    Some(crate::chip::ChipVariant::Nfc(_nfc)) => {
+                        ChipCreateVariant::Nfc(NfcCreate::default())
                     }
                     None => ChipCreateVariant::Beacon(crate::chip::BleBeacon::default()), /* Fallback */
                 },
@@ -301,5 +337,19 @@ impl fmt::Debug for DeviceAddChip {
             .field("device_config", &self.device_config)
             .field("chip", &self.chip)
             .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_position_distance() {
+        let p1 = Position { x: 0.0, y: 0.0, z: 0.0 };
+        let p2 = Position { x: 0.0, y: 0.0, z: 0.03 };
+        let p3 = Position { x: 0.05, y: 0.0, z: 0.0 };
+        assert!((p1.distance(&p2) - 0.03).abs() < 1e-6);
+        assert!((p1.distance(&p3) - 0.05).abs() < 1e-6);
     }
 }

@@ -76,22 +76,30 @@ pub fn then_wait_for_response_containing(world: &mut World, name: &str, expected
     }
 
     panic!(
-        "Modem {} did not receive expected substring after {} attempts.\nExpected to contain: {:?}",
-        name, MAX_RESPONSE_RETRIES, expected
+        "Modem {name} did not receive expected substring after {MAX_RESPONSE_RETRIES} attempts.\nExpected to contain: {expected:?}"
     );
 }
 
 /// Normalizes the expected response string to bytes.
 /// Adds \r\n unless it's "OK" or already present.
 fn normalize_expected_response(expected: &str) -> Vec<u8> {
-    if expected == "OK" {
-        AT_OK.to_vec()
-    } else {
-        let s = if expected.ends_with("\r\n") {
-            expected.to_string()
-        } else {
-            format!("{}\r\n", expected)
-        };
-        s.as_bytes().to_vec()
+    match expected {
+        "OK" => AT_OK.to_vec(),
+        _ => [expected.trim_end_matches(['\r', '\n']).as_bytes(), b"\r\n"].concat(),
     }
+}
+
+/// Verifies that the modem has no pending responses in its queue.
+///
+/// This is useful for asserting that an asynchronous notification (like +CMT)
+/// was NOT received (e.g., when a message is dropped due to routing failure).
+pub fn then_no_response(world: &mut World, name: &str) {
+    let (_, handler) = world.get_modem(name);
+    let response = handler.try_get_response();
+    assert!(
+        response.is_none(),
+        "Expected no response from modem {}, but got: {:?}",
+        name,
+        String::from_utf8_lossy(&response.unwrap())
+    );
 }
