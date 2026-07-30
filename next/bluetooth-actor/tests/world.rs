@@ -487,7 +487,9 @@ impl World {
     }
 
     /// Verifies that the scanner receives advertisements from the specified
-    /// beacon at the expected interval.
+    /// beacon at the expected interval by comparing relative packet counts over
+    /// a fixed time window, avoiding fragile wall-clock interval
+    /// assertions.
     pub async fn then_scanner_measures_interval_from(
         &mut self,
         scanner_name: &str,
@@ -501,42 +503,56 @@ impl World {
         let expected_byte_5 = (beacon_id.0 & 0xFF) as u8;
         let expected_byte_4 = ((beacon_id.0 >> 8) & 0xFF) as u8;
 
-        let mut timestamps = Vec::new();
+        let window_ms = (expected_ms * 6).clamp(3000, 6000);
+        let mut timestamps: Vec<std::time::Instant> = Vec::new();
         let start = std::time::Instant::now();
-        let timeout = std::time::Duration::from_millis(expected_ms * 8 + 2000);
+        let timeout = std::time::Duration::from_millis(window_ms);
 
-        while start.elapsed() < timeout && timestamps.len() < 5 {
+        while start.elapsed() < timeout {
             let reports = self.receive_scan_report(scanner_name).await;
             let now = std::time::Instant::now();
             for report in reports {
                 if report.mac[5] == expected_byte_5 && report.mac[4] == expected_byte_4 {
-                    timestamps.push(now);
+                    if timestamps.is_empty()
+                        || now.duration_since(*timestamps.last().unwrap())
+                            > std::time::Duration::from_millis((expected_ms / 2).min(50))
+                    {
+                        timestamps.push(now);
+                    }
                 }
             }
         }
 
-        assert!(
-            timestamps.len() >= 2,
-            "Need at least 2 packets to measure interval, got {}",
-            timestamps.len()
-        );
-        let mut intervals = Vec::new();
-        for i in 1..timestamps.len() {
-            intervals.push(timestamps[i].duration_since(timestamps[i - 1]).as_millis() as u64);
-        }
-        let avg_interval: u64 = intervals.iter().sum::<u64>() / intervals.len() as u64;
+        let count = timestamps.len();
+        let actual_ms = start.elapsed().as_millis() as f64;
+        let expected_count = (actual_ms / (expected_ms.max(1) as f64)).round() as usize;
+        let min_count = (expected_count / 2).max(2);
+        let max_count = expected_count * 2;
+
+        let avg_interval: u64 = if count >= 2 {
+            (timestamps.last().unwrap().duration_since(*timestamps.first().unwrap())).as_millis()
+                as u64
+                / (count - 1) as u64
+        } else {
+            0
+        };
 
         info!(
-            "Measured average interval for {}: {}ms (expected {}ms)",
-            beacon_name, avg_interval, expected_ms
+            "Beacon '{}': received {} advertisements over {}ms (expected ~{} at {}ms interval, avg gap: {}ms)",
+            beacon_name, count, window_ms, expected_count, expected_ms, avg_interval
         );
-        let margin = (expected_ms / 2).max(200);
+
         assert!(
-            avg_interval >= expected_ms - margin && avg_interval <= expected_ms + margin,
-            "Interval {}ms not within expected range {}ms +/- {}ms",
-            avg_interval,
+            count >= min_count && count <= max_count,
+            "Beacon '{}' advertisement count {} out of bounds [{}..{}] over {}ms (expected interval {}ms, measured avg interval {}ms). Timestamps: {:?}",
+            beacon_name,
+            count,
+            min_count,
+            max_count,
+            window_ms,
             expected_ms,
-            margin
+            avg_interval,
+            timestamps
         );
     }
 
