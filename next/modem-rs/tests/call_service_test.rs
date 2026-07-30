@@ -36,6 +36,7 @@ fn test_standard_call() {
         &format!("+CLCC: 1,0,2,0,0,\"+{TEST_PHONE_NUMBER_ALT}\",{TOA_INTERNATIONAL}"),
     );
     then_response_contains(&mut world, "A", "OK");
+    then_no_response(&mut world, "A");
 }
 
 // Scenario: Receive Ring
@@ -55,6 +56,7 @@ fn test_ring() {
     // Verify call state (Incoming)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     then_response_contains(&mut world, "A", &format!("+CLCC: 1,1,4,0,0,\"\",{TOA_NATIONAL}"));
+    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Query Current Calls
@@ -111,6 +113,7 @@ fn test_query_current_calls() {
         "A",
         &format!("+CLCC: 2,0,0,0,0,\"{CALL_PEER_C}\",{TOA_NATIONAL}"),
     );
+    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Call Ring Timeout
@@ -153,6 +156,7 @@ fn test_call_ring_timeout() {
         "C",
         &format!("+CLCC: 1,1,4,0,0,\"{}\",{}", TEST_PHONE_NUMBER_LONG_A, TOA_NATIONAL),
     );
+    then_response_is(&mut world, "C", "OK");
 
     // Advance time > 30s
     when_time_advances_ms(&mut world, 30100);
@@ -273,6 +277,7 @@ fn test_external_incoming_call() {
         "A",
         &format!("+CLCC: 1,1,4,0,0,\"{TEST_PHONE_NUMBER}\",{}", TOA_NATIONAL),
     );
+    then_response_is(&mut world, "A", "OK");
 
     // Wait for timeout
     when_time_advances_ms(&mut world, 2000);
@@ -407,6 +412,7 @@ fn test_emergency_dial_syntax() {
         "A",
         &format!("+CLCC: 1,0,2,0,0,\"{CALL_PEER_ALT_2}\",{}", TOA_NATIONAL),
     );
+    then_response_is(&mut world, "A", "OK");
 }
 
 #[test]
@@ -425,6 +431,7 @@ fn test_dial_clir_semicolon() {
         "A",
         &format!("+CLCC: 1,0,2,0,0,\"{CALL_PEER_ALT_2}\",{}", TOA_NATIONAL),
     );
+    then_response_is(&mut world, "A", "OK");
 }
 
 #[test]
