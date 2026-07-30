@@ -183,6 +183,12 @@ message WifiIpcStats {
   optional WifiApiStats wifi_api_stats = 2;
 }
 
+// NFC IPC statistics. Used for transport between nfc-actor and device-actor.
+message NfcIpcStats {
+  optional NfcStats nfc_stats = 1;
+  optional NfcApiStats nfc_api_stats = 2;
+}
+
 // Application-level API Counters for all technologies.
 message ApiStats {
   // 1-99 reserved for Bluetooth
@@ -281,6 +287,7 @@ message NciRfStats {
   optional int32 discover = 1;
   optional int32 discover_select = 2;
   optional int32 deactivate = 3;
+  optional int32 rf_set_listen_mode_routing = 4;
 }
 
 message NciDataStats {

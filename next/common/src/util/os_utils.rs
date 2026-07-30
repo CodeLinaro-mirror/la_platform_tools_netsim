@@ -9,6 +9,7 @@ use std::os::fd::AsRawFd;
 #[cfg(target_os = "windows")]
 use std::os::windows::io::AsRawHandle;
 use std::{
+    env,
     ffi::{CString, NulError},
     path::PathBuf,
 };
@@ -36,11 +37,18 @@ compile_error!("netsim only supports linux, Mac, and Windows");
 
 /// Get discovery directory for netsim
 pub fn get_discovery_directory() -> PathBuf {
+    get_discovery_directory_with_env(|k| env::var(k))
+}
+
+pub(crate) fn get_discovery_directory_with_env<F>(get_env: F) -> PathBuf
+where
+    F: Fn(&str) -> Result<String, env::VarError>,
+{
     // $TMPDIR is the temp directory on buildbots
-    if let Ok(test_env_p) = std::env::var("TMPDIR") {
+    if let Ok(test_env_p) = get_env("TMPDIR") {
         return PathBuf::from(test_env_p);
     }
-    let mut path = match std::env::var(DISCOVERY.root_env) {
+    let mut path = match get_env(DISCOVERY.root_env) {
         Ok(env_p) => PathBuf::from(env_p),
         Err(_) => {
             warn!("No discovery env for {}, using /tmp", DISCOVERY.root_env);
@@ -61,8 +69,14 @@ const DEFAULT_INSTANCE: u16 = 1;
 /// 2. The CLI flag `--instance`.
 /// 3. The default value `DEFAULT_INSTANCE`.
 pub fn get_instance(instance_flag: Option<u16>) -> u16 {
-    let instance_env: Option<u16> =
-        std::env::var("NETSIM_INSTANCE").ok().and_then(|i| i.parse().ok());
+    get_instance_with_env(|k| env::var(k), instance_flag)
+}
+
+fn get_instance_with_env<F>(get_env: F, instance_flag: Option<u16>) -> u16
+where
+    F: Fn(&str) -> Result<String, env::VarError>,
+{
+    let instance_env: Option<u16> = get_env("NETSIM_INSTANCE").ok().and_then(|i| i.parse().ok());
     match (instance_env, instance_flag) {
         (Some(i), _) if i > 0 => i,
         (_, Some(i)) if i > 0 => i,
@@ -79,8 +93,19 @@ pub fn get_hci_port(hci_port_flag: u32, instance: u16) -> u32 {
 
 /// Get the netsim instance name used for log filename creation
 pub fn get_instance_name(instance_num: Option<u16>, connector_instance: Option<u16>) -> String {
+    get_instance_name_with_env(|k| env::var(k), instance_num, connector_instance)
+}
+
+fn get_instance_name_with_env<F>(
+    get_env: F,
+    instance_num: Option<u16>,
+    connector_instance: Option<u16>,
+) -> String
+where
+    F: Fn(&str) -> Result<String, env::VarError>,
+{
     let mut instance_name = String::new();
-    let instance = get_instance(instance_num);
+    let instance = get_instance_with_env(get_env, instance_num);
     if instance > 1 {
         instance_name.push_str(&format!("{instance}_"));
     }
@@ -141,75 +166,68 @@ pub fn redirect_std_stream(instance_name: &str) -> Result<(), NulError> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::tests::ENV_MUTEX;
 
     #[test]
     fn test_get_discovery_directory() {
-        let _locked = ENV_MUTEX.lock();
-        // Remove all environment variable
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::remove_var(DISCOVERY.root_env);
-            std::env::remove_var("TMPDIR");
-        }
-
         // Test with no environment variables
-        let actual = get_discovery_directory();
+        let mock_env_none = |_key: &str| Err(env::VarError::NotPresent);
+        let actual = get_discovery_directory_with_env(mock_env_none);
         let mut expected = PathBuf::from("/tmp");
         expected.push(DISCOVERY.subdir);
         assert_eq!(actual, expected);
 
         // Test with root_env variable
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::set_var(DISCOVERY.root_env, "/netsim-test");
-        }
-        let actual = get_discovery_directory();
+        let mock_env_root = |key: &str| {
+            if key == DISCOVERY.root_env {
+                Ok("/netsim-test".to_string())
+            } else {
+                Err(env::VarError::NotPresent)
+            }
+        };
+        let actual = get_discovery_directory_with_env(mock_env_root);
         let mut expected = PathBuf::from("/netsim-test");
         expected.push(DISCOVERY.subdir);
         assert_eq!(actual, expected);
 
         // Test with TMPDIR variable
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::set_var("TMPDIR", "/tmpdir");
-        }
-        assert_eq!(get_discovery_directory(), PathBuf::from("/tmpdir"));
+        let mock_env_tmpdir = |key: &str| {
+            if key == "TMPDIR" { Ok("/tmpdir".to_string()) } else { Err(env::VarError::NotPresent) }
+        };
+        assert_eq!(get_discovery_directory_with_env(mock_env_tmpdir), PathBuf::from("/tmpdir"));
     }
 
     #[test]
     fn test_get_instance_and_instance_name() {
-        let _locked = ENV_MUTEX.lock();
         // Set NETSIM_INSTANCE environment variable
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::set_var("NETSIM_INSTANCE", "100");
-        }
-        assert_eq!(get_instance(Some(0)), 100);
-        assert_eq!(get_instance(Some(1)), 100);
+        let mock_env_100 = |key: &str| {
+            if key == "NETSIM_INSTANCE" {
+                Ok("100".to_string())
+            } else {
+                Err(env::VarError::NotPresent)
+            }
+        };
+        assert_eq!(get_instance_with_env(mock_env_100, Some(0)), 100);
+        assert_eq!(get_instance_with_env(mock_env_100, Some(1)), 100);
 
         // Remove NETSIM_INSTANCE environment variable
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("NETSIM_INSTANCE");
-        }
-        assert_eq!(get_instance(None), DEFAULT_INSTANCE);
-        assert_eq!(get_instance(Some(0)), DEFAULT_INSTANCE);
-        assert_eq!(get_instance(Some(1)), 1);
+        let mock_env_none = |_key: &str| Err(env::VarError::NotPresent);
+        assert_eq!(get_instance_with_env(mock_env_none, None), DEFAULT_INSTANCE);
+        assert_eq!(get_instance_with_env(mock_env_none, Some(0)), DEFAULT_INSTANCE);
+        assert_eq!(get_instance_with_env(mock_env_none, Some(1)), 1);
 
         // Default cases - instance name should be empty string
-        assert_eq!(get_instance_name(None, None), "");
-        assert_eq!(get_instance_name(Some(1), None), "");
+        assert_eq!(get_instance_name_with_env(mock_env_none, None, None), "");
+        assert_eq!(get_instance_name_with_env(mock_env_none, Some(1), None), "");
 
         // Default instance but connector set - Expect instance name to be "connector_"
-        assert_eq!(get_instance_name(None, Some(3)), "connector_");
-        assert_eq!(get_instance_name(Some(1), Some(1)), "connector_");
-        assert_eq!(get_instance_name(Some(1), Some(2)), "connector_");
+        assert_eq!(get_instance_name_with_env(mock_env_none, None, Some(3)), "connector_");
+        assert_eq!(get_instance_name_with_env(mock_env_none, Some(1), Some(1)), "connector_");
+        assert_eq!(get_instance_name_with_env(mock_env_none, Some(1), Some(2)), "connector_");
 
         // Both instance and connector set - Expect instance name to be
         // "<instance>_connector_"
-        assert_eq!(get_instance_name(Some(2), Some(1)), "2_connector_");
-        assert_eq!(get_instance_name(Some(3), Some(3)), "3_connector_");
+        assert_eq!(get_instance_name_with_env(mock_env_none, Some(2), Some(1)), "2_connector_");
+        assert_eq!(get_instance_name_with_env(mock_env_none, Some(3), Some(3)), "3_connector_");
     }
 
     #[test]

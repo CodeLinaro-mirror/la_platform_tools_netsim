@@ -7,7 +7,7 @@ use modem_rs::{
 };
 use netsim_model::Quirks;
 
-use crate::world::World;
+use crate::{common::constants::*, world::World};
 
 /// Creates a modem with the given name.
 ///
@@ -93,17 +93,17 @@ pub fn given_modem_with_sim_profile(world: &mut World, name: &str) {
 /// Helper function to create the legacy SIM profile used in tests.
 pub fn create_legacy_test_profile() -> SimProfile {
     SimProfile {
-        iccid: "89012345678901234567".to_string(),
-        imsi: "123456789012345".to_string(),
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: "3F00".to_string(),
+                    file_id: 0x3F00,
                     files: vec![SimFile::Ef(ElementaryFile {
-                        file_id: "2FE2".to_string(),
+                        file_id: 0x2FE2,
                         size: 10,
                         record_len: None,
-                        data: "89012345678901234567".to_string(),
+                        data: TEST_ICCID.to_string(),
                     })],
                 },
             },
@@ -116,23 +116,23 @@ pub fn create_legacy_test_profile() -> SimProfile {
 /// verified.
 pub fn create_locked_sim_profile() -> SimProfile {
     SimProfile {
-        iccid: "89012345678901234567".to_string(),
-        imsi: "123456789012345".to_string(),
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
         pin_profile: PinProfile {
             state: "EnabledNotVerified".to_string(),
-            pin1: "1111".to_string(),
-            puk1: "12345678".to_string(),
+            pin1: LOCKED_PIN.to_string(),
+            puk1: TEST_PUK.to_string(),
             ..Default::default()
         },
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: "3F00".to_string(),
+                    file_id: 0x3F00,
                     files: vec![SimFile::Ef(ElementaryFile {
-                        file_id: "2FE2".to_string(),
+                        file_id: 0x2FE2,
                         size: 10,
                         record_len: None,
-                        data: "89012345678901234567".to_string(),
+                        data: TEST_ICCID.to_string(),
                     })],
                 },
             },
@@ -157,5 +157,109 @@ pub fn given_modem_with_locked_sim(world: &mut World, name: &str) {
         .manager
         .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
         .expect("Failed to create modem with locked SIM");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Helper function to create a SIM profile with EF_MSISDN in the filesystem.
+pub fn create_profile_with_msisdn() -> SimProfile {
+    SimProfile {
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: 0x3F00,
+                    files: vec![
+                        SimFile::Ef(ElementaryFile {
+                            file_id: 0x2FE2,
+                            size: 10,
+                            record_len: None,
+                            data: TEST_ICCID.to_string(),
+                        }),
+                        SimFile::Ef(ElementaryFile {
+                            file_id: 0x6F40, // EF_MSISDN
+                            size: 28,
+                            record_len: Some(28),
+                            data: "F".repeat(56), // empty record (all F)
+                        }),
+                    ],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a SIM profile that has EF_MSISDN in the filesystem.
+pub fn given_modem_with_msisdn_in_fs(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    let profile = create_profile_with_msisdn();
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+        .expect("Failed to create modem with MSISDN in FS");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Helper function to create a SIM profile with EF_FPLMN and EF_MBDN in the
+/// filesystem.
+pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
+    SimProfile {
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: 0x3F00,
+                    files: vec![
+                        SimFile::Ef(ElementaryFile {
+                            file_id: 0x2FE2,
+                            size: 10,
+                            record_len: None,
+                            data: TEST_ICCID.to_string(),
+                        }),
+                        SimFile::Ef(ElementaryFile {
+                            file_id: 0x6F7B, // EF_FPLMN
+                            size: 12,
+                            record_len: None,
+                            data: "F".repeat(24),
+                        }),
+                        SimFile::Ef(ElementaryFile {
+                            file_id: 0x6FC7, // EF_MBDN
+                            size: 152,
+                            record_len: Some(38),
+                            data: "F".repeat(304),
+                        }),
+                    ],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a SIM profile that has EF_FPLMN and EF_MBDN in the
+/// filesystem.
+pub fn given_modem_with_fplmn_and_mbdn_in_fs(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    let profile = create_profile_with_fplmn_and_mbdn();
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+        .expect("Failed to create modem with FPLMN and MBDN in FS");
     world.modems.insert(name.to_string(), (id, handler));
 }

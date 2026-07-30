@@ -40,3 +40,25 @@ rust_library_host {
         "libserde",
     ],
 }
+
+rust_test_host {
+    name: "libnetsim_next_device_api_tests",
+    crate_name: "device_api",
+    edition: "2024",
+    crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libnetsim_next_model_testing",
+        "libserde",
+    ],
+}

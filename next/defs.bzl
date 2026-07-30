@@ -84,10 +84,9 @@ NetsimDepInfo = provider(
     fields = {
         "crate_name": "Crate name",
         "rlib": "The .rlib file",
-        "direct_externs": "Depset of direct crate_name=path strings",
         "transitive_rlibs": "Depset of transitive .rlib files",
+        "direct_externs": "Depset of direct crate_name=path strings",
         "transitive_externs": "Depset of transitive crate_name=path strings",
-        "compile_data": "Depset of compile_data files",
     },
 )
 
@@ -115,6 +114,7 @@ def _netsim_dep_aspect_impl(target, ctx):
 
     trans_rlibs = []
     trans_externs = []
+
     direct_externs_list = []
 
     if hasattr(ctx.rule.attr, "deps"):
@@ -135,15 +135,7 @@ def _netsim_dep_aspect_impl(target, ctx):
                 name = d[NetsimDepInfo].crate_name
                 if lib and name:
                     direct_rlibs.append(lib)
-                    direct_externs.append("%s=%s" % (name, lib.path))
-                dep_info = d[NetsimDepInfo]
-                if dep_info.crate_name and dep_info.rlib:
-                    direct_externs_list.append("%s=%s" % (dep_info.crate_name, dep_info.rlib.path))
-
-    compile_data_list = []
-    if hasattr(ctx.rule.attr, "compile_data"):
-        for f in ctx.rule.attr.compile_data:
-            compile_data_list.extend(f[DefaultInfo].files.to_list())
+                    direct_externs_list.append("%s=%s" % (name, lib.path))
 
     return [NetsimDepInfo(
         crate_name = crate_name,
@@ -151,7 +143,6 @@ def _netsim_dep_aspect_impl(target, ctx):
         direct_externs = depset(direct_externs_list),
         transitive_rlibs = depset(direct_rlibs, transitive = trans_rlibs),
         transitive_externs = depset(direct_externs, transitive = trans_externs),
-        compile_data = depset(compile_data_list),
     )]
 
 netsim_dep_aspect = aspect(
@@ -248,8 +239,8 @@ def _netsim_clippy_test_impl(ctx):
         target_names.append(t.label.name)
 
         compile_data = []
-        if NetsimDepInfo in t:
-            compile_data = t[NetsimDepInfo].compile_data.to_list()
+        if hasattr(info, "compile_data"):
+            compile_data = info.compile_data.to_list()
 
         t_args = ctx.actions.args()
         t_args.use_param_file("@%s", use_always = True)
@@ -289,7 +280,7 @@ def _netsim_clippy_test_impl(ctx):
             executable = action_wrapper,
             arguments = [clippy_driver_path, log_file.path, status_file.path, success_file.path, t_args],
             env = {
-                "CARGO_MANIFEST_DIR": (ctx.label.workspace_root + "/" + ctx.label.package) if ctx.label.workspace_root else ctx.label.package,
+                "CARGO_MANIFEST_DIR": root_file.dirname,
                 "OUT_DIR": target_out_dir,
             },
             mnemonic = "NetsimClippy",
@@ -445,14 +436,26 @@ def netsim_rust_library(
     if enable_unit_test:
         # There can be integ test deps that are not used in unit tests,
         # so disable unused_crate_dependencies.
-        test_flags = [f for f in NETSIM_RUSTC_FLAGS if f != "-Dunused_crate_dependencies"]
+        test_flags = [f for f in rustc_flags if f != "-Dunused_crate_dependencies"]
 
         rust_test(
             name = "test",
-            crate = ":testing",
+            srcs = srcs,
+            crate_root = kwargs.get("crate_root"),
             crate_features = ["testing"] + crate_features,
+            crate_name = kwargs.get("crate_name", name),
+            aliases = kwargs.get("aliases", {}),
             rustc_flags = test_flags,
             deps = testing_deps + select_deps + test_deps,
+            proc_macro_deps = kwargs.get("proc_macro_deps", []),
+            edition = kwargs.get("edition", "2021"),
+            env = kwargs.get("env", {}),
+            rustc_env = kwargs.get("rustc_env", {}),
+            compile_data = kwargs.get("compile_data", []),
+            data = kwargs.get("data", []),
+            tags = kwargs.get("tags", []),
+            target_compatible_with = kwargs.get("target_compatible_with", []),
+            visibility = kwargs.get("visibility", []),
             testonly = True,
         )
 
@@ -463,7 +466,7 @@ def netsim_rust_library(
     if has_integration_test:
         # Integration tests receive all library dependencies for convenience,
         # so disable unused_crate_dependencies.
-        test_flags = [f for f in NETSIM_RUSTC_FLAGS if f != "-Dunused_crate_dependencies"]
+        test_flags = [f for f in rustc_flags if f != "-Dunused_crate_dependencies"]
 
         # If there's a mod.rs, it's typically the root.
         # Else it's likely a single-file setup.
@@ -481,20 +484,31 @@ def netsim_rust_library(
             name = "integration-test",
             srcs = integration_test_srcs,
             crate_root = crate_root,
+            aliases = kwargs.get("aliases", {}),
             rustc_flags = test_flags,
             compile_data = kwargs.get("compile_data", []),
             deps = [":testing"] + testing_deps + select_deps + test_deps,
             proc_macro_deps = kwargs.get("proc_macro_deps", []),
-            edition = kwargs.get("edition", "2024"),
+            edition = kwargs.get("edition", "2021"),
+            env = kwargs.get("env", {}),
+            rustc_env = kwargs.get("rustc_env", {}),
+            data = kwargs.get("data", []),
+            tags = kwargs.get("tags", []),
+            target_compatible_with = kwargs.get("target_compatible_with", []),
+            visibility = kwargs.get("visibility", []),
             testonly = True,
         )
 
     # 5. Common Targets (Clippy, Rustfmt)
+    tgs = [":" + name]
+    if has_integration_test:
+        tgs.append(":integration-test")
+
     _define_common_targets(
         name,
         enable_clippy,
         enable_rustfmt,
-        targets = [":" + name] + (([":integration-test"] if has_integration_test else [])),
+        targets = tgs,
     )
 
     # 6. Documentation

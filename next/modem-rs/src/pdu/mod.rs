@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
+use std::{fmt, iter::once};
 
 use chrono::{Datelike, Timelike, Utc};
 use nom::{
@@ -9,7 +9,7 @@ use nom::{
 };
 use tracing::{debug, warn};
 
-mod bcd;
+pub(crate) mod bcd;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseError {
@@ -44,6 +44,25 @@ impl fmt::Display for EncodeError {
         }
     }
 }
+
+// 3GPP TS 23.040 PDU Type Mask and Header Constants
+/// Bit 5 of SMS-SUBMIT PDU type: Status Report Request (SRR)
+const SMS_SUBMIT_SRR_MASK: u8 = 0x20;
+/// Bit 6 of SMS-SUBMIT PDU type: User Data Header Indicator (UDHI)
+const SMS_SUBMIT_UDHI_MASK: u8 = 0x40;
+
+/// Default SMS Center Address length (0x00 = empty / default SCA)
+const PDU_SCA_DEFAULT: u8 = 0x00;
+/// PDU Type for SMS-STATUS-REPORT (3GPP TS 23.040 § 9.2.2.3)
+const SMS_STATUS_REPORT_PDU_TYPE: u8 = 0x02;
+/// Status 0x00: Short message received by SME successfully (3GPP TS 23.040 §
+/// 9.2.3.22)
+const SMS_STATUS_SUCCESS: u8 = 0x00;
+
+/// PDU Type for SMS-DELIVER without User Data Header
+const SMS_DELIVER_PDU_TYPE: u8 = 0x24;
+/// PDU Type for SMS-DELIVER with User Data Header (UDHI set)
+const SMS_DELIVER_UDHI_PDU_TYPE: u8 = 0x64;
 
 /// Represents a parsed SMS-SUBMIT (outgoing) PDU.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,17 +114,50 @@ impl SubmitPdu {
         Some(bcd::bcd_to_string(bcd_bytes))
     }
 
+    /// Checks if a status report is requested for this SMS-SUBMIT PDU.
+    pub fn status_report_requested(&self) -> bool {
+        (self.pdu_type & SMS_SUBMIT_SRR_MASK) != 0
+    }
+
+    /// Converts this SMS-SUBMIT PDU (outgoing) to an SMS-STATUS-REPORT PDU.
+    /// Returns the hex-encoded PDU string.
+    pub fn to_status_report_pdu_hex(&self, mr: u8) -> Result<String, EncodeError> {
+        let scts = get_current_timestamp_bcd();
+        let dt = scts.clone(); // Use same timestamp for discharge time
+
+        let bytes: Vec<u8> = once(PDU_SCA_DEFAULT) // 1. SCA
+            .chain(once(SMS_STATUS_REPORT_PDU_TYPE)) // 2. PDU-Type (SMS-STATUS-REPORT)
+            .chain(once(mr)) // 3. MR (assigned by modem)
+            .chain(self.address.iter().copied()) // 4. RA (Recipient Address)
+            .chain(scts) // 5. SCTS
+            .chain(dt) // 6. DT (Discharge Time)
+            .chain(once(SMS_STATUS_SUCCESS)) // 7. Status (0 = success)
+            .collect();
+
+        Ok(hex::encode_upper(bytes))
+    }
+
     /// Converts this SMS-SUBMIT PDU (outgoing) to an SMS-DELIVER PDU
     /// (incoming). Returns the hex-encoded PDU string.
-    pub fn to_deliver_pdu_hex(&self) -> Result<String, EncodeError> {
-        let rx_pdu_type = if (self.pdu_type & 0x40) != 0 { 0x64 } else { 0x24 };
+    pub fn to_deliver_pdu_hex(&self, sender: Option<&str>) -> Result<String, EncodeError> {
+        let rx_pdu_type = if (self.pdu_type & SMS_SUBMIT_UDHI_MASK) != 0 {
+            SMS_DELIVER_UDHI_PDU_TYPE
+        } else {
+            SMS_DELIVER_PDU_TYPE
+        };
         let scts = get_current_timestamp_bcd();
 
-        let bytes: Vec<u8> = std::iter::once(0x00) // 1. SCA
-            .chain(std::iter::once(rx_pdu_type)) // 2. PDU-Type
-            .chain(self.address.iter().copied()) // 3. Address (OA)
-            .chain(std::iter::once(self.protocol_id)) // 4. Protocol ID
-            .chain(std::iter::once(self.data_code_scheme)) // 5. DCS
+        let oa_bytes = if let Some(sender_num) = sender {
+            encode_address(sender_num)
+        } else {
+            self.address.clone()
+        };
+
+        let bytes: Vec<u8> = once(PDU_SCA_DEFAULT) // 1. SCA
+            .chain(once(rx_pdu_type)) // 2. PDU-Type
+            .chain(oa_bytes.iter().copied()) // 3. Address (OA)
+            .chain(once(self.protocol_id)) // 4. Protocol ID
+            .chain(once(self.data_code_scheme)) // 5. DCS
             .chain(scts) // 6. SCTS
             .chain(self.user_data.iter().copied()) // 7. User Data
             .collect();
@@ -232,6 +284,17 @@ pub(crate) fn get_current_timestamp_bcd() -> Vec<u8> {
     ]
 }
 
+/// Encodes a phone number into the raw bytes format expected for PDU address
+/// fields (OA/DA).
+pub fn encode_address(number: &str) -> Vec<u8> {
+    let clean_number = number.strip_prefix('+').unwrap_or(number);
+    let address_len_digits = clean_number.len() as u8;
+    let address_type = if number.starts_with('+') { 0x91 } else { 0x81 };
+    let bcd_digits = bcd::string_to_bcd(clean_number);
+
+    once(address_len_digits).chain(once(address_type)).chain(bcd_digits).collect()
+}
+
 /// Creates an SMS-DELIVER PDU from sender number and plain text, encoded in
 /// UCS-2. Returns the hex-encoded PDU string.
 pub fn create_deliver_pdu_ucs2(sender: &str, text: &str) -> String {
@@ -239,15 +302,7 @@ pub fn create_deliver_pdu_ucs2(sender: &str, text: &str) -> String {
     let scts = get_current_timestamp_bcd();
 
     // 1. OA Address
-    let clean_sender = sender.strip_prefix('+').unwrap_or(sender);
-    let address_len_digits = clean_sender.len() as u8;
-    let address_type = if sender.starts_with('+') { 0x91 } else { 0x81 };
-    let bcd_digits = bcd::string_to_bcd(clean_sender);
-
-    let mut address_bytes = Vec::with_capacity(2 + bcd_digits.len());
-    address_bytes.push(address_len_digits);
-    address_bytes.push(address_type);
-    address_bytes.extend(bcd_digits);
+    let address_bytes = encode_address(sender);
 
     // 2. User Data (UCS-2)
     let utf16_chars: Vec<u16> = text.encode_utf16().collect();
@@ -277,21 +332,33 @@ fn try_decode_hex(pdu: &[u8]) -> Option<Vec<u8>> {
 pub struct ProcessedSms {
     pub to: Option<String>,
     pub pdu: Vec<u8>,
+    pub status_report: Option<Vec<u8>>,
 }
 
 /// Processes an outgoing SMS PDU (which might be hex-encoded or raw bytes).
 /// If it is a valid SMS-SUBMIT PDU, it extracts the destination and converts it
 /// to SMS-DELIVER. Otherwise, it returns the original bytes as-is.
-pub fn process_outgoing_sms(pdu: &[u8]) -> ProcessedSms {
+pub fn process_outgoing_sms(pdu: &[u8], sender: Option<&str>, mr: u8) -> ProcessedSms {
     let decoded = try_decode_hex(pdu);
     let bytes_to_parse = decoded.as_deref().unwrap_or(pdu);
 
     match SubmitPdu::parse(bytes_to_parse) {
         Ok(parsed_pdu) => {
             let to = parsed_pdu.phone_number();
-            match parsed_pdu.to_deliver_pdu_hex() {
+            let status_report = if parsed_pdu.status_report_requested() {
+                match parsed_pdu.to_status_report_pdu_hex(mr) {
+                    Ok(hex_str) => Some(hex_str.into_bytes()),
+                    Err(e) => {
+                        warn!("Failed to encode status report: {:?}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            match parsed_pdu.to_deliver_pdu_hex(sender) {
                 Ok(rx_pdu_hex) => {
-                    return ProcessedSms { to, pdu: rx_pdu_hex.into_bytes() };
+                    return ProcessedSms { to, pdu: rx_pdu_hex.into_bytes(), status_report };
                 }
                 Err(e) => {
                     warn!("Failed to encode DELIVER PDU: {:?}", e);
@@ -307,7 +374,7 @@ pub fn process_outgoing_sms(pdu: &[u8]) -> ProcessedSms {
         }
     }
 
-    ProcessedSms { to: None, pdu: pdu.to_vec() }
+    ProcessedSms { to: None, pdu: pdu.to_vec(), status_report: None }
 }
 
 /// Calculates the TPDU length from a PDU (which might be hex-encoded or raw
@@ -391,10 +458,10 @@ mod tests {
     }
 
     #[test]
-    fn test_to_deliver_pdu_hex() {
+    fn test_to_deliver_pdu_hex_fallback() {
         let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
         let pdu = SubmitPdu::parse_str(pdu_hex).unwrap();
-        let rx_pdu_hex = pdu.to_deliver_pdu_hex().unwrap();
+        let rx_pdu_hex = pdu.to_deliver_pdu_hex(None).unwrap();
 
         let rx_bytes = hex::decode(rx_pdu_hex).unwrap();
 
@@ -415,6 +482,22 @@ mod tests {
         pos += 7;
 
         assert_eq!(rx_bytes[pos..], pdu.user_data[..]);
+    }
+
+    #[test]
+    fn test_to_deliver_pdu_hex_with_sender() {
+        let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
+        let pdu = SubmitPdu::parse_str(pdu_hex).unwrap();
+        // Pass sender "+12345"
+        let rx_pdu_hex = pdu.to_deliver_pdu_hex(Some("+12345")).unwrap();
+        let rx_bytes = hex::decode(rx_pdu_hex).unwrap();
+
+        assert_eq!(rx_bytes[0], 0x00); // SCA length
+        assert_eq!(rx_bytes[1], 0x24); // PDU-Type (DELIVER, SRI=1, MMS=1)
+
+        // Expected OA BCD for "+12345": length=5, type=0x91, digits=21 43 F5
+        let expected_oa = vec![5, 0x91, 0x21, 0x43, 0xF5];
+        assert_eq!(rx_bytes[2..7], expected_oa[..]);
     }
 
     #[test]
@@ -487,16 +570,21 @@ mod tests {
     fn test_process_outgoing_sms_happy_path() {
         // Valid SMS-SUBMIT PDU targeting "8618810189440"
         let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
-        let processed = super::process_outgoing_sms(pdu_hex.as_bytes());
+        let processed = super::process_outgoing_sms(pdu_hex.as_bytes(), Some("+12345"), 0);
         assert_eq!(processed.to, Some("18810189440".to_string()));
         // The generated PDU should be SMS-DELIVER (starts with "0024...")
         assert!(processed.pdu.starts_with(b"0024"));
+
+        // The PDU should contain the encoded sender "+12345" (05912143F5)
+        let pdu_str = std::str::from_utf8(&processed.pdu).unwrap();
+        // DELIVER PDU: SCA(00) + PDU_TYPE(24 or 64) + OA(05912143F5)
+        assert!(pdu_str.starts_with("002405912143F5") || pdu_str.starts_with("006405912143F5"));
     }
 
     #[test]
     fn test_process_outgoing_sms_fallback_invalid_pdu() {
         let raw_text = b"hello";
-        let processed = super::process_outgoing_sms(raw_text);
+        let processed = super::process_outgoing_sms(raw_text, None, 0);
         assert_eq!(processed.to, None);
         assert_eq!(processed.pdu, raw_text.to_vec());
     }

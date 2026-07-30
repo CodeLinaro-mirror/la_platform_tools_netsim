@@ -1,13 +1,30 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use modem_rs_derive::CommandParser;
+
 use crate::{
-    parser::{Command, QuotedString},
-    types::{ExecutionResult, HandledCommand},
+    parser::QuotedString,
+    types::{ExecutionResult, HandledCommand, Parsable},
 };
 
+/// STK (SIM Toolkit) service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum StkCommand<'a> {
+    #[command(tag = "AT+CUSATD?")]
+    QueryStkReady,
+    #[command(tag = "AT+CUSATE=")]
+    SendStkEnvelope(QuotedString<'a>),
+    #[command(tag = "AT+STKEN=")]
+    SetStkEnabled(u8),
+    #[command(tag = "AT+STKUR=")]
+    SetStkUnsolicitedResult(u8),
+    #[command(tag = "AT+STK=")]
+    SetStk(u8),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum StkResponse {
+pub enum StkResponse {
     StkReady { ready: u8, support: u8 },
     UsatEnvelopeResponse(String),
     UsatProactiveCommand(String),
@@ -29,40 +46,24 @@ impl std::fmt::Display for StkResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StkError {
-    Error,
-}
-
 #[derive(Default)]
 struct StkExecutionResult {
     response: Option<StkResponse>,
     urcs: Vec<StkResponse>,
 }
 
-type StkResult = Result<StkExecutionResult, StkError>;
+type StkResult = Result<StkExecutionResult, ExecutionResult>;
 
-impl From<StkResult> for ExecutionResult {
-    fn from(res: StkResult) -> Self {
-        match res {
-            Ok(stk_res) => {
-                let mut handled = HandledCommand::ok();
-                if let Some(resp) = stk_res.response {
-                    let resp_str = resp.to_string();
-                    if !resp_str.is_empty() {
-                        handled.responses.insert(0, resp_str);
-                    }
-                }
-                for urc in stk_res.urcs {
-                    let urc_str = urc.to_string();
-                    if !urc_str.is_empty() {
-                        handled.responses.push(urc_str);
-                    }
-                }
-                ExecutionResult::Success(handled)
-            }
-            Err(StkError::Error) => ExecutionResult::Error,
+impl From<StkExecutionResult> for ExecutionResult {
+    fn from(stk_res: StkExecutionResult) -> Self {
+        let mut handled = HandledCommand::ok();
+        if let Some(resp) = stk_res.response {
+            handled.responses.insert(0, resp.into());
         }
+        for urc in stk_res.urcs {
+            handled.responses.push(urc.into());
+        }
+        ExecutionResult::Success(handled)
     }
 }
 
@@ -76,7 +77,7 @@ impl StkService {
         // A simple parser for the envelope command.
         // For now, we only care about the command tag.
         if command.len() < 8 {
-            return Err(StkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         let tag = &command[0..2];
@@ -95,7 +96,7 @@ impl StkService {
             // Menu Selection
             urcs.push(StkResponse::UsatProactiveCommand("SubMenu1".to_string()));
         } else {
-            return Err(StkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         Ok(StkExecutionResult {
@@ -127,24 +128,24 @@ impl StkService {
         self.handle_envelope_command(envelope_command.as_ref())
     }
 
-    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
-        match command {
-            Command::QueryStkReady => self.handle_query_stk_ready().into(),
-            Command::SendStkEnvelope(envelope_command) => {
-                self.handle_send_stk_envelope_command(*envelope_command).into()
+    pub fn execute<'a>(&mut self, command: &StkCommand<'a>) -> ExecutionResult {
+        let res = match command {
+            StkCommand::QueryStkReady => self.handle_query_stk_ready(),
+            StkCommand::SendStkEnvelope(envelope_command) => {
+                self.handle_send_stk_envelope_command(*envelope_command)
             }
-            Command::SetStk(_) => self.handle_set_stk().into(),
-            Command::SetStkEnabled(_) => self.handle_set_stk_enabled().into(),
-            Command::SetStkUnsolicitedResult(_) => self.handle_set_stk_unsolicited_result().into(),
-            _ => ExecutionResult::Unhandled,
-        }
+            StkCommand::SetStk(_) => self.handle_set_stk(),
+            StkCommand::SetStkEnabled(_) => self.handle_set_stk_enabled(),
+            StkCommand::SetStkUnsolicitedResult(_) => self.handle_set_stk_unsolicited_result(),
+        };
+        res.into()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::ExecutionResult;
+    use crate::types::{ExecutionResult, Response};
 
     #[test]
     fn test_stk_result_to_execution_result() {
@@ -153,14 +154,14 @@ mod tests {
             response: Some(StkResponse::UsatEnvelopeResponse("0".to_string())),
             urcs: vec![StkResponse::UsatProactiveCommand("9000".to_string())],
         });
-        let exec_res: ExecutionResult = res.into();
+        let exec_res: ExecutionResult = res.map_or_else(|e| e, ExecutionResult::from);
         if let ExecutionResult::Success(handled) = exec_res {
             assert_eq!(
                 handled.responses,
                 vec![
-                    "+CUSATE: 0\r\n".to_string(),
-                    "OK\r\n".to_string(),
-                    "+CUSATP: \"9000\"\r\n".to_string()
+                    Response::Stk(StkResponse::UsatEnvelopeResponse("0".to_string())),
+                    Response::Ok,
+                    Response::Stk(StkResponse::UsatProactiveCommand("9000".to_string())),
                 ]
             );
         } else {
@@ -172,11 +173,11 @@ mod tests {
             response: Some(StkResponse::StkReady { ready: 1, support: 1 }),
             urcs: Vec::new(),
         });
-        let exec_res: ExecutionResult = res.into();
+        let exec_res: ExecutionResult = res.map_or_else(|e| e, ExecutionResult::from);
         if let ExecutionResult::Success(handled) = exec_res {
             assert_eq!(
                 handled.responses,
-                vec!["+CUSATD: 1, 1\r\n".to_string(), "OK\r\n".to_string()]
+                vec![Response::Stk(StkResponse::StkReady { ready: 1, support: 1 }), Response::Ok,]
             );
         } else {
             panic!("Expected Success");
@@ -184,16 +185,19 @@ mod tests {
 
         // Test Ok with empty result (AT+STK=1 case)
         let res: StkResult = Ok(StkExecutionResult::default());
-        let exec_res: ExecutionResult = res.into();
+        let exec_res: ExecutionResult = res.map_or_else(|e| e, ExecutionResult::from);
         if let ExecutionResult::Success(handled) = exec_res {
-            assert_eq!(handled.responses, vec!["OK\r\n".to_string()]);
+            assert_eq!(handled.responses, vec![Response::Ok]);
         } else {
             panic!("Expected Success");
         }
 
         // Test Err
-        let res: StkResult = Err(StkError::Error);
-        let exec_res: ExecutionResult = res.into();
-        assert!(matches!(exec_res, ExecutionResult::Error));
+        let res: StkResult = Err(ExecutionResult::error());
+        let exec_res: ExecutionResult = match res {
+            Ok(_) => panic!("Expected Err"),
+            Err(e) => e,
+        };
+        assert!(matches!(exec_res, ExecutionResult::Error { .. }));
     }
 }

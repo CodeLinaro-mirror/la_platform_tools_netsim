@@ -1,17 +1,99 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use modem_rs_derive::CommandParser;
+
 use crate::{
-    parser::{Command, QuotedString},
-    types::{CmeeMode, ExecutionResult, HandledCommand},
+    parser::QuotedString,
+    types::{CmeeMode, ExecutionResult, Parsable},
 };
 
 const DEFAULT_IMEI: &str = "867400022047199";
 const DEFAULT_SVN: &str = "01";
 const DEFAULT_INFO: &str = "modem simulator";
 
+/// Miscellaneous modem service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum MiscCommand<'a> {
+    #[command(tag = "AT+CMEE=?")]
+    QuerySupportedReportMobileEquipmentError,
+    #[command(tag = "AT+CMEE?")]
+    QueryReportMobileEquipmentError,
+    #[command(tag = "AT+CMEE=")]
+    SetReportMobileEquipmentError(u8),
+    /// Goldfish specific concatenated init command
+    #[command(tag = "ATE0Q0V1")]
+    GoldfishInitSequence,
+    #[command(tag = "ATE")]
+    SetEcho(u8),
+    #[command(tag = "ATL")]
+    SetSpeakerVolume(u8),
+    #[command(tag = "ATM")]
+    SetSpeakerMute(u8),
+    #[command(tag = "ATQ")]
+    SetQuietMode(u8),
+    #[command(tag = "ATV")]
+    SetVerboseMode(u8),
+    #[command(tag = "AT&F")]
+    ResetToFactoryDefaults,
+    #[command(tag = "AT&V")]
+    ViewActiveConfiguration,
+    #[command(tag = "AT&W")]
+    WriteActiveConfiguration,
+    #[command(tag = "ATZ")]
+    Reset,
+    #[command(tag = "ATI")]
+    GetIdentificationInformation,
+    #[command(tag = "ATS0=")]
+    SetAutoAnswer(u8),
+    #[command(tag = "ATS3=")]
+    SetCommandTerminationCharacter(u8),
+    #[command(tag = "ATS4=")]
+    SetResponseFormattingCharacter(u8),
+    #[command(tag = "ATS5=")]
+    SetCommandLineEditingCharacter(u8),
+    #[command(tag = "ATS6=")]
+    SetPauseBeforeBlindDialing(u8),
+    #[command(tag = "ATS7=")]
+    SetConnectionCompletionTimeout(u8),
+    #[command(tag = "ATS8=")]
+    SetCommaDialModifierTime(u8),
+    #[command(tag = "ATS10=")]
+    SetAutomaticDisconnectDelay(u8),
+    #[command(tag = "AT+GCAP")]
+    GetCapabilities,
+    #[command(tag = "AT+GMI")]
+    GetManufacturerIdentification,
+    #[command(tag = "AT+GMM")]
+    GetModelId,
+    #[command(tag = "AT+GMR")]
+    GetRevision,
+    #[command(tag = "AT+GSN")]
+    GetSerialNumber,
+    #[command(tag = "AT+CGSN=")]
+    GetProductSerialNumberGsmWithType(u8),
+    #[command(tag = "AT+CGSN")]
+    GetProductSerialNumberGsm,
+    #[command(tag = "AT+ICF=")]
+    SetTeTaControlCharacterFraming(u8, u8),
+    #[command(tag = "AT+IFC=")]
+    SetTeTaLocalDataFlowControl(u8, u8),
+    #[command(tag = "AT+IPR=")]
+    SetTeTaFixedLocalRate(u32),
+    #[command(tag = "AT+CCLK=")]
+    SetTime(QuotedString<'a>),
+    #[command(tag = "AT+CCLK?")]
+    QueryTime,
+    #[command(tag = "AT+CMOD=")]
+    SetCallMode(u8),
+    #[command(tag = "AT+CSCS=")]
+    SetCharacterSet(QuotedString<'a>),
+    #[command(tag = "AT")]
+    Test,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum MiscResponse {
+pub enum MiscResponse {
     Clock(String),
     ModelId(String),
     Revision(String),
@@ -72,32 +154,7 @@ impl std::fmt::Display for MiscResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MiscError {
-    Error,
-    Unhandled,
-}
-
-type MiscResult = Result<Option<MiscResponse>, MiscError>;
-
-impl From<MiscResult> for ExecutionResult {
-    fn from(res: MiscResult) -> Self {
-        match res {
-            Ok(opt_resp) => {
-                let mut handled = HandledCommand::ok();
-                if let Some(resp) = opt_resp {
-                    let resp_str = resp.to_string();
-                    if !resp_str.is_empty() {
-                        handled.responses.insert(0, resp_str);
-                    }
-                }
-                ExecutionResult::Success(handled)
-            }
-            Err(MiscError::Error) => ExecutionResult::Error,
-            Err(MiscError::Unhandled) => ExecutionResult::Unhandled,
-        }
-    }
-}
+type MiscResult = Result<Option<MiscResponse>, ExecutionResult>;
 
 pub struct MiscService {
     cmee_mode: CmeeMode,
@@ -190,7 +247,7 @@ impl MiscService {
             self.cmee_mode = m;
             Ok(None)
         } else {
-            Err(MiscError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -316,62 +373,69 @@ impl MiscService {
         Ok(Some(MiscResponse::Capabilities))
     }
 
-    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
+    pub fn execute<'a>(&mut self, command: &MiscCommand<'a>) -> ExecutionResult {
         let misc_result = match command {
-            Command::GetManufacturerIdentification => self.handle_get_manufacturer_identification(),
-            Command::GetCapabilities => self.handle_get_capabilities(),
-            Command::GetModelId => self.handle_get_model_id(),
-            Command::GetRevision => self.handle_get_revision(),
-            Command::GetSerialNumber => self.handle_get_serial_number(),
-            Command::GetProductSerialNumberGsm => self.handle_get_product_serial_number_gsm(),
-            Command::GetProductSerialNumberGsmWithType(snt) => {
+            MiscCommand::GetManufacturerIdentification => {
+                self.handle_get_manufacturer_identification()
+            }
+            MiscCommand::GetCapabilities => self.handle_get_capabilities(),
+            MiscCommand::GetModelId => self.handle_get_model_id(),
+            MiscCommand::GetRevision => self.handle_get_revision(),
+            MiscCommand::GetSerialNumber => self.handle_get_serial_number(),
+            MiscCommand::GetProductSerialNumberGsm => self.handle_get_product_serial_number_gsm(),
+            MiscCommand::GetProductSerialNumberGsmWithType(snt) => {
                 self.handle_get_product_serial_number_gsm_with_type(*snt)
             }
-            Command::SetTeTaControlCharacterFraming(f, p) => self.handle_set_icf(*f, *p),
-            Command::SetTeTaLocalDataFlowControl(d1, d2) => self.handle_set_ifc(*d1, *d2),
-            Command::SetTeTaFixedLocalRate(_) => self.handle_set_ipr(),
-            Command::SetTime(time) => self.handle_set_time(*time),
-            Command::QueryTime => self.handle_query_time(),
-            Command::SetReportMobileEquipmentError(mode) => {
+            MiscCommand::SetTeTaControlCharacterFraming(f, p) => self.handle_set_icf(*f, *p),
+            MiscCommand::SetTeTaLocalDataFlowControl(d1, d2) => self.handle_set_ifc(*d1, *d2),
+            MiscCommand::SetTeTaFixedLocalRate(_) => self.handle_set_ipr(),
+            MiscCommand::SetTime(time) => self.handle_set_time(*time),
+            MiscCommand::QueryTime => self.handle_query_time(),
+            MiscCommand::SetReportMobileEquipmentError(mode) => {
                 self.handle_set_report_mobile_equipment_error(*mode)
             }
-            Command::QueryReportMobileEquipmentError => {
+            MiscCommand::QueryReportMobileEquipmentError => {
                 self.handle_query_report_mobile_equipment_error()
             }
-            Command::QuerySupportedReportMobileEquipmentError => {
+            MiscCommand::QuerySupportedReportMobileEquipmentError => {
                 self.handle_query_supported_report_mobile_equipment_error()
             }
-            Command::GoldfishInitSequence => self.handle_goldfish_init_sequence(),
-            Command::SetEcho(_) => self.handle_set_echo(),
-            Command::SetSpeakerVolume(vol) => self.handle_set_speaker_volume(*vol),
-            Command::SetSpeakerMute(mute) => self.handle_set_speaker_mute(*mute),
-            Command::SetQuietMode(quiet) => self.handle_set_quiet_mode(*quiet),
-            Command::SetVerboseMode(verbose) => self.handle_set_verbose_mode(*verbose),
-            Command::ResetToFactoryDefaults => self.handle_reset_to_factory_defaults(),
-            Command::ViewActiveConfiguration => self.handle_view_active_configuration(),
-            Command::WriteActiveConfiguration => self.handle_write_active_configuration(),
-            Command::Reset => self.handle_reset(),
-            Command::GetIdentificationInformation => self.handle_get_identification_information(),
-            Command::SetAutoAnswer(_) => self.handle_set_auto_answer(),
-            Command::SetCommandTerminationCharacter(_) => {
+            MiscCommand::GoldfishInitSequence => self.handle_goldfish_init_sequence(),
+            MiscCommand::SetEcho(_) => self.handle_set_echo(),
+            MiscCommand::SetSpeakerVolume(vol) => self.handle_set_speaker_volume(*vol),
+            MiscCommand::SetSpeakerMute(mute) => self.handle_set_speaker_mute(*mute),
+            MiscCommand::SetQuietMode(quiet) => self.handle_set_quiet_mode(*quiet),
+            MiscCommand::SetVerboseMode(verbose) => self.handle_set_verbose_mode(*verbose),
+            MiscCommand::ResetToFactoryDefaults => self.handle_reset_to_factory_defaults(),
+            MiscCommand::ViewActiveConfiguration => self.handle_view_active_configuration(),
+            MiscCommand::WriteActiveConfiguration => self.handle_write_active_configuration(),
+            MiscCommand::Reset => self.handle_reset(),
+            MiscCommand::GetIdentificationInformation => {
+                self.handle_get_identification_information()
+            }
+            MiscCommand::SetAutoAnswer(_) => self.handle_set_auto_answer(),
+            MiscCommand::SetCommandTerminationCharacter(_) => {
                 self.handle_set_command_termination_character()
             }
-            Command::SetResponseFormattingCharacter(_) => {
+            MiscCommand::SetResponseFormattingCharacter(_) => {
                 self.handle_set_response_formatting_character()
             }
-            Command::SetCommandLineEditingCharacter(_) => {
+            MiscCommand::SetCommandLineEditingCharacter(_) => {
                 self.handle_set_command_line_editing_character()
             }
-            Command::SetPauseBeforeBlindDialing(_) => self.handle_set_pause_before_blind_dialing(),
-            Command::SetConnectionCompletionTimeout(_) => {
+            MiscCommand::SetPauseBeforeBlindDialing(_) => {
+                self.handle_set_pause_before_blind_dialing()
+            }
+            MiscCommand::SetConnectionCompletionTimeout(_) => {
                 self.handle_set_connection_completion_timeout()
             }
-            Command::SetCommaDialModifierTime(_) => self.handle_set_comma_dial_modifier_time(),
-            Command::SetAutomaticDisconnectDelay(_) => self.handle_set_automatic_disconnect_delay(),
-            Command::SetCallMode(_) => self.handle_set_call_mode(),
-            Command::SetCharacterSet(_) => self.handle_set_character_set(),
-            Command::Test => Ok(None),
-            _ => Err(MiscError::Unhandled),
+            MiscCommand::SetCommaDialModifierTime(_) => self.handle_set_comma_dial_modifier_time(),
+            MiscCommand::SetAutomaticDisconnectDelay(_) => {
+                self.handle_set_automatic_disconnect_delay()
+            }
+            MiscCommand::SetCallMode(_) => self.handle_set_call_mode(),
+            MiscCommand::SetCharacterSet(_) => self.handle_set_character_set(),
+            MiscCommand::Test => Ok(None),
         };
 
         misc_result.into()

@@ -21,6 +21,7 @@ use crate::{
         types::{Station, WifiResult},
         utils::{self, build_tx_info},
     },
+    stats::WifiApi,
 };
 
 // Packets flowing from Medium to Guest (Destination)
@@ -249,6 +250,7 @@ impl Medium {
         ieee80211: &Ieee80211,
         out_queue: &mut Vec<(u32, Bytes)>,
     ) -> WifiResult<()> {
+        self.parse_action_frame(ieee80211);
         let source_addr = ieee80211.get_source();
         let source = self.get_station(&source_addr)?.clone();
         let dest_addr = ieee80211.get_destination();
@@ -346,5 +348,253 @@ impl Medium {
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn parse_action_frame(&mut self, ieee80211: &Ieee80211) {
+        use netsim_packets::{
+            ActionHeader, VendorSpecificPublicActionHeader, category, dpp, management_subtype, nan,
+            p2p, public_action,
+        };
+        use zerocopy::FromBytes;
+
+        if ieee80211.is_mgmt() {
+            if ieee80211.stype() == management_subtype::ACTION {
+                let payload = ieee80211.get_payload();
+                #[allow(clippy::collapsible_if)]
+                if let Ok((action_hdr, rest_bytes)) = ActionHeader::ref_from_prefix(&payload) {
+                    if action_hdr.category == category::PUBLIC {
+                        match action_hdr.action {
+                            public_action::FTM_REQUEST => {
+                                self.wifi_stats.incr_wifi_api(WifiApi::WifiRttManagerStartRanging);
+                            }
+                            public_action::FINE_TIMING_MEASUREMENT => {
+                                self.wifi_stats
+                                    .incr_wifi_api(WifiApi::WifiRttManagerOnRangingResults);
+                            }
+                            public_action::GAS_INITIAL_REQUEST
+                            | public_action::GAS_INITIAL_RESPONSE => {
+                                self.wifi_stats
+                                    .incr_wifi_api(WifiApi::WifiP2pManagerDiscoverServices);
+                            }
+                            public_action::VENDOR_SPECIFIC => {
+                                if let Ok((vs_hdr, sharing_payload)) =
+                                    VendorSpecificPublicActionHeader::ref_from_prefix(rest_bytes)
+                                {
+                                    match (vs_hdr.oui, vs_hdr.oui_type) {
+                                        (nan::OUI, nan::OUI_TYPE) => {
+                                            self.parse_nan_action(sharing_payload)
+                                        }
+                                        (p2p::OUI, p2p::OUI_TYPE) => {
+                                            self.parse_p2p_action(sharing_payload)
+                                        }
+                                        (dpp::OUI, dpp::OUI_TYPE) => {
+                                            self.parse_dpp_action(sharing_payload)
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            } else {
+                let stype = ieee80211.stype();
+                if (stype == management_subtype::PROBE_REQUEST
+                    || stype == management_subtype::PROBE_RESPONSE)
+                    && self.has_p2p_ie(ieee80211)
+                {
+                    if stype == management_subtype::PROBE_REQUEST {
+                        let source_addr = ieee80211.get_source();
+                        self.active_p2p_groups.remove(&source_addr);
+                    }
+                    self.wifi_stats.incr_wifi_api(WifiApi::WifiP2pManagerDiscoverPeers);
+                }
+                if (stype == management_subtype::BEACON
+                    || stype == management_subtype::PROBE_RESPONSE)
+                    && self.is_p2p_go(ieee80211)
+                {
+                    let source_addr = ieee80211.get_source();
+                    if self.active_p2p_groups.insert(source_addr) {
+                        self.wifi_stats.incr_wifi_api(WifiApi::WifiP2pManagerCreateGroup);
+                    }
+                }
+            }
+        }
+    }
+
+    fn has_p2p_ie(&self, ieee80211: &Ieee80211) -> bool {
+        use netsim_packets::{IeIterator, management_subtype, p2p, tags};
+
+        let payload = ieee80211.get_payload();
+        let offset = match ieee80211.stype() {
+            management_subtype::PROBE_REQUEST => 0,
+            management_subtype::PROBE_RESPONSE => 12,
+            _ => return false,
+        };
+
+        if payload.len() < offset {
+            return false;
+        }
+
+        let ies = &payload[offset..];
+        for ie in IeIterator::new(ies) {
+            if ie.id == tags::VENDOR_SPECIFIC
+                && ie.body.len() >= 4
+                && ie.body[0..3] == p2p::OUI
+                && ie.body[3] == p2p::OUI_TYPE
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn is_p2p_go(&self, ieee80211: &Ieee80211) -> bool {
+        use netsim_packets::{IeIterator, management_subtype, p2p, tags};
+
+        let payload = ieee80211.get_payload();
+        let offset = match ieee80211.stype() {
+            management_subtype::BEACON => 12,
+            management_subtype::PROBE_RESPONSE => 12,
+            _ => return false,
+        };
+
+        if payload.len() < offset {
+            return false;
+        }
+
+        let ies = &payload[offset..];
+        for ie in IeIterator::new(ies) {
+            if ie.id == tags::VENDOR_SPECIFIC
+                && ie.body.len() >= 4
+                && ie.body[0..3] == p2p::OUI
+                && ie.body[3] == p2p::OUI_TYPE
+            {
+                let mut attr_bytes = &ie.body[4..];
+                while attr_bytes.len() >= 3 {
+                    let attr_id = attr_bytes[0];
+                    let attr_len = u16::from_le_bytes([attr_bytes[1], attr_bytes[2]]) as usize;
+                    if attr_bytes.len() < 3 + attr_len {
+                        break;
+                    }
+                    let attr_val = &attr_bytes[3..3 + attr_len];
+                    #[allow(clippy::collapsible_if)]
+                    if attr_id == 2 {
+                        if attr_len >= 2 {
+                            let group_cap = attr_val[1];
+                            if group_cap & 0x01 != 0 {
+                                return true;
+                            }
+                        }
+                    }
+                    attr_bytes = &attr_bytes[3 + attr_len..];
+                }
+            }
+        }
+        false
+    }
+
+    fn parse_nan_action(&mut self, sharing_payload: &[u8]) {
+        use netsim_packets::{NanAttributeIterator, NanNdpHeader, NanSdaHeader, nan};
+        use zerocopy::FromBytes;
+
+        for attr in NanAttributeIterator::new(sharing_payload) {
+            match attr.id {
+                nan::attr::SDA => {
+                    if let Ok((sda_hdr, _)) = NanSdaHeader::ref_from_prefix(attr.val) {
+                        let service_type = sda_hdr.control & 0x03;
+                        match service_type {
+                            nan::service_type::PUBLISH => {
+                                let publish_type = (sda_hdr.control >> 2) & 0x01;
+                                if publish_type == 0 {
+                                    self.wifi_stats
+                                        .incr_wifi_api(WifiApi::WifiAwareSessionPublishUnsolicited);
+                                } else {
+                                    self.wifi_stats
+                                        .incr_wifi_api(WifiApi::WifiAwareSessionPublishSolicited);
+                                }
+                            }
+                            nan::service_type::SUBSCRIBE => {
+                                let subscribe_type = (sda_hdr.control >> 2) & 0x01;
+                                if subscribe_type == 1 {
+                                    self.wifi_stats
+                                        .incr_wifi_api(WifiApi::WifiAwareSessionSubscribeActive);
+                                } else {
+                                    self.wifi_stats
+                                        .incr_wifi_api(WifiApi::WifiAwareSessionSubscribePassive);
+                                }
+                            }
+                            nan::service_type::FOLLOW_UP => {
+                                self.wifi_stats
+                                    .incr_wifi_api(WifiApi::WifiAwareDiscoverySessionSendMessage);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                nan::attr::NDP => {
+                    if let Ok((ndp_hdr, _)) = NanNdpHeader::ref_from_prefix(attr.val) {
+                        let ndp_type = ndp_hdr.type_and_status & 0x0F;
+                        match ndp_type {
+                            nan::ndp_type::REQUEST => {
+                                self.wifi_stats.incr_wifi_api(WifiApi::WifiAwareNdpRequest);
+                            }
+                            nan::ndp_type::RESPONSE => {
+                                self.wifi_stats.incr_wifi_api(WifiApi::WifiAwareNdpResponse);
+                            }
+                            nan::ndp_type::CONFIRM => {
+                                self.wifi_stats.incr_wifi_api(WifiApi::WifiAwareNdpConfirm);
+                            }
+                            nan::ndp_type::TERMINATE => {
+                                self.wifi_stats.incr_wifi_api(WifiApi::WifiAwareNdpTerminate);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn parse_p2p_action(&mut self, sharing_payload: &[u8]) {
+        use netsim_packets::p2p;
+
+        if let Some(&p2p_subtype) = sharing_payload.first() {
+            match p2p_subtype {
+                p2p::action_type::GO_NEG_REQ
+                | p2p::action_type::GO_NEG_RESP
+                | p2p::action_type::GO_NEG_CONF => {
+                    self.wifi_stats.incr_wifi_api(WifiApi::WifiP2pManagerConnect);
+                }
+                p2p::action_type::INVITATION_REQ | p2p::action_type::INVITATION_RESP => {
+                    self.wifi_stats.incr_wifi_api(WifiApi::WifiP2pManagerConnect);
+                }
+                p2p::action_type::PROV_DISC_REQ | p2p::action_type::PROV_DISC_RESP => {
+                    self.wifi_stats.incr_wifi_api(WifiApi::WifiP2pManagerConnect);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn parse_dpp_action(&mut self, sharing_payload: &[u8]) {
+        use netsim_packets::dpp;
+
+        if let Some(&dpp_subtype) = sharing_payload.first() {
+            match dpp_subtype {
+                dpp::action_type::AUTH_REQ => {
+                    self.wifi_stats.incr_wifi_api(WifiApi::WifiEasyConnectAuthRequest);
+                }
+                dpp::action_type::AUTH_RESP => {
+                    self.wifi_stats.incr_wifi_api(WifiApi::WifiEasyConnectAuthResponse);
+                }
+                dpp::action_type::AUTH_CONF => {
+                    self.wifi_stats.incr_wifi_api(WifiApi::WifiEasyConnectAuthConfirm);
+                }
+                _ => {}
+            }
+        }
     }
 }

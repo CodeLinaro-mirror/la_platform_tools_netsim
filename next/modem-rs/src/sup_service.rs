@@ -1,14 +1,56 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use modem_rs_derive::CommandParser;
+
 use crate::{
     constants::FACILITY_SIM_PIN,
-    parser::{Command, QuotedString},
-    types::{CmeError, ExecutionResult, HandledCommand},
+    parser::{QuotedString, parse_raw_data},
+    sim_service::SimService,
+    types::{CmeError, ExecutionResult, Parsable},
 };
 
+/// Supplementary service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum SupCommand<'a> {
+    #[command(tag = "AT+CLCK=")]
+    SetFacilityLock(QuotedString<'a>, u8, Option<QuotedString<'a>>, Option<u8>),
+    #[command(tag = "AT+CCFC=")]
+    CallForwarding {
+        reason: u8,
+        mode: u8,
+        number: Option<QuotedString<'a>>,
+        r#type: Option<u8>,
+        class: Option<u8>,
+        subaddr: Option<QuotedString<'a>>,
+        satype: Option<u8>,
+        time: Option<u8>,
+    },
+    #[command(tag = "AT+CCFCU=")]
+    CallForwardUtility(#[parser(parse_raw_data)] &'a [u8]),
+    #[command(tag = "AT+CLIR?")]
+    QueryClir,
+    /// Non-standard Goldfish CLIR syntax
+    #[command(tag = "AT+CLIR: ")]
+    SetClirGoldfish(u8),
+    #[command(tag = "AT+CLIR=")]
+    SetClir(u8),
+    #[command(tag = "AT+CLIP=")]
+    SetClip(u8),
+    #[command(tag = "AT+CLIP?")]
+    QueryClip,
+    #[command(tag = "AT+COLP=")]
+    SetColp(u8),
+    #[command(tag = "AT+CCWA=")]
+    SetCallWaiting(u8, Option<u8>, Option<u8>),
+    #[command(tag = "AT+CSSN=")]
+    SuppServiceNotification(u8, u8),
+    #[command(tag = "AT+CUSD=")]
+    SetUssd { mode: u8, message: Option<QuotedString<'a>>, dcs: Option<u8> },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum SupResponse {
+pub enum SupResponse {
     FacilityLockStatus(u8),
     Clir { n: u8, m: u8 },
     Clip { status: u8, class: u8 },
@@ -30,38 +72,7 @@ impl std::fmt::Display for SupResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SupError {
-    Cme(CmeError),
-    Unhandled,
-}
-
-impl From<CmeError> for SupError {
-    fn from(err: CmeError) -> Self {
-        SupError::Cme(err)
-    }
-}
-
-type SupResult = Result<Option<SupResponse>, SupError>;
-
-impl From<SupResult> for ExecutionResult {
-    fn from(res: SupResult) -> Self {
-        match res {
-            Ok(opt_resp) => {
-                let mut handled = HandledCommand::ok();
-                if let Some(resp) = opt_resp {
-                    let resp_str = resp.to_string();
-                    if !resp_str.is_empty() {
-                        handled.responses.insert(0, resp_str);
-                    }
-                }
-                ExecutionResult::Success(handled)
-            }
-            Err(SupError::Cme(err)) => ExecutionResult::CmeError(err),
-            Err(SupError::Unhandled) => ExecutionResult::Unhandled,
-        }
-    }
-}
+type SupResult = Result<Option<SupResponse>, ExecutionResult>;
 
 pub const _MODE_ENABLE: u8 = 1;
 pub const _MODE_QUERY: u8 = 2;
@@ -80,6 +91,10 @@ pub struct SupService {
 }
 
 impl SupService {
+    pub fn clip_enabled(&self) -> bool {
+        self.clip_enabled == 1
+    }
+
     // --- Pure command handlers ---
 
     fn handle_set_facility_lock(&self, _facility: &str, mode: u8) -> SupResult {
@@ -156,31 +171,39 @@ impl SupService {
         Ok(None)
     }
 
-    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
+    pub fn execute<'a>(
+        &mut self,
+        command: &SupCommand<'a>,
+        sim_service: &mut SimService,
+    ) -> ExecutionResult {
         let sup_result = match command {
-            Command::SetFacilityLock(facility, mode, _, _) => {
+            SupCommand::SetFacilityLock(facility, mode, passwd, _) => {
                 let facility_str = std::str::from_utf8(facility.as_ref()).unwrap_or("");
-                if facility_str != FACILITY_SIM_PIN {
-                    self.handle_set_facility_lock(facility_str, *mode)
-                } else {
-                    Err(SupError::Unhandled)
+                if facility_str == FACILITY_SIM_PIN {
+                    return sim_service.handle_set_facility_lock(*mode, *passwd).into();
                 }
+                self.handle_set_facility_lock(facility_str, *mode)
             }
-            Command::CallForwarding { reason: _, mode, number, r#type, .. } => {
+            SupCommand::CallForwarding { reason: _, mode, number, r#type, .. } => {
                 self.handle_call_forwarding(*mode, *number, *r#type)
             }
-            Command::CallForwardUtility(_) => Err(SupError::Cme(CmeError::OperationNotSupported)),
-            Command::QueryClir => self.handle_query_clir(),
-            Command::SetClir(clir) | Command::SetClirGoldfish(clir) => self.handle_set_clir(*clir),
-            Command::SetClip(enabled) => self.handle_set_clip(*enabled),
-            Command::QueryClip => self.handle_query_clip(),
-            Command::SetColp(_) => self.handle_set_colp(),
-            Command::SetCallWaiting(n, mode, class) => {
+            SupCommand::CallForwardUtility(_) => {
+                Err(ExecutionResult::cme_error(CmeError::OperationNotSupported))
+            }
+            SupCommand::QueryClir => self.handle_query_clir(),
+            SupCommand::SetClir(clir) | SupCommand::SetClirGoldfish(clir) => {
+                self.handle_set_clir(*clir)
+            }
+            SupCommand::SetClip(enabled) => self.handle_set_clip(*enabled),
+            SupCommand::QueryClip => self.handle_query_clip(),
+            SupCommand::SetColp(_) => self.handle_set_colp(),
+            SupCommand::SetCallWaiting(n, mode, class) => {
                 self.handle_set_call_waiting(*n, *mode, *class)
             }
-            Command::SuppServiceNotification(_, _) => self.handle_supp_service_notification(),
-            Command::SetUssd { mode, message, dcs } => self.handle_set_ussd(*mode, *message, *dcs),
-            _ => Err(SupError::Unhandled),
+            SupCommand::SuppServiceNotification(_, _) => self.handle_supp_service_notification(),
+            SupCommand::SetUssd { mode, message, dcs } => {
+                self.handle_set_ussd(*mode, *message, *dcs)
+            }
         };
 
         sup_result.into()

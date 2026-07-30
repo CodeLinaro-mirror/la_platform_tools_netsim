@@ -33,6 +33,7 @@ members = [
   "rootcanal-server",
   "testing",
   "cli",
+  "common",
 ]
 
 [workspace.doc]

@@ -26,6 +26,7 @@ netsim_rust_library(
         "//next/modem-rs-derive",
     ],
     test_deps = [
+        "@tempfile",
         "@tracing-subscriber",
     ],
     deps = [

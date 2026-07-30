@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{steps::*, world::World};
+use crate::{common::constants::*, steps::*, world::World};
 
 // Scenario: Emergency Call
 //   Given a modem "A"
@@ -11,7 +11,7 @@ use crate::{steps::*, world::World};
 fn test_emergency_call() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "ATD911;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{TEST_EMERGENCY_NUMBER};"));
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -25,12 +25,16 @@ fn test_standard_call() {
     given_modem(&mut world, "A");
 
     // Dial international number
-    when_at_command_sent(&mut world, "A", "ATD+1234567;");
+    when_at_command_sent(&mut world, "A", &format!("ATD+{TEST_PHONE_NUMBER_ALT};"));
     then_response_is(&mut world, "A", "OK");
 
     // Verify CLCC shows Dialing state (2) and International ToA (145)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
-    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"+1234567\",145");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 1,0,2,0,0,\"+{TEST_PHONE_NUMBER_ALT}\",{TOA_INTERNATIONAL}"),
+    );
     then_response_contains(&mut world, "A", "OK");
 }
 
@@ -50,7 +54,7 @@ fn test_ring() {
 
     // Verify call state (Incoming)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
-    then_response_contains(&mut world, "A", "+CLCC: 1,1,4,0,0,\"\",129");
+    then_response_contains(&mut world, "A", &format!("+CLCC: 1,1,4,0,0,\"\",{TOA_NATIONAL}"));
 }
 
 // Scenario: Query Current Calls
@@ -73,11 +77,11 @@ fn test_ring() {
 fn test_query_current_calls() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    given_modem_with_number(&mut world, "B", "111");
-    given_modem_with_number(&mut world, "C", "222");
+    given_modem_with_number(&mut world, "B", CALL_PEER_B);
+    given_modem_with_number(&mut world, "C", CALL_PEER_C);
 
     // A calls B, B answers
-    when_at_command_sent(&mut world, "A", "ATD111;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{CALL_PEER_B};"));
     then_response_is(&mut world, "A", "OK");
     then_response_is(&mut world, "B", "RING");
 
@@ -86,7 +90,7 @@ fn test_query_current_calls() {
     then_response_is(&mut world, "A", "OK"); // Connection established
 
     // A calls C, B goes on hold, C answers
-    when_at_command_sent(&mut world, "A", "ATD222;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{CALL_PEER_C};"));
     then_response_is(&mut world, "A", "OK");
     then_response_is(&mut world, "C", "RING");
 
@@ -97,8 +101,16 @@ fn test_query_current_calls() {
     // Query A's calls
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     // Order might vary, so check contains
-    then_response_contains(&mut world, "A", "+CLCC: 1,0,1,0,0,\"111\",129");
-    then_response_contains(&mut world, "A", "+CLCC: 2,0,0,0,0,\"222\",129");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 1,0,1,0,0,\"{CALL_PEER_B}\",{TOA_NATIONAL}"),
+    );
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 2,0,0,0,0,\"{CALL_PEER_C}\",{TOA_NATIONAL}"),
+    );
 }
 
 // Scenario: Call Ring Timeout
@@ -114,12 +126,12 @@ fn test_query_current_calls() {
 #[test]
 fn test_call_ring_timeout() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
-    given_modem_with_number(&mut world, "B", "111");
-    given_modem_with_number(&mut world, "C", "222");
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_A);
+    given_modem_with_number(&mut world, "B", CALL_PEER_B);
+    given_modem_with_number(&mut world, "C", CALL_PEER_C);
 
     // A calls B, B answers
-    when_at_command_sent(&mut world, "A", "ATD111;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{CALL_PEER_B};"));
     then_response_is(&mut world, "A", "OK");
     then_response_is(&mut world, "B", "RING");
 
@@ -128,7 +140,7 @@ fn test_call_ring_timeout() {
     then_response_is(&mut world, "A", "OK"); // Connected
 
     // A calls C
-    when_at_command_sent(&mut world, "A", "ATD222;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{CALL_PEER_C};"));
     then_response_is(&mut world, "A", "OK");
 
     // Verify C has Incoming call - First consume RING
@@ -136,7 +148,11 @@ fn test_call_ring_timeout() {
 
     // Check AT+CLCC on C
     when_at_command_sent(&mut world, "C", "AT+CLCC");
-    then_response_contains(&mut world, "C", "+CLCC: 1,1,4,0,0,\"\",129");
+    then_response_contains(
+        &mut world,
+        "C",
+        &format!("+CLCC: 1,1,4,0,0,\"{}\",{}", TEST_PHONE_NUMBER_LONG_A, TOA_NATIONAL),
+    );
 
     // Advance time > 30s
     when_time_advances_ms(&mut world, 30100);
@@ -232,20 +248,31 @@ fn test_external_incoming_call() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
+    // Enable CLIP
+    when_at_command_sent(&mut world, "A", "AT+CLIP=1");
+    then_response_is(&mut world, "A", "OK");
+
     // Inject call
-    let id_a = world.modems.get("A").unwrap().0;
-    when_external_call_initiated(&mut world, id_a, "123456");
+    when_incoming_call_received(&mut world, "A", TEST_PHONE_NUMBER);
 
     // Expect RING
     then_response_is(&mut world, "A", "RING");
     // Expect +CLIP
-    then_response_contains(&mut world, "A", "+CLIP: \"123456\",129,,,,0");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLIP: \"{TEST_PHONE_NUMBER}\",{}", TOA_NATIONAL),
+    );
 
     // Verify call state (Incoming)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     // ID=1, Direction=1(Incoming), State=4(Incoming), Voice=0(Voice), Multiparty=0,
     // Number="123456", Type=129
-    then_response_contains(&mut world, "A", "+CLCC: 1,1,4,0,0,\"123456\",129");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 1,1,4,0,0,\"{TEST_PHONE_NUMBER}\",{}", TOA_NATIONAL),
+    );
 
     // Wait for timeout
     when_time_advances_ms(&mut world, 2000);
@@ -269,24 +296,27 @@ fn test_external_incoming_call() {
 fn test_external_call_control() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    let id_a = world.modems.get("A").unwrap().0;
 
     // Dial
-    when_at_command_sent(&mut world, "A", "ATD123;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{CALL_PEER_EXT};"));
     then_response_is(&mut world, "A", "OK");
 
     // Remote Answer
-    when_external_call_answered(&mut world, id_a);
+    when_external_call_answered(&mut world, "A");
     then_response_is(&mut world, "A", "OK");
 
     // Verify Active
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     // ID=1, Dir=0(Out), State=0(Active), ...
-    then_response_contains(&mut world, "A", "+CLCC: 1,0,0,0,0,\"123\",129");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 1,0,0,0,0,\"{CALL_PEER_EXT}\",{}", TOA_NATIONAL),
+    );
     then_response_is(&mut world, "A", "OK");
 
     // Remote Hangup
-    when_external_call_hungup(&mut world, id_a);
+    when_external_call_hungup(&mut world, "A");
     then_response_is(&mut world, "A", "NO CARRIER");
 
     // Verify Idle
@@ -308,30 +338,37 @@ fn test_external_call_control() {
 fn test_external_call_hold() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    let id_a = world.modems.get("A").unwrap().0;
 
     // Dial and Answer to get Active call
-    when_at_command_sent(&mut world, "A", "ATD123;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{CALL_PEER_EXT};"));
     then_response_is(&mut world, "A", "OK");
-    when_external_call_answered(&mut world, id_a);
+    when_external_call_answered(&mut world, "A");
     then_response_is(&mut world, "A", "OK");
 
     // Hold ON
-    when_external_call_held(&mut world, id_a, true);
+    when_external_call_held(&mut world, "A", true);
 
     // Check State (Held = 1)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     // +CLCC: 1,0,1,... (State 1)
-    then_response_contains(&mut world, "A", "+CLCC: 1,0,1,0,0,\"123\",129");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 1,0,1,0,0,\"{CALL_PEER_EXT}\",{}", TOA_NATIONAL),
+    );
     then_response_is(&mut world, "A", "OK");
 
     // Hold OFF (Resume)
-    when_external_call_held(&mut world, id_a, false);
+    when_external_call_held(&mut world, "A", false);
 
     // Check State (Active = 0)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     // +CLCC: 1,0,0,... (State 0)
-    then_response_contains(&mut world, "A", "+CLCC: 1,0,0,0,0,\"123\",129");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 1,0,0,0,0,\"{CALL_PEER_EXT}\",{}", TOA_NATIONAL),
+    );
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -354,7 +391,7 @@ fn test_emergency_dial_syntax() {
     given_modem(&mut world, "A");
 
     // Emergency with category and CLIR
-    when_at_command_sent(&mut world, "A", "ATD911@1,#I;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{}@1,#I;", TEST_EMERGENCY_NUMBER));
     then_response_is(&mut world, "A", "OK");
 
     // Verify it is NOT in active calls (InitiateEmergencyCall is no-op)
@@ -362,10 +399,14 @@ fn test_emergency_dial_syntax() {
     then_response_is(&mut world, "A", "OK");
 
     // Normal call to non-existent peer should be in Dialing state
-    when_at_command_sent(&mut world, "A", "ATD12345;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{CALL_PEER_ALT_2};"));
     then_response_is(&mut world, "A", "OK");
     when_at_command_sent(&mut world, "A", "AT+CLCC");
-    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"12345\",129");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 1,0,2,0,0,\"{CALL_PEER_ALT_2}\",{}", TOA_NATIONAL),
+    );
 }
 
 #[test]
@@ -374,12 +415,16 @@ fn test_dial_clir_semicolon() {
     given_modem(&mut world, "A");
 
     // Dial with CLIR 'i' and semicolon
-    when_at_command_sent(&mut world, "A", "ATD12345i;");
+    when_at_command_sent(&mut world, "A", &format!("ATD{CALL_PEER_ALT_2}i;"));
     then_response_is(&mut world, "A", "OK");
 
     // Verify it dialed "12345" (clean number)
     when_at_command_sent(&mut world, "A", "AT+CLCC");
-    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"12345\",129");
+    then_response_contains(
+        &mut world,
+        "A",
+        &format!("+CLCC: 1,0,2,0,0,\"{CALL_PEER_ALT_2}\",{}", TOA_NATIONAL),
+    );
 }
 
 #[test]
@@ -396,7 +441,7 @@ fn test_invalid_dial_syntax() {
     then_response_is(&mut world, "A", "ERROR");
 
     // Plus at the beginning should be accepted
-    when_at_command_sent(&mut world, "A", "ATD+12345;");
+    when_at_command_sent(&mut world, "A", &format!("ATD+{CALL_PEER_ALT_2};"));
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -429,13 +474,27 @@ fn test_dtmf_validation() {
 #[test]
 fn test_standard_call_with_leading_plus_routing() {
     let mut world = World::new();
-    given_modem_with_number(&mut world, "A", "15555215554");
-    given_modem_with_number(&mut world, "B", "15555215556");
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_A);
+    given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_B);
 
     // A dials B's number with leading '+'
-    when_at_command_sent(&mut world, "A", "ATD+15555215556;");
+    when_at_command_sent(&mut world, "A", &format!("ATD+{TEST_PHONE_NUMBER_LONG_B};"));
     then_response_is(&mut world, "A", "OK");
 
     // Verify B receives the incoming RING
+    then_response_is(&mut world, "B", "RING");
+}
+
+#[test]
+fn test_remote_call_initiation() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_A);
+    given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_B);
+
+    // A calls B via remote call
+    when_at_command_sent(&mut world, "A", &format!("AT+REMOTECALL={TEST_PHONE_NUMBER_LONG_B}"));
+    then_response_is(&mut world, "A", "OK");
+
+    // B should receive RING
     then_response_is(&mut world, "B", "RING");
 }
