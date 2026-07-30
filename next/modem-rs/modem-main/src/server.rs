@@ -171,7 +171,9 @@ async fn handle_client(
             if manager.get_modem(modem_id).is_none() {
                 let modem_callbacks =
                     Arc::new(ServerCallbacks { client_writers: client_writers.clone() });
-                manager.new_modem(modem_id, modem_callbacks).unwrap();
+                manager
+                    .new_modem(modem_id, modem_callbacks, None, None, Default::default())
+                    .unwrap();
             }
             client_writers.lock().await.insert(modem_id, writer_arc);
 

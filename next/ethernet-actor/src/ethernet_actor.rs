@@ -18,7 +18,7 @@ pub enum EthernetReq {
 #[derive(Debug)]
 pub enum EthernetResponse {
     Statistics(Box<[netsim_model::NetsimRadioStats]>),
-    Chip(Chip),
+    Chip(Box<Chip>),
 }
 
 pub struct EthernetActor {
@@ -142,7 +142,7 @@ impl ActorService for EthernetActor {
                     .active_chips
                     .get(&id)
                     .ok_or_else(|| EthernetError::Internal(format!("Chip {id} not found")))?;
-                Ok(EthernetResponse::Chip(chip.clone()))
+                Ok(EthernetResponse::Chip(Box::new(chip.clone())))
             }
         }
     }

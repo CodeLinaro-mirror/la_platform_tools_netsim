@@ -51,6 +51,8 @@ pub struct ChipConfig {
     pub model: Option<String>,
     #[serde(rename = "simType")]
     pub sim_type: Option<i32>,
+    #[serde(rename = "simProfile")]
+    pub sim_profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,8 +157,9 @@ pub struct DualFdListener {
     config: DualFdConfig,
     /// Streams established from pre-existing FDs (e.g., inherited pipes) that
     /// do not need to accept connections dynamically.
-    pending_static_streams: VecDeque<(String, String, Option<i32>, (OwnedFd, OwnedFd))>,
-    listening_sockets: Vec<(String, String, Option<i32>, AsyncFd<OwnedFd>)>,
+    pending_static_streams:
+        VecDeque<(String, String, Option<i32>, Option<String>, (OwnedFd, OwnedFd))>,
+    listening_sockets: Vec<(String, String, Option<i32>, Option<String>, AsyncFd<OwnedFd>)>,
 }
 
 impl DualFdListener {
@@ -185,6 +188,7 @@ impl DualFdListener {
                         device.name.clone(),
                         chip.kind.clone(),
                         chip.sim_type,
+                        chip.sim_profile.clone(),
                         async_fd,
                     ));
                 } else {
@@ -197,6 +201,7 @@ impl DualFdListener {
                         device.name.clone(),
                         chip.kind.clone(),
                         chip.sim_type,
+                        chip.sim_profile.clone(),
                         (in_fd, out_fd),
                     ));
                 }
@@ -231,6 +236,7 @@ fn create_stream_and_sink(
     device_name: String,
     chip_kind: String,
     sim_type: Option<i32>,
+    sim_profile: Option<String>,
     in_fd: OwnedFd,
     out_fd: OwnedFd,
 ) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
@@ -251,6 +257,7 @@ fn create_stream_and_sink(
             product_name: "".to_string(),
             address: "".to_string(),
             sim_type,
+            sim_profile,
         }),
         name: String::new(),
     };
@@ -297,10 +304,17 @@ fn create_stream_and_sink(
 #[async_trait]
 impl TransportListener for DualFdListener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
-        while let Some((device_name, chip_kind, sim_type, (in_fd, out_fd))) =
+        while let Some((device_name, chip_kind, sim_type, sim_profile, (in_fd, out_fd))) =
             self.pending_static_streams.pop_front()
         {
-            match create_stream_and_sink(device_name, chip_kind, sim_type, in_fd, out_fd) {
+            match create_stream_and_sink(
+                device_name,
+                chip_kind,
+                sim_type,
+                sim_profile,
+                in_fd,
+                out_fd,
+            ) {
                 Ok(res) => return Ok(res),
                 Err(e) => {
                     tracing::warn!("Failed to create transport for static FD: {e}, skipping");
@@ -316,15 +330,16 @@ impl TransportListener for DualFdListener {
         // loop on transient accept errors, which are rare. This is not a hot path.
         loop {
             let mut accept_futures = Vec::new();
-            for (device_name, chip_kind, sim_type, async_fd) in &self.listening_sockets {
+            for (device_name, chip_kind, sim_type, sim_profile, async_fd) in &self.listening_sockets
+            {
                 accept_futures.push(Box::pin(async move {
                     let res = accept_one_connection(async_fd).await;
-                    (device_name, chip_kind, *sim_type, res)
+                    (device_name, chip_kind, *sim_type, sim_profile, res)
                 }));
             }
 
             let (result, _, _remaining) = futures::future::select_all(accept_futures).await;
-            let (device_name, chip_kind, sim_type, res) = result;
+            let (device_name, chip_kind, sim_type, sim_profile, res) = result;
 
             match res {
                 Ok((connected_fd, cloned_fd)) => {
@@ -332,6 +347,7 @@ impl TransportListener for DualFdListener {
                         device_name.clone(),
                         chip_kind.clone(),
                         sim_type,
+                        sim_profile.clone(),
                         connected_fd,
                         cloned_fd,
                     ) {

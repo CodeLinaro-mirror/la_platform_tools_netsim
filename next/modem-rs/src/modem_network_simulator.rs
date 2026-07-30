@@ -143,9 +143,12 @@ impl ModemNetworkSimulator {
         &mut self,
         id: ModemId,
         sink: ModemSink,
+        sim_profile: Option<String>,
         sim_type: Option<i32>,
         quirks: Quirks,
     ) -> Result<(), ModemError> {
+        // TODO(b/540029089): Support XML SIM profile in modem-rs
+        let _ = sim_profile;
         self.new_modem_with_profile(id, sink, None, sim_type, quirks)
     }
 
@@ -641,7 +644,7 @@ mod tests {
 
         let modem_id: ModemId = 1;
         let (mut modem_handler, sink) = MockModemHandler::new(false);
-        simulator.new_modem(modem_id, sink, None, Quirks::default()).unwrap();
+        simulator.new_modem(modem_id, sink, None, None, Quirks::default()).unwrap();
 
         // 1. Schedule an event 100ms in the future.
         let event_duration = Duration::from_millis(100);
@@ -680,8 +683,8 @@ mod tests {
         let (_, sink1) = MockModemHandler::new(false);
         let (_, sink2) = MockModemHandler::new(false);
 
-        simulator.new_modem(id, sink1, None, Quirks::default()).unwrap();
-        let res = simulator.new_modem(id, sink2, None, Quirks::default());
+        simulator.new_modem(id, sink1, None, None, Quirks::default()).unwrap();
+        let res = simulator.new_modem(id, sink2, None, None, Quirks::default());
         assert!(res.is_err());
         let err = res.unwrap_err();
         assert!(matches!(err, ModemError::DuplicateModemId(1)));
@@ -694,7 +697,7 @@ mod tests {
         let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
         let id = 1;
         let (_, sink) = MockModemHandler::new(false);
-        simulator.new_modem(id, sink, None, Quirks::default()).unwrap();
+        simulator.new_modem(id, sink, None, None, Quirks::default()).unwrap();
 
         // Schedule an event
         simulator.schedule_event(id, Duration::from_millis(10), ModemEvent::TestEvent);
@@ -716,8 +719,8 @@ mod tests {
         let mut simulator = ModemNetworkSimulator::new(tx);
         let (_, sink1) = MockModemHandler::new(false);
         let (_, sink2) = MockModemHandler::new(false);
-        simulator.new_modem(1, sink1, None, Quirks::default()).unwrap();
-        simulator.new_modem(2, sink2, None, Quirks::default()).unwrap();
+        simulator.new_modem(1, sink1, None, None, Quirks::default()).unwrap();
+        simulator.new_modem(2, sink2, None, None, Quirks::default()).unwrap();
 
         let ids = simulator.get_modem_ids();
         assert_eq!(ids.len(), 2);
@@ -736,7 +739,7 @@ mod tests {
         // 1. Add modem
         let chip_id = 99;
         let (mut handler, sink) = MockModemHandler::new(false);
-        let res = interface.add_modem(chip_id, sink, None, Quirks::default());
+        let res = interface.add_modem(chip_id, sink, None, None, Quirks::default());
         assert!(res.is_ok());
 
         // 2. Get modem info
