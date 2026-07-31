@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::VecDeque, sync::mpsc, time::Duration};
+use std::{sync::mpsc, time::Duration};
 
 use bytes::Bytes;
 
@@ -10,7 +10,6 @@ use crate::types::ModemSink;
 /// Mock handler for modem callbacks that captures responses.
 pub struct MockModemHandler {
     rx: mpsc::Receiver<Vec<u8>>,
-    buffer: VecDeque<Vec<u8>>,
 }
 
 impl MockModemHandler {
@@ -37,38 +36,13 @@ impl MockModemHandler {
             }
             Ok(())
         });
-        (Self { rx, buffer: VecDeque::new() }, sink)
-    }
-
-    /// Peeks at the next response without consuming it (non-blocking).
-    pub fn peek_response(&mut self) -> Option<&Vec<u8>> {
-        if self.buffer.is_empty()
-            && let Ok(msg) = self.rx.try_recv()
-        {
-            self.buffer.push_back(msg);
-        }
-        self.buffer.front()
-    }
-
-    /// Drains all pending responses from the receiver into the buffer.
-    pub fn buffer_pending_responses(&mut self) {
-        while let Ok(msg) = self.rx.try_recv() {
-            self.buffer.push_back(msg);
-        }
-    }
-
-    /// Returns a reference to the internal buffer.
-    pub fn get_buffer(&self) -> &VecDeque<Vec<u8>> {
-        &self.buffer
+        (Self { rx }, sink)
     }
 
     /// Waits for a response.
     /// Since the simulator is synchronous, responses should be available
     /// immediately.
     pub fn wait_for_response(&mut self) -> Vec<u8> {
-        if let Some(msg) = self.buffer.pop_front() {
-            return msg;
-        }
         // Use recv_timeout to avoid hanging forever if logic is wrong, but typically
         // it's instant.
         self.rx
@@ -78,9 +52,6 @@ impl MockModemHandler {
 
     /// Checks if a response is available (non-blocking).
     pub fn try_get_response(&mut self) -> Option<Vec<u8>> {
-        if let Some(msg) = self.buffer.pop_front() {
-            return Some(msg);
-        }
         self.rx.try_recv().ok()
     }
 }

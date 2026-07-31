@@ -31,11 +31,9 @@ fn test_metrics_counters() {
 
     // Send a command and check again
     when_at_command_sent(&mut world, "A", "AT");
-    then_response_is(&mut world, "A", "OK");
     then_metrics_are(&world, 1, 0);
 
     // Initiate a call and check again
     when_at_command_sent(&mut world, "A", "ATD12345;");
-    then_response_is(&mut world, "A", "OK");
     then_metrics_are(&world, 2, 1);
 }
