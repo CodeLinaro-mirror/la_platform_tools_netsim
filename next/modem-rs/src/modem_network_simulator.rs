@@ -18,7 +18,7 @@ use crate::{
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
     time::{Clock, SystemClock},
-    types::{AT_OK, CommandAction, HostEvent, ModemError, ModemId, ModemSink},
+    types::{CommandAction, HostEvent, ModemError, ModemId, ModemSink},
 };
 
 #[derive(Debug)]
@@ -293,7 +293,6 @@ impl ModemNetworkSimulator {
                 }
 
                 effects.extend(self.initiate_call(id, &phone_number));
-                effects.push((id, ModemEffect::Response(AT_OK.to_vec())));
             }
             CommandAction::SwapCalls(active_peer, held_peer) => {
                 if let Some(modem) = self.modems.get_mut(&active_peer) {
@@ -306,7 +305,6 @@ impl ModemNetworkSimulator {
             CommandAction::InitiateRemoteCall(phone_number) => {
                 events.push(NetworkEvent::NewConnection { id, destination: phone_number.clone() });
                 effects.extend(self.initiate_call(id, &phone_number));
-                effects.push((id, ModemEffect::Response(AT_OK.to_vec())));
             }
             CommandAction::AnswerCall(answered_modem_id) => {
                 self.metrics.calls_answered.fetch_add(1, AtomicOrdering::Relaxed);
@@ -755,6 +753,7 @@ mod tests {
 
         let response = handler.wait_for_response();
         assert_eq!(response, b"OK\r\n");
+        assert_eq!(handler.try_get_response(), None);
 
         // 4. Perform action
         let action =
@@ -775,5 +774,21 @@ mod tests {
 
         let res = interface.get_modem_info(chip_id);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_initiate_call_send_data_returns_ok() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+        let interface: &mut dyn ModemNetworkInterface = &mut simulator;
+
+        let chip_id = 1;
+        let (mut handler, sink) = MockModemHandler::new(false);
+        interface.add_modem(chip_id, sink, None, None, Quirks::default()).unwrap();
+
+        interface.send_data(chip_id, b"ATD12345;\r\n").unwrap();
+        let response = handler.wait_for_response();
+        assert_eq!(response, b"OK\r\n");
+        assert_eq!(handler.try_get_response(), None);
     }
 }
