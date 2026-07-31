@@ -49,12 +49,17 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
 
     fn get_modem_info(&self, chip_id: ModemId) -> Result<ModemInfo, ModemError> {
         if let Some(modem) = self.get_modem(chip_id) {
+            let (rssi, ber) = modem.network_service.signal_strength();
             Ok(ModemInfo {
                 id: chip_id,
                 connections: modem.get_active_calls(),
                 ringing: modem.is_ringing(),
                 sms_count: modem.get_sms_count(),
                 quirks: modem.quirks,
+                rssi: rssi as u32,
+                ber: ber as u32,
+                voice_registration: modem.network_service.voice_registration(),
+                data_registration: modem.network_service.data_registration(),
             })
         } else {
             Err(ModemError::NotFound)

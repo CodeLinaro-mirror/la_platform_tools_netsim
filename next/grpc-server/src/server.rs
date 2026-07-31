@@ -363,6 +363,40 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_cell_service_execute_pdu_success() {
+        let (server, addr, mut cell_rx, _) = setup_test_server().await;
+
+        let env = Arc::new(Environment::new(1));
+        let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", addr));
+        let client = CellServiceClient::new(ch);
+
+        tokio::spawn(async move {
+            if let Some(actor_framework::ResourceRequest::Action { id, action, respond_to }) =
+                cell_rx.recv().await
+            {
+                assert_eq!(id.unwrap().0, 1);
+                match action {
+                    CellAction::ReceivePdu { pdu } => {
+                        assert_eq!(pdu, "00010203");
+                        let _ = respond_to.send(Ok(CellActionResult::Success));
+                    }
+                    _ => panic!("Unexpected action: {:?}", action),
+                }
+            }
+        });
+
+        let mut req = ExecuteCellRequest::new();
+        req.id = 1;
+        let mut pdu_action = netsim_proto::cell::ReceivePdu::new();
+        pdu_action.pdu = "00010203".to_string();
+        req.set_receive_pdu(pdu_action);
+        let response = client.execute(&req);
+        assert!(response.is_ok());
+
+        drop(server);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_cell_service_execute_fail() {
         let (server, addr, mut cell_rx, _) = setup_test_server().await;
 

@@ -39,6 +39,16 @@ pub struct Cell {
     /// Quirks for compatibility with different guest-side implementations.
     #[serde(default)]
     pub quirks: Quirks,
+    #[serde(default)]
+    pub sms_count: u32,
+    #[serde(default)]
+    pub rssi: u32,
+    #[serde(default)]
+    pub ber: u32,
+    #[serde(default)]
+    pub voice_registration: RegistrationStatus,
+    #[serde(default)]
+    pub data_registration: RegistrationStatus,
 }
 
 impl Default for Cell {
@@ -49,12 +59,18 @@ impl Default for Cell {
             sim_type: None,
             sim_profile: None,
             quirks: Quirks::default(),
+            sms_count: 0,
+            rssi: 0,
+            ber: 0,
+            voice_registration: RegistrationStatus::default(),
+            data_registration: RegistrationStatus::default(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum RegistrationStatus {
+    #[default]
     NotRegistered = 0,
     RegisteredHome = 1,
     Searching = 2,

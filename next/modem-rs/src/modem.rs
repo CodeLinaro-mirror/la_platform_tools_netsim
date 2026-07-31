@@ -353,8 +353,8 @@ impl ModemImpl {
         effects
     }
 
-    pub fn get_sms_count(&self) -> usize {
-        self.sim_service.get_sms_count() + self.sms_service.get_sms_count()
+    pub fn get_sms_count(&self) -> u32 {
+        (self.sim_service.get_sms_count() + self.sms_service.get_sms_count()) as u32
     }
 
     pub fn is_ringing(&self) -> bool {

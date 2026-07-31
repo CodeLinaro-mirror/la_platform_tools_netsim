@@ -3,7 +3,7 @@
 
 use std::{str, time::Duration};
 
-use netsim_model::Quirks;
+use netsim_model::{Quirks, RegistrationStatus};
 use nom::IResult;
 
 use crate::{
@@ -410,8 +410,12 @@ pub struct ModemInfo {
     pub id: u32,
     pub connections: Vec<String>, // Placeholder for actual connection info
     pub ringing: bool,
-    pub sms_count: usize,
+    pub sms_count: u32,
     pub quirks: Quirks,
+    pub rssi: u32,
+    pub ber: u32,
+    pub voice_registration: RegistrationStatus,
+    pub data_registration: RegistrationStatus,
 }
 
 /// Represents the signal strength parameters for all supported tech layout (22

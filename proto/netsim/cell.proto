@@ -45,6 +45,7 @@ message ExecuteCellRequest {
     SetSimStatus set_sim_status = 11;
     SetNetworkTechnology set_network_technology = 12;
     SetNetworkTimezone set_network_timezone = 13;
+    ReceivePdu receive_pdu = 14;
   }
 }
 
@@ -69,6 +70,10 @@ message RemoteHold {
 message ReceiveSms {
   string sender = 1;
   string text = 2;
+}
+
+message ReceivePdu {
+  string pdu = 1;
 }
 
 message SetSignalStrength {

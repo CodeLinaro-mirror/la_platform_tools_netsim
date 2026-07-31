@@ -23,6 +23,10 @@ pub enum GsmCommand {
     Voice(GsmVoice),
     /// Set data registration status (gsm data <state>)
     Data(GsmData),
+    /// Set SIM card status (gsm sim <present/absent>)
+    Sim(GsmSim),
+    /// Set network technology (gsm tech <gsm/lte/nr>)
+    Tech(GsmTech),
 }
 
 #[derive(Debug, Args, PartialEq)]
@@ -120,4 +124,37 @@ pub enum RegistrationStatusOption {
     Denied,
     Unknown,
     Roaming,
+}
+
+#[derive(Debug, Args, PartialEq)]
+pub struct GsmSim {
+    /// SIM status (present/absent)
+    #[arg(value_enum, ignore_case = true)]
+    pub state: SimStateOption,
+    /// ID of the cellular device
+    #[arg(long)]
+    pub id: Option<u32>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum SimStateOption {
+    Present,
+    Absent,
+}
+
+#[derive(Debug, Args, PartialEq)]
+pub struct GsmTech {
+    /// Radio technology
+    #[arg(value_enum, ignore_case = true)]
+    pub tech: RadioTechnologyOption,
+    /// ID of the cellular device
+    #[arg(long)]
+    pub id: Option<u32>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum RadioTechnologyOption {
+    Gsm,
+    Lte,
+    Nr,
 }

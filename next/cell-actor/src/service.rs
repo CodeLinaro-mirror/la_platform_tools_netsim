@@ -135,6 +135,11 @@ impl ActorService for CellActor {
                     sim_type: None,
                     sim_profile: None,
                     quirks: info.quirks,
+                    sms_count: info.sms_count,
+                    rssi: info.rssi,
+                    ber: info.ber,
+                    voice_registration: info.voice_registration,
+                    data_registration: info.data_registration,
                 })),
                 ..Default::default()
             }))
@@ -187,12 +192,31 @@ impl ActorService for CellActor {
 
         let modem_action = match action {
             CellAction::IncomingCall { number } => {
+                if !is_valid_phone_number(&number) {
+                    return Err(CellError::Chip(ChipError::InvalidArguments(
+                        format!("Invalid phone number: {number}").into(),
+                    )));
+                }
                 ModemAction::IncomingCall { target_id: chip_id, number }
             }
             CellAction::UpdateCall => ModemAction::UpdatePhysicalChannelConfigs { id: chip_id },
             CellAction::EndCall => ModemAction::RemoteHangup { id: chip_id },
             CellAction::ReceiveSms { sender, text } => {
+                if !is_valid_sms_sender(&sender) {
+                    return Err(CellError::Chip(ChipError::InvalidArguments(
+                        format!("Invalid SMS sender: {sender}").into(),
+                    )));
+                }
                 ModemAction::IncomingSms { id: chip_id, sender, text }
+            }
+            CellAction::ReceivePdu { pdu } => {
+                if !is_valid_hex_pdu(&pdu) {
+                    return Err(CellError::Chip(ChipError::InvalidArguments(
+                        format!("Invalid PDU format (must be even-length hex string): {pdu}")
+                            .into(),
+                    )));
+                }
+                ModemAction::IncomingPdu { id: chip_id, pdu }
             }
             CellAction::SetSignalStrength { rssi, ber } => {
                 let rssi_u8 = u8::try_from(rssi).map_err(|e| {
@@ -252,6 +276,11 @@ impl ActorService for CellActor {
                         sim_type: None,
                         sim_profile: None,
                         quirks: info.quirks,
+                        sms_count: info.sms_count,
+                        rssi: info.rssi,
+                        ber: info.ber,
+                        voice_registration: info.voice_registration,
+                        data_registration: info.data_registration,
                     })),
                     ..Default::default()
                 });
@@ -259,4 +288,29 @@ impl ActorService for CellActor {
         }
         Ok(chips)
     }
+}
+
+fn is_valid_phone_number(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().all(|c| {
+            c.is_ascii_digit()
+                || c == '+'
+                || c == '-'
+                || c == ' '
+                || c == '('
+                || c == ')'
+                || c == '*'
+                || c == '#'
+        })
+}
+
+fn is_valid_sms_sender(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().all(|c| {
+            c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == ' ' || c == '(' || c == ')'
+        })
+}
+
+fn is_valid_hex_pdu(s: &str) -> bool {
+    !s.is_empty() && s.len().is_multiple_of(2) && s.chars().all(|c| c.is_ascii_hexdigit())
 }

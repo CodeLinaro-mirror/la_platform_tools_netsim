@@ -298,6 +298,15 @@ impl NetworkService {
     pub fn is_attached(&self) -> bool {
         self.is_attached
     }
+    pub fn voice_registration(&self) -> RegistrationStatus {
+        self.voice_registration
+    }
+    pub fn data_registration(&self) -> RegistrationStatus {
+        self.data_registration
+    }
+    pub fn signal_strength(&self) -> (u8, u8) {
+        self.signal_strength
+    }
 
     pub fn detach_network(&mut self) {
         self.is_attached = false;
