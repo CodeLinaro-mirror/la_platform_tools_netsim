@@ -32,7 +32,6 @@ pub struct ModemImpl {
     pub sup_service: SupService,
     pub misc_service: MiscService,
     pub data_service: DataService,
-    phone_number: String,
     pub quirks: Quirks,
     _state: State,
 }
@@ -57,17 +56,12 @@ pub enum ModemEffect {
 }
 
 impl ModemImpl {
-    pub(crate) fn new(
-        id: ModemId,
-        profile: crate::config::SimProfile,
-        sim_type: Option<i32>,
-        quirks: Quirks,
-    ) -> Self {
+    pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile, quirks: Quirks) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         Self {
             id,
             enable_unsolicited_urcs: enable_unsol,
-            sim_service: SimService::new(&profile, sim_type),
+            sim_service: SimService::new(&profile),
             network_service: NetworkService::new(quirks),
             sms_service: SmsService::default(),
             stk_service: StkService::default(),
@@ -75,7 +69,6 @@ impl ModemImpl {
             misc_service: MiscService::default(),
             call_service: CallService::default(),
             data_service: DataService::from_env(),
-            phone_number: profile.msisdn.clone(),
             quirks,
             _state: State::Idle,
         }
@@ -184,12 +177,11 @@ impl ModemImpl {
     }
 
     pub fn set_phone_number(&mut self, number: &str) {
-        self.phone_number = number.to_string();
         self.sim_service.set_msisdn(number);
     }
 
     pub fn phone_number(&self) -> String {
-        self.phone_number.clone()
+        self.sim_service.get_msisdn()
     }
 
     pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) {
@@ -256,7 +248,7 @@ impl ModemImpl {
                 let sms_res = if store {
                     self.sms_service.handle_store_sms(&mut self.sim_service, pdu)
                 } else {
-                    self.sms_service.handle_sms_body(pdu, &self.phone_number)
+                    self.sms_service.handle_sms_body(pdu, &self.phone_number())
                 };
 
                 let exec_res: ExecutionResult = sms_res.into();
@@ -580,7 +572,7 @@ mod tests {
 
     #[test]
     fn test_execute_chained_commands_parse_error() {
-        let mut modem = ModemImpl::new(1, SimProfile::default(), None, Quirks::default());
+        let mut modem = ModemImpl::new(1, SimProfile::default(), Quirks::default());
         // We pass a command Y that returns Err on Command::parse(Y).
         // Since Y does not start with AT or RING, and we bypass split_chained_commands,
         // we can pass it directly to execute_chained_commands.

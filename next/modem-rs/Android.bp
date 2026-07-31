@@ -12,6 +12,8 @@ rust_library_host {
     crate_root: "src/lib.rs",
     srcs: [
         "src/lib.rs",
+        "src/profiles/iccprofile_for_sim0.xml",
+        "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
     ],
     features: ["cuttlefish"],
     lints: "none",
@@ -23,6 +25,7 @@ rust_library_host {
         "libnom",
         "libserde",
         "libserde_json",
+        "libserde_xml_rs",
         "libtokio",
         "libtracing",
     ],
@@ -39,6 +42,8 @@ rust_library_host {
     crate_root: "src/lib.rs",
     srcs: [
         "src/lib.rs",
+        "src/profiles/iccprofile_for_sim0.xml",
+        "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
     ],
     features: [
         "cuttlefish",
@@ -53,6 +58,7 @@ rust_library_host {
         "libnom",
         "libserde",
         "libserde_json",
+        "libserde_xml_rs",
         "libtokio",
         "libtracing",
     ],
@@ -71,6 +77,12 @@ rust_test_host {
     ],
     srcs: [
         "src/lib.rs",
+        "src/profiles/iccprofile_for_sim0.xml",
+        "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+    ],
+    data: [
+        "src/profiles/iccprofile_for_sim0.xml",
+        "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
     ],
     features: [
         "cuttlefish",
@@ -85,6 +97,7 @@ rust_test_host {
         "libnom",
         "libserde",
         "libserde_json",
+        "libserde_xml_rs",
         "libtempfile",
         "libtokio",
         "libtracing",
@@ -129,6 +142,10 @@ rust_test_host {
         "tests/time_service_test.rs",
         "tests/world.rs",
     ],
+    data: [
+        "src/profiles/iccprofile_for_sim0.xml",
+        "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+    ],
     features: [
         "cuttlefish",
         "testing",
@@ -143,6 +160,7 @@ rust_test_host {
         "libnom",
         "libserde",
         "libserde_json",
+        "libserde_xml_rs",
         "libtempfile",
         "libtokio",
         "libtracing",

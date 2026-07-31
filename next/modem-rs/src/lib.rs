@@ -21,6 +21,8 @@ mod stk_service;
 mod sup_service;
 pub mod time;
 
+mod xml_profile;
+
 pub mod test_utils;
 mod types; // Test utils might need to be public for integration tests
 

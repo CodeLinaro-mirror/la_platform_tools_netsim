@@ -61,6 +61,7 @@ use std::fmt;
 pub enum ModemError {
     DuplicateModemId(ModemId),
     NotFound,
+    InvalidConfig(String),
 }
 
 impl std::error::Error for ModemError {}
@@ -70,6 +71,7 @@ impl fmt::Display for ModemError {
         match self {
             ModemError::DuplicateModemId(id) => write!(f, "Duplicate modem ID: {id}"),
             ModemError::NotFound => write!(f, "Modem network not found"),
+            ModemError::InvalidConfig(msg) => write!(f, "Invalid configuration: {msg}"),
         }
     }
 }

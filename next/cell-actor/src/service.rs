@@ -166,7 +166,9 @@ impl ActorService for CellActor {
             }
         }
 
-        self.handle_get(id, ctx).await.map(|opt| opt.unwrap())
+        self.handle_get(id, ctx)
+            .await?
+            .ok_or_else(|| CellError::Chip(netsim_model::ChipError::ChipNotFound(id)))
     }
 
     async fn handle_action(

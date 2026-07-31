@@ -154,7 +154,7 @@ fn test_call_ring_timeout() {
     then_response_contains(
         &mut world,
         "C",
-        &format!("+CLCC: 1,1,4,0,0,\"{}\",{}", TEST_PHONE_NUMBER_LONG_A, TOA_NATIONAL),
+        &format!("+CLCC: 1,1,4,0,0,\"+{}\",{}", TEST_PHONE_NUMBER_LONG_A, TOA_INTERNATIONAL),
     );
     then_response_is(&mut world, "C", "OK");
 

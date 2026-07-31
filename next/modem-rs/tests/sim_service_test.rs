@@ -350,14 +350,17 @@ fn test_sim_crsm_read_write() {
         "A",
         &format!("AT+CRSM={},{},0,0,10", CRSM_READ_BINARY, EF_ICCID_DEC),
     ); // 176=Read Binary, 12258=0x2FE2
-    then_response_is(&mut world, "A", &format!("+CRSM: 144,0,{}", TEST_ICCID));
+    then_response_is(&mut world, "A", &format!("+CRSM: 144,0,{}", TEST_ICCID_SWAPPED));
     then_response_is(&mut world, "A", "OK");
 
     // Write new ICCID via UPDATE BINARY (214 / 0xD6)
     when_at_command_sent(
         &mut world,
         "A",
-        &format!("AT+CRSM={},{},0,0,10,\"{}\"", CRSM_UPDATE_BINARY, EF_ICCID_DEC, NEW_ICCID),
+        &format!(
+            "AT+CRSM={},{},0,0,10,\"{}\"",
+            CRSM_UPDATE_BINARY, EF_ICCID_DEC, NEW_ICCID_SWAPPED
+        ),
     );
     then_response_is(&mut world, "A", "+CRSM: 144,0");
     then_response_is(&mut world, "A", "OK");
@@ -652,6 +655,19 @@ fn test_apdu_update_record_wrong_length() {
 }
 
 #[test]
+fn test_apdu_update_record_invalid_hex() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // UPDATE RECORD with invalid hex characters (e.g. 'G' at the end)
+    // MSISDN record length is 28 bytes (56 hex characters)
+    let invalid_hex = "000000000000000000000000000007915155255155F4FFFFFFFFFFFG";
+    when_at_command_sent(&mut world, "A", &format!("AT+CRSM=220,28480,1,4,28,\"{invalid_hex}\""));
+    then_response_is(&mut world, "A", "+CRSM: 106,134"); // SW_INCORRECT_PARAMS (6A86)
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
 fn test_apdu_update_record_out_of_bounds() {
     let mut world = World::new();
     given_modem_with_msisdn_in_fs(&mut world, "A");
@@ -800,6 +816,17 @@ fn test_apdu_update_missing_data() {
     // We will assert +CRSM: 106,134 first. If it fails with parse error, we will
     // know.
     then_response_is(&mut world, "A", "+CRSM: 106,134");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_apdu_update_binary_invalid_hex() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Update FPLMN with invalid hex (e.g. 'G' at the end)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=214,28539,0,0,6,\"40F21040F22G\"");
+    then_response_is(&mut world, "A", "+CRSM: 106,134"); // SW_INCORRECT_PARAMS (6A86)
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -974,5 +1001,304 @@ fn test_cgla_close_invalid_channels() {
         &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH4}\""),
     );
     then_response_is(&mut world, "A", &format!("+CGLA: 4,{}", RESP_ERROR_OUT_OF_BOUNDS));
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_default_sim_profile_reads() {
+    let mut world = World::new();
+    // sim_type = 1 triggers the loading of the default production profile:
+    // PROFILE_DEFAULT_XML
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Verify CPIN status is READY (default profile does not lock by default)
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: READY");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Query IMSI (AT+CIMI) -> parsed from USIM ADF
+    when_at_command_sent(&mut world, "A", "AT+CIMI");
+    then_response_is(&mut world, "A", "311740123456789");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Query ICCID (AT+CICCID) -> parsed from CCID tag in EF_ICCID
+    when_at_command_sent(&mut world, "A", "AT+CICCID");
+    then_response_is(&mut world, "A", "89860318640220133897");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Query ICCID via Restricted SIM Access (AT+CRSM) on EF_ICCID (12258 /
+    //    0x2FE2)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,12258,0,0,10");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,98683081462002318379");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Query Preferred Languages via Restricted SIM Access on EF_PL (12037 /
+    //    0x2F05)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,12037,0,0,4");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,FFFFFFFF");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cts_profile_csim_and_status_reads() {
+    let mut world = World::new();
+    // sim_type = 2 triggers the loading of the CTS profile: PROFILE_CTS_XML
+    given_modem_with_sim_type(&mut world, "A", 2);
+
+    // 1. Verify AT+CSIM STATUS command query (80f2000000)
+    // This command is explicitly mapped in the CSIM block of the CTS XML profile.
+    // It returns the long Master File FCP template.
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"80f2000000\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSIM: 110,62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Verify AT+CSIM wrong length STATUS command query (80F20000)
+    // This maps to the wrong length error response (6C35) configured in the XML.
+    when_at_command_sent(&mut world, "A", "AT+CSIM=8,\"80F20000\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6C35");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Verify AT+CRSM STATUS command query (command 242 / 0xF2)
+    // The simulator has a hardcoded override for APDU_STATUS (0xF2) to return the
+    // MF FCP template:
+    // "62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF"
+    when_at_command_sent(&mut world, "A", "AT+CRSM=242,0,0,0,0");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_apdu_parsing_cases() {
+    let mut world = World::new();
+    // sim_type = 1 triggers the loading of the default production profile:
+    // PROFILE_DEFAULT_XML
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Open Logical Channel 1 (Case 2 APDU: Le=00)
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_OPEN}\""));
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Select EF_ICCID with FCP request (Case 4 APDU: Lc=02, Data=2FE2, Le=0C)
+    // Send standard select to EF_ICCID: CLA=00 INS=A4 P1=00 P2=04 Lc=02 Data=2FE2
+    // Le=0C
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,16,\"00A40004022FE20C\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Read Binary Part (Case 2 APDU, Le > 0)
+    // Read 5 bytes of selected EF_ICCID: CLA=00 INS=B0 P1=00 P2=00 Le=05
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"00B0000005\"");
+    then_response_is(&mut world, "A", "+CGLA: 14,98683081469000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Read Binary Full (Case 2 APDU, Le = 0)
+    // Read all bytes of selected EF_ICCID: CLA=00 INS=B0 P1=00 P2=00 Le=00
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"00B0000000\"");
+    then_response_is(&mut world, "A", "+CGLA: 24,986830814620023183799000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Invalid Length APDU (6 bytes, but Lc=2 which expects 7 bytes)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,12,\"00B000000201\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6700");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6. Close Channel 1 (Case 2 APDU: Le=00)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH1}\""),
+    );
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_invalid_channel_index() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Enable verbose errors
+    when_at_command_sent(&mut world, "A", "AT+CMEE=2");
+    then_response_is(&mut world, "A", "OK");
+
+    // Transmit on invalid channel index 4
+    when_at_command_sent(&mut world, "A", "AT+CGLA=4,10,\"00A40004022FE2\"");
+    then_response_is(&mut world, "A", "+CME ERROR: invalid index");
+}
+
+#[test]
+fn test_apdu_read_binary_offset_out_of_bounds() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A"); // ICCID size is 10
+
+    // Read at offset 11
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,12258,0,11,1");
+    then_response_is(&mut world, "A", "+CRSM: 106,134");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_apdu_read_binary_range_out_of_bounds() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A"); // ICCID size is 10
+
+    // Read 5 bytes at offset 8 (ends at 13, past size 10)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,12258,0,8,5");
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_apdu_read_binary_at_end_of_file() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A"); // ICCID size is 10
+
+    // Read 0 bytes at offset 10 (exactly at end of file)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,12258,0,10,0");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_apdu_read_record_file_not_found() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A");
+
+    // Read record 1 of non-existent file 9999
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,9999,1,4,28");
+    then_response_is(&mut world, "A", "+CRSM: 106,130");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_apdu_read_record_transparent_file() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A"); // ICCID is transparent
+
+    // Try to read record 1 of ICCID
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,12258,1,4,10");
+    then_response_is(&mut world, "A", "+CRSM: 106,130");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_apdu_read_record_index_zero() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A"); // MSISDN is record file
+
+    // Read record 0 of MSISDN
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,0,4,28");
+    then_response_is(&mut world, "A", "+CRSM: 106,136");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_apdu_read_record_out_of_bounds() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // Read record 5 of MSISDN (only 1 exists)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,5,4,28");
+    then_response_is(&mut world, "A", "+CRSM: 106,136");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_even_length_imsi_processing() {
+    let mut world = World::new();
+    let xml = r#"<IccProfile>
+        <MF>
+            <ADF aid="A0000000871002FF86FF0389FFFFFFFF">
+                <EF id="6F07" structure="transparent">
+                    <CIMI>31174012345678</CIMI>
+                </EF>
+            </ADF>
+        </MF>
+    </IccProfile>"#;
+    given_modem_with_xml_profile(&mut world, "A", xml);
+
+    // 1. Check IMSI readout via AT+CIMI
+    when_at_command_sent(&mut world, "A", "AT+CIMI");
+    then_response_is(&mut world, "A", "31174012345678");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Check low-level BCD encoding and padding in EF_IMSI file
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,28423,0,0,9");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,0831114710325476F8");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_apdu_write_cases() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A"); // ICCID is transparent, MSISDN is linear fixed
+
+    // 1. Open Logical Channel 1
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_OPEN}\""));
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Select EF_ICCID
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,16,\"00A40004022FE20C\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Write Binary (UPDATE BINARY Case 3: CLA=00 INS=D6 P1=00 P2=05 Lc=05
+    //    Data=1122334455)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,20,\"00D60005051122334455\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Read Binary Back to verify state (Le=05)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"00B0000505\"");
+    then_response_is(&mut world, "A", "+CGLA: 14,11223344559000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Select EF_MSISDN (28480 = 0x6F40)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,16,\"00A40004026F400C\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6. Write Record (UPDATE RECORD Case 3: CLA=00 INS=DC P1=01 P2=04 Lc=1C
+    //    Data=28-bytes)
+    // MSISDN record length is 28 bytes (56 hex characters) in the default mock
+    // layout
+    let new_record_hex = "0000000000000000000000000000079181F2FF00000FFFFFFFFFFFFF";
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=1,66,\"00DC01041C{new_record_hex}\""));
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 7. Read Record Back to verify state (Le=1C)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"00B201041C\"");
+    then_response_is(&mut world, "A", &format!("+CGLA: 60,{new_record_hex}9000"));
+    then_response_is(&mut world, "A", "OK");
+
+    // 8. Close Channel 1
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH1}\""),
+    );
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_invalid_file_and_channel_handling() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A");
+
+    // Try to select a non-existent file ID (e.g. 0xFFFF)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,16,\"00A4000402FFFF0C\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A82");
     then_response_is(&mut world, "A", "OK");
 }
