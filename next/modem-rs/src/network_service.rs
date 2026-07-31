@@ -312,6 +312,10 @@ impl NetworkService {
         self.is_attached = false;
     }
 
+    pub fn set_operator_manual(&mut self, mode: u8, oper: Option<&[u8]>) -> NetworkResult {
+        self.handle_set_operator(mode, Some(0), oper)
+    }
+
     pub fn attach_network(&mut self) -> Vec<String> {
         self.attach_network_urcs().iter().map(|u| u.to_string()).collect()
     }

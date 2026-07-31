@@ -370,6 +370,20 @@ impl ModemImpl {
             .collect()
     }
 
+    pub fn set_operator(&mut self, operator: &str) -> Vec<ModemEffect> {
+        let mode = if operator.is_empty() { 0 } else { 1 };
+        let oper = if operator.is_empty() { None } else { Some(operator.as_bytes()) };
+        let mut effects = Vec::new();
+        if let Ok(Some(crate::network_service::NetworkResponse::Urcs(urcs))) =
+            self.network_service.set_operator_manual(mode, oper)
+        {
+            effects.extend(
+                urcs.into_iter().map(|u| ModemEffect::Response(u.to_string().into_bytes())),
+            );
+        }
+        effects
+    }
+
     pub fn call_service(&self) -> &CallService {
         &self.call_service
     }

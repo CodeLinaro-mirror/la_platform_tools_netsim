@@ -3,7 +3,7 @@
 
 use std::{str, time::Duration};
 
-use netsim_model::{Quirks, RegistrationStatus};
+use netsim_model::{Call, Quirks, RegistrationStatus};
 use nom::IResult;
 
 use crate::{
@@ -408,7 +408,7 @@ pub enum HostEvent {
 #[derive(Debug, Clone, Default)]
 pub struct ModemInfo {
     pub id: u32,
-    pub connections: Vec<String>, // Placeholder for actual connection info
+    pub calls: Vec<Call>,
     pub ringing: bool,
     pub sms_count: u32,
     pub quirks: Quirks,

@@ -27,6 +27,8 @@ pub enum GsmCommand {
     Sim(GsmSim),
     /// Set network technology (gsm tech <gsm/lte/nr>)
     Tech(GsmTech),
+    /// Set network operator (gsm operator <operator_name_or_plmn>)
+    Operator(GsmOperator),
 }
 
 #[derive(Debug, Args, PartialEq)]
@@ -157,4 +159,13 @@ pub enum RadioTechnologyOption {
     Gsm,
     Lte,
     Nr,
+}
+
+#[derive(Debug, Args, PartialEq)]
+pub struct GsmOperator {
+    /// Operator name or numeric PLMN. Use empty string to reset to automatic.
+    pub operator: String,
+    /// ID of the cellular device
+    #[arg(long)]
+    pub id: Option<u32>,
 }

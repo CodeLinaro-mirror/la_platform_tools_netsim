@@ -123,6 +123,7 @@ impl ModemNetworkSimulator {
             ModemAction::SetNetworkTechnology { id, tech } => {
                 self.set_network_technology(id.0, tech)
             }
+            ModemAction::SetOperator { id, operator } => self.set_operator(id.0, &operator),
         }
     }
 
@@ -136,6 +137,10 @@ impl ModemNetworkSimulator {
         tech: RadioTechnology,
     ) -> Vec<NetworkEvent> {
         self.apply_to_modem(id, |modem| modem.set_network_technology(tech))
+    }
+
+    pub fn set_operator(&mut self, id: ModemId, operator: &str) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.set_operator(operator))
     }
 
     /// Creates a new modem instance.
@@ -760,7 +765,7 @@ mod tests {
         // 2. Get modem info
         let info = interface.get_modem_info(chip_id).unwrap();
         assert_eq!(info.id, chip_id);
-        assert!(info.connections.is_empty());
+        assert!(info.calls.is_empty());
         assert!(!info.ringing);
         assert_eq!(info.sms_count, 0);
 

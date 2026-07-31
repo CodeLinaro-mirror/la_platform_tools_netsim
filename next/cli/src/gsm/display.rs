@@ -5,7 +5,9 @@ use std::fmt;
 
 use netsim_proto::cell::{Cell, ListCellsResponse};
 
-use crate::display::{Displayer, format_call_state, format_registration_status};
+use crate::display::{
+    Displayer, format_call_direction, format_call_state, format_registration_status,
+};
 
 impl fmt::Display for Displayer<'_, &ListCellsResponse> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -86,10 +88,11 @@ impl fmt::Display for Displayer<'_, &Cell> {
             while let Some(call) = calls.next() {
                 write!(
                     f,
-                    "{:call_indent$}- Number: {}, State: {}",
+                    "{:call_indent$}- Number: {}, State: {}, Direction: {}",
                     "",
                     call.number,
-                    format_call_state(call.state.enum_value_or_default())
+                    format_call_state(call.state.enum_value_or_default()),
+                    format_call_direction(call.direction.enum_value_or_default())
                 )?;
                 if calls.peek().is_some() {
                     writeln!(f)?;
@@ -102,7 +105,10 @@ impl fmt::Display for Displayer<'_, &Cell> {
 
 #[cfg(test)]
 mod tests {
-    use netsim_proto::cell::{Call, RegistrationStatus, call::State as CallState};
+    use netsim_proto::cell::{
+        Call, RegistrationStatus,
+        call::{Direction as CallDirection, State as CallState},
+    };
     use protobuf::EnumOrUnknown;
 
     use super::*;
@@ -173,11 +179,13 @@ Active Calls: None";
         let mut call1 = Call::new();
         call1.number = "12345".to_string();
         call1.state = EnumOrUnknown::new(CallState::ACTIVE);
+        call1.direction = EnumOrUnknown::new(CallDirection::MOBILE_ORIGINATED);
         cell.active_calls.push(call1);
 
         let mut call2 = Call::new();
         call2.number = "67890".to_string();
         call2.state = EnumOrUnknown::new(CallState::HOLDING);
+        call2.direction = EnumOrUnknown::new(CallDirection::MOBILE_TERMINATED);
         cell.active_calls.push(call2);
 
         let displayer = Displayer::new(&cell, false);
@@ -191,8 +199,8 @@ SMS Count: 10
 Voice Registration: home
 Data Registration: unregistered
 Active Calls:
-  - Number: 12345, State: active
-  - Number: 67890, State: holding";
+  - Number: 12345, State: active, Direction: outgoing
+  - Number: 67890, State: holding, Direction: incoming";
         assert_eq!(output, expected);
     }
 }

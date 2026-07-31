@@ -140,6 +140,7 @@ impl ActorService for CellActor {
                     ber: info.ber,
                     voice_registration: info.voice_registration,
                     data_registration: info.data_registration,
+                    active_calls: info.calls,
                 })),
                 ..Default::default()
             }))
@@ -245,6 +246,9 @@ impl ActorService for CellActor {
             CellAction::SetNetworkTechnology { tech } => {
                 ModemAction::SetNetworkTechnology { id: chip_id, tech }
             }
+            CellAction::SetOperator { operator } => {
+                ModemAction::SetOperator { id: chip_id, operator }
+            }
         };
 
         self.controller.perform_action(modem_action)?;
@@ -281,6 +285,7 @@ impl ActorService for CellActor {
                         ber: info.ber,
                         voice_registration: info.voice_registration,
                         data_registration: info.data_registration,
+                        active_calls: info.calls,
                     })),
                     ..Default::default()
                 });

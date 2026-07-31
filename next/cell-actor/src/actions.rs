@@ -18,6 +18,7 @@ pub enum CellAction {
     RemoteHold { on_hold: bool },
     SetSimStatus { present: bool },
     SetNetworkTechnology { tech: RadioTechnology },
+    SetOperator { operator: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

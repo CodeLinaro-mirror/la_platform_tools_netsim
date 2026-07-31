@@ -38,6 +38,14 @@ pub fn format_call_state(state: netsim_proto::cell::call::State) -> &'static str
     }
 }
 
+pub fn format_call_direction(direction: netsim_proto::cell::call::Direction) -> &'static str {
+    match direction {
+        netsim_proto::cell::call::Direction::DIR_UNKNOWN => "unknown",
+        netsim_proto::cell::call::Direction::MOBILE_ORIGINATED => "outgoing",
+        netsim_proto::cell::call::Direction::MOBILE_TERMINATED => "incoming",
+    }
+}
+
 /// # Invariants
 /// Displayed values **do not** end in a newline.
 pub struct Displayer<'a, T> {
