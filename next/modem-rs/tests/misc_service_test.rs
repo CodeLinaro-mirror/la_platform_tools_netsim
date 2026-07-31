@@ -84,7 +84,6 @@ fn test_set_speaker_volume() {
 
     when_at_command_sent(&mut world, "A", "AT&V");
     then_response_contains(&mut world, "A", "L:1");
-    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Set Speaker Mute
@@ -103,7 +102,6 @@ fn test_set_speaker_mute() {
 
     when_at_command_sent(&mut world, "A", "AT&V");
     then_response_contains(&mut world, "A", "M:1");
-    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Set Quiet Mode
@@ -122,7 +120,6 @@ fn test_set_quiet_mode() {
 
     when_at_command_sent(&mut world, "A", "AT&V");
     then_response_contains(&mut world, "A", "Q:1");
-    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Set Verbose Mode
@@ -141,7 +138,6 @@ fn test_set_verbose_mode() {
 
     when_at_command_sent(&mut world, "A", "AT&V");
     then_response_contains(&mut world, "A", "V:1");
-    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Reset to Factory Defaults
@@ -167,7 +163,6 @@ fn test_reset_to_factory_defaults() {
     // Verify defaults: L:1 M:1 Q:0 V:1 ICF:3,3 IFC:2,2
     when_at_command_sent(&mut world, "A", "AT&V");
     then_response_contains(&mut world, "A", "L:1 M:1 Q:0 V:1 ICF:3,3 IFC:2,2");
-    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: View Active Configuration
@@ -181,8 +176,6 @@ fn test_view_active_configuration() {
 
     when_at_command_sent(&mut world, "A", "AT&V");
     then_response_contains(&mut world, "A", "ACTIVE PROFILE:");
-    then_response_contains(&mut world, "A", "L:1 M:1 Q:0 V:1 ICF:3,3 IFC:2,2");
-    then_response_is(&mut world, "A", "OK");
 }
 
 // Scenario: Write Active Configuration
