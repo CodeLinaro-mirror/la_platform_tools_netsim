@@ -130,6 +130,75 @@ impl From<u8> for Instruction {
     }
 }
 
+/// SELECT command P1 parameters as defined in ISO/IEC 7816-4 § 6.11.1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
+#[repr(u8)]
+pub enum SelectP1 {
+    ByFid = 0x00,
+    ByDfName = 0x04,
+    ByPathFromMf = 0x08,
+}
+
+impl TryFrom<u8> for SelectP1 {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(Self::ByFid),
+            0x04 => Ok(Self::ByDfName),
+            0x08 => Ok(Self::ByPathFromMf),
+            _ => Err(()),
+        }
+    }
+}
+
+/// SELECT command P2 parameters (FCI template control) as defined in ISO/IEC
+/// 7816-4 Table 40.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SelectP2 {
+    ReturnFcp = 0x00,
+    DoNotReturnFcp = 0x04,
+    ReturnProprietary = 0x08, // Unsupported by simulator
+    ReturnFcpNoProprietary = 0x0C,
+}
+
+impl TryFrom<u8> for SelectP2 {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(Self::ReturnFcp),
+            0x04 => Ok(Self::DoNotReturnFcp),
+            0x08 => Ok(Self::ReturnProprietary),
+            0x0C => Ok(Self::ReturnFcpNoProprietary),
+            _ => Err(()),
+        }
+    }
+}
+
+/// READ/UPDATE RECORD command P2 parameters (Mode) as defined in ETSI TS 102
+/// 221 Table 11.5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum RecordMode {
+    NextRecord = 0x02,     // Unsupported by simulator
+    PreviousRecord = 0x03, // Unsupported by simulator
+    AbsoluteMode = 0x04,
+}
+
+impl TryFrom<u8> for RecordMode {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value & 0x07 {
+            0x02 => Ok(Self::NextRecord),
+            0x03 => Ok(Self::PreviousRecord),
+            0x04 => Ok(Self::AbsoluteMode),
+            _ => Err(()),
+        }
+    }
+}
+
 /// Parsed APDU components according to ISO/IEC 7816-4.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParsedApdu<'a> {
@@ -565,5 +634,35 @@ mod tests {
         // Do not match guest command on channel 0 (XML mapping to channel 1 is strict)
         let status_channel_0_guest = ParsedApdu::parse(&[0x80, 0xF2, 0xFF, 0x00, 0x00]).unwrap();
         assert!(!status_channel_1_mapped.matches(&status_channel_0_guest));
+    }
+
+    #[test]
+    fn test_select_p1_try_from() {
+        assert_eq!(SelectP1::try_from(0x00), Ok(SelectP1::ByFid));
+        assert_eq!(SelectP1::try_from(0x04), Ok(SelectP1::ByDfName));
+        assert_eq!(SelectP1::try_from(0x08), Ok(SelectP1::ByPathFromMf));
+        assert_eq!(SelectP1::try_from(0x01), Err(()));
+        assert_eq!(SelectP1::try_from(0x03), Err(()));
+        assert_eq!(SelectP1::try_from(0x09), Err(()));
+        assert_eq!(SelectP1::try_from(0x02), Err(()));
+        assert_eq!(SelectP1::try_from(0x0A), Err(()));
+    }
+
+    #[test]
+    fn test_select_p2_try_from() {
+        assert_eq!(SelectP2::try_from(0x00), Ok(SelectP2::ReturnFcp));
+        assert_eq!(SelectP2::try_from(0x04), Ok(SelectP2::DoNotReturnFcp));
+        assert_eq!(SelectP2::try_from(0x08), Ok(SelectP2::ReturnProprietary));
+        assert_eq!(SelectP2::try_from(0x0C), Ok(SelectP2::ReturnFcpNoProprietary));
+        assert_eq!(SelectP2::try_from(0x01), Err(()));
+    }
+
+    #[test]
+    fn test_record_mode_try_from() {
+        assert_eq!(RecordMode::try_from(0x02), Ok(RecordMode::NextRecord));
+        assert_eq!(RecordMode::try_from(0x03), Ok(RecordMode::PreviousRecord));
+        assert_eq!(RecordMode::try_from(0x04), Ok(RecordMode::AbsoluteMode));
+        assert_eq!(RecordMode::try_from(0x14), Ok(RecordMode::AbsoluteMode));
+        assert_eq!(RecordMode::try_from(0x00), Err(()));
     }
 }
