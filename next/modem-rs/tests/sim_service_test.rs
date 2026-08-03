@@ -1406,7 +1406,7 @@ fn test_cgla_select_by_aid() {
         "A",
         "AT+CGLA=1,42,\"01A4040010A0000000871002FF86FF0389FFFFFFFF\"",
     );
-    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "+CGLA: 4,6147");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -1553,7 +1553,7 @@ fn test_aid_reset_on_select_outside() {
         "A",
         "AT+CSIM=42,\"00A4040010A0000000871002FF86FF0389FFFFFFFF\"",
     );
-    then_response_is(&mut world, "A", "+CSIM: 4,9000");
+    then_response_is(&mut world, "A", "+CSIM: 4,6147");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CSIM=14,\"00A40004027F10\"");
@@ -1644,5 +1644,105 @@ fn test_select_aid_does_not_match_file_id_mock() {
         "AT+CGLA=0,42,\"00A4040010A0000000871002FF86FF0389FFFFFFFF\"",
     );
     then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_get_response_retrieves_buffered_data() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Send SELECT command for MF (3F00) with P2=00 (ReturnFcp) on channel 0
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40000023F00\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6135");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Issuing GET_RESPONSE (0xC0) retrieves the buffered FCP template (53 bytes
+    //    = 0x35)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00C0000035\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CGLA: 110,62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_get_response_partial_reads() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40000023F00\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6135");
+    then_response_is(&mut world, "A", "OK");
+
+    // Read first 10 (0x0A) bytes -> 43 (0x2B) bytes remaining, status word 612B
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00C000000A\"");
+    then_response_is(&mut world, "A", "+CGLA: 24,62338202782183023F00612B");
+    then_response_is(&mut world, "A", "OK");
+
+    // Read remaining 43 (0x2B) bytes -> status word 9000
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00C000002B\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CGLA: 90,A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_response_buffer_cleared_on_other_command() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40000023F00\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6135");
+    then_response_is(&mut world, "A", "OK");
+
+    // Send another command (e.g. STATUS 0xF2) -> clears response buffer
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00F2000000\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CGLA: 110,62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+
+    // GET_RESPONSE now returns 6A88 because buffer was cleared
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00C0000035\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A88");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_response_buffer_cleared_on_channel_close() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Open channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Select MF on channel 1 (buffers FCP)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,14,\"01A40000023F00\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6135");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Close channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070800101\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Open channel 1 again
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. GET_RESPONSE on channel 1 returns 6A88 because buffer was cleared on close
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01C0000035\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A88");
     then_response_is(&mut world, "A", "OK");
 }

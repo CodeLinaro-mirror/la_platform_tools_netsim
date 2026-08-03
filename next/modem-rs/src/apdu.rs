@@ -665,4 +665,9 @@ mod tests {
         assert_eq!(RecordMode::try_from(0x14), Ok(RecordMode::AbsoluteMode));
         assert_eq!(RecordMode::try_from(0x00), Err(()));
     }
+
+    #[test]
+    fn test_instruction_from_u8() {
+        assert_eq!(Instruction::from(0xC0), Instruction::GetResponse);
+    }
 }

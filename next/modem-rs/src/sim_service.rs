@@ -228,6 +228,7 @@ pub struct SimService {
     logical_channels: [bool; 4],
     selected_aids: [Option<String>; 4],
     selected_files: [Option<u16>; 4],
+    response_buffer: [Vec<u8>; 4],
     cdma_subscription_source: u8,
     cdma_roaming_preference: u8,
     adfs: Vec<crate::config::ApplicationDedicatedFile>,
@@ -290,6 +291,7 @@ impl SimService {
             logical_channels: [true, false, false, false],
             selected_aids: [None, None, None, None],
             selected_files: [None; 4],
+            response_buffer: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
             cdma_subscription_source: 0,
             cdma_roaming_preference: 0,
             adfs: profile.adfs.clone(),
@@ -891,6 +893,10 @@ impl SimService {
         let active_aid = self.selected_aids[idx].as_deref();
         let selected_fid = self.selected_files[idx];
 
+        if apdu.ins != apdu::Instruction::GetResponse {
+            self.response_buffer[idx].clear();
+        }
+
         // 2. Immediate validation check for invalid SELECT P2 parameter
         if apdu.ins == apdu::Instruction::Select && apdu.p2 == P2_INVALID_SELECT {
             return format_sim_payload_status(SW_INCORRECT_PARAMS);
@@ -930,6 +936,7 @@ impl SimService {
                         self.logical_channels[target_idx] = false;
                         self.selected_aids[target_idx] = None;
                         self.selected_files[target_idx] = None;
+                        self.response_buffer[target_idx].clear();
                     }
                 }
             }
@@ -1022,7 +1029,23 @@ impl SimService {
                             return format_sim_payload_status(SW_INCORRECT_PARAMS);
                         }
                         match self.select_sim_file(idx, apdu) {
-                            Ok(()) => format_sim_payload_status(SW_SUCCESS),
+                            Ok(()) => {
+                                if p2 == apdu::SelectP2::ReturnFcp {
+                                    let fid =
+                                        self.selected_files[idx].unwrap_or(ADF_DEFAULT_FILE_ID);
+                                    let fcp_hex =
+                                        generate_df_fcp(fid, self.selected_aids[idx].as_deref());
+                                    if let Ok(fcp_bytes) = hex::decode(&fcp_hex) {
+                                        let len = fcp_bytes.len();
+                                        self.response_buffer[idx] = fcp_bytes;
+                                        let sw_low = if len >= 256 { 0 } else { len as u8 };
+                                        let sw = ((SW_BYTES_REMAINING_PREFIX as u16) << 8)
+                                            | (sw_low as u16);
+                                        return format_sim_payload_status(sw);
+                                    }
+                                }
+                                format_sim_payload_status(SW_SUCCESS)
+                            }
                             Err(sw) => format_sim_payload_status(sw),
                         }
                     } else {
@@ -1054,11 +1077,13 @@ impl SimService {
                             self.logical_channels[target_idx] = false;
                             self.selected_aids[target_idx] = None;
                             self.selected_files[target_idx] = None;
+                            self.response_buffer[target_idx].clear();
                             format_sim_payload_status(SW_SUCCESS)
                         }
                     }
                     _ => format_sim_payload_status(SW_INCORRECT_PARAMS),
                 },
+                apdu::Instruction::GetResponse => self.handle_get_response(idx, apdu),
                 _ => {
                     if access_type == SimAccessType::Cgla {
                         format_sim_payload_status(SW_INS_NOT_SUPPORTED)
@@ -1375,6 +1400,35 @@ impl SimService {
 
         sim_result.into()
     }
+
+    fn handle_get_response(&mut self, idx: usize, apdu: &apdu::ParsedApdu<'_>) -> String {
+        if apdu.p1 != 0x00 || apdu.p2 != 0x00 {
+            return format_sim_payload_status(SW_INCORRECT_PARAMS);
+        }
+        if self.response_buffer[idx].is_empty() {
+            return format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND);
+        }
+
+        let req_len = if let Some(le) = apdu.expected_length() {
+            if le == 0 { 256 } else { le as usize }
+        } else {
+            self.response_buffer[idx].len()
+        };
+
+        let available = self.response_buffer[idx].len();
+        let take_len = req_len.min(available);
+        let chunk: Vec<u8> = self.response_buffer[idx].drain(..take_len).collect();
+        let remaining = self.response_buffer[idx].len();
+        let hex_data = hex::encode_upper(&chunk);
+
+        if remaining > 0 {
+            let sw_low = if remaining >= 256 { 0 } else { remaining as u8 };
+            let sw = ((SW_BYTES_REMAINING_PREFIX as u16) << 8) | (sw_low as u16);
+            format_sim_payload_data(&hex_data, sw)
+        } else {
+            format_sim_payload_data(&hex_data, SW_SUCCESS)
+        }
+    }
 }
 
 fn encode_msisdn_str(msisdn: &str) -> Vec<u8> {
@@ -1407,6 +1461,26 @@ fn encode_msisdn_str(msisdn: &str) -> Vec<u8> {
     result.extend_from_slice(&[0xFF, 0xFF]);
 
     result
+}
+
+fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
+    let mut fcp_bytes = hex::decode(STATUS_FCP_HEX).unwrap();
+    // Overwrite File ID in FCP template (Tag '83' at index 6: 83 02 3F 00)
+    fcp_bytes[8] = ((df_id >> 8) & 0xFF) as u8;
+    fcp_bytes[9] = (df_id & 0xFF) as u8;
+
+    if df_id == ADF_DEFAULT_FILE_ID
+        && let Some(aid) = active_aid
+        && let Ok(aid_bytes) = hex::decode(aid)
+    {
+        // Append Tag '84' (DF Name / AID)
+        fcp_bytes.push(TAG_DF_NAME);
+        fcp_bytes.push(aid_bytes.len() as u8);
+        fcp_bytes.extend(aid_bytes);
+        // Update Tag '62' length at index 1
+        fcp_bytes[1] = (fcp_bytes.len() - 2) as u8;
+    }
+    hex::encode_upper(fcp_bytes)
 }
 
 pub(crate) fn find_df(df: &DedicatedFile, id: u16) -> Option<&DedicatedFile> {

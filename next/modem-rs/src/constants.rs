@@ -66,6 +66,8 @@ pub mod access_technology {
 pub const MF_FILE_ID: u16 = 0x3F00;
 pub const ADF_DEFAULT_FILE_ID: u16 = 0x7FFF;
 
+pub const TAG_DF_NAME: u8 = 0x84;
+
 // ISO 7816-4 APDU Status Words (SW)
 pub const SW_SUCCESS: u16 = 0x9000;
 pub const SW_WRONG_LENGTH: u16 = 0x6700;
@@ -80,3 +82,6 @@ pub const SW_NO_CHANNEL_AVAILABLE: u16 = 0x6A81;
 pub const SW_INCOMPATIBLE_FILE_STRUCTURE: u16 = 0x6981;
 #[allow(dead_code)]
 pub const SW_COMMAND_NOT_ALLOWED: u16 = 0x6986;
+
+// GET_RESPONSE (0xC0) status words
+pub const SW_BYTES_REMAINING_PREFIX: u8 = 0x61;
