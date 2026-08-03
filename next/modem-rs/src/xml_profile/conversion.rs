@@ -3,17 +3,16 @@
 
 use super::{error::XmlProfileError, schema::*};
 use crate::{
+    apdu,
     config::{
         ApduMapping, ApplicationDedicatedFile, ApplicationFileOverride, DedicatedFile,
         ElementaryFile, SimFile, StkMenuItem,
     },
-    constants::{
-        ADF_DEFAULT_FILE_ID, INS_READ_BINARY, INS_READ_RECORD, INS_UPDATE_RECORD, MF_FILE_ID,
-    },
+    constants::{ADF_DEFAULT_FILE_ID, MF_FILE_ID},
 };
 
 struct SimIoMapping {
-    cmd: u8,
+    cmd: apdu::Instruction,
     p1: u8,
     p2: u8,
     p3: u8,
@@ -180,7 +179,7 @@ fn infer_records_from_read(
     let mut inferred_rec_len = 0;
 
     for m in simio_mappings {
-        if m.cmd == INS_READ_RECORD {
+        if m.cmd == apdu::Instruction::ReadRecord {
             // Enforce absolute addressing mode (P2 = 04) for simplicity and consistency
             if m.p2 != 0x04 {
                 return Err(XmlProfileError::InvalidValue {
@@ -261,7 +260,7 @@ fn infer_records_from_update(
     let mut inferred_rec_len = existing_rec_len;
 
     for m in simio_mappings {
-        if m.cmd == INS_UPDATE_RECORD {
+        if m.cmd == apdu::Instruction::UpdateRecord {
             // Enforce absolute addressing mode (P2 = 04)
             if m.p2 != 0x04 {
                 return Err(XmlProfileError::InvalidValue {
@@ -309,7 +308,7 @@ impl TryFrom<XmlElementaryFile> for ElementaryFile {
             match member {
                 XmlElementaryFileMember::Simio(m) => {
                     simio_mappings.push(SimIoMapping {
-                        cmd: m.command,
+                        cmd: apdu::Instruction::from(m.command),
                         p1: m.p1,
                         p2: m.p2,
                         p3: m.p3,
@@ -341,7 +340,8 @@ impl TryFrom<XmlElementaryFile> for ElementaryFile {
             }
         }
 
-        if let Some(b0_map) = simio_mappings.iter().find(|m| m.cmd == INS_READ_BINARY) {
+        if let Some(b0_map) = simio_mappings.iter().find(|m| m.cmd == apdu::Instruction::ReadBinary)
+        {
             if b0_map.p1 != 0 || b0_map.p2 != 0 {
                 return Err(XmlProfileError::InvalidValue {
                     file_id,

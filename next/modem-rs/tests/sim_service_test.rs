@@ -862,7 +862,7 @@ fn test_cgla_validation_errors() {
 
     // Too short APDU (less than 4 bytes)
     when_at_command_sent(&mut world, "A", "AT+CGLA=0,4,\"0070\"");
-    then_response_is(&mut world, "A", "+CGLA: 4,6F00");
+    then_response_is(&mut world, "A", "+CGLA: 4,6700");
     then_response_is(&mut world, "A", "OK");
 
     // Invalid hex data
@@ -1300,5 +1300,26 @@ fn test_cgla_invalid_file_and_channel_handling() {
     // Try to select a non-existent file ID (e.g. 0xFFFF)
     when_at_command_sent(&mut world, "A", "AT+CGLA=0,16,\"00A4000402FFFF0C\"");
     then_response_is(&mut world, "A", "+CGLA: 4,6A82");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_csim_select_and_unhandled_ins() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. SELECT command via CSIM returns success
+    when_at_command_sent(&mut world, "A", "AT+CSIM=14,\"00A40004022FE2\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Unhandled INS via CSIM returns SW_INCORRECT_PARAMS (6A86) as baseline
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"00FE000000\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6A86");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. APDU with mismatched Lc length via CSIM returns SW_WRONG_LENGTH (6700)
+    when_at_command_sent(&mut world, "A", "AT+CSIM=14,\"00A400040A1122\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6700");
     then_response_is(&mut world, "A", "OK");
 }

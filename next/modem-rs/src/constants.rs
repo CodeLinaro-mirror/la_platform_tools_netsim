@@ -66,6 +66,18 @@ pub mod access_technology {
 pub const MF_FILE_ID: u16 = 0x3F00;
 pub const ADF_DEFAULT_FILE_ID: u16 = 0x7FFF;
 
-pub const INS_READ_BINARY: u8 = 0xB0;
-pub const INS_READ_RECORD: u8 = 0xB2;
-pub const INS_UPDATE_RECORD: u8 = 0xDC;
+// ISO 7816-4 APDU Status Words (SW)
+pub const CLA_UNSUPPORTED: u8 = 0xFF;
+pub const SW_SUCCESS: u16 = 0x9000;
+pub const SW_WRONG_LENGTH: u16 = 0x6700;
+pub const SW_FILE_NOT_FOUND: u16 = 0x6A82;
+pub const SW_INCORRECT_PARAMS: u16 = 0x6A86;
+pub const SW_REFERENCED_DATA_NOT_FOUND: u16 = 0x6A88;
+pub const SW_CLASS_NOT_SUPPORTED: u16 = 0x6E00;
+pub const SW_INS_NOT_SUPPORTED: u16 = 0x6D00;
+pub const SW_TECHNICAL_PROBLEM: u16 = 0x6F00;
+pub const SW_NO_CHANNEL_AVAILABLE: u16 = 0x6A81;
+#[allow(dead_code)]
+pub const SW_INCOMPATIBLE_FILE_STRUCTURE: u16 = 0x6981;
+#[allow(dead_code)]
+pub const SW_COMMAND_NOT_ALLOWED: u16 = 0x6986;
