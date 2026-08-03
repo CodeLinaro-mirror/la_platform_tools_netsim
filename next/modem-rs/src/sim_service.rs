@@ -365,55 +365,27 @@ impl SimService {
         service
     }
 
-    fn lookup_cgla(&self, aid: &str, file_id: Option<u16>, command: &str) -> Option<String> {
+    fn lookup_cgla(
+        &self,
+        aid: &str,
+        file_id: Option<u16>,
+        apdu: &apdu::ParsedApdu<'_>,
+    ) -> Option<String> {
         let adf = self.adfs.iter().find(|am| am.aid == aid)?;
 
-        let lookup = |cmd: &str| {
-            if let Some(fid) = file_id
-                && let Some(file_mock) = adf.files.iter().find(|f| f.id == fid)
-                && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd == cmd)
-            {
-                return Some(m.response.to_string());
-            }
-            adf.cgla.iter().find(|m| m.cmd == cmd).map(|m| m.response.to_string())
-        };
-
-        if let Some(resp) = lookup(command) {
-            return Some(resp);
-        }
-
-        // Fallback: strip "00" CLA if present and try again.
-        // Some XML profiles exclude the "00" CLA prefix.
-        if let Some(stripped) = command.strip_prefix("00")
-            && !stripped.is_empty()
-            && let Some(resp) = lookup(stripped)
+        if let Some(fid) = file_id
+            && let Some(file_mock) = adf.files.iter().find(|f| f.id == fid)
+            && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd.matches(apdu))
         {
-            return Some(resp);
+            return Some(m.response.to_string());
         }
 
-        None
+        adf.cgla.iter().find(|m| m.cmd.matches(apdu)).map(|m| m.response.to_string())
     }
 
-    fn lookup_csim(&self, command: &str) -> Option<String> {
+    fn lookup_csim(&self, apdu: &apdu::ParsedApdu<'_>) -> Option<String> {
         let adf = self.adfs.iter().find(|am| am.aid == "CSIM")?;
-
-        let lookup =
-            |cmd: &str| adf.csim.iter().find(|m| m.cmd == cmd).map(|m| m.response.to_string());
-
-        if let Some(resp) = lookup(command) {
-            return Some(resp);
-        }
-
-        // Fallback: strip "00" CLA if present and try again.
-        // Some XML profiles exclude the "00" CLA prefix.
-        if let Some(stripped) = command.strip_prefix("00")
-            && !stripped.is_empty()
-            && let Some(resp) = lookup(stripped)
-        {
-            return Some(resp);
-        }
-
-        None
+        adf.csim.iter().find(|m| m.cmd.matches(apdu)).map(|m| m.response.to_string())
     }
 
     fn get_imsi(&self) -> String {
@@ -785,9 +757,8 @@ impl SimService {
         access_type: SimAccessType,
         idx: usize,
         apdu: &apdu::ParsedApdu<'_>,
-        cmd_hex: &str,
     ) -> String {
-        if apdu.class == CLA_UNSUPPORTED {
+        if !apdu.class.is_supported() {
             return format_sim_payload_status(SW_CLASS_NOT_SUPPORTED);
         }
 
@@ -808,13 +779,12 @@ impl SimService {
         }
 
         // 3. Honor explicit APDU mappings defined in the XML profile
-        let cmd_hex_upper = cmd_hex.to_ascii_uppercase();
         let active_aid = self.selected_aids[idx].as_deref().unwrap_or("");
         let selected_fid = self.selected_files[idx];
 
         let profile_response = match access_type {
-            SimAccessType::Cgla => self.lookup_cgla(active_aid, selected_fid, &cmd_hex_upper),
-            SimAccessType::Csim => self.lookup_csim(&cmd_hex_upper),
+            SimAccessType::Cgla => self.lookup_cgla(active_aid, selected_fid, apdu),
+            SimAccessType::Csim => self.lookup_csim(apdu),
         };
         if let Some(resp) = profile_response {
             return resp;
@@ -990,8 +960,15 @@ impl SimService {
             }
         };
 
-        let response_data =
-            self.process_logical_channel_apdu(SimAccessType::Cgla, idx, &parsed, data_clean);
+        if !parsed.class.is_supported()
+            || (parsed.class.channel() != 0 && parsed.class.channel() != idx)
+        {
+            return Ok(Some(SimResponse::GenericLogicalChannelAccess(format_sim_payload_status(
+                SW_CLASS_NOT_SUPPORTED,
+            ))));
+        }
+
+        let response_data = self.process_logical_channel_apdu(SimAccessType::Cgla, idx, &parsed);
 
         Ok(Some(SimResponse::GenericLogicalChannelAccess(response_data)))
     }
@@ -1046,11 +1023,21 @@ impl SimService {
             }
         };
 
+        let channel_idx = parsed.class.channel();
+        if !parsed.class.is_supported()
+            || channel_idx >= self.logical_channels.len()
+            || !self.logical_channels[channel_idx]
+        {
+            return Ok(Some(SimResponse::GenericSimAccess(format_sim_payload_status(
+                SW_CLASS_NOT_SUPPORTED,
+            ))));
+        }
+
         if parsed.ins == apdu::Instruction::ManageChannel {
             self.handle_csim_manage_channel(parsed.p1, parsed.p2)
         } else {
             let payload =
-                self.process_logical_channel_apdu(SimAccessType::Csim, 0, &parsed, apdu_str);
+                self.process_logical_channel_apdu(SimAccessType::Csim, channel_idx, &parsed);
             Ok(Some(SimResponse::GenericSimAccess(payload)))
         }
     }

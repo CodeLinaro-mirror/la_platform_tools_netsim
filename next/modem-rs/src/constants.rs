@@ -67,7 +67,6 @@ pub const MF_FILE_ID: u16 = 0x3F00;
 pub const ADF_DEFAULT_FILE_ID: u16 = 0x7FFF;
 
 // ISO 7816-4 APDU Status Words (SW)
-pub const CLA_UNSUPPORTED: u8 = 0xFF;
 pub const SW_SUCCESS: u16 = 0x9000;
 pub const SW_WRONG_LENGTH: u16 = 0x6700;
 pub const SW_FILE_NOT_FOUND: u16 = 0x6A82;

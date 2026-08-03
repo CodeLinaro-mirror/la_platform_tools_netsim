@@ -130,9 +130,9 @@ impl ElementaryFile {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ApduMapping {
-    pub cmd: String,
+    pub cmd: crate::apdu::ParsedApdu<'static>,
     pub response: String,
 }
 

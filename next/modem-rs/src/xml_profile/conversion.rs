@@ -3,7 +3,7 @@
 
 use super::{error::XmlProfileError, schema::*};
 use crate::{
-    apdu,
+    apdu::{self, ParsedApdu},
     config::{
         ApduMapping, ApplicationDedicatedFile, ApplicationFileOverride, DedicatedFile,
         ElementaryFile, SimFile, StkMenuItem,
@@ -28,17 +28,6 @@ pub struct ParsedAdf {
     pub nested_adfs: Vec<ApplicationDedicatedFile>,
 }
 
-pub fn normalize_command(cmd: &str) -> String {
-    if let Some(start) = cmd.find('"')
-        && let Some(end) = cmd.rfind('"')
-        && start < end
-    {
-        cmd[start + 1..end].trim().to_ascii_uppercase()
-    } else {
-        cmd.trim().to_ascii_uppercase()
-    }
-}
-
 impl TryFrom<XmlApplicationDedicatedFile> for ParsedAdf {
     type Error = XmlProfileError;
     fn try_from(xml_adf: XmlApplicationDedicatedFile) -> Result<Self, Self::Error> {
@@ -53,11 +42,15 @@ impl TryFrom<XmlApplicationDedicatedFile> for ParsedAdf {
         for member in xml_adf.members {
             match member {
                 XmlApplicationDedicatedFileMember::Cgla(m) => {
-                    let norm_cmd = normalize_command(&m.cmd);
+                    let norm_cmd = ParsedApdu::parse_mapped(&m.cmd).map_err(|e| {
+                        XmlProfileError::InvalidApduCommand { command: m.cmd.clone(), error: e }
+                    })?;
                     cgla.push(ApduMapping { cmd: norm_cmd, response: m.response });
                 }
                 XmlApplicationDedicatedFileMember::Csim(m) => {
-                    let norm_cmd = normalize_command(&m.cmd);
+                    let norm_cmd = ParsedApdu::parse_mapped(&m.cmd).map_err(|e| {
+                        XmlProfileError::InvalidApduCommand { command: m.cmd.clone(), error: e }
+                    })?;
                     csim.push(ApduMapping { cmd: norm_cmd, response: m.response });
                 }
                 XmlApplicationDedicatedFileMember::FileOverride(f) => {
@@ -66,11 +59,16 @@ impl TryFrom<XmlApplicationDedicatedFile> for ParsedAdf {
                         .into_iter()
                         .map(|file_member| match file_member {
                             XmlApplicationFileOverrideMember::Cgla(m) => {
-                                let norm_cmd = normalize_command(&m.cmd);
-                                ApduMapping { cmd: norm_cmd, response: m.response }
+                                let norm_cmd = ParsedApdu::parse_mapped(&m.cmd).map_err(|e| {
+                                    XmlProfileError::InvalidApduCommand {
+                                        command: m.cmd.clone(),
+                                        error: e,
+                                    }
+                                })?;
+                                Ok(ApduMapping { cmd: norm_cmd, response: m.response })
                             }
                         })
-                        .collect();
+                        .collect::<Result<Vec<_>, XmlProfileError>>()?;
                     files.push(ApplicationFileOverride { id: f.id, cgla: file_cgla });
                 }
                 XmlApplicationDedicatedFileMember::DedicatedFile(xml_df) => {

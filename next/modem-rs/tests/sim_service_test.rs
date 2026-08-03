@@ -1323,3 +1323,43 @@ fn test_csim_select_and_unhandled_ins() {
     then_response_is(&mut world, "A", "+CSIM: 4,6700");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_csim_invalid_channel_rejection() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Send command with CLA 40 (Format 2, channel 4) -> out of bounds (max 3
+    //    supported)
+    // Expect SW_CLASS_NOT_SUPPORTED (6E00)
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"40B0000005\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6E00");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Send command with CLA 01 (Format 1, channel 1) which is closed
+    // Expect SW_CLASS_NOT_SUPPORTED (6E00)
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"01B0000005\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6E00");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_lenient_cla_rejection() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Open channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Open channel 2
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,029000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Transmit on channel 1 with APDU specifying channel 2 (CLA 02)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"02F2000000\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6E00");
+    then_response_is(&mut world, "A", "OK");
+}
