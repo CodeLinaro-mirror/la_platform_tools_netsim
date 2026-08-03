@@ -67,7 +67,7 @@ impl ModemImpl {
             sim_service: SimService::new(&profile),
             network_service: NetworkService::new(quirks),
             sms_service: SmsService::default(),
-            stk_service: StkService::default(),
+            stk_service: StkService::new(profile.stk.clone()),
             sup_service: SupService::default(),
             misc_service: MiscService::default(),
             call_service: CallService::default(),
@@ -515,7 +515,7 @@ impl ModemImpl {
             Command::Data(c) => self.data_service.execute(c),
             Command::Misc(c) => self.misc_service.execute(c),
             Command::Sup(c) => self.sup_service.execute(c, &mut self.sim_service),
-            Command::Stk(c) => self.stk_service.execute(c),
+            Command::Stk(c) => self.stk_service.execute(c, &mut self.sim_service),
         }
     }
 }

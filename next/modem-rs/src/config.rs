@@ -58,6 +58,10 @@ pub struct Stk {
 /// Represents a single STK menu item.
 #[derive(Debug, Deserialize, Default, Clone, PartialEq)]
 pub struct StkMenuItem {
+    #[serde(default)]
+    pub id: u8,
+    #[serde(default)]
+    pub menu_id: u8,
     pub text: String,
     #[serde(default)]
     pub items: Vec<StkMenuItem>,

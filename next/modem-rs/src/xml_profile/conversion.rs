@@ -407,7 +407,18 @@ impl TryFrom<XmlElementaryFile> for ElementaryFile {
 impl From<XmlSetupMenu> for StkMenuItem {
     fn from(xml_menu: XmlSetupMenu) -> Self {
         let items = xml_menu.items.into_iter().map(StkMenuItem::from).collect();
-        StkMenuItem { text: xml_menu.text, items }
+        StkMenuItem { id: 0, menu_id: 0, text: xml_menu.text, items }
+    }
+}
+
+impl From<XmlDisplayText> for StkMenuItem {
+    fn from(xml_text: XmlDisplayText) -> Self {
+        StkMenuItem {
+            id: xml_text.id.unwrap_or(0),
+            menu_id: xml_text.menu_id,
+            text: xml_text.text,
+            items: Vec::new(),
+        }
     }
 }
 
@@ -418,11 +429,14 @@ impl From<XmlSelectItem> for StkMenuItem {
             .into_iter()
             .map(|sub| match sub {
                 XmlSelectItemOrDisplayText::SelectItem(it) => StkMenuItem::from(it),
-                XmlSelectItemOrDisplayText::DisplayText(dt) => {
-                    StkMenuItem { text: dt.text, items: Vec::new() }
-                }
+                XmlSelectItemOrDisplayText::DisplayText(dt) => StkMenuItem::from(dt),
             })
             .collect();
-        StkMenuItem { text: xml_item.text, items }
+        StkMenuItem {
+            id: xml_item.id.unwrap_or(0),
+            menu_id: xml_item.menu_id,
+            text: xml_item.text,
+            items,
+        }
     }
 }
