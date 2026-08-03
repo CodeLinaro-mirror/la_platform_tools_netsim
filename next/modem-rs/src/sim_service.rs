@@ -77,6 +77,10 @@ pub enum SimCommand<'a> {
     /// VENDOR: Update phone number
     #[command(tag = "AT+REMOTEUPADATEPHONENUMBER")]
     UpdatePhoneNumber(#[parser(parse_raw_data)] &'a [u8]),
+    #[command(tag = "AT+CEID")]
+    GetEid,
+    #[command(tag = "AT+CATR")]
+    GetAtr,
 }
 
 const MIN_PIN_LEN: usize = 4;
@@ -159,6 +163,8 @@ pub enum SimResponse {
     FacilityLockStatus(u8),
     PinRetriesSpic(u32),
     PinRemainingAttempts { pin_type: String, retries: u32, default_retries: u32 },
+    Eid(String),
+    Atr(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +205,8 @@ impl std::fmt::Display for SimResponse {
             SimResponse::PinRemainingAttempts { pin_type, retries, default_retries } => {
                 write!(f, "+CPINR: \"{pin_type}\",{retries},{default_retries}\r\n")
             }
+            SimResponse::Eid(eid) => write!(f, "+CEID: {eid}\r\n"),
+            SimResponse::Atr(atr) => write!(f, "+CATR: {atr}\r\n"),
         }
     }
 }
@@ -223,6 +231,8 @@ pub struct SimService {
     cdma_subscription_source: u8,
     cdma_roaming_preference: u8,
     adfs: Vec<crate::config::ApplicationDedicatedFile>,
+    eid: Option<String>,
+    atr: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -283,6 +293,8 @@ impl SimService {
             cdma_subscription_source: 0,
             cdma_roaming_preference: 0,
             adfs: profile.adfs.clone(),
+            eid: profile.eid.clone(),
+            atr: profile.atr.clone(),
         };
 
         // Ensure boot-essential files are present in the filesystem and correctly
@@ -544,6 +556,22 @@ impl SimService {
 
     fn handle_get_iccid(&self) -> SimResult {
         Ok(Some(SimResponse::Iccid(self.get_iccid())))
+    }
+
+    fn handle_get_eid(&self) -> SimResult {
+        if let Some(eid) = &self.eid {
+            Ok(Some(SimResponse::Eid(eid.clone())))
+        } else {
+            Err(ExecutionResult::cme_error(CmeError::NotFound))
+        }
+    }
+
+    fn handle_get_atr(&self) -> SimResult {
+        if let Some(atr) = &self.atr {
+            Ok(Some(SimResponse::Atr(atr.clone())))
+        } else {
+            Err(ExecutionResult::cme_error(CmeError::NotFound))
+        }
     }
 
     fn update_sim_file(
@@ -1230,6 +1258,8 @@ impl SimService {
             SimCommand::UpdatePhoneNumber(phone_number) => {
                 self.handle_update_phone_number(phone_number)
             }
+            SimCommand::GetEid => self.handle_get_eid(),
+            SimCommand::GetAtr => self.handle_get_atr(),
         };
 
         sim_result.into()

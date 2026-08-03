@@ -22,6 +22,8 @@ pub struct SimProfile {
     pub stk: Stk,
     pub sim_io: SimIo,
     pub enable_unsolicited_urcs: Option<bool>,
+    pub eid: Option<String>,
+    pub atr: Option<String>,
     #[serde(default)]
     pub adfs: Vec<ApplicationDedicatedFile>,
 }

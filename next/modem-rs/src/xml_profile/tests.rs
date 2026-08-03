@@ -145,3 +145,17 @@ fn test_parse_pin_retries() {
     assert_eq!(profile.pin_profile.pin2_retries, Some(6));
     assert_eq!(profile.pin_profile.puk2_retries, Some(16));
 }
+
+#[test]
+fn test_parse_eid_and_atr() {
+    let xml = r#"<IccProfile>
+        <MF></MF>
+        <CardProfile>
+            <EID>89049032000001000000000254806852</EID>
+            <ATR>3F979580BFFE8210428031A073BE211797</ATR>
+        </CardProfile>
+    </IccProfile>"#;
+    let profile = parse_xml_profile(xml).unwrap();
+    assert_eq!(profile.eid, Some("89049032000001000000000254806852".to_string()));
+    assert_eq!(profile.atr, Some("3F979580BFFE8210428031A073BE211797".to_string()));
+}

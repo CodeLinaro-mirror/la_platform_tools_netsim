@@ -1363,3 +1363,44 @@ fn test_lenient_cla_rejection() {
     then_response_is(&mut world, "A", "+CGLA: 4,6E00");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_get_eid_and_atr() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // EID from default profile (iccprofile_for_sim0.xml)
+    // <EID>89049032000001000000000254806852</EID>
+    when_at_command_sent(&mut world, "A", "AT+CEID");
+    then_response_is(&mut world, "A", "+CEID: 89049032000001000000000254806852");
+    then_response_is(&mut world, "A", "OK");
+
+    // ATR from default profile (iccprofile_for_sim0.xml)
+    // <ATR>3F979580BFFE8210428031A073BE211797</ATR>
+    when_at_command_sent(&mut world, "A", "AT+CATR");
+    then_response_is(&mut world, "A", "+CATR: 3F979580BFFE8210428031A073BE211797");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_get_eid_and_atr_not_found() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A");
+
+    // Default CMEE is 0 (disable), so it should return generic "ERROR"
+    when_at_command_sent(&mut world, "A", "AT+CEID");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+CATR");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Enable CMEE=1 (numeric error), should return "+CME ERROR: 22" (NotFound)
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CEID");
+    then_response_is(&mut world, "A", "+CME ERROR: 22");
+
+    when_at_command_sent(&mut world, "A", "AT+CATR");
+    then_response_is(&mut world, "A", "+CME ERROR: 22");
+}
