@@ -19,7 +19,13 @@ use tracing::{error, info};
 use crate::{
     error::NfcError,
     nfc_actor::{ChipState, NfcAction, NfcActor},
+    stats::NfcApi,
 };
+
+const NCI_MT_DATA: u8 = 0;
+const NCI_MT_CMD: u8 = 1;
+const NCI_MT_RSP: u8 = 2;
+const NCI_MT_NTF: u8 = 3;
 
 impl From<&ChipState> for netsim_model::Chip {
     fn from(state: &ChipState) -> Self {
@@ -68,7 +74,7 @@ impl ActorService for NfcActor {
     type Create = ChipCreate;
     type Update = ChipUpdate;
     type Action = NfcAction;
-    type ActionResult = ();
+    type ActionResult = crate::nfc_actor::NfcActionResult;
     type Error = NfcError;
     type Entity = netsim_model::Chip;
     type TypedStream = (); // No typed streams for now
@@ -144,6 +150,7 @@ impl ActorService for NfcActor {
         let enabled = Arc::new(AtomicBool::new(true));
         let enabled_clone = enabled.clone();
         let chip_id_clone = chip_id;
+        let nfc_stats_clone = self.nfc_stats.clone();
         let task_1 = Box::pin(async move {
             while let Some(item) = stream.next().await {
                 match item {
@@ -152,6 +159,17 @@ impl ActorService for NfcActor {
                             continue;
                         }
                         let bytes = bytes_mut.freeze();
+                        if bytes.len() >= 3 {
+                            match (bytes[0] >> 5) & 0x07 {
+                                NCI_MT_DATA => {
+                                    nfc_stats_clone.incr_nci_data_tx();
+                                    nfc_stats_clone.incr(NfcApi::DataReceive);
+                                }
+                                NCI_MT_RSP => nfc_stats_clone.incr_nci_responses_tx(),
+                                NCI_MT_NTF => nfc_stats_clone.incr_nci_notifications_tx(),
+                                _ => {}
+                            }
+                        }
                         if let Err(e) = packet_sink.send(bytes).await {
                             error!("Failed to send packet to guest: {:?}", e);
                             break;
@@ -159,6 +177,7 @@ impl ActorService for NfcActor {
                     }
                     Err(e) => {
                         error!("NFC reader error: {:?}", e);
+                        nfc_stats_clone.incr_nci_error();
                         break;
                     }
                 }
@@ -169,6 +188,16 @@ impl ActorService for NfcActor {
         ctx.spawn(chip_id, task_1);
 
         // Bridge Guest -> Casimir
+        let nfc_stats_rx = self.nfc_stats.clone();
+        let packet_stream = packet_stream.inspect(move |bytes| {
+            if bytes.len() >= 3 {
+                match (bytes[0] >> 5) & 0x07 {
+                    NCI_MT_DATA => nfc_stats_rx.incr_nci_data_rx(),
+                    NCI_MT_CMD => nfc_stats_rx.incr_nci_commands_rx(),
+                    _ => {}
+                }
+            }
+        });
         ctx.add_stream(chip_id, Box::pin(packet_stream));
 
         self.active_chips.insert(
@@ -254,7 +283,18 @@ impl ActorService for NfcActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
-            NfcAction::Generic(_req) => Ok(()),
+            NfcAction::Generic(_req) => Ok(crate::nfc_actor::NfcActionResult::Ok),
+            NfcAction::GetStatistics => {
+                let mut stats = Vec::new();
+                for id in self.active_chips.keys() {
+                    let mut radio_stats = netsim_model::NetsimRadioStats::default();
+                    radio_stats.id = id.0;
+                    radio_stats.name = format!("nfc-{}", id.0);
+                    radio_stats.kind = netsim_model::RadioKind::Nfc;
+                    stats.push(radio_stats);
+                }
+                Ok(crate::nfc_actor::NfcActionResult::Statistics(stats.into_boxed_slice()))
+            }
             NfcAction::CreateControlChannel { respond_to } => {
                 info!("NfcActor: Received CreateControlChannel action");
                 let (grpc_io, casimir_io) = tokio::io::duplex(1024);
@@ -274,20 +314,22 @@ impl ActorService for NfcActor {
                                 id
                             );
                             let _ = respond_to.send(Ok((grpc_io, id)));
-                            Ok(())
+                            Ok(crate::nfc_actor::NfcActionResult::Ok)
                         }
                         Err(e) => {
                             let err_msg = format!("Failed to add RF device to Casimir: {e}");
                             error!("NfcActor: {}", err_msg);
+                            self.nfc_stats.incr_casimir_error();
                             let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
-                            Ok(())
+                            Ok(crate::nfc_actor::NfcActionResult::Ok)
                         }
                     }
                 } else {
                     let err_msg = "Casimir scene not started".to_string();
                     error!("NfcActor: {}", err_msg);
+                    self.nfc_stats.incr_casimir_error();
                     let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
-                    Ok(())
+                    Ok(crate::nfc_actor::NfcActionResult::Ok)
                 }
             }
         }

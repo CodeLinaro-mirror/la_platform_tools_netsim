@@ -56,3 +56,64 @@ rust_library_host {
         "libtracing",
     ],
 }
+
+rust_test_host {
+    name: "libnetsim_next_slirp_actor_tests",
+    crate_name: "slirp_actor",
+    edition: "2024",
+    crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_packets_testing",
+        "libnetsim_next_slirp_testing",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+    ],
+}
+
+rust_test_host {
+    name: "libnetsim_next_slirp_actor_integration_tests",
+    crate_name: "slirp_actor_tests",
+    edition: "2024",
+    crate_root: "tests/integration_test.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "tests/integration_test.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_packets_testing",
+        "libnetsim_next_slirp_actor_testing",
+        "libnetsim_next_slirp_testing",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+    ],
+}

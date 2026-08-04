@@ -3,3 +3,6 @@
 
 mod dhcpv6_impl;
 pub use dhcpv6_impl::Dhcpv6Manager;
+
+#[cfg(test)]
+mod tests;

@@ -8,7 +8,6 @@ mod boot_test;
 mod call_service_test;
 mod cellular_network_test;
 mod data_service_test;
-mod event_loop_test;
 mod integration_test;
 mod misc_service_test;
 mod modem_action_test;

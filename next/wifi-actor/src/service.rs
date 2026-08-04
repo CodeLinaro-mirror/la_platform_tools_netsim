@@ -172,7 +172,7 @@ impl ActorService for WifiActor {
                 })?;
                 *chip = initial_chip.clone();
                 let chip = chip.clone();
-                Ok(WifiResponse::Chip(chip))
+                Ok(WifiResponse::Chip(Box::new(chip)))
             }
         }
     }

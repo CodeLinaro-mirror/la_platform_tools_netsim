@@ -19,6 +19,10 @@ package(default_visibility = ["//visibility:public"])
 netsim_rust_library(
     name = "modem-rs",
     srcs = glob(["src/**/*.rs"]),
+    compile_data = [
+        "src/profiles/iccprofile_for_sim0.xml",
+        "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+    ],
     crate_name = "modem_rs",
     edition = "2024",
     features = ["test-utils"],
@@ -26,6 +30,7 @@ netsim_rust_library(
         "//next/modem-rs-derive",
     ],
     test_deps = [
+        "@tempfile",
         "@tracing-subscriber",
     ],
     deps = [
@@ -35,6 +40,7 @@ netsim_rust_library(
         "@hex",
         "@nom",
         "@serde",
+        "@serde-xml-rs",
         "@serde_json",
         "@tokio",
         "@tracing",

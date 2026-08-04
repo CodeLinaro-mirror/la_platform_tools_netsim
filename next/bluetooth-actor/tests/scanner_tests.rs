@@ -1,6 +1,8 @@
 // Copyright 2023-2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use netsim_model::{ChipUpdate, Interval};
+
 use crate::world::World;
 
 // Feature: Scanner Support
@@ -115,4 +117,73 @@ async fn test_scanner_sees_multiple_beacons() {
     // 3. Verify scanner sees both beacons.
     world.then_scanner_sees_adv_from("Scanner", "Beacon1").await;
     world.then_scanner_sees_adv_from("Scanner", "Beacon2").await;
+}
+
+// Scenario: Active scanner does not deadlock the simulation
+//
+//   Given a beacon chip
+//   And an active scanner chip
+//   When the beacon advertises
+//   Then the active scanner receives the advertisement and sends scan request
+//   And the simulation does not deadlock
+#[tokio::test]
+async fn test_active_scanner_no_deadlock() {
+    let mut world = World::new();
+
+    // 1. Create a beacon.
+    world.given_beacon("Beacon").await;
+
+    // 2. Create an active scanner.
+    world.given_active_scanner("ActiveScanner").await;
+
+    // 3. Verify it receives the advertisement (if it deadlocks, this will hang).
+    world.then_scanner_sees_any_adv("ActiveScanner").await;
+}
+
+// Scenario: Update under load does not deadlock
+//
+//   Given a beacon chip
+//   And a scanner chip
+//   When we update the beacon preset repeatedly
+//   Then the simulation does not deadlock
+#[tokio::test]
+async fn test_update_deadlock_under_load() {
+    let mut world = World::new();
+
+    // 1. Create a beacon with fast advertising interval.
+    world.given_beacon_with_interval("Beacon", Interval::Milliseconds(20)).await;
+
+    // 2. Create a scanner.
+    world.given_scanner("Scanner").await;
+
+    let id = *world.chips.get("Beacon").unwrap();
+    let client = world.client.clone();
+
+    // 3. Spawn a task to update preset repeatedly to trigger handle_update ->
+    //    set_properties.
+    let handle = tokio::spawn(async move {
+        let start = std::time::Instant::now();
+        let mut i = 0;
+        while start.elapsed() < std::time::Duration::from_millis(250) {
+            let preset = if i % 2 == 0 { "default" } else { "laird_bl654" };
+            let update = ChipUpdate {
+                variant: Some(netsim_model::ChipVariantUpdate::Bluetooth(
+                    netsim_model::BluetoothUpdate {
+                        preset: Some(preset.to_string()),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            };
+            let _ = client.0.update(id, update).await;
+            i += 1;
+            tokio::task::yield_now().await;
+        }
+    });
+
+    // Wait for the update task to finish (or hang if it deadlocks).
+    tokio::time::timeout(std::time::Duration::from_secs(10), handle)
+        .await
+        .expect("Test timed out (deadlock detected)")
+        .unwrap();
 }

@@ -22,17 +22,25 @@ pub fn netsimd_temp_dir() -> PathBuf {
 /// Helper function for netsimd_temp_dir() to allow Read Only
 /// Unit tests.
 fn netsimd_temp_dir_pathbuf() -> PathBuf {
+    netsimd_temp_dir_pathbuf_with_env(|k| env::var(k), env::temp_dir)
+}
+
+fn netsimd_temp_dir_pathbuf_with_env<F, G>(get_env: F, get_temp_dir: G) -> PathBuf
+where
+    F: Fn(&str) -> Result<String, env::VarError>,
+    G: Fn() -> PathBuf,
+{
     // allow Forge to override the system temp
-    let mut path = match env::var("ANDROID_TMP") {
+    let mut path = match get_env("ANDROID_TMP") {
         Ok(var) => PathBuf::from(var),
-        _ => env::temp_dir(),
+        _ => get_temp_dir(),
     };
     // On Windows the GetTempPath() is user-dependent so we don't need
     // to append $USER to the result -- otherwise allow multiple users
     // to co-exist on a system.
     #[cfg(not(target_os = "windows"))]
     {
-        let user = match env::var("USER") {
+        let user = match get_env("USER") {
             Ok(var) => format!("android-{var}"),
             _ => "android".to_string(),
         };
@@ -46,36 +54,30 @@ fn netsimd_temp_dir_pathbuf() -> PathBuf {
 #[cfg(not(target_os = "windows"))]
 #[cfg(test)]
 mod tests {
-    use std::env;
+    use std::{env, path::PathBuf};
 
-    use super::netsimd_temp_dir_pathbuf;
-    use crate::tests::ENV_MUTEX;
+    use super::netsimd_temp_dir_pathbuf_with_env;
 
     #[test]
     fn test_forge() {
-        let _locked = ENV_MUTEX.lock();
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            env::set_var("ANDROID_TMP", "/tmp/forge");
-            env::set_var("USER", "ryle");
-        }
-        let tmp_dir = netsimd_temp_dir_pathbuf();
+        let mock_env = |key: &str| match key {
+            "ANDROID_TMP" => Ok("/tmp/forge".to_string()),
+            "USER" => Ok("ryle".to_string()),
+            _ => Err(env::VarError::NotPresent),
+        };
+        let mock_temp = || PathBuf::from("/tmp");
+        let tmp_dir = netsimd_temp_dir_pathbuf_with_env(mock_env, mock_temp);
         assert_eq!(tmp_dir.to_str().unwrap(), "/tmp/forge/android-ryle/netsimd");
     }
 
     #[test]
     fn test_non_forge() {
-        let _locked = ENV_MUTEX.lock();
-        let temp_dir = env::temp_dir();
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            env::remove_var("ANDROID_TMP");
-            env::set_var("USER", "ryle");
-        }
-        let netsimd_temp_dir = netsimd_temp_dir_pathbuf();
-        assert_eq!(
-            netsimd_temp_dir.to_str().unwrap(),
-            temp_dir.join("android-ryle/netsimd").to_str().unwrap()
-        );
+        let mock_env = |key: &str| match key {
+            "USER" => Ok("ryle".to_string()),
+            _ => Err(env::VarError::NotPresent),
+        };
+        let mock_temp = || PathBuf::from("/tmp");
+        let netsimd_temp_dir = netsimd_temp_dir_pathbuf_with_env(mock_env, mock_temp);
+        assert_eq!(netsimd_temp_dir.to_str().unwrap(), "/tmp/android-ryle/netsimd");
     }
 }

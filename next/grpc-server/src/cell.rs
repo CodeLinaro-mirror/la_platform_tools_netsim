@@ -43,6 +43,31 @@ fn map_proto_reg_status(
     }
 }
 
+fn map_model_reg_status(
+    model_status: netsim_model::RegistrationStatus,
+) -> protobuf::EnumOrUnknown<netsim_proto::cell::RegistrationStatus> {
+    match model_status {
+        netsim_model::RegistrationStatus::NotRegistered => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::NOT_REGISTERED)
+        }
+        netsim_model::RegistrationStatus::RegisteredHome => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::REGISTERED_HOME)
+        }
+        netsim_model::RegistrationStatus::Searching => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::SEARCHING)
+        }
+        netsim_model::RegistrationStatus::Denied => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::DENIED)
+        }
+        netsim_model::RegistrationStatus::Roaming => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::ROAMING)
+        }
+        netsim_model::RegistrationStatus::Unknown => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::UNKNOWN)
+        }
+    }
+}
+
 impl CellService for CellServiceImpl {
     fn get(&mut self, ctx: RpcContext, req: GetCellRequest, sink: UnarySink<Cell>) {
         let client = self.client.clone();
@@ -55,6 +80,12 @@ impl CellService for CellServiceImpl {
                     if let Some(netsim_model::ChipVariant::Cell(cell_info)) = chip.variant {
                         cell.state = cell_info.state;
                         cell.ringing = cell.state == MODEM_STATE_RINGING;
+                        cell.sms_count = cell_info.sms_count;
+                        cell.rssi = cell_info.rssi;
+                        cell.ber = cell_info.ber;
+                        cell.voice_registration =
+                            map_model_reg_status(cell_info.voice_registration);
+                        cell.data_registration = map_model_reg_status(cell_info.data_registration);
                     }
                     let _ = sink.success(cell).await;
                 }
@@ -87,6 +118,13 @@ impl CellService for CellServiceImpl {
                         if let Some(netsim_model::ChipVariant::Cell(cell_info)) = chip.variant {
                             cell.state = cell_info.state;
                             cell.ringing = cell.state == MODEM_STATE_RINGING;
+                            cell.sms_count = cell_info.sms_count;
+                            cell.rssi = cell_info.rssi;
+                            cell.ber = cell_info.ber;
+                            cell.voice_registration =
+                                map_model_reg_status(cell_info.voice_registration);
+                            cell.data_registration =
+                                map_model_reg_status(cell_info.data_registration);
                             response.cells.push(cell);
                         }
                     }
@@ -121,6 +159,9 @@ impl CellService for CellServiceImpl {
                 }
                 Some(netsim_proto::cell::execute_cell_request::Action::ReceiveSms(s)) => {
                     CellAction::ReceiveSms { sender: s.sender, text: s.text }
+                }
+                Some(netsim_proto::cell::execute_cell_request::Action::ReceivePdu(p)) => {
+                    CellAction::ReceivePdu { pdu: p.pdu }
                 }
                 Some(netsim_proto::cell::execute_cell_request::Action::SetSignalStrength(s)) => {
                     CellAction::SetSignalStrength { rssi: s.rssi, ber: s.ber }

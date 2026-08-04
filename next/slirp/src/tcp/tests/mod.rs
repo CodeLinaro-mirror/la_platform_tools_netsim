@@ -4,6 +4,7 @@
 mod connection_info_tests;
 mod tcp_checksum_tests;
 mod tcp_closing_tests;
+mod tcp_congestion_tests;
 mod tcp_connection_tests;
 mod tcp_flow_control_tests;
 mod tcp_handshake_tests;

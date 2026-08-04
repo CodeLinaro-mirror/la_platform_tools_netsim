@@ -3,3 +3,6 @@
 
 pub mod clock;
 pub mod timers;
+
+#[cfg(test)]
+mod tests;

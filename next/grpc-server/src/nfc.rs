@@ -33,6 +33,7 @@ impl NfcService for NfcServiceImpl {
         req: GetStatusRequest,
         sink: UnarySink<GetStatusResponse>,
     ) {
+        self.client.incr_get_status_count();
         let client = self.client.clone();
         ctx.spawn(async move {
             let mut resp = GetStatusResponse::new();
@@ -80,6 +81,7 @@ impl NfcService for NfcServiceImpl {
         req: SetPowerRequest,
         sink: UnarySink<SetPowerResponse>,
     ) {
+        self.client.incr_set_power_count();
         let client = self.client.clone();
         ctx.spawn(async move {
             let patch = ChipUpdate { enabled: Some(req.power_on), ..Default::default() };
@@ -129,6 +131,7 @@ impl NfcService for NfcServiceImpl {
         req: PollRequest,
         mut sink: ServerStreamingSink<PollResponse>,
     ) {
+        self.client.incr_poll_count();
         let client = self.client.clone();
         ctx.spawn(async move {
             let chip_exists = client.read(ChipId(req.chip_id)).await.is_ok();
@@ -155,6 +158,7 @@ impl NfcService for NfcServiceImpl {
         req: SendApduRequest,
         sink: UnarySink<SendApduResponse>,
     ) {
+        self.client.incr_send_apdu_count();
         let client = self.client.clone();
         ctx.spawn(async move {
             let chip_exists = client.read(ChipId(req.chip_id)).await.is_ok();

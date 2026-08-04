@@ -66,3 +66,76 @@ rust_library_host {
         "libasync_trait",
     ],
 }
+
+rust_test_host {
+    name: "libnetsim_next_cell_actor_tests",
+    crate_name: "cell_actor",
+    edition: "2024",
+    crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_device_api_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_modem_rs_testing",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+        "libtracing_subscriber",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}
+
+rust_test_host {
+    name: "libnetsim_next_cell_actor_integration_tests",
+    crate_name: "cell_actor_tests",
+    edition: "2024",
+    crate_root: "tests/integration_test.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "tests/integration_test.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_cell_actor_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_device_api_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_modem_rs_testing",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+        "libtracing_subscriber",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}

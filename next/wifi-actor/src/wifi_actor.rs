@@ -7,7 +7,7 @@ use actor_framework::DynContext;
 use ap_actor::{ApClient, SharedKeyStore};
 use netsim_model::{Chip, ChipId, NetsimRadioStats};
 use netsim_packets::Ieee80211;
-use netsim_proto::stats::WifiStats as ProtoWifiStats;
+use netsim_proto::stats::WifiIpcStats as ProtoWifiIpcStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
 #[cfg(not(target_os = "linux"))]
@@ -35,8 +35,8 @@ pub enum WifiReq {
 pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
-    GlobalStats(Box<ProtoWifiStats>),
-    Chip(netsim_model::Chip),
+    GlobalStats(Box<ProtoWifiIpcStats>),
+    Chip(Box<netsim_model::Chip>),
 }
 
 pub type SlirpPendingRequest = (
@@ -162,9 +162,26 @@ impl WifiActor {
         }
     }
 
-    // this is the input router
+    #[allow(clippy::collapsible_if)]
     pub(crate) async fn process_guest_packet(&mut self, chip_id: u32, packet: bytes::Bytes) {
         trace!("WifiActor: Packet from Guest (Chip {}) len {}", chip_id, packet.len());
+
+        // Fast path: Avoid full PDL decode overhead for standard data packets.
+        // HwsimMsg format: NlMsgHdr (16 bytes) + HwsimMsgHdr (hwsim_cmd at offset 16).
+        // HwsimCmd::StartPmsr relies on netsim_packets::HwsimCmd::StartPmsr as u8.
+        if packet.len() >= 20 && packet[16] == netsim_packets::HwsimCmd::StartPmsr as u8 {
+            if let Ok(hwsim_msg) = netsim_packets::HwsimMsg::decode_full(&packet) {
+                if hwsim_msg.hwsim_hdr.hwsim_cmd == netsim_packets::HwsimCmd::StartPmsr {
+                    if let Some(resp) =
+                        crate::pmsr::handle_start_pmsr(&hwsim_msg, chip_id, &self.active_chips)
+                    {
+                        self.out_queue.push((chip_id, resp));
+                    }
+                    self.flush_out_queue();
+                    return;
+                }
+            }
+        }
 
         match self.medium.resolve_tx_packet(chip_id, &packet) {
             Ok(tx_state) => {
@@ -204,22 +221,24 @@ impl WifiActor {
                                     if let (Some(initiator), Some(responder)) = (
                                         self.active_chips.get(&ChipId(chip_id)),
                                         self.active_chips.get(&ChipId(peer_id)),
-                                    ) && let Some(responses) = crate::ftm::handle_ftm_request(
-                                        &frame,
-                                        &initiator.pose.position,
-                                        &responder.pose.position,
                                     ) {
-                                        debug!(
-                                            "Simulated FTM Response from {} to {}",
-                                            peer_id, chip_id
-                                        );
-                                        for resp in responses {
-                                            self.out_queue.push((chip_id, resp));
+                                        if let Some(responses) = crate::ftm::handle_ftm_request(
+                                            &frame,
+                                            &initiator.pose.position,
+                                            &responder.pose.position,
+                                        ) {
+                                            debug!(
+                                                "Simulated FTM Response from {} to {}",
+                                                peer_id, chip_id
+                                            );
+                                            for resp in responses {
+                                                self.out_queue.push((chip_id, resp));
+                                            }
+                                            // Suppress generic transmission.
+                                            // Act as a Hardware Offload/Medium Interception to
+                                            // ensure ONLY the simulated FTM response is sent.
+                                            return;
                                         }
-                                        // Suppress generic transmission.
-                                        // Act as a Hardware Offload/Medium Interception to
-                                        // ensure ONLY the simulated FTM response is sent.
-                                        return;
                                     }
                                 }
                             }

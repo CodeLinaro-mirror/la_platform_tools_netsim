@@ -15,13 +15,17 @@ fn test_stk_display_text() {
     // This is a simplified "Display Text" proactive command envelope.
     when_at_command_sent(&mut world, "A", "AT+CUSATE=\"D1150121810D050448656C6C6F20576F726C64\"");
 
-    then_response_is(&mut world, "A", "+CUSAT: \"9000\"");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
+    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "A", "+CUSATP: \"9000\"");
 }
 
 // Scenario: Send STK Envelope Command
 //   Given a modem "A"
 //   When AT command 'AT+CUSATE="D3120101"' is sent to "A"
-//   Then response from "A" is '+CUSATP: "SubMenu1"'
+//   Then response from "A" is '+CUSATE: 0'
+//   And response from "A" is 'OK'
+//   And response from "A" is '+CUSATP: "SubMenu1"'
 #[test]
 fn test_send_stk_envelope_command() {
     let mut world = World::new();
@@ -29,13 +33,17 @@ fn test_send_stk_envelope_command() {
 
     when_at_command_sent(&mut world, "A", "AT+CUSATE=\"D3120101\"");
 
+    then_response_is(&mut world, "A", "+CUSATE: 0");
+    then_response_is(&mut world, "A", "OK");
     then_response_is(&mut world, "A", "+CUSATP: \"SubMenu1\"");
 }
 
 // Scenario: STK Get Input
 //   Given a modem "A"
 //   When AT command 'AT+CUSATE="D1150123810D0504456E7465722054657874"' is sent
-// to "A"   Then response from "A" is '+CUSAT: "9000"'
+// to "A"   Then response from "A" is '+CUSATE: 0'
+//   And response from "A" is 'OK'
+//   And response from "A" is '+CUSATP: \"9000\"'
 #[test]
 fn test_stk_get_input() {
     let mut world = World::new();
@@ -44,7 +52,9 @@ fn test_stk_get_input() {
     // This is a simplified "Get Input" proactive command envelope.
     when_at_command_sent(&mut world, "A", "AT+CUSATE=\"D1150123810D0504456E7465722054657874\"");
 
-    then_response_is(&mut world, "A", "+CUSAT: \"9000\"");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
+    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "A", "+CUSATP: \"9000\"");
 }
 
 // Scenario: Query STK Ready

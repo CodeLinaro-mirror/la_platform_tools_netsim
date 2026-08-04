@@ -62,7 +62,3 @@ impl ArpTable {
         None
     }
 }
-
-#[cfg(test)]
-#[path = "tests/arp_tests.rs"]
-mod tests;

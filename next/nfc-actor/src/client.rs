@@ -11,22 +11,53 @@ use netsim_model::{
 use crate::NfcActor;
 
 #[derive(Clone, Debug)]
-pub struct NfcClient(pub ResourceClient<NfcActor>);
+pub struct NfcClient {
+    pub client: ResourceClient<NfcActor>,
+    pub stats: std::sync::Arc<crate::stats::NfcStats>,
+    pub service_stats: std::sync::Arc<crate::stats::NfcServiceStats>,
+}
 
 impl NfcClient {
+    pub fn new(client: ResourceClient<NfcActor>) -> Self {
+        Self {
+            client,
+            stats: std::sync::Arc::new(crate::stats::NfcStats::new()),
+            service_stats: std::sync::Arc::new(crate::stats::NfcServiceStats::new()),
+        }
+    }
     pub async fn list(&self) -> Result<Vec<Chip>, ClientError> {
-        self.0.list().err_into::<ClientError>().await
+        self.client.list().err_into::<ClientError>().await
+    }
+
+    pub fn stats(&self) -> std::sync::Arc<crate::stats::NfcStats> {
+        self.stats.clone()
+    }
+    pub fn service_stats(&self) -> std::sync::Arc<crate::stats::NfcServiceStats> {
+        self.service_stats.clone()
+    }
+
+    pub fn incr_get_status_count(&self) {
+        self.service_stats.incr_get_status_count();
+    }
+    pub fn incr_set_power_count(&self) {
+        self.service_stats.incr_set_power_count();
+    }
+    pub fn incr_poll_count(&self) {
+        self.service_stats.incr_poll_count();
+    }
+    pub fn incr_send_apdu_count(&self) {
+        self.service_stats.incr_send_apdu_count();
     }
 }
 
 #[async_trait]
 impl ChipClient for NfcClient {
     async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
-        self.0.create_with_id(id, params).err_into::<ClientError>().await.map(|_| ())
+        self.client.create_with_id(id, params).err_into::<ClientError>().await.map(|_| ())
     }
 
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {
-        self.0
+        self.client
             .get(id)
             .err_into::<ClientError>()
             .await?
@@ -34,29 +65,50 @@ impl ChipClient for NfcClient {
     }
 
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
-        self.0.update(id, patch).err_into::<ClientError>().await
+        self.client.update(id, patch).err_into::<ClientError>().await
     }
 
     async fn delete(&self, id: ChipId) -> Result<(), ClientError> {
-        self.0.delete(id).err_into::<ClientError>().await
+        self.client.delete(id).err_into::<ClientError>().await
     }
 
     async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError> {
-        // NFC doesn't implement statistics yet
-        Ok(Box::new([]))
+        match self.client.perform_action(None, crate::nfc_actor::NfcAction::GetStatistics).await {
+            Ok(crate::nfc_actor::NfcActionResult::Statistics(stats)) => Ok(stats),
+            Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
+            Err(e) => Err(ClientError::Send(e.to_string())),
+        }
     }
 
     async fn read_count_for_testing(&self) -> Result<usize, ClientError> {
-        self.0.list().err_into::<ClientError>().await.map(|chips| chips.len())
+        self.client.list().err_into::<ClientError>().await.map(|chips| chips.len())
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        self.0.shutdown().err_into::<ClientError>().await
+        self.client.shutdown().err_into::<ClientError>().await
     }
 
     async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
         // Not implemented
         self.read(id).await
+    }
+
+    async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
+        use netsim_proto::protobuf::Message;
+        self.stats
+            .to_ipc_proto()
+            .write_to_bytes()
+            .map(Some)
+            .map_err(|e| ClientError::Recv(e.to_string()))
+    }
+
+    async fn get_service_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
+        use netsim_proto::protobuf::Message;
+        self.service_stats
+            .to_proto()
+            .write_to_bytes()
+            .map(Some)
+            .map_err(|e| ClientError::Recv(e.to_string()))
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {
@@ -71,7 +123,10 @@ impl NfcClient {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let action = crate::nfc_actor::NfcAction::CreateControlChannel { respond_to: tx };
 
-        self.0.perform_action(None, action).await.map_err(|e| ClientError::Send(e.to_string()))?;
+        self.client
+            .perform_action(None, action)
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
 
         rx.await
             .map_err(|e| ClientError::Recv(e.to_string()))?

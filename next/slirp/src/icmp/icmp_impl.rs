@@ -325,7 +325,3 @@ impl IcmpManager {
         self.send_icmp_error(responses, config, offending_packet, IcmpType::TimeExceeded, 0);
     }
 }
-
-#[cfg(test)]
-#[path = "tests/icmp_tests.rs"]
-mod tests;

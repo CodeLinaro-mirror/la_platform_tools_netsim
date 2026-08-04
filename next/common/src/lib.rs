@@ -8,11 +8,3 @@
 
 pub mod system;
 pub mod util;
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Mutex;
-    // Shared mutex to ensure environment is not modified by multiple tests
-    // simultaneously
-    pub static ENV_MUTEX: Mutex<()> = Mutex::new(());
-}

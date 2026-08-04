@@ -98,7 +98,3 @@ impl TimerManager {
         self.events.clear();
     }
 }
-
-#[cfg(test)]
-#[path = "tests/timers_tests.rs"]
-mod tests;

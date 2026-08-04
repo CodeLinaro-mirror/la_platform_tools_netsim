@@ -6,3 +6,6 @@ pub use dhcp_impl::DhcpManager;
 #[cfg(test)]
 #[allow(unused_imports)]
 pub(crate) use dhcp_impl::{DHCP_MAGIC_COOKIE, DhcpMessageType, DhcpPacket};
+
+#[cfg(test)]
+mod tests;

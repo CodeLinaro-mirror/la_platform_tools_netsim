@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::ModemAction;
+use netsim_model::{ModemAction, Quirks};
 
 // ...
 use crate::modem_network_simulator::NetworkEvent;
@@ -14,6 +14,8 @@ pub trait ModemNetworkInterface: Send + Sync {
         chip_id: ModemId,
         sink: ModemSink,
         sim_type: Option<i32>,
+        sim_profile: Option<String>,
+        quirks: Quirks,
     ) -> Result<(), ModemError>;
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError>;
     fn send_data(&mut self, chip_id: ModemId, data: &[u8]) -> Result<(), ModemError>;
@@ -30,8 +32,10 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
         chip_id: ModemId,
         sink: ModemSink,
         sim_type: Option<i32>,
+        sim_profile: Option<String>,
+        quirks: Quirks,
     ) -> Result<(), ModemError> {
-        self.new_modem(chip_id, sink, sim_type)
+        self.new_modem(chip_id, sink, sim_type, sim_profile, quirks)
     }
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError> {
         self.remove_modem(chip_id);
@@ -45,11 +49,17 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
 
     fn get_modem_info(&self, chip_id: ModemId) -> Result<ModemInfo, ModemError> {
         if let Some(modem) = self.get_modem(chip_id) {
+            let (rssi, ber) = modem.network_service.signal_strength();
             Ok(ModemInfo {
                 id: chip_id,
                 connections: modem.get_active_calls(),
                 ringing: modem.is_ringing(),
                 sms_count: modem.get_sms_count(),
+                quirks: modem.quirks,
+                rssi: rssi as u32,
+                ber: ber as u32,
+                voice_registration: modem.network_service.voice_registration(),
+                data_registration: modem.network_service.data_registration(),
             })
         } else {
             Err(ModemError::NotFound)

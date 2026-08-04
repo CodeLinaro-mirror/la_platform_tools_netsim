@@ -12,7 +12,15 @@ pub const MODEM_STATE_IDLE: &str = "idle";
 /// Parameters for creating a Cellular chip.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CellCreate {
-    // Future Cellular specific properties.
+    pub sim_type: Option<i32>,
+    pub sim_profile: Option<String>,
+}
+
+/// Quirks for compatibility with different guest-side implementations.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Quirks {
+    /// Flag for compatibility with Goldfish RIL in SDK 37 and earlier.
+    pub goldfish_ril_37_or_earlier: bool,
 }
 
 /// Cellular technology specific chip information.
@@ -25,16 +33,44 @@ pub struct Cell {
     /// SIM card type (0 = No SIM, 1 = Normal SIM, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sim_type: Option<i32>,
+    /// XML SIM ICC profile content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_profile: Option<String>,
+    /// Quirks for compatibility with different guest-side implementations.
+    #[serde(default)]
+    pub quirks: Quirks,
+    #[serde(default)]
+    pub sms_count: u32,
+    #[serde(default)]
+    pub rssi: u32,
+    #[serde(default)]
+    pub ber: u32,
+    #[serde(default)]
+    pub voice_registration: RegistrationStatus,
+    #[serde(default)]
+    pub data_registration: RegistrationStatus,
 }
 
 impl Default for Cell {
     fn default() -> Self {
-        Self { radio: crate::chip::Radio::default(), state: "idle".to_string(), sim_type: None }
+        Self {
+            radio: crate::chip::Radio::default(),
+            state: "idle".to_string(),
+            sim_type: None,
+            sim_profile: None,
+            quirks: Quirks::default(),
+            sms_count: 0,
+            rssi: 0,
+            ber: 0,
+            voice_registration: RegistrationStatus::default(),
+            data_registration: RegistrationStatus::default(),
+        }
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum RegistrationStatus {
+    #[default]
     NotRegistered = 0,
     RegisteredHome = 1,
     Searching = 2,
@@ -43,7 +79,7 @@ pub enum RegistrationStatus {
     Roaming = 5,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum RadioTechnology {
     Unknown = 0,
     Gsm = 1,

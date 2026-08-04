@@ -340,6 +340,8 @@ impl From<ChipKind> for ChipVariant {
                 radio: Default::default(),
                 state: "unknown".into(),
                 sim_type: None,
+                quirks: Default::default(),
+                ..Default::default()
             }),
             ChipKind::CELLULAR_DATA => ChipVariant::CellularData(Default::default()),
             ChipKind::ETHERNET => ChipVariant::Ethernet(Default::default()),
@@ -600,6 +602,9 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn reset(&self, id: ChipId) -> Result<Chip, ClientError>;
     fn clone_box(&self) -> Box<dyn ChipClient>;
     async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
+        Ok(None)
+    }
+    async fn get_service_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
         Ok(None)
     }
 }

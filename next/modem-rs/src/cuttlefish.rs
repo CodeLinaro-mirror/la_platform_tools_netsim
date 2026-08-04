@@ -64,3 +64,27 @@ pub fn read_cuttlefish_config_with_params(
         dns: instance_config.ril_dns.clone(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+
+    #[test]
+    fn test_read_cuttlefish_config_file_not_found() {
+        let config = read_cuttlefish_config_with_params("/nonexistent/file", "1");
+        assert!(config.is_none());
+    }
+
+    #[test]
+    fn test_read_cuttlefish_config_invalid_json() {
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        temp_file.write_all(b"{invalid_json").unwrap();
+        temp_file.as_file_mut().flush().unwrap();
+
+        let config_path_str = temp_file.path().to_str().unwrap();
+        let config = read_cuttlefish_config_with_params(config_path_str, "1");
+        assert!(config.is_none());
+    }
+}
