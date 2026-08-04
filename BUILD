@@ -1,10 +1,8 @@
 # Copyright 2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 
-load("@goldfish_build//rules/native:native_binaries.bzl", "stripped_binaries")
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_license//rules:license.bzl", "license")
-load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
 
 package(
     default_applicable_licenses = [":license"],
@@ -32,31 +30,6 @@ cc_library(
     name = "netsimd_cc_grpc",
     visibility = ["//visibility:public"],
     deps = ["//proto:netsim_cc_grpc"],
-)
-
-rust_binary(
-    name = "netsim",
-    srcs = ["//rust/cli:bin/netsim.rs"],
-    crate_name = "netsim_cli",
-    edition = "2021",
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
-    deps = [
-        "//rust/cli:netsim_cli",
-    ],
-)
-
-rust_test(
-    name = "netsim_cli_tests",
-    crate = "//rust/cli:netsim_cli",
-    edition = "2021",
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
-    tags = ["general_tests"],
 )
 
 # PDL generated files
@@ -121,73 +94,6 @@ genrule(
 )
 
 genrule(
-    name = "netsim_daemon_cc",
-    srcs = ["//rust/daemon:src/ffi.rs"],
-    outs = ["netsim-daemon/src/ffi.rs.cc"],
-    cmd = "$(location @cxx.rs//:codegen) $(SRCS) --cfg feature=\\\"local_ssl\\\" >> $(OUTS)",
-    tools = ["@cxx.rs//:codegen"],
-)
-
-genrule(
-    name = "netsim_daemon_h",
-    srcs = ["//rust/daemon:src/ffi.rs"],
-    outs = ["netsim-daemon/src/ffi.rs.h"],
-    cmd = "$(location @cxx.rs//:codegen) $(SRCS) --cfg feature=\\\"local_ssl\\\" --header >> $(OUTS)",
-    tools = ["@cxx.rs//:codegen"],
-)
-
-cc_binary(
-    name = "netsimd",
-    srcs = [
-        "src/backend/grpc_client.h",
-        "src/hci/bluetooth_facade.cc",
-        "src/hci/bluetooth_facade.h",
-        "src/hci/hci_packet_hub.h",
-        "src/hci/hci_packet_transport.cc",
-        "src/hci/hci_packet_transport.h",
-        "src/hci/rust_device.cc",
-        "src/hci/rust_device.h",
-        "src/util/crash_report.cc",
-        "src/util/crash_report.h",
-        "src/util/filesystem.h",
-        "src/util/ini_file.h",
-        "src/util/log.cc",
-        "src/util/log.h",
-        ":netsim_daemon_cc",
-        ":netsim_daemon_h",
-        "//rust:netsimd.cc",
-    ] + select({
-        "@platforms//os:windows": ["src/hci/async_manager.cc"],
-        "//conditions:default": [],
-    }),
-    defines = ["NETSIM_ANDROID_EMULATOR"],
-    includes = ["src"],
-    linkopts = select({
-        "@platforms//os:windows": ["ntdll.lib"],
-        "//conditions:default": [],
-    }),
-    visibility = ["//visibility:public"],
-    deps = [
-        ":netsimd_cc_grpc",
-        ":netsimd_cc_proto",
-        "@aemu//base:aemu-base",
-        "@aemu//base:aemu-base-socket-utils",
-        "@c-ares//:ares",
-        "@cxx.rs//:core",
-        "@glib//glib",
-        "@rootcanal//:libbt-rootcanal",
-        "@wpa_supplicant_8//:hostapd_c_lib",
-    ] + select({
-        "@platforms//os:windows": [
-            "//rust/daemon:netsim_daemon_windows",
-        ],
-        "//conditions:default": [
-            "//rust/daemon:netsim_daemon",
-        ],
-    }),
-)
-
-genrule(
     name = "netsim-ui",
     srcs = ["//ui:netsim_ui_files"],
     outs = [
@@ -223,12 +129,22 @@ genrule(
     """,
 )
 
-stripped_binaries(
+alias(
     name = "netsim_stripped",
-    srcs = [":netsim"],
+    actual = "//next/cli:netsim_stripped",
 )
 
-stripped_binaries(
+alias(
+    name = "netsim",
+    actual = "//next/cli:netsim",
+)
+
+alias(
     name = "netsimd_stripped",
-    srcs = [":netsimd"],
+    actual = "//next/daemon:daemon_stripped",
+)
+
+alias(
+    name = "netsimd",
+    actual = "//next/daemon:daemon",
 )
