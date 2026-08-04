@@ -93,42 +93,6 @@ genrule(
     ],
 )
 
-genrule(
-    name = "netsim-ui",
-    srcs = ["//ui:netsim_ui_files"],
-    outs = [
-        "netsim-ui/index.html",
-        "netsim-ui/js/device-info.js",
-        "netsim-ui/js/device-list.js",
-        "netsim-ui/js/navigation-bar.js",
-        "netsim-ui/js/packet-info.js",
-        "netsim-ui/js/license-info.js",
-        "netsim-ui/js/customize-map-button.js",
-        "netsim-ui/js/pyramid-sprite.js",
-        "netsim-ui/js/device-dragzone.js",
-        "netsim-ui/js/device-map.js",
-        "netsim-ui/js/device-dropzone.js",
-        "netsim-ui/js/device-observer.js",
-        "netsim-ui/js/netsim-app.js",
-        "netsim-ui/js/cube-sprite.js",
-        "netsim-ui/dev.html",
-        "netsim-ui/node_modules/tslib/tslib.es6.js",
-        "netsim-ui/assets/grid-background.svg",
-        "netsim-ui/assets/netsim-logo.svg",
-        "netsim-ui/assets/netsim-logo-b.svg",
-        "netsim-ui/assets/polar-background.svg",
-        "netsim-ui/assets/hexagonal-background.png",
-    ],
-    cmd = """
-      set -e
-      mkdir -p $(@D)/netsim-ui
-      # Use a sample path from the source list to find the root 'dist' directory
-      source_path=$$(echo $(locations //ui:netsim_ui_files) | cut -d' ' -f1)
-      dist_dir=$${source_path%/dist/*}/dist
-      cp -r $${dist_dir}/. $(@D)/netsim-ui/
-    """,
-)
-
 alias(
     name = "netsim_stripped",
     actual = "//next/cli:netsim_stripped",
