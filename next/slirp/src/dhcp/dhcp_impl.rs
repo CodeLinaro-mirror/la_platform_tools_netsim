@@ -61,9 +61,9 @@ pub enum DhcpMessageType {
 }
 
 #[derive(Clone)]
-struct DhcpLease {
+pub(super) struct DhcpLease {
     mac_addr: MacAddr,
-    ip_addr: Ipv4Addr,
+    pub(super) ip_addr: Ipv4Addr,
     expires_at: Instant,
 }
 
@@ -91,7 +91,7 @@ impl<'de> Deserialize<'de> for DhcpLease {
 
 #[derive(Serialize, Deserialize)]
 pub struct DhcpManager {
-    leases: Vec<DhcpLease>,
+    pub(super) leases: Vec<DhcpLease>,
 }
 
 impl Default for DhcpManager {
@@ -146,7 +146,7 @@ impl DhcpManager {
         MacAddr { bytes: mac_bytes }
     }
 
-    fn find_lease_by_mac(&self, mac: &MacAddr, clock: &dyn Clock) -> Option<&DhcpLease> {
+    pub(super) fn find_lease_by_mac(&self, mac: &MacAddr, clock: &dyn Clock) -> Option<&DhcpLease> {
         self.leases.iter().find(|l| l.mac_addr == *mac && l.expires_at > clock.now())
     }
 
@@ -568,7 +568,3 @@ impl DhcpManager {
         responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer[..packet_len])));
     }
 }
-
-#[cfg(test)]
-#[path = "tests/dhcp_tests.rs"]
-mod tests;

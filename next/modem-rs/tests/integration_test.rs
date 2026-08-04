@@ -124,13 +124,13 @@ fn test_pdu_mode_end_to_end_scenario() {
 
     // Verify A receives the converted SMS-DELIVER PDU.
     // SCTS timestamp is dynamic, so we match static prefix and suffix.
-    then_wait_for_response_containing(&mut world, "A", "+CMT: ,41");
+    then_wait_for_response_containing(&mut world, "A", "+CMT: ,37");
     let response = then_wait_for_response_containing(
         &mut world,
         "A",
         "17AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701",
     );
-    assert!(response.contains("00240D91688118109844F00000"));
+    assert!(response.contains("002405812143F50000"));
 }
 
 #[test]
@@ -233,11 +233,11 @@ fn test_pdu_mode_loopback() {
     then_wait_for_response_containing(&mut world, "A", "+CMGS: ");
     then_response_is(&mut world, "A", "OK");
 
-    then_wait_for_response_containing(&mut world, "A", "+CMT: ,41");
+    then_wait_for_response_containing(&mut world, "A", "+CMT: ,40");
     let response = then_wait_for_response_containing(
         &mut world,
         "A",
         "17AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701",
     );
-    assert!(response.contains("00240D91688118109844F00000"));
+    assert!(response.contains("00240B818118109844F00000"));
 }

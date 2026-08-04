@@ -28,7 +28,7 @@ pub struct CglaMapping {
 
 #[derive(Debug, Clone)]
 pub struct AdfFileMock {
-    pub id: &'static str,
+    pub id: u16,
     pub cgla: &'static [CglaMapping],
 }
 
@@ -1444,8 +1444,8 @@ const PROFILE_CTS_ADF_A000000063504B43532D3135_FILE_4318_CGLA: &[CglaMapping] = 
 ];
 
 const PROFILE_CTS_ADF_A000000063504B43532D3135_FILES: &[AdfFileMock] = &[
-    AdfFileMock { id: "4300", cgla: PROFILE_CTS_ADF_A000000063504B43532D3135_FILE_4300_CGLA },
-    AdfFileMock { id: "4318", cgla: PROFILE_CTS_ADF_A000000063504B43532D3135_FILE_4318_CGLA },
+    AdfFileMock { id: 0x4300, cgla: PROFILE_CTS_ADF_A000000063504B43532D3135_FILE_4300_CGLA },
+    AdfFileMock { id: 0x4318, cgla: PROFILE_CTS_ADF_A000000063504B43532D3135_FILE_4318_CGLA },
 ];
 
 const PROFILE_CTS_ADF_A0000000871002FF86FF0389FFFFFFFF_CGLA: &[CglaMapping] = &[];

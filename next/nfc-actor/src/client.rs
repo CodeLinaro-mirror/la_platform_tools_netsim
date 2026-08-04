@@ -96,7 +96,7 @@ impl ChipClient for NfcClient {
     async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
         use netsim_proto::protobuf::Message;
         self.stats
-            .to_proto()
+            .to_ipc_proto()
             .write_to_bytes()
             .map(Some)
             .map_err(|e| ClientError::Recv(e.to_string()))

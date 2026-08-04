@@ -3,11 +3,60 @@
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use modem_rs_derive::CommandParser;
+
 use crate::{
-    parser::{Command, QuotedString},
+    parser::{QuotedString, parse_raw_data},
     sim_service::SimService, // Required for Sim storage
-    types::{CmeError, CommandAction, ExecutionResult, HandledCommand},
+    types::{CommandAction, ExecutionResult, HandledCommand, Parsable, Response},
 };
+
+/// SMS service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum SmsCommand<'a> {
+    /// 3GPP TS 27.005: Send message
+    #[command(tag = "AT+CMGS=")]
+    SendSms(#[parser(parse_raw_data)] &'a [u8]),
+    /// 3GPP TS 27.005: Write message to memory
+    #[command(tag = "AT+CMGW=")]
+    StoreSms(u8),
+    /// 3GPP TS 27.005: Read message
+    #[command(tag = "AT+CMGR=")]
+    ReadSms(u8),
+    /// 3GPP TS 27.005: Delete SMS Message
+    #[command(tag = "AT+CMGD=")]
+    DeleteSms(u8),
+    /// 3GPP TS 27.005: New message acknowledgement with value (e.g. AT+CNMA=1)
+    #[command(tag = "AT+CNMA=")]
+    SendSmsAckWithVal(u8),
+    /// 3GPP TS 27.005: New message acknowledgement
+    #[command(tag = "AT+CNMA")]
+    SendSmsAck,
+    /// 3GPP TS 27.005: Set SMS message format
+    #[command(tag = "AT+CMGF=")]
+    SetSmsMessageFormat(u8),
+    /// 3GPP TS 27.005: Set preferred message storage
+    #[command(tag = "AT+CPMS=")]
+    SetPreferredMessageStorage(QuotedString<'a>, QuotedString<'a>, QuotedString<'a>),
+    /// 3GPP TS 27.005: Query preferred message storage
+    #[command(tag = "AT+CPMS?")]
+    QueryPreferredMessageStorage,
+    /// 3GPP TS 27.005: Set broadcast config
+    #[command(tag = "AT+CSCB=")]
+    BroadcastConfig(u8, QuotedString<'a>, QuotedString<'a>),
+    /// 3GPP TS 27.005: Query broadcast config
+    #[command(tag = "AT+CSCB?")]
+    QueryBroadcastConfig,
+    /// 3GPP TS 27.005: Set SMSC address
+    #[command(tag = "AT+CSCA=")]
+    SetSmscAddress(QuotedString<'a>, Option<u8>),
+    /// 3GPP TS 27.005: Get SMSC address
+    #[command(tag = "AT+CSCA?")]
+    GetSmscAddress,
+    /// VENDOR: Remote SMS
+    #[command(tag = "AT+REMOTESMS=")]
+    RemoteSms(QuotedString<'a>),
+}
 
 const TOSCA_INTERNATIONAL: u8 = 145;
 const TOSCA_NATIONAL: u8 = 129;
@@ -77,19 +126,7 @@ impl std::fmt::Display for SmsResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SmsError {
-    Cme(CmeError),
-    Unhandled,
-    Generic,
-}
-
-impl From<CmeError> for SmsError {
-    fn from(err: CmeError) -> Self {
-        SmsError::Cme(err)
-    }
-}
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsSuccess {
     pub response: Option<SmsResponse>,
     pub action: CommandAction,
@@ -105,36 +142,7 @@ impl SmsSuccess {
     }
 }
 
-pub type SmsResult = Result<SmsSuccess, SmsError>;
-
-impl From<SmsResult> for ExecutionResult {
-    fn from(res: SmsResult) -> Self {
-        match res {
-            Ok(success) => {
-                let mut responses = Vec::new();
-                let mut add_ok = true;
-                if let Some(resp) = success.response {
-                    if resp == SmsResponse::Prompt {
-                        add_ok = false;
-                    }
-                    let resp_str = resp.to_string();
-                    if !resp_str.is_empty() {
-                        responses.push(resp_str);
-                    }
-                }
-                if add_ok {
-                    responses.push("OK\r\n".to_string());
-                }
-                let action =
-                    if success.action != CommandAction::None { Some(success.action) } else { None };
-                ExecutionResult::Success(HandledCommand { responses, action })
-            }
-            Err(SmsError::Cme(err)) => ExecutionResult::CmeError(err),
-            Err(SmsError::Unhandled) => ExecutionResult::Unhandled,
-            Err(SmsError::Generic) => ExecutionResult::Error,
-        }
-    }
-}
+type SmsResult = Result<SmsSuccess, ExecutionResult>;
 
 // Holds all state related to the SMS service.
 pub struct SmsService {
@@ -179,17 +187,21 @@ impl SmsService {
         self.messages.len()
     }
 
-    pub fn handle_sms_body(&mut self, pdu: &[u8]) -> SmsResult {
+    pub fn handle_sms_body(&mut self, pdu: &[u8], sender: &str) -> SmsResult {
+        let mr = self.message_reference.fetch_add(1, Ordering::Relaxed);
         let action = if self.message_format == MessageFormat::Text {
             let to = self.pending_sms_destination.take().unwrap_or_default();
             let text = std::str::from_utf8(pdu).unwrap_or_default().to_string();
             CommandAction::ReceiveTextSms { to, text }
         } else {
-            let processed = crate::pdu::process_outgoing_sms(pdu);
-            CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu }
+            let processed = crate::pdu::process_outgoing_sms(pdu, Some(sender), mr);
+            CommandAction::ReceiveSms {
+                to: processed.to,
+                pdu: processed.pdu,
+                status_report: processed.status_report,
+            }
         };
 
-        let mr = self.message_reference.fetch_add(1, Ordering::Relaxed);
         Ok(SmsSuccess::with_action(Some(SmsResponse::SendSms { mr }), action))
     }
 
@@ -198,7 +210,7 @@ impl SmsService {
             if let Some(index) = sim_service.store_sms(pdu) {
                 Ok(SmsSuccess::new(Some(SmsResponse::WriteSms { index: index as usize })))
             } else {
-                Err(SmsError::Generic)
+                Err(ExecutionResult::error())
             }
         } else {
             self.messages.push(pdu.to_vec());
@@ -212,13 +224,13 @@ impl SmsService {
             if sim_service.delete_sms(index) {
                 Ok(SmsSuccess::new(None))
             } else {
-                Err(SmsError::Generic)
+                Err(ExecutionResult::error())
             }
         } else if (index as usize) > 0 && (index as usize - 1) < self.messages.len() {
             self.messages.remove(index as usize - 1);
             Ok(SmsSuccess::new(None))
         } else {
-            Err(SmsError::Generic)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -226,13 +238,13 @@ impl SmsService {
         if self.storage1 == MessageStorage::Sim {
             match sim_service.read_sms(index) {
                 Ok(Some(pdu)) => Ok(SmsSuccess::new(Some(SmsResponse::ReadSms { pdu }))),
-                Ok(None) => Err(SmsError::Generic),
-                Err(err) => Err(SmsError::Cme(err)),
+                Ok(None) => Err(ExecutionResult::error()),
+                Err(err) => Err(ExecutionResult::cme_error(err)),
             }
         } else if let Some(pdu) = index.checked_sub(1).and_then(|i| self.messages.get(i as usize)) {
             Ok(SmsSuccess::new(Some(SmsResponse::ReadSms { pdu: pdu.clone() })))
         } else {
-            Err(SmsError::Generic)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -338,35 +350,63 @@ impl SmsService {
 
     pub fn handle_remote_sms(&self, pdu: QuotedString) -> SmsResult {
         let pdu_bytes = pdu.to_vec();
-        let processed = crate::pdu::process_outgoing_sms(&pdu_bytes);
-        let action = CommandAction::ReceiveSms { to: processed.to, pdu: processed.pdu };
+        let processed = crate::pdu::process_outgoing_sms(&pdu_bytes, None, 0);
+        let action = CommandAction::ReceiveSms {
+            to: processed.to,
+            pdu: processed.pdu,
+            status_report: processed.status_report,
+        };
         Ok(SmsSuccess::with_action(None, action))
     }
 
     // Explicit execute method instead of Trait
-    pub fn execute(&mut self, command: &Command, sim_service: &mut SimService) -> ExecutionResult {
+    pub fn execute<'a>(
+        &mut self,
+        command: &SmsCommand<'a>,
+        sim_service: &mut SimService,
+    ) -> ExecutionResult {
         let sms_result = match command {
-            Command::SendSms(data) => self.handle_cmgs(data),
-            Command::StoreSms(len) => self.handle_wait_for_store_sms(*len),
-            Command::ReadSms(index) => self.handle_read_sms(sim_service, *index),
-            Command::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
-            Command::SendSmsAck | Command::SendSmsAckWithVal(_) => self.handle_send_sms_ack(),
-            Command::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
-            Command::SetPreferredMessageStorage(storage1, storage2, storage3) => {
+            SmsCommand::SendSms(data) => self.handle_cmgs(data),
+            SmsCommand::StoreSms(len) => self.handle_wait_for_store_sms(*len),
+            SmsCommand::ReadSms(index) => self.handle_read_sms(sim_service, *index),
+            SmsCommand::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
+            SmsCommand::SendSmsAck | SmsCommand::SendSmsAckWithVal(_) => self.handle_send_sms_ack(),
+            SmsCommand::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
+            SmsCommand::SetPreferredMessageStorage(storage1, storage2, storage3) => {
                 self.handle_set_preferred_message_storage(*storage1, *storage2, *storage3)
             }
-            Command::QueryPreferredMessageStorage => self.handle_query_preferred_message_storage(),
-            Command::BroadcastConfig(mode, mids, dcss) => {
+            SmsCommand::QueryPreferredMessageStorage => {
+                self.handle_query_preferred_message_storage()
+            }
+            SmsCommand::BroadcastConfig(mode, mids, dcss) => {
                 self.handle_broadcast_config(*mode, *mids, *dcss)
             }
-            Command::QueryBroadcastConfig => self.handle_query_broadcast_config(),
-            Command::SetSmscAddress(address, tosca) => {
+            SmsCommand::QueryBroadcastConfig => self.handle_query_broadcast_config(),
+            SmsCommand::SetSmscAddress(address, tosca) => {
                 self.handle_set_smsc_address(*address, *tosca)
             }
-            Command::GetSmscAddress => self.handle_get_smsc_address(),
-            Command::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
-            _ => Err(SmsError::Unhandled),
+            SmsCommand::GetSmscAddress => self.handle_get_smsc_address(),
+            SmsCommand::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
         };
         sms_result.into()
+    }
+}
+
+impl From<SmsSuccess> for ExecutionResult {
+    fn from(success: SmsSuccess) -> Self {
+        let mut responses = Vec::new();
+        let mut add_ok = true;
+        if let Some(resp) = success.response {
+            if resp == SmsResponse::Prompt {
+                add_ok = false;
+            }
+            responses.push(resp.into());
+        }
+        if add_ok {
+            responses.push(Response::Ok);
+        }
+        let action =
+            if success.action != CommandAction::None { Some(success.action) } else { None };
+        ExecutionResult::Success(HandledCommand { responses, action })
     }
 }

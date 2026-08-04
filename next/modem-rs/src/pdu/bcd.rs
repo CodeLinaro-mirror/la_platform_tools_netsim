@@ -77,6 +77,31 @@ pub fn to_bcd_byte(val: u8) -> u8 {
     (lo << 4) | hi
 }
 
+/// Encodes an IMSI string to its BCD representation according to 3GPP TS
+/// 31.102. Returns None if IMSI is empty or contains non-digits.
+pub fn encode_imsi(imsi: &str) -> Option<String> {
+    if imsi.is_empty() || !imsi.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+
+    let is_odd = !imsi.len().is_multiple_of(2);
+    let odd_even_indicator = if is_odd { 1 } else { 0 };
+    // Identity type for IMSI is 1 (001 binary)
+    let identity_type = 1;
+    let flags = (odd_even_indicator << 3) | identity_type;
+
+    let first_digit = imsi.chars().next()?.to_digit(10).unwrap_or(0) as u8;
+    let byte_2 = (first_digit << 4) | flags;
+
+    let remaining_digits = &imsi[1..];
+    let swapped_bytes = string_to_bcd(remaining_digits);
+    let swapped_remaining = hex::encode_upper(swapped_bytes);
+
+    let encoded_hex = format!("{byte_2:02X}{swapped_remaining}");
+    let len_byte = (encoded_hex.len() / 2) as u8;
+    Some(format!("{len_byte:02X}{encoded_hex}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,12 +113,18 @@ mod tests {
 
         let bytes_padded = [0x12, 0x34, 0xF5];
         assert_eq!(bcd_to_string(&bytes_padded), "21435");
+
+        // Edge Case: Single digit BCD
+        assert_eq!(bcd_to_string(&[0xF5]), "5");
     }
 
     #[test]
     fn test_string_to_bcd() {
         assert_eq!(string_to_bcd("21436587"), vec![0x12, 0x34, 0x56, 0x78]);
         assert_eq!(string_to_bcd("21435"), vec![0x12, 0x34, 0xF5]);
+
+        // Edge Case: Single digit BCD
+        assert_eq!(string_to_bcd("5"), vec![0xF5]);
     }
 
     #[test]
@@ -113,6 +144,37 @@ mod tests {
         assert_eq!(to_bcd_byte(0), 0x00);
         assert_eq!(to_bcd_byte(45), 0x54);
         assert_eq!(to_bcd_byte(99), 0x99);
+    }
+
+    #[test]
+    fn test_encode_imsi() {
+        // Odd length IMSI (15 digits): "311740123456789"
+        // odd_even_indicator = 1, identity_type = 1 => flags = 0x09
+        // first_digit = 3 => byte_2 = (3 << 4) | 0x09 = 0x39
+        // remaining = "11740123456789" (14 digits) -> string_to_bcd -> [0x11, 0x47,
+        // 0x10, 0x32, 0x54, 0x76, 0x98] encoded_hex = "3911471032547698" (8
+        // bytes) -> length = 8 (0x08) full = "083911471032547698"
+        assert_eq!(encode_imsi("311740123456789"), Some("083911471032547698".to_string()));
+
+        // Even length IMSI (14 digits): "31174012345678"
+        // odd_even_indicator = 0, identity_type = 1 => flags = 0x01
+        // first_digit = 3 => byte_2 = (3 << 4) | 0x01 = 0x31
+        // remaining = "1174012345678" (13 digits) -> string_to_bcd -> [0x11, 0x47,
+        // 0x10, 0x32, 0x54, 0x76, 0xF8] encoded_hex = "31114710325476F8" (8
+        // bytes) -> length = 8 (0x08) full = "0831114710325476F8"
+        assert_eq!(encode_imsi("31174012345678"), Some("0831114710325476F8".to_string()));
+
+        // Invalid inputs
+        assert_eq!(encode_imsi(""), None);
+        assert_eq!(encode_imsi("123a45"), None);
+
+        // New Edge Cases:
+        // 1. Single digit IMSI
+        assert_eq!(encode_imsi("1"), Some("0119".to_string()));
+        // 2. Trailing invalid character
+        assert_eq!(encode_imsi("12345678901234a"), None);
+        // 3. Small even length IMSI (2 digits)
+        assert_eq!(encode_imsi("12"), Some("0211F2".to_string()));
     }
 
     #[test]

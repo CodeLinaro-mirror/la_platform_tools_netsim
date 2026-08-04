@@ -3,7 +3,7 @@
 
 [package]
 name = "netsim-daemon"
-version = "0.3.117"
+version = "0.3.118"
 edition = "2021"
 build = "build.rs"
 

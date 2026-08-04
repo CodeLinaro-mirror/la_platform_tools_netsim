@@ -97,7 +97,3 @@ impl UdpManager {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "tests/udp_tests.rs"]
-mod tests;

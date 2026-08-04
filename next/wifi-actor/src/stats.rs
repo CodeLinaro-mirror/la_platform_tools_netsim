@@ -6,6 +6,10 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use netsim_proto::stats::{
+    WifiApiStats, WifiAwareDiscoverySessionStats, WifiAwareNdpStats, WifiAwareSessionStats,
+    WifiEasyConnectStats, WifiP2pManagerStats, WifiRttManagerStats,
+};
 use tracing::{debug, warn};
 
 use crate::error::WifiError;
@@ -60,6 +64,57 @@ pub struct WifiStats {
     values: WifiValues,
 }
 
+#[repr(usize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WifiApi {
+    // Wi-Fi Aware (NAN)
+    WifiAwareSessionPublishUnsolicited = 0,
+    WifiAwareSessionPublishSolicited = 1,
+    WifiAwareSessionSubscribeActive = 2,
+    WifiAwareSessionSubscribePassive = 3,
+    WifiAwareDiscoverySessionSendMessage = 4,
+    WifiAwareNdpRequest = 5,
+    WifiAwareNdpResponse = 6,
+    WifiAwareNdpConfirm = 7,
+    WifiAwareNdpTerminate = 8,
+
+    // Wi-Fi Direct (P2P)
+    WifiP2pManagerCreateGroup = 9,
+    WifiP2pManagerConnect = 10,
+    WifiP2pManagerDiscoverPeers = 11,
+    WifiP2pManagerDiscoverServices = 12,
+
+    // Wi-Fi RTT (FTM)
+    WifiRttManagerStartRanging = 13,
+    WifiRttManagerOnRangingResults = 14,
+
+    // Wi-Fi Easy Connect (DPP)
+    WifiEasyConnectAuthRequest = 15,
+    WifiEasyConnectAuthResponse = 16,
+    WifiEasyConnectAuthConfirm = 17,
+
+    Count = 18,
+}
+
+#[derive(Clone, Debug, Default)]
+struct WifiApiArray {
+    data: [u64; WifiApi::Count as usize],
+}
+
+impl std::ops::Index<WifiApi> for WifiApiArray {
+    type Output = u64;
+
+    fn index(&self, index: WifiApi) -> &Self::Output {
+        &self.data[index as usize]
+    }
+}
+
+impl std::ops::IndexMut<WifiApi> for WifiApiArray {
+    fn index_mut(&mut self, index: WifiApi) -> &mut Self::Output {
+        &mut self.data[index as usize]
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct WifiCounts {
     hostapd_error: u64,
@@ -79,6 +134,8 @@ struct WifiCounts {
     wmedium_unicast_frames_tx: u64,
     mgmt_frames_rx: u64,
     mdns_count: u64,
+
+    wifi_apis: WifiApiArray,
 }
 
 #[derive(Clone, Debug)]
@@ -188,41 +245,115 @@ impl WifiStats {
         self.counts.mdns_count += 1;
     }
 
+    pub fn incr_wifi_api(&mut self, api: WifiApi) {
+        if api != WifiApi::Count {
+            self.counts.wifi_apis[api] += 1;
+        }
+    }
+
     pub fn bytes_ps_to_mbps(bytes_per_second: u64) -> f32 {
         ((bytes_per_second as f64 * 8.0) / (1_000_000.0)) as f32
     }
 
-    pub fn to_proto(&self) -> netsim_proto::stats::WifiStats {
-        let mut proto = netsim_proto::stats::WifiStats::new();
+    pub fn to_proto(&self) -> netsim_proto::stats::WifiIpcStats {
+        let mut wifi_stats = netsim_proto::stats::WifiStats::new();
 
         let saturate = |val: u64| -> i32 { std::cmp::min(val, i32::MAX as u64) as i32 };
 
-        proto.set_hostapd_errors(saturate(self.counts.hostapd_error));
-        proto.set_network_errors(saturate(self.counts.network_error));
-        proto.set_client_errors(saturate(self.counts.client_error));
-        proto.set_frame_errors(saturate(self.counts.frame_error));
-        proto.set_transmission_errors(saturate(self.counts.transmission_error));
-        proto.set_other_errors(saturate(self.counts.other_error));
+        wifi_stats.set_hostapd_errors(saturate(self.counts.hostapd_error));
+        wifi_stats.set_network_errors(saturate(self.counts.network_error));
+        wifi_stats.set_client_errors(saturate(self.counts.client_error));
+        wifi_stats.set_frame_errors(saturate(self.counts.frame_error));
+        wifi_stats.set_transmission_errors(saturate(self.counts.transmission_error));
+        wifi_stats.set_other_errors(saturate(self.counts.other_error));
 
-        proto.set_hwsim_frames_rx(saturate(self.counts.hwsim_frames_rx));
-        proto.set_hwsim_frames_tx(saturate(self.counts.hwsim_frames_tx));
-        proto.set_network_packets_tx(saturate(self.counts.network_packets_tx));
-        proto.set_network_packets_rx(saturate(self.counts.network_packets_rx));
-        proto.set_hostapd_frames_tx(saturate(self.counts.hostapd_frames_tx));
-        proto.set_hostapd_frames_rx(saturate(self.counts.hostapd_frames_rx));
-        proto.set_wmedium_frames_tx(saturate(self.counts.wmedium_frames_tx));
-        proto.set_wmedium_unicast_frames_tx(saturate(self.counts.wmedium_unicast_frames_tx));
-        proto.set_mgmt_frames_rx(saturate(self.counts.mgmt_frames_rx));
-        proto.set_mdns_count(saturate(self.counts.mdns_count));
+        wifi_stats.set_hwsim_frames_rx(saturate(self.counts.hwsim_frames_rx));
+        wifi_stats.set_hwsim_frames_tx(saturate(self.counts.hwsim_frames_tx));
+        wifi_stats.set_network_packets_tx(saturate(self.counts.network_packets_tx));
+        wifi_stats.set_network_packets_rx(saturate(self.counts.network_packets_rx));
+        wifi_stats.set_hostapd_frames_tx(saturate(self.counts.hostapd_frames_tx));
+        wifi_stats.set_hostapd_frames_rx(saturate(self.counts.hostapd_frames_rx));
+        wifi_stats.set_wmedium_frames_tx(saturate(self.counts.wmedium_frames_tx));
+        wifi_stats.set_wmedium_unicast_frames_tx(saturate(self.counts.wmedium_unicast_frames_tx));
+        wifi_stats.set_mgmt_frames_rx(saturate(self.counts.mgmt_frames_rx));
+        wifi_stats.set_mdns_count(saturate(self.counts.mdns_count));
 
-        proto.set_max_download_throughput(Self::bytes_ps_to_mbps(
+        let mut wifi = WifiApiStats::new();
+
+        let mut wifi_aware_session = WifiAwareSessionStats::new();
+        wifi_aware_session.set_publish_unsolicited(saturate(
+            self.counts.wifi_apis[WifiApi::WifiAwareSessionPublishUnsolicited],
+        ));
+        wifi_aware_session.set_publish_solicited(saturate(
+            self.counts.wifi_apis[WifiApi::WifiAwareSessionPublishSolicited],
+        ));
+        wifi_aware_session.set_subscribe_active(saturate(
+            self.counts.wifi_apis[WifiApi::WifiAwareSessionSubscribeActive],
+        ));
+        wifi_aware_session.set_subscribe_passive(saturate(
+            self.counts.wifi_apis[WifiApi::WifiAwareSessionSubscribePassive],
+        ));
+        wifi.wifi_aware_session = netsim_proto::protobuf::MessageField::some(wifi_aware_session);
+
+        let mut wifi_aware_discovery_session = WifiAwareDiscoverySessionStats::new();
+        wifi_aware_discovery_session.set_send_message(saturate(
+            self.counts.wifi_apis[WifiApi::WifiAwareDiscoverySessionSendMessage],
+        ));
+        wifi.wifi_aware_discovery_session =
+            netsim_proto::protobuf::MessageField::some(wifi_aware_discovery_session);
+
+        let mut wifi_aware_ndp = WifiAwareNdpStats::new();
+        wifi_aware_ndp.set_request(saturate(self.counts.wifi_apis[WifiApi::WifiAwareNdpRequest]));
+        wifi_aware_ndp.set_response(saturate(self.counts.wifi_apis[WifiApi::WifiAwareNdpResponse]));
+        wifi_aware_ndp.set_confirm(saturate(self.counts.wifi_apis[WifiApi::WifiAwareNdpConfirm]));
+        wifi_aware_ndp
+            .set_terminate(saturate(self.counts.wifi_apis[WifiApi::WifiAwareNdpTerminate]));
+        wifi.wifi_aware_ndp = netsim_proto::protobuf::MessageField::some(wifi_aware_ndp);
+
+        let mut wifi_p2p_manager = WifiP2pManagerStats::new();
+        wifi_p2p_manager
+            .set_create_group(saturate(self.counts.wifi_apis[WifiApi::WifiP2pManagerCreateGroup]));
+        wifi_p2p_manager
+            .set_connect(saturate(self.counts.wifi_apis[WifiApi::WifiP2pManagerConnect]));
+        wifi_p2p_manager.set_discover_peers(saturate(
+            self.counts.wifi_apis[WifiApi::WifiP2pManagerDiscoverPeers],
+        ));
+        wifi_p2p_manager.set_discover_services(saturate(
+            self.counts.wifi_apis[WifiApi::WifiP2pManagerDiscoverServices],
+        ));
+        wifi.wifi_p2p_manager = netsim_proto::protobuf::MessageField::some(wifi_p2p_manager);
+
+        let mut wifi_rtt_manager = WifiRttManagerStats::new();
+        wifi_rtt_manager.set_start_ranging(saturate(
+            self.counts.wifi_apis[WifiApi::WifiRttManagerStartRanging],
+        ));
+        wifi_rtt_manager.set_on_ranging_results(saturate(
+            self.counts.wifi_apis[WifiApi::WifiRttManagerOnRangingResults],
+        ));
+        wifi.wifi_rtt_manager = netsim_proto::protobuf::MessageField::some(wifi_rtt_manager);
+
+        let mut wifi_easy_connect = WifiEasyConnectStats::new();
+        wifi_easy_connect
+            .set_auth_request(saturate(self.counts.wifi_apis[WifiApi::WifiEasyConnectAuthRequest]));
+        wifi_easy_connect.set_auth_response(saturate(
+            self.counts.wifi_apis[WifiApi::WifiEasyConnectAuthResponse],
+        ));
+        wifi_easy_connect
+            .set_auth_confirm(saturate(self.counts.wifi_apis[WifiApi::WifiEasyConnectAuthConfirm]));
+        wifi.wifi_easy_connect = netsim_proto::protobuf::MessageField::some(wifi_easy_connect);
+
+        wifi_stats.set_max_download_throughput(Self::bytes_ps_to_mbps(
             self.values.download_throughput.max_throughput,
         ));
-        proto.set_max_upload_throughput(Self::bytes_ps_to_mbps(
+        wifi_stats.set_max_upload_throughput(Self::bytes_ps_to_mbps(
             self.values.upload_throughput.max_throughput,
         ));
 
-        proto
+        let mut ipc_stats = netsim_proto::stats::WifiIpcStats::new();
+        ipc_stats.wifi_stats = netsim_proto::protobuf::MessageField::some(wifi_stats);
+        ipc_stats.wifi_api_stats = netsim_proto::protobuf::MessageField::some(wifi);
+
+        ipc_stats
     }
 }
 

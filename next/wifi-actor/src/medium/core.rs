@@ -1,7 +1,10 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use ap_actor::SharedKeyStore;
 use netsim_packets::{HwsimFrame, MacAddress};
@@ -25,6 +28,7 @@ pub struct Medium {
     pub wifi_stats: WifiStats,
     pub(crate) debug: Arc<DebugArgs>,
     pub(crate) seq: std::sync::atomic::AtomicU16,
+    pub(crate) active_p2p_groups: HashSet<MacAddress>,
 }
 
 impl std::fmt::Debug for Medium {
@@ -56,6 +60,7 @@ impl Medium {
             wifi_stats,
             debug,
             seq: std::sync::atomic::AtomicU16::new(100),
+            active_p2p_groups: HashSet::new(),
         }
     }
 
@@ -233,5 +238,56 @@ mod tests {
         medium.reset(client_id);
         assert_eq!(medium.get_p2p_tx_count(client_id), 0);
         assert_eq!(medium.get_p2p_rx_count(client_id), 0);
+    }
+
+    #[test]
+    fn test_parse_action_frame() {
+        use std::sync::Arc;
+
+        use netsim_packets::{
+            FrameControl, Ieee80211, MacAddr, MacHeader3Addr, SequenceControl, category,
+            public_action,
+        };
+        use zerocopy::IntoBytes;
+
+        use crate::{
+            DebugArgs,
+            stats::{SystemClock, WifiStats},
+        };
+
+        let key_store = Arc::new(ap_actor::SharedKeyStore::new());
+        let clock = Arc::new(SystemClock);
+        let wifi_stats = WifiStats::new(clock);
+        let debug = Arc::new(DebugArgs::default());
+
+        let mut medium = Medium::new(key_store, wifi_stats, debug);
+
+        // Construct FTM Request Frame (Public Action 32)
+        let mut req_frame = Vec::new();
+
+        // Header
+        let header = MacHeader3Addr {
+            frame_control: FrameControl::new(0x00D0), // Action
+            duration_id: zerocopy::U16::new(0),
+            addr1: MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            addr2: MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x02]),
+            addr3: MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            sequence_control: SequenceControl::new(0),
+        };
+        req_frame.extend_from_slice(header.as_bytes());
+
+        // Body
+        req_frame.push(category::PUBLIC);
+        req_frame.push(public_action::FTM_REQUEST);
+        req_frame.push(1); // Trigger = 1
+
+        let ieee80211 = Ieee80211::decode(&req_frame).unwrap();
+
+        medium.parse_action_frame(&ieee80211);
+
+        let proto_stats = medium.wifi_stats.to_proto();
+        let wifi_api_stats = proto_stats.wifi_api_stats.unwrap();
+        let rtt_stats = wifi_api_stats.wifi_rtt_manager.unwrap();
+        assert_eq!(rtt_stats.start_ranging, Some(1));
     }
 }

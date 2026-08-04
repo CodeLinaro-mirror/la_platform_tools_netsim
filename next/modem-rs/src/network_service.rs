@@ -3,13 +3,50 @@
 
 // src/network_service.rs
 
+use modem_rs_derive::CommandParser;
 use netsim_model::{Quirks, RegistrationStatus};
 use tracing::{info, warn};
 
 use crate::{
-    parser::Command,
-    types::{CmeError, ExecutionResult, HandledCommand, SignalStrength},
+    constants::{DEFAULT_OPERATOR_NAME_LONG, DEFAULT_OPERATOR_NAME_SHORT, DEFAULT_PLMN},
+    parser::{QuotedString, parse_raw_data},
+    types::{CmeError, ExecutionResult, Parsable, Response, SignalStrength},
 };
+
+/// Network service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum NetworkCommand<'a> {
+    #[command(tag = "AT+COPS?")]
+    QueryOperator,
+    #[command(tag = "AT+COPS=")]
+    SetOperator { mode: u8, format: Option<u8>, oper: Option<QuotedString<'a>> },
+    #[command(tag = "AT+CREG?")]
+    QueryVoiceNetworkRegistration,
+    #[command(tag = "AT+CREG=")]
+    SetVoiceNetworkRegistration(u8),
+    #[command(tag = "AT+CGREG?")]
+    QueryDataNetworkRegistration,
+    #[command(tag = "AT+CGREG=")]
+    SetDataNetworkRegistration(u8),
+    #[command(tag = "AT+CEREG?")]
+    QueryLteNetworkRegistration,
+    #[command(tag = "AT+CEREG=")]
+    SetLteNetworkRegistration(u8),
+    #[command(tag = "AT+CFUN?")]
+    QueryRadioPower,
+    #[command(tag = "AT+CFUN=")]
+    SetRadioPower(u8),
+    #[command(tag = "AT+CSQ")]
+    QuerySignalStrength,
+    #[command(tag = "AT+CESQ")]
+    QueryExtendedSignalQuality,
+    #[command(tag = "AT+CTEC?")]
+    QueryCurrentNetworkTechnology,
+    #[command(tag = "AT+CTEC=?")]
+    QuerySupportedNetworkTechnology,
+    #[command(tag = "AT+CTEC=")]
+    SetNetworkTechnology(u8, #[parser(parse_raw_data)] &'a [u8]),
+}
 
 const DUMMY_LAC: &str = "2142";
 const DUMMY_CID: &str = "0000B804";
@@ -21,7 +58,7 @@ pub enum RegistrationType {
     Lte,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkUrc {
     Registration {
         reg_type: RegistrationType,
@@ -60,13 +97,14 @@ impl std::fmt::Display for NetworkUrc {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkResponse {
     OperatorQuery {
         is_registered: bool,
         mode: u8,
         format: u8,
         plmn: String,
+        quirks: Quirks,
     },
     SignalStrength {
         rssi: u8,
@@ -97,22 +135,22 @@ pub enum NetworkResponse {
 impl std::fmt::Display for NetworkResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NetworkResponse::OperatorQuery { is_registered, mode, format, plmn } => {
+            NetworkResponse::OperatorQuery { is_registered, mode, format, plmn, quirks } => {
                 if *is_registered && *mode != 2 {
                     match format {
-                        0 => write!(
-                            f,
-                            "+COPS: {mode},0,\"{}\"\r\n",
-                            crate::constants::DEFAULT_OPERATOR_NAME_LONG
-                        ),
-                        1 => write!(
-                            f,
-                            "+COPS: {mode},1,\"{}\"\r\n",
-                            crate::constants::DEFAULT_OPERATOR_NAME_SHORT
-                        ),
+                        0 => write!(f, "+COPS: {mode},0,\"{DEFAULT_OPERATOR_NAME_LONG}\"\r\n"),
+                        1 => write!(f, "+COPS: {mode},1,\"{DEFAULT_OPERATOR_NAME_SHORT}\"\r\n"),
                         2 => write!(f, "+COPS: {mode},2,{plmn}\r\n"),
                         _ => write!(f, "+COPS: {mode}\r\n"),
                     }
+                } else if quirks.goldfish_ril_37_or_earlier && *format == 2 {
+                    // Legacy Goldfish RIL (SDK 37 and earlier) parses numeric format 2 as
+                    // operatorNumeric. Returning "+COPS: <mode>,2,0" sets
+                    // operatorNumeric to "0" (length 1), causing legacy RIL
+                    // to crash with std::out_of_range in operatorNumeric.substr(0, 3). Returning
+                    // DEFAULT_PLMN ("310260") ensures operatorNumeric has at
+                    // least 3 characters and avoids the RIL crash.
+                    write!(f, "+COPS: {mode},2,\"{DEFAULT_PLMN}\"\r\n")
                 } else {
                     write!(f, "+COPS: {mode},{format},0\r\n")
                 }
@@ -175,46 +213,7 @@ impl std::fmt::Display for NetworkResponse {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum NetworkError {
-    Cme(CmeError),
-    CmeWithUrc(CmeError, Vec<NetworkUrc>),
-    Error,
-}
-
-pub type NetworkResult = Result<Option<NetworkResponse>, NetworkError>;
-
-impl From<NetworkResult> for ExecutionResult {
-    fn from(res: NetworkResult) -> Self {
-        match res {
-            Ok(opt_resp) => {
-                let mut handled = HandledCommand::ok();
-                if let Some(resp) = opt_resp {
-                    match resp {
-                        NetworkResponse::Urcs(urcs) => {
-                            for urc in urcs.iter().rev() {
-                                handled.responses.insert(0, urc.to_string());
-                            }
-                        }
-                        _ => {
-                            let resp_str = resp.to_string();
-                            if !resp_str.is_empty() {
-                                handled.responses.insert(0, resp_str);
-                            }
-                        }
-                    }
-                }
-                ExecutionResult::Success(handled)
-            }
-            Err(NetworkError::Cme(err)) => ExecutionResult::CmeError(err),
-            Err(NetworkError::CmeWithUrc(err, urcs)) => {
-                let urc_strings = urcs.iter().map(|u| u.to_string()).collect();
-                ExecutionResult::CmeErrorWithUrc(err, urc_strings)
-            }
-            Err(NetworkError::Error) => ExecutionResult::Error,
-        }
-    }
-}
+type NetworkResult = Result<Option<NetworkResponse>, ExecutionResult>;
 
 /// Formats the unsolicited signal quality (CSQ) report according to the
 /// extended 22-field layout.
@@ -340,17 +339,15 @@ impl NetworkService {
         if rssi == crate::constants::CSQ_SIGNAL_UNKNOWN {
             return i32::MAX;
         }
-        // Convert CSQ RSSI (0-31) to dBm
-        // 0 -> -113 dBm, 31 -> -51 dBm, step 2
-        let rssi_dbm = -113 + (rssi as i32 * 2);
-
-        // Estimate RSRP = RSSI - 15 dBm
-        let rsrp_dbm = rssi_dbm - 15;
+        // Map CSQ (0-31) linearly to LTE RSRP range [-140, -44] dBm (3GPP TS 36.133).
+        // CSQ 0 -> -140 dBm, CSQ 31 -> -47 dBm (step of 3 dBm)
+        // rsrp_dbm = -140 + (rssi * 3)
+        let rsrp_dbm = -140 + (rssi as i32 * 3);
 
         // AIDL expects -1 * rsrp_dbm
         let rsrp_csq = -rsrp_dbm;
 
-        // Clamp to valid range [44, 140]
+        // Clamp to 3GPP TS 36.133 valid RSRP range [44, 140] (-44 dBm to -140 dBm)
         rsrp_csq.clamp(44, 140)
     }
 
@@ -449,6 +446,7 @@ impl NetworkService {
             mode: self.cops_mode,
             format: self.cops_format,
             plmn: self.plmn.clone(),
+            quirks: self.quirks,
         }))
     }
 
@@ -466,7 +464,7 @@ impl NetworkService {
         );
 
         if format.is_some_and(|fmt| fmt > 2) {
-            return Err(NetworkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         match mode {
@@ -485,7 +483,7 @@ impl NetworkService {
                 if let Some(op_bytes) = oper {
                     let op_str = match std::str::from_utf8(op_bytes) {
                         Ok(s) => s,
-                        Err(_) => return Err(NetworkError::Error),
+                        Err(_) => return Err(ExecutionResult::error()),
                     };
 
                     self.cops_mode = 1;
@@ -523,10 +521,13 @@ impl NetworkService {
                         if let Some(urc) = self.format_cereg_urc(self.data_registration) {
                             urcs.push(urc);
                         }
-                        Err(NetworkError::CmeWithUrc(CmeError::NoNetworkService, urcs))
+                        Err(ExecutionResult::Error {
+                            cme: Some(CmeError::NoNetworkService),
+                            urcs: vec![Response::Network(NetworkResponse::Urcs(urcs))],
+                        })
                     }
                 } else {
-                    Err(NetworkError::Error)
+                    Err(ExecutionResult::error())
                 }
             }
             2 => {
@@ -556,14 +557,14 @@ impl NetworkService {
                     self.cops_format = fmt;
                     Ok(None)
                 } else {
-                    Err(NetworkError::Error)
+                    Err(ExecutionResult::error())
                 }
             }
             4 => {
                 if let Some(op_bytes) = oper {
                     let op_str = match std::str::from_utf8(op_bytes) {
                         Ok(s) => s,
-                        Err(_) => return Err(NetworkError::Error),
+                        Err(_) => return Err(ExecutionResult::error()),
                     };
 
                     self.cops_mode = 4;
@@ -588,10 +589,10 @@ impl NetworkService {
                     }
                     if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
                 } else {
-                    Err(NetworkError::Error)
+                    Err(ExecutionResult::error())
                 }
             }
-            _ => Err(NetworkError::Error),
+            _ => Err(ExecutionResult::error()),
         }
     }
 
@@ -632,7 +633,7 @@ impl NetworkService {
             }
             if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
         } else {
-            Err(NetworkError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -660,7 +661,7 @@ impl NetworkService {
             }
             if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
         } else {
-            Err(NetworkError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -688,7 +689,7 @@ impl NetworkService {
             }
             if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
         } else {
-            Err(NetworkError::Error)
+            Err(ExecutionResult::error())
         }
     }
 
@@ -706,7 +707,7 @@ impl NetworkService {
     fn handle_set_ctec(&mut self, current: u8, preferred: &[u8]) -> NetworkResult {
         let preferred_str = match std::str::from_utf8(preferred) {
             Ok(s) => s.trim(),
-            Err(_) => return Err(NetworkError::Error),
+            Err(_) => return Err(ExecutionResult::error()),
         };
         let preferred_clean = preferred_str.trim_matches('"').trim();
         // Strip hex prefix "0x" or "0X" if present
@@ -717,7 +718,7 @@ impl NetworkService {
 
         let preferred_mask = match u32::from_str_radix(preferred_clean, 16) {
             Ok(val) => val,
-            Err(_) => return Err(NetworkError::Error),
+            Err(_) => return Err(ExecutionResult::error()),
         };
 
         // Validate allowed technologies mask
@@ -728,12 +729,12 @@ impl NetworkService {
         // Validate current tech is supported (current is a mask, e.g. 32 for LTE)
         let current_u32 = current as u32;
         if current_u32.count_ones() != 1 || (current_u32 & !allowed_mask) != 0 {
-            return Err(NetworkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         // Validate preferred mask only contains supported technologies
         if (preferred_mask & !allowed_mask) != 0 {
-            return Err(NetworkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         info!("handle_set_ctec: current={}, preferred_mask={:#X}", current, preferred_mask);
@@ -779,7 +780,7 @@ impl NetworkService {
         enable_unsolicited_urcs: bool,
     ) -> NetworkResult {
         if power != 0 && power != 1 && power != 4 {
-            return Err(NetworkError::Error);
+            return Err(ExecutionResult::error());
         }
 
         let old_power = self.radio_power;
@@ -880,30 +881,41 @@ impl NetworkService {
         }
     }
 
-    pub fn execute(&mut self, command: &Command, enable_unsolicited_urcs: bool) -> ExecutionResult {
+    pub fn execute<'a>(
+        &mut self,
+        command: &NetworkCommand<'a>,
+        enable_unsolicited_urcs: bool,
+    ) -> ExecutionResult {
         let res = match command {
-            Command::QueryOperator => self.handle_query_operator(),
-            Command::SetOperator { mode, format, oper } => {
+            NetworkCommand::QueryOperator => self.handle_query_operator(),
+            NetworkCommand::SetOperator { mode, format, oper } => {
                 self.handle_set_operator(*mode, *format, oper.as_deref())
             }
-            Command::QuerySignalStrength => self.handle_query_signal_strength(),
-            Command::QueryExtendedSignalQuality => self.handle_query_extended_signal_quality(),
-            Command::QueryVoiceNetworkRegistration => self.handle_query_voice_registration(),
-            Command::SetVoiceNetworkRegistration(mode) => self.handle_set_voice_registration(*mode),
-            Command::QueryDataNetworkRegistration => self.handle_query_data_registration(),
-            Command::SetDataNetworkRegistration(mode) => self.handle_set_data_registration(*mode),
-            Command::QueryLteNetworkRegistration => self.handle_query_lte_registration(),
-            Command::SetLteNetworkRegistration(mode) => self.handle_set_lte_registration(*mode),
-            Command::QueryRadioPower => self.handle_query_radio_power(),
-            Command::SetRadioPower(power) => {
+            NetworkCommand::QuerySignalStrength => self.handle_query_signal_strength(),
+            NetworkCommand::QueryExtendedSignalQuality => {
+                self.handle_query_extended_signal_quality()
+            }
+            NetworkCommand::QueryVoiceNetworkRegistration => self.handle_query_voice_registration(),
+            NetworkCommand::SetVoiceNetworkRegistration(mode) => {
+                self.handle_set_voice_registration(*mode)
+            }
+            NetworkCommand::QueryDataNetworkRegistration => self.handle_query_data_registration(),
+            NetworkCommand::SetDataNetworkRegistration(mode) => {
+                self.handle_set_data_registration(*mode)
+            }
+            NetworkCommand::QueryLteNetworkRegistration => self.handle_query_lte_registration(),
+            NetworkCommand::SetLteNetworkRegistration(mode) => {
+                self.handle_set_lte_registration(*mode)
+            }
+            NetworkCommand::QueryRadioPower => self.handle_query_radio_power(),
+            NetworkCommand::SetRadioPower(power) => {
                 self.handle_set_radio_power(*power, enable_unsolicited_urcs)
             }
-            Command::QueryCurrentNetworkTechnology => self.handle_query_current_ctec(),
-            Command::QuerySupportedNetworkTechnology => self.handle_query_supported_ctec(),
-            Command::SetNetworkTechnology(current, preferred) => {
+            NetworkCommand::QueryCurrentNetworkTechnology => self.handle_query_current_ctec(),
+            NetworkCommand::QuerySupportedNetworkTechnology => self.handle_query_supported_ctec(),
+            NetworkCommand::SetNetworkTechnology(current, preferred) => {
                 self.handle_set_ctec(*current, preferred.as_ref())
             }
-            _ => return ExecutionResult::Unhandled,
         };
         res.into()
     }

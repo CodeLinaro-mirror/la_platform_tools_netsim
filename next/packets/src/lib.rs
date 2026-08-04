@@ -216,7 +216,8 @@ pub use ieee80211::{
     Ieee80211, MacAddress,
     action::{
         ActionHeader, FTM_PARAM_ASAP, FTM_PARAM_LMR_FEEDBACK, FineTimingMeasurement, FtmRequest,
-        category, public_action,
+        NanAttributeHeader, NanAttributeIterator, NanNdpHeader, NanSdaHeader,
+        VendorSpecificPublicActionHeader, category, dpp, nan, p2p, public_action,
     },
     eapol::{
         EAP_CODE_FAILURE, EAP_CODE_REQUEST, EAP_CODE_RESPONSE, EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,

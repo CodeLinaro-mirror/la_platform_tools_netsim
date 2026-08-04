@@ -3,15 +3,74 @@
 
 use std::collections::HashMap;
 
+use modem_rs_derive::CommandParser;
 use tracing::{info, warn};
 
 use crate::{
     config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
-    constants::FACILITY_SIM_PIN,
-    parser::{ApduData, Command, PinString, QuotedString},
+    parser::{ApduData, PinString, QuotedString, parse_raw_data},
     profiles::Profile,
-    types::{CmeError, DEFAULT_PIN, ExecutionResult, HandledCommand},
+    types::{CmeError, DEFAULT_PIN, ExecutionResult, Parsable},
 };
+
+/// SIM service AT commands.
+#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+pub enum SimCommand<'a> {
+    #[command(tag = "AT+CPIN?")]
+    GetSimStatus,
+    #[command(tag = "AT+CPINR=")]
+    QueryPinRetries(QuotedString<'a>),
+    #[command(tag = "AT+CPIN=")]
+    EnterPin(PinString<'a>, Option<PinString<'a>>),
+    #[command(tag = "AT+CRSM=")]
+    SimIo {
+        command: u16,
+        file_id: u16,
+        p1: u8,
+        p2: u8,
+        p3: u8,
+        data: Option<ApduData<'a>>,
+        path: Option<ApduData<'a>>,
+    },
+    #[command(tag = "AT+CIMI")]
+    GetImsi,
+    #[command(tag = "AT+CICCID")]
+    GetIccid,
+    #[command(tag = "AT+CCHO=")]
+    OpenLogicalChannel(#[parser(parse_raw_data)] &'a [u8]),
+    #[command(tag = "AT+CCHC=")]
+    CloseLogicalChannel(u8),
+    #[command(tag = "AT+CGLA=")]
+    TransmitLogicalChannel(u8, u8, #[parser(parse_raw_data)] &'a [u8]),
+    #[command(tag = "AT+CPWD=")]
+    ChangePassword(QuotedString<'a>, QuotedString<'a>, QuotedString<'a>),
+    /// VENDOR: Query PIN retries
+    #[command(tag = "AT+SPIC")]
+    QueryPinRetriesSpic,
+    /// 3GPP2 C.S0023: Set CDMA subscription source
+    #[command(tag = "AT+CCSS=")]
+    SetCdmaSubscriptionSource(u8),
+    /// 3GPP2 C.S0023: Query CDMA subscription source
+    #[command(tag = "AT+CCSS?")]
+    QueryCdmaSubscriptionSource,
+    /// 3GPP2 C.S0023: Set CDMA roaming preference
+    #[command(tag = "AT+WRMP=")]
+    SetCdmaRoamingPreference(u8),
+    /// 3GPP2 C.S0023: Query CDMA roaming preference
+    #[command(tag = "AT+WRMP?")]
+    QueryCdmaRoamingPreference,
+    /// Generic SIM access (+CSIM)
+    #[command(tag = "AT+CSIM=")]
+    GenericSimAccess(u32, ApduData<'a>),
+    #[command(tag = "AT+MBAU=")]
+    SimAuthentication(#[parser(parse_raw_data)] &'a [u8]),
+    /// SIM authentication (Vendor caret version)
+    #[command(tag = "AT^MBAU=")]
+    SimAuthenticationVendor(#[parser(parse_raw_data)] &'a [u8]),
+    /// VENDOR: Update phone number
+    #[command(tag = "AT+REMOTEUPADATEPHONENUMBER")]
+    UpdatePhoneNumber(#[parser(parse_raw_data)] &'a [u8]),
+}
 
 const MIN_PIN_LEN: usize = 4;
 const MAX_PIN_LEN: usize = 8;
@@ -96,7 +155,7 @@ pub enum SimState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum SimResponse {
+pub enum SimResponse {
     PinStatus(RequiredPin),
     RestrictedSimAccess { status_byte_1: u8, status_byte_2: u8, data: Option<String> },
     Imsi(String),
@@ -114,7 +173,7 @@ enum SimResponse {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RequiredPin {
+pub enum RequiredPin {
     None,
     SimPin,
     SimPuk,
@@ -153,38 +212,7 @@ impl std::fmt::Display for SimResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SimError {
-    Cme(CmeError),
-    Unhandled,
-}
-
-impl From<CmeError> for SimError {
-    fn from(err: CmeError) -> Self {
-        SimError::Cme(err)
-    }
-}
-
-type SimResult = Result<Option<SimResponse>, SimError>;
-
-impl From<SimResult> for ExecutionResult {
-    fn from(res: SimResult) -> Self {
-        match res {
-            Ok(opt_resp) => {
-                let mut handled = HandledCommand::ok();
-                if let Some(resp) = opt_resp {
-                    let resp_str = resp.to_string();
-                    if !resp_str.is_empty() {
-                        handled.responses.insert(0, resp_str);
-                    }
-                }
-                ExecutionResult::Success(handled)
-            }
-            Err(SimError::Cme(err)) => ExecutionResult::CmeError(err),
-            Err(SimError::Unhandled) => ExecutionResult::Unhandled,
-        }
-    }
-}
+type SimResult = Result<Option<SimResponse>, ExecutionResult>;
 
 // Holds all state related to the SIM card.
 pub struct SimService {
@@ -293,13 +321,11 @@ impl SimService {
 
     fn lookup_cgla(&self, aid: &str, file_id: Option<u16>, command: &str) -> Option<String> {
         let adf = self.profile.adfs.iter().find(|am| am.aid == aid)?;
-        if let Some(fid) = file_id {
-            let fid_str = format!("{fid:04X}");
-            if let Some(file_mock) = adf.files.iter().find(|f| f.id == fid_str)
-                && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd == command)
-            {
-                return Some(m.response.to_string());
-            }
+        if let Some(fid) = file_id
+            && let Some(file_mock) = adf.files.iter().find(|f| f.id == fid)
+            && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd == command)
+        {
+            return Some(m.response.to_string());
         }
         adf.cgla.iter().find(|m| m.cmd == command).map(|m| m.response.to_string())
     }
@@ -311,6 +337,16 @@ impl SimService {
 
     pub fn set_msisdn(&mut self, msisdn: &str) {
         self.msisdn = msisdn.to_string();
+    }
+
+    pub fn get_cpin_urc(&self) -> Option<String> {
+        let status = match self.state {
+            SimState::Absent => return Some("+CPIN: ABSENT\r\n".to_string()),
+            SimState::Ready => RequiredPin::None,
+            SimState::PinRequired => RequiredPin::SimPin,
+            SimState::PukRequired => RequiredPin::SimPuk,
+        };
+        Some(format!("{}", SimResponse::PinStatus(status)))
     }
 
     pub fn is_present(&self) -> bool {
@@ -382,14 +418,14 @@ impl SimService {
             SimState::Absent => unreachable!("Absent state handled in execute"),
             SimState::Ready => {
                 if pin_or_puk_len == 0 {
-                    Err(SimError::Cme(CmeError::IncorrectPassword))
+                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                 } else {
                     Ok(None)
                 }
             }
             SimState::PinRequired => {
                 if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&pin_or_puk_len) {
-                    return Err(SimError::Cme(CmeError::IncorrectPassword));
+                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
                 }
                 if pin_or_puk.as_ref() == self.pin1.as_bytes() {
                     self.state = SimState::Ready;
@@ -400,16 +436,16 @@ impl SimService {
                     if self.pin1_retries == 0 {
                         self.state = SimState::PukRequired;
                     }
-                    Err(SimError::Cme(CmeError::IncorrectPassword))
+                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                 }
             }
             SimState::PukRequired => {
                 if pin_or_puk_len != PUK_LEN {
-                    return Err(SimError::Cme(CmeError::IncorrectPassword));
+                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
                 }
                 if let Some(new_pin) = new_pin {
                     if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&new_pin.as_ref().len()) {
-                        return Err(SimError::Cme(CmeError::IncorrectPassword));
+                        return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
                     }
                     if pin_or_puk.as_ref() == self.puk1.as_bytes() {
                         self.pin1 = String::from_utf8_lossy(new_pin.as_ref()).to_string();
@@ -419,10 +455,10 @@ impl SimService {
                         Ok(None)
                     } else {
                         self.puk1_retries = self.puk1_retries.saturating_sub(1);
-                        Err(SimError::Cme(CmeError::IncorrectPassword))
+                        Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                     }
                 } else {
-                    Err(SimError::Cme(CmeError::IncorrectParameters))
+                    Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))
                 }
             }
         }
@@ -472,7 +508,7 @@ impl SimService {
         }
 
         // Update in the file system if it exists there
-        if let Some(ef) = find_ef_mut(&mut self.fs.master_file, &format!("{file_id:04X}")) {
+        if let Some(ef) = find_ef_mut(&mut self.fs.master_file, file_id) {
             if command == APDU_UPDATE_BINARY {
                 let offset = ((p1 as usize) << 8) | (p2 as usize);
                 let mut ef_bytes = hex::decode(&ef.data).unwrap_or_default();
@@ -547,7 +583,7 @@ impl SimService {
 
         // 2. Try to read from the loaded FileSystem first (for READ BINARY and SELECT)
         if command == APDU_READ_BINARY {
-            if let Some(ef) = find_ef(&self.fs.master_file, &format!("{file_id:04X}")) {
+            if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
                 let offset = ((p1 as usize) << 8) | (p2 as usize);
                 let length = p3 as usize;
                 let ef_bytes = hex::decode(&ef.data).unwrap_or_default();
@@ -559,9 +595,7 @@ impl SimService {
                     data: Some(hex::encode_upper(sliced)),
                 }));
             }
-        } else if command == APDU_SELECT
-            && find_df(&self.fs.master_file, &format!("{file_id:04X}")).is_some()
-        {
+        } else if command == APDU_SELECT && find_df(&self.fs.master_file, file_id).is_some() {
             return Ok(Some(SimResponse::RestrictedSimAccess {
                 status_byte_1: 144,
                 status_byte_2: 0,
@@ -613,7 +647,7 @@ impl SimService {
             let aid_exists = self.profile.adfs.iter().any(|am| am.aid == aid_clean);
             if !aid_exists {
                 info!("[SimService] Rejecting logical channel for unknown AID: {}", aid_clean);
-                return Err(SimError::Cme(CmeError::NotFound));
+                return Err(ExecutionResult::cme_error(CmeError::NotFound));
             }
         }
 
@@ -622,17 +656,17 @@ impl SimService {
             self.selected_aids[channel_idx] = Some(aid_clean);
             Ok(Some(SimResponse::OpenLogicalChannel(channel_idx as u8)))
         } else {
-            Err(SimError::Cme(CmeError::NoResources))
+            Err(ExecutionResult::cme_error(CmeError::NoResources))
         }
     }
 
     fn handle_close_logical_channel(&mut self, channel_id: u8) -> SimResult {
         let idx = channel_id as usize;
         if idx == 0 || idx >= self.logical_channels.len() {
-            return Err(SimError::Cme(CmeError::InvalidIndex));
+            return Err(ExecutionResult::cme_error(CmeError::InvalidIndex));
         }
         if !self.logical_channels[idx] {
-            return Err(SimError::Cme(CmeError::NotFound));
+            return Err(ExecutionResult::cme_error(CmeError::NotFound));
         }
         self.logical_channels[idx] = false;
         self.selected_aids[idx] = None;
@@ -701,8 +735,8 @@ impl SimService {
                         match ins {
                             INS_SELECT => {
                                 if let Some(fid) = selected_fid
-                                    && (find_ef(&self.fs.master_file, &format!("{fid:04X}"))
-                                        .is_some()
+                                    && (find_ef(&self.fs.master_file, fid).is_some()
+                                        || find_df(&self.fs.master_file, fid).is_some()
                                         || matches!(
                                             fid,
                                             EF_ICCID_ID
@@ -721,21 +755,47 @@ impl SimService {
                             INS_STATUS => {
                                 format_sim_response_hex("+CGLA", STATUS_FCP_HEX, SW_SUCCESS)
                             }
-                            INS_MANAGE_CHANNEL => {
-                                if p1 == 0x00 || p1 == 0x80 {
-                                    if p1 == 0x80 && !self.logical_channels[idx] {
+                            INS_MANAGE_CHANNEL => match p1 {
+                                MANAGE_CHANNEL_ACTION_OPEN => {
+                                    if let Some(channel_idx) =
+                                        self.logical_channels.iter().position(|&open| !open)
+                                    {
+                                        self.logical_channels[channel_idx] = true;
+                                        let channel_hex = format!("{channel_idx:02X}");
+                                        format_sim_response_hex("+CGLA", &channel_hex, SW_SUCCESS)
+                                    } else {
                                         format_sim_response_hex(
                                             "+CGLA",
                                             "",
                                             SW_NO_CHANNEL_AVAILABLE,
                                         )
+                                    }
+                                }
+                                MANAGE_CHANNEL_ACTION_CLOSE => {
+                                    let target_idx = p2 as usize;
+                                    if target_idx == 0 {
+                                        format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS) // 6A86
+                                    } else if target_idx >= self.logical_channels.len() {
+                                        format_sim_response_hex(
+                                            "+CGLA",
+                                            "",
+                                            SW_REFERENCED_DATA_NOT_FOUND,
+                                        ) // 6A88
+                                    } else if !self.logical_channels[target_idx] {
+                                        format_sim_response_hex(
+                                            "+CGLA",
+                                            "",
+                                            SW_NO_CHANNEL_AVAILABLE,
+                                        ) // 6A81
                                     } else {
+                                        self.logical_channels[target_idx] = false;
+                                        self.selected_aids[target_idx] = None;
+                                        self.selected_files[target_idx] = None;
                                         format_sim_response_hex("+CGLA", "", SW_SUCCESS)
                                     }
-                                } else {
-                                    format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS)
                                 }
-                            }
+                                _ => format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS),
+                            },
                             _ => {
                                 warn!(
                                     "[SimService] Transmit logical channel: command not found in profile: {}, ins: {:02X}",
@@ -753,10 +813,10 @@ impl SimService {
     fn handle_transmit_logical_channel(&mut self, channel_id: u8, data: &[u8]) -> SimResult {
         let idx = channel_id as usize;
         if idx >= self.logical_channels.len() {
-            return Err(SimError::Cme(CmeError::InvalidIndex));
+            return Err(ExecutionResult::cme_error(CmeError::InvalidIndex));
         }
         if !self.logical_channels[idx] {
-            return Err(SimError::Cme(CmeError::NotFound));
+            return Err(ExecutionResult::cme_error(CmeError::NotFound));
         }
 
         let data_str = std::str::from_utf8(data).unwrap_or("");
@@ -842,10 +902,10 @@ impl SimService {
         let apdu_str = std::str::from_utf8(apdu.as_ref()).unwrap_or("");
         let apdu_bytes = match hex::decode(apdu_str) {
             Ok(b) => b,
-            Err(_) => return Err(SimError::Cme(CmeError::Custom(100, "unknown"))),
+            Err(_) => return Err(ExecutionResult::cme_error(CmeError::Custom(100, "unknown"))),
         };
         if apdu_bytes.len() < 4 {
-            return Err(SimError::Cme(CmeError::Custom(100, "unknown")));
+            return Err(ExecutionResult::cme_error(CmeError::Custom(100, "unknown")));
         }
         let _cla = apdu_bytes[0];
         let ins = apdu_bytes[1];
@@ -884,7 +944,7 @@ impl SimService {
         if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&old_password.as_ref().len())
             || !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&new_password.as_ref().len())
         {
-            return Err(SimError::Cme(CmeError::IncorrectPassword));
+            return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
         }
         if old_password.as_ref() == self.pin1.as_bytes() {
             self.pin1 = String::from_utf8(new_password.0.to_vec()).unwrap_or_default();
@@ -895,7 +955,7 @@ impl SimService {
             if self.pin1_retries == 0 {
                 self.state = SimState::PukRequired;
             }
-            Err(SimError::Cme(CmeError::IncorrectPassword))
+            Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
         }
     }
     fn handle_set_cdma_subscription_source(&mut self, source: u8) -> SimResult {
@@ -977,18 +1037,22 @@ impl SimService {
         format!("{alpha}{bcd_len_hex}{ton_npi}{dialing_number}{suffix}")
     }
 
-    fn handle_set_facility_lock(&mut self, mode: u8, passwd: Option<QuotedString>) -> SimResult {
+    pub fn handle_set_facility_lock(
+        &mut self,
+        mode: u8,
+        passwd: Option<QuotedString>,
+    ) -> SimResult {
         if (mode == 0 || mode == 1) && self.state == SimState::PukRequired {
-            return Err(SimError::Cme(CmeError::SimPukRequired));
+            return Err(ExecutionResult::cme_error(CmeError::SimPukRequired));
         }
         match mode {
             0 => {
                 let passwd = match passwd {
                     Some(p) => p,
-                    None => return Err(SimError::Cme(CmeError::IncorrectPassword)),
+                    None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
                 };
                 if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&passwd.as_ref().len()) {
-                    return Err(SimError::Cme(CmeError::IncorrectPassword));
+                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
                 }
                 let passwd_str = String::from_utf8(passwd.to_vec()).unwrap_or_default();
                 if passwd_str == self.pin1 {
@@ -1001,16 +1065,16 @@ impl SimService {
                     if self.pin1_retries == 0 {
                         self.state = SimState::PukRequired;
                     }
-                    Err(SimError::Cme(CmeError::IncorrectPassword))
+                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                 }
             }
             1 => {
                 let passwd = match passwd {
                     Some(p) => p,
-                    None => return Err(SimError::Cme(CmeError::IncorrectPassword)),
+                    None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
                 };
                 if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&passwd.as_ref().len()) {
-                    return Err(SimError::Cme(CmeError::IncorrectPassword));
+                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
                 }
                 let passwd_str = String::from_utf8(passwd.to_vec()).unwrap_or_default();
                 if passwd_str == self.pin1 {
@@ -1023,11 +1087,11 @@ impl SimService {
                     if self.pin1_retries == 0 {
                         self.state = SimState::PukRequired;
                     }
-                    Err(SimError::Cme(CmeError::IncorrectPassword))
+                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                 }
             }
             2 => Ok(Some(SimResponse::FacilityLockStatus(if self.pin_enabled { 1 } else { 0 }))),
-            _ => Err(SimError::Unhandled),
+            _ => Err(ExecutionResult::Unhandled),
         }
     }
 
@@ -1043,7 +1107,7 @@ impl SimService {
             "SIM PUK" => (self.puk1_retries, DEFAULT_PUK_RETRIES),
             "SIM PIN2" => (self.pin2_retries, DEFAULT_PIN_RETRIES),
             "SIM PUK2" => (self.puk2_retries, DEFAULT_PUK_RETRIES),
-            _ => return Err(SimError::Cme(CmeError::IncorrectParameters)),
+            _ => return Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
         };
         Ok(Some(SimResponse::PinRemainingAttempts {
             pin_type: pin_type_str.to_string(),
@@ -1057,110 +1121,56 @@ impl SimService {
         if imsi.is_empty() {
             return "083901621032547698".to_string(); // Fallback encoded imsi
         }
-        let digits: String = imsi.chars().filter(|c| c.is_ascii_digit()).collect();
-        if digits.is_empty() {
-            return "083901621032547698".to_string();
-        }
-
-        #[allow(clippy::manual_is_multiple_of)]
-        let is_odd = (digits.len() % 2) != 0;
-        let odd_even_indicator = if is_odd { 1 } else { 0 };
-        // Identity type for IMSI is 1 (001 binary)
-        let identity_type = 1;
-        let flags = (odd_even_indicator << 3) | identity_type;
-
-        let first_digit = digits.chars().next().unwrap().to_digit(10).unwrap_or(0) as u8;
-        let byte_2 = (first_digit << 4) | flags;
-
-        let remaining_digits = &digits[1..];
-        let swapped_remaining = swap_bcd_digits(remaining_digits);
-
-        let encoded_hex = format!("{byte_2:02X}{swapped_remaining}");
-        let len_byte = (encoded_hex.len() / 2) as u8;
-        format!("{len_byte:02X}{encoded_hex}")
+        crate::pdu::bcd::encode_imsi(imsi).unwrap_or_else(|| "083901621032547698".to_string())
     }
 
-    fn is_sim_command(command: &Command) -> bool {
-        match command {
-            Command::SetFacilityLock(facility, ..) | Command::ChangePassword(facility, ..) => {
-                std::str::from_utf8(facility.as_ref()).unwrap_or("") == FACILITY_SIM_PIN
-            }
-            Command::GetSimStatus
-            | Command::EnterPin(_, _)
-            | Command::SimIo { .. }
-            | Command::GetImsi
-            | Command::GetIccid
-            | Command::OpenLogicalChannel(_)
-            | Command::CloseLogicalChannel(_)
-            | Command::TransmitLogicalChannel(_, _, _)
-            | Command::QueryPinRetries(_)
-            | Command::QueryPinRetriesSpic
-            | Command::SetCdmaSubscriptionSource(_)
-            | Command::QueryCdmaSubscriptionSource
-            | Command::SetCdmaRoamingPreference(_)
-            | Command::QueryCdmaRoamingPreference
-            | Command::SimAuthentication(_)
-            | Command::SimAuthenticationVendor(_)
-            | Command::UpdatePhoneNumber(_)
-            | Command::GenericSimAccess(_, _) => true,
-            _ => false,
-        }
-    }
-
-    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
-        if !Self::is_sim_command(command) {
-            return ExecutionResult::Unhandled;
-        }
+    pub fn execute<'a>(&mut self, command: &SimCommand<'a>) -> ExecutionResult {
         info!("[SimService] Executing SIM command: {:?}", command);
         if self.state == SimState::Absent {
-            return ExecutionResult::CmeError(CmeError::SimNotInserted); /* SIM not inserted */
+            return ExecutionResult::cme_error(CmeError::SimNotInserted); /* SIM not inserted */
         }
         let sim_result = match command {
-            Command::GenericSimAccess(len, apdu) => self.handle_generic_sim_access(*len, *apdu),
-            Command::GetSimStatus => self.handle_get_sim_status(),
-            Command::EnterPin(pin, new_pin) => self.handle_enter_pin(*pin, *new_pin),
-            Command::SimIo { command, file_id, p1, p2, p3, data, path: _ } => {
+            SimCommand::GenericSimAccess(len, apdu) => self.handle_generic_sim_access(*len, *apdu),
+            SimCommand::GetSimStatus => self.handle_get_sim_status(),
+            SimCommand::EnterPin(pin, new_pin) => self.handle_enter_pin(*pin, *new_pin),
+            SimCommand::SimIo { command, file_id, p1, p2, p3, data, path: _ } => {
                 let data_str = data.and_then(|d| String::from_utf8(d.0.to_vec()).ok());
                 self.handle_sim_io(*command, *file_id, *p1, *p2, *p3, data_str)
             }
-            Command::GetImsi => self.handle_get_imsi(),
-            Command::GetIccid => self.handle_get_iccid(),
-            Command::OpenLogicalChannel(aid) => self.handle_open_logical_channel(aid),
-            Command::CloseLogicalChannel(channel_id) => {
+            SimCommand::GetImsi => self.handle_get_imsi(),
+            SimCommand::GetIccid => self.handle_get_iccid(),
+            SimCommand::OpenLogicalChannel(aid) => self.handle_open_logical_channel(aid),
+            SimCommand::CloseLogicalChannel(channel_id) => {
                 self.handle_close_logical_channel(*channel_id)
             }
-            Command::TransmitLogicalChannel(channel_id, _, data) => {
+            SimCommand::TransmitLogicalChannel(channel_id, _, data) => {
                 self.handle_transmit_logical_channel(*channel_id, data)
             }
-            Command::ChangePassword(facility, old_password, new_password) => {
+            SimCommand::ChangePassword(facility, old_password, new_password) => {
                 self.handle_change_password(*facility, *old_password, *new_password)
             }
-            Command::QueryPinRetries(pin_type) => self.handle_query_pin_retries_cpinr(*pin_type),
-            Command::QueryPinRetriesSpic => self.handle_query_pin_retries_spic(),
-            Command::SetFacilityLock(_, mode, passwd, _) => {
-                self.handle_set_facility_lock(*mode, *passwd)
-            }
-            Command::SetCdmaSubscriptionSource(source) => {
+            SimCommand::QueryPinRetries(pin_type) => self.handle_query_pin_retries_cpinr(*pin_type),
+            SimCommand::QueryPinRetriesSpic => self.handle_query_pin_retries_spic(),
+            SimCommand::SetCdmaSubscriptionSource(source) => {
                 self.handle_set_cdma_subscription_source(*source)
             }
-            Command::QueryCdmaSubscriptionSource => self.handle_query_cdma_subscription_source(),
-            Command::SetCdmaRoamingPreference(preference) => {
+            SimCommand::QueryCdmaSubscriptionSource => self.handle_query_cdma_subscription_source(),
+            SimCommand::SetCdmaRoamingPreference(preference) => {
                 self.handle_set_cdma_roaming_preference(*preference)
             }
-            Command::QueryCdmaRoamingPreference => self.handle_query_cdma_roaming_preference(),
-            Command::SimAuthentication(data) => self.handle_sim_authentication(data),
-            Command::SimAuthenticationVendor(data) => self.handle_sim_authentication(data),
-            Command::UpdatePhoneNumber(phone_number) => {
+            SimCommand::QueryCdmaRoamingPreference => self.handle_query_cdma_roaming_preference(),
+            SimCommand::SimAuthentication(data) => self.handle_sim_authentication(data),
+            SimCommand::SimAuthenticationVendor(data) => self.handle_sim_authentication(data),
+            SimCommand::UpdatePhoneNumber(phone_number) => {
                 self.handle_update_phone_number(phone_number)
             }
-            _ => Err(SimError::Unhandled),
         };
 
         sim_result.into()
     }
 }
 
-fn find_df<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a DedicatedFile> {
+pub(crate) fn find_df(df: &DedicatedFile, id: u16) -> Option<&DedicatedFile> {
     if df.file_id == id {
         return Some(df);
     }
@@ -1174,7 +1184,7 @@ fn find_df<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a DedicatedFile> {
     None
 }
 
-fn find_ef<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a ElementaryFile> {
+pub(crate) fn find_ef(df: &DedicatedFile, id: u16) -> Option<&ElementaryFile> {
     for file in &df.files {
         match file {
             SimFile::Ef(ef) => {
@@ -1192,7 +1202,7 @@ fn find_ef<'a>(df: &'a DedicatedFile, id: &str) -> Option<&'a ElementaryFile> {
     None
 }
 
-fn find_ef_mut<'a>(df: &'a mut DedicatedFile, id: &str) -> Option<&'a mut ElementaryFile> {
+pub(crate) fn find_ef_mut(df: &mut DedicatedFile, id: u16) -> Option<&mut ElementaryFile> {
     for file in &mut df.files {
         match file {
             SimFile::Ef(ef) => {

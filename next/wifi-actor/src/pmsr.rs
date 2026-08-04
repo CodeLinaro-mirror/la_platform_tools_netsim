@@ -39,13 +39,10 @@ pub(crate) fn handle_start_pmsr(
 
     // TODO: Parse MAC addresses from StartPmsr attributes and find matching chip
     // instead of picking the first other chip.
-    let mut responder_chip = None;
-    for id in chip_ids {
-        if id != initiator_id {
-            responder_chip = active_chips.get(&ChipId(id));
-            break;
-        }
-    }
+    let responder_chip = chip_ids
+        .iter()
+        .find(|&&id| id != initiator_id)
+        .and_then(|&id| active_chips.get(&ChipId(id)));
 
     let responder_chip = responder_chip?;
     let distance = initiator_chip.pose.position.distance(&responder_chip.pose.position) as f64;
@@ -100,11 +97,12 @@ pub(crate) fn handle_start_pmsr(
             let peer_idx = 1;
             add_nested(b2, peer_idx, |b3| {
                 // Peer 1
-                let mut fake_mac = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55];
-                if responder_chip.kind == netsim_model::ChipKind::WIFI {
+                let fake_mac = if responder_chip.kind == netsim_model::ChipKind::WIFI {
                     let id_bytes = responder_chip.id.to_be_bytes();
-                    fake_mac = [0x02, 0x00, id_bytes[0], id_bytes[1], id_bytes[2], id_bytes[3]];
-                }
+                    [0x02, 0x00, id_bytes[0], id_bytes[1], id_bytes[2], id_bytes[3]]
+                } else {
+                    [0x00, 0x11, 0x22, 0x33, 0x44, 0x55]
+                };
 
                 add_attr(b3, NL80211_PMSR_PEER_ATTR_ADDR, &fake_mac);
                 add_nested(b3, NL80211_PMSR_PEER_ATTR_RESP, |b4| {

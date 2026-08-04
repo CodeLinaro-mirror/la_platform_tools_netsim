@@ -117,7 +117,8 @@ async fn test_hci_exchange() {
 
 async fn test_hci_exchange_internal() {
     setup();
-    let rootcanal = Arc::new(Rootcanal::new(Box::new(TestCallbacks), false));
+    let rootcanal =
+        Arc::new(Rootcanal::new(Box::new(TestCallbacks), false, Box::new(|_, _, _, _| {})));
     let (ll_sender, mut ll_receiver) = mpsc::channel(10);
     let (hci_sender, mut hci_receiver) = mpsc::channel(10);
 
