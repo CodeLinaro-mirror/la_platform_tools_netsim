@@ -633,4 +633,61 @@ mod tests {
         let expected = "\n  cellular: state: active | rssi: 15 | ber: 2 | sms_count: 5 | voice: home | data: roaming | active_calls: 12345(active)";
         assert_eq!(output, expected);
     }
+
+    #[test]
+    fn test_display_nfc_chip() {
+        let mut chip = ChipMsg::new();
+        chip.id = 1;
+        chip.name = "nfc-chip".to_string();
+        let mut radio = Radio::new();
+        radio.state = Some(true).into();
+        radio.rx_count = 10;
+        radio.tx_count = 20;
+        chip.chip = Some(ChipProto::Nfc(radio));
+
+        let mut displayer = Displayer::new(&chip, false);
+        displayer.indent = 2;
+        let output = format!("{}", displayer);
+
+        let expected = "\n  nfc:     up       | rx_count:        10 | tx_count:        20";
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_display_ethernet_chip() {
+        let mut chip = ChipMsg::new();
+        chip.id = 2;
+        chip.name = "eth-chip".to_string();
+        let mut radio = Radio::new();
+        radio.state = Some(true).into();
+        radio.rx_count = 5;
+        radio.tx_count = 15;
+        chip.chip = Some(ChipProto::Ethernet(radio));
+
+        let mut displayer = Displayer::new(&chip, false);
+        displayer.indent = 2;
+        let output = format!("{}", displayer);
+
+        let expected = "\n  ethernet: up       | rx_count:         5 | tx_count:        15";
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_display_cellular_data_chip() {
+        let mut chip = ChipMsg::new();
+        chip.id = 3;
+        chip.name = "cell-data-chip".to_string();
+        let mut radio = Radio::new();
+        radio.state = Some(true).into();
+        radio.rx_count = 100;
+        radio.tx_count = 200;
+        chip.chip = Some(ChipProto::CellularData(radio));
+
+        let mut displayer = Displayer::new(&chip, false);
+        displayer.indent = 2;
+        let output = format!("{}", displayer);
+
+        let expected = "\n  cellular-data: up       | rx_count:       100 | tx_count:       200";
+        assert_eq!(output, expected);
+    }
 }
