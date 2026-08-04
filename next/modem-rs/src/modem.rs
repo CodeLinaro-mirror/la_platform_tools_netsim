@@ -17,7 +17,10 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    types::{AT_OK, CmeError, CommandAction, ExecutionResult, HandledCommand, ModemId, Response},
+    types::{
+        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HandledCommand, ModemId,
+        RadioPowerLevel, RegistrationUnsolicitedMode, Response,
+    },
 };
 
 /// Represents a single modem device.
@@ -103,7 +106,7 @@ impl ModemImpl {
     }
 
     pub fn trigger_remote_answer(&mut self) -> Vec<ModemEffect> {
-        let mut effects = Vec::new(); // Was missing initialization in original block? No, Vec::new() was at end.
+        let mut effects = Vec::new();
         if self.call_service.remote_answer() {
             effects.push(ModemEffect::Response(AT_OK.to_vec()));
         }
@@ -265,9 +268,7 @@ impl ModemImpl {
                 self.sms_service.waiting_for_pdu_store = false;
                 Some(ExecutionResult::Success(HandledCommand::ok()))
             } else {
-                None // Waiting for more data? Or just ignore for now if
-                // incomplete? The emulator usually
-                // sends full line/buffer.
+                None // Return None to wait for more data if the buffer is incomplete.
             }
         } else {
             None
@@ -371,7 +372,7 @@ impl ModemImpl {
     }
 
     pub fn set_operator(&mut self, operator: &str) -> Vec<ModemEffect> {
-        let mode = if operator.is_empty() { 0 } else { 1 };
+        let mode = if operator.is_empty() { CopsMode::Automatic } else { CopsMode::Manual };
         let oper = if operator.is_empty() { None } else { Some(operator.as_bytes()) };
         let mut effects = Vec::new();
         if let Ok(Some(crate::network_service::NetworkResponse::Urcs(urcs))) =
@@ -397,7 +398,8 @@ impl ModemImpl {
     ) -> ExecutionResult {
         let mut result = self.execute(command);
         if let ExecutionResult::Success(ref mut handled) = result {
-            if let Command::Network(NetworkCommand::SetRadioPower(1)) = command {
+            if let Command::Network(NetworkCommand::SetRadioPower(RadioPowerLevel::Full)) = command
+            {
                 effects.push(ModemEffect::Schedule {
                     delay: std::time::Duration::from_millis(10),
                     event: ModemEvent::AttachNetwork,
@@ -408,7 +410,7 @@ impl ModemImpl {
                     NetworkCommand::SetVoiceNetworkRegistration(m)
                     | NetworkCommand::SetDataNetworkRegistration(m)
                     | NetworkCommand::SetLteNetworkRegistration(m),
-                ) => *m > 0,
+                ) => *m != RegistrationUnsolicitedMode::Disable,
                 _ => false,
             };
             if mode_active && !self.network_service.is_attached() {

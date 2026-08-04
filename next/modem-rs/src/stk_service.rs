@@ -16,11 +16,11 @@ pub enum StkCommand<'a> {
     #[command(tag = "AT+CUSATE=")]
     SendStkEnvelope(QuotedString<'a>),
     #[command(tag = "AT+STKEN=")]
-    SetStkEnabled(u8),
+    SetStkEnabled(bool),
     #[command(tag = "AT+STKUR=")]
-    SetStkUnsolicitedResult(u8),
+    SetStkUnsolicitedResult(bool),
     #[command(tag = "AT+STK=")]
-    SetStk(u8),
+    SetStk(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

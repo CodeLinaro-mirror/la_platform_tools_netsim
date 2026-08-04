@@ -7,7 +7,9 @@ use tracing::debug;
 use crate::{
     data_service::DataService,
     parser::{parse_raw_data, parse_until_semicolon},
-    types::{AT_OK, CommandAction, ExecutionResult, ModemId, Parsable},
+    types::{
+        AT_OK, CallHoldAction, CallHoldParam, CommandAction, ExecutionResult, ModemId, Parsable,
+    },
 };
 
 /// Call service AT commands.
@@ -20,7 +22,7 @@ pub enum CallCommand<'a> {
     #[command(tag = "ATH")]
     Hangup,
     #[command(tag = "AT+CHLD=")]
-    CallHold(u8),
+    CallHold(CallHoldParam),
     #[command(tag = "AT+CLCC")]
     QueryCurrentCalls,
     #[command(tag = "AT+CMUT=")]
@@ -371,32 +373,30 @@ impl CallService {
         Ok(Some(CallResponse::WithAction(CommandAction::HangupCall(id))))
     }
 
-    pub fn handle_call_hold(&mut self, raw_chld_op: u8, id: ModemId) -> CallResult {
-        debug!("[CallService] Call hold operation: {raw_chld_op}");
+    pub fn handle_call_hold(&mut self, chld: CallHoldParam, id: ModemId) -> CallResult {
+        debug!("[CallService] Call hold operation: {chld:?}");
         debug!("[CallService] Calls before hold op: {:?}", self.calls);
 
-        let (op, index) = if raw_chld_op >= 100 {
-            (raw_chld_op / 100, Some(raw_chld_op % 100))
-        } else if raw_chld_op >= 10 {
-            (raw_chld_op / 10, Some(raw_chld_op % 10))
-        } else {
-            (raw_chld_op, None)
-        };
+        let (op, index) = (chld.op, chld.call_id);
 
         // Validate index for ops that require it (1 and 2)
-        if index.is_some_and(|idx| (op == 1 || op == 2) && !self.has_call(idx)) {
+        if index.is_some_and(|idx| {
+            (op == CallHoldAction::ReleaseActiveAcceptHeldOrWaiting
+                || op == CallHoldAction::HoldActiveAcceptHeldOrWaiting)
+                && !self.has_call(idx)
+        }) {
             return Err(ExecutionResult::error());
         }
 
         match op {
-            0 => {
+            CallHoldAction::ReleaseHeldOrWaiting => {
                 let prev_len = self.calls.len();
                 self.calls.retain(|c| c.state != CallState::Held && !c.state.is_waiting());
                 if self.calls.len() < prev_len {
                     return Ok(Some(CallResponse::WithAction(CommandAction::HangupCall(id))));
                 }
             }
-            1 => {
+            CallHoldAction::ReleaseActiveAcceptHeldOrWaiting => {
                 let prev_len = self.calls.len();
                 if let Some(idx) = index {
                     self.remove_call(idx);
@@ -413,7 +413,7 @@ impl CallService {
                     return Ok(Some(CallResponse::WithAction(CommandAction::HangupCall(id))));
                 }
             }
-            2 => {
+            CallHoldAction::HoldActiveAcceptHeldOrWaiting => {
                 if let Some(idx) = index {
                     for call in self.calls.iter_mut() {
                         if call.id == idx {
@@ -434,7 +434,7 @@ impl CallService {
                     }
                 }
             }
-            3 => {
+            CallHoldAction::AddHeld => {
                 if !self.is_active() || !self.is_held() {
                     return Err(ExecutionResult::error());
                 }
@@ -447,14 +447,16 @@ impl CallService {
                     }
                 }
             }
-            4 => {
+            CallHoldAction::Ect => {
                 // ECT: Connect remote parties and disconnect us.
                 // TODO: Support true ECT by bridging peers in the simulator, but it is
                 // currently unsupported in the Android Emulator RIL.
                 // For now, we hang up to avoid leaking state.
                 return self.handle_hangup(id);
             }
-            _ => return Err(ExecutionResult::error()),
+            CallHoldAction::UserToUserSignaling => {
+                return Err(ExecutionResult::error());
+            }
         }
         debug!("[CallService] Calls after hold op: {:?}", self.calls);
         Ok(None)

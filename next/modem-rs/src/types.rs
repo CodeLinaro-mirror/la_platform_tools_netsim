@@ -8,8 +8,8 @@ use nom::IResult;
 
 use crate::{
     call_service::CallResponse, data_service::DataResponse, misc_service::MiscResponse,
-    network_service::NetworkResponse, sim_service::SimResponse, sms_service::SmsResponse,
-    stk_service::StkResponse, sup_service::SupResponse,
+    network_service::NetworkResponse, parser::QuotedString, sim_service::SimResponse,
+    sms_service::SmsResponse, stk_service::StkResponse, sup_service::SupResponse,
 };
 
 pub trait Parsable<'a>: Sized {
@@ -123,8 +123,6 @@ impl fmt::Debug for ModemSink {
     }
 }
 
-// --- New types for architectural refactoring ---
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum CmeeMode {
@@ -134,13 +132,56 @@ pub enum CmeeMode {
     Verbose = 2, // Returns "+CME ERROR: <verbose string>"
 }
 
-impl CmeeMode {
-    pub fn from_u8(val: u8) -> Option<Self> {
+impl<'a> Parsable<'a> for CmeeMode {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
         match val {
-            0 => Some(Self::Disable),
-            1 => Some(Self::Numeric),
-            2 => Some(Self::Verbose),
-            _ => None,
+            0 => Ok((input, Self::Disable)),
+            1 => Ok((input, Self::Numeric)),
+            2 => Ok((input, Self::Verbose)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum RegistrationUnsolicitedMode {
+    #[default]
+    Disable = 0,
+    Enable = 1,
+    EnableWithLocation = 2,
+}
+
+impl<'a> Parsable<'a> for RegistrationUnsolicitedMode {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Disable)),
+            1 => Ok((input, Self::Enable)),
+            2 => Ok((input, Self::EnableWithLocation)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum RadioPowerLevel {
+    Minimum = 0,
+    #[default]
+    Full = 1,
+    DisableRf = 4,
+}
+
+impl<'a> Parsable<'a> for RadioPowerLevel {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Minimum)),
+            1 => Ok((input, Self::Full)),
+            4 => Ok((input, Self::DisableRf)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
         }
     }
 }
@@ -505,5 +546,806 @@ impl SignalStrength {
             self.nr_csi_rsrq,
             self.nr_csi_sinr
         )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum CopsMode {
+    #[default]
+    Automatic = 0,
+    Manual = 1,
+    Deregister = 2,
+    SetFormatOnly = 3,
+    ManualAutomatic = 4,
+}
+
+impl<'a> Parsable<'a> for CopsMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Automatic)),
+            1 => Ok((input, Self::Manual)),
+            2 => Ok((input, Self::Deregister)),
+            3 => Ok((input, Self::SetFormatOnly)),
+            4 => Ok((input, Self::ManualAutomatic)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum CopsFormat {
+    LongAlphanumeric = 0,
+    ShortAlphanumeric = 1,
+    #[default]
+    Numeric = 2,
+}
+
+impl<'a> Parsable<'a> for CopsFormat {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::LongAlphanumeric)),
+            1 => Ok((input, Self::ShortAlphanumeric)),
+            2 => Ok((input, Self::Numeric)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CallHoldAction {
+    ReleaseHeldOrWaiting = 0,
+    ReleaseActiveAcceptHeldOrWaiting = 1,
+    HoldActiveAcceptHeldOrWaiting = 2,
+    AddHeld = 3,
+    Ect = 4,
+    UserToUserSignaling = 5,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallHoldParam {
+    pub op: CallHoldAction,
+    pub call_id: Option<u8>,
+}
+
+impl<'a> Parsable<'a> for CallHoldParam {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        let (op_val, call_id) = if val >= 100 {
+            (val / 100, Some(val % 100))
+        } else if val >= 10 {
+            (val / 10, Some(val % 10))
+        } else {
+            (val, None)
+        };
+        let op = match op_val {
+            0 => CallHoldAction::ReleaseHeldOrWaiting,
+            1 => CallHoldAction::ReleaseActiveAcceptHeldOrWaiting,
+            2 => CallHoldAction::HoldActiveAcceptHeldOrWaiting,
+            3 => CallHoldAction::AddHeld,
+            4 => CallHoldAction::Ect,
+            5 => CallHoldAction::UserToUserSignaling,
+            _ => {
+                return Err(nom::Err::Error(nom::error::Error::new(
+                    input,
+                    nom::error::ErrorKind::MapRes,
+                )));
+            }
+        };
+        Ok((input, Self { op, call_id }))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum FacilityLockMode {
+    Unlock = 0,
+    Lock = 1,
+    QueryStatus = 2,
+}
+
+impl<'a> Parsable<'a> for FacilityLockMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Unlock)),
+            1 => Ok((input, Self::Lock)),
+            2 => Ok((input, Self::QueryStatus)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum SmsBroadcastMode {
+    #[default]
+    Accept = 0,
+    Discard = 1,
+}
+
+impl<'a> Parsable<'a> for SmsBroadcastMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Accept)),
+            1 => Ok((input, Self::Discard)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum ProductSerialNumberType {
+    #[default]
+    ImeiWithInfo = 0,
+    Imei = 1,
+    ImeiWithSvn = 2,
+    Svn = 3,
+}
+
+impl<'a> Parsable<'a> for ProductSerialNumberType {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::ImeiWithInfo)),
+            1 => Ok((input, Self::Imei)),
+            2 => Ok((input, Self::ImeiWithSvn)),
+            3 => Ok((input, Self::Svn)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum IcfFormat {
+    Data8Stop2 = 1,
+    Data8Parity1Stop1 = 2,
+    Data8Stop1 = 3,
+    Data7Stop2 = 4,
+    Data7Parity1Stop1 = 5,
+    Data7Stop1 = 6,
+}
+
+impl<'a> Parsable<'a> for IcfFormat {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            1 => Ok((input, Self::Data8Stop2)),
+            2 => Ok((input, Self::Data8Parity1Stop1)),
+            3 => Ok((input, Self::Data8Stop1)),
+            4 => Ok((input, Self::Data7Stop2)),
+            5 => Ok((input, Self::Data7Parity1Stop1)),
+            6 => Ok((input, Self::Data7Stop1)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum IcfParity {
+    Odd = 0,
+    Even = 1,
+    Mark = 2,
+    Space = 3,
+}
+
+impl<'a> Parsable<'a> for IcfParity {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Odd)),
+            1 => Ok((input, Self::Even)),
+            2 => Ok((input, Self::Mark)),
+            3 => Ok((input, Self::Space)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum FlowControlMode {
+    None = 0,
+    XonXoff = 1,
+    Hardware = 2,
+}
+
+impl<'a> Parsable<'a> for FlowControlMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::None)),
+            1 => Ok((input, Self::XonXoff)),
+            2 => Ok((input, Self::Hardware)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CallMode {
+    SingleMode = 0,
+    AlternateVoiceData = 1,
+}
+
+impl<'a> Parsable<'a> for CallMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::SingleMode)),
+            1 => Ok((input, Self::AlternateVoiceData)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum CdmaSubscriptionSource {
+    #[default]
+    RuimSim = 0,
+    Nv = 1,
+}
+
+impl<'a> Parsable<'a> for CdmaSubscriptionSource {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::RuimSim)),
+            1 => Ok((input, Self::Nv)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum ClipActivation {
+    #[default]
+    Disable = 0,
+    Enable = 1,
+}
+
+impl<'a> Parsable<'a> for ClipActivation {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Disable)),
+            1 => Ok((input, Self::Enable)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClipProvisionStatus {
+    NotProvisioned = 0,
+    Provisioned = 1,
+    Unknown = 2,
+}
+
+impl<'a> Parsable<'a> for ClipProvisionStatus {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::NotProvisioned)),
+            1 => Ok((input, Self::Provisioned)),
+            2 => Ok((input, Self::Unknown)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CallWaitingPresentation {
+    Disable = 0,
+    Enable = 1,
+}
+
+impl<'a> Parsable<'a> for CallWaitingPresentation {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Disable)),
+            1 => Ok((input, Self::Enable)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CallWaitingMode {
+    Disable = 0,
+    Enable = 1,
+    Query = 2,
+}
+
+impl<'a> Parsable<'a> for CallWaitingMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Disable)),
+            1 => Ok((input, Self::Enable)),
+            2 => Ok((input, Self::Query)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CallWaitingStatus {
+    NotActive = 0,
+    Active = 1,
+}
+
+impl<'a> Parsable<'a> for CallWaitingStatus {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::NotActive)),
+            1 => Ok((input, Self::Active)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+impl<'a> Parsable<'a> for bool {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, false)),
+            1 => Ok((input, true)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ClirMode {
+    SubscriptionDefault = 0,
+    Invocation = 1,
+    Suppression = 2,
+}
+
+impl<'a> Parsable<'a> for ClirMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::SubscriptionDefault)),
+            1 => Ok((input, Self::Invocation)),
+            2 => Ok((input, Self::Suppression)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CallForwardingReason {
+    Unconditional = 0,
+    Busy = 1,
+    NoReply = 2,
+    NotReachable = 3,
+    All = 4,
+    AllConditional = 5,
+}
+
+impl<'a> Parsable<'a> for CallForwardingReason {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Unconditional)),
+            1 => Ok((input, Self::Busy)),
+            2 => Ok((input, Self::NoReply)),
+            3 => Ok((input, Self::NotReachable)),
+            4 => Ok((input, Self::All)),
+            5 => Ok((input, Self::AllConditional)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CallForwardingMode {
+    Disable = 0,
+    Enable = 1,
+    Query = 2,
+    Registration = 3,
+    Erasure = 4,
+}
+
+impl<'a> Parsable<'a> for CallForwardingMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Disable)),
+            1 => Ok((input, Self::Enable)),
+            2 => Ok((input, Self::Query)),
+            3 => Ok((input, Self::Registration)),
+            4 => Ok((input, Self::Erasure)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum UssdMode {
+    DisableUrc = 0,
+    EnableUrc = 1,
+    Cancel = 2,
+}
+
+impl<'a> Parsable<'a> for UssdMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::DisableUrc)),
+            1 => Ok((input, Self::EnableUrc)),
+            2 => Ok((input, Self::Cancel)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ClirStatus {
+    NotActive = 0,
+    Active = 1,
+    Unknown = 2,
+    TemporaryRestricted = 3,
+    TemporaryAllowed = 4,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum UssdStatus {
+    NoActionRequired = 0,
+    ActionRequired = 1,
+    TerminatedByNetwork = 2,
+    OtherClientResponded = 3,
+    NotSupported = 4,
+    NetworkTimeout = 5,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum SpeakerMuteMode {
+    Off = 0,
+    #[default]
+    OnAndOffOnCarrier = 1,
+    AlwaysOn = 2,
+    OffDialRingOnConnectOffCarrier = 3,
+}
+
+impl<'a> Parsable<'a> for SpeakerMuteMode {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Off)),
+            1 => Ok((input, Self::OnAndOffOnCarrier)),
+            2 => Ok((input, Self::AlwaysOn)),
+            3 => Ok((input, Self::OffDialRingOnConnectOffCarrier)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum CdmaRoamingPreference {
+    #[default]
+    HomeOnly = 0,
+    RoamingOnly = 1,
+    Automatic = 2,
+}
+
+impl<'a> Parsable<'a> for CdmaRoamingPreference {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::HomeOnly)),
+            1 => Ok((input, Self::RoamingOnly)),
+            2 => Ok((input, Self::Automatic)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdpType {
+    Ip,
+    Ipv6,
+    Ipv4v6,
+    Ppp,
+    NonIp,
+    Cell,
+}
+
+impl<'a> Parsable<'a> for PdpType {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, quoted) = QuotedString::parse(input)?;
+        match quoted.as_ref() {
+            b"IP" => Ok((input, Self::Ip)),
+            b"IPV6" => Ok((input, Self::Ipv6)),
+            b"IPV4V6" => Ok((input, Self::Ipv4v6)),
+            b"PPP" => Ok((input, Self::Ppp)),
+            b"Non-IP" => Ok((input, Self::NonIp)),
+            b"Cell" => Ok((input, Self::Cell)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+impl std::fmt::Display for PdpType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PdpType::Ip => write!(f, "IP"),
+            PdpType::Ipv6 => write!(f, "IPV6"),
+            PdpType::Ipv4v6 => write!(f, "IPV4V6"),
+            PdpType::Ppp => write!(f, "PPP"),
+            PdpType::NonIp => write!(f, "Non-IP"),
+            PdpType::Cell => write!(f, "Cell"),
+        }
+    }
+}
+
+impl std::fmt::Display for CopsMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CopsFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for RegistrationUnsolicitedMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for RadioPowerLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CmeeMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CallHoldAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for FacilityLockMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for SmsBroadcastMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for ProductSerialNumberType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for IcfFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for IcfParity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for FlowControlMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CallMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CdmaSubscriptionSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for ClipActivation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CallWaitingPresentation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CallWaitingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CallWaitingStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for ClirMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CallForwardingReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CallForwardingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for UssdMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for SpeakerMuteMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for ClirStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for ClipProvisionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for UssdStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CdmaRoamingPreference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum AccessTechnology {
+    Gsm = 0,
+    Wcdma = 2,
+    #[default]
+    Lte = 7,
+    Nr = 11,
+}
+
+impl<'a> Parsable<'a> for AccessTechnology {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Gsm)),
+            2 => Ok((input, Self::Wcdma)),
+            7 => Ok((input, Self::Lte)),
+            11 => Ok((input, Self::Nr)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+impl std::fmt::Display for AccessTechnology {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum CtecTechnology {
+    Gsm = 1,
+    Wcdma = 2,
+    #[default]
+    Lte = 32,
+    Nr = 64,
+}
+
+impl<'a> Parsable<'a> for CtecTechnology {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            1 => Ok((input, Self::Gsm)),
+            2 => Ok((input, Self::Wcdma)),
+            32 => Ok((input, Self::Lte)),
+            64 => Ok((input, Self::Nr)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+impl std::fmt::Display for CtecTechnology {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Facility {
+    SimPin,
+    Other,
+}
+
+impl<'a> Parsable<'a> for Facility {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, quoted) = QuotedString::parse(input)?;
+        match quoted.as_ref() {
+            b"SC" => Ok((input, Self::SimPin)),
+            _ => Ok((input, Self::Other)),
+        }
+    }
+}
+
+impl std::fmt::Display for Facility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Facility::SimPin => write!(f, "SC"),
+            Facility::Other => write!(f, "OTHER"),
+        }
     }
 }

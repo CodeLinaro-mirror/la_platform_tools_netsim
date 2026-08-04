@@ -11,7 +11,10 @@ use crate::{
     config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
     constants::*,
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
-    types::{CmeError, DEFAULT_PIN, ExecutionResult, Parsable},
+    types::{
+        CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN, ExecutionResult,
+        FacilityLockMode, Parsable,
+    },
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -56,13 +59,13 @@ pub enum SimCommand<'a> {
     QueryPinRetriesSpic,
     /// 3GPP2 C.S0023: Set CDMA subscription source
     #[command(tag = "AT+CCSS=")]
-    SetCdmaSubscriptionSource(u8),
+    SetCdmaSubscriptionSource(CdmaSubscriptionSource),
     /// 3GPP2 C.S0023: Query CDMA subscription source
     #[command(tag = "AT+CCSS?")]
     QueryCdmaSubscriptionSource,
     /// 3GPP2 C.S0023: Set CDMA roaming preference
     #[command(tag = "AT+WRMP=")]
-    SetCdmaRoamingPreference(u8),
+    SetCdmaRoamingPreference(CdmaRoamingPreference),
     /// 3GPP2 C.S0023: Query CDMA roaming preference
     #[command(tag = "AT+WRMP?")]
     QueryCdmaRoamingPreference,
@@ -121,9 +124,6 @@ const RESP_REFERENCED_DATA_NOT_FOUND: SimResponse =
 
 const P2_INVALID_SELECT: u8 = 0xF0;
 
-const MANAGE_CHANNEL_ACTION_OPEN: u8 = 0x00;
-const MANAGE_CHANNEL_ACTION_CLOSE: u8 = 0x80;
-
 // APDU Status Words (SW)
 
 // Hex Data Templates
@@ -157,8 +157,8 @@ pub enum SimResponse {
     CloseLogicalChannel,
     GenericLogicalChannelAccess(String),
     GenericSimAccess(String),
-    CdmaSubscriptionSource(u8),
-    CdmaRoamingPreference(u8),
+    CdmaSubscriptionSource(CdmaSubscriptionSource),
+    CdmaRoamingPreference(CdmaRoamingPreference),
     SimAuthentication(String),
     FacilityLockStatus(u8),
     PinRetriesSpic(u32),
@@ -229,8 +229,8 @@ pub struct SimService {
     selected_aids: [Option<String>; 4],
     selected_files: [Option<u16>; 4],
     response_buffer: [Vec<u8>; 4],
-    cdma_subscription_source: u8,
-    cdma_roaming_preference: u8,
+    cdma_subscription_source: CdmaSubscriptionSource,
+    cdma_roaming_preference: CdmaRoamingPreference,
     adfs: Vec<crate::config::ApplicationDedicatedFile>,
     eid: Option<String>,
     atr: Option<String>,
@@ -292,8 +292,8 @@ impl SimService {
             selected_aids: [None, None, None, None],
             selected_files: [None; 4],
             response_buffer: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
-            cdma_subscription_source: 0,
-            cdma_roaming_preference: 0,
+            cdma_subscription_source: CdmaSubscriptionSource::default(),
+            cdma_roaming_preference: CdmaRoamingPreference::default(),
             adfs: profile.adfs.clone(),
             eid: profile.eid.clone(),
             atr: profile.atr.clone(),
@@ -919,24 +919,28 @@ impl SimService {
             } else if apdu.ins == apdu::Instruction::ManageChannel
                 && let Some(sw) = get_status_word_from_payload(&resp)
                 && sw == SW_SUCCESS
+                && let Ok(action) = apdu::ManageChannelAction::try_from(apdu.p1)
             {
-                if apdu.p1 == MANAGE_CHANNEL_ACTION_OPEN {
-                    if let Some(channel_idx) = get_channel_idx_from_open_response(&resp)
-                        && channel_idx < self.logical_channels.len()
-                    {
-                        self.logical_channels[channel_idx] = true;
-                        self.selected_files[channel_idx] = Some(MF_FILE_ID);
-                        if access_type == SimAccessType::Csim {
-                            self.selected_aids[channel_idx] = Some("CSIM".to_string());
+                match action {
+                    apdu::ManageChannelAction::Open => {
+                        if let Some(channel_idx) = get_channel_idx_from_open_response(&resp)
+                            && channel_idx < self.logical_channels.len()
+                        {
+                            self.logical_channels[channel_idx] = true;
+                            self.selected_files[channel_idx] = Some(MF_FILE_ID);
+                            if access_type == SimAccessType::Csim {
+                                self.selected_aids[channel_idx] = Some("CSIM".to_string());
+                            }
                         }
                     }
-                } else if apdu.p1 == MANAGE_CHANNEL_ACTION_CLOSE {
-                    let target_idx = if apdu.p2 == 0 { idx } else { apdu.p2 as usize };
-                    if target_idx != 0 && target_idx < self.logical_channels.len() {
-                        self.logical_channels[target_idx] = false;
-                        self.selected_aids[target_idx] = None;
-                        self.selected_files[target_idx] = None;
-                        self.response_buffer[target_idx].clear();
+                    apdu::ManageChannelAction::Close => {
+                        let target_idx = if apdu.p2 == 0 { idx } else { apdu.p2 as usize };
+                        if target_idx != 0 && target_idx < self.logical_channels.len() {
+                            self.logical_channels[target_idx] = false;
+                            self.selected_aids[target_idx] = None;
+                            self.selected_files[target_idx] = None;
+                            self.response_buffer[target_idx].clear();
+                        }
                     }
                 }
             }
@@ -1053,36 +1057,40 @@ impl SimService {
                     }
                 }
                 apdu::Instruction::Status => format_sim_payload_data(STATUS_FCP_HEX, SW_SUCCESS),
-                apdu::Instruction::ManageChannel => match apdu.p1 {
-                    MANAGE_CHANNEL_ACTION_OPEN => {
-                        if let Some(channel_idx) =
-                            self.logical_channels.iter().position(|&open| !open)
-                        {
-                            self.logical_channels[channel_idx] = true;
-                            let channel_hex = format!("{channel_idx:02X}");
-                            format_sim_payload_data(&channel_hex, SW_SUCCESS)
-                        } else {
-                            format_sim_payload_status(SW_NO_CHANNEL_AVAILABLE)
+                apdu::Instruction::ManageChannel => {
+                    let Ok(action) = apdu::ManageChannelAction::try_from(apdu.p1) else {
+                        return format_sim_payload_status(SW_INCORRECT_PARAMS);
+                    };
+                    match action {
+                        apdu::ManageChannelAction::Open => {
+                            if let Some(channel_idx) =
+                                self.logical_channels.iter().position(|&open| !open)
+                            {
+                                self.logical_channels[channel_idx] = true;
+                                let channel_hex = format!("{channel_idx:02X}");
+                                format_sim_payload_data(&channel_hex, SW_SUCCESS)
+                            } else {
+                                format_sim_payload_status(SW_NO_CHANNEL_AVAILABLE)
+                            }
+                        }
+                        apdu::ManageChannelAction::Close => {
+                            let target_idx = if apdu.p2 == 0 { idx } else { apdu.p2 as usize };
+                            if target_idx == 0 {
+                                format_sim_payload_status(SW_INCORRECT_PARAMS) // 6A86
+                            } else if target_idx >= self.logical_channels.len()
+                                || !self.logical_channels[target_idx]
+                            {
+                                format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND) // 6A88
+                            } else {
+                                self.logical_channels[target_idx] = false;
+                                self.selected_aids[target_idx] = None;
+                                self.selected_files[target_idx] = None;
+                                self.response_buffer[target_idx].clear();
+                                format_sim_payload_status(SW_SUCCESS)
+                            }
                         }
                     }
-                    MANAGE_CHANNEL_ACTION_CLOSE => {
-                        let target_idx = if apdu.p2 == 0 { idx } else { apdu.p2 as usize };
-                        if target_idx == 0 {
-                            format_sim_payload_status(SW_INCORRECT_PARAMS) // 6A86
-                        } else if target_idx >= self.logical_channels.len()
-                            || !self.logical_channels[target_idx]
-                        {
-                            format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND) // 6A88
-                        } else {
-                            self.logical_channels[target_idx] = false;
-                            self.selected_aids[target_idx] = None;
-                            self.selected_files[target_idx] = None;
-                            self.response_buffer[target_idx].clear();
-                            format_sim_payload_status(SW_SUCCESS)
-                        }
-                    }
-                    _ => format_sim_payload_status(SW_INCORRECT_PARAMS),
-                },
+                }
                 apdu::Instruction::GetResponse => self.handle_get_response(idx, apdu),
                 _ => {
                     if access_type == SimAccessType::Cgla {
@@ -1139,36 +1147,44 @@ impl SimService {
     }
 
     fn handle_csim_manage_channel(&mut self, channel_idx: usize, p1: u8, p2: u8) -> SimResult {
-        if p1 == MANAGE_CHANNEL_ACTION_OPEN {
-            // Open channel
-            if let Some(channel_idx) = self.logical_channels.iter().position(|&open| !open) {
-                self.logical_channels[channel_idx] = true;
-                self.selected_aids[channel_idx] = Some("CSIM".to_string()); // CSIM channel
-                let resp_hex = format!("{channel_idx:02X}{SW_SUCCESS:04X}");
-                Ok(Some(SimResponse::GenericSimAccess(format!("{},{resp_hex}", resp_hex.len()))))
-            } else {
-                // No channel available
-                Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_NO_CHANNEL_AVAILABLE:04X}"))))
+        let Ok(action) = apdu::ManageChannelAction::try_from(p1) else {
+            let status = SW_INCORRECT_PARAMS;
+            return Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))));
+        };
+        match action {
+            apdu::ManageChannelAction::Open => {
+                if let Some(channel_idx) = self.logical_channels.iter().position(|&open| !open) {
+                    self.logical_channels[channel_idx] = true;
+                    self.selected_aids[channel_idx] = Some("CSIM".to_string()); // CSIM channel
+                    let resp_hex = format!("{channel_idx:02X}{SW_SUCCESS:04X}");
+                    Ok(Some(SimResponse::GenericSimAccess(format!(
+                        "{},{resp_hex}",
+                        resp_hex.len()
+                    ))))
+                } else {
+                    // No channel available
+                    Ok(Some(SimResponse::GenericSimAccess(format!(
+                        "4,{SW_NO_CHANNEL_AVAILABLE:04X}"
+                    ))))
+                }
             }
-        } else if p1 == MANAGE_CHANNEL_ACTION_CLOSE {
-            // Close channel
-            let target_idx = if p2 == 0 { channel_idx } else { p2 as usize };
-            if target_idx == 0 {
-                let status = SW_INCORRECT_PARAMS;
-                Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
-            } else if target_idx >= self.logical_channels.len()
-                || !self.logical_channels[target_idx]
-            {
-                let status = SW_REFERENCED_DATA_NOT_FOUND;
-                Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
-            } else {
-                self.logical_channels[target_idx] = false;
-                self.selected_aids[target_idx] = None;
-                self.selected_files[target_idx] = None;
-                Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_SUCCESS:04X}"))))
+            apdu::ManageChannelAction::Close => {
+                let target_idx = if p2 == 0 { channel_idx } else { p2 as usize };
+                if target_idx == 0 {
+                    let status = SW_INCORRECT_PARAMS;
+                    Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
+                } else if target_idx >= self.logical_channels.len()
+                    || !self.logical_channels[target_idx]
+                {
+                    let status = SW_REFERENCED_DATA_NOT_FOUND;
+                    Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
+                } else {
+                    self.logical_channels[target_idx] = false;
+                    self.selected_aids[target_idx] = None;
+                    self.selected_files[target_idx] = None;
+                    Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_SUCCESS:04X}"))))
+                }
             }
-        } else {
-            Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_INCORRECT_PARAMS:04X}"))))
         }
     }
 
@@ -1229,7 +1245,7 @@ impl SimService {
             Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
         }
     }
-    fn handle_set_cdma_subscription_source(&mut self, source: u8) -> SimResult {
+    fn handle_set_cdma_subscription_source(&mut self, source: CdmaSubscriptionSource) -> SimResult {
         self.cdma_subscription_source = source;
         Ok(None)
     }
@@ -1239,7 +1255,10 @@ impl SimService {
         Ok(Some(SimResponse::CdmaSubscriptionSource(source)))
     }
 
-    fn handle_set_cdma_roaming_preference(&mut self, preference: u8) -> SimResult {
+    fn handle_set_cdma_roaming_preference(
+        &mut self,
+        preference: CdmaRoamingPreference,
+    ) -> SimResult {
         self.cdma_roaming_preference = preference;
         Ok(None)
     }
@@ -1277,14 +1296,16 @@ impl SimService {
 
     pub fn handle_set_facility_lock(
         &mut self,
-        mode: u8,
+        mode: FacilityLockMode,
         passwd: Option<QuotedString>,
     ) -> SimResult {
-        if (mode == 0 || mode == 1) && self.state == SimState::PukRequired {
+        if (mode == FacilityLockMode::Unlock || mode == FacilityLockMode::Lock)
+            && self.state == SimState::PukRequired
+        {
             return Err(ExecutionResult::cme_error(CmeError::SimPukRequired));
         }
         match mode {
-            0 => {
+            FacilityLockMode::Unlock => {
                 let passwd = match passwd {
                     Some(p) => p,
                     None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
@@ -1306,7 +1327,7 @@ impl SimService {
                     Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                 }
             }
-            1 => {
+            FacilityLockMode::Lock => {
                 let passwd = match passwd {
                     Some(p) => p,
                     None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
@@ -1328,8 +1349,9 @@ impl SimService {
                     Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                 }
             }
-            2 => Ok(Some(SimResponse::FacilityLockStatus(if self.pin_enabled { 1 } else { 0 }))),
-            _ => Err(ExecutionResult::Unhandled),
+            FacilityLockMode::QueryStatus => {
+                Ok(Some(SimResponse::FacilityLockStatus(if self.pin_enabled { 1 } else { 0 })))
+            }
         }
     }
 
@@ -1355,7 +1377,7 @@ impl SimService {
     }
 
     pub fn execute<'a>(&mut self, command: &SimCommand<'a>) -> ExecutionResult {
-        info!("[SimService] Executing SIM command: {:?}", command);
+        info!("[SimService] Executing SIM command: {command:?}");
         if self.state == SimState::Absent {
             return ExecutionResult::cme_error(CmeError::SimNotInserted); /* SIM not inserted */
         }

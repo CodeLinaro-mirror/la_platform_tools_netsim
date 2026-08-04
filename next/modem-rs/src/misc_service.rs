@@ -5,7 +5,10 @@ use modem_rs_derive::CommandParser;
 
 use crate::{
     parser::QuotedString,
-    types::{CmeeMode, ExecutionResult, Parsable},
+    types::{
+        CallMode, CmeeMode, ExecutionResult, FlowControlMode, IcfFormat, IcfParity, Parsable,
+        ProductSerialNumberType, SpeakerMuteMode,
+    },
 };
 
 const DEFAULT_IMEI: &str = "867400022047199";
@@ -20,20 +23,20 @@ pub enum MiscCommand<'a> {
     #[command(tag = "AT+CMEE?")]
     QueryReportMobileEquipmentError,
     #[command(tag = "AT+CMEE=")]
-    SetReportMobileEquipmentError(u8),
+    SetReportMobileEquipmentError(CmeeMode),
     /// Goldfish specific concatenated init command
     #[command(tag = "ATE0Q0V1")]
     GoldfishInitSequence,
     #[command(tag = "ATE")]
-    SetEcho(u8),
+    SetEcho(bool),
     #[command(tag = "ATL")]
     SetSpeakerVolume(u8),
     #[command(tag = "ATM")]
-    SetSpeakerMute(u8),
+    SetSpeakerMute(SpeakerMuteMode),
     #[command(tag = "ATQ")]
-    SetQuietMode(u8),
+    SetQuietMode(bool),
     #[command(tag = "ATV")]
-    SetVerboseMode(u8),
+    SetVerboseMode(bool),
     #[command(tag = "AT&F")]
     ResetToFactoryDefaults,
     #[command(tag = "AT&V")]
@@ -71,13 +74,13 @@ pub enum MiscCommand<'a> {
     #[command(tag = "AT+GSN")]
     GetSerialNumber,
     #[command(tag = "AT+CGSN=")]
-    GetProductSerialNumberGsmWithType(u8),
+    GetProductSerialNumberGsmWithType(ProductSerialNumberType),
     #[command(tag = "AT+CGSN")]
     GetProductSerialNumberGsm,
     #[command(tag = "AT+ICF=")]
-    SetTeTaControlCharacterFraming(u8, u8),
+    SetTeTaControlCharacterFraming(IcfFormat, Option<IcfParity>),
     #[command(tag = "AT+IFC=")]
-    SetTeTaLocalDataFlowControl(u8, u8),
+    SetTeTaLocalDataFlowControl(FlowControlMode, Option<FlowControlMode>),
     #[command(tag = "AT+IPR=")]
     SetTeTaFixedLocalRate(u32),
     #[command(tag = "AT+CCLK=")]
@@ -85,7 +88,7 @@ pub enum MiscCommand<'a> {
     #[command(tag = "AT+CCLK?")]
     QueryTime,
     #[command(tag = "AT+CMOD=")]
-    SetCallMode(u8),
+    SetCallMode(CallMode),
     #[command(tag = "AT+CSCS=")]
     SetCharacterSet(QuotedString<'a>),
     #[command(tag = "AT")]
@@ -98,18 +101,18 @@ pub enum MiscResponse {
     ModelId(String),
     Revision(String),
     SerialNumber(String),
-    ProductSerialNumberGsm(u8),
-    ErrorReportingMode(u8),
+    ProductSerialNumberGsm(ProductSerialNumberType),
+    ErrorReportingMode(CmeeMode),
     ErrorReportingSupported,
     ActiveConfiguration {
         speaker_volume: u8,
-        speaker_mute: u8,
-        quiet_mode: u8,
-        verbose_mode: u8,
-        icf_format: u8,
-        icf_parity: u8,
-        ifc_dce: u8,
-        ifc_dte: u8,
+        speaker_mute: SpeakerMuteMode,
+        quiet_mode: bool,
+        verbose_mode: bool,
+        icf_format: IcfFormat,
+        icf_parity: IcfParity,
+        ifc_dce: FlowControlMode,
+        ifc_dte: FlowControlMode,
     },
     ManufacturerIdentification(String),
     Capabilities,
@@ -123,11 +126,14 @@ impl std::fmt::Display for MiscResponse {
             MiscResponse::Revision(revision) => write!(f, "{revision}\r\n"),
             MiscResponse::SerialNumber(serial_number) => write!(f, "{serial_number}\r\n"),
             MiscResponse::ProductSerialNumberGsm(snt) => match snt {
-                0 => write!(f, "{DEFAULT_IMEI}{DEFAULT_INFO}\r\n"),
-                1 => write!(f, "{DEFAULT_IMEI}\r\n"),
-                2 => write!(f, "{DEFAULT_IMEI}{DEFAULT_SVN}\r\n"),
-                3 => write!(f, "{DEFAULT_SVN}\r\n"),
-                _ => write!(f, "{DEFAULT_IMEI}\r\n"),
+                ProductSerialNumberType::ImeiWithInfo => {
+                    write!(f, "{DEFAULT_IMEI}{DEFAULT_INFO}\r\n")
+                }
+                ProductSerialNumberType::Imei => write!(f, "{DEFAULT_IMEI}\r\n"),
+                ProductSerialNumberType::ImeiWithSvn => {
+                    write!(f, "{DEFAULT_IMEI}{DEFAULT_SVN}\r\n")
+                }
+                ProductSerialNumberType::Svn => write!(f, "{DEFAULT_SVN}\r\n"),
             },
             MiscResponse::ErrorReportingMode(mode) => write!(f, "+CMEE: {mode}\r\n"),
             MiscResponse::ErrorReportingSupported => write!(f, "+CMEE: (0-2)\r\n"),
@@ -141,9 +147,11 @@ impl std::fmt::Display for MiscResponse {
                 ifc_dce,
                 ifc_dte,
             } => {
+                let quiet = if *quiet_mode { 1 } else { 0 };
+                let verbose = if *verbose_mode { 1 } else { 0 };
                 write!(
                     f,
-                    "ACTIVE PROFILE:\r\nL:{speaker_volume} M:{speaker_mute} Q:{quiet_mode} V:{verbose_mode} ICF:{icf_format},{icf_parity} IFC:{ifc_dce},{ifc_dte}\r\n"
+                    "ACTIVE PROFILE:\r\nL:{speaker_volume} M:{speaker_mute} Q:{quiet} V:{verbose} ICF:{icf_format},{icf_parity} IFC:{ifc_dce},{ifc_dte}\r\n"
                 )
             }
             MiscResponse::ManufacturerIdentification(manufacturer) => {
@@ -160,13 +168,13 @@ pub struct MiscService {
     cmee_mode: CmeeMode,
     clock: String,
     speaker_volume: u8,
-    speaker_mute: u8,
-    quiet_mode: u8,
-    verbose_mode: u8,
-    icf_format: u8,
-    icf_parity: u8,
-    ifc_dce: u8,
-    ifc_dte: u8,
+    speaker_mute: SpeakerMuteMode,
+    quiet_mode: bool,
+    verbose_mode: bool,
+    icf_format: IcfFormat,
+    icf_parity: IcfParity,
+    ifc_dce: FlowControlMode,
+    ifc_dte: FlowControlMode,
 }
 
 impl Default for MiscService {
@@ -175,13 +183,13 @@ impl Default for MiscService {
             cmee_mode: CmeeMode::default(),
             clock: "".to_string(),
             speaker_volume: 1,
-            speaker_mute: 1,
-            quiet_mode: 0,
-            verbose_mode: 1,
-            icf_format: 3,
-            icf_parity: 3,
-            ifc_dce: 2,
-            ifc_dte: 2,
+            speaker_mute: SpeakerMuteMode::OnAndOffOnCarrier,
+            quiet_mode: false,
+            verbose_mode: true,
+            icf_format: IcfFormat::Data8Stop1,
+            icf_parity: IcfParity::Space,
+            ifc_dce: FlowControlMode::Hardware,
+            ifc_dte: FlowControlMode::Hardware,
         }
     }
 }
@@ -219,22 +227,29 @@ impl MiscService {
     }
 
     fn handle_get_product_serial_number_gsm(&self) -> MiscResult {
-        Ok(Some(MiscResponse::ProductSerialNumberGsm(1)))
+        Ok(Some(MiscResponse::ProductSerialNumberGsm(ProductSerialNumberType::Imei)))
     }
 
-    fn handle_get_product_serial_number_gsm_with_type(&self, snt: u8) -> MiscResult {
+    fn handle_get_product_serial_number_gsm_with_type(
+        &self,
+        snt: ProductSerialNumberType,
+    ) -> MiscResult {
         Ok(Some(MiscResponse::ProductSerialNumberGsm(snt)))
     }
 
-    fn handle_set_icf(&mut self, format: u8, parity: u8) -> MiscResult {
+    fn handle_set_icf(&mut self, format: IcfFormat, parity: Option<IcfParity>) -> MiscResult {
         self.icf_format = format;
-        self.icf_parity = parity;
+        if let Some(p) = parity {
+            self.icf_parity = p;
+        }
         Ok(None)
     }
 
-    fn handle_set_ifc(&mut self, dce: u8, dte: u8) -> MiscResult {
+    fn handle_set_ifc(&mut self, dce: FlowControlMode, dte: Option<FlowControlMode>) -> MiscResult {
         self.ifc_dce = dce;
-        self.ifc_dte = dte;
+        if let Some(d) = dte {
+            self.ifc_dte = d;
+        }
         Ok(None)
     }
 
@@ -242,28 +257,26 @@ impl MiscService {
         Ok(None)
     }
 
-    fn handle_set_report_mobile_equipment_error(&mut self, mode: u8) -> MiscResult {
-        if let Some(m) = CmeeMode::from_u8(mode) {
-            self.cmee_mode = m;
-            Ok(None)
-        } else {
-            Err(ExecutionResult::error())
-        }
+    fn handle_set_report_mobile_equipment_error(&mut self, mode: CmeeMode) -> MiscResult {
+        self.cmee_mode = mode;
+        Ok(None)
     }
 
     fn handle_query_report_mobile_equipment_error(&self) -> MiscResult {
-        Ok(Some(MiscResponse::ErrorReportingMode(self.cmee_mode as u8)))
+        Ok(Some(MiscResponse::ErrorReportingMode(self.cmee_mode)))
     }
 
     fn handle_query_supported_report_mobile_equipment_error(&self) -> MiscResult {
         Ok(Some(MiscResponse::ErrorReportingSupported))
     }
 
-    fn handle_goldfish_init_sequence(&self) -> MiscResult {
+    fn handle_goldfish_init_sequence(&mut self) -> MiscResult {
+        self.quiet_mode = false;
+        self.verbose_mode = true;
         Ok(None)
     }
 
-    fn handle_set_echo(&self) -> MiscResult {
+    fn handle_set_echo(&self, _echo: bool) -> MiscResult {
         Ok(None)
     }
 
@@ -272,17 +285,17 @@ impl MiscService {
         Ok(None)
     }
 
-    fn handle_set_speaker_mute(&mut self, mute: u8) -> MiscResult {
+    fn handle_set_speaker_mute(&mut self, mute: SpeakerMuteMode) -> MiscResult {
         self.speaker_mute = mute;
         Ok(None)
     }
 
-    fn handle_set_quiet_mode(&mut self, quiet: u8) -> MiscResult {
+    fn handle_set_quiet_mode(&mut self, quiet: bool) -> MiscResult {
         self.quiet_mode = quiet;
         Ok(None)
     }
 
-    fn handle_set_verbose_mode(&mut self, verbose: u8) -> MiscResult {
+    fn handle_set_verbose_mode(&mut self, verbose: bool) -> MiscResult {
         self.verbose_mode = verbose;
         Ok(None)
     }
@@ -290,13 +303,13 @@ impl MiscService {
     fn handle_reset_to_factory_defaults(&mut self) -> MiscResult {
         self.cmee_mode = CmeeMode::default();
         self.speaker_volume = 1;
-        self.speaker_mute = 1;
-        self.quiet_mode = 0;
-        self.verbose_mode = 1;
-        self.icf_format = 3;
-        self.icf_parity = 3;
-        self.ifc_dce = 2;
-        self.ifc_dte = 2;
+        self.speaker_mute = SpeakerMuteMode::OnAndOffOnCarrier;
+        self.quiet_mode = false;
+        self.verbose_mode = true;
+        self.icf_format = IcfFormat::Data8Stop1;
+        self.icf_parity = IcfParity::Space;
+        self.ifc_dce = FlowControlMode::Hardware;
+        self.ifc_dte = FlowControlMode::Hardware;
         Ok(None)
     }
 
@@ -357,7 +370,7 @@ impl MiscService {
         Ok(None)
     }
 
-    fn handle_set_call_mode(&self) -> MiscResult {
+    fn handle_set_call_mode(&self, _mode: CallMode) -> MiscResult {
         Ok(None)
     }
 
@@ -401,7 +414,7 @@ impl MiscService {
                 self.handle_query_supported_report_mobile_equipment_error()
             }
             MiscCommand::GoldfishInitSequence => self.handle_goldfish_init_sequence(),
-            MiscCommand::SetEcho(_) => self.handle_set_echo(),
+            MiscCommand::SetEcho(echo) => self.handle_set_echo(*echo),
             MiscCommand::SetSpeakerVolume(vol) => self.handle_set_speaker_volume(*vol),
             MiscCommand::SetSpeakerMute(mute) => self.handle_set_speaker_mute(*mute),
             MiscCommand::SetQuietMode(quiet) => self.handle_set_quiet_mode(*quiet),
@@ -433,7 +446,7 @@ impl MiscService {
             MiscCommand::SetAutomaticDisconnectDelay(_) => {
                 self.handle_set_automatic_disconnect_delay()
             }
-            MiscCommand::SetCallMode(_) => self.handle_set_call_mode(),
+            MiscCommand::SetCallMode(mode) => self.handle_set_call_mode(*mode),
             MiscCommand::SetCharacterSet(_) => self.handle_set_character_set(),
             MiscCommand::Test => Ok(None),
         };

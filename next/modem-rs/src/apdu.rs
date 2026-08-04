@@ -199,6 +199,26 @@ impl TryFrom<u8> for RecordMode {
     }
 }
 
+/// MANAGE CHANNEL command P1 parameters (Action) as defined in ISO/IEC 7816-4 §
+/// 6.13.1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ManageChannelAction {
+    Open = 0x00,
+    Close = 0x80,
+}
+
+impl TryFrom<u8> for ManageChannelAction {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(Self::Open),
+            0x80 => Ok(Self::Close),
+            _ => Err(()),
+        }
+    }
+}
+
 /// Parsed APDU components according to ISO/IEC 7816-4.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParsedApdu<'a> {
