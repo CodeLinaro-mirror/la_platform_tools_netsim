@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use modem_rs_derive::CommandParser;
 
 use crate::{
@@ -12,6 +14,11 @@ use crate::{
         ExecutionResult, Facility, FacilityLockMode, Parsable, UssdMode, UssdStatus,
     },
 };
+
+const SERVICE_CLASS_VOICE: u8 = 1;
+const SERVICE_CLASS_DATA: u8 = 2;
+const SERVICE_CLASS_FAX: u8 = 4;
+const SERVICE_CLASS_VOICE_DATA_FAX: u8 = 7;
 
 /// Supplementary service AT commands.
 #[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
@@ -57,7 +64,7 @@ pub enum SupResponse {
     FacilityLockStatus(u8),
     Clir { n: ClirMode, m: ClirStatus },
     Clip { activation: ClipActivation, provision: ClipProvisionStatus },
-    CallWaiting { status: CallWaitingStatus, class: u8 },
+    CallWaiting(Vec<(CallWaitingStatus, u8)>),
     Ussd { status: UssdStatus, message: String, dcs: u8 },
 }
 
@@ -69,8 +76,11 @@ impl std::fmt::Display for SupResponse {
             SupResponse::Clip { activation, provision } => {
                 write!(f, "+CLIP: {activation},{provision}\r\n")
             }
-            SupResponse::CallWaiting { status, class } => {
-                write!(f, "+CCWA: {status},{class}\r\n")
+            SupResponse::CallWaiting(infos) => {
+                for (status, class) in infos {
+                    write!(f, "+CCWA: {status},{class}\r\n")?;
+                }
+                Ok(())
             }
             SupResponse::Ussd { status, message, dcs } => {
                 write!(f, "+CUSD: {status},\"{message}\",{dcs}\r\n")
@@ -88,10 +98,30 @@ pub struct CallForwardingInfo {
     pub type_: u8,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SupService {
     call_forwarding_info: Option<CallForwardingInfo>,
     clip_enabled: ClipActivation,
+    clir_mode: ClirMode,
+    ccwa_presentation: CallWaitingPresentation,
+    ccwa_status: BTreeMap<u8, CallWaitingStatus>,
+}
+
+impl Default for SupService {
+    fn default() -> Self {
+        let ccwa_status = BTreeMap::from([
+            (SERVICE_CLASS_VOICE, CallWaitingStatus::NotActive),
+            (SERVICE_CLASS_DATA, CallWaitingStatus::NotActive),
+            (SERVICE_CLASS_FAX, CallWaitingStatus::NotActive),
+        ]);
+        Self {
+            call_forwarding_info: None,
+            clip_enabled: ClipActivation::default(),
+            clir_mode: ClirMode::default(),
+            ccwa_presentation: CallWaitingPresentation::Disable,
+            ccwa_status,
+        }
+    }
 }
 
 impl SupService {
@@ -128,10 +158,11 @@ impl SupService {
     }
 
     fn handle_query_clir(&self) -> SupResult {
-        Ok(Some(SupResponse::Clir { n: ClirMode::SubscriptionDefault, m: ClirStatus::NotActive }))
+        Ok(Some(SupResponse::Clir { n: self.clir_mode, m: ClirStatus::Active }))
     }
 
-    fn handle_set_clir(&self, _clir: ClirMode) -> SupResult {
+    fn handle_set_clir(&mut self, clir: ClirMode) -> SupResult {
+        self.clir_mode = clir;
         Ok(None)
     }
 
@@ -148,19 +179,51 @@ impl SupService {
     }
 
     fn handle_set_call_waiting(
-        &self,
-        _n: CallWaitingPresentation,
+        &mut self,
+        n: CallWaitingPresentation,
         mode: Option<CallWaitingMode>,
         class: Option<u8>,
     ) -> SupResult {
-        if let Some(CallWaitingMode::Query) = mode {
-            let classx = class.unwrap_or(7);
-            Ok(Some(SupResponse::CallWaiting {
-                status: CallWaitingStatus::NotActive,
-                class: classx,
-            }))
-        } else {
-            Ok(None)
+        self.ccwa_presentation = n;
+        let class = class.unwrap_or(SERVICE_CLASS_VOICE_DATA_FAX);
+        match mode {
+            Some(CallWaitingMode::Disable) => {
+                self.set_ccwa_status(class, CallWaitingStatus::NotActive);
+                Ok(None)
+            }
+            Some(CallWaitingMode::Enable) => {
+                self.set_ccwa_status(class, CallWaitingStatus::Active);
+                Ok(None)
+            }
+            Some(CallWaitingMode::Query) => {
+                // Find all active basic classes that are subset of the queried class.
+                let mut active_classes = Vec::new();
+                for (&bc, &status) in &self.ccwa_status {
+                    if (class & bc) == bc && status == CallWaitingStatus::Active {
+                        active_classes.push(bc);
+                    }
+                }
+                if active_classes.is_empty() {
+                    // None are active, return single line indicating disabled for the queried class
+                    Ok(Some(SupResponse::CallWaiting(vec![(CallWaitingStatus::NotActive, class)])))
+                } else {
+                    // Return active classes
+                    let infos = active_classes
+                        .into_iter()
+                        .map(|bc| (CallWaitingStatus::Active, bc))
+                        .collect();
+                    Ok(Some(SupResponse::CallWaiting(infos)))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn set_ccwa_status(&mut self, class: u8, status: CallWaitingStatus) {
+        for (&bc, val) in &mut self.ccwa_status {
+            if (class & bc) == bc {
+                *val = status;
+            }
         }
     }
 

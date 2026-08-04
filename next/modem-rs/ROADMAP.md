@@ -241,10 +241,10 @@ a massive amount of work to reach feature parity with the C++
 - [x] **Implement Radio Power Management (`AT+CFUN`):**
   - [x] Implement `AT+CFUN` command in `parser.rs`.
   - [x] Add support for setting and querying the radio power state.
-- [ ] **Implement Network Selection (`AT+COPS`):**
-  - [ ] Add support for querying and setting the network selection mode.
-  - [ ] Add support for querying available networks.
-  - [ ] Add support for requesting the current operator.
+- [x] **Implement Network Selection (`AT+COPS`):**
+  - [x] Add support for querying and setting the network selection mode.
+  - [x] Add support for querying available networks.
+  - [x] Add support for requesting the current operator.
 - [x] **Implement Network Registration (`AT+CREG`, `AT+CGREG`, `AT+CEREG`):**
   - [x] Implement `AT+CREG`, `AT+CGREG`, `AT+CEREG` set/query commands in
         `parser.rs`.
@@ -333,13 +333,13 @@ missing most of the features and complexity of the C++ `sup_service.cpp`.
 
 - [ ] **Implement full USSD handling (`AT+CUSD`):**
   - [ ] Add logic for managing USSD sessions.
-- [ ] **Implement full CLIR handling (`AT+CLIR`):**
-  - [ ] Add the `ClirStatusInfo` struct and logic for setting and querying the
+- [x] **Implement full CLIR handling (`AT+CLIR`):**
+  - [x] Add the `ClirStatusInfo` struct and logic for setting and querying the
         CLIR status.
 - [ ] **Implement full CLIP handling (`AT+CLIP`):**
   - [ ] Add logic for setting and querying the CLIP status.
-- [ ] **Implement full Call Waiting handling (`AT+CCWA`):**
-  - [ ] Add the `CallWaitingInfo` struct and logic for setting and querying the
+- [x] **Implement full Call Waiting handling (`AT+CCWA`):**
+  - [x] Add the `CallWaitingInfo` struct and logic for setting and querying the
         call waiting status.
 - [ ] **Enhance Call Forwarding handling (`AT+CCFCU`):**
   - [ ] Expand the `handle_call_forwarding` function to support multiple call

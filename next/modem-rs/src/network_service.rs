@@ -12,7 +12,8 @@ use crate::{
     parser::{QuotedString, parse_raw_data},
     types::{
         AccessTechnology, CmeError, CopsFormat, CopsMode, CtecTechnology, ExecutionResult,
-        Parsable, RadioPowerLevel, RegistrationUnsolicitedMode, Response, SignalStrength,
+        OperatorStatus, Parsable, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
+        SignalStrength,
     },
 };
 
@@ -21,6 +22,8 @@ use crate::{
 pub enum NetworkCommand<'a> {
     #[command(tag = "AT+COPS?")]
     QueryOperator,
+    #[command(tag = "AT+COPS=?")]
+    QueryAvailableOperators,
     #[command(tag = "AT+COPS=")]
     SetOperator { mode: CopsMode, format: Option<CopsFormat>, oper: Option<QuotedString<'a>> },
     #[command(tag = "AT+CREG?")]
@@ -53,6 +56,25 @@ pub enum NetworkCommand<'a> {
 
 const DUMMY_LAC: &str = "2142";
 const DUMMY_CID: &str = "0000B804";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperatorInfo {
+    pub status: OperatorStatus,
+    pub long_name: String,
+    pub short_name: String,
+    pub numeric: String,
+    pub act: AccessTechnology,
+}
+
+impl std::fmt::Display for OperatorInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({},\"{}\",\"{}\",\"{}\",{})",
+            self.status, self.long_name, self.short_name, self.numeric, self.act
+        )
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistrationType {
@@ -133,6 +155,7 @@ pub enum NetworkResponse {
     },
     RadioPower(RadioPowerLevel),
     Urcs(Vec<NetworkUrc>),
+    AvailableOperators(Vec<OperatorInfo>),
 }
 
 impl std::fmt::Display for NetworkResponse {
@@ -217,6 +240,42 @@ impl std::fmt::Display for NetworkResponse {
                     write!(f, "{urc}")?;
                 }
                 Ok(())
+            }
+            NetworkResponse::AvailableOperators(operators) => {
+                write!(f, "+COPS: ")?;
+                for (i, op) in operators.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{op}")?;
+                }
+                write!(f, ",,(")?;
+                let modes = [
+                    CopsMode::Automatic,
+                    CopsMode::Manual,
+                    CopsMode::Deregister,
+                    CopsMode::SetFormatOnly,
+                    CopsMode::ManualAutomatic,
+                ];
+                for (i, m) in modes.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{m}")?;
+                }
+                write!(f, "),(")?;
+                let formats = [
+                    CopsFormat::LongAlphanumeric,
+                    CopsFormat::ShortAlphanumeric,
+                    CopsFormat::Numeric,
+                ];
+                for (i, fmt) in formats.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{fmt}")?;
+                }
+                write!(f, ")\r\n")
             }
         }
     }
@@ -607,6 +666,19 @@ impl NetworkService {
         }
     }
 
+    fn handle_query_available_operators(&self) -> NetworkResult {
+        let status =
+            if self.is_attached { OperatorStatus::Current } else { OperatorStatus::Available };
+        let default_op = OperatorInfo {
+            status,
+            long_name: DEFAULT_OPERATOR_NAME_LONG.to_string(),
+            short_name: DEFAULT_OPERATOR_NAME_SHORT.to_string(),
+            numeric: DEFAULT_PLMN.to_string(),
+            act: self.act,
+        };
+        Ok(Some(NetworkResponse::AvailableOperators(vec![default_op])))
+    }
+
     fn handle_query_signal_strength(&self) -> NetworkResult {
         let (rssi, ber) = self.signal_strength;
         Ok(Some(NetworkResponse::SignalStrength { rssi, ber, act: self.act }))
@@ -882,6 +954,7 @@ impl NetworkService {
     ) -> ExecutionResult {
         let res = match command {
             NetworkCommand::QueryOperator => self.handle_query_operator(),
+            NetworkCommand::QueryAvailableOperators => self.handle_query_available_operators(),
             NetworkCommand::SetOperator { mode, format, oper } => {
                 self.handle_set_operator(*mode, *format, oper.as_deref())
             }

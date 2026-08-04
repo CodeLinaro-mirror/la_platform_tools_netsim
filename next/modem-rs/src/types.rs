@@ -597,6 +597,21 @@ impl<'a> Parsable<'a> for CopsFormat {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
+pub enum OperatorStatus {
+    Unknown = 0,
+    Available = 1,
+    Current = 2,
+    Forbidden = 3,
+}
+
+impl std::fmt::Display for OperatorStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum CallHoldAction {
     ReleaseHeldOrWaiting = 0,
     ReleaseActiveAcceptHeldOrWaiting = 1,
@@ -912,9 +927,10 @@ impl<'a> Parsable<'a> for bool {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum ClirMode {
+    #[default]
     SubscriptionDefault = 0,
     Invocation = 1,
     Suppression = 2,
