@@ -1,7 +1,11 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{str, time::Duration};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr},
+    str,
+    time::Duration,
+};
 
 use netsim_model::{Call, Quirks, RegistrationStatus};
 use nom::IResult;
@@ -49,8 +53,15 @@ pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 pub const DEFAULT_PIN: &str = "1234";
 pub const DEFAULT_PIN2: &str = "5678";
 
-pub const DEFAULT_GATEWAY: &str = "10.0.2.2";
-pub const DEFAULT_DNS: &str = "10.0.2.3";
+pub const DEFAULT_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
+pub const DEFAULT_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
+pub const DEFAULT_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
+
+// Aligned with libslirp-rs and emulator networking defaults.
+pub const DEFAULT_IPV6_GATEWAY: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2);
+pub const DEFAULT_IPV6_DNS: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3);
+pub const DEFAULT_IPV6_ADDR: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15);
+pub const DEFAULT_IPV6_PREFIX: u32 = 64;
 
 // A unique identifier for a modem instance.
 pub type ModemId = u32;
