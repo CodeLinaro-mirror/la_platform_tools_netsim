@@ -134,6 +134,19 @@ fn test_csq_query() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_cops_query_available_operators() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+COPS=?");
+    then_response_is(
+        &mut world,
+        "A",
+        "+COPS: (1,\"Android Virtual Operator\",\"Android\",\"310260\",7),,(0,1,2,3,4),(0,1,2)",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
 // Scenario: Network Registration on Radio ON
 //   Given a modem "A"
 //   When AT command "AT+CFUN=0" is sent to "A"
