@@ -39,7 +39,7 @@ pub fn given_goldfish_37_modem(world: &mut World, name: &str) {
     let id = world.next_modem_id();
     let (handler, sink) = MockModemHandler::new(true);
 
-    let quirks = Quirks { goldfish_ril_37_or_earlier: true };
+    let quirks = Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() };
     world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
@@ -57,6 +57,20 @@ pub fn given_modem_with_sim_type(world: &mut World, name: &str, sim_type: i32) {
         .manager
         .new_modem(id, sink, Some(sim_type), None, Quirks::default())
         .expect("Failed to create new modem");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Creates a Cuttlefish modem with the given name.
+pub fn given_cuttlefish_modem(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    let quirks = Quirks { is_cuttlefish: true, ..Default::default() };
+    world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 

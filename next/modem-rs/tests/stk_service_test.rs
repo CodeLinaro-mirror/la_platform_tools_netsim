@@ -84,15 +84,15 @@ fn test_send_stk_envelope_command() {
             "8F",
             "0A",
             "01",
-            "8053E34EE48BBE7F6E", // Item 1: Tag 8F, Len 10, ID 01, UCS2 Text
+            "80006D0065006E0075", // Item 1: ID 01, "menu"
             "8F",
             "0A",
             "02",
-            "804E1A52A14ECB7ECD", // Item 2: Tag 8F, Len 10, ID 02, "业务介绍" (Service Intro)
+            "800049006E0066006F", // Item 2: ID 02, "Info"
             "8F",
             "0A",
             "03",
-            "80724867434FE1606F", // Item 3: Tag 8F, Len 10, ID 03, "特权信息" (Privilege Info)
+            "8000480065006C0070", // Item 3: ID 03, "Help"
             "\""
         ),
     );
@@ -198,24 +198,24 @@ fn test_set_stk_ready() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "38", // Proactive Command: Tag D0, Len 56 (0x38)
+            "48", // Proactive Command: Tag D0, Len 72 (0x48)
             "81",
             "03",
             "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
             "82",
             "02",
             "8182", // Device IDs: UICC (81) to ME (82)
-            "05",
-            "09",
-            "804E2D56FD79FB52A8", // Alpha ID: "中国移动" (China Mobile)
+            "85",
+            "0D",
+            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
             "8F",
-            "10",
+            "18",
             "50",
-            "8000530049004D5FEB6377786E8BA4", // Item 1: ID 0x50, "SIM快捷确认" (SIM Quick Confirm)
+            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
             "8F",
-            "10",
+            "14",
             "4E",
-            "80005500530049004D53614FE1606F", // Item 2: ID 0x4E, "USIM卡信息" (USIM Card Info)
+            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
             "\""
         ),
     );
@@ -266,24 +266,24 @@ fn test_stk_submenu_navigation() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "38", // Proactive Command: Tag D0, Len 56 (0x38)
+            "48", // Proactive Command: Tag D0, Len 72 (0x48)
             "81",
             "03",
             "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
             "82",
             "02",
             "8182", // Device IDs: UICC (81) to ME (82)
-            "05",
-            "09",
-            "804E2D56FD79FB52A8", // Alpha ID: "中国移动" (China Mobile)
+            "85",
+            "0D",
+            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
             "8F",
-            "10",
+            "18",
             "50",
-            "8000530049004D5FEB6377786E8BA4", // Item 1: ID 0x50, "SIM快捷确认" (SIM Quick Confirm)
+            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
             "8F",
-            "10",
+            "14",
             "4E",
-            "80005500530049004D53614FE1606F", // Item 2: ID 0x4E, "USIM卡信息" (USIM Card Info)
+            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
             "\""
         ),
     );
@@ -324,15 +324,15 @@ fn test_stk_submenu_navigation() {
             "8F",
             "0A",
             "01",
-            "8053E34EE48BBE7F6E", // Item 1: Tag 8F, Len 10, ID 01, UCS2 Text
+            "80006D0065006E0075", // Item 1: ID 01, "menu"
             "8F",
             "0A",
             "02",
-            "804E1A52A14ECB7ECD", // Item 2: Tag 8F, Len 10, ID 02, "业务介绍" (Service Intro)
+            "800049006E0066006F", // Item 2: ID 02, "Info"
             "8F",
             "0A",
             "03",
-            "80724867434FE1606F", // Item 3: Tag 8F, Len 10, ID 03, "特权信息" (Privilege Info)
+            "8000480065006C0070", // Item 3: ID 03, "Help"
             "\""
         ),
     );
@@ -366,7 +366,7 @@ fn test_stk_submenu_navigation() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "21", // Proactive Command: Tag D0, Len 33 (0x21)
+            "31", // Proactive Command: Tag D0, Len 49 (0x31)
             "81",
             "03",
             "012400", // Command Details: SELECT ITEM (0x24)
@@ -374,13 +374,13 @@ fn test_stk_submenu_navigation() {
             "02",
             "8182", // Device IDs: UICC (81) to ME (82)
             "8F",
-            "0A",
+            "12",
             "01",
-            "806DFB52A083DC5355", // Item 1: ID 01, "无线电话" (Wireless Phone)
+            "800041006400640020006D0065006E0075", // Item 1: ID 01, "Add menu"
             "8F",
-            "0A",
+            "12",
             "02",
-            "805220966483DC5355", // Item 2: ID 02, "协同电话" (Collaborative Phone)
+            "8000440065006C0020006D0065006E0075", // Item 2: ID 02, "Del menu"
             "\""
         ),
     );
@@ -412,7 +412,7 @@ fn test_stk_submenu_navigation() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "22", // Proactive Command: Tag D0, Len 34 (0x22)
+            "2A", // Proactive Command: Tag D0, Len 42 (0x2A)
             "81",
             "03",
             "012181", // Command Details: Tag 81, Len 03, Type 21 (DISPLAY TEXT), Qual 81
@@ -420,10 +420,10 @@ fn test_stk_submenu_navigation() {
             "02",
             "8102", // Device IDs: UICC (81) to Display (02)
             "8D",
-            "17", // Text String: Tag 8D, Len 23
+            "1F", // Text String: Tag 8D, Len 31
             "08", // DCS: 08 (UCS2)
-            "662F542666F465B04E0B8F7D83DC535552178868FF1F", /* Text: "是否启新下载电话列表?"
-                   * (Download new phone list?) */
+            "004E006F007400200069006D0070006C0065006D0065006E007400650064", /* Text: "Not
+                   * implemented" */
             "\""
         ),
     );
@@ -468,24 +468,24 @@ fn test_stk_session_terminated_by_user() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "38", // Proactive Command: Tag D0, Len 56 (0x38)
+            "48", // Proactive Command: Tag D0, Len 72 (0x48)
             "81",
             "03",
             "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
             "82",
             "02",
             "8182", // Device IDs: UICC (81) to ME (82)
-            "05",
-            "09",
-            "804E2D56FD79FB52A8", // Alpha ID: "中国移动" (China Mobile)
+            "85",
+            "0D",
+            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
             "8F",
-            "10",
+            "18",
             "50",
-            "8000530049004D5FEB6377786E8BA4", // Item 1: ID 0x50, "SIM快捷确认" (SIM Quick Confirm)
+            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
             "8F",
-            "10",
+            "14",
             "4E",
-            "80005500530049004D53614FE1606F", // Item 2: ID 0x4E, "USIM卡信息" (USIM Card Info)
+            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
             "\""
         ),
     );
@@ -525,15 +525,15 @@ fn test_stk_session_terminated_by_user() {
             "8F",
             "0A",
             "01",
-            "8053E34EE48BBE7F6E", // Item 1: Tag 8F, Len 10, ID 01, UCS2 Text
+            "80006D0065006E0075", // Item 1: ID 01, "menu"
             "8F",
             "0A",
             "02",
-            "804E1A52A14ECB7ECD", // Item 2: Tag 8F, Len 10, ID 02, "业务介绍" (Service Intro)
+            "800049006E0066006F", // Item 2: ID 02, "Info"
             "8F",
             "0A",
             "03",
-            "80724867434FE1606F", // Item 3: Tag 8F, Len 10, ID 03, "特权信息" (Privilege Info)
+            "8000480065006C0070", // Item 3: ID 03, "Help"
             "\""
         ),
     );
@@ -598,24 +598,24 @@ fn test_stk_backward_move() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "38", // Proactive Command: Tag D0, Len 56 (0x38)
+            "48", // Proactive Command: Tag D0, Len 72 (0x48)
             "81",
             "03",
             "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
             "82",
             "02",
             "8182", // Device IDs: UICC (81) to ME (82)
-            "05",
-            "09",
-            "804E2D56FD79FB52A8", // Alpha ID: "中国移动" (China Mobile)
+            "85",
+            "0D",
+            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
             "8F",
-            "10",
+            "18",
             "50",
-            "8000530049004D5FEB6377786E8BA4", // Item 1: ID 0x50, "SIM快捷确认" (SIM Quick Confirm)
+            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
             "8F",
-            "10",
+            "14",
             "4E",
-            "80005500530049004D53614FE1606F", // Item 2: ID 0x4E, "USIM卡信息" (USIM Card Info)
+            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
             "\""
         ),
     );
@@ -655,15 +655,15 @@ fn test_stk_backward_move() {
             "8F",
             "0A",
             "01",
-            "8053E34EE48BBE7F6E", // Item 1: Tag 8F, Len 10, ID 01, UCS2 Text
+            "80006D0065006E0075", // Item 1: ID 01, "menu"
             "8F",
             "0A",
             "02",
-            "804E1A52A14ECB7ECD", // Item 2: Tag 8F, Len 10, ID 02, "业务介绍" (Service Intro)
+            "800049006E0066006F", // Item 2: ID 02, "Info"
             "8F",
             "0A",
             "03",
-            "80724867434FE1606F", // Item 3: Tag 8F, Len 10, ID 03, "特权信息" (Privilege Info)
+            "8000480065006C0070", // Item 3: ID 03, "Help"
             "\""
         ),
     );
@@ -694,7 +694,7 @@ fn test_stk_backward_move() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "21", // Proactive Command: Tag D0, Len 33 (0x21)
+            "31", // Proactive Command: Tag D0, Len 49 (0x31)
             "81",
             "03",
             "012400", // Command Details: SELECT ITEM (0x24)
@@ -702,13 +702,13 @@ fn test_stk_backward_move() {
             "02",
             "8182", // Device IDs: UICC (81) to ME (82)
             "8F",
-            "0A",
+            "12",
             "01",
-            "806DFB52A083DC5355", // Item 1: ID 01, "无线电话" (Wireless Phone)
+            "800041006400640020006D0065006E0075", // Item 1: ID 0x01, "Add menu"
             "8F",
-            "0A",
+            "12",
             "02",
-            "805220966483DC5355", // Item 2: ID 02, "协同电话" (Collaborative Phone)
+            "8000440065006C0020006D0065006E0075", // Item 2: ID 0x02, "Del menu"
             "\""
         ),
     );
@@ -744,22 +744,22 @@ fn test_stk_backward_move() {
             "2D", // Proactive Command: Tag D0, Len 45 (0x2D)
             "81",
             "03",
-            "012400", // Command Details: SELECT ITEM (0x24)
+            "012400", // Command Details: Tag 81, Len 03, Num 01, Type 24 (SELECT ITEM), Qual 00
             "82",
             "02",
-            "8182", // Device IDs: UICC to ME
+            "8182", // Device IDs: UICC (81) to ME (82)
             "8F",
             "0A",
             "01",
-            "8053E34EE48BBE7F6E", // Item 1: UCS2 Text
+            "80006D0065006E0075", // Item 1: ID 01, "menu"
             "8F",
             "0A",
             "02",
-            "804E1A52A14ECB7ECD", // Item 2: "业务介绍" (Service Intro)
+            "800049006E0066006F", // Item 2: ID 02, "Info"
             "8F",
             "0A",
             "03",
-            "80724867434FE1606F", // Item 3: "特权信息" (Privilege Info)
+            "8000480065006C0070", // Item 3: ID 03, "Help"
             "\""
         ),
     );
@@ -791,7 +791,7 @@ fn test_stk_backward_move() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "21", // Proactive Command: Tag D0, Len 33 (0x21)
+            "31", // Proactive Command: Tag D0, Len 49 (0x31)
             "81",
             "03",
             "012400", // Command Details: SELECT ITEM (0x24)
@@ -799,13 +799,13 @@ fn test_stk_backward_move() {
             "02",
             "8182", // Device IDs: UICC (81) to ME (82)
             "8F",
-            "0A",
+            "12",
             "01",
-            "806DFB52A083DC5355", // Item 1: ID 01, "无线电话" (Wireless Phone)
+            "800041006400640020006D0065006E0075", // Item 1: ID 0x01, "Add menu"
             "8F",
-            "0A",
+            "12",
             "02",
-            "805220966483DC5355", // Item 2: ID 02, "协同电话" (Collaborative Phone)
+            "8000440065006C0020006D0065006E0075", // Item 2: ID 0x02, "Del menu"
             "\""
         ),
     );
@@ -841,24 +841,24 @@ fn test_stk_reporting_disabled() {
         concat!(
             "+CUSATP: \"",
             "D0",
-            "38", // Proactive Command: Tag D0, Len 56 (0x38)
+            "48", // Proactive Command: Tag D0, Len 72 (0x48)
             "81",
             "03",
             "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
             "82",
             "02",
             "8182", // Device IDs: UICC (81) to ME (82)
-            "05",
-            "09",
-            "804E2D56FD79FB52A8", // Alpha ID: "中国移动" (China Mobile)
+            "85",
+            "0D",
+            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
             "8F",
-            "10",
+            "18",
             "50",
-            "8000530049004D5FEB6377786E8BA4", // Item 1: ID 0x50, "SIM快捷确认" (SIM Quick Confirm)
+            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
             "8F",
-            "10",
+            "14",
             "4E",
-            "80005500530049004D53614FE1606F", // Item 2: ID 0x4E, "USIM卡信息" (USIM Card Info)
+            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
             "\""
         ),
     );

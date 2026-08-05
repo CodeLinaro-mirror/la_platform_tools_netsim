@@ -156,7 +156,13 @@ impl ModemNetworkSimulator {
             Some(xml) => xml.as_str(),
             None => match sim_type {
                 Some(2) => crate::profiles::PROFILE_CTS_XML,
-                _ => crate::profiles::PROFILE_DEFAULT_XML,
+                _ => {
+                    if quirks.is_cuttlefish {
+                        crate::profiles::PROFILE_TEL_ALASKA_XML
+                    } else {
+                        crate::profiles::PROFILE_DEFAULT_XML
+                    }
+                }
             },
         };
 

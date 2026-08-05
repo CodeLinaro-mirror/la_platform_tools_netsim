@@ -61,11 +61,12 @@ pub enum ModemEffect {
 impl ModemImpl {
     pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile, quirks: Quirks) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
+        let home_plmn = profile.home_plmn();
         Self {
             id,
             enable_unsolicited_urcs: enable_unsol,
             sim_service: SimService::new(&profile),
-            network_service: NetworkService::new(quirks),
+            network_service: NetworkService::new(quirks, home_plmn),
             sms_service: SmsService::default(),
             stk_service: StkService::new(profile.stk.clone()),
             sup_service: SupService::default(),

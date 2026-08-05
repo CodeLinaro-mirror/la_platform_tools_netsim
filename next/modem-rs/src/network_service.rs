@@ -332,7 +332,7 @@ pub struct NetworkService {
 }
 
 impl NetworkService {
-    pub fn new(quirks: Quirks) -> Self {
+    pub fn new(quirks: Quirks, home_plmn: &str) -> Self {
         Self {
             voice_registration: RegistrationStatus::NotRegistered,
             data_registration: RegistrationStatus::NotRegistered,
@@ -341,16 +341,16 @@ impl NetworkService {
             data_unsol_mode: RegistrationUnsolicitedMode::default(),
             lte_unsol_mode: RegistrationUnsolicitedMode::default(),
             radio_power: RadioPowerLevel::default(),
-            plmn: crate::constants::DEFAULT_PLMN.to_string(),
+            plmn: home_plmn.to_string(),
             cops_mode: CopsMode::Automatic,
             // Non-standard default: While 3GPP TS 27.007 § 7.3 specifies format 0 (long format
             // alphanumeric) as the default when AT+COPS is queried without setting
             // format, Goldfish RIL (`reference-ril.c`) in `requestOperator`
             // (`RIL_REQUEST_OPERATOR`) expects `AT+COPS?` to return `response[2]` (`<oper>`)
-            // as a 6-digit numeric MCC/MNC string (`310260`). If an alphanumeric operator string is
-            // returned, Goldfish RIL logs `requestOperator expected mccmnc to be 6
-            // decimal digits` and returns an error. Therefore, format 2 (numeric
-            // MCC/MNC) must be the default for Goldfish compatibility.
+            // as a 6-digit numeric MCC/MNC string (`310260` or `311740`). If an alphanumeric
+            // operator string is returned, Goldfish RIL logs `requestOperator expected
+            // mccmnc to be 6 decimal digits` and returns an error. Therefore, format 2
+            // (numeric MCC/MNC) must be the default for Goldfish compatibility.
             cops_format: CopsFormat::Numeric,
             current_network_mode: CtecTechnology::Lte,
             preferred_network_mode: CtecTechnology::Nr as u32,
@@ -562,12 +562,11 @@ impl NetworkService {
                         self.cops_format = fmt;
                     }
 
-                    let is_valid_operator = op_str == crate::constants::DEFAULT_PLMN
+                    let is_valid_operator = op_str == self.plmn
                         || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
                         || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
 
                     if is_valid_operator {
-                        self.plmn = crate::constants::DEFAULT_PLMN.to_string();
                         let mut urcs = Vec::new();
                         if !self.is_attached && self.radio_power == RadioPowerLevel::Full {
                             urcs.extend(self.attach_network_urcs());
@@ -643,12 +642,11 @@ impl NetworkService {
                         self.cops_format = fmt;
                     }
 
-                    let manual_success = op_str == crate::constants::DEFAULT_PLMN
+                    let manual_success = op_str == self.plmn
                         || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
                         || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
                     let mut urcs = Vec::new();
                     if manual_success {
-                        self.plmn = crate::constants::DEFAULT_PLMN.to_string();
                         if !self.is_attached && self.radio_power == RadioPowerLevel::Full {
                             urcs.extend(self.attach_network_urcs());
                         }
@@ -673,7 +671,7 @@ impl NetworkService {
             status,
             long_name: DEFAULT_OPERATOR_NAME_LONG.to_string(),
             short_name: DEFAULT_OPERATOR_NAME_SHORT.to_string(),
-            numeric: DEFAULT_PLMN.to_string(),
+            numeric: self.plmn.clone(),
             act: self.act,
         };
         Ok(Some(NetworkResponse::AvailableOperators(vec![default_op])))

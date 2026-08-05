@@ -21,6 +21,8 @@ pub struct CellCreate {
 pub struct Quirks {
     /// Flag for compatibility with Goldfish RIL in SDK 37 and earlier.
     pub goldfish_ril_37_or_earlier: bool,
+    /// Flag indicating if the guest device is Cuttlefish.
+    pub is_cuttlefish: bool,
 }
 
 /// Cellular technology specific chip information.
