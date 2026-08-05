@@ -1026,7 +1026,7 @@ fn test_default_sim_profile_reads() {
 
     // 2. Query IMSI (AT+CIMI) -> parsed from USIM ADF
     when_at_command_sent(&mut world, "A", "AT+CIMI");
-    then_response_is(&mut world, "A", "311740123456789");
+    then_response_is(&mut world, "A", "310260000000000");
     then_response_is(&mut world, "A", "OK");
 
     // 3. Query ICCID (AT+CICCID) -> parsed from CCID tag in EF_ICCID
@@ -1044,6 +1044,48 @@ fn test_default_sim_profile_reads() {
     //    0x2F05)
     when_at_command_sent(&mut world, "A", "AT+CRSM=176,12037,0,0,4");
     then_response_is(&mut world, "A", "+CRSM: 144,0,FFFFFFFF");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cuttlefish_default_tel_alaska_sim_profile_reads() {
+    let mut world = World::new();
+    // Cuttlefish modems default to the TelAlaska profile (PROFILE_TEL_ALASKA_XML)
+    given_cuttlefish_modem(&mut world, "A");
+
+    // Verify CPIN status is READY
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: READY");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query IMSI (AT+CIMI) -> parsed from USIM ADF (TelAlaska 311740)
+    when_at_command_sent(&mut world, "A", "AT+CIMI");
+    then_response_is(&mut world, "A", "311740123456789");
+    then_response_is(&mut world, "A", "OK");
+
+    // Enable verbose error reporting
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query EID -> should return NotFound CME ERROR (22) because CardProfile is
+    // missing
+    when_at_command_sent(&mut world, "A", "AT+CEID");
+    then_response_is(&mut world, "A", "+CME ERROR: 22");
+
+    // Query ATR -> should return NotFound CME ERROR (22) because CardProfile is
+    // missing
+    when_at_command_sent(&mut world, "A", "AT+CATR");
+    then_response_is(&mut world, "A", "+CME ERROR: 22");
+
+    // Enable radio and wait for registration
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
+
+    // Query COPS -> returns TelAlaska PLMN (311740) derived from SIM profile
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,2,311740");
     then_response_is(&mut world, "A", "OK");
 }
 

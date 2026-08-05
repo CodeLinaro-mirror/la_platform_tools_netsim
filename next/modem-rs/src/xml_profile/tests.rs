@@ -8,7 +8,7 @@ fn test_parse_default_profile() {
     let profile = parse_xml_profile(crate::profiles::PROFILE_DEFAULT_XML);
     assert!(profile.is_ok(), "Failed to parse default profile: {:?}", profile.err());
     let profile = profile.unwrap();
-    assert_eq!(profile.imsi, "311740123456789");
+    assert_eq!(profile.imsi, "310260000000000");
     assert_eq!(profile.iccid, "89860318640220133897");
 }
 
@@ -18,6 +18,15 @@ fn test_parse_cts_profile() {
     assert!(profile.is_ok(), "Failed to parse CTS profile: {:?}", profile.err());
     let profile = profile.unwrap();
     assert_eq!(profile.imsi, "310260000000000");
+    assert_eq!(profile.iccid, "89860318640220133897");
+}
+
+#[test]
+fn test_parse_tel_alaska_profile() {
+    let profile = parse_xml_profile(crate::profiles::PROFILE_TEL_ALASKA_XML);
+    assert!(profile.is_ok(), "Failed to parse TelAlaska profile: {:?}", profile.err());
+    let profile = profile.unwrap();
+    assert_eq!(profile.imsi, "311740123456789");
     assert_eq!(profile.iccid, "89860318640220133897");
 }
 

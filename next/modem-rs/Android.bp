@@ -14,6 +14,7 @@ rust_library_host {
         "src/lib.rs",
         "src/profiles/iccprofile_for_sim0.xml",
         "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+        "src/profiles/iccprofile_for_sim_tel_alaska.xml",
     ],
     features: ["cuttlefish"],
     lints: "none",
@@ -44,6 +45,7 @@ rust_library_host {
         "src/lib.rs",
         "src/profiles/iccprofile_for_sim0.xml",
         "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+        "src/profiles/iccprofile_for_sim_tel_alaska.xml",
     ],
     features: [
         "cuttlefish",
@@ -79,10 +81,12 @@ rust_test_host {
         "src/lib.rs",
         "src/profiles/iccprofile_for_sim0.xml",
         "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+        "src/profiles/iccprofile_for_sim_tel_alaska.xml",
     ],
     data: [
         "src/profiles/iccprofile_for_sim0.xml",
         "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+        "src/profiles/iccprofile_for_sim_tel_alaska.xml",
     ],
     features: [
         "cuttlefish",
@@ -145,6 +149,7 @@ rust_test_host {
     data: [
         "src/profiles/iccprofile_for_sim0.xml",
         "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+        "src/profiles/iccprofile_for_sim_tel_alaska.xml",
     ],
     features: [
         "cuttlefish",

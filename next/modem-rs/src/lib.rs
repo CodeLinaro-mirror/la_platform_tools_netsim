@@ -15,7 +15,7 @@ mod modem_network_simulator;
 mod network_service;
 mod parser;
 mod pdu;
-mod profiles;
+pub mod profiles;
 mod sim_service;
 mod sms_service;
 mod stk_service;
