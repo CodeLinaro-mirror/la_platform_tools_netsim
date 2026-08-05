@@ -9,8 +9,8 @@ use crate::{
     parser::parse_raw_data,
     sim_service::SimService,
     types::{
-        AT_OK, CallHoldAction, CallHoldParam, ClirMode, CommandAction, DialArgs, ExecutionResult,
-        ModemId, NumberPresentation, Parsable, PhoneNumber,
+        AT_OK, CallHoldAction, CallHoldParam, ClirMode, CmeError, CommandAction, DialArgs,
+        ExecutionResult, ModemId, NumberPresentation, Parsable, PhoneNumber,
     },
 };
 
@@ -325,11 +325,15 @@ impl CallService {
     fn handle_voice_dial(
         &mut self,
         args: DialArgs,
-        _sim_service: &SimService,
+        sim_service: &SimService,
         clir_mode: ClirMode,
     ) -> CallResult {
         if args.is_emergency {
             return Ok(Some(CallResponse::WithActions(vec![CommandAction::InitiateEmergencyCall])));
+        }
+
+        if !sim_service.is_fdn_allowed(&args.number) {
+            return Err(ExecutionResult::cme_error(CmeError::FixedDialNumberOnlyAllowed));
         }
 
         debug!("[CallService] Calls before dial: {:?}", self.calls);
@@ -676,4 +680,27 @@ fn is_valid_dtmf_format(dtmf_str: &str) -> bool {
     }
 
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CallDirection, CallService, CallState};
+    use crate::types::{NumberPresentation, PhoneNumber};
+
+    #[test]
+    fn test_clcc_not_available() {
+        let mut service = CallService::default();
+        service.add_call(
+            CallState::Incoming,
+            CallDirection::Incoming,
+            Some(PhoneNumber::new("123456")),
+            NumberPresentation::NotAvailable,
+            None,
+        );
+
+        let calls_res = service.handle_query_current_calls().unwrap().unwrap();
+        let formatted = calls_res.to_string();
+
+        assert_eq!(formatted, "+CLCC: 1,1,4,0,0,\"\",129\r\n");
+    }
 }

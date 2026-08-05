@@ -297,3 +297,64 @@ pub fn given_modem_with_fplmn_and_mbdn_in_fs(world: &mut World, name: &str) {
         .expect("Failed to create modem with FPLMN and MBDN in FS");
     world.modems.insert(name.to_string(), (id, handler));
 }
+
+/// Helper function to create a SIM profile with FDN records.
+pub fn create_fdn_sim_profile() -> SimProfile {
+    let fdn_record1 =
+        hex::decode("FFFFFFFFFFFFFFFFFFFFFFFFFFFF04812143F5FFFFFFFFFFFFFFFFFF").unwrap();
+    let fdn_record2 =
+        hex::decode("FFFFFFFFFFFFFFFFFFFFFFFFFFFF07916105550501F0FFFFFFFFFFFF").unwrap();
+    let fdn_record3 =
+        hex::decode("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF").unwrap();
+    let mut fdn_data = Vec::new();
+    fdn_data.extend(fdn_record1);
+    fdn_data.extend(fdn_record2);
+    fdn_data.extend(fdn_record3);
+
+    SimProfile {
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
+        pin_profile: PinProfile { pin2: "5678".to_string(), ..Default::default() },
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: 0x3F00,
+                    files: vec![
+                        SimFile::ElementaryFile(ElementaryFile {
+                            file_id: 0x2FE2,
+                            record_len: None,
+                            data: hex::decode(TEST_ICCID).unwrap(),
+                        }),
+                        SimFile::DedicatedFile(DedicatedFile {
+                            file_id: 0x7F10, // DF_TELECOM
+                            files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                file_id: 0x6F3B, // EF_FDN
+                                record_len: Some(28),
+                                data: fdn_data,
+                            })],
+                        }),
+                    ],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a SIM profile that has FDN records.
+pub fn given_modem_with_fdn_sim_profile(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    let profile = create_fdn_sim_profile();
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+        .expect("Failed to create modem with FDN SIM profile");
+    world.modems.insert(name.to_string(), (id, handler));
+}

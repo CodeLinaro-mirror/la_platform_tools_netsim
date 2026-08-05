@@ -47,6 +47,7 @@ pub const AT_OK: &[u8] = b"OK\r\n";
 pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 
 pub const DEFAULT_PIN: &str = "1234";
+pub const DEFAULT_PIN2: &str = "5678";
 
 pub const DEFAULT_GATEWAY: &str = "10.0.2.2";
 pub const DEFAULT_DNS: &str = "10.0.2.3";
@@ -105,13 +106,14 @@ impl PhoneNumber {
 }
 
 impl<'a> Parsable<'a> for PhoneNumber {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         use nom::{
             bytes::complete::{tag, take_while1},
             combinator::{opt, recognize},
             sequence::pair,
         };
 
+        // ONLY allow clean number characters (digits, *, #, and optional leading +)
         let (remaining, digits) = recognize(pair(
             opt(tag(b"+")),
             take_while1(|c: u8| matches!(c, b'0'..=b'9' | b'*' | b'#')),
@@ -207,7 +209,7 @@ pub struct DialArgs {
 }
 
 impl<'a> Parsable<'a> for DialArgs {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         let (input, content) = crate::parser::parse_until_semicolon(input)?;
         let dial_str = DialString::parse(content).ok_or_else(|| {
             nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))
@@ -356,6 +358,7 @@ pub enum CmeError {
     NoNetworkService,
     NoResources,
     IncorrectParameters,
+    FixedDialNumberOnlyAllowed,
     Custom(u32, &'static str),
 }
 
@@ -382,6 +385,7 @@ impl CmeError {
             Self::NoNetworkService => 30,
             Self::NoResources => 142,
             Self::IncorrectParameters => 50,
+            Self::FixedDialNumberOnlyAllowed => 56,
             Self::Custom(c, _) => c,
         }
     }
@@ -408,6 +412,7 @@ impl CmeError {
             Self::NoNetworkService => "no network service",
             Self::NoResources => "no resources",
             Self::IncorrectParameters => "incorrect parameters",
+            Self::FixedDialNumberOnlyAllowed => "fixed dialing number only allowed",
             Self::Custom(_, msg) => msg,
         }
     }
@@ -1035,6 +1040,36 @@ impl<'a> Parsable<'a> for CallWaitingPresentation {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FormattedNumber<'a> {
+    pub number: &'a str,
+    pub toa: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum NumberPresentation {
+    #[default]
+    Allowed = 0,
+    Restricted = 1,
+    NotAvailable = 2,
+}
+
+impl NumberPresentation {
+    pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
+        match self {
+            Self::Restricted | Self::NotAvailable => FormattedNumber { number: "", toa: 129 },
+            Self::Allowed => {
+                if let Some(num) = number {
+                    FormattedNumber { number: num.as_str(), toa: num.toa() }
+                } else {
+                    FormattedNumber { number: "", toa: 129 }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CallWaitingMode {
     Disable = 0,
@@ -1500,6 +1535,7 @@ impl std::fmt::Display for CtecTechnology {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Facility {
     SimPin,
+    FixedDial,
     Other,
 }
 
@@ -1508,6 +1544,7 @@ impl<'a> Parsable<'a> for Facility {
         let (input, quoted) = QuotedString::parse(input)?;
         match quoted.as_ref() {
             b"SC" => Ok((input, Self::SimPin)),
+            b"FD" => Ok((input, Self::FixedDial)),
             _ => Ok((input, Self::Other)),
         }
     }
@@ -1517,37 +1554,8 @@ impl std::fmt::Display for Facility {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Facility::SimPin => write!(f, "SC"),
+            Facility::FixedDial => write!(f, "FD"),
             Facility::Other => write!(f, "OTHER"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FormattedNumber<'a> {
-    pub number: &'a str,
-    pub toa: u8,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(u8)]
-pub enum NumberPresentation {
-    #[default]
-    Allowed = 0,
-    Restricted = 1,
-    NotAvailable = 2,
-}
-
-impl NumberPresentation {
-    pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
-        match self {
-            Self::Restricted | Self::NotAvailable => FormattedNumber { number: "", toa: 129 },
-            Self::Allowed => {
-                if let Some(num) = number {
-                    FormattedNumber { number: num.as_str(), toa: num.toa() }
-                } else {
-                    FormattedNumber { number: "", toa: 129 }
-                }
-            }
         }
     }
 }
@@ -1590,14 +1598,13 @@ mod tests {
         let dial = DialString::parse(b"12345i,1234").unwrap();
         assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
 
-        let dial = DialString::parse(b"12345I").unwrap();
-        assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
-
-        let dial = DialString::parse(b"+12345W678").unwrap();
+        let dial = DialString::parse(b"+12345I,678").unwrap();
         assert_eq!(dial.clean_number().unwrap().as_str(), "+12345");
 
         // Strictly rejects invalid dial characters (like 'a')
         assert!(DialString::parse(b"123a45").is_none());
+        assert!(DialString::parse(b"123b45").is_none());
+        assert!(DialString::parse(b"123c45").is_none());
     }
 
     #[test]

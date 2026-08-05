@@ -266,6 +266,9 @@ impl SupService {
                 Facility::SimPin => {
                     return sim_service.handle_set_facility_lock(*mode, *passwd).into();
                 }
+                Facility::FixedDial => {
+                    return sim_service.handle_set_fdn_lock(*mode, *passwd).into();
+                }
                 Facility::Other => self.handle_set_facility_lock(*mode),
             },
             SupCommand::CallForwarding { reason: _, mode, number, r#type, .. } => {
