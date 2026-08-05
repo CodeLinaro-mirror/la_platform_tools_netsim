@@ -147,7 +147,21 @@ impl DialString {
     }
 
     pub fn clir(&self, default: ClirMode) -> ClirMode {
-        let raw_num = if let Some(pos) = self.0.find('@') { &self.0[..pos] } else { &self.0 };
+        let at_pos = self.0.find('@');
+        if let Some(pos) = at_pos {
+            let parts = &self.0[pos + 1..];
+            if let Some(second) = parts.split(',').nth(1) {
+                let clir_part = second.trim_start_matches('#');
+                if clir_part == "i" {
+                    return ClirMode::Suppression;
+                } else if clir_part == "I" {
+                    return ClirMode::Invocation;
+                }
+            }
+        }
+
+        // Find CLIR suffix in the number part (before first pause/wait)
+        let raw_num = if let Some(pos) = at_pos { &self.0[..pos] } else { &self.0 };
         let num_part = raw_num.split([',', 'W', 'w']).next().unwrap_or("");
         if num_part.ends_with('i') {
             ClirMode::Suppression
@@ -1600,6 +1614,17 @@ mod tests {
 
         // Modifiers with pause/wait
         let dial = DialString::parse(b"12345i,1234").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
+
+        // Number suffix with @ parameters where @ part has no CLIR suffix
+        let dial = DialString::parse(b"12345i@1,2").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
+
+        let dial = DialString::parse(b"12345I@1,2").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Invocation);
+
+        // Emergency dial string with CLIR suffix after @
+        let dial = DialString::parse(b"911@1,#i").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
     }
 
