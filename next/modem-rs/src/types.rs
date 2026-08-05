@@ -76,16 +76,147 @@ impl fmt::Display for ModemError {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PhoneNumber(String);
+
+impl PhoneNumber {
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn normalized(&self) -> &str {
+        self.0.strip_prefix('+').unwrap_or(&self.0)
+    }
+
+    pub fn toa(&self) -> u8 {
+        if self.0.starts_with('+') { 145 } else { 129 }
+    }
+
+    pub fn is_gprs_dial(&self) -> bool {
+        self.0.starts_with("*99")
+            && self.0.ends_with('#')
+            && self.0.as_bytes().get(3).is_some_and(|&c| c == b'*' || c == b'#')
+    }
+}
+
+impl<'a> Parsable<'a> for PhoneNumber {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        use nom::{
+            bytes::complete::{tag, take_while1},
+            combinator::{opt, recognize},
+            sequence::pair,
+        };
+
+        let (remaining, digits) = recognize(pair(
+            opt(tag(b"+")),
+            take_while1(|c: u8| matches!(c, b'0'..=b'9' | b'*' | b'#')),
+        ))(input)?;
+
+        let s = std::str::from_utf8(digits).map_err(|_e| {
+            nom::Err::Error(nom::error::Error::new(remaining, nom::error::ErrorKind::MapRes))
+        })?;
+
+        Ok((remaining, PhoneNumber(s.to_string())))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DialString(String);
+
+impl DialString {
+    pub fn parse(bytes: &[u8]) -> Option<Self> {
+        let s = std::str::from_utf8(bytes).ok()?.trim();
+        // Allow all standard dial characters and modifiers
+        let is_valid = !s.is_empty()
+            && s.chars().all(|c| {
+                matches!(c, '0'..='9' | '*' | '#' | '+' | ',' | 'W' | 'w' | 'i' | 'I' | '@')
+            });
+        if !is_valid {
+            return None;
+        }
+        Some(Self(s.to_string()))
+    }
+
+    pub fn is_emergency(&self) -> bool {
+        self.0.contains('@') || self.clean_number().as_ref().map(|n| n.as_str()) == Some("911")
+    }
+
+    pub fn clir(&self, default: ClirMode) -> ClirMode {
+        let raw_num = if let Some(pos) = self.0.find('@') { &self.0[..pos] } else { &self.0 };
+        let num_part = raw_num.split([',', 'W', 'w']).next().unwrap_or("");
+        if num_part.ends_with('i') {
+            ClirMode::Suppression
+        } else if num_part.ends_with('I') {
+            ClirMode::Invocation
+        } else {
+            default
+        }
+    }
+
+    pub fn clean_number(&self) -> Option<PhoneNumber> {
+        let raw_num = if let Some(pos) = self.0.find('@') { &self.0[..pos] } else { &self.0 };
+
+        // Truncate at first pause/wait modifier
+        let num_part = raw_num.split([',', 'W', 'w']).next().unwrap_or("");
+
+        // Strip CLIR suffixes
+        let mut clean = num_part;
+        if clean.ends_with('i') || clean.ends_with('I') {
+            clean = &clean[..clean.len() - 1];
+        }
+
+        // Validate clean number format strictly
+        let is_valid = !clean.is_empty()
+            && clean.bytes().enumerate().all(|(i, b)| match b {
+                b'+' => i == 0,
+                b'0'..=b'9' | b'*' | b'#' => true,
+                _ => false,
+            });
+        if !is_valid {
+            return None;
+        }
+
+        Some(PhoneNumber(clean.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DialArgs {
+    pub number: PhoneNumber,
+    pub clir: ClirMode,
+    pub is_emergency: bool,
+}
+
+impl<'a> Parsable<'a> for DialArgs {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, content) = crate::parser::parse_until_semicolon(input)?;
+        let dial_str = DialString::parse(content).ok_or_else(|| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))
+        })?;
+        let number = dial_str.clean_number().ok_or_else(|| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+        })?;
+        let clir = dial_str.clir(ClirMode::SubscriptionDefault);
+        let is_emergency = dial_str.is_emergency();
+        Ok((input, DialArgs { number, clir, is_emergency }))
+    }
+}
+
 // Actions that a command can request to be executed by the
 // CellularNetworkSimulator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandAction {
-    InitiateCall(String),
-    InitiateRemoteCall(String),
+    InitiateCall(DialArgs),
+    InitiateRemoteCall(PhoneNumber),
     InitiateEmergencyCall,
     AnswerCall(ModemId),
     HangupCall(ModemId),
-    InitiateCallAndHold(String),
+    InitiateCallAndHold(DialArgs),
     SwapCalls(ModemId, ModemId),
     ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
     ReceiveTextSms { to: String, text: String },
@@ -1363,5 +1494,167 @@ impl std::fmt::Display for Facility {
             Facility::SimPin => write!(f, "SC"),
             Facility::Other => write!(f, "OTHER"),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FormattedNumber<'a> {
+    pub number: &'a str,
+    pub toa: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum NumberPresentation {
+    #[default]
+    Allowed = 0,
+    Restricted = 1,
+    NotAvailable = 2,
+}
+
+impl NumberPresentation {
+    pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
+        match self {
+            Self::Restricted | Self::NotAvailable => FormattedNumber { number: "", toa: 129 },
+            Self::Allowed => {
+                if let Some(num) = number {
+                    FormattedNumber { number: num.as_str(), toa: num.toa() }
+                } else {
+                    FormattedNumber { number: "", toa: 129 }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_phone_number_parse() {
+        let (rem, phone) = PhoneNumber::parse(b"+16505550100").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(phone.as_str(), "+16505550100");
+
+        let (rem, phone) = PhoneNumber::parse(b"12345*678#").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(phone.as_str(), "12345*678#");
+
+        // Prefix parsing behavior: stops at first invalid char
+        let (rem, phone) = PhoneNumber::parse(b"123a45").unwrap();
+        assert_eq!(rem, b"a45");
+        assert_eq!(phone.as_str(), "123");
+
+        // Plus at non-start is invalid and ends digits matching
+        let (rem, phone) = PhoneNumber::parse(b"12+34").unwrap();
+        assert_eq!(rem, b"+34");
+        assert_eq!(phone.as_str(), "12");
+    }
+
+    #[test]
+    fn test_dial_string_clean_number() {
+        // Valid
+        let dial = DialString::parse(b"12345").unwrap();
+        assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
+
+        let dial = DialString::parse(b"+16505550100").unwrap();
+        assert_eq!(dial.clean_number().unwrap().as_str(), "+16505550100");
+
+        // Strips CLIR and modifiers
+        let dial = DialString::parse(b"12345i,1234").unwrap();
+        assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
+
+        let dial = DialString::parse(b"12345I").unwrap();
+        assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
+
+        let dial = DialString::parse(b"+12345W678").unwrap();
+        assert_eq!(dial.clean_number().unwrap().as_str(), "+12345");
+
+        // Strictly rejects invalid dial characters (like 'a')
+        assert!(DialString::parse(b"123a45").is_none());
+    }
+
+    #[test]
+    fn test_dial_string_clir() {
+        let dial = DialString::parse(b"12345i").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
+
+        let dial = DialString::parse(b"12345I").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Invocation);
+
+        let dial = DialString::parse(b"12345").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::SubscriptionDefault);
+        assert_eq!(dial.clir(ClirMode::Invocation), ClirMode::Invocation);
+
+        // Modifiers with pause/wait
+        let dial = DialString::parse(b"12345i,1234").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
+    }
+
+    #[test]
+    fn test_dial_args_parse() {
+        let (rem, args) = DialArgs::parse(b"12345i;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "12345");
+        assert_eq!(args.clir, ClirMode::Suppression);
+        assert!(!args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"12345I\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "12345");
+        assert_eq!(args.clir, ClirMode::Invocation);
+        assert!(!args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"911;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "911");
+        assert!(args.is_emergency);
+    }
+
+    #[test]
+    fn test_phone_number_is_gprs_dial() {
+        assert!(PhoneNumber::new("*99#").is_gprs_dial());
+        assert!(PhoneNumber::new("*99*1#").is_gprs_dial());
+        assert!(PhoneNumber::new("*99***1#").is_gprs_dial());
+        assert!(!PhoneNumber::new("12345").is_gprs_dial());
+        assert!(!PhoneNumber::new("*99").is_gprs_dial());
+        assert!(!PhoneNumber::new("*99#1").is_gprs_dial());
+    }
+
+    #[test]
+    fn test_phone_number_toa() {
+        assert_eq!(PhoneNumber::new("+16505550100").toa(), 145);
+        assert_eq!(PhoneNumber::new("16505550100").toa(), 129);
+        assert_eq!(PhoneNumber::new("12345").toa(), 129);
+    }
+
+    #[test]
+    fn test_number_presentation_format_number() {
+        let phone = PhoneNumber::new("12345");
+
+        // Allowed
+        let formatted = NumberPresentation::Allowed.format_number(Some(&phone));
+        assert_eq!(formatted.number, "12345");
+        assert_eq!(formatted.toa, 129);
+
+        let int_phone = PhoneNumber::new("+12345");
+        let formatted = NumberPresentation::Allowed.format_number(Some(&int_phone));
+        assert_eq!(formatted.number, "+12345");
+        assert_eq!(formatted.toa, 145);
+
+        let formatted = NumberPresentation::Allowed.format_number(None);
+        assert_eq!(formatted.number, "");
+        assert_eq!(formatted.toa, 129);
+
+        // Restricted
+        let formatted = NumberPresentation::Restricted.format_number(Some(&phone));
+        assert_eq!(formatted.number, "");
+        assert_eq!(formatted.toa, 129);
+
+        // Not Available
+        let formatted = NumberPresentation::NotAvailable.format_number(Some(&phone));
+        assert_eq!(formatted.number, "");
+        assert_eq!(formatted.toa, 129);
     }
 }

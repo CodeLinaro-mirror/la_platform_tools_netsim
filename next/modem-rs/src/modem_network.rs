@@ -6,7 +6,7 @@ use netsim_model::{ModemAction, Quirks};
 // ...
 use crate::modem_network_simulator::NetworkEvent;
 pub use crate::types::ModemError;
-use crate::types::{ModemId, ModemInfo, ModemSink};
+use crate::types::{ModemId, ModemInfo, ModemSink, PhoneNumber};
 
 pub trait ModemNetworkInterface: Send + Sync {
     fn add_modem(
@@ -55,7 +55,11 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
                 .calls
                 .iter()
                 .map(|c| netsim_model::Call {
-                    number: c.number.clone(),
+                    number: c
+                        .number
+                        .as_ref()
+                        .map(|n: &PhoneNumber| n.as_str().to_string())
+                        .unwrap_or_default(),
                     state: match c.state {
                         crate::call_service::CallState::Active => netsim_model::CallState::Active,
                         crate::call_service::CallState::Held => netsim_model::CallState::Holding,

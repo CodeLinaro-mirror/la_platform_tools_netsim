@@ -13,7 +13,7 @@ use crate::{
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
     types::{
         CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN, ExecutionResult,
-        FacilityLockMode, Parsable,
+        FacilityLockMode, Parsable, PhoneNumber,
     },
 };
 
@@ -432,10 +432,10 @@ impl SimService {
             .unwrap_or_else(|| DEFAULT_FALLBACK_ICCID.to_string())
     }
 
-    pub fn get_msisdn(&self) -> String {
-        find_ef(&self.fs.master_file, EF_MSISDN_ID)
-            .and_then(|ef| decode_msisdn(&ef.data))
-            .unwrap_or_default()
+    pub(crate) fn get_msisdn(&self) -> Option<PhoneNumber> {
+        let raw =
+            find_ef(&self.fs.master_file, EF_MSISDN_ID).and_then(|ef| decode_msisdn(&ef.data))?;
+        PhoneNumber::parse(raw.as_bytes()).map(|(_, p)| p).ok()
     }
 
     pub fn set_msisdn(&mut self, msisdn: &str) {
