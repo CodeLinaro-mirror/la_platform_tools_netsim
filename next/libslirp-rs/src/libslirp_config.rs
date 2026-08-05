@@ -210,8 +210,8 @@ fn format_dns_addr(addr: &str) -> String {
         }
     } else if let Ok(socket) = addr.parse::<std::net::SocketAddr>() {
         match socket {
-            std::net::SocketAddr::V4(s) => format!("{}:53", s.ip()),
-            std::net::SocketAddr::V6(s) => format!("[{}]:53", s.ip()),
+            std::net::SocketAddr::V4(s) => format!("{}:{}", s.ip(), s.port()),
+            std::net::SocketAddr::V6(s) => format!("[{}]:{}", s.ip(), s.port()),
         }
     } else {
         // Handle bracketed IPv6 without port specified: [2001:db8::1]
@@ -221,8 +221,8 @@ fn format_dns_addr(addr: &str) -> String {
         }
 
         // Fallback for hostnames (e.g., localhost:5354 or localhost)
-        if let Some((host, _)) = addr.rsplit_once(':') {
-            format!("{host}:53")
+        if let Some((host, port)) = addr.rsplit_once(':') {
+            format!("{host}:{port}")
         } else {
             format!("{addr}:53")
         }
@@ -421,15 +421,15 @@ mod tests {
     #[test]
     fn test_format_dns_addr() {
         assert_eq!(format_dns_addr("localhost"), "localhost:53");
-        assert_eq!(format_dns_addr("localhost:5354"), "localhost:53"); // Custom port stripped
+        assert_eq!(format_dns_addr("localhost:5354"), "localhost:5354"); // Custom port preserved
         assert_eq!(format_dns_addr("example.com"), "example.com:53");
-        assert_eq!(format_dns_addr("example.com:5354"), "example.com:53"); // Custom port stripped
+        assert_eq!(format_dns_addr("example.com:5354"), "example.com:5354"); // Custom port preserved
         assert_eq!(format_dns_addr("127.0.0.1"), "127.0.0.1:53");
         assert_eq!(format_dns_addr("127.0.0.1:53"), "127.0.0.1:53");
-        assert_eq!(format_dns_addr("127.0.0.1:5354"), "127.0.0.1:53"); // Custom port stripped
+        assert_eq!(format_dns_addr("127.0.0.1:5354"), "127.0.0.1:5354"); // Custom port preserved
         assert_eq!(format_dns_addr("[2001:db8::1]"), "[2001:db8::1]:53");
         assert_eq!(format_dns_addr("[2001:db8::1]:53"), "[2001:db8::1]:53");
-        assert_eq!(format_dns_addr("[2001:db8::1]:5354"), "[2001:db8::1]:53"); // Custom port stripped
+        assert_eq!(format_dns_addr("[2001:db8::1]:5354"), "[2001:db8::1]:5354"); // Custom port preserved
         assert_eq!(format_dns_addr("2001:db8::1"), "[2001:db8::1]:53");
     }
 
