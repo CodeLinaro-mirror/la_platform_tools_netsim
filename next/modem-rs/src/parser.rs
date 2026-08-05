@@ -122,7 +122,7 @@ pub fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Top-level AT Command wrapper enum across all modem-rs services.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Command<'a> {
     Sim(SimCommand<'a>),
     Call(CallCommand<'a>),
@@ -155,7 +155,7 @@ mod tests {
     use super::*;
     use crate::types::{
         CallMode, CallWaitingMode, CallWaitingPresentation, ClirMode, CopsFormat, CopsMode,
-        PdpType, ProductSerialNumberType,
+        DialArgs, PdpType, PhoneNumber, ProductSerialNumberType,
     };
 
     #[test]
@@ -371,7 +371,12 @@ mod tests {
     fn test_parse_gprs_dial() {
         let (rem, cmd) = Command::parse(b"ATD*99***1#\r\n").unwrap();
         assert_eq!(rem, b"\r\n");
-        assert_eq!(cmd, Command::Call(CallCommand::Dial(b"*99***1#")));
+        let expected_dial_args = DialArgs {
+            number: PhoneNumber::new("*99***1#"),
+            clir: ClirMode::SubscriptionDefault,
+            is_emergency: false,
+        };
+        assert_eq!(cmd, Command::Call(CallCommand::Dial(expected_dial_args)));
     }
 
     #[test]

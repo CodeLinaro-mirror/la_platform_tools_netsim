@@ -129,6 +129,10 @@ impl SupService {
         self.clip_enabled == ClipActivation::Enable
     }
 
+    pub fn clir_mode(&self) -> ClirMode {
+        self.clir_mode
+    }
+
     // --- Pure command handlers ---
 
     fn handle_set_facility_lock(&self, mode: FacilityLockMode) -> SupResult {
