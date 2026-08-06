@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -151,6 +151,11 @@ impl ActorService for NfcActor {
         let enabled_clone = enabled.clone();
         let chip_id_clone = chip_id;
         let nfc_stats_clone = self.nfc_stats.clone();
+        let tx_count = Arc::new(AtomicU64::new(0));
+        let rx_count = Arc::new(AtomicU64::new(0));
+        let tx_count_clone = tx_count.clone();
+        let rx_count_clone = rx_count.clone();
+
         let task_1 = Box::pin(async move {
             while let Some(item) = stream.next().await {
                 match item {
@@ -164,9 +169,16 @@ impl ActorService for NfcActor {
                                 NCI_MT_DATA => {
                                     nfc_stats_clone.incr_nci_data_tx();
                                     nfc_stats_clone.incr(NfcApi::DataReceive);
+                                    rx_count_clone.fetch_add(1, Ordering::Relaxed);
                                 }
-                                NCI_MT_RSP => nfc_stats_clone.incr_nci_responses_tx(),
-                                NCI_MT_NTF => nfc_stats_clone.incr_nci_notifications_tx(),
+                                NCI_MT_RSP => {
+                                    nfc_stats_clone.incr_nci_responses_tx();
+                                    rx_count_clone.fetch_add(1, Ordering::Relaxed);
+                                }
+                                NCI_MT_NTF => {
+                                    nfc_stats_clone.incr_nci_notifications_tx();
+                                    rx_count_clone.fetch_add(1, Ordering::Relaxed);
+                                }
                                 _ => {}
                             }
                         }
@@ -192,8 +204,15 @@ impl ActorService for NfcActor {
         let packet_stream = packet_stream.inspect(move |bytes| {
             if bytes.len() >= 3 {
                 match (bytes[0] >> 5) & 0x07 {
-                    NCI_MT_DATA => nfc_stats_rx.incr_nci_data_rx(),
-                    NCI_MT_CMD => nfc_stats_rx.incr_nci_commands_rx(),
+                    NCI_MT_DATA => {
+                        nfc_stats_rx.incr_nci_data_rx();
+                        nfc_stats_rx.incr(NfcApi::DataSend);
+                        tx_count_clone.fetch_add(1, Ordering::Relaxed);
+                    }
+                    NCI_MT_CMD => {
+                        nfc_stats_rx.incr_nci_commands_rx();
+                        tx_count_clone.fetch_add(1, Ordering::Relaxed);
+                    }
                     _ => {}
                 }
             }
@@ -202,7 +221,15 @@ impl ActorService for NfcActor {
 
         self.active_chips.insert(
             chip_id,
-            ChipState { id: chip_id, device_id, enabled, casimir_device_id, nfc_writer },
+            ChipState {
+                id: chip_id,
+                device_id,
+                enabled,
+                casimir_device_id,
+                nfc_writer,
+                tx_count,
+                rx_count,
+            },
         );
 
         info!("NFC chip {} created for device {}", chip_id, device_id);
@@ -286,11 +313,13 @@ impl ActorService for NfcActor {
             NfcAction::Generic(_req) => Ok(crate::nfc_actor::NfcActionResult::Ok),
             NfcAction::GetStatistics => {
                 let mut stats = Vec::new();
-                for id in self.active_chips.keys() {
+                for (id, state) in &self.active_chips {
                     let mut radio_stats = netsim_model::NetsimRadioStats::default();
                     radio_stats.id = id.0;
                     radio_stats.name = format!("nfc-{}", id.0);
                     radio_stats.kind = netsim_model::RadioKind::Nfc;
+                    radio_stats.tx_count = state.tx_count.load(Ordering::Relaxed);
+                    radio_stats.rx_count = state.rx_count.load(Ordering::Relaxed);
                     stats.push(radio_stats);
                 }
                 Ok(crate::nfc_actor::NfcActionResult::Statistics(stats.into_boxed_slice()))

@@ -3,7 +3,10 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, atomic::AtomicBool},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64},
+    },
 };
 
 use device_actor::DeviceClient;
@@ -17,6 +20,8 @@ pub struct ChipState {
     pub enabled: Arc<AtomicBool>,
     pub casimir_device_id: u16,
     pub nfc_writer: WriteHalf<DuplexStream>,
+    pub tx_count: Arc<AtomicU64>,
+    pub rx_count: Arc<AtomicU64>,
 }
 
 use crate::stats::NfcStats;

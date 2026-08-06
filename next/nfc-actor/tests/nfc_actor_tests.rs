@@ -9,7 +9,7 @@ use std::{
 use actor_framework::{ActorLifecycle, ActorService, Context};
 use bytes::Bytes;
 use device_actor::DeviceActor;
-use futures::future::BoxFuture;
+use futures::{StreamExt, future::BoxFuture};
 use netsim_model::{ChipCreate, ChipId, DeviceId};
 use nfc_actor::NfcActor;
 use tokio::sync::mpsc;
@@ -96,15 +96,23 @@ impl actor_framework::ActorClient<DeviceActor> for MockDeviceActorClient {
 
 struct TestContext {
     tasks: Arc<Mutex<HashMap<ChipId, tokio::task::JoinHandle<ChipId>>>>,
+    stream_tasks: Arc<Mutex<HashMap<ChipId, tokio::task::JoinHandle<()>>>>,
     aborted_tasks: Arc<Mutex<Vec<ChipId>>>,
     removed_streams: Arc<Mutex<Vec<ChipId>>>,
 }
 
 impl Context<NfcActor> for TestContext {
     fn set_interval(&mut self, _duration: std::time::Duration) {}
-    fn add_stream(&mut self, _id: ChipId, _stream: actor_framework::BoxStream) {}
+    fn add_stream(&mut self, id: ChipId, mut stream: actor_framework::BoxStream) {
+        let handle = tokio::spawn(async move { while stream.next().await.is_some() {} });
+        self.stream_tasks.lock().unwrap().insert(id, handle);
+    }
     fn remove_stream(&mut self, id: ChipId) {
         self.removed_streams.lock().unwrap().push(id);
+        let value = self.stream_tasks.lock().unwrap().remove(&id);
+        if let Some(handle) = value {
+            handle.abort();
+        }
     }
     fn add_typed_stream(&mut self, _id: usize, _stream: actor_framework::BoxTypedStream<()>) {}
     fn remove_typed_stream(&mut self, _id: usize) {}
@@ -166,6 +174,7 @@ struct NfcWorld {
     aborted_tasks: Arc<Mutex<Vec<ChipId>>>,
     removed_streams: Arc<Mutex<Vec<ChipId>>>,
     packet_receivers: HashMap<ChipId, mpsc::Receiver<Bytes>>,
+    packet_senders: HashMap<ChipId, mpsc::Sender<Bytes>>,
 }
 
 impl NfcWorld {
@@ -177,23 +186,26 @@ impl NfcWorld {
         actor.start_casimir();
 
         let tasks = Arc::new(Mutex::new(HashMap::new()));
+        let stream_tasks = Arc::new(Mutex::new(HashMap::new()));
         let aborted_tasks = Arc::new(Mutex::new(Vec::new()));
         let removed_streams = Arc::new(Mutex::new(Vec::new()));
         let ctx = TestContext {
             tasks: tasks.clone(),
+            stream_tasks: stream_tasks.clone(),
             aborted_tasks: aborted_tasks.clone(),
             removed_streams: removed_streams.clone(),
         };
         let packet_receivers = HashMap::new();
+        let packet_senders = HashMap::new();
 
-        Self { actor, ctx, tasks, aborted_tasks, removed_streams, packet_receivers }
+        Self { actor, ctx, tasks, aborted_tasks, removed_streams, packet_receivers, packet_senders }
     }
 
     async fn given_a_chip(&mut self, id_val: u32) {
         let chip_id = ChipId(id_val);
         let device_id = DeviceId(id_val);
 
-        let (_tx_stream, rx_stream) = mpsc::channel(10);
+        let (tx_stream, rx_stream) = mpsc::channel(10);
         let (tx_sink, rx_sink) = mpsc::channel(10);
         let packet_stream = ReceiverStream::new(rx_stream);
         let packet_sink = MockSink(tx_sink);
@@ -217,6 +229,7 @@ impl NfcWorld {
             "Chip must be enabled by default upon boot across all platforms during transition to Netsim"
         );
         self.packet_receivers.insert(chip_id, rx_sink);
+        self.packet_senders.insert(chip_id, tx_stream);
     }
 
     async fn when_casimir_disconnects(&mut self, id_val: u32) {
@@ -627,4 +640,60 @@ async fn test_nfc_stats_counters() {
     .await;
 
     mock_peer_handle.abort();
+}
+
+#[tokio::test]
+async fn test_multiple_chip_stats_separation() {
+    let mut world = NfcWorld::new().await;
+
+    // Given two active chips
+    world.given_a_chip(1).await;
+    world.given_a_chip(2).await;
+
+    // Send packets through the streams to naturally increment counters
+    let chip1_tx = world.packet_senders.get(&ChipId(1)).unwrap();
+    let chip2_tx = world.packet_senders.get(&ChipId(2)).unwrap();
+
+    // Send 3 DATA packets (Guest -> Casimir) for Chip 1
+    // MT=0x00 (DATA)
+    for _ in 0..3 {
+        chip1_tx.send(Bytes::from(vec![0x00, 0x00, 0x00, 0x00])).await.unwrap();
+    }
+
+    // Send 5 CMD packets (Guest -> Casimir) for Chip 2
+    // MT=0x20 (CMD) -> 0x20 >> 5 == 1 (NCI_MT_CMD)
+    for _ in 0..5 {
+        chip2_tx.send(Bytes::from(vec![0x20, 0x00, 0x00, 0x00])).await.unwrap();
+    }
+
+    // Yield to allow the background stream tasks to process the items
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Call GetStatistics
+    use nfc_actor::{NfcAction, NfcActionResult};
+
+    let res = world.actor.handle_action(None, NfcAction::GetStatistics, &mut world.ctx).await;
+    assert!(res.is_ok());
+
+    match res.unwrap() {
+        NfcActionResult::Statistics(stats) => {
+            assert_eq!(stats.len(), 2);
+            let mut chip1_found = false;
+            let mut chip2_found = false;
+            for s in stats.iter() {
+                if s.id == 1 {
+                    assert_eq!(s.tx_count, 3);
+                    assert_eq!(s.rx_count, 0);
+                    chip1_found = true;
+                } else if s.id == 2 {
+                    assert_eq!(s.tx_count, 5);
+                    assert_eq!(s.rx_count, 0);
+                    chip2_found = true;
+                }
+            }
+            assert!(chip1_found);
+            assert!(chip2_found);
+        }
+        _ => panic!("Expected Statistics"),
+    }
 }
