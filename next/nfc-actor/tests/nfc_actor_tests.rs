@@ -657,13 +657,13 @@ async fn test_multiple_chip_stats_separation() {
     // Send 3 DATA packets (Guest -> Casimir) for Chip 1
     // MT=0x00 (DATA)
     for _ in 0..3 {
-        chip1_tx.send(Bytes::from(vec![0x00, 0x00, 0x00, 0x00])).await.unwrap();
+        chip1_tx.send(Bytes::from(vec![0x00, 0x00, 0x00])).await.unwrap();
     }
 
     // Send 5 CMD packets (Guest -> Casimir) for Chip 2
     // MT=0x20 (CMD) -> 0x20 >> 5 == 1 (NCI_MT_CMD)
     for _ in 0..5 {
-        chip2_tx.send(Bytes::from(vec![0x20, 0x00, 0x00, 0x00])).await.unwrap();
+        chip2_tx.send(Bytes::from(vec![0x20, 0x00, 0x00])).await.unwrap();
     }
 
     // Yield to allow the background stream tasks to process the items
@@ -696,4 +696,37 @@ async fn test_multiple_chip_stats_separation() {
         }
         _ => panic!("Expected Statistics"),
     }
+}
+
+#[tokio::test]
+async fn test_nci_packet_framing_codec() {
+    use bytes::Bytes;
+    use futures::StreamExt;
+    use nfc_actor::service::NciCodec;
+    use tokio_util::codec::FramedRead;
+
+    // Continuous NCI stream:
+    // Packet 1: Header [0x00, 0x00, 0x03] + Payload [0x01, 0x02, 0x03] (Len = 6)
+    // Packet 2: Header [0x20, 0x00, 0x01] + Payload [0xAA]             (Len = 4)
+    let raw_nci_bytes = vec![0x00, 0x00, 0x03, 0x01, 0x02, 0x03, 0x20, 0x00, 0x01, 0xAA];
+    let cursor = std::io::Cursor::new(raw_nci_bytes);
+    let mut stream = FramedRead::new(cursor, NciCodec);
+
+    let frame1 = stream.next().await.unwrap().unwrap();
+    assert_eq!(
+        frame1.len(),
+        6,
+        "NCI Frame 1 length must be exactly 6 bytes (3 header + 3 payload)! No trailing bytes allowed."
+    );
+    assert_eq!(frame1, Bytes::from_static(&[0x00, 0x00, 0x03, 0x01, 0x02, 0x03]));
+
+    let frame2 = stream.next().await.unwrap().unwrap();
+    assert_eq!(
+        frame2.len(),
+        4,
+        "NCI Frame 2 length must be exactly 4 bytes (3 header + 1 payload)!"
+    );
+    assert_eq!(frame2, Bytes::from_static(&[0x20, 0x00, 0x01, 0xAA]));
+
+    assert!(stream.next().await.is_none());
 }

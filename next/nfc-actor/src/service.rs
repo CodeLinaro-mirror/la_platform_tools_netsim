@@ -10,10 +10,12 @@ use std::{
 };
 
 use actor_framework::{ActorService, DynContext};
+use bytes::{Bytes, BytesMut};
 use device_actor::DeviceClient;
 use futures::{SinkExt, StreamExt};
 use netsim_model::{ChipCreate, ChipError, ChipId, ChipUpdate, DeviceId};
 use tokio::sync::mpsc::unbounded_channel;
+use tokio_util::codec::{Decoder, FramedRead};
 use tracing::{error, info};
 
 use crate::{
@@ -21,6 +23,28 @@ use crate::{
     nfc_actor::{ChipState, NfcAction, NfcActor},
     stats::NfcApi,
 };
+
+/// NCI Frame Decoder for Casimir <-> Guest packet stream.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NciCodec;
+
+impl Decoder for NciCodec {
+    type Item = Bytes;
+    type Error = std::io::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        if src.len() < 3 {
+            return Ok(None);
+        }
+        let payload_len = src[2] as usize;
+        let total_len = 3 + payload_len;
+        if src.len() < total_len {
+            src.reserve(total_len - src.len());
+            return Ok(None);
+        }
+        Ok(Some(src.split_to(total_len).freeze()))
+    }
+}
 
 const NCI_MT_DATA: u8 = 0;
 const NCI_MT_CMD: u8 = 1;
@@ -141,12 +165,7 @@ impl ActorService for NfcActor {
 
         // Bridge Casimir -> Guest
         let (nfc_reader, nfc_writer) = tokio::io::split(nfc_io);
-        let mut stream = tokio_util::codec::length_delimited::Builder::new()
-            .length_field_offset(2)
-            .length_field_length(1)
-            .length_adjustment(3)
-            .num_skip(0)
-            .new_read(nfc_reader);
+        let mut stream = FramedRead::new(nfc_reader, NciCodec);
         let enabled = Arc::new(AtomicBool::new(true));
         let enabled_clone = enabled.clone();
         let chip_id_clone = chip_id;
@@ -159,11 +178,10 @@ impl ActorService for NfcActor {
         let task_1 = Box::pin(async move {
             while let Some(item) = stream.next().await {
                 match item {
-                    Ok(bytes_mut) => {
+                    Ok(bytes) => {
                         if !enabled_clone.load(Ordering::Acquire) {
                             continue;
                         }
-                        let bytes = bytes_mut.freeze();
                         if bytes.len() >= 3 {
                             match (bytes[0] >> 5) & 0x07 {
                                 NCI_MT_DATA => {
@@ -374,36 +392,88 @@ impl ActorService for NfcActor {
 
 #[cfg(test)]
 mod tests {
-    use tokio::io::{AsyncWriteExt, duplex};
-    use tokio_stream::StreamExt;
-    use tokio_util::codec::length_delimited::Builder;
+    use bytes::BytesMut;
+    use tokio_util::codec::Decoder;
+
+    use super::*;
+
+    #[test]
+    fn test_nci_codec_single_packet() {
+        let mut codec = NciCodec;
+        let mut buf = BytesMut::from(&[0x40, 0x00, 0x01, 0xAA][..]);
+
+        let frame = codec.decode(&mut buf).unwrap().expect("Frame must decode");
+        assert_eq!(frame.len(), 4);
+        assert_eq!(frame, Bytes::from_static(&[0x40, 0x00, 0x01, 0xAA]));
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_nci_codec_multi_packet_stream() {
+        let mut codec = NciCodec;
+        // Packet 1: 3-byte header [0x00, 0x00, 0x03] + 3-byte payload [0x01, 0x02,
+        // 0x03] (Len = 6) Packet 2: 3-byte header [0x20, 0x00, 0x01] + 1-byte
+        // payload [0xAA]             (Len = 4)
+        let mut buf =
+            BytesMut::from(&[0x00, 0x00, 0x03, 0x01, 0x02, 0x03, 0x20, 0x00, 0x01, 0xAA][..]);
+
+        let frame1 = codec.decode(&mut buf).unwrap().expect("Frame 1 must decode");
+        assert_eq!(frame1.len(), 6, "Frame 1 must be exact length 6 (no over-reading)");
+        assert_eq!(frame1, Bytes::from_static(&[0x00, 0x00, 0x03, 0x01, 0x02, 0x03]));
+
+        let frame2 = codec.decode(&mut buf).unwrap().expect("Frame 2 must decode");
+        assert_eq!(frame2.len(), 4, "Frame 2 must be exact length 4");
+        assert_eq!(frame2, Bytes::from_static(&[0x20, 0x00, 0x01, 0xAA]));
+
+        assert!(buf.is_empty());
+        assert!(codec.decode(&mut buf).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_nci_codec_partial_chunks() {
+        let mut codec = NciCodec;
+        let mut buf = BytesMut::new();
+
+        // 1. Partial header (2 bytes)
+        buf.extend_from_slice(&[0x61, 0x05]);
+        assert!(codec.decode(&mut buf).unwrap().is_none());
+
+        // 2. Length byte (declares 2 bytes payload)
+        buf.extend_from_slice(&[0x02]);
+        assert!(codec.decode(&mut buf).unwrap().is_none());
+
+        // 3. Partial payload (1 byte)
+        buf.extend_from_slice(&[0x10]);
+        assert!(codec.decode(&mut buf).unwrap().is_none());
+
+        // 4. Final payload byte
+        buf.extend_from_slice(&[0x20]);
+        let frame = codec.decode(&mut buf).unwrap().expect("Frame must decode when complete");
+        assert_eq!(frame.len(), 5);
+        assert_eq!(frame, Bytes::from_static(&[0x61, 0x05, 0x02, 0x10, 0x20]));
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_nci_codec_empty_payload() {
+        let mut codec = NciCodec;
+        let mut buf = BytesMut::from(&[0x20, 0x00, 0x00][..]);
+
+        let frame = codec.decode(&mut buf).unwrap().expect("0-payload frame must decode");
+        assert_eq!(frame.len(), 3);
+        assert_eq!(frame, Bytes::from_static(&[0x20, 0x00, 0x00]));
+        assert!(buf.is_empty());
+    }
 
     #[tokio::test]
-    async fn test_nci_codec_length_adjustment() -> Result<(), Box<dyn std::error::Error>> {
-        // This test documents and verifies the correct configuration of the
-        // LengthDelimitedCodec used in service.rs to read NCI packets.
-        // NCI header is 3 bytes (offset 2 + len 1). We must use length_adjustment(3)
-        // to include the header in the returned bytes when num_skip(0) is used.
-
-        let (mut writer, reader) = duplex(1024);
-        let mut stream = Builder::new()
-            .length_field_offset(2)
-            .length_field_length(1)
-            .length_adjustment(3) // Crucial fix!
-            .num_skip(0)
-            .new_read(reader);
-
-        // Packet: header [0x40, 0x00], len 1, payload [0xaa]
+    async fn test_nci_codec_with_framed_read() -> Result<(), Box<dyn std::error::Error>> {
         let packet = &[0x40, 0x00, 1, 0xaa];
-        writer.write_all(packet).await?;
-        drop(writer);
+        let cursor = std::io::Cursor::new(packet.to_vec());
+        let mut stream = FramedRead::new(cursor, NciCodec);
 
-        // Verify we receive the full 4 bytes (header + payload)
         let bytes = stream.next().await.ok_or("Stream ended prematurely")??;
         assert_eq!(bytes.len(), 4);
         assert_eq!(bytes.as_ref(), packet);
-
-        // Verify the stream terminates cleanly (EOF) on next read without looping
         assert!(stream.next().await.is_none());
         Ok(())
     }

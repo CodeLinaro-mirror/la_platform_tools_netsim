@@ -5,7 +5,7 @@ mod error;
 mod lifecycle;
 mod nfc_actor;
 mod scene;
-mod service;
+pub mod service;
 mod stats;
 
 mod client;
@@ -17,6 +17,7 @@ pub use client::NfcClient;
 pub use error::NfcError;
 pub use nfc_actor::{NfcAction, NfcActionResult, NfcActor};
 pub use scene::SceneClient;
+pub use service::NciCodec;
 pub use stats::{NfcApi, NfcServiceStats, NfcStats};
 
 /// Creates a new NFC actor framework instance and client.
