@@ -215,9 +215,11 @@ pub enum CommandAction {
     InitiateRemoteCall(PhoneNumber),
     InitiateEmergencyCall,
     AnswerCall(ModemId),
-    HangupCall(ModemId),
+    HangupCall { initiator: ModemId, target_peer: ModemId },
     InitiateCallAndHold(DialArgs),
     SwapCalls(ModemId, ModemId),
+    HoldCall { holder: ModemId, target: ModemId },
+    ResumeCall { resumer: ModemId, target: ModemId },
     ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
     ReceiveTextSms { to: String, text: String },
     None,
@@ -490,18 +492,18 @@ pub struct HandledCommand {
     pub responses: Vec<Response>,
     /// An optional follow-up action for the CellularNetworkSimulator to
     /// perform.
-    pub action: Option<CommandAction>,
+    pub actions: Vec<CommandAction>,
 }
 
 impl HandledCommand {
     /// Creates a result with a simple "OK" response and no follow-up action.
     pub fn ok() -> Self {
-        Self { responses: vec![Response::Ok], action: None }
+        Self { responses: vec![Response::Ok], actions: vec![] }
     }
 
     /// Creates a result with a simple "OK" response AND a follow-up action.
-    pub fn ok_with_action(action: CommandAction) -> Self {
-        Self { responses: vec![Response::Ok], action: Some(action) }
+    pub fn ok_with_actions(actions: Vec<CommandAction>) -> Self {
+        Self { responses: vec![Response::Ok], actions }
     }
 }
 
@@ -525,8 +527,8 @@ impl ExecutionResult {
         Self::Success(HandledCommand::ok())
     }
 
-    pub fn ok_with_action(action: CommandAction) -> Self {
-        Self::Success(HandledCommand::ok_with_action(action))
+    pub fn ok_with_actions(actions: Vec<CommandAction>) -> Self {
+        Self::Success(HandledCommand::ok_with_actions(actions))
     }
 
     pub fn error() -> Self {
@@ -543,14 +545,15 @@ impl<T: Into<Response>> From<Option<T>> for ExecutionResult {
         match opt.map(Into::into) {
             Some(
                 resp @ (Response::Call(CallResponse::Ring) | Response::Data(DataResponse::Connect)),
-            ) => Self::Success(HandledCommand { responses: vec![resp], action: None }),
+            ) => Self::Success(HandledCommand { responses: vec![resp], actions: vec![] }),
             Some(Response::Call(CallResponse::Empty)) => Self::Success(HandledCommand::default()),
-            Some(Response::Call(CallResponse::WithAction(action))) => {
-                Self::Success(HandledCommand::ok_with_action(action))
+            Some(Response::Call(CallResponse::WithActions(actions))) => {
+                Self::Success(HandledCommand::ok_with_actions(actions))
             }
-            Some(resp) => {
-                Self::Success(HandledCommand { responses: vec![resp, Response::Ok], action: None })
-            }
+            Some(resp) => Self::Success(HandledCommand {
+                responses: vec![resp, Response::Ok],
+                actions: vec![],
+            }),
             None => Self::ok(),
         }
     }
@@ -741,14 +744,22 @@ impl std::fmt::Display for OperatorStatus {
     }
 }
 
+/// AT+CHLD Call Hold operations (3GPP TS 27.007 Section 7.22).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CallHoldAction {
-    ReleaseHeldOrWaiting = 0,
-    ReleaseActiveAcceptHeldOrWaiting = 1,
-    HoldActiveAcceptHeldOrWaiting = 2,
-    AddHeld = 3,
-    Ect = 4,
+    /// AT+CHLD=0: Releases all held calls or rejects a waiting call.
+    ReleaseHeld = 0,
+    /// AT+CHLD=1: Releases all active calls and accepts held/waiting call.
+    ReleaseAndAccept = 1,
+    /// AT+CHLD=2: Places active calls on hold and accepts held/waiting call.
+    HoldAndAccept = 2,
+    /// AT+CHLD=3: Adds a held call to the active conversation (Conference
+    /// call).
+    Conference = 3,
+    /// AT+CHLD=4: Explicit Call Transfer (ECT).
+    Transfer = 4,
+    /// AT+CHLD=5: User-to-User Signaling.
     UserToUserSignaling = 5,
 }
 
@@ -769,11 +780,11 @@ impl<'a> Parsable<'a> for CallHoldParam {
             (val, None)
         };
         let op = match op_val {
-            0 => CallHoldAction::ReleaseHeldOrWaiting,
-            1 => CallHoldAction::ReleaseActiveAcceptHeldOrWaiting,
-            2 => CallHoldAction::HoldActiveAcceptHeldOrWaiting,
-            3 => CallHoldAction::AddHeld,
-            4 => CallHoldAction::Ect,
+            0 => CallHoldAction::ReleaseHeld,
+            1 => CallHoldAction::ReleaseAndAccept,
+            2 => CallHoldAction::HoldAndAccept,
+            3 => CallHoldAction::Conference,
+            4 => CallHoldAction::Transfer,
             5 => CallHoldAction::UserToUserSignaling,
             _ => {
                 return Err(nom::Err::Error(nom::error::Error::new(

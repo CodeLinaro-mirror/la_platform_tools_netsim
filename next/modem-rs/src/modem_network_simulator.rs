@@ -322,17 +322,17 @@ impl ModemNetworkSimulator {
                 if let Some(peer_id) = peer_to_hold
                     && let Some(peer) = self.modems.get_mut(&peer_id)
                 {
-                    peer.call_service.receive_hold();
+                    peer.call_service.receive_hold(id);
                 }
 
                 effects.extend(self.initiate_call(id, &args.number, args.clir));
             }
             CommandAction::SwapCalls(active_peer, held_peer) => {
                 if let Some(modem) = self.modems.get_mut(&active_peer) {
-                    modem.call_service.receive_hold();
+                    modem.call_service.receive_hold(id);
                 }
                 if let Some(modem) = self.modems.get_mut(&held_peer) {
-                    modem.call_service.receive_resume();
+                    modem.call_service.receive_resume(id);
                 }
             }
             CommandAction::InitiateRemoteCall(phone_number) => {
@@ -367,38 +367,34 @@ impl ModemNetworkSimulator {
                     }
                 }
             }
-            CommandAction::HangupCall(hung_up_modem_id) => {
+            CommandAction::HangupCall { initiator, target_peer } => {
                 self.metrics.calls_hung_up.fetch_add(1, AtomicOrdering::Relaxed);
                 let mut effects = Vec::new();
 
-                let remaining_peer_ids: Vec<ModemId> = if let Some(initiator_modem) =
-                    self.modems.get(&hung_up_modem_id)
-                {
-                    initiator_modem.call_service.calls.iter().filter_map(|c| c.peer_id).collect()
-                } else {
-                    Vec::new()
-                };
-
-                for (&mid, modem) in self.modems.iter_mut() {
-                    if mid != hung_up_modem_id {
-                        let has_call_to_initiator = modem
-                            .call_service
-                            .calls
-                            .iter()
-                            .any(|c| c.peer_id == Some(hung_up_modem_id));
-
-                        let initiator_still_has_call = remaining_peer_ids.contains(&mid);
-
-                        if has_call_to_initiator && !initiator_still_has_call {
-                            modem.call_service.receive_hangup_from_peer_id(hung_up_modem_id);
-                            effects
-                                .push((mid, ModemEffect::Response(b"\r\nNO CARRIER\r\n".to_vec())));
-                        }
-                    }
+                if let Some(target) = self.modems.get_mut(&target_peer) {
+                    target.call_service.receive_hangup_from_peer_id(initiator);
+                    effects
+                        .push((target_peer, ModemEffect::Response(b"\r\nNO CARRIER\r\n".to_vec())));
                 }
+
                 let processed_events = self.process_effects(effects);
                 events.extend(processed_events);
-                events.push(NetworkEvent::ModemHungUp { id: hung_up_modem_id });
+
+                if let Some(initiator_modem) = self.modems.get(&initiator)
+                    && initiator_modem.call_service.calls.is_empty()
+                {
+                    events.push(NetworkEvent::ModemHungUp { id: initiator });
+                }
+            }
+            CommandAction::HoldCall { holder, target } => {
+                if let Some(hold_modem) = self.modems.get_mut(&target) {
+                    hold_modem.call_service.receive_hold(holder);
+                }
+            }
+            CommandAction::ResumeCall { resumer, target } => {
+                if let Some(resume_modem) = self.modems.get_mut(&target) {
+                    resume_modem.call_service.receive_resume(resumer);
+                }
             }
             CommandAction::InitiateEmergencyCall => {} // No-op
             CommandAction::ReceiveSms { to, pdu, status_report } => {
