@@ -128,5 +128,7 @@ pub const DLT_FIRA_UCI: u32 = 299;
 pub const DLT_IEEE802_11_RADIO: u32 = 127;
 // Ethernet DLT is 1
 pub const DLT_ETHERNET: u32 = 1;
-// User defined 0 DLT is 147 (for custom protocols like NCI/AT commands)
+// NFC Controller Interface (NCI) uses DLT 147 (USER0) for Wireshark support
+pub const DLT_NFC_NCI: u32 = 147;
+// User defined 0 DLT is 147 (for custom protocols like AT commands)
 pub const DLT_USER0: u32 = 147;

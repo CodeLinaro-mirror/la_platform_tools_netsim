@@ -140,14 +140,6 @@ class CompileInstallTask(Task):
             self.on_rm_error(os.unlink, str(dest_file), None)
         shutil.copy(src_file, dest_file)
 
-      # Copy netsim-ui
-      ui_src_dir = search_dir / "netsim-ui"
-      ui_dest_dir = dest_dir / "netsim-ui"
-      if ui_dest_dir.exists():
-        shutil.rmtree(ui_dest_dir, onerror=self.on_rm_error)
-      logging.info(f"Copying directory {ui_src_dir} to {ui_dest_dir}")
-      shutil.copytree(ui_src_dir, ui_dest_dir, dirs_exist_ok=True)
-
     except FileNotFoundError as e:
       logging.error(
           f"Artifact not found: {e}. A successful Bazel build is required."

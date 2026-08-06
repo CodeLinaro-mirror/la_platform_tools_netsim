@@ -73,7 +73,7 @@ impl ChipClient for EthernetClient {
 
     async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
         match self.inner.perform_action(Some(id), EthernetReq::Reset { id }).await {
-            Ok(EthernetResponse::Chip(chip)) => Ok(chip),
+            Ok(EthernetResponse::Chip(chip)) => Ok(*chip),
             Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
             Err(e) => Err(ClientError::Send(e.to_string())),
         }

@@ -7,7 +7,7 @@ use bytes::Bytes;
 use cell_actor::CellClient;
 use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult};
-use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
+use futures::{StreamExt, channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::{
     Cell, Chip, ChipClient, ChipCreate, ChipError as NetsimChipError, ChipId, ChipVariant,
     DeviceId, PacketSink, PacketStream,
@@ -232,4 +232,181 @@ async fn test_delete_chip_non_blocking() {
 
     // Verify delete finishes
     delete_handle.await.unwrap().unwrap();
+}
+
+// Test status fields are populated and updated
+#[tokio::test]
+async fn test_get_chip_status_fields() {
+    let harness = setup_test_harness().await;
+    let chip_id = ChipId(1);
+    let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink();
+    let params = create_params(chip_id, stream, sink);
+    harness.client.create(chip_id, params).await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // 1. Initial status check
+    let chip = harness.client.read(chip_id).await.unwrap();
+    if let Some(ChipVariant::Cell(cell_chip)) = &chip.variant {
+        assert_eq!(cell_chip.sms_count, 0);
+        assert_eq!(cell_chip.rssi, 20); // Default RSSI in NetworkService::new is 20
+        assert_eq!(cell_chip.ber, 99); // Default BER in NetworkService::new is 99
+        assert_eq!(cell_chip.voice_registration, netsim_model::RegistrationStatus::NotRegistered);
+        assert_eq!(cell_chip.data_registration, netsim_model::RegistrationStatus::NotRegistered);
+    } else {
+        panic!("GetChip failed for existing chip");
+    }
+
+    // 2. Update signal strength
+    harness
+        .client
+        .perform_action(chip_id, cell_actor::CellAction::SetSignalStrength { rssi: 15, ber: 2 })
+        .await
+        .unwrap();
+
+    // 3. Update registration
+    harness
+        .client
+        .perform_action(
+            chip_id,
+            cell_actor::CellAction::SetVoiceRegistration {
+                status: netsim_model::RegistrationStatus::RegisteredHome,
+            },
+        )
+        .await
+        .unwrap();
+    harness
+        .client
+        .perform_action(
+            chip_id,
+            cell_actor::CellAction::SetDataRegistration {
+                status: netsim_model::RegistrationStatus::Roaming,
+            },
+        )
+        .await
+        .unwrap();
+
+    // 4. Verify updates
+    let chip = harness.client.read(chip_id).await.unwrap();
+    if let Some(ChipVariant::Cell(cell_chip)) = &chip.variant {
+        assert_eq!(cell_chip.rssi, 15);
+        assert_eq!(cell_chip.ber, 2);
+        assert_eq!(cell_chip.voice_registration, netsim_model::RegistrationStatus::RegisteredHome);
+        assert_eq!(cell_chip.data_registration, netsim_model::RegistrationStatus::Roaming);
+    } else {
+        panic!("GetChip failed for existing chip");
+    }
+}
+
+#[tokio::test]
+async fn test_receive_pdu_action_forwarding() {
+    let harness = setup_test_harness().await;
+    let chip_id = ChipId(1);
+    let (stream, sink, _stream_tx, mut sink_rx) = create_dummy_stream_sink();
+    let params = create_params(chip_id, stream, sink);
+    harness.client.create(chip_id, params).await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    harness
+        .client
+        .perform_action(
+            chip_id,
+            cell_actor::CellAction::ReceivePdu {
+                pdu: "0011000B915155255155F40000AA01F0".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let packet = tokio::time::timeout(std::time::Duration::from_millis(500), sink_rx.next())
+        .await
+        .unwrap()
+        .unwrap();
+
+    // CMT response: "+CMT: ,15\r\n0011000B915155255155F40000AA01F0\r\n"
+    let expected_response = "+CMT: ,15\r\n0011000B915155255155F40000AA01F0\r\n";
+    assert_eq!(packet, bytes::Bytes::from(expected_response));
+}
+
+#[tokio::test]
+async fn test_receive_sms_action_forwarding() {
+    let harness = setup_test_harness().await;
+    let chip_id = ChipId(1);
+    let (stream, sink, _stream_tx, mut sink_rx) = create_dummy_stream_sink();
+    let params = create_params(chip_id, stream, sink);
+    harness.client.create(chip_id, params).await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    harness
+        .client
+        .perform_action(
+            chip_id,
+            cell_actor::CellAction::ReceiveSms {
+                sender: "123456".to_string(),
+                text: "hello".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let packet = tokio::time::timeout(std::time::Duration::from_millis(500), sink_rx.next())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let packet_str = std::str::from_utf8(&packet).unwrap().to_lowercase();
+    assert!(packet_str.starts_with("+cmt: ,26\r\n002406812143650008"));
+    assert!(packet_str.ends_with("0a00680065006c006c006f\r\n"));
+}
+
+#[tokio::test]
+async fn test_receive_pdu_invalid_hex() {
+    let harness = setup_test_harness().await;
+    let chip_id = ChipId(1);
+    let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink();
+    let params = create_params(chip_id, stream, sink);
+    harness.client.create(chip_id, params).await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // Invalid hex character 'g'
+    let result = harness
+        .client
+        .perform_action(
+            chip_id,
+            cell_actor::CellAction::ReceivePdu {
+                pdu: "0011000B915155255155F40000AA01Fg".to_string(),
+            },
+        )
+        .await;
+
+    assert!(result.is_err());
+    let err_str = result.unwrap_err().to_string();
+    assert!(err_str.contains("Invalid PDU format"), "Unexpected error: {err_str}");
+}
+
+#[tokio::test]
+async fn test_incoming_call_invalid_number() {
+    let harness = setup_test_harness().await;
+    let chip_id = ChipId(1);
+    let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink();
+    let params = create_params(chip_id, stream, sink);
+    harness.client.create(chip_id, params).await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // Invalid character 'a' in phone number
+    let result = harness
+        .client
+        .perform_action(
+            chip_id,
+            cell_actor::CellAction::IncomingCall { number: "12345abc".to_string() },
+        )
+        .await;
+
+    assert!(result.is_err());
+    let err_str = result.unwrap_err().to_string();
+    assert!(err_str.contains("Invalid phone number"), "Unexpected error: {err_str}");
 }

@@ -1,6 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use hex;
 use modem_rs::{
     DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile, config::PinProfile,
     test_utils::MockModemHandler,
@@ -22,7 +23,10 @@ pub fn given_modem(world: &mut World, name: &str) {
     let id = world.next_modem_id();
     let (handler, sink) = MockModemHandler::new(false);
 
-    world.manager.new_modem(id, sink, None, Quirks::default()).expect("Failed to create new modem");
+    world
+        .manager
+        .new_modem(id, sink, None, None, Quirks::default())
+        .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -35,8 +39,8 @@ pub fn given_goldfish_37_modem(world: &mut World, name: &str) {
     let id = world.next_modem_id();
     let (handler, sink) = MockModemHandler::new(true);
 
-    let quirks = Quirks { goldfish_ril_37_or_earlier: true };
-    world.manager.new_modem(id, sink, None, quirks).expect("Failed to create new modem");
+    let quirks = Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() };
+    world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -51,8 +55,22 @@ pub fn given_modem_with_sim_type(world: &mut World, name: &str, sim_type: i32) {
 
     world
         .manager
-        .new_modem(id, sink, Some(sim_type), Quirks::default())
+        .new_modem(id, sink, Some(sim_type), None, Quirks::default())
         .expect("Failed to create new modem");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Creates a Cuttlefish modem with the given name.
+pub fn given_cuttlefish_modem(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    let quirks = Quirks { is_cuttlefish: true, ..Default::default() };
+    world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -90,6 +108,22 @@ pub fn given_modem_with_sim_profile(world: &mut World, name: &str) {
     world.modems.insert(name.to_string(), (id, handler));
 }
 
+/// Creates a modem with a custom XML SIM profile.
+pub fn given_modem_with_xml_profile(world: &mut World, name: &str, xml: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    world
+        .manager
+        .new_modem(id, sink, None, Some(xml.to_string()), Quirks::default())
+        .expect("Failed to create new modem with XML profile");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
 /// Helper function to create the legacy SIM profile used in tests.
 pub fn create_legacy_test_profile() -> SimProfile {
     SimProfile {
@@ -99,11 +133,11 @@ pub fn create_legacy_test_profile() -> SimProfile {
             file_system: FileSystem {
                 master_file: DedicatedFile {
                     file_id: 0x3F00,
-                    files: vec![SimFile::Ef(ElementaryFile {
+                    files: vec![SimFile::ElementaryFile(ElementaryFile {
                         file_id: 0x2FE2,
-                        size: 10,
+
                         record_len: None,
-                        data: TEST_ICCID.to_string(),
+                        data: hex::decode(TEST_ICCID).unwrap(),
                     })],
                 },
             },
@@ -128,11 +162,11 @@ pub fn create_locked_sim_profile() -> SimProfile {
             file_system: FileSystem {
                 master_file: DedicatedFile {
                     file_id: 0x3F00,
-                    files: vec![SimFile::Ef(ElementaryFile {
+                    files: vec![SimFile::ElementaryFile(ElementaryFile {
                         file_id: 0x2FE2,
-                        size: 10,
+
                         record_len: None,
-                        data: TEST_ICCID.to_string(),
+                        data: hex::decode(TEST_ICCID).unwrap(),
                     })],
                 },
             },
@@ -170,17 +204,17 @@ pub fn create_profile_with_msisdn() -> SimProfile {
                 master_file: DedicatedFile {
                     file_id: 0x3F00,
                     files: vec![
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x2FE2,
-                            size: 10,
+
                             record_len: None,
-                            data: TEST_ICCID.to_string(),
+                            data: hex::decode(TEST_ICCID).unwrap(),
                         }),
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x6F40, // EF_MSISDN
-                            size: 28,
+
                             record_len: Some(28),
-                            data: "F".repeat(56), // empty record (all F)
+                            data: vec![0xFF; 28],
                         }),
                     ],
                 },
@@ -219,23 +253,23 @@ pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
                 master_file: DedicatedFile {
                     file_id: 0x3F00,
                     files: vec![
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x2FE2,
-                            size: 10,
+
                             record_len: None,
-                            data: TEST_ICCID.to_string(),
+                            data: hex::decode(TEST_ICCID).unwrap(),
                         }),
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x6F7B, // EF_FPLMN
-                            size: 12,
+
                             record_len: None,
-                            data: "F".repeat(24),
+                            data: vec![0xFF; 12],
                         }),
-                        SimFile::Ef(ElementaryFile {
+                        SimFile::ElementaryFile(ElementaryFile {
                             file_id: 0x6FC7, // EF_MBDN
-                            size: 152,
+
                             record_len: Some(38),
-                            data: "F".repeat(304),
+                            data: vec![0xFF; 152],
                         }),
                     ],
                 },

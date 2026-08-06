@@ -65,7 +65,7 @@ impl ChipClient for UwbClient {
             .err_into::<ClientError>()
             .await
         {
-            Ok(crate::UwbActionResult::Chip(chip)) => Ok(chip),
+            Ok(crate::UwbActionResult::Chip(chip)) => Ok(*chip),
             Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
             Err(e) => Err(e),
         }

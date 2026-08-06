@@ -45,6 +45,8 @@ message ExecuteCellRequest {
     SetSimStatus set_sim_status = 11;
     SetNetworkTechnology set_network_technology = 12;
     SetNetworkTimezone set_network_timezone = 13;
+    ReceivePdu receive_pdu = 14;
+    SetOperator set_operator = 15;
   }
 }
 
@@ -69,6 +71,10 @@ message RemoteHold {
 message ReceiveSms {
   string sender = 1;
   string text = 2;
+}
+
+message ReceivePdu {
+  string pdu = 1;
 }
 
 message SetSignalStrength {
@@ -121,6 +127,16 @@ message Call {
     WAITING = 6;
   }
   State state = 2;
+  enum Direction {
+    DIR_UNKNOWN = 0;
+    MOBILE_ORIGINATED = 1;
+    MOBILE_TERMINATED = 2;
+  }
+  Direction direction = 3;
+}
+
+message SetOperator {
+  string operator = 1;
 }
 
 message SetSimStatus {

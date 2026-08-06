@@ -14,6 +14,7 @@ pub const DEFAULT_PIN_RETRIES: u32 = 3;
 pub const DEFAULT_PUK_RETRIES: u32 = 10;
 pub const TEST_IMSI: &str = "123456789012345";
 pub const TEST_ICCID: &str = "89012345678901234567";
+pub const TEST_ICCID_SWAPPED: &str = "98103254769810325476";
 pub const TEST_AID: &str = "A000000063504B43532D3135";
 
 // CRSM Constants
@@ -25,6 +26,7 @@ pub const EF_IMSI_DEC: &str = "28423";
 pub const EF_MSISDN_DEC: &str = "28480";
 pub const TEST_IMSI_ENCODED: &str = "081932547698103254";
 pub const NEW_ICCID: &str = "89012608640220133897";
+pub const NEW_ICCID_SWAPPED: &str = "98106280462002318379";
 pub const NEW_IMSI: &str = "310260123456789";
 pub const NEW_IMSI_ENCODED: &str = "083901621032547698";
 pub const TEST_MSISDN: &str = "15555215554";
@@ -75,6 +77,7 @@ pub const RESP_ERROR_NO_CHANNEL_AVAILABLE: &str = "6A81";
 pub const RESP_ERROR_INCORRECT_PARAMS: &str = "6A86";
 pub const RESP_ERROR_FILE_NOT_FOUND: &str = "6A82";
 pub const RESP_ERROR_OUT_OF_BOUNDS: &str = "6A88";
+pub const RESP_ERROR_REFERENCED_DATA_NOT_FOUND: &str = "6A88";
 pub const RESP_ERROR_WRONG_LENGTH: &str = "6700";
 pub const RESP_CRSM_INCORRECT_PARAMS: &str = "+CRSM: 106,134";
 pub const RESP_CRSM_FILE_NOT_FOUND: &str = "+CRSM: 106,130";

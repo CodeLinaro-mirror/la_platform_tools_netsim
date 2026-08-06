@@ -4,11 +4,12 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use modem_rs_derive::CommandParser;
+use nom::IResult;
 
 use crate::{
     parser::{QuotedString, parse_raw_data},
     sim_service::SimService, // Required for Sim storage
-    types::{CommandAction, ExecutionResult, HandledCommand, Parsable, Response},
+    types::{CommandAction, ExecutionResult, HandledCommand, Parsable, Response, SmsBroadcastMode},
 };
 
 /// SMS service AT commands.
@@ -34,7 +35,7 @@ pub enum SmsCommand<'a> {
     SendSmsAck,
     /// 3GPP TS 27.005: Set SMS message format
     #[command(tag = "AT+CMGF=")]
-    SetSmsMessageFormat(u8),
+    SetSmsMessageFormat(MessageFormat),
     /// 3GPP TS 27.005: Set preferred message storage
     #[command(tag = "AT+CPMS=")]
     SetPreferredMessageStorage(QuotedString<'a>, QuotedString<'a>, QuotedString<'a>),
@@ -43,7 +44,7 @@ pub enum SmsCommand<'a> {
     QueryPreferredMessageStorage,
     /// 3GPP TS 27.005: Set broadcast config
     #[command(tag = "AT+CSCB=")]
-    BroadcastConfig(u8, QuotedString<'a>, QuotedString<'a>),
+    BroadcastConfig(SmsBroadcastMode, QuotedString<'a>, QuotedString<'a>),
     /// 3GPP TS 27.005: Query broadcast config
     #[command(tag = "AT+CSCB?")]
     QueryBroadcastConfig,
@@ -73,6 +74,17 @@ pub enum MessageFormat {
     Text,
 }
 
+impl<'a> Parsable<'a> for MessageFormat {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 => Ok((input, Self::Pdu)),
+            1 => Ok((input, Self::Text)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmsResponse {
     SendSms {
@@ -90,7 +102,7 @@ pub enum SmsResponse {
         storage3: MessageStorage,
     },
     BroadcastConfig {
-        mode: u8,
+        mode: SmsBroadcastMode,
         mids: String,
         dcss: String,
     },
@@ -158,7 +170,7 @@ pub struct SmsService {
     pending_sms_destination: Option<String>,
     pub waiting_for_pdu_len: Option<usize>,
     pub waiting_for_pdu_store: bool,
-    broadcast_config: (u8, String, String),
+    broadcast_config: (SmsBroadcastMode, String, String),
 }
 
 impl Default for SmsService {
@@ -175,7 +187,7 @@ impl Default for SmsService {
             pending_sms_destination: None,
             waiting_for_pdu_len: None,
             waiting_for_pdu_store: false,
-            broadcast_config: (0, "".to_string(), "".to_string()),
+            broadcast_config: (SmsBroadcastMode::Accept, "".to_string(), "".to_string()),
         }
     }
 }
@@ -248,8 +260,8 @@ impl SmsService {
         }
     }
 
-    pub fn handle_set_sms_message_format(&mut self, format: u8) -> SmsResult {
-        self.message_format = if format == 1 { MessageFormat::Text } else { MessageFormat::Pdu };
+    pub fn handle_set_sms_message_format(&mut self, format: MessageFormat) -> SmsResult {
+        self.message_format = format;
         Ok(SmsSuccess::new(None))
     }
 
@@ -304,7 +316,7 @@ impl SmsService {
 
     pub fn handle_broadcast_config(
         &mut self,
-        mode: u8,
+        mode: SmsBroadcastMode,
         mids: QuotedString,
         dcss: QuotedString,
     ) -> SmsResult {

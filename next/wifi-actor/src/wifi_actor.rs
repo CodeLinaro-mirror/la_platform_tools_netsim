@@ -36,7 +36,7 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiIpcStats>),
-    Chip(netsim_model::Chip),
+    Chip(Box<netsim_model::Chip>),
 }
 
 pub type SlirpPendingRequest = (

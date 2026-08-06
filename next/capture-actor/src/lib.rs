@@ -12,6 +12,7 @@ mod capture_actor;
 mod error;
 mod ethernet_pcap;
 mod lifecycle;
+mod nci_pcap;
 mod service;
 mod uwb_pcap;
 mod wifi_pcap;
@@ -20,7 +21,7 @@ mod writer;
 use actor_framework::ResourceActor;
 pub use capture_actor::CaptureActor;
 pub use error::CaptureError;
-pub use writer::{DLT_BLUETOOTH_H4, DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO};
+pub use writer::{DLT_BLUETOOTH_H4, DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO, DLT_NFC_NCI};
 
 pub mod client;
 pub use client::CaptureClient;
@@ -44,7 +45,7 @@ mod tests {
 
     use capture_api::Direction;
 
-    use crate::bt_pcap::BluetoothH4Writer;
+    use crate::{bt_pcap::BluetoothH4Writer, nci_pcap::NciPcapWriter};
 
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -64,6 +65,25 @@ mod tests {
 
         // explicitly drop writer to ensure file handle closed (though not strictly
         // required for remove_file on linux)
+        drop(writer);
+        fs::remove_file(filename).unwrap();
+        fs::remove_dir(dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_nci_pcap_writer() {
+        let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("netsim_test_nci_pcap_writer_{}", id));
+        fs::create_dir_all(&dir).unwrap();
+        let filename = dir.join("test_nci_pcap.pcap");
+        let mut writer = NciPcapWriter::new(&filename).await.unwrap();
+        let data = vec![0x20, 0x00, 0x01, 0x00]; // Fake NCI CORE_RESET_CMD
+        writer.write_packet(SystemTime::now(), Direction::Sent, &data).await.unwrap();
+
+        let (records, bytes) = writer.get_stats();
+        assert_eq!(records, 1);
+        assert_eq!(bytes, 4);
+
         drop(writer);
         fs::remove_file(filename).unwrap();
         fs::remove_dir(dir).unwrap();
