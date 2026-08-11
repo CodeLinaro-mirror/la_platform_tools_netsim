@@ -73,11 +73,13 @@ impl ActorService for CellActor {
         ctx.add_stream(chip_id, Box::pin(stream));
 
         // 2. Add to Controller directly (Sync)
-        let (sim_type, quirks) = match params.chip.variant.as_ref() {
-            Some(ChipVariant::Cell(cell)) => (cell.sim_type, cell.quirks),
-            _ => (None, Quirks::default()),
+        let (sim_type, sim_profile, quirks) = match params.chip.variant.as_ref() {
+            Some(ChipVariant::Cell(cell)) => (cell.sim_type, cell.sim_profile.clone(), cell.quirks),
+            _ => (None, None, Quirks::default()),
         };
-        if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink, sim_type, quirks) {
+        if let Err(e) =
+            self.controller.add_modem(chip_id.0, modem_sink, sim_type, sim_profile, quirks)
+        {
             return Err(CellError::ModemError(e));
         }
 
@@ -131,7 +133,14 @@ impl ActorService for CellActor {
                         MODEM_STATE_IDLE.to_string()
                     },
                     sim_type: None,
+                    sim_profile: None,
                     quirks: info.quirks,
+                    sms_count: info.sms_count,
+                    rssi: info.rssi,
+                    ber: info.ber,
+                    voice_registration: info.voice_registration,
+                    data_registration: info.data_registration,
+                    active_calls: info.calls,
                 })),
                 ..Default::default()
             }))
@@ -163,7 +172,9 @@ impl ActorService for CellActor {
             }
         }
 
-        self.handle_get(id, ctx).await.map(|opt| opt.unwrap())
+        self.handle_get(id, ctx)
+            .await?
+            .ok_or_else(|| CellError::Chip(netsim_model::ChipError::ChipNotFound(id)))
     }
 
     async fn handle_action(
@@ -182,12 +193,31 @@ impl ActorService for CellActor {
 
         let modem_action = match action {
             CellAction::IncomingCall { number } => {
+                if !is_valid_phone_number(&number) {
+                    return Err(CellError::Chip(ChipError::InvalidArguments(
+                        format!("Invalid phone number: {number}").into(),
+                    )));
+                }
                 ModemAction::IncomingCall { target_id: chip_id, number }
             }
             CellAction::UpdateCall => ModemAction::UpdatePhysicalChannelConfigs { id: chip_id },
             CellAction::EndCall => ModemAction::RemoteHangup { id: chip_id },
             CellAction::ReceiveSms { sender, text } => {
+                if !is_valid_sms_sender(&sender) {
+                    return Err(CellError::Chip(ChipError::InvalidArguments(
+                        format!("Invalid SMS sender: {sender}").into(),
+                    )));
+                }
                 ModemAction::IncomingSms { id: chip_id, sender, text }
+            }
+            CellAction::ReceivePdu { pdu } => {
+                if !is_valid_hex_pdu(&pdu) {
+                    return Err(CellError::Chip(ChipError::InvalidArguments(
+                        format!("Invalid PDU format (must be even-length hex string): {pdu}")
+                            .into(),
+                    )));
+                }
+                ModemAction::IncomingPdu { id: chip_id, pdu }
             }
             CellAction::SetSignalStrength { rssi, ber } => {
                 let rssi_u8 = u8::try_from(rssi).map_err(|e| {
@@ -215,6 +245,9 @@ impl ActorService for CellActor {
             }
             CellAction::SetNetworkTechnology { tech } => {
                 ModemAction::SetNetworkTechnology { id: chip_id, tech }
+            }
+            CellAction::SetOperator { operator } => {
+                ModemAction::SetOperator { id: chip_id, operator }
             }
         };
 
@@ -245,7 +278,14 @@ impl ActorService for CellActor {
                             MODEM_STATE_IDLE.to_string()
                         },
                         sim_type: None,
+                        sim_profile: None,
                         quirks: info.quirks,
+                        sms_count: info.sms_count,
+                        rssi: info.rssi,
+                        ber: info.ber,
+                        voice_registration: info.voice_registration,
+                        data_registration: info.data_registration,
+                        active_calls: info.calls,
                     })),
                     ..Default::default()
                 });
@@ -253,4 +293,29 @@ impl ActorService for CellActor {
         }
         Ok(chips)
     }
+}
+
+fn is_valid_phone_number(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().all(|c| {
+            c.is_ascii_digit()
+                || c == '+'
+                || c == '-'
+                || c == ' '
+                || c == '('
+                || c == ')'
+                || c == '*'
+                || c == '#'
+        })
+}
+
+fn is_valid_sms_sender(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().all(|c| {
+            c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == ' ' || c == '(' || c == ')'
+        })
+}
+
+fn is_valid_hex_pdu(s: &str) -> bool {
+    !s.is_empty() && s.len().is_multiple_of(2) && s.chars().all(|c| c.is_ascii_hexdigit())
 }

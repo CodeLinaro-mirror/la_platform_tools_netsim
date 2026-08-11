@@ -3,11 +3,13 @@
 
 use netsim_proto::cell::{
     EndCall, ExecuteCellRequest, GetCellRequest, IncomingCall, ListCellsRequest,
-    RegistrationStatus, RemoteAnswer, RemoteHold, SetDataRegistration, SetSignalStrength,
-    SetVoiceRegistration,
+    RegistrationStatus, RemoteAnswer, RemoteHold, SetDataRegistration, SetNetworkTechnology,
+    SetSignalStrength, SetSimStatus, SetVoiceRegistration,
 };
 
-use super::args::{GsmCommand, HoldStateOption, RegistrationStatusOption};
+use super::args::{
+    GsmCommand, HoldStateOption, RadioTechnologyOption, RegistrationStatusOption, SimStateOption,
+};
 use crate::{
     cell_helper::{CellClient, resolve_cell_id},
     display::Displayer,
@@ -153,6 +155,55 @@ pub fn execute(cmd: GsmCommand, client: &impl CellClient, verbose: bool) -> Resu
                 println!("Data registration status set to {:?} for cell {}.", args.status, id);
             }
         }
+        GsmCommand::Sim(args) => {
+            let id = resolve_cell_id(args.id, client)?;
+            let mut req = ExecuteCellRequest::new();
+            req.id = id;
+            let mut action = SetSimStatus::new();
+            action.state = protobuf::EnumOrUnknown::new(match args.state {
+                SimStateOption::Present => netsim_proto::cell::set_sim_status::SimState::PRESENT,
+                SimStateOption::Absent => netsim_proto::cell::set_sim_status::SimState::ABSENT,
+            });
+            req.set_set_sim_status(action);
+            client.execute(&req)?;
+            if verbose {
+                println!("SIM status set to {:?} for cell {}.", args.state, id);
+            }
+        }
+        GsmCommand::Tech(args) => {
+            let id = resolve_cell_id(args.id, client)?;
+            let mut req = ExecuteCellRequest::new();
+            req.id = id;
+            let mut action = SetNetworkTechnology::new();
+            action.tech = protobuf::EnumOrUnknown::new(match args.tech {
+                RadioTechnologyOption::Gsm => {
+                    netsim_proto::cell::set_network_technology::RadioTechnology::GSM
+                }
+                RadioTechnologyOption::Lte => {
+                    netsim_proto::cell::set_network_technology::RadioTechnology::LTE
+                }
+                RadioTechnologyOption::Nr => {
+                    netsim_proto::cell::set_network_technology::RadioTechnology::NR
+                }
+            });
+            req.set_set_network_technology(action);
+            client.execute(&req)?;
+            if verbose {
+                println!("Network technology set to {:?} for cell {}.", args.tech, id);
+            }
+        }
+        GsmCommand::Operator(args) => {
+            let id = resolve_cell_id(args.id, client)?;
+            let mut req = ExecuteCellRequest::new();
+            req.id = id;
+            let mut action = netsim_proto::cell::SetOperator::new();
+            action.operator = args.operator.clone();
+            req.set_set_operator(action);
+            client.execute(&req)?;
+            if verbose {
+                println!("Network operator set to '{}' for cell {}.", args.operator, id);
+            }
+        }
     }
     Ok(())
 }
@@ -164,7 +215,8 @@ mod tests {
 
     use super::{
         super::args::{
-            GsmAccept, GsmCall, GsmCancel, GsmData, GsmHold, GsmSignal, GsmStatus, GsmVoice,
+            GsmAccept, GsmCall, GsmCancel, GsmData, GsmHold, GsmSignal, GsmSim, GsmStatus, GsmTech,
+            GsmVoice, RadioTechnologyOption, SimStateOption,
         },
         *,
     };
@@ -366,6 +418,42 @@ mod tests {
         assert_eq!(
             req.set_data_registration().status.enum_value(),
             Ok(RegistrationStatus::ROAMING)
+        );
+    }
+
+    #[test]
+    fn test_gsm_sim() {
+        let client = MockCellClient::default();
+        let cmd = GsmCommand::Sim(GsmSim { state: SimStateOption::Present, id: Some(1) });
+        client.execute_responses.lock().unwrap().push_back(Ok(Empty::new()));
+
+        let result = execute(cmd, &client, false);
+        assert!(result.is_ok());
+        assert_eq!(client.execute_calls.lock().unwrap().len(), 1);
+        let req = &client.execute_calls.lock().unwrap()[0];
+        assert_eq!(req.id, 1);
+        assert!(req.has_set_sim_status());
+        assert_eq!(
+            req.set_sim_status().state.enum_value(),
+            Ok(netsim_proto::cell::set_sim_status::SimState::PRESENT)
+        );
+    }
+
+    #[test]
+    fn test_gsm_tech() {
+        let client = MockCellClient::default();
+        let cmd = GsmCommand::Tech(GsmTech { tech: RadioTechnologyOption::Lte, id: Some(1) });
+        client.execute_responses.lock().unwrap().push_back(Ok(Empty::new()));
+
+        let result = execute(cmd, &client, false);
+        assert!(result.is_ok());
+        assert_eq!(client.execute_calls.lock().unwrap().len(), 1);
+        let req = &client.execute_calls.lock().unwrap()[0];
+        assert_eq!(req.id, 1);
+        assert!(req.has_set_network_technology());
+        assert_eq!(
+            req.set_network_technology().tech.enum_value(),
+            Ok(netsim_proto::cell::set_network_technology::RadioTechnology::LTE)
         );
     }
 }

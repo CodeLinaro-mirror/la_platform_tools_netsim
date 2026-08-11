@@ -239,5 +239,5 @@ fn test_pdu_mode_loopback() {
         "A",
         "17AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701",
     );
-    assert!(response.contains("00240B818118109844F00000"));
+    assert!(response.contains("00240B918118109844F00000"));
 }

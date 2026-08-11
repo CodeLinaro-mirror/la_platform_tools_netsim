@@ -12,7 +12,8 @@ pub const MODEM_STATE_IDLE: &str = "idle";
 /// Parameters for creating a Cellular chip.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CellCreate {
-    // Future Cellular specific properties.
+    pub sim_type: Option<i32>,
+    pub sim_profile: Option<String>,
 }
 
 /// Quirks for compatibility with different guest-side implementations.
@@ -20,6 +21,8 @@ pub struct CellCreate {
 pub struct Quirks {
     /// Flag for compatibility with Goldfish RIL in SDK 37 and earlier.
     pub goldfish_ril_37_or_earlier: bool,
+    /// Flag indicating if the guest device is Cuttlefish.
+    pub is_cuttlefish: bool,
 }
 
 /// Cellular technology specific chip information.
@@ -32,9 +35,24 @@ pub struct Cell {
     /// SIM card type (0 = No SIM, 1 = Normal SIM, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sim_type: Option<i32>,
+    /// XML SIM ICC profile content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_profile: Option<String>,
     /// Quirks for compatibility with different guest-side implementations.
     #[serde(default)]
     pub quirks: Quirks,
+    #[serde(default)]
+    pub sms_count: u32,
+    #[serde(default)]
+    pub rssi: u32,
+    #[serde(default)]
+    pub ber: u32,
+    #[serde(default)]
+    pub voice_registration: RegistrationStatus,
+    #[serde(default)]
+    pub data_registration: RegistrationStatus,
+    #[serde(default)]
+    pub active_calls: Vec<Call>,
 }
 
 impl Default for Cell {
@@ -43,13 +61,50 @@ impl Default for Cell {
             radio: crate::chip::Radio::default(),
             state: "idle".to_string(),
             sim_type: None,
+            sim_profile: None,
             quirks: Quirks::default(),
+            sms_count: 0,
+            rssi: 0,
+            ber: 0,
+            voice_registration: RegistrationStatus::default(),
+            data_registration: RegistrationStatus::default(),
+            active_calls: Vec::new(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct Call {
+    pub number: String,
+    pub state: CallState,
+    pub direction: CallDirection,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum CallState {
+    #[default]
+    Unknown = 0,
+    Active = 1,
+    Holding = 2,
+    Dialing = 3,
+    Alerting = 4,
+    Incoming = 5,
+    Waiting = 6,
+}
+
+/// Standard 3GPP terms for Outgoing (Mobile Originated) and Incoming (Mobile
+/// Terminated) calls
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum CallDirection {
+    #[default]
+    Unknown = 0,
+    MobileOriginated = 1,
+    MobileTerminated = 2,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum RegistrationStatus {
+    #[default]
     NotRegistered = 0,
     RegisteredHome = 1,
     Searching = 2,
@@ -82,6 +137,7 @@ pub enum ModemAction {
     UpdateNetworkTime { id: ChipId, time: String },
     SetSimStatus { id: ChipId, present: bool },
     SetNetworkTechnology { id: ChipId, tech: RadioTechnology },
+    SetOperator { id: ChipId, operator: String },
 }
 
 /// Cellular specific chip updates.

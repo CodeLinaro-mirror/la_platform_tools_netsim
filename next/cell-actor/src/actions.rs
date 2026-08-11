@@ -10,6 +10,7 @@ pub enum CellAction {
     UpdateCall,
     EndCall,
     ReceiveSms { sender: String, text: String },
+    ReceivePdu { pdu: String },
     SetSignalStrength { rssi: u32, ber: u32 },
     SetVoiceRegistration { status: RegistrationStatus },
     SetDataRegistration { status: RegistrationStatus },
@@ -17,6 +18,7 @@ pub enum CellAction {
     RemoteHold { on_hold: bool },
     SetSimStatus { present: bool },
     SetNetworkTechnology { tech: RadioTechnology },
+    SetOperator { operator: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

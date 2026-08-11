@@ -179,7 +179,7 @@ impl ActorService for UwbActor {
                     ))
                     .await;
 
-                Ok(UwbActionResult::Chip(chip))
+                Ok(UwbActionResult::Chip(Box::new(chip)))
             }
             UwbAction::GetStatistics => {
                 let stats = self

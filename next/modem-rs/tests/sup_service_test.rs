@@ -111,7 +111,7 @@ fn test_query_clir() {
     let mut world = World::new();
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CLIR?");
-    then_response_is(&mut world, "A", "+CLIR: 0,0");
+    then_response_is(&mut world, "A", "+CLIR: 0,1");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -236,18 +236,74 @@ fn test_facility_lock_puk_required() {
 }
 
 #[test]
-fn test_query_call_waiting() {
+fn test_ccwa_lifecycle() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    // Query CCWA with default class (returns status 0, class 7)
+    // 1. Query CCWA with default class, should be disabled (status 0, class 7)
     when_at_command_sent(&mut world, "A", "AT+CCWA=1,2");
     then_response_is(&mut world, "A", "+CCWA: 0,7");
     then_response_is(&mut world, "A", "OK");
 
-    // Query CCWA with specific class (returns status 0, class 1)
+    // 2. Query CCWA with specific class (returns status 0, class 1 for voice)
     when_at_command_sent(&mut world, "A", "AT+CCWA=1,2,1");
     then_response_is(&mut world, "A", "+CCWA: 0,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Enable CCWA for voice (class 1)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Query CCWA again, should be enabled (status 1, class 1)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,2,1");
+    then_response_is(&mut world, "A", "+CCWA: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4a. Query CCWA with default class (7), should return only active classes
+    // (status 1, class 1 for voice)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,2");
+    then_response_is(&mut world, "A", "+CCWA: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4b. Query CCWA for data (class 2), should be disabled (status 0, class 2)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,2,2");
+    then_response_is(&mut world, "A", "+CCWA: 0,2");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4c. Enable CCWA for Voice+Data+Fax (class 7)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,1,7");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4d. Query CCWA for Voice (class 1), should be enabled (status 1, class 1)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,2,1");
+    then_response_is(&mut world, "A", "+CCWA: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4e. Query CCWA for Data (class 2), should be enabled (status 1, class 2)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,2,2");
+    then_response_is(&mut world, "A", "+CCWA: 1,2");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4f. Query CCWA with default class (7), should return all active classes
+    // (status 1, class 1, 2, 4)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,2");
+    then_response_is(&mut world, "A", "+CCWA: 1,1");
+    then_response_is(&mut world, "A", "+CCWA: 1,2");
+    then_response_is(&mut world, "A", "+CCWA: 1,4");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Disable CCWA for all (class 7)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,0,7");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6. Query CCWA again for voice, should be disabled (status 0, class 1)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,2,1");
+    then_response_is(&mut world, "A", "+CCWA: 0,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6b. Query CCWA again for data, should be disabled (status 0, class 2)
+    when_at_command_sent(&mut world, "A", "AT+CCWA=1,2,2");
+    then_response_is(&mut world, "A", "+CCWA: 0,2");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -258,5 +314,10 @@ fn test_set_clir() {
 
     // Set CLIR to 1 (presentation restricted)
     when_at_command_sent(&mut world, "A", "AT+CLIR=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query CLIR, should be 1,1 (since it is provisioned)
+    when_at_command_sent(&mut world, "A", "AT+CLIR?");
+    then_response_is(&mut world, "A", "+CLIR: 1,1");
     then_response_is(&mut world, "A", "OK");
 }

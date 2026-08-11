@@ -103,4 +103,6 @@ message Chip {
   optional model.Position offset = 10;
   // Sim type for modem simulator (1 for normal, 2 for CtsCarrierApiTestCases)
   int32 sim_type = 11;
+  // XML SIM ICC profile content
+  optional string sim_profile = 12;
 }

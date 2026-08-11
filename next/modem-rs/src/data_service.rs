@@ -11,7 +11,7 @@ use crate::{
     cuttlefish::read_cuttlefish_config,
     modem::ModemImpl,
     parser::QuotedString,
-    types::{DEFAULT_DNS, DEFAULT_GATEWAY, ExecutionResult, Parsable},
+    types::{DEFAULT_DNS, DEFAULT_GATEWAY, ExecutionResult, Parsable, PdpType},
 };
 
 /// Data service AT commands.
@@ -20,7 +20,7 @@ pub enum DataCommand<'a> {
     #[command(tag = "AT+CGDCONT=")]
     DefinePdpContext(
         u8,
-        QuotedString<'a>,
+        PdpType,
         QuotedString<'a>,
         Option<QuotedString<'a>>,
         Option<u8>,
@@ -75,7 +75,7 @@ pub struct Qos {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PdpContext {
-    pub pdp_type: String,
+    pub pdp_type: PdpType,
     pub apn: String,
     pub active: bool,
     pub qos: Qos,
@@ -115,8 +115,8 @@ impl std::fmt::Display for DataResponse {
                 for (cid, context) in contexts {
                     write!(
                         f,
-                        "+CGDCONT: {},\"{}\",\"{}\",,0,0\r\n",
-                        cid, context.pdp_type, context.apn
+                        "+CGDCONT: {cid},\"{}\",\"{}\",,0,0\r\n",
+                        context.pdp_type, context.apn
                     )?;
                 }
                 Ok(())
@@ -125,8 +125,8 @@ impl std::fmt::Display for DataResponse {
                 for (cid, qos) in qos_list {
                     write!(
                         f,
-                        "+CGEQMIN: {},{},{},{},{},{}\r\n",
-                        cid, qos.precedence, qos.delay, qos.reliability, qos.peak, qos.mean
+                        "+CGEQMIN: {cid},{},{},{},{},{}\r\n",
+                        qos.precedence, qos.delay, qos.reliability, qos.peak, qos.mean
                     )?;
                 }
                 Ok(())
@@ -135,8 +135,8 @@ impl std::fmt::Display for DataResponse {
                 for (cid, qos) in qos_list {
                     write!(
                         f,
-                        "+CGEQREQ: {},{},{},{},{},{}\r\n",
-                        cid, qos.precedence, qos.delay, qos.reliability, qos.peak, qos.mean
+                        "+CGEQREQ: {cid},{},{},{},{},{}\r\n",
+                        qos.precedence, qos.delay, qos.reliability, qos.peak, qos.mean
                     )?;
                 }
                 Ok(())
@@ -145,8 +145,8 @@ impl std::fmt::Display for DataResponse {
                 for (cid, qos) in qos_list {
                     write!(
                         f,
-                        "+CGQMIN: {},{},{},{},{},{}\r\n",
-                        cid, qos.precedence, qos.delay, qos.reliability, qos.peak, qos.mean
+                        "+CGQMIN: {cid},{},{},{},{},{}\r\n",
+                        qos.precedence, qos.delay, qos.reliability, qos.peak, qos.mean
                     )?;
                 }
                 Ok(())
@@ -155,20 +155,20 @@ impl std::fmt::Display for DataResponse {
                 for (cid, qos) in qos_list {
                     write!(
                         f,
-                        "+CGQREQ: {},{},{},{},{},{}\r\n",
-                        cid, qos.precedence, qos.delay, qos.reliability, qos.peak, qos.mean
+                        "+CGQREQ: {cid},{},{},{},{},{}\r\n",
+                        qos.precedence, qos.delay, qos.reliability, qos.peak, qos.mean
                     )?;
                 }
                 Ok(())
             }
             DataResponse::PsAttach(attached) => {
                 let state = if *attached { 1 } else { 0 };
-                write!(f, "+CGATT: {}\r\n", state)
+                write!(f, "+CGATT: {state}\r\n")
             }
             DataResponse::PdpContextActivate(active_list) => {
                 for (cid, active) in active_list {
                     let state = if *active { 1 } else { 0 };
-                    write!(f, "+CGACT: {},{}\r\n", cid, state)?;
+                    write!(f, "+CGACT: {cid},{state}\r\n")?;
                 }
                 Ok(())
             }
@@ -176,18 +176,10 @@ impl std::fmt::Display for DataResponse {
                 write!(f, "CONNECT\r\n")
             }
             DataResponse::PdpAddress { cid, ip_address } => {
-                write!(f, "+CGPADDR: {},\"{}\"\r\n", cid, ip_address)
+                write!(f, "+CGPADDR: {cid},\"{ip_address}\"\r\n")
             }
             DataResponse::DynamicParam { cid, apn, ip_address, prefix, gateway, dns } => {
-                write!(
-                    f,
-                    "+CGCONTRDP: {},5,\"{}\",{},{},{}\r\n",
-                    cid,
-                    apn,
-                    format_args!("{}/{}", ip_address, prefix),
-                    gateway,
-                    dns
-                )
+                write!(f, "+CGCONTRDP: {cid},5,\"{apn}\",{ip_address}/{prefix},{gateway},{dns}\r\n")
             }
         }
     }
@@ -256,13 +248,13 @@ impl DataService {
     pub fn handle_define_pdp_context(
         &mut self,
         cid: u8,
-        pdp_type: QuotedString,
+        pdp_type: PdpType,
         apn: QuotedString,
     ) -> DataResult {
         self.pdp_contexts.insert(
             cid,
             PdpContext {
-                pdp_type: String::from_utf8(pdp_type.to_vec()).unwrap_or_default(),
+                pdp_type,
                 apn: String::from_utf8(apn.to_vec()).unwrap_or_default(),
                 active: self.ps_attached, // Goldfish expects data to be auto-activated
                 qos: Qos::default(),
@@ -607,7 +599,7 @@ mod tests {
     #[test]
     fn test_data_service_dial_direct() {
         let mut service = DataService::default();
-        let res = service.handle_define_pdp_context(1, QuotedString(b"IP"), QuotedString(b"test"));
+        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b"test"));
         assert!(res.is_ok());
 
         // Dial
@@ -622,7 +614,7 @@ mod tests {
     #[test]
     fn test_data_service_dial_malformed() {
         let mut service = DataService::default();
-        let res = service.handle_define_pdp_context(1, QuotedString(b"IP"), QuotedString(b"test"));
+        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b"test"));
         assert!(res.is_ok());
 
         // Dial malformed alphanumeric CID
@@ -637,7 +629,7 @@ mod tests {
     #[test]
     fn test_pdp_context_auto_activation() {
         let mut service = DataService::default();
-        let _ = service.handle_define_pdp_context(1, QuotedString(b""), QuotedString(b""));
+        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b""));
         assert!(service.pdp_contexts.get(&1).unwrap().active);
     }
 
@@ -645,7 +637,7 @@ mod tests {
     fn test_pdp_context_no_auto_activation_when_detached() {
         let mut service = DataService::default();
         let _ = service.handle_set_ps_attach(0);
-        let _ = service.handle_define_pdp_context(1, QuotedString(b""), QuotedString(b""));
+        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b""));
         assert!(!service.pdp_contexts.get(&1).unwrap().active);
     }
 

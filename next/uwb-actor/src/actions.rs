@@ -41,7 +41,7 @@ pub enum UwbActionResult {
     /// The action returned statistics.
     Statistics(Box<[NetsimRadioStats]>),
     /// The action returned the updated chip state.
-    Chip(netsim_model::Chip),
+    Chip(Box<netsim_model::Chip>),
     /// The action returned global statistics bytes.
     GlobalStats(Vec<u8>),
 }
