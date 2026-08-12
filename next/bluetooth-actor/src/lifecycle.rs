@@ -4,14 +4,21 @@
 use std::time::Duration;
 
 use actor_framework::{ActorLifecycle, ActorService, DynContext};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info};
 
-use crate::bluetooth_actor::BluetoothActor;
+use crate::{BluetoothEvent, bluetooth_actor::BluetoothActor};
 
 impl ActorLifecycle for BluetoothActor {
     async fn on_start(&mut self, runtime: &mut DynContext<Self>) {
         // Tick every 10ms to drive Rootcanal
         runtime.set_interval(Duration::from_millis(10));
+
+        // Register internal event stream
+        let rx = self.event_rx.lock().unwrap().take();
+        if let Some(rx) = rx {
+            runtime.add_typed_stream(0, Box::pin(UnboundedReceiverStream::new(rx)));
+        }
     }
 
     async fn on_tick(&mut self, _runtime: &mut DynContext<Self>) {
@@ -44,6 +51,19 @@ impl ActorLifecycle for BluetoothActor {
         ctx.remove_stream(id);
         if let Err(e) = self.handle_delete(id, ctx).await {
             error!("Failed to delete chip {id} after sink task closed: {e}");
+        }
+    }
+
+    async fn on_typed_stream(
+        &mut self,
+        _id: usize,
+        item: Self::TypedStream,
+        _ctx: &mut DynContext<Self>,
+    ) {
+        match item {
+            BluetoothEvent::DeliverPacket { receiver_id, packet, phy, rssi } => {
+                self.rootcanal.deliver_packet(receiver_id.0, &packet, phy, rssi);
+            }
         }
     }
 }

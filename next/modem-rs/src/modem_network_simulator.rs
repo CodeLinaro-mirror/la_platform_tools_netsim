@@ -9,16 +9,16 @@ use std::{
 };
 
 use bytes::Bytes;
-use netsim_model::{ModemAction, RadioTechnology, RegistrationStatus};
+use netsim_model::{ModemAction, Quirks, RadioTechnology, RegistrationStatus};
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
 use crate::{
-    constants::CALL_RING_TIMEOUT,
+    call_service::CallState,
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
     time::{Clock, SystemClock},
-    types::{AT_OK, CommandAction, HostEvent, ModemError, ModemId, ModemSink},
+    types::{CommandAction, HostEvent, ModemError, ModemId, ModemSink},
 };
 
 #[derive(Debug)]
@@ -144,8 +144,28 @@ impl ModemNetworkSimulator {
         id: ModemId,
         sink: ModemSink,
         sim_type: Option<i32>,
+        sim_profile: Option<String>,
+        quirks: Quirks,
     ) -> Result<(), ModemError> {
-        self.new_modem_with_profile(id, sink, None, sim_type)
+        let xml_content = match &sim_profile {
+            Some(xml) => xml.as_str(),
+            None => match sim_type {
+                Some(2) => crate::profiles::PROFILE_CTS_XML,
+                _ => crate::profiles::PROFILE_DEFAULT_XML,
+            },
+        };
+
+        let profile = match crate::xml_profile::parse_xml_profile(xml_content) {
+            Ok(p) => p,
+            Err(e) => {
+                return Err(ModemError::InvalidConfig(format!(
+                    "Failed to parse SIM profile XML: {}",
+                    e
+                )));
+            }
+        };
+
+        self.new_modem_with_profile(id, sink, Some(profile), sim_type, quirks)
     }
 
     /// Creates a new modem instance with a specific SIM profile.
@@ -155,24 +175,27 @@ impl ModemNetworkSimulator {
         sink: ModemSink,
         profile: Option<crate::config::SimProfile>,
         sim_type: Option<i32>,
+        quirks: Quirks,
     ) -> Result<(), ModemError> {
         if self.modems.contains_key(&id) {
             return Err(ModemError::DuplicateModemId(id));
         }
-        let mut modem = crate::modem::ModemImpl::new(id, profile.unwrap_or_default());
+        let mut profile = profile.unwrap_or_default();
+        if profile.msisdn.is_empty() {
+            let num_modems = self.modems.len();
+            profile.msisdn =
+                format!("{}{:03}", crate::constants::DEFAULT_MSISDN_PREFIX, num_modems + 1);
+        }
+        let target_msisdn = profile.msisdn.clone();
+        let mut modem = crate::modem::ModemImpl::new(id, profile, quirks);
+        // Override the default dummy number with a unique generated one to prevent
+        // conflicts when launching multiple default emulators. Custom profiles are
+        // preserved.
+        if normalize_number(&modem.phone_number()) == crate::constants::DEFAULT_FALLBACK_MSISDN {
+            modem.set_phone_number(&target_msisdn);
+        }
         if let Some(t) = sim_type {
             modem.set_sim_status(t > 0);
-        }
-        if modem.phone_number().is_empty() {
-            let num_modems = self.modems.len();
-            let default_num = match num_modems {
-                0 => "15555211001",
-                1 => "15555211002",
-                _ => "",
-            };
-            if !default_num.is_empty() {
-                modem.set_phone_number(default_num);
-            }
         }
         self.modems.insert(id, modem);
         self.sinks.insert(id, sink);
@@ -207,6 +230,17 @@ impl ModemNetworkSimulator {
                     self.schedule_event(id, delay, event);
                 }
                 ModemEffect::Response(packet) => {
+                    let mut packet = packet;
+                    if let Some(modem) = self.modems.get(&id) {
+                        // Goldfish RIL in SDK 37 and earlier (without TTY raw mode) translates \r
+                        // to \n on input, turning \r\n into \n\n and
+                        // corrupting stream. We work around this by
+                        // only sending \r (which translates to a single \n on the guest).
+                        let translate_crlf_to_cr = modem.quirks.goldfish_ril_37_or_earlier;
+                        if translate_crlf_to_cr {
+                            packet = replace_crlf_with_cr(&packet);
+                        }
+                    }
                     debug!("Sending response to {}: {:?}", id, std::str::from_utf8(&packet));
                     if let Some(sink) = self.sinks.get_mut(&id)
                         && let Err(e) = sink.send(Bytes::from(packet))
@@ -276,7 +310,6 @@ impl ModemNetworkSimulator {
                 }
 
                 effects.extend(self.initiate_call(id, &phone_number));
-                effects.push((id, ModemEffect::Response(AT_OK.to_vec())));
             }
             CommandAction::SwapCalls(active_peer, held_peer) => {
                 if let Some(modem) = self.modems.get_mut(&active_peer) {
@@ -289,7 +322,6 @@ impl ModemNetworkSimulator {
             CommandAction::InitiateRemoteCall(phone_number) => {
                 events.push(NetworkEvent::NewConnection { id, destination: phone_number.clone() });
                 effects.extend(self.initiate_call(id, &phone_number));
-                effects.push((id, ModemEffect::Response(AT_OK.to_vec())));
             }
             CommandAction::AnswerCall(answered_modem_id) => {
                 self.metrics.calls_answered.fetch_add(1, AtomicOrdering::Relaxed);
@@ -346,7 +378,7 @@ impl ModemNetworkSimulator {
                 events.push(NetworkEvent::ModemHungUp { id: hung_up_modem_id });
             }
             CommandAction::InitiateEmergencyCall => {} // No-op
-            CommandAction::ReceiveSms { to, pdu } => {
+            CommandAction::ReceiveSms { to, pdu, status_report } => {
                 self.metrics.sms_sent.fetch_add(1, AtomicOrdering::Relaxed);
                 let peer_id = if let Some(ref num) = to {
                     let sender_num = self.modems.get(&id).map(|m| m.phone_number());
@@ -367,13 +399,32 @@ impl ModemNetworkSimulator {
 
                 if let Some(peer_id) = peer_id {
                     let tpdu_len = crate::pdu::calculate_tpdu_len(&pdu);
+                    let peer_is_goldfish_37 = self
+                        .modems
+                        .get(&peer_id)
+                        .is_some_and(|m| m.quirks.goldfish_ril_37_or_earlier);
 
-                    let mut response = b"+CMT: ,".to_vec();
+                    // Goldfish RIL in SDK 37 and earlier expects "+CMT: <len>" (no leading comma)
+                    // for incoming PDU.
+                    let omit_cmt_leading_comma = peer_is_goldfish_37;
+                    let mut response = b"+CMT: ".to_vec();
+                    if !omit_cmt_leading_comma {
+                        response.push(b',');
+                    }
                     response.extend_from_slice(tpdu_len.to_string().as_bytes());
                     response.extend_from_slice(b"\r\n");
                     response.extend_from_slice(&pdu);
                     response.extend_from_slice(b"\r\n");
                     effects.push((peer_id, ModemEffect::Response(response)));
+
+                    // Send status report back to sender if requested and message was routed
+                    if let Some(report_pdu) = status_report {
+                        let report_tpdu_len = crate::pdu::calculate_tpdu_len(&report_pdu);
+                        let report_str = std::str::from_utf8(&report_pdu).unwrap_or_default();
+                        let report_response =
+                            format!("+CDS: {report_tpdu_len}\r\n{report_str}\r\n").into_bytes();
+                        effects.push((id, ModemEffect::Response(report_response)));
+                    }
                 }
             }
             CommandAction::ReceiveTextSms { to, text } => {
@@ -429,7 +480,7 @@ impl ModemNetworkSimulator {
         target_id: ModemId,
         number: &str,
     ) -> Vec<NetworkEvent> {
-        self.apply_to_modem(target_id, |modem| modem.trigger_incoming_call(number))
+        self.apply_to_modem(target_id, |modem| modem.trigger_incoming_call(number, None))
     }
 
     pub fn initiate_external_answer(&mut self, id: ModemId) -> Vec<NetworkEvent> {
@@ -484,18 +535,23 @@ impl ModemNetworkSimulator {
         let target_id = self
             .find_peer_id(caller_id, |m| normalize_number(&m.phone_number()) == normalized_target);
 
-        if let Some(tid) = target_id
-            && let Some(modem) = self.modems.get_mut(&tid)
-        {
-            // Send RING
-            let mut effects = modem.receive_at_command(b"RING\r\n");
+        if let Some(tid) = target_id {
+            // 1. Set peer_id on Caller's dialing call
+            if let Some(caller) = self.modems.get_mut(&caller_id)
+                && let Some(call) =
+                    caller.call_service.calls.iter_mut().find(|c| c.state == CallState::Dialing)
+            {
+                call.peer_id = Some(tid);
+                debug!("[Network] Set peer_id of caller {} to {} for dialing call", caller_id, tid);
+            }
 
-            // Also schedule RING timeout on TARGET
-            effects.push(ModemEffect::Schedule {
-                delay: CALL_RING_TIMEOUT,
-                event: ModemEvent::CallRingTimeout { call_token: 1 },
-            });
-            return effects.into_iter().map(|e| (tid, e)).collect();
+            // 2. Trigger incoming call on Callee (RING + CLIP + peer_id)
+            let caller_number =
+                self.modems.get(&caller_id).map(|m| m.phone_number()).unwrap_or_default();
+            if let Some(callee) = self.modems.get_mut(&tid) {
+                let effects = callee.trigger_incoming_call(&caller_number, Some(caller_id));
+                return effects.into_iter().map(|e| (tid, e)).collect();
+            }
         }
         Vec::new()
     }
@@ -567,4 +623,189 @@ impl ModemNetworkSimulator {
 
 fn normalize_number(num: &str) -> &str {
     num.strip_prefix('+').unwrap_or(num)
+}
+
+fn replace_crlf_with_cr(packet: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(packet.len());
+    let mut iter = packet.iter().peekable();
+
+    while let Some(&b) = iter.next() {
+        if b == b'\r' && iter.peek() == Some(&&b'\n') {
+            iter.next(); // Consume and skip the '\n'
+        }
+        result.push(b);
+    }
+
+    result.shrink_to_fit();
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use netsim_model::{ChipId, ModemAction};
+
+    use super::*;
+    use crate::{
+        modem_network::ModemNetworkInterface, test_utils::MockModemHandler, time::MockClock,
+    };
+
+    #[test]
+    fn test_event_loop_tick_and_duration() {
+        let clock = Arc::new(MockClock::default());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
+
+        let modem_id: ModemId = 1;
+        let (mut modem_handler, sink) = MockModemHandler::new(false);
+        simulator.new_modem(modem_id, sink, None, None, Quirks::default()).unwrap();
+
+        // 1. Schedule an event 100ms in the future.
+        let event_duration = Duration::from_millis(100);
+        simulator.schedule_event(modem_id, event_duration, ModemEvent::TestEvent);
+
+        // 2. Tick before the event is due.
+        // It should return the duration until the next event.
+        let (events, next_duration) = simulator.tick();
+        assert!(events.is_empty());
+        assert_eq!(next_duration, Some(event_duration));
+
+        // 3. Advance the clock manually.
+        clock.advance(event_duration);
+
+        // 4. Tick again. The event should fire now.
+        let (_events_after, next_duration_after) = simulator.tick();
+        assert!(next_duration_after.is_none());
+
+        // 5. Check that the event was handled.
+        let response = modem_handler.wait_for_response();
+        assert_eq!(response, b"TEST_EVENT_FIRED\r\n");
+    }
+
+    #[test]
+    fn test_modem_simulator_constructor_real_clock() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let sim = ModemNetworkSimulator::new(tx);
+        assert_eq!(sim.get_modem_count(), 0);
+    }
+
+    #[test]
+    fn test_add_duplicate_modem() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+        let id = 1;
+        let (_, sink1) = MockModemHandler::new(false);
+        let (_, sink2) = MockModemHandler::new(false);
+
+        simulator.new_modem(id, sink1, None, None, Quirks::default()).unwrap();
+        let res = simulator.new_modem(id, sink2, None, None, Quirks::default());
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(matches!(err, ModemError::DuplicateModemId(1)));
+    }
+
+    #[test]
+    fn test_tick_missing_modem() {
+        let clock = Arc::new(MockClock::default());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
+        let id = 1;
+        let (_, sink) = MockModemHandler::new(false);
+        simulator.new_modem(id, sink, None, None, Quirks::default()).unwrap();
+
+        // Schedule an event
+        simulator.schedule_event(id, Duration::from_millis(10), ModemEvent::TestEvent);
+
+        // Remove modem
+        simulator.remove_modem(id);
+
+        // Advance clock and tick
+        clock.advance(Duration::from_millis(10));
+        let (events, _) = simulator.tick();
+
+        // Verify it doesn't panic and returns no events
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_simulator_getters_and_debug() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+        let (_, sink1) = MockModemHandler::new(false);
+        let (_, sink2) = MockModemHandler::new(false);
+        simulator.new_modem(1, sink1, None, None, Quirks::default()).unwrap();
+        simulator.new_modem(2, sink2, None, None, Quirks::default()).unwrap();
+
+        let ids = simulator.get_modem_ids();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&2));
+
+        simulator.external_echo_for_debug("Test debug echo".to_string());
+    }
+
+    #[test]
+    fn test_modem_network_interface_delegation() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+        let interface: &mut dyn ModemNetworkInterface = &mut simulator;
+
+        // 1. Add modem
+        let chip_id = 99;
+        let (mut handler, sink) = MockModemHandler::new(false);
+        let res = interface.add_modem(chip_id, sink, None, None, Quirks::default());
+        assert!(res.is_ok());
+
+        // 2. Get modem info
+        let info = interface.get_modem_info(chip_id).unwrap();
+        assert_eq!(info.id, chip_id);
+        assert!(info.connections.is_empty());
+        assert!(!info.ringing);
+        assert_eq!(info.sms_count, 0);
+
+        // 3. Send data
+        let res = interface.send_data(chip_id, b"AT\r\n");
+        assert!(res.is_ok());
+
+        let response = handler.wait_for_response();
+        assert_eq!(response, b"OK\r\n");
+        assert_eq!(handler.try_get_response(), None);
+
+        // 4. Perform action
+        let action =
+            ModemAction::IncomingCall { target_id: ChipId(chip_id), number: "12345".to_string() };
+        let _events = interface.perform_action(action).unwrap();
+        let response = handler.wait_for_response();
+        assert!(String::from_utf8_lossy(&response).contains("RING"));
+
+        let info = interface.get_modem_info(chip_id).unwrap();
+        assert!(info.ringing);
+
+        let res = interface.on_timer(chip_id);
+        assert!(res.is_ok());
+
+        // 5. Remove modem
+        let res = interface.remove_modem(chip_id);
+        assert!(res.is_ok());
+
+        let res = interface.get_modem_info(chip_id);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_initiate_call_send_data_returns_ok() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+        let interface: &mut dyn ModemNetworkInterface = &mut simulator;
+
+        let chip_id = 1;
+        let (mut handler, sink) = MockModemHandler::new(false);
+        interface.add_modem(chip_id, sink, None, None, Quirks::default()).unwrap();
+
+        interface.send_data(chip_id, b"ATD12345;\r\n").unwrap();
+        let response = handler.wait_for_response();
+        assert_eq!(response, b"OK\r\n");
+        assert_eq!(handler.try_get_response(), None);
+    }
 }

@@ -31,6 +31,10 @@ impl WifiClient {
         Self { inner: client }
     }
 
+    pub async fn list(&self) -> Result<Vec<Chip>, ClientError> {
+        self.inner.list().await.map_err(|e| ClientError::Send(e.to_string()))
+    }
+
     pub async fn set_rf_state(&self, id: ChipId, enabled: bool) -> Result<(), ClientError> {
         let patch = ChipUpdate {
             variant: Some(ChipVariantUpdate::Wifi(Default::default())),
@@ -44,7 +48,10 @@ impl WifiClient {
         &self,
     ) -> Result<netsim_proto::stats::WifiStats, ClientError> {
         match self.inner.perform_action(None, crate::wifi_actor::WifiReq::GetGlobalStats).await {
-            Ok(crate::wifi_actor::WifiResponse::GlobalStats(stats)) => Ok(*stats),
+            Ok(crate::wifi_actor::WifiResponse::GlobalStats(stats)) => {
+                let mut ipc_stats = *stats;
+                Ok(ipc_stats.wifi_stats.take().unwrap_or_default())
+            }
             Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
             Err(e) => Err(ClientError::Send(e.to_string())),
         }
@@ -99,15 +106,20 @@ impl ChipClient for WifiClient {
 
     async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
         match self.inner.perform_action(Some(id), crate::wifi_actor::WifiReq::Reset { id }).await {
-            Ok(crate::wifi_actor::WifiResponse::Chip(chip)) => Ok(chip),
+            Ok(crate::wifi_actor::WifiResponse::Chip(chip)) => Ok(*chip),
             Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
             Err(e) => Err(ClientError::Send(e.to_string())),
         }
     }
 
     async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
-        let stats = self.get_global_stats_proto().await?;
-        stats.write_to_bytes().map(Some).map_err(|e| ClientError::Recv(e.to_string()))
+        match self.inner.perform_action(None, crate::wifi_actor::WifiReq::GetGlobalStats).await {
+            Ok(crate::wifi_actor::WifiResponse::GlobalStats(stats)) => {
+                stats.write_to_bytes().map(Some).map_err(|e| ClientError::Recv(e.to_string()))
+            }
+            Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
+            Err(e) => Err(ClientError::Send(e.to_string())),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {

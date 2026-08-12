@@ -498,18 +498,21 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
 }
 
 /// Converts an 802.3 packet (from TAP) to 802.11 for the Medium.
+#[allow(clippy::collapsible_if)]
 pub fn convert_8023_to_80211(
     packet: bytes::Bytes,
     bssid: Option<netsim_packets::MacAddress>,
     seq: u16,
 ) -> Option<bytes::Bytes> {
     use netsim_packets::{FrameDirection, Ieee80211};
-    if let Some(bssid) = bssid
-        && let Ok(ieee80211) =
+    if let Some(bssid) = bssid {
+        if let Ok(ieee80211) =
             Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
-        && let Ok(bytes) = ieee80211.encode_to_vec()
-    {
-        return Some(bytes::Bytes::from(bytes));
+        {
+            if let Ok(bytes) = ieee80211.encode_to_vec() {
+                return Some(bytes::Bytes::from(bytes));
+            }
+        }
     }
     None
 }

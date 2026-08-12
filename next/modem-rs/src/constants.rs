@@ -10,6 +10,8 @@ pub const GPRS_DIAL_PREFIX: &[u8] = b"*99";
 pub const DEFAULT_PLMN: &str = "310260";
 pub const DEFAULT_OPERATOR_NAME_LONG: &str = "Android Virtual Operator";
 pub const DEFAULT_OPERATOR_NAME_SHORT: &str = "Android";
+pub const DEFAULT_MSISDN_PREFIX: &str = "15555211";
+pub const DEFAULT_FALLBACK_MSISDN: &str = "15551234567";
 
 /// Returns true if the dial string is a standard GPRS dialing command.
 /// Standard GPRS dialing formats include *99#, *99*<cid>#, or *99***<cid>#.
@@ -60,3 +62,10 @@ pub mod access_technology {
     pub const LTE: u8 = 7;
     pub const NR: u8 = 11;
 }
+
+pub const MF_FILE_ID: u16 = 0x3F00;
+pub const ADF_DEFAULT_FILE_ID: u16 = 0x7FFF;
+
+pub const INS_READ_BINARY: u8 = 0xB0;
+pub const INS_READ_RECORD: u8 = 0xB2;
+pub const INS_UPDATE_RECORD: u8 = 0xDC;

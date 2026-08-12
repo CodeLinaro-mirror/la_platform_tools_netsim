@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::mpsc, time::Duration};
+use std::{collections::VecDeque, sync::mpsc, time::Duration};
 
 use bytes::Bytes;
 
@@ -10,16 +10,18 @@ use crate::types::ModemSink;
 /// Mock handler for modem callbacks that captures responses.
 pub struct MockModemHandler {
     rx: mpsc::Receiver<Vec<u8>>,
+    buffer: VecDeque<Vec<u8>>,
 }
 
 impl MockModemHandler {
-    pub fn new() -> (Self, ModemSink) {
+    pub fn new(goldfish_37: bool) -> (Self, ModemSink) {
         let (tx, rx) = mpsc::channel();
         let sink = ModemSink::new(move |item: Bytes| {
             let data = item.to_vec();
+            let delimiter = if goldfish_37 { b'\r' } else { b'\n' };
             let mut start = 0;
             for i in 0..data.len() {
-                if data[i] == b'\n' {
+                if data[i] == delimiter {
                     let line = data[start..=i].to_vec();
                     if let Err(e) = tx.send(line) {
                         return Err(e.to_string());
@@ -35,13 +37,38 @@ impl MockModemHandler {
             }
             Ok(())
         });
-        (Self { rx }, sink)
+        (Self { rx, buffer: VecDeque::new() }, sink)
+    }
+
+    /// Peeks at the next response without consuming it (non-blocking).
+    pub fn peek_response(&mut self) -> Option<&Vec<u8>> {
+        if self.buffer.is_empty()
+            && let Ok(msg) = self.rx.try_recv()
+        {
+            self.buffer.push_back(msg);
+        }
+        self.buffer.front()
+    }
+
+    /// Drains all pending responses from the receiver into the buffer.
+    pub fn buffer_pending_responses(&mut self) {
+        while let Ok(msg) = self.rx.try_recv() {
+            self.buffer.push_back(msg);
+        }
+    }
+
+    /// Returns a reference to the internal buffer.
+    pub fn get_buffer(&self) -> &VecDeque<Vec<u8>> {
+        &self.buffer
     }
 
     /// Waits for a response.
     /// Since the simulator is synchronous, responses should be available
     /// immediately.
     pub fn wait_for_response(&mut self) -> Vec<u8> {
+        if let Some(msg) = self.buffer.pop_front() {
+            return msg;
+        }
         // Use recv_timeout to avoid hanging forever if logic is wrong, but typically
         // it's instant.
         self.rx
@@ -51,6 +78,9 @@ impl MockModemHandler {
 
     /// Checks if a response is available (non-blocking).
     pub fn try_get_response(&mut self) -> Option<Vec<u8>> {
+        if let Some(msg) = self.buffer.pop_front() {
+            return Some(msg);
+        }
         self.rx.try_recv().ok()
     }
 }

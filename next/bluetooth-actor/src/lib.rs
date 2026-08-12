@@ -109,6 +109,9 @@
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 
+use netsim_model::ChipId;
+use rootcanal::Phy;
+
 mod actions;
 mod beacon;
 mod bluetooth_actor; // Renamed from actor
@@ -133,6 +136,22 @@ pub use client::BluetoothClient;
 pub use error::BluetoothError;
 /// The entity type managed by the Bluetooth ResourceActor.
 pub type BluetoothEntity = BluetoothActor;
+
+#[derive(Debug, Clone)]
+/// Events that can be sent to the Bluetooth actor via typed stream.
+pub enum BluetoothEvent {
+    /// Deliver a link layer packet to a specific chip.
+    DeliverPacket {
+        /// The destination chip ID.
+        receiver_id: ChipId,
+        /// The packet payload.
+        packet: bytes::Bytes,
+        /// The physical layer type (LE or Classic).
+        phy: Phy,
+        /// The Received Signal Strength Indication.
+        rssi: i32,
+    },
+}
 
 use actor_framework::ResourceActor;
 

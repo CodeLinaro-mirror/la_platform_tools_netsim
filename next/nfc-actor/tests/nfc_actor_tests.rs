@@ -165,6 +165,7 @@ struct NfcWorld {
     tasks: Arc<Mutex<HashMap<ChipId, tokio::task::JoinHandle<ChipId>>>>,
     aborted_tasks: Arc<Mutex<Vec<ChipId>>>,
     removed_streams: Arc<Mutex<Vec<ChipId>>>,
+    packet_receivers: HashMap<ChipId, mpsc::Receiver<Bytes>>,
 }
 
 impl NfcWorld {
@@ -172,7 +173,7 @@ impl NfcWorld {
         let _ = tracing_subscriber::fmt().with_test_writer().try_init();
 
         let device_client = device_actor::DeviceClient::new(Box::new(MockDeviceActorClient));
-        let mut actor = NfcActor::new(device_client);
+        let mut actor = NfcActor::new(device_client, Arc::new(nfc_actor::NfcStats::new()));
         actor.start_casimir();
 
         let tasks = Arc::new(Mutex::new(HashMap::new()));
@@ -183,8 +184,9 @@ impl NfcWorld {
             aborted_tasks: aborted_tasks.clone(),
             removed_streams: removed_streams.clone(),
         };
+        let packet_receivers = HashMap::new();
 
-        Self { actor, ctx, tasks, aborted_tasks, removed_streams }
+        Self { actor, ctx, tasks, aborted_tasks, removed_streams, packet_receivers }
     }
 
     async fn given_a_chip(&mut self, id_val: u32) {
@@ -192,7 +194,7 @@ impl NfcWorld {
         let device_id = DeviceId(id_val);
 
         let (_tx_stream, rx_stream) = mpsc::channel(10);
-        let (tx_sink, _rx_sink) = mpsc::channel(10);
+        let (tx_sink, rx_sink) = mpsc::channel(10);
         let packet_stream = ReceiverStream::new(rx_stream);
         let packet_sink = MockSink(tx_sink);
 
@@ -214,6 +216,7 @@ impl NfcWorld {
                 .load(std::sync::atomic::Ordering::Relaxed),
             "Chip must be enabled by default upon boot across all platforms during transition to Netsim"
         );
+        self.packet_receivers.insert(chip_id, rx_sink);
     }
 
     async fn when_casimir_disconnects(&mut self, id_val: u32) {
@@ -394,4 +397,234 @@ async fn test_nfc_initial_enablement_universal() {
         chip.enabled,
         "Chip must be enabled upon creation across all platforms during transition to Netsim"
     );
+}
+
+#[tokio::test]
+async fn test_nfc_stats_counters() {
+    let mut world = NfcWorld::new().await;
+    let chip_id = ChipId(1);
+    world.given_a_chip(chip_id.0).await;
+
+    // Enable the chip so that it can receive packets from Casimir
+    let update_enable = netsim_model::ChipUpdate { enabled: Some(true), ..Default::default() };
+    let update_res = world.actor.handle_update(chip_id, update_enable, &mut world.ctx).await;
+    assert!(update_res.is_ok());
+
+    use casimir::packets::{
+        nci::{
+            ConnId, ControlPacket, ControlPacketChild, CoreInitCommand, CoreResetCommand,
+            DataPacket, DeactivationType, DiscoverConfiguration, FeatureEnable, MessageType,
+            ResetType, RfDeactivateCommand, RfDiscoverCommand, RfDiscoverSelectCommand,
+            RfDiscoveryId, RfInterfaceType, RfIntfActivatedNotification, RfPacketChild,
+            RfProtocolType, RfTechnologyAndMode,
+        },
+        rf,
+    };
+    use nfc_actor::{NfcAction, NfcApi};
+    use pdl_runtime::Packet;
+
+    async fn send_and_verify(
+        actor: &mut NfcActor,
+        ctx: &mut TestContext,
+        chip_id: ChipId,
+        mut packet_bytes: Vec<u8>,
+        api: NfcApi,
+        expected_count: u32,
+    ) {
+        if packet_bytes.len() > 3 {
+            packet_bytes[2] = (packet_bytes.len() - 3) as u8;
+        }
+        let msg = Bytes::from(packet_bytes);
+        actor.on_stream(chip_id, msg, ctx).await;
+        assert_eq!(actor.nfc_stats.get(api), expected_count, "Assertion failed for {:?}", api);
+    }
+
+    // 1. CoreReset
+    let cmd = CoreResetCommand { reset_type: ResetType::KeepConfig };
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        cmd.encode_to_vec().unwrap(),
+        NfcApi::CoreReset,
+        1,
+    )
+    .await;
+
+    // 2. CoreInit
+    let cmd = CoreInitCommand { feature_enable: FeatureEnable {} };
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        cmd.encode_to_vec().unwrap(),
+        NfcApi::CoreInit,
+        1,
+    )
+    .await;
+
+    // Setup Mock Peer on RF channel
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let action = NfcAction::CreateControlChannel { respond_to: tx };
+    world.actor.handle_action(None, action, &mut world.ctx).await.unwrap();
+    let (rf_io, rf_device_id) = rx.await.unwrap().unwrap();
+
+    let (rf_rx, rf_tx) = tokio::io::split(rf_io);
+    let mut rf_reader = ::casimir::RfReader::new(rf_rx);
+    let mut rf_writer = ::casimir::RfWriter::new(rf_tx);
+
+    let casimir_device_id = world.actor.active_chips.get(&chip_id).unwrap().casimir_device_id;
+    let (mock_peer_cmd_tx, mut mock_peer_cmd_rx) = mpsc::channel::<Vec<u8>>(10);
+
+    let mock_peer_handle = tokio::spawn(async move {
+        use ::casimir::packets::rf;
+        use pdl_runtime::Packet;
+
+        loop {
+            tokio::select! {
+                res = rf_reader.read() => {
+                    let bytes = match res {
+                        Ok(b) => b,
+                        Err(_) => break, // EOF
+                    };
+                    let pkt = match rf::RfPacket::decode_full(&bytes) {
+                        Ok(p) => p,
+                        Err(_) => continue,
+                    };
+                    if pkt.packet_type() == rf::RfPacketType::SelectCommand
+                        && pkt.protocol() == rf::Protocol::IsoDep
+                        && pkt.technology() == rf::Technology::NfcA
+                    {
+                        if let Ok(cmd) = rf::T4ATSelectCommand::decode_full(&bytes) {
+                            let resp = rf::T4ATSelectResponse {
+                                sender: rf_device_id,
+                                receiver: cmd.sender(),
+                                bitrate: rf::BitRate::BitRate106KbitS,
+                                power_level: 10,
+                                rats_response: vec![0x78, 0x80, 0x00, 0x00],
+                            };
+                            let _ = rf_writer.write(&resp.encode_to_vec().unwrap()).await;
+                        }
+                    } else {
+                        if let Ok(specialized) = pkt.specialize() {
+                            match specialized {
+                                rf::RfPacketChild::PollCommand(cmd) => {
+                                     let resp = rf::NfcAPollResponse {
+                                         sender: rf_device_id,
+                                         receiver: cmd.sender(),
+                                         protocol: rf::Protocol::IsoDep,
+                                         bitrate: rf::BitRate::BitRate106KbitS,
+                                         power_level: 10,
+                                         nfcid1: vec![1, 2, 3, 4],
+                                         int_protocol: 0b01, // Type 4A Tag
+                                         bit_frame_sdd: 0,
+                                     };
+                                     let _ = rf_writer.write(&resp.encode_to_vec().unwrap()).await;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                Some(data_bytes) = mock_peer_cmd_rx.recv() => {
+                    let pkt = rf::Data {
+                        sender: rf_device_id,
+                        receiver: casimir_device_id,
+                        technology: rf::Technology::NfcA,
+                        protocol: rf::Protocol::IsoDep,
+                        bitrate: rf::BitRate::BitRate106KbitS,
+                        power_level: 10,
+                        data: data_bytes,
+                    };
+                    let _ = rf_writer.write(&pkt.encode_to_vec().unwrap()).await;
+                }
+            }
+        }
+    });
+
+    // 3. RfDiscover
+    let cmd = RfDiscoverCommand {
+        configurations: vec![DiscoverConfiguration {
+            technology_and_mode: RfTechnologyAndMode::NfcAPassivePollMode,
+            discovery_frequency: 1,
+        }],
+    };
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        cmd.encode_to_vec().unwrap(),
+        NfcApi::RfDiscover,
+        1,
+    )
+    .await;
+
+    // Wait for mock peer to activate Casimir (poll + select)
+    let rx_sink = world.packet_receivers.get_mut(&chip_id).unwrap();
+    loop {
+        let bytes = rx_sink.recv().await.unwrap();
+        if let Ok(pkt) = ControlPacket::decode_full(&bytes) {
+            if let Ok(ControlPacketChild::RfPacket(rf_pkt)) = pkt.specialize() {
+                if let Ok(RfPacketChild::RfIntfActivatedNotification(_)) = rf_pkt.specialize() {
+                    break;
+                }
+            }
+        }
+    }
+
+    // 4. RfDiscoverSelect
+    let cmd = RfDiscoverSelectCommand {
+        rf_discovery_id: RfDiscoveryId::try_from(1).unwrap(),
+        rf_protocol: RfProtocolType::IsoDep,
+        rf_interface: RfInterfaceType::Frame,
+    };
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        cmd.encode_to_vec().unwrap(),
+        NfcApi::RfDiscoverSelect,
+        1,
+    )
+    .await;
+
+    // 5. DataSend
+    let pkt = DataPacket {
+        conn_id: ConnId::StaticRf,
+        mt: MessageType::Data,
+        cr: 0,
+        payload: vec![1, 2, 3],
+    };
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        pkt.encode_to_vec().unwrap(),
+        NfcApi::DataSend,
+        1,
+    )
+    .await;
+
+    // 6. DataReceive (via mock peer)
+    let nci_data_pkt = vec![0, 0, 3, 1, 2, 3]; // NCI Data Packet: MT=0, ConnID=0, RFU=0, Len=3, Payload=[1,2,3]
+    mock_peer_cmd_tx.send(nci_data_pkt).await.unwrap();
+
+    // Wait for the packet to be processed by Casimir and forwarded to actor
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    assert_eq!(world.actor.nfc_stats.get(NfcApi::DataReceive), 1);
+
+    // 7. RfDeactivate
+    let cmd = RfDeactivateCommand { deactivation_type: DeactivationType::IdleMode };
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        cmd.encode_to_vec().unwrap(),
+        NfcApi::RfDeactivate,
+        1,
+    )
+    .await;
+
+    mock_peer_handle.abort();
 }

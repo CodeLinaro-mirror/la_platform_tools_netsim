@@ -65,8 +65,21 @@ impl ChipClient for UwbClient {
             .err_into::<ClientError>()
             .await
         {
-            Ok(crate::UwbActionResult::Chip(chip)) => Ok(chip),
+            Ok(crate::UwbActionResult::Chip(chip)) => Ok(*chip),
             Ok(_) => Err(ClientError::Recv("Unexpected action result for reset".into())),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
+        match self
+            .0
+            .perform_action(None, crate::UwbAction::GetGlobalStats)
+            .err_into::<ClientError>()
+            .await
+        {
+            Ok(crate::UwbActionResult::GlobalStats(stats)) => Ok(Some(stats)),
+            Ok(_) => Err(ClientError::Recv("Unexpected action result for get_global_stats".into())),
             Err(e) => Err(e),
         }
     }

@@ -10,6 +10,7 @@ DEPS = [
     "//next/device-actor",
     "//next/device-api",
     "//next/model",
+    "//proto",
     "@tracing",
     "@anyhow",
     "@bytes",
@@ -18,6 +19,7 @@ DEPS = [
     "@tokio",
     "@tokio-util",
     "@casimir//:casimir_lib",
+    "@pdl-runtime",
 ]
 
 netsim_rust_library(

@@ -4,13 +4,13 @@
 
 use std::{
     collections::{HashMap, hash_map::Entry},
-    fs::read_to_string,
+    env,
     path::PathBuf,
 };
 
 use tracing::error;
 
-use super::os_utils::get_discovery_directory;
+use super::os_utils::get_discovery_directory_with_env;
 
 #[derive(Default)]
 pub struct IniParserOptions {
@@ -100,25 +100,15 @@ pub fn get_ini_filename(instance_num: u16) -> String {
 
 /// Get the filepath of netsim.ini under discovery directory
 pub fn get_ini_filepath(instance_num: u16) -> PathBuf {
-    let mut discovery_dir = get_discovery_directory();
-    discovery_dir.push(get_ini_filename(instance_num));
-    discovery_dir
+    get_ini_filepath_with_env(|k| env::var(k), instance_num)
 }
 
 /// Get the grpc server address for netsim
-pub fn get_server_address(instance_num: u16) -> Option<String> {
-    get_address_by_key(instance_num, "grpc.address")
-        .or_else(|| get_address_by_key(instance_num, "grpc.port"))
-}
-
-/// Get the tcp server address for netsim packet stream
-pub fn get_tcp_server_address(instance_num: u16) -> Option<String> {
-    get_address_by_key(instance_num, "tcp.address")
-        .or_else(|| get_address_by_key(instance_num, "tcp.port"))
-}
-
-fn get_address_by_key(instance_num: u16, key: &str) -> Option<String> {
-    let filepath = get_ini_filepath(instance_num);
+fn get_address_by_key_with_env<F>(get_env: F, instance_num: u16, key: &str) -> Option<String>
+where
+    F: Fn(&str) -> Result<String, env::VarError>,
+{
+    let filepath = get_ini_filepath_with_env(get_env, instance_num);
     if !filepath.exists() {
         error!("Unable to find netsim ini file: {filepath:?}");
         return None;
@@ -127,25 +117,51 @@ fn get_address_by_key(instance_num: u16, key: &str) -> Option<String> {
         error!("Not a file: {filepath:?}");
         return None;
     }
-    let ini_file_contents = read_to_string(filepath)
-        .inspect_err(|err| {
-            error!("Error reading ini file: {err}");
-        })
-        .ok()?;
-    let ini_map = parse_ini(&ini_file_contents, &IniParserOptions { strict: false })
-        .inspect_err(|err| {
-            error!("Error parsing ini file: {err}");
-        })
-        .ok()?;
-    ini_map.get(key).map(|s| if s.contains(':') { s.to_string() } else { format!("127.0.0.1:{s}") })
+    let content = match std::fs::read_to_string(&filepath) {
+        Ok(c) => c,
+        Err(err) => {
+            error!("Error reading ini file: {err:?}");
+            return None;
+        }
+    };
+    let map = match parse_ini(&content, &IniParserOptions::default()) {
+        Ok(m) => m,
+        Err(err) => {
+            error!("Error parsing ini file: {err:?}");
+            return None;
+        }
+    };
+    map.get(key).map(|s| if s.contains(':') { s.to_string() } else { format!("localhost:{s}") })
+}
+
+fn get_address_by_key(instance_num: u16, key: &str) -> Option<String> {
+    get_address_by_key_with_env(|k| env::var(k), instance_num, key)
+}
+
+/// Get the grpc server address for netsim
+pub fn get_server_address(instance_num: u16) -> Option<String> {
+    get_address_by_key(instance_num, "grpc.port")
+}
+
+/// Get the TCP server address for netsim packet stream
+pub fn get_tcp_server_address(instance_num: u16) -> Option<String> {
+    get_address_by_key(instance_num, "tcp.port")
+}
+
+pub(crate) fn get_ini_filepath_with_env<F>(get_env: F, instance_num: u16) -> PathBuf
+where
+    F: Fn(&str) -> Result<String, env::VarError>,
+{
+    let mut discovery_dir = get_discovery_directory_with_env(get_env);
+    discovery_dir.push(get_ini_filename(instance_num));
+    discovery_dir
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{env, path::PathBuf};
 
-    use super::{get_ini_filepath, parse_ini};
-    use crate::tests::ENV_MUTEX;
+    use super::{IniParseErrorKind, IniParserOptions, get_ini_filepath_with_env, parse_ini};
 
     #[test]
     fn test_read() {
@@ -170,22 +186,16 @@ mod tests {
 
     #[test]
     fn test_get_ini_filepath() {
-        let _locked = ENV_MUTEX.lock();
-
-        // Test with TMPDIR variable
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::set_var("TMPDIR", "/tmpdir");
-        }
+        let mock_env = |key: &str| {
+            if key == "TMPDIR" { Ok("/tmpdir".to_string()) } else { Err(env::VarError::NotPresent) }
+        };
 
         // Test get_netsim_ini_filepath
-        assert_eq!(get_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));
-        assert_eq!(get_ini_filepath(2), PathBuf::from("/tmpdir/netsim_2.ini"));
+        assert_eq!(get_ini_filepath_with_env(mock_env, 1), PathBuf::from("/tmpdir/netsim.ini"));
+        assert_eq!(get_ini_filepath_with_env(mock_env, 2), PathBuf::from("/tmpdir/netsim_2.ini"));
     }
     #[test]
     fn test_parse_ini_strict() {
-        use super::{IniParseErrorKind, IniParserOptions, parse_ini};
-
         // Test empty key
         let content = "=value";
         let result = parse_ini(content, &IniParserOptions { strict: true });
@@ -241,37 +251,37 @@ mod tests {
     }
 
     #[test]
-    fn test_get_server_address() {
-        let _locked = ENV_MUTEX.lock();
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("TMPDIR");
-        }
+    fn test_get_address_by_key() {
         let temp_dir = tempfile::tempdir().unwrap();
         let tmp_dir_path = temp_dir.path().to_path_buf();
+        let tmp_dir_path_clone = tmp_dir_path.clone();
 
-        // SAFETY: Serialized via ENV_MUTEX.
-        unsafe {
-            std::env::set_var("TMPDIR", tmp_dir_path.to_str().unwrap());
-        }
+        let mock_env = move |key: &str| {
+            if key == "TMPDIR" {
+                Ok(tmp_dir_path_clone.to_str().unwrap().to_string())
+            } else {
+                Err(env::VarError::NotPresent)
+            }
+        };
 
         // Test case 1: Only grpc.port exists
         let ini_content = "grpc.port=1234\ntcp.port=5678\n";
         std::fs::write(tmp_dir_path.join("netsim.ini"), ini_content).unwrap();
-        assert_eq!(super::get_server_address(1).unwrap(), "127.0.0.1:1234");
-        assert_eq!(super::get_tcp_server_address(1).unwrap(), "127.0.0.1:5678");
 
-        // Test case 2: Both grpc.address and grpc.port exist (address priority)
-        let ini_content =
-            "grpc.port=1234\ngrpc.address=[::1]:1235\ntcp.port=5678\ntcp.address=1.2.3.4:5679\n";
-        std::fs::write(tmp_dir_path.join("netsim.ini"), ini_content).unwrap();
-        assert_eq!(super::get_server_address(1).unwrap(), "[::1]:1235");
-        assert_eq!(super::get_tcp_server_address(1).unwrap(), "1.2.3.4:5679");
+        let grpc_addr = super::get_address_by_key_with_env(&mock_env, 1, "grpc.port");
+        assert_eq!(grpc_addr.unwrap(), "localhost:1234");
 
-        // Test case 3: Port is numeric without colon, should format to
-        // localhost/127.0.0.1
-        let ini_content = "grpc.port=8888\n";
+        let tcp_addr = super::get_address_by_key_with_env(&mock_env, 1, "tcp.port");
+        assert_eq!(tcp_addr.unwrap(), "localhost:5678");
+
+        // Test case 2: Port with address-like value
+        let ini_content = "grpc.port=[::1]:1235\ntcp.port=1.2.3.4:5679\n";
         std::fs::write(tmp_dir_path.join("netsim.ini"), ini_content).unwrap();
-        assert_eq!(super::get_server_address(1).unwrap(), "127.0.0.1:8888");
+
+        let grpc_addr = super::get_address_by_key_with_env(&mock_env, 1, "grpc.port");
+        assert_eq!(grpc_addr.unwrap(), "[::1]:1235");
+
+        let tcp_addr = super::get_address_by_key_with_env(&mock_env, 1, "tcp.port");
+        assert_eq!(tcp_addr.unwrap(), "1.2.3.4:5679");
     }
 }

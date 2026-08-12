@@ -6,6 +6,7 @@ use netsim_model::{BluetoothMode, Chip, ChipCreate, ChipError, ChipId, ChipUpdat
 use tracing::{info, warn};
 
 use crate::{
+    BluetoothEvent,
     actions::{BluetoothAction, BluetoothActionResult},
     bluetooth_actor::BluetoothActor,
     error::BluetoothError,
@@ -21,7 +22,7 @@ impl ActorService for BluetoothActor {
     type ActionResult = BluetoothActionResult;
     type Error = BluetoothError;
     type Entity = Chip;
-    type TypedStream = ();
+    type TypedStream = BluetoothEvent;
 
     async fn handle_create(
         &mut self,
@@ -157,7 +158,7 @@ impl ActorService for BluetoothActor {
                 crate::sniffer::create(&self.rootcanal, chip_id, params)?
             }
         }
-        self.chips.lock().unwrap().insert(chip_id, chip.clone());
+        self.chips.write().unwrap().insert(chip_id, chip.clone());
         self.initial_chips.insert(chip_id, chip);
         Ok(chip_id)
     }
@@ -167,7 +168,7 @@ impl ActorService for BluetoothActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        let chips = self.chips.lock().unwrap();
+        let chips = self.chips.read().unwrap();
         Ok(chips.get(&id).cloned())
     }
 
@@ -179,35 +180,35 @@ impl ActorService for BluetoothActor {
         update: Self::Update,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        let mut chips = self.chips.lock().unwrap();
-        let mut chip =
-            chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
-
-        // Intercept preset update
-        if let Some(netsim_model::ChipVariantUpdate::Bluetooth(netsim_model::BluetoothUpdate {
-            preset: Some(preset_name),
-            ..
-        })) = &update.variant
+        let config_bytes = if let Some(netsim_model::ChipVariantUpdate::Bluetooth(
+            netsim_model::BluetoothUpdate { preset: Some(preset_name), .. },
+        )) = &update.variant
         {
             let preset = parse_controller_preset(preset_name)?;
-
             let mut config = netsim_proto::configuration::Controller::new();
             config.set_preset(preset);
-            let config_bytes =
-                netsim_proto::protobuf::Message::write_to_bytes(&config).map_err(|e| {
-                    BluetoothError::invalid_arg(format!("Failed to serialize config: {e}"))
-                })?;
+            Some(netsim_proto::protobuf::Message::write_to_bytes(&config).map_err(|e| {
+                BluetoothError::invalid_arg(format!("Failed to serialize config: {e}"))
+            })?)
+        } else {
+            None
+        };
 
+        if let Some(bytes) = config_bytes {
             self.rootcanal
-                .set_properties(id.0, &config_bytes)
+                .set_properties(id.0, &bytes)
                 .map_err(|e| BluetoothError::Rootcanal(Box::new(e)))?;
         }
 
-        // 1. Update the chip data
-        update.apply(&mut chip);
+        let chip = {
+            let mut chips = self.chips.write().unwrap();
+            let mut chip =
+                chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
-        // 2. Sync the global chips map
-        chips.insert(id, chip.clone());
+            update.apply(&mut chip);
+            chips.insert(id, chip.clone());
+            chip
+        };
 
         Ok(chip)
     }
@@ -217,8 +218,11 @@ impl ActorService for BluetoothActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        let mut chips = self.chips.lock().unwrap();
-        if let Some(chip) = chips.remove(&id) {
+        let chip_to_delete = {
+            let mut chips = self.chips.write().unwrap();
+            chips.remove(&id)
+        };
+        if let Some(chip) = chip_to_delete {
             let chip_id = ChipId(chip.id);
             let device_id = chip.device_id;
 
@@ -250,7 +254,7 @@ impl ActorService for BluetoothActor {
                 let _ = self.rootcanal.clear_stats(id.0);
 
                 let chip = {
-                    let mut chips = self.chips.lock().unwrap();
+                    let mut chips = self.chips.write().unwrap();
                     let initial_chip = self
                         .initial_chips
                         .get(&id)
@@ -265,13 +269,16 @@ impl ActorService for BluetoothActor {
             }
             BluetoothAction::GetStatistics => {
                 let mut stats_list = Vec::new();
-                let chips = self.chips.lock().unwrap();
-                for (id, chip) in chips.iter() {
+                let chips_info: Vec<(ChipId, String)> = {
+                    let chips = self.chips.read().unwrap();
+                    chips.values().map(|chip| (ChipId(chip.id), chip.name.clone())).collect()
+                };
+                for (id, name) in chips_info {
                     if let Ok(stats) = self.rootcanal.get_stats(id.0) {
                         // BLE Stats
                         let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = id.0;
-                        radio_stats.name = chip.name.clone();
+                        radio_stats.name = name.clone();
                         radio_stats.kind = netsim_model::RadioKind::BluetoothLowEnergy;
                         radio_stats.tx_count = stats.ll_packets_out_ble;
                         radio_stats.rx_count = stats.ll_packets_in_ble;
@@ -282,7 +289,7 @@ impl ActorService for BluetoothActor {
                         // Classic Stats
                         let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = id.0;
-                        radio_stats.name = chip.name.clone();
+                        radio_stats.name = name;
                         radio_stats.kind = netsim_model::RadioKind::BluetoothClassic;
                         radio_stats.tx_count = stats.ll_packets_out_classic;
                         radio_stats.rx_count = stats.ll_packets_in_classic;
@@ -294,7 +301,7 @@ impl ActorService for BluetoothActor {
                 Ok(BluetoothActionResult::Statistics(stats_list.into_boxed_slice()))
             }
             BluetoothAction::GetCountForTesting => {
-                let count = self.chips.lock().unwrap().len();
+                let count = self.chips.read().unwrap().len();
                 Ok(BluetoothActionResult::Count(count))
             }
         }
@@ -304,7 +311,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        let chips = self.chips.lock().unwrap();
+        let chips = self.chips.read().unwrap();
         Ok(chips.values().cloned().collect())
     }
 }

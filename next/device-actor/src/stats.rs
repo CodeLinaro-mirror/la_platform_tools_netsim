@@ -16,6 +16,16 @@ const STATS_PRINT_OPTIONS: PrintOptions = PrintOptions {
 
 const DEFAULT_STATS_FILENAME: &str = "netsim_session_stats.json";
 
+pub struct CombinedStatsInputs {
+    pub active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
+    pub wifi_stats: Option<netsim_proto::stats::WifiStats>,
+    pub wifi_api: Option<netsim_proto::stats::WifiApiStats>,
+    pub uwb_api: Option<netsim_proto::stats::UwbApiStats>,
+    pub nfc_api: Option<netsim_proto::stats::NfcApiStats>,
+    pub nfc_stats: Option<netsim_proto::stats::NfcStats>,
+    pub nfc_service_stats: Option<netsim_proto::stats::NfcServiceStats>,
+}
+
 #[derive(Debug)]
 pub struct Stats {
     proto: ProtoNetsimStats,
@@ -84,19 +94,60 @@ impl Stats {
         self.proto.device_stats.push(device_stats);
     }
 
-    pub fn get_combined_stats(
-        &mut self,
-        mut active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
-        wifi_stats: Option<netsim_proto::stats::WifiStats>,
-    ) -> ProtoNetsimStats {
+    pub fn get_combined_stats(&mut self, inputs: CombinedStatsInputs) -> ProtoNetsimStats {
+        let CombinedStatsInputs {
+            mut active_stats,
+            wifi_stats,
+            wifi_api,
+            uwb_api,
+            nfc_api,
+            nfc_stats,
+            nfc_service_stats,
+        } = inputs;
         if let Some(start) = self.start_time {
             self.proto.set_duration_secs(start.elapsed().as_secs());
         }
         let mut combined = self.proto.clone();
         combined.radio_stats.extend(self.archived_radio_stats.clone());
         combined.radio_stats.append(&mut active_stats);
+        if wifi_api.is_some() || uwb_api.is_some() || nfc_api.is_some() {
+            let mut api_stats = combined.api_stats.take().unwrap_or_default();
+            if let Some(wa) = wifi_api {
+                api_stats.wifi = netsim_proto::protobuf::MessageField::some(wa);
+            }
+            if let Some(ua) = uwb_api {
+                api_stats.uwb = netsim_proto::protobuf::MessageField::some(ua);
+            }
+            if let Some(na) = nfc_api {
+                let mut total_calls = 0;
+                if let Some(core) = na.nci_core.as_ref() {
+                    total_calls += core.reset.unwrap_or(0);
+                    total_calls += core.init.unwrap_or(0);
+                }
+                if let Some(rf) = na.nci_rf.as_ref() {
+                    total_calls += rf.discover.unwrap_or(0);
+                    total_calls += rf.discover_select.unwrap_or(0);
+                    total_calls += rf.deactivate.unwrap_or(0);
+                    total_calls += rf.rf_set_listen_mode_routing.unwrap_or(0);
+                }
+                if let Some(data) = na.nci_data.as_ref() {
+                    total_calls += data.send.unwrap_or(0);
+                    total_calls += data.receive.unwrap_or(0);
+                }
+                api_stats.nfc_total_calls = Some(total_calls);
+                api_stats.nfc = netsim_proto::protobuf::MessageField::some(na);
+            }
+            combined.api_stats = netsim_proto::protobuf::MessageField::some(api_stats);
+        }
+
         if let Some(ws) = wifi_stats {
             combined.wifi_stats = Some(ws).into();
+        }
+        if let Some(ns) = nfc_stats {
+            combined.nfc_stats = Some(ns).into();
+        }
+        if let Some(nss) = nfc_service_stats {
+            combined.nfc_service_stats = Some(nss).into();
         }
 
         let frontend_snap = self.frontend_stats.snapshot();
@@ -206,7 +257,15 @@ mod tests {
         frontend_stats.delete_device.store(11, Ordering::SeqCst);
 
         let mut stats = Stats::new("1.0.0".to_string(), None, frontend_stats);
-        let proto = stats.get_combined_stats(vec![], None);
+        let proto = stats.get_combined_stats(CombinedStatsInputs {
+            active_stats: vec![],
+            wifi_stats: None,
+            wifi_api: None,
+            uwb_api: None,
+            nfc_api: None,
+            nfc_stats: None,
+            nfc_service_stats: None,
+        });
 
         let frontend_proto = proto.frontend_stats.as_ref().expect("Frontend stats missing");
         assert_eq!(frontend_proto.get_version(), 1);
@@ -220,5 +279,41 @@ mod tests {
         assert_eq!(frontend_proto.list_capture(), 9);
         assert_eq!(frontend_proto.get_capture(), 10);
         assert_eq!(frontend_proto.delete_device(), 11);
+    }
+
+    #[test]
+    fn test_nfc_stats_translation() {
+        let mut stats = Stats::new("1.0.0".to_string(), None, Arc::new(FrontendStats::default()));
+
+        let mut nfc_api = netsim_proto::stats::NfcApiStats::new();
+        let mut core = netsim_proto::stats::NciCoreStats::new();
+        core.reset = Some(1);
+        core.init = Some(2);
+        nfc_api.nci_core = netsim_proto::protobuf::MessageField::some(core);
+
+        let mut rf = netsim_proto::stats::NciRfStats::new();
+        rf.discover = Some(3);
+        rf.discover_select = Some(4);
+        rf.deactivate = Some(5);
+        rf.rf_set_listen_mode_routing = Some(6);
+        nfc_api.nci_rf = netsim_proto::protobuf::MessageField::some(rf);
+
+        let mut data = netsim_proto::stats::NciDataStats::new();
+        data.send = Some(7);
+        data.receive = Some(8);
+        nfc_api.nci_data = netsim_proto::protobuf::MessageField::some(data);
+
+        let proto = stats.get_combined_stats(CombinedStatsInputs {
+            active_stats: vec![],
+            wifi_stats: None,
+            wifi_api: None,
+            uwb_api: None,
+            nfc_api: Some(nfc_api),
+            nfc_stats: None,
+            nfc_service_stats: None,
+        });
+
+        let api_stats = proto.api_stats.as_ref().expect("Api stats missing");
+        assert_eq!(api_stats.nfc_total_calls(), 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8);
     }
 }

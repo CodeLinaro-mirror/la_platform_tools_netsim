@@ -14,11 +14,14 @@ mod modem_network_simulator;
 mod network_service;
 mod parser;
 mod pdu;
+mod profiles;
 mod sim_service;
 mod sms_service;
 mod stk_service;
 mod sup_service;
 pub mod time;
+
+mod xml_profile;
 
 pub mod test_utils;
 mod types; // Test utils might need to be public for integration tests

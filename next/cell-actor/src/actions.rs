@@ -10,6 +10,7 @@ pub enum CellAction {
     UpdateCall,
     EndCall,
     ReceiveSms { sender: String, text: String },
+    ReceivePdu { pdu: String },
     SetSignalStrength { rssi: u32, ber: u32 },
     SetVoiceRegistration { status: RegistrationStatus },
     SetDataRegistration { status: RegistrationStatus },

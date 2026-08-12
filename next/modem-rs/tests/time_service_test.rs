@@ -37,10 +37,9 @@ fn test_set_and_query_time() {
 fn test_update_network_time() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    let id_a = world.modems.get("A").unwrap().0;
 
     let time_str = "25/01/01,12:00:00+04";
-    world.manager.update_network_time(id_a, time_str);
+    when_network_time_updated(&mut world, "A", time_str);
 
     // Expect NITZ unsolicited
     then_response_is(&mut world, "A", "+CTZV: +04");

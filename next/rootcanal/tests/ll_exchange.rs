@@ -104,7 +104,8 @@ async fn test_ll_exchange() {
 
 async fn test_ll_exchange_internal() {
     setup();
-    let rootcanal = Arc::new(Rootcanal::new(Box::new(TestCallbacks), false));
+    let rootcanal =
+        Arc::new(Rootcanal::new(Box::new(TestCallbacks), false, Box::new(|_, _, _, _| {})));
     let (sender, mut _receiver) = mpsc::channel(10);
 
     let rootcanal_clone = rootcanal.clone();

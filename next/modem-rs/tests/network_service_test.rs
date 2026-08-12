@@ -1,7 +1,9 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{steps::*, world::World};
+use netsim_model::RadioTechnology;
+
+use crate::{common::constants::*, steps::*, world::World};
 
 // Scenario: Query Operator Selection
 //   Given a modem "A"
@@ -19,28 +21,28 @@ fn test_cops_query() {
     when_at_command_sent(&mut world, "A", "AT+CFUN=1");
     then_response_is(&mut world, "A", "OK");
     when_time_advances_ms(&mut world, 10);
-    let csq_response = "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647";
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
     then_response_is(&mut world, "A", csq_response);
 
-    // 1. Default should be format 0 (long alphanumeric)
+    // 1. Default should be format 2 (numeric)
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", &format!("+COPS: 0,2,{TEST_PLMN}"));
     then_response_is(&mut world, "A", "OK");
 
-    // 2. Set format to 1 (short alphanumeric)
+    // 2. Set format to 0 (long alphanumeric)
+    when_at_command_sent(&mut world, "A", "AT+COPS=3,0");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", &format!("+COPS: 0,0,\"{TEST_OPERATOR_LONG}\""));
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Set format to 1 (short alphanumeric)
     when_at_command_sent(&mut world, "A", "AT+COPS=3,1");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,1,\"Android\"");
-    then_response_is(&mut world, "A", "OK");
-
-    // 3. Set format to 2 (numeric)
-    when_at_command_sent(&mut world, "A", "AT+COPS=3,2");
-    then_response_is(&mut world, "A", "OK");
-
-    when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
+    then_response_is(&mut world, "A", &format!("+COPS: 0,1,\"{TEST_OPERATOR_SHORT}\""));
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -49,7 +51,7 @@ fn test_cops_modes() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    let csq_response = "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647";
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
 
     // Enable CREG URCs
     when_at_command_sent(&mut world, "A", "AT+CREG=1");
@@ -69,7 +71,7 @@ fn test_cops_modes() {
 
     // Query should show mode 2
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 2,0,0");
+    then_response_is(&mut world, "A", "+COPS: 2,2,0");
     then_response_is(&mut world, "A", "OK");
 
     // 2. Test Auto Register (AT+COPS=0)
@@ -79,11 +81,11 @@ fn test_cops_modes() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", &format!("+COPS: 0,2,{TEST_PLMN}"));
     then_response_is(&mut world, "A", "OK");
 
     // 3. Test Manual Register to wrong operator (AT+COPS=1,2,\"123456\")
-    when_at_command_sent(&mut world, "A", "AT+COPS=1,2,\"123456\"");
+    when_at_command_sent(&mut world, "A", &format!("AT+COPS=1,2,\"{INVALID_PLMN}\""));
     // Registration denied (3)
     then_response_is(&mut world, "A", "+CREG: 3");
     then_response_is(&mut world, "A", "ERROR");
@@ -95,18 +97,18 @@ fn test_cops_modes() {
 
     // 4. Test Manual Register to correct operator (AT+COPS=1,0,\"Android Virtual
     //    Operator\")
-    when_at_command_sent(&mut world, "A", "AT+COPS=1,0,\"Android Virtual Operator\"");
+    when_at_command_sent(&mut world, "A", &format!("AT+COPS=1,0,\"{TEST_OPERATOR_LONG}\""));
     then_response_is(&mut world, "A", "+CREG: 1");
     then_response_is(&mut world, "A", csq_response);
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 1,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", &format!("+COPS: 1,0,\"{TEST_OPERATOR_LONG}\""));
     then_response_is(&mut world, "A", "OK");
 
     // 5. Test Manual Register to wrong operator when previous was manual
     //    (AT+COPS=1,2,\"123456\")
-    when_at_command_sent(&mut world, "A", "AT+COPS=1,2,\"123456\"");
+    when_at_command_sent(&mut world, "A", &format!("AT+COPS=1,2,\"{INVALID_PLMN}\""));
     // Registration denied (3)
     then_response_is(&mut world, "A", "+CREG: 3");
     then_response_is(&mut world, "A", "ERROR");
@@ -128,11 +130,7 @@ fn test_csq_query() {
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CSQ");
 
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -175,11 +173,7 @@ fn test_network_registration() {
     then_response_is(&mut world, "A", "+CREG: 1");
     then_response_is(&mut world, "A", "+CGREG: 1");
     then_response_is(&mut world, "A", "+CEREG: 1");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
 }
 
 // Scenario: Set dynamic registration status
@@ -200,14 +194,12 @@ fn test_set_registration_status() {
     when_at_command_sent(&mut world, "A", "AT+CGREG=1");
     then_response_is(&mut world, "A", "OK");
 
-    let id_a = world.modems.get("A").unwrap().0;
-
     // Set Voice
-    when_voice_registration_set(&mut world, id_a, RegistrationStatus::Roaming);
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::Roaming);
     then_response_is(&mut world, "A", "+CREG: 5");
 
     // Set Data
-    when_data_registration_set(&mut world, id_a, RegistrationStatus::Denied);
+    when_data_registration_set(&mut world, "A", RegistrationStatus::Denied);
     then_response_is(&mut world, "A", "+CGREG: 3");
 }
 
@@ -241,24 +233,17 @@ fn test_set_signal_strength() {
 
     // Check default (which should now be 20,99 because we are on GSM)
     when_at_command_sent(&mut world, "A", "AT+CSQ");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 20,99,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", RESP_CSQ_GSM_DEFAULT);
     then_response_is(&mut world, "A", "OK");
 
     // Change value
-    let id_a = world.modems.get("A").unwrap().0;
-    when_signal_strength_set(&mut world, id_a, 25, 0);
+    let rssi = 25;
+    let ber = 0;
+    when_signal_strength_set(&mut world, "A", rssi, ber);
 
     // Check new value
     when_at_command_sent(&mut world, "A", "AT+CSQ");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 25,0,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", &format!("+CSQ: {rssi},{ber},{CSQ_MAX_20}"));
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -289,11 +274,7 @@ fn test_network_registration_radio_cycle() {
 
     when_time_advances_ms(&mut world, 10);
     then_response_is(&mut world, "A", "+CREG: 1");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
 
     // 2. Turn radio OFF (drops registration and sends URC synchronously)
     when_at_command_sent(&mut world, "A", "AT+CFUN=0");
@@ -306,11 +287,7 @@ fn test_network_registration_radio_cycle() {
 
     when_time_advances_ms(&mut world, 10);
     then_response_is(&mut world, "A", "+CREG: 1");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
 }
 
 // Scenario: Query Operator in All Formats (Compound Query)
@@ -329,13 +306,13 @@ fn test_query_operator_all_formats() {
     when_at_command_sent(&mut world, "A", "AT+CFUN=1");
     then_response_is(&mut world, "A", "OK");
     when_time_advances_ms(&mut world, 10);
-    let csq_response = "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647";
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
     then_response_is(&mut world, "A", csq_response);
 
     when_at_command_sent(&mut world, "A", "AT+COPS=3,0;+COPS?;+COPS=3,1;+COPS?;+COPS=3,2;+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
-    then_response_is(&mut world, "A", "+COPS: 0,1,\"Android\"");
-    then_response_is(&mut world, "A", "+COPS: 0,2,310260");
+    then_response_is(&mut world, "A", &format!("+COPS: 0,0,\"{TEST_OPERATOR_LONG}\""));
+    then_response_is(&mut world, "A", &format!("+COPS: 0,1,\"{TEST_OPERATOR_SHORT}\""));
+    then_response_is(&mut world, "A", &format!("+COPS: 0,2,{TEST_PLMN}"));
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -424,14 +401,10 @@ fn test_set_ctec_wcdma_and_urc() {
     when_time_advances_ms(&mut world, 10);
 
     // Consume the initial attachment URCs (which default to LTE act = 7!)
-    then_response_is(&mut world, "A", "+CREG: 1,\"2142\",\"0000B804\",7");
-    then_response_is(&mut world, "A", "+CGREG: 1,\"2142\",\"0000B804\",7");
-    then_response_is(&mut world, "A", "+CEREG: 1,\"2142\",\"0000B804\",7");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", &format!("+CGREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", &format!("+CEREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
 
     // 2. Switch technology to WCDMA (current mode = 2, preferred mask = 0x21)
     when_at_command_sent(&mut world, "A", "AT+CTEC=2,\"21\"");
@@ -439,14 +412,10 @@ fn test_set_ctec_wcdma_and_urc() {
     // Verify CTEC response and the IMMEDIATE unsolicited URCs showing WCDMA act =
     // 2!
     then_response_is(&mut world, "A", "+CTEC: DONE");
-    then_response_is(&mut world, "A", "+CREG: 1,\"2142\",\"0000B804\",2");
-    then_response_is(&mut world, "A", "+CGREG: 1,\"2142\",\"0000B804\",2");
-    then_response_is(&mut world, "A", "+CEREG: 1,\"2142\",\"0000B804\",2");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,20,99,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",2"));
+    then_response_is(&mut world, "A", &format!("+CGREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",2"));
+    then_response_is(&mut world, "A", &format!("+CEREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",2"));
+    then_response_is(&mut world, "A", RESP_CSQ_WCDMA_DEFAULT);
     then_response_is(&mut world, "A", "OK");
 
     // Verify that tech is queried back correctly as WCDMA (current = 2!)
@@ -477,11 +446,11 @@ fn test_cops_manual_registration_denied_all_urcs() {
     then_response_is(&mut world, "A", "+CGREG: 1");
     then_response_is(&mut world, "A", "+CEREG: 1");
     // Consume CSQ report
-    let csq_response = "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647";
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
     then_response_is(&mut world, "A", csq_response);
 
     // Try Manual Register to wrong operator (AT+COPS=1,2,\"123456\")
-    when_at_command_sent(&mut world, "A", "AT+COPS=1,2,\"123456\"");
+    when_at_command_sent(&mut world, "A", &format!("AT+COPS=1,2,\"{INVALID_PLMN}\""));
     // We should receive Denied (3) URCs for all three: CREG, CGREG, CEREG
     then_response_is(&mut world, "A", "+CREG: 3");
     then_response_is(&mut world, "A", "+CGREG: 3");
@@ -499,7 +468,7 @@ fn test_cops_mode_4() {
     then_response_is(&mut world, "A", "OK");
     when_time_advances_ms(&mut world, 10);
     // Consume CSQ report
-    let csq_response = "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647";
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
     then_response_is(&mut world, "A", csq_response);
 
     // 1. Missing oper -> ERROR
@@ -510,11 +479,11 @@ fn test_cops_mode_4() {
     then_response_is(&mut world, "A", "ERROR");
 
     // 2. Correct operator -> Success (cops_mode = 4)
-    when_at_command_sent(&mut world, "A", "AT+COPS=4,0,\"Android Virtual Operator\"");
+    when_at_command_sent(&mut world, "A", &format!("AT+COPS=4,0,\"{TEST_OPERATOR_LONG}\""));
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 4,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", &format!("+COPS: 4,0,\"{TEST_OPERATOR_LONG}\""));
     then_response_is(&mut world, "A", "OK");
 
     // 3. Wrong operator -> Fallback to automatic (cops_mode = 0)
@@ -522,7 +491,7 @@ fn test_cops_mode_4() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", &format!("+COPS: 0,0,\"{TEST_OPERATOR_LONG}\""));
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -537,33 +506,21 @@ fn test_csq_nr_technology() {
     when_at_command_sent(&mut world, "A", "AT+CFUN=1");
     then_response_is(&mut world, "A", "OK");
     when_time_advances_ms(&mut world, 10);
-    then_response_is(&mut world, "A", "+CREG: 1,\"2142\",\"0000B804\",7");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
 
     // 2. Change tech to NR (64 = bitmask for NR)
     when_at_command_sent(&mut world, "A", "AT+CTEC=64,\"21\"");
     then_response_is(&mut world, "A", "+CTEC: DONE");
 
     // Verify it triggers URC with CREG = 1 and new technology NR (11)
-    then_response_is(&mut world, "A", "+CREG: 1,\"2142\",\"0000B804\",11");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,88,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",11"));
+    then_response_is(&mut world, "A", RESP_CSQ_NR_DEFAULT);
     then_response_is(&mut world, "A", "OK");
 
     // 3. Query CSQ, verify LTE fields are max and NR field (16) is 20!
     when_at_command_sent(&mut world, "A", "AT+CSQ");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,88,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", RESP_CSQ_NR_DEFAULT);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -580,11 +537,7 @@ fn test_network_registration_radio_cycle_cfun_4() {
 
     when_time_advances_ms(&mut world, 10);
     then_response_is(&mut world, "A", "+CREG: 1");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
 
     // 2. Turn radio to Minimum Functionality (4) (drops registration and sends URC
     //    synchronously)
@@ -603,9 +556,226 @@ fn test_network_registration_radio_cycle_cfun_4() {
 
     when_time_advances_ms(&mut world, 10);
     then_response_is(&mut world, "A", "+CREG: 1");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,88,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647",
-    );
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
+}
+
+#[test]
+fn test_creg_registration_queries() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Query initial status (default unsol mode 0, not registered 0)
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    then_response_is(&mut world, "A", "+CREG: 0,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Set unsol mode to 1
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query status (should show mode 1)
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    then_response_is(&mut world, "A", "+CREG: 1,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Turn radio ON (attaches and registers)
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+
+    // Consume CREG URC (others are disabled by default)
+    then_response_is(&mut world, "A", "+CREG: 1");
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
+    then_response_is(&mut world, "A", csq_response);
+
+    // Query status (should show registered 1,1)
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    then_response_is(&mut world, "A", "+CREG: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Set unsol mode to 2 (should return immediate location info URC)
+    when_at_command_sent(&mut world, "A", "AT+CREG=2");
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", "OK");
+
+    // Query status (should show mode 2, status 1, LAC "2142", CID "0000B804", act 7
+    // (LTE))
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    then_response_is(&mut world, "A", &format!("+CREG: 2,1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgreg_registration_queries() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Query initial status
+    when_at_command_sent(&mut world, "A", "AT+CGREG?");
+    then_response_is(&mut world, "A", "+CGREG: 0,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Set unsol mode to 1
+    when_at_command_sent(&mut world, "A", "AT+CGREG=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query status (should show mode 1)
+    when_at_command_sent(&mut world, "A", "AT+CGREG?");
+    then_response_is(&mut world, "A", "+CGREG: 1,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Turn radio ON
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+
+    // Consume CGREG URC
+    then_response_is(&mut world, "A", "+CGREG: 1");
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
+    then_response_is(&mut world, "A", csq_response);
+
+    // Query status (should show registered 1,1)
+    when_at_command_sent(&mut world, "A", "AT+CGREG?");
+    then_response_is(&mut world, "A", "+CGREG: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Set unsol mode to 2
+    when_at_command_sent(&mut world, "A", "AT+CGREG=2");
+    then_response_is(&mut world, "A", &format!("+CGREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", "OK");
+
+    // Query status
+    when_at_command_sent(&mut world, "A", "AT+CGREG?");
+    then_response_is(&mut world, "A", &format!("+CGREG: 2,1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cereg_registration_queries() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Query initial status
+    when_at_command_sent(&mut world, "A", "AT+CEREG?");
+    then_response_is(&mut world, "A", "+CEREG: 0,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Set unsol mode to 1
+    when_at_command_sent(&mut world, "A", "AT+CEREG=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query status (should show mode 1)
+    when_at_command_sent(&mut world, "A", "AT+CEREG?");
+    then_response_is(&mut world, "A", "+CEREG: 1,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Turn radio ON
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+
+    // Consume CEREG URC
+    then_response_is(&mut world, "A", "+CEREG: 1");
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
+    then_response_is(&mut world, "A", csq_response);
+
+    // Query status (should show registered 1,1)
+    when_at_command_sent(&mut world, "A", "AT+CEREG?");
+    then_response_is(&mut world, "A", "+CEREG: 1,1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Set unsol mode to 2
+    when_at_command_sent(&mut world, "A", "AT+CEREG=2");
+    then_response_is(&mut world, "A", &format!("+CEREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", "OK");
+
+    // Query status
+    when_at_command_sent(&mut world, "A", "AT+CEREG?");
+    then_response_is(&mut world, "A", &format!("+CEREG: 2,1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_network_technology_changes() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Enable URCs for CREG, CGREG, CEREG (mode 2 to get location info)
+    when_at_command_sent(&mut world, "A", "AT+CREG=2");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGREG=2");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CEREG=2");
+    then_response_is(&mut world, "A", "OK");
+
+    // Turn radio ON
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+    // Consume initial registration URCs (default is LTE = 7)
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", &format!("+CGREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", &format!("+CEREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    let csq_response = RESP_CSQ_LTE_DEFAULT;
+    then_response_is(&mut world, "A", csq_response);
+
+    // 1. Change technology to GSM (act 0)
+    when_network_technology_changes(&mut world, "A", RadioTechnology::Gsm);
+    when_time_advances_ms(&mut world, 10);
+    // Expect URCs with act 0
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",0"));
+    then_response_is(&mut world, "A", &format!("+CGREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",0"));
+    then_response_is(&mut world, "A", &format!("+CEREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",0"));
+    let gsm_csq_response = RESP_CSQ_GSM_DEFAULT;
+    then_response_is(&mut world, "A", gsm_csq_response);
+
+    // 2. Change technology to NR (act 11)
+    when_network_technology_changes(&mut world, "A", RadioTechnology::Nr);
+    when_time_advances_ms(&mut world, 10);
+    // Expect URCs with act 11
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",11"));
+    then_response_is(&mut world, "A", &format!("+CGREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",11"));
+    then_response_is(&mut world, "A", &format!("+CEREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",11"));
+    let nr_csq_response = RESP_CSQ_NR_DEFAULT;
+    then_response_is(&mut world, "A", nr_csq_response);
+}
+
+#[test]
+fn test_legacy_creg_format() {
+    let mut world = World::new();
+    given_goldfish_37_modem(&mut world, "A");
+
+    // 1. Query CREG with default unsol_mode (0)
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    // Should return full format even with unsol_mode=0
+    then_response_is(&mut world, "A", "+CREG: 0,0,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Enable unsolicited reports (mode 1)
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CGREG=1");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "A", "AT+CEREG=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Turn radio ON and wait for attachment
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+
+    // URC should be full format even though unsol_mode=1
+    then_response_is(&mut world, "A", "+CREG: 1,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "+CGREG: 1,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "+CEREG: 1,\"2142\",\"0000B804\",7");
+
+    // Consume CSQ report
+    let csq_response = "+CSQ: 99,99,2147483647,2147483647,2147483647,2147483647,2147483647,20,80,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647,2147483647";
+    then_response_is(&mut world, "A", csq_response);
+
+    // 4. Query CREG again (now registered, unsol_mode=1)
+    when_at_command_sent(&mut world, "A", "AT+CREG?");
+    // Should return full format with unsol_mode=1
+    then_response_is(&mut world, "A", "+CREG: 1,1,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "OK");
 }

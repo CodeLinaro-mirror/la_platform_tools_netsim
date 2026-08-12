@@ -62,6 +62,9 @@ pub struct Chip {
     /// SIM card type (0 = No SIM, 1 = Normal SIM, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sim_type: Option<i32>,
+    /// XML SIM ICC profile content.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sim_profile: Option<String>,
 }
 
 impl Chip {
@@ -75,6 +78,7 @@ impl Chip {
             product_name: "Virtual Chip".to_string(),
             address: "".to_string(),
             sim_type: None,
+            sim_profile: None,
         }
     }
 }

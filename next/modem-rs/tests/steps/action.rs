@@ -3,8 +3,8 @@
 
 use std::time::Duration;
 
-use modem_rs::{ModemId, RegistrationStatus};
-use netsim_model::{ChipId, ModemAction};
+use modem_rs::RegistrationStatus;
+use netsim_model::{ChipId, ModemAction, RadioTechnology};
 
 use crate::world::World;
 
@@ -48,62 +48,14 @@ pub fn when_time_advances_ms(world: &mut World, ms: u64) {
 }
 
 /// Triggers a physical channel configuration update on the modem.
-///
-/// This invokes the `on_update_physical_channel_configs` method on the modem's
-/// data service, simulating network-side changes.
 pub fn when_physical_channel_configs_updated(world: &mut World, name: &str) {
     let (id, _) = world.get_modem(name);
-    world.manager.update_physical_channel_configs(id);
-}
-
-pub fn when_incoming_sms_received(world: &mut World, id: ModemId, sender: &str, text: &str) {
-    world.manager.send_incoming_sms(id, sender, text);
-}
-
-pub fn when_incoming_pdu_received(world: &mut World, id: ModemId, pdu: &str) {
-    world.manager.send_incoming_pdu(id, pdu);
-}
-
-pub fn when_external_call_initiated(world: &mut World, target_id: ModemId, number: &str) {
-    world.manager.initiate_external_incoming_call(target_id, number);
-}
-
-pub fn when_external_call_answered(world: &mut World, id: ModemId) {
-    world.manager.initiate_external_answer(id);
-}
-
-pub fn when_external_call_hungup(world: &mut World, id: ModemId) {
-    world.manager.initiate_external_hangup(id);
-}
-
-pub fn when_external_call_held(world: &mut World, id: ModemId, on_hold: bool) {
-    world.manager.set_call_hold(id, on_hold);
-}
-
-pub fn when_network_time_updated(world: &mut World, id: ModemId, time: &str) {
-    world.manager.update_network_time(id, time);
-}
-
-pub fn when_voice_registration_set(world: &mut World, id: ModemId, status: RegistrationStatus) {
-    world.manager.set_voice_registration(id, status);
-}
-
-pub fn when_data_registration_set(world: &mut World, id: ModemId, status: RegistrationStatus) {
-    world.manager.set_data_registration(id, status);
-}
-
-pub fn when_signal_strength_set(world: &mut World, id: ModemId, rssi: u8, ber: u8) {
-    world.manager.set_signal_strength(id, rssi, ber);
-}
-
-pub fn when_action_incoming_call(world: &mut World, target_name: &str, number: &str) {
-    let (id, _) = world.get_modem(target_name);
-    let action = ModemAction::IncomingCall { target_id: ChipId(id), number: number.to_string() };
+    let action = ModemAction::UpdatePhysicalChannelConfigs { id: ChipId(id) };
     world.manager.dispatch(action);
 }
 
-pub fn when_action_incoming_sms(world: &mut World, id_name: &str, sender: &str, text: &str) {
-    let (id, _) = world.get_modem(id_name);
+pub fn when_incoming_sms_received(world: &mut World, name: &str, sender: &str, text: &str) {
+    let (id, _) = world.get_modem(name);
     let action = ModemAction::IncomingSms {
         id: ChipId(id),
         sender: sender.to_string(),
@@ -112,12 +64,68 @@ pub fn when_action_incoming_sms(world: &mut World, id_name: &str, sender: &str, 
     world.manager.dispatch(action);
 }
 
-pub fn when_action_set_voice_registration(
-    world: &mut World,
-    id_name: &str,
-    status: RegistrationStatus,
-) {
-    let (id, _) = world.get_modem(id_name);
+pub fn when_incoming_pdu_received(world: &mut World, name: &str, pdu: &str) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::IncomingPdu { id: ChipId(id), pdu: pdu.to_string() };
+    world.manager.dispatch(action);
+}
+
+pub fn when_incoming_call_received(world: &mut World, name: &str, number: &str) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::IncomingCall { target_id: ChipId(id), number: number.to_string() };
+    world.manager.dispatch(action);
+}
+
+pub fn when_external_call_answered(world: &mut World, name: &str) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::RemoteAnswer { id: ChipId(id) };
+    world.manager.dispatch(action);
+}
+
+pub fn when_external_call_hungup(world: &mut World, name: &str) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::RemoteHangup { id: ChipId(id) };
+    world.manager.dispatch(action);
+}
+
+pub fn when_external_call_held(world: &mut World, name: &str, on_hold: bool) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::RemoteHold { id: ChipId(id), on_hold };
+    world.manager.dispatch(action);
+}
+
+pub fn when_network_time_updated(world: &mut World, name: &str, time: &str) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::UpdateNetworkTime { id: ChipId(id), time: time.to_string() };
+    world.manager.dispatch(action);
+}
+
+pub fn when_voice_registration_set(world: &mut World, name: &str, status: RegistrationStatus) {
+    let (id, _) = world.get_modem(name);
     let action = ModemAction::SetVoiceRegistration { id: ChipId(id), status };
+    world.manager.dispatch(action);
+}
+
+pub fn when_data_registration_set(world: &mut World, name: &str, status: RegistrationStatus) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::SetDataRegistration { id: ChipId(id), status };
+    world.manager.dispatch(action);
+}
+
+pub fn when_signal_strength_set(world: &mut World, name: &str, rssi: u8, ber: u8) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::SetSignalStrength { id: ChipId(id), rssi, ber };
+    world.manager.dispatch(action);
+}
+
+pub fn when_network_technology_changes(world: &mut World, name: &str, tech: RadioTechnology) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::SetNetworkTechnology { id: ChipId(id), tech };
+    world.manager.dispatch(action);
+}
+
+pub fn when_sim_status_set(world: &mut World, name: &str, present: bool) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::SetSimStatus { id: ChipId(id), present };
     world.manager.dispatch(action);
 }
