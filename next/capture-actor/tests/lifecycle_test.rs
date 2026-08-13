@@ -21,10 +21,15 @@ async fn test_capture_entity_lifecycle() {
     world.when_create_capture(chip_id, ChipKind::BLUETOOTH, "test_device", false).await.unwrap();
     world.then_capture_is_enabled(chip_id, false).await;
     world.then_capture_stats_are(chip_id, 0, 0).await;
+    let info = world.client.get_capture(netsim_model::ChipId(chip_id)).await.unwrap().unwrap();
+    assert_eq!(info.seconds, 0);
+    assert_eq!(info.nanos, 0);
 
     // When: the capture is enabled
     world.when_update_capture(chip_id, true).await.unwrap();
     world.then_capture_is_enabled(chip_id, true).await;
+    let info = world.client.get_capture(netsim_model::ChipId(chip_id)).await.unwrap().unwrap();
+    assert!(info.seconds > 0);
 
     // And: a packet is sent
     world.when_dummy_packet_is_sent(chip_id).await;

@@ -229,6 +229,7 @@ async fn setup_grpc_listener(
     cell_client: cell_actor::CellClient,
     nfc_client: nfc_actor::NfcClient,
     wifi_client: wifi_actor::WifiClient,
+    capture_client: CaptureClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(u16, grpcio::Server), RunResult> {
@@ -249,6 +250,7 @@ async fn setup_grpc_listener(
         cell_client,
         nfc_client,
         wifi_client,
+        capture_client,
         packet_streamer_service,
         version,
         frontend_stats,
@@ -570,6 +572,7 @@ impl NetsimDaemon {
             cell_client.clone(),
             nfc_client.clone(),
             wifi_client.clone(),
+            capture_client.clone(),
             get_version(),
             frontend_stats.clone(),
         )
