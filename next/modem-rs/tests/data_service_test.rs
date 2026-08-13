@@ -281,7 +281,7 @@ fn test_set_packet_event_reporting() {
 //   Given a modem "A"
 //   When AT command 'AT+CGDCONT=1,"IP","test"' is sent to "A"
 //   And AT command "AT+CGPADDR=1" is sent to "A"
-//   Then response from "A" is '+CGPADDR: 1,"0.0.0.0"'
+//   Then response from "A" is '+CGPADDR: 1,"10.0.2.15"'
 //   And response from "A" is "OK"
 #[test]
 fn test_show_pdp_address() {
@@ -306,10 +306,9 @@ fn test_show_pdp_address() {
     when_at_command_sent(&mut world, "A", &format!("AT+CGACT={TEST_PDP_CID},0"));
     then_response_is(&mut world, "A", "OK");
 
-    // 4. Query address (should be 0.0.0.0)
+    // 4. Query address (should be ERROR because inactive)
     when_at_command_sent(&mut world, "A", &format!("AT+CGPADDR={TEST_PDP_CID}"));
-    then_response_is(&mut world, "A", &format!("+CGPADDR: {TEST_PDP_CID},\"0.0.0.0\""));
-    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "A", "ERROR");
 
     // 5. Reactivate context (Goldfish-style AT+CGACT=cid,state)
     when_at_command_sent(&mut world, "A", &format!("AT+CGACT={TEST_PDP_CID},1"));
@@ -467,10 +466,9 @@ fn test_goldfish_ril_compat_incorrect_cgact() {
     when_at_command_sent(&mut world, "A", &format!("AT+CGACT={TEST_PDP_CID},0"));
     then_wait_for_response_containing(&mut world, "A", "OK");
 
-    // 3. Verify it is now inactive (IP is 0.0.0.0)
+    // 3. Verify it is now inactive (should return ERROR)
     when_at_command_sent(&mut world, "A", &format!("AT+CGPADDR={TEST_PDP_CID}"));
-    then_response_is(&mut world, "A", &format!("+CGPADDR: {TEST_PDP_CID},\"0.0.0.0\""));
-    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "A", "ERROR");
 
     // 4. Define CID 2
     when_at_command_sent(
@@ -499,10 +497,9 @@ fn test_goldfish_ril_compat_incorrect_cgact() {
     when_at_command_sent(&mut world, "A", &format!("AT+CGACT={TEST_PDP_CID_ALT},0"));
     then_wait_for_response_containing(&mut world, "A", "OK");
 
-    // Verify CID 2 is inactive
+    // Verify CID 2 is inactive (should return ERROR)
     when_at_command_sent(&mut world, "A", &format!("AT+CGPADDR={TEST_PDP_CID_ALT}"));
-    then_response_is(&mut world, "A", &format!("+CGPADDR: {TEST_PDP_CID_ALT},\"0.0.0.0\""));
-    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "A", "ERROR");
 }
 
 #[test]

@@ -377,6 +377,8 @@ def netsim_rust_library(
         enable_integration_test = True,
         enable_doc = True,
         enable_doc_test = True,
+        test_args = [],
+        integration_test_args = [],
         **kwargs):
     """
     Defines a Netsim Rust library with standard targets.
@@ -403,6 +405,8 @@ def netsim_rust_library(
         enable_integration_test: Whether to generate an integration test target if files exist.
         enable_doc: Whether to generate documentation.
         enable_doc_test: Whether to generate a doc test target.
+        test_args: Command-line arguments passed to the unit test binary.
+        integration_test_args: Command-line arguments passed to the integration test binary.
         **kwargs: Additional arguments passed to rust_library.
     """
 
@@ -441,6 +445,7 @@ def netsim_rust_library(
         rust_test(
             name = "test",
             srcs = srcs,
+            args = test_args,
             crate_root = kwargs.get("crate_root"),
             crate_features = ["testing"] + crate_features,
             crate_name = kwargs.get("crate_name", name),
@@ -483,6 +488,7 @@ def netsim_rust_library(
         rust_test(
             name = "integration-test",
             srcs = integration_test_srcs,
+            args = integration_test_args,
             crate_root = crate_root,
             aliases = kwargs.get("aliases", {}),
             rustc_flags = test_flags,

@@ -11,12 +11,17 @@ netsim_rust_library(
     crate_name = "libslirp_rs",
     crate_root = "src/lib.rs",
     edition = "2024",
-    enable_integration_test = False,
+    enable_integration_test = True,
+    # Tests monitor process-level file descriptor counts (/proc/self/fd) to verify zero
+    # resource leaks on Drop of World. Running integration tests in parallel causes FD
+    # count race conditions, so serial execution (--test-threads=1) is strictly required.
+    integration_test_args = ["--test-threads=1"],
     select_deps = select({
         "@bazel_tools//src/conditions:windows": ["@winapi"],
         "@platforms//os:linux": ["@libc"],
         "@platforms//os:macos": ["@libc"],
     }),
+    test_deps = ["@etherparse"],
     deps = [
         "@bytes",
         "@glib//glib",

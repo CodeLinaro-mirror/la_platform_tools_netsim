@@ -123,11 +123,7 @@ impl ModemImpl {
     }
 
     pub fn trigger_remote_hold(&mut self, on_hold: bool) -> Vec<ModemEffect> {
-        if on_hold {
-            self.call_service.receive_hold();
-        } else {
-            self.call_service.receive_resume();
-        }
+        self.call_service.trigger_remote_hold(on_hold);
         Vec::new()
     }
 
@@ -296,7 +292,7 @@ impl ModemImpl {
                     if !combined.is_empty() {
                         effects.push(ModemEffect::Response(combined.into_bytes()));
                     }
-                    if let Some(act) = handled.action {
+                    for act in handled.actions {
                         effects.push(ModemEffect::Action(act));
                     }
                 }
@@ -431,7 +427,7 @@ impl ModemImpl {
                     event: ModemEvent::AttachNetwork,
                 });
             }
-            if let Some(action) = handled.action.take() {
+            for action in std::mem::take(&mut handled.actions) {
                 effects.push(ModemEffect::Action(action));
             }
         }
@@ -449,7 +445,16 @@ impl ModemImpl {
             let is_last = i == sub_commands.len() - 1;
             match Command::parse(cmd_bytes) {
                 Ok((rem, command)) => {
-                    if !rem.is_empty() {
+                    let clean_rem = if rem == b"0"
+                        && matches!(
+                            command,
+                            Command::Call(crate::call_service::CallCommand::Hangup)
+                        ) {
+                        b""
+                    } else {
+                        rem
+                    };
+                    if !clean_rem.is_empty() {
                         error!(
                             "Failed to parse AT command {:?} (trailing garbage: {:?})",
                             String::from_utf8_lossy(cmd_bytes),

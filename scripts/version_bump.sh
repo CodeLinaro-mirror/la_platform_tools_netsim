@@ -20,78 +20,48 @@
 # so bump versions using a script.
 #
 
+NO_UPLOAD=false
+if [[ "$1" == "--no-upload" ]]; then
+  NO_UPLOAD=true
+fi
+
 # Absolute path to this script
 SCRIPT=$(dirname $(readlink -f "$0"))
-export CARGO=$SCRIPT/../rust/daemon/Cargo.toml
-export CARGO_CLI=$SCRIPT/../rust/cli/Cargo.toml
-export CARGO_COMMON=$SCRIPT/../rust/common/Cargo.toml
-export VERSION=$SCRIPT/../rust/daemon/src/version.rs
-export NEXT_DIR=$SCRIPT/../next
-export NEXT_VERSION=$SCRIPT/../next/daemon/src/version.rs
+export VERSION_FILE=$SCRIPT/../next/daemon/src/version.rs
 
-VERSIONS=$(python <<EOF
+NEW_VERSION=$(python3 - <<EOF
 import re
 import os
 
-m = None
-new_version = ""
-for cargo in [os.environ["CARGO_COMMON"], os.environ["CARGO_CLI"], os.environ["CARGO"]]:
-    with open(cargo, "r+") as f:
+version_file = os.environ["VERSION_FILE"]
+with open(version_file, "r+") as f:
+    lines = f.readlines()
+    next_ver_regex = re.compile(r'^pub const VERSION:\s&str\s=\s"(\d+)\.(\d+)\.(\d+)";$')
+    new_version = ""
+    for i, line in enumerate(lines):
+        m = next_ver_regex.match(line)
+        if m:
+            new_version = "{0}.{1}.{2}".format(m[1], m[2], int(m[3]) + 1)
+            lines[i] = 'pub const VERSION: &str = "{}";\n'.format(new_version)
+            break
+    f.seek(0)
+    f.writelines(lines)
+    f.truncate()
 
-        version_regex = re.compile(r'^version\s=\s"(\d+)\.(\d+)\.(\d+)"$')
-
-        lines = f.readlines()
-        for i, line in enumerate(lines):
-            # Check if the line contains the string "version = "
-            # and replace
-            m = version_regex.match(line)
-            if m:
-                new_version = "{0}.{1}.{2}".format(m[1], m[2], int(m[3]) + 1)
-                lines[i] = 'version = "{}"\n'.format(new_version)
-                break
-
-        f.seek(0)
-        f.writelines(lines)
-        f.truncate()
-
-with open(os.environ["VERSION"], "r+") as f:
-        lines = f.readlines()
-        for i, line in enumerate(lines):
-            if line.startswith("pub const VERSION"):
-               lines[i] = 'pub const VERSION: &str = "{}";\n'.format(new_version)
-               break
-
-        f.seek(0)
-        f.writelines(lines)
-        f.truncate()
-
-new_next_version = ""
-if os.path.exists(os.environ["NEXT_VERSION"]):
-    with open(os.environ["NEXT_VERSION"], "r+") as f:
-        lines = f.readlines()
-        next_ver_regex = re.compile(r'^pub const VERSION:\s&str\s=\s"(\d+)\.(\d+)\.(\d+)";$')
-        for i, line in enumerate(lines):
-            m = next_ver_regex.match(line)
-            if m:
-               new_next_version = "{0}.{1}.{2}".format(m[1], m[2], int(m[3]) + 1)
-               lines[i] = 'pub const VERSION: &str = "{}";\n'.format(new_next_version)
-               break
-        f.seek(0)
-        f.writelines(lines)
-        f.truncate()
-
-print(new_version + " " + new_next_version)
+print(new_version)
 EOF
 )
 
-NEW_VERSION=$(echo $VERSIONS | awk '{print $1}')
-NEW_NEXT_VERSION=$(echo $VERSIONS | awk '{print $2}')
-
-echo "Bumping original to version $NEW_VERSION"
-echo "Bumping next to version $NEW_NEXT_VERSION"
+echo "Bumping Netsim version to $NEW_VERSION"
 
 # Create a CL
 cd "$SCRIPT/.."
-repo start "version_bump_${NEW_VERSION}_${NEW_NEXT_VERSION}" .
-git commit -m "Version Bump to $NEW_VERSION (next to $NEW_NEXT_VERSION)" "$CARGO" "$CARGO_CLI" "$CARGO_COMMON" "$VERSION" "$NEXT_VERSION"
+repo start "version_bump_${NEW_VERSION}" .
+git commit -m "Version Bump to $NEW_VERSION" "$VERSION_FILE"
+
+if [ "$NO_UPLOAD" = true ]; then
+  echo "Created commit for version $NEW_VERSION. Skipped repo upload."
+  exit 0
+fi
+
 repo upload -y --cbr -o nokeycheck --label Presubmit-Ready+1 --re=formosa@google.com,shuohsu@google.com --cc=schilit@google.com .

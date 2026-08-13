@@ -12,8 +12,8 @@ use crate::{
     constants::*,
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
     types::{
-        CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN, ExecutionResult,
-        FacilityLockMode, Parsable, PhoneNumber,
+        CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN, DEFAULT_PIN2,
+        ExecutionResult, FacilityLockMode, Parsable, PhoneNumber,
     },
 };
 
@@ -110,6 +110,11 @@ const EF_FPLMN_ID: u16 = 0x6F7B;
 const EF_MSISDN_ID: u16 = 0x6F40;
 const EF_MBDN_ID: u16 = 0x6FC7;
 const EF_AD_ID: u16 = 0x6FAD;
+const EF_FDN_ID: u16 = 0x6F3B;
+
+// SIM file structure constants (TS 51.011 / TS 31.102)
+const ADN_FOOTER_LEN: usize = 14; // Length of dialing number info excluding alpha identifier
+const BCD_LEN_MAX: usize = 10; // Maximum length of BCD dialing number in ADN/FDN record
 
 // ISO 7816-4 SIM APDU Response Constants
 const RESP_SUCCESS: SimResponse = SimResponse::RestrictedSimAccess { sw: SW_SUCCESS, data: None };
@@ -221,8 +226,10 @@ pub struct SimService {
     puk1: String,
     pin1_retries: u32,
     puk1_retries: u32,
+    pin2: String,
     pin2_retries: u32,
     puk2_retries: u32,
+    fdn_enabled: bool,
     fs: FileSystem,
     sms_messages: HashMap<u8, Vec<u8>>,
     logical_channels: [bool; 4],
@@ -283,8 +290,14 @@ impl SimService {
             },
             pin1_retries: profile.pin_profile.pin1_retries.unwrap_or(DEFAULT_PIN_RETRIES),
             puk1_retries: profile.pin_profile.puk1_retries.unwrap_or(DEFAULT_PUK_RETRIES),
+            pin2: if !profile.pin_profile.pin2.is_empty() {
+                profile.pin_profile.pin2.clone()
+            } else {
+                DEFAULT_PIN2.to_string()
+            },
             pin2_retries: profile.pin_profile.pin2_retries.unwrap_or(DEFAULT_PIN_RETRIES),
             puk2_retries: profile.pin_profile.puk2_retries.unwrap_or(DEFAULT_PUK_RETRIES),
+            fdn_enabled: false,
             fs: profile.sim_io.file_system.clone(),
             sms_messages: HashMap::new(),
             // Channel 0 is the basic channel and is always open by default.
@@ -1355,6 +1368,92 @@ impl SimService {
         }
     }
 
+    pub(crate) fn handle_set_fdn_lock(
+        &mut self,
+        mode: FacilityLockMode,
+        passwd: Option<QuotedString>,
+    ) -> SimResult {
+        if (mode == FacilityLockMode::Unlock || mode == FacilityLockMode::Lock)
+            && self.pin2_retries == 0
+        {
+            return Err(ExecutionResult::cme_error(CmeError::SimPuk2Required));
+        }
+
+        match mode {
+            FacilityLockMode::Unlock | FacilityLockMode::Lock => {
+                let passwd = match passwd {
+                    Some(p) => p,
+                    None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
+                };
+                if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&passwd.as_ref().len()) {
+                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
+                }
+                if passwd.as_ref() == self.pin2.as_bytes() {
+                    self.fdn_enabled = mode == FacilityLockMode::Lock;
+                    self.pin2_retries = DEFAULT_PIN_RETRIES;
+                    Ok(None)
+                } else {
+                    self.pin2_retries = self.pin2_retries.saturating_sub(1);
+                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
+                }
+            }
+            FacilityLockMode::QueryStatus => {
+                Ok(Some(SimResponse::FacilityLockStatus(if self.fdn_enabled { 1 } else { 0 })))
+            }
+        }
+    }
+
+    pub(crate) fn is_fdn_allowed(&self, number: &PhoneNumber) -> bool {
+        if !self.fdn_enabled {
+            return true;
+        }
+
+        let Some(fdn_ef) = find_ef(&self.fs.master_file, EF_FDN_ID) else {
+            return false;
+        };
+
+        let record_len = fdn_ef.record_len.unwrap_or(28);
+        if record_len < ADN_FOOTER_LEN {
+            return false;
+        }
+
+        let normalized_target = number.normalized();
+
+        for record in fdn_ef.data.chunks(record_len) {
+            if record.len() < record_len {
+                continue;
+            }
+            if record.iter().all(|&b| b == 0xFF) {
+                continue;
+            }
+
+            let len_offset = record_len - ADN_FOOTER_LEN;
+            let len_byte = record[len_offset];
+            if len_byte == 0xFF || len_byte == 0 {
+                continue;
+            }
+
+            let bcd_len = (len_byte as usize).saturating_sub(1).min(BCD_LEN_MAX);
+            if bcd_len == 0 {
+                continue;
+            }
+
+            let bcd_start = len_offset + 2;
+            let bcd_bytes = &record[bcd_start..bcd_start + bcd_len];
+
+            let decoded_number = crate::pdu::bcd::bcd_to_string(bcd_bytes);
+            if decoded_number.is_empty() {
+                continue;
+            }
+
+            if normalized_target.starts_with(&decoded_number) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     fn handle_query_pin_retries_spic(&self) -> SimResult {
         let retries = self.pin1_retries;
         Ok(Some(SimResponse::PinRetriesSpic(retries)))
@@ -1650,4 +1749,139 @@ fn get_channel_idx_from_open_response(payload: &str) -> Option<usize> {
     }
     let channel_hex = &part2[0..2];
     usize::from_str_radix(channel_hex, 16).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::{
+            DedicatedFile, ElementaryFile, FileSystem, PinProfile, SimFile, SimIo, SimProfile,
+        },
+        parser::QuotedString,
+        types::FacilityLockMode,
+    };
+
+    fn create_test_fdn_profile(fdn_data: Vec<u8>) -> SimProfile {
+        SimProfile {
+            iccid: "89014103211118500720".to_string(),
+            imsi: "310260123456789".to_string(),
+            pin_profile: PinProfile { pin2: "5678".to_string(), ..Default::default() },
+            sim_io: SimIo {
+                file_system: FileSystem {
+                    master_file: DedicatedFile {
+                        file_id: 0x3F00,
+                        files: vec![
+                            SimFile::ElementaryFile(ElementaryFile {
+                                file_id: 0x2FE2,
+                                record_len: None,
+                                data: hex::decode("89014103211118500720").unwrap(),
+                            }),
+                            SimFile::DedicatedFile(DedicatedFile {
+                                file_id: 0x7F10, // DF_TELECOM
+                                files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                    file_id: 0x6F3B, // EF_FDN
+                                    record_len: Some(28),
+                                    data: fdn_data,
+                                })],
+                            }),
+                        ],
+                    },
+                },
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_is_fdn_allowed_disabled_by_default() {
+        let mut fdn_record = vec![0xFF; 28];
+        fdn_record[14] = 4; // len: 3 BCD + 1 TON
+        fdn_record[15] = 0x81; // National
+        fdn_record[16] = 0x21; // '1','2'
+        fdn_record[17] = 0x43; // '3','4'
+        fdn_record[18] = 0xF5; // '5', filler
+
+        let profile = create_test_fdn_profile(fdn_record);
+        let service = SimService::new(&profile);
+
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("98765")));
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("12345")));
+    }
+
+    #[test]
+    fn test_is_fdn_allowed_enabled_matching() {
+        let mut fdn_record = vec![0xFF; 28];
+        fdn_record[14] = 4; // len
+        fdn_record[15] = 0x81;
+        fdn_record[16] = 0x21;
+        fdn_record[17] = 0x43;
+        fdn_record[18] = 0xF5; // "12345"
+
+        let mut profile = create_test_fdn_profile(fdn_record);
+        profile.pin_profile.pin2 = "5678".to_string();
+        let mut service = SimService::new(&profile);
+
+        service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"5678"))).unwrap();
+        assert!(service.fdn_enabled);
+
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("12345")));
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("1234567")));
+        assert!(!service.is_fdn_allowed(&PhoneNumber::new("1234")));
+        assert!(!service.is_fdn_allowed(&PhoneNumber::new("98765")));
+
+        // Security bypass fix verification (characters 'a' in BCD)
+        let mut fdn_record_with_a = vec![0xFF; 28];
+        fdn_record_with_a[14] = 3; // len: 2 bytes BCD + 1 TON
+        fdn_record_with_a[15] = 0x81;
+        fdn_record_with_a[16] = 0x21; // "12"
+        fdn_record_with_a[17] = 0xC3; // "3a"
+
+        let profile_a = create_test_fdn_profile(fdn_record_with_a);
+        let mut service_a = SimService::new(&profile_a);
+        service_a.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"5678"))).unwrap();
+
+        assert!(!service_a.is_fdn_allowed(&PhoneNumber::new("12345")));
+    }
+
+    #[test]
+    fn test_handle_set_fdn_lock_lockout() {
+        let fdn_record = vec![0xFF; 28];
+        let mut profile = create_test_fdn_profile(fdn_record);
+        profile.pin_profile.pin2 = "5678".to_string();
+        profile.pin_profile.pin2_retries = Some(3);
+        let mut service = SimService::new(&profile);
+
+        // Try invalid length PIN2 -> fails immediately, does NOT decrement retries
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"123")));
+        assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::IncorrectPassword)));
+        assert_eq!(service.pin2_retries, 3);
+
+        let res =
+            service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"123456789")));
+        assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::IncorrectPassword)));
+        assert_eq!(service.pin2_retries, 3);
+
+        // Try wrong PIN2 -> retries decrement
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
+        assert!(res.is_err());
+        assert_eq!(service.pin2_retries, 2);
+
+        // Try wrong PIN2 again
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
+        assert!(res.is_err());
+        assert_eq!(service.pin2_retries, 1);
+
+        // Try wrong PIN2 third time -> retries reach 0
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
+        assert!(res.is_err());
+        assert_eq!(service.pin2_retries, 0);
+
+        // Try CORRECT PIN2 now that it is blocked -> should STILL fail with
+        // SimPuk2Required!
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"5678")));
+        assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::SimPuk2Required)));
+
+        assert!(!service.fdn_enabled);
+    }
 }

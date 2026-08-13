@@ -141,16 +141,16 @@ impl std::fmt::Display for SmsResponse {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsSuccess {
     pub response: Option<SmsResponse>,
-    pub action: CommandAction,
+    pub actions: Vec<CommandAction>,
 }
 
 impl SmsSuccess {
     pub fn new(response: Option<SmsResponse>) -> Self {
-        Self { response, action: CommandAction::None }
+        Self { response, actions: vec![] }
     }
 
-    pub fn with_action(response: Option<SmsResponse>, action: CommandAction) -> Self {
-        Self { response, action }
+    pub fn with_actions(response: Option<SmsResponse>, actions: Vec<CommandAction>) -> Self {
+        Self { response, actions }
     }
 }
 
@@ -201,20 +201,20 @@ impl SmsService {
 
     pub fn handle_sms_body(&mut self, pdu: &[u8], sender: &str) -> SmsResult {
         let mr = self.message_reference.fetch_add(1, Ordering::Relaxed);
-        let action = if self.message_format == MessageFormat::Text {
+        let actions = if self.message_format == MessageFormat::Text {
             let to = self.pending_sms_destination.take().unwrap_or_default();
             let text = std::str::from_utf8(pdu).unwrap_or_default().to_string();
-            CommandAction::ReceiveTextSms { to, text }
+            vec![CommandAction::ReceiveTextSms { to, text }]
         } else {
             let processed = crate::pdu::process_outgoing_sms(pdu, Some(sender), mr);
-            CommandAction::ReceiveSms {
+            vec![CommandAction::ReceiveSms {
                 to: processed.to,
                 pdu: processed.pdu,
                 status_report: processed.status_report,
-            }
+            }]
         };
 
-        Ok(SmsSuccess::with_action(Some(SmsResponse::SendSms { mr }), action))
+        Ok(SmsSuccess::with_actions(Some(SmsResponse::SendSms { mr }), actions))
     }
 
     pub fn handle_store_sms(&mut self, sim_service: &mut SimService, pdu: &[u8]) -> SmsResult {
@@ -363,12 +363,12 @@ impl SmsService {
     pub fn handle_remote_sms(&self, pdu: QuotedString) -> SmsResult {
         let pdu_bytes = pdu.to_vec();
         let processed = crate::pdu::process_outgoing_sms(&pdu_bytes, None, 0);
-        let action = CommandAction::ReceiveSms {
+        let actions = vec![CommandAction::ReceiveSms {
             to: processed.to,
             pdu: processed.pdu,
             status_report: processed.status_report,
-        };
-        Ok(SmsSuccess::with_action(None, action))
+        }];
+        Ok(SmsSuccess::with_actions(None, actions))
     }
 
     // Explicit execute method instead of Trait
@@ -417,8 +417,7 @@ impl From<SmsSuccess> for ExecutionResult {
         if add_ok {
             responses.push(Response::Ok);
         }
-        let action =
-            if success.action != CommandAction::None { Some(success.action) } else { None };
-        ExecutionResult::Success(HandledCommand { responses, action })
+        let actions = success.actions;
+        ExecutionResult::Success(HandledCommand { responses, actions })
     }
 }

@@ -1,7 +1,11 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{str, time::Duration};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr},
+    str,
+    time::Duration,
+};
 
 use netsim_model::{Call, Quirks, RegistrationStatus};
 use nom::IResult;
@@ -47,9 +51,17 @@ pub const AT_OK: &[u8] = b"OK\r\n";
 pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 
 pub const DEFAULT_PIN: &str = "1234";
+pub const DEFAULT_PIN2: &str = "5678";
 
-pub const DEFAULT_GATEWAY: &str = "10.0.2.2";
-pub const DEFAULT_DNS: &str = "10.0.2.3";
+pub const DEFAULT_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
+pub const DEFAULT_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
+pub const DEFAULT_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
+
+// Aligned with libslirp-rs and emulator networking defaults.
+pub const DEFAULT_IPV6_GATEWAY: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2);
+pub const DEFAULT_IPV6_DNS: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3);
+pub const DEFAULT_IPV6_ADDR: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15);
+pub const DEFAULT_IPV6_PREFIX: u32 = 64;
 
 // A unique identifier for a modem instance.
 pub type ModemId = u32;
@@ -105,13 +117,14 @@ impl PhoneNumber {
 }
 
 impl<'a> Parsable<'a> for PhoneNumber {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         use nom::{
             bytes::complete::{tag, take_while1},
             combinator::{opt, recognize},
             sequence::pair,
         };
 
+        // ONLY allow clean number characters (digits, *, #, and optional leading +)
         let (remaining, digits) = recognize(pair(
             opt(tag(b"+")),
             take_while1(|c: u8| matches!(c, b'0'..=b'9' | b'*' | b'#')),
@@ -147,7 +160,21 @@ impl DialString {
     }
 
     pub fn clir(&self, default: ClirMode) -> ClirMode {
-        let raw_num = if let Some(pos) = self.0.find('@') { &self.0[..pos] } else { &self.0 };
+        let at_pos = self.0.find('@');
+        if let Some(pos) = at_pos {
+            let parts = &self.0[pos + 1..];
+            if let Some(second) = parts.split(',').nth(1) {
+                let clir_part = second.trim_start_matches('#');
+                if clir_part == "i" {
+                    return ClirMode::Suppression;
+                } else if clir_part == "I" {
+                    return ClirMode::Invocation;
+                }
+            }
+        }
+
+        // Find CLIR suffix in the number part (before first pause/wait)
+        let raw_num = if let Some(pos) = at_pos { &self.0[..pos] } else { &self.0 };
         let num_part = raw_num.split([',', 'W', 'w']).next().unwrap_or("");
         if num_part.ends_with('i') {
             ClirMode::Suppression
@@ -193,7 +220,7 @@ pub struct DialArgs {
 }
 
 impl<'a> Parsable<'a> for DialArgs {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         let (input, content) = crate::parser::parse_until_semicolon(input)?;
         let dial_str = DialString::parse(content).ok_or_else(|| {
             nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))
@@ -215,9 +242,11 @@ pub enum CommandAction {
     InitiateRemoteCall(PhoneNumber),
     InitiateEmergencyCall,
     AnswerCall(ModemId),
-    HangupCall(ModemId),
+    HangupCall { initiator: ModemId, target_peer: ModemId },
     InitiateCallAndHold(DialArgs),
     SwapCalls(ModemId, ModemId),
+    HoldCall { holder: ModemId, target: ModemId },
+    ResumeCall { resumer: ModemId, target: ModemId },
     ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
     ReceiveTextSms { to: String, text: String },
     None,
@@ -340,6 +369,7 @@ pub enum CmeError {
     NoNetworkService,
     NoResources,
     IncorrectParameters,
+    FixedDialNumberOnlyAllowed,
     Custom(u32, &'static str),
 }
 
@@ -366,6 +396,7 @@ impl CmeError {
             Self::NoNetworkService => 30,
             Self::NoResources => 142,
             Self::IncorrectParameters => 50,
+            Self::FixedDialNumberOnlyAllowed => 56,
             Self::Custom(c, _) => c,
         }
     }
@@ -392,6 +423,7 @@ impl CmeError {
             Self::NoNetworkService => "no network service",
             Self::NoResources => "no resources",
             Self::IncorrectParameters => "incorrect parameters",
+            Self::FixedDialNumberOnlyAllowed => "fixed dialing number only allowed",
             Self::Custom(_, msg) => msg,
         }
     }
@@ -490,18 +522,18 @@ pub struct HandledCommand {
     pub responses: Vec<Response>,
     /// An optional follow-up action for the CellularNetworkSimulator to
     /// perform.
-    pub action: Option<CommandAction>,
+    pub actions: Vec<CommandAction>,
 }
 
 impl HandledCommand {
     /// Creates a result with a simple "OK" response and no follow-up action.
     pub fn ok() -> Self {
-        Self { responses: vec![Response::Ok], action: None }
+        Self { responses: vec![Response::Ok], actions: vec![] }
     }
 
     /// Creates a result with a simple "OK" response AND a follow-up action.
-    pub fn ok_with_action(action: CommandAction) -> Self {
-        Self { responses: vec![Response::Ok], action: Some(action) }
+    pub fn ok_with_actions(actions: Vec<CommandAction>) -> Self {
+        Self { responses: vec![Response::Ok], actions }
     }
 }
 
@@ -525,8 +557,8 @@ impl ExecutionResult {
         Self::Success(HandledCommand::ok())
     }
 
-    pub fn ok_with_action(action: CommandAction) -> Self {
-        Self::Success(HandledCommand::ok_with_action(action))
+    pub fn ok_with_actions(actions: Vec<CommandAction>) -> Self {
+        Self::Success(HandledCommand::ok_with_actions(actions))
     }
 
     pub fn error() -> Self {
@@ -543,14 +575,15 @@ impl<T: Into<Response>> From<Option<T>> for ExecutionResult {
         match opt.map(Into::into) {
             Some(
                 resp @ (Response::Call(CallResponse::Ring) | Response::Data(DataResponse::Connect)),
-            ) => Self::Success(HandledCommand { responses: vec![resp], action: None }),
+            ) => Self::Success(HandledCommand { responses: vec![resp], actions: vec![] }),
             Some(Response::Call(CallResponse::Empty)) => Self::Success(HandledCommand::default()),
-            Some(Response::Call(CallResponse::WithAction(action))) => {
-                Self::Success(HandledCommand::ok_with_action(action))
+            Some(Response::Call(CallResponse::WithActions(actions))) => {
+                Self::Success(HandledCommand::ok_with_actions(actions))
             }
-            Some(resp) => {
-                Self::Success(HandledCommand { responses: vec![resp, Response::Ok], action: None })
-            }
+            Some(resp) => Self::Success(HandledCommand {
+                responses: vec![resp, Response::Ok],
+                actions: vec![],
+            }),
             None => Self::ok(),
         }
     }
@@ -741,14 +774,22 @@ impl std::fmt::Display for OperatorStatus {
     }
 }
 
+/// AT+CHLD Call Hold operations (3GPP TS 27.007 Section 7.22).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CallHoldAction {
-    ReleaseHeldOrWaiting = 0,
-    ReleaseActiveAcceptHeldOrWaiting = 1,
-    HoldActiveAcceptHeldOrWaiting = 2,
-    AddHeld = 3,
-    Ect = 4,
+    /// AT+CHLD=0: Releases all held calls or rejects a waiting call.
+    ReleaseHeld = 0,
+    /// AT+CHLD=1: Releases all active calls and accepts held/waiting call.
+    ReleaseAndAccept = 1,
+    /// AT+CHLD=2: Places active calls on hold and accepts held/waiting call.
+    HoldAndAccept = 2,
+    /// AT+CHLD=3: Adds a held call to the active conversation (Conference
+    /// call).
+    Conference = 3,
+    /// AT+CHLD=4: Explicit Call Transfer (ECT).
+    Transfer = 4,
+    /// AT+CHLD=5: User-to-User Signaling.
     UserToUserSignaling = 5,
 }
 
@@ -769,11 +810,11 @@ impl<'a> Parsable<'a> for CallHoldParam {
             (val, None)
         };
         let op = match op_val {
-            0 => CallHoldAction::ReleaseHeldOrWaiting,
-            1 => CallHoldAction::ReleaseActiveAcceptHeldOrWaiting,
-            2 => CallHoldAction::HoldActiveAcceptHeldOrWaiting,
-            3 => CallHoldAction::AddHeld,
-            4 => CallHoldAction::Ect,
+            0 => CallHoldAction::ReleaseHeld,
+            1 => CallHoldAction::ReleaseAndAccept,
+            2 => CallHoldAction::HoldAndAccept,
+            3 => CallHoldAction::Conference,
+            4 => CallHoldAction::Transfer,
             5 => CallHoldAction::UserToUserSignaling,
             _ => {
                 return Err(nom::Err::Error(nom::error::Error::new(
@@ -1005,6 +1046,36 @@ impl<'a> Parsable<'a> for CallWaitingPresentation {
             0 => Ok((input, Self::Disable)),
             1 => Ok((input, Self::Enable)),
             _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FormattedNumber<'a> {
+    pub number: &'a str,
+    pub toa: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum NumberPresentation {
+    #[default]
+    Allowed = 0,
+    Restricted = 1,
+    NotAvailable = 2,
+}
+
+impl NumberPresentation {
+    pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
+        match self {
+            Self::Restricted | Self::NotAvailable => FormattedNumber { number: "", toa: 129 },
+            Self::Allowed => {
+                if let Some(num) = number {
+                    FormattedNumber { number: num.as_str(), toa: num.toa() }
+                } else {
+                    FormattedNumber { number: "", toa: 129 }
+                }
+            }
         }
     }
 }
@@ -1475,6 +1546,7 @@ impl std::fmt::Display for CtecTechnology {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Facility {
     SimPin,
+    FixedDial,
     Other,
 }
 
@@ -1483,6 +1555,7 @@ impl<'a> Parsable<'a> for Facility {
         let (input, quoted) = QuotedString::parse(input)?;
         match quoted.as_ref() {
             b"SC" => Ok((input, Self::SimPin)),
+            b"FD" => Ok((input, Self::FixedDial)),
             _ => Ok((input, Self::Other)),
         }
     }
@@ -1492,37 +1565,8 @@ impl std::fmt::Display for Facility {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Facility::SimPin => write!(f, "SC"),
+            Facility::FixedDial => write!(f, "FD"),
             Facility::Other => write!(f, "OTHER"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FormattedNumber<'a> {
-    pub number: &'a str,
-    pub toa: u8,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(u8)]
-pub enum NumberPresentation {
-    #[default]
-    Allowed = 0,
-    Restricted = 1,
-    NotAvailable = 2,
-}
-
-impl NumberPresentation {
-    pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
-        match self {
-            Self::Restricted | Self::NotAvailable => FormattedNumber { number: "", toa: 129 },
-            Self::Allowed => {
-                if let Some(num) = number {
-                    FormattedNumber { number: num.as_str(), toa: num.toa() }
-                } else {
-                    FormattedNumber { number: "", toa: 129 }
-                }
-            }
         }
     }
 }
@@ -1565,14 +1609,13 @@ mod tests {
         let dial = DialString::parse(b"12345i,1234").unwrap();
         assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
 
-        let dial = DialString::parse(b"12345I").unwrap();
-        assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
-
-        let dial = DialString::parse(b"+12345W678").unwrap();
+        let dial = DialString::parse(b"+12345I,678").unwrap();
         assert_eq!(dial.clean_number().unwrap().as_str(), "+12345");
 
         // Strictly rejects invalid dial characters (like 'a')
         assert!(DialString::parse(b"123a45").is_none());
+        assert!(DialString::parse(b"123b45").is_none());
+        assert!(DialString::parse(b"123c45").is_none());
     }
 
     #[test]
@@ -1589,6 +1632,17 @@ mod tests {
 
         // Modifiers with pause/wait
         let dial = DialString::parse(b"12345i,1234").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
+
+        // Number suffix with @ parameters where @ part has no CLIR suffix
+        let dial = DialString::parse(b"12345i@1,2").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
+
+        let dial = DialString::parse(b"12345I@1,2").unwrap();
+        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Invocation);
+
+        // Emergency dial string with CLIR suffix after @
+        let dial = DialString::parse(b"911@1,#i").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
     }
 
