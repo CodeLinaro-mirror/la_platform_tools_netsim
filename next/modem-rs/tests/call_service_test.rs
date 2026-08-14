@@ -505,3 +505,205 @@ fn test_remote_call_initiation() {
     // B should receive RING
     then_response_is(&mut world, "B", "RING");
 }
+
+#[test]
+fn test_clir_dial_suffixes() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_A);
+    given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_B);
+
+    // Enable CLIP on B
+    when_at_command_sent(&mut world, "B", "AT+CLIP=1");
+    then_response_is(&mut world, "B", "OK");
+
+    // Scenario 1: Dial with CLIR suppression 'i' (allow presentation)
+    when_at_command_sent(&mut world, "A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B}i;"));
+    then_response_is(&mut world, "A", "OK");
+
+    // B should receive RING and +CLIP presenting A's number
+    then_response_contains(&mut world, "B", "RING");
+    then_response_contains(
+        &mut world,
+        "B",
+        &format!("+CLIP: \"+{TEST_PHONE_NUMBER_LONG_A}\",145,,,,0"),
+    );
+
+    // Hang up
+    when_at_command_sent(&mut world, "A", "ATH");
+    then_response_is(&mut world, "A", "OK");
+
+    // Scenario 2: Dial with CLIR invocation 'I' (restrict presentation)
+    when_at_command_sent(&mut world, "A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B}I;"));
+    then_response_is(&mut world, "A", "OK");
+
+    // B should receive RING and +CLIP with restricted caller ID
+    then_response_contains(&mut world, "B", "RING");
+    then_response_contains(&mut world, "B", "+CLIP: \"\",129,,,,1");
+}
+
+#[test]
+fn test_fdn_dial_restriction() {
+    let mut world = World::new();
+    given_modem_with_fdn_sim_profile(&mut world, "A");
+    given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_B);
+
+    // Enable verbose CME errors
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // By default FDN is disabled, so dialing B's number should succeed
+    when_at_command_sent(&mut world, "A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B};"));
+    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "B", "RING");
+
+    // Hang up B
+    when_at_command_sent(&mut world, "B", "ATH");
+    then_response_is(&mut world, "B", "OK");
+    then_response_is(&mut world, "A", "");
+    then_response_is(&mut world, "A", "NO CARRIER");
+
+    // Enable FDN lock using PIN2 "5678"
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"FD\",1,\"5678\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query FDN status -> should be 1 (enabled)
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"FD\",2");
+    then_response_contains(&mut world, "A", "+CLCK: 1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Try to dial B's number (not in FDN list) -> should fail with CME ERROR 56
+    when_at_command_sent(&mut world, "A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B};"));
+    then_response_is(&mut world, "A", "+CME ERROR: 56");
+
+    // Dial number in FDN list (12345) -> should succeed
+    when_at_command_sent(&mut world, "A", "ATD12345;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Hang up A
+    when_at_command_sent(&mut world, "A", "ATH");
+    then_response_is(&mut world, "A", "OK");
+
+    // Dial number starting with FDN list entry (1234567) -> should succeed (prefix
+    // match)
+    when_at_command_sent(&mut world, "A", "ATD1234567;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Hang up A
+    when_at_command_sent(&mut world, "A", "ATH");
+    then_response_is(&mut world, "A", "OK");
+
+    // Dial number that is prefix of FDN entry but shorter (1234) -> should fail
+    when_at_command_sent(&mut world, "A", "ATD1234;");
+    then_response_is(&mut world, "A", "+CME ERROR: 56");
+
+    // Disable FDN lock
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"FD\",0,\"5678\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Dial B's number again -> should succeed now
+    when_at_command_sent(&mut world, "A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B};"));
+    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "B", "RING");
+}
+
+#[test]
+fn test_fdn_emergency_call_bypass() {
+    let mut world = World::new();
+    given_modem_with_fdn_sim_profile(&mut world, "A");
+
+    // Enable FDN lock using PIN2 "5678"
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"FD\",1,\"5678\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Dial emergency call (911) -> should bypass FDN and return OK
+    when_at_command_sent(&mut world, "A", "ATD911;");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_fdn_pin2_toggle_failure() {
+    let mut world = World::new();
+    given_modem_with_fdn_sim_profile(&mut world, "A");
+
+    // Try to enable FDN lock with INCORRECT PIN2 "0000" -> should fail with ERROR
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"FD\",1,\"0000\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Verify FDN lock status remains 0 (disabled)
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"FD\",2");
+    then_response_contains(&mut world, "A", "+CLCK: 0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_clir_clcc_number_hiding() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_A);
+    given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_B);
+
+    // Enable CLIP on B
+    when_at_command_sent(&mut world, "B", "AT+CLIP=1");
+    then_response_is(&mut world, "B", "OK");
+
+    // Dial B from A with CLIR invocation 'I' (restrict presentation)
+    when_at_command_sent(&mut world, "A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B}I;"));
+    then_response_is(&mut world, "A", "OK");
+
+    // B should receive RING and +CLIP with restricted caller ID
+    then_response_contains(&mut world, "B", "RING");
+    then_response_contains(&mut world, "B", "+CLIP: \"\",129,,,,1");
+
+    // B queries current calls list -> should show incoming call with hidden caller
+    // number
+    when_at_command_sent(&mut world, "B", "AT+CLCC");
+    then_response_contains(&mut world, "B", "+CLCC: 1,1,4,0,0,\"\",129");
+    then_response_is(&mut world, "B", "OK");
+}
+
+#[test]
+fn test_fdn_international_matching() {
+    let mut world = World::new();
+    given_modem_with_fdn_sim_profile(&mut world, "A");
+
+    // Enable FDN lock using PIN2 "5678"
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"FD\",1,\"5678\"");
+    then_response_is(&mut world, "A", "OK");
+
+    // Dial international FDN number with '+' prefix -> should succeed
+    when_at_command_sent(&mut world, "A", "ATD+16505550100;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Hang up A
+    when_at_command_sent(&mut world, "A", "ATH");
+    then_response_is(&mut world, "A", "OK");
+
+    // Dial same international number WITHOUT '+' prefix -> should also succeed due
+    // to normalization
+    when_at_command_sent(&mut world, "A", "ATD16505550100;");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_dial_with_pause_modifier() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", "987654");
+    given_modem_with_number(&mut world, "B", "123456");
+
+    // Enable CLIP on B to receive caller ID
+    when_at_command_sent(&mut world, "B", "AT+CLIP=1");
+    then_response_is(&mut world, "B", "OK");
+
+    // Dial B's number (123456) from A with a pause modifier and DTMF suffix
+    when_at_command_sent(&mut world, "A", "ATD123456,1234;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify B receives the incoming RING and +CLIP with A's number
+    then_response_contains(&mut world, "B", "RING");
+    then_response_contains(&mut world, "B", "+CLIP: \"987654\",129,,,,0");
+
+    // A queries current calls list -> should show dialing/active call with B's
+    // clean number
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,2,0,0,\"123456\",129");
+    then_response_is(&mut world, "A", "OK");
+}

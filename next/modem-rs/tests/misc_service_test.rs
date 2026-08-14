@@ -48,9 +48,10 @@ fn test_cmee_queries_and_set() {
     then_response_is(&mut world, "A", "+CMEE: 2");
     then_response_is(&mut world, "A", "OK");
 
-    // Set to invalid value (3) returns ERROR and doesn't change mode
+    // Set to invalid value (3) returns CME ERROR (since CMEE is 2) and doesn't
+    // change mode
     when_at_command_sent(&mut world, "A", "AT+CMEE=3");
-    then_response_is(&mut world, "A", "ERROR");
+    then_response_is(&mut world, "A", "+CME ERROR: incorrect parameters");
     when_at_command_sent(&mut world, "A", "AT+CMEE?");
     then_response_is(&mut world, "A", "+CMEE: 2");
     then_response_is(&mut world, "A", "OK");
@@ -388,36 +389,36 @@ fn test_get_serial_number() {
 
 // Scenario: Set TE-TA Control Character Framing
 //   Given a modem "A"
-//   When AT command "AT+ICF=3,4" is sent to "A"
+//   When AT command "AT+ICF=3,3" is sent to "A"
 //   Then response from "A" is "OK"
 //   When AT command "AT&V" is sent to "A"
-//   Then response from "A" contains "ICF:3,4"
+//   Then response from "A" contains "ICF:3,3"
 #[test]
 fn test_set_te_ta_control_character_framing() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+ICF=3,4");
+    when_at_command_sent(&mut world, "A", "AT+ICF=3,3");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT&V");
-    then_response_contains(&mut world, "A", "ICF:3,4");
+    then_response_contains(&mut world, "A", "ICF:3,3");
 }
 
 // Scenario: Set TE-TA Local Data Flow Control
 //   Given a modem "A"
-//   When AT command "AT+IFC=3,4" is sent to "A"
+//   When AT command "AT+IFC=2,2" is sent to "A"
 //   Then response from "A" is "OK"
 //   When AT command "AT&V" is sent to "A"
-//   Then response from "A" contains "IFC:3,4"
+//   Then response from "A" contains "IFC:2,2"
 #[test]
 fn test_set_te_ta_local_data_flow_control() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+IFC=3,4");
+    when_at_command_sent(&mut world, "A", "AT+IFC=2,2");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT&V");
-    then_response_contains(&mut world, "A", "IFC:3,4");
+    then_response_contains(&mut world, "A", "IFC:2,2");
 }
 
 // Scenario: Get Product Serial Number (IMEI)

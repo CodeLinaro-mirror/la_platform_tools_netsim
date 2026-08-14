@@ -192,6 +192,18 @@ pub fn execute(cmd: GsmCommand, client: &impl CellClient, verbose: bool) -> Resu
                 println!("Network technology set to {:?} for cell {}.", args.tech, id);
             }
         }
+        GsmCommand::Operator(args) => {
+            let id = resolve_cell_id(args.id, client)?;
+            let mut req = ExecuteCellRequest::new();
+            req.id = id;
+            let mut action = netsim_proto::cell::SetOperator::new();
+            action.operator = args.operator.clone();
+            req.set_set_operator(action);
+            client.execute(&req)?;
+            if verbose {
+                println!("Network operator set to '{}' for cell {}.", args.operator, id);
+            }
+        }
     }
     Ok(())
 }

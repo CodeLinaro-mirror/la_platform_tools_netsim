@@ -1077,12 +1077,14 @@ impl CallbackContext {
     }
 }
 
-extern "C" fn register_poll_fd_cb(_fd: c_int, _opaque: *mut c_void) {
-    //TODO: Need implementation for Windows
+extern "C" fn register_poll_fd_cb(_fd: c_int, opaque: *mut c_void) {
+    // Safety: `opaque` is a valid `CallbackContext` pointer.
+    unsafe { callback_context_from_raw(opaque) }.notify();
 }
 
-extern "C" fn unregister_poll_fd_cb(_fd: c_int, _opaque: *mut c_void) {
-    //TODO: Need implementation for Windows
+extern "C" fn unregister_poll_fd_cb(_fd: c_int, opaque: *mut c_void) {
+    // Safety: `opaque` is a valid `CallbackContext` pointer.
+    unsafe { callback_context_from_raw(opaque) }.notify();
 }
 
 extern "C" fn notify_cb(opaque: *mut c_void) {

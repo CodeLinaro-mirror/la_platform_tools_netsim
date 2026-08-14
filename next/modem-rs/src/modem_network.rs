@@ -6,7 +6,7 @@ use netsim_model::{ModemAction, Quirks};
 // ...
 use crate::modem_network_simulator::NetworkEvent;
 pub use crate::types::ModemError;
-use crate::types::{ModemId, ModemInfo, ModemSink};
+use crate::types::{ModemId, ModemInfo, ModemSink, PhoneNumber};
 
 pub trait ModemNetworkInterface: Send + Sync {
     fn add_modem(
@@ -50,9 +50,41 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
     fn get_modem_info(&self, chip_id: ModemId) -> Result<ModemInfo, ModemError> {
         if let Some(modem) = self.get_modem(chip_id) {
             let (rssi, ber) = modem.network_service.signal_strength();
+            let calls = modem
+                .call_service
+                .calls
+                .iter()
+                .map(|c| netsim_model::Call {
+                    number: c
+                        .number
+                        .as_ref()
+                        .map(|n: &PhoneNumber| n.as_str().to_string())
+                        .unwrap_or_default(),
+                    state: match c.state {
+                        crate::call_service::CallState::Active => netsim_model::CallState::Active,
+                        crate::call_service::CallState::Held => netsim_model::CallState::Holding,
+                        crate::call_service::CallState::Dialing => netsim_model::CallState::Dialing,
+                        crate::call_service::CallState::Alerting => {
+                            netsim_model::CallState::Alerting
+                        }
+                        crate::call_service::CallState::Incoming => {
+                            netsim_model::CallState::Incoming
+                        }
+                        crate::call_service::CallState::Waiting => netsim_model::CallState::Waiting,
+                    },
+                    direction: match c.direction {
+                        crate::call_service::CallDirection::Outgoing => {
+                            netsim_model::CallDirection::MobileOriginated
+                        }
+                        crate::call_service::CallDirection::Incoming => {
+                            netsim_model::CallDirection::MobileTerminated
+                        }
+                    },
+                })
+                .collect();
             Ok(ModemInfo {
                 id: chip_id,
-                connections: modem.get_active_calls(),
+                calls,
                 ringing: modem.is_ringing(),
                 sms_count: modem.get_sms_count(),
                 quirks: modem.quirks,

@@ -1,6 +1,7 @@
 # Copyright 2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 
+load("@goldfish_build//rules/native:native_binaries.bzl", "stripped_binaries")
 load("@rules_rust//rust:defs.bzl", "rust_test")
 load("//next:defs.bzl", "netsim_rust_binary")
 
@@ -48,4 +49,9 @@ rust_test(
         "@serde_json",
         "@tracing",
     ],
+)
+
+stripped_binaries(
+    name = "netsim_stripped",
+    srcs = [":netsim"],
 )

@@ -18,7 +18,10 @@ use crate::{
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
     time::{Clock, SystemClock},
-    types::{CommandAction, HostEvent, ModemError, ModemId, ModemSink},
+    types::{
+        ClirMode, CommandAction, DialString, HostEvent, ModemError, ModemId, ModemSink,
+        NumberPresentation, PhoneNumber,
+    },
 };
 
 #[derive(Debug)]
@@ -123,6 +126,7 @@ impl ModemNetworkSimulator {
             ModemAction::SetNetworkTechnology { id, tech } => {
                 self.set_network_technology(id.0, tech)
             }
+            ModemAction::SetOperator { id, operator } => self.set_operator(id.0, &operator),
         }
     }
 
@@ -138,6 +142,10 @@ impl ModemNetworkSimulator {
         self.apply_to_modem(id, |modem| modem.set_network_technology(tech))
     }
 
+    pub fn set_operator(&mut self, id: ModemId, operator: &str) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.set_operator(operator))
+    }
+
     /// Creates a new modem instance.
     pub fn new_modem(
         &mut self,
@@ -151,7 +159,13 @@ impl ModemNetworkSimulator {
             Some(xml) => xml.as_str(),
             None => match sim_type {
                 Some(2) => crate::profiles::PROFILE_CTS_XML,
-                _ => crate::profiles::PROFILE_DEFAULT_XML,
+                _ => {
+                    if quirks.is_cuttlefish {
+                        crate::profiles::PROFILE_TEL_ALASKA_XML
+                    } else {
+                        crate::profiles::PROFILE_DEFAULT_XML
+                    }
+                }
             },
         };
 
@@ -191,7 +205,11 @@ impl ModemNetworkSimulator {
         // Override the default dummy number with a unique generated one to prevent
         // conflicts when launching multiple default emulators. Custom profiles are
         // preserved.
-        if normalize_number(&modem.phone_number()) == crate::constants::DEFAULT_FALLBACK_MSISDN {
+        if modem
+            .phone_number()
+            .as_ref()
+            .is_some_and(|n| n.normalized() == crate::constants::DEFAULT_FALLBACK_MSISDN)
+        {
             modem.set_phone_number(&target_msisdn);
         }
         if let Some(t) = sim_type {
@@ -293,11 +311,11 @@ impl ModemNetworkSimulator {
         let mut events = Vec::new();
 
         match action {
-            CommandAction::InitiateCall(phone_number) => {
+            CommandAction::InitiateCall(args) => {
                 self.metrics.calls_initiated.fetch_add(1, AtomicOrdering::Relaxed);
-                effects.extend(self.initiate_call(id, &phone_number));
+                effects.extend(self.initiate_call(id, &args.number, args.clir));
             }
-            CommandAction::InitiateCallAndHold(phone_number) => {
+            CommandAction::InitiateCallAndHold(args) => {
                 self.metrics.calls_initiated.fetch_add(1, AtomicOrdering::Relaxed);
 
                 // Find peer to hold
@@ -306,22 +324,29 @@ impl ModemNetworkSimulator {
                 if let Some(peer_id) = peer_to_hold
                     && let Some(peer) = self.modems.get_mut(&peer_id)
                 {
-                    peer.call_service.receive_hold();
+                    peer.call_service.receive_hold(id);
                 }
 
-                effects.extend(self.initiate_call(id, &phone_number));
+                effects.extend(self.initiate_call(id, &args.number, args.clir));
             }
             CommandAction::SwapCalls(active_peer, held_peer) => {
                 if let Some(modem) = self.modems.get_mut(&active_peer) {
-                    modem.call_service.receive_hold();
+                    modem.call_service.receive_hold(id);
                 }
                 if let Some(modem) = self.modems.get_mut(&held_peer) {
-                    modem.call_service.receive_resume();
+                    modem.call_service.receive_resume(id);
                 }
             }
             CommandAction::InitiateRemoteCall(phone_number) => {
-                events.push(NetworkEvent::NewConnection { id, destination: phone_number.clone() });
-                effects.extend(self.initiate_call(id, &phone_number));
+                events.push(NetworkEvent::NewConnection {
+                    id,
+                    destination: phone_number.as_str().to_string(),
+                });
+                effects.extend(self.initiate_call(
+                    id,
+                    &phone_number,
+                    ClirMode::SubscriptionDefault,
+                ));
             }
             CommandAction::AnswerCall(answered_modem_id) => {
                 self.metrics.calls_answered.fetch_add(1, AtomicOrdering::Relaxed);
@@ -344,48 +369,46 @@ impl ModemNetworkSimulator {
                     }
                 }
             }
-            CommandAction::HangupCall(hung_up_modem_id) => {
+            CommandAction::HangupCall { initiator, target_peer } => {
                 self.metrics.calls_hung_up.fetch_add(1, AtomicOrdering::Relaxed);
                 let mut effects = Vec::new();
 
-                let remaining_peer_ids: Vec<ModemId> = if let Some(initiator_modem) =
-                    self.modems.get(&hung_up_modem_id)
-                {
-                    initiator_modem.call_service.calls.iter().filter_map(|c| c.peer_id).collect()
-                } else {
-                    Vec::new()
-                };
-
-                for (&mid, modem) in self.modems.iter_mut() {
-                    if mid != hung_up_modem_id {
-                        let has_call_to_initiator = modem
-                            .call_service
-                            .calls
-                            .iter()
-                            .any(|c| c.peer_id == Some(hung_up_modem_id));
-
-                        let initiator_still_has_call = remaining_peer_ids.contains(&mid);
-
-                        if has_call_to_initiator && !initiator_still_has_call {
-                            modem.call_service.receive_hangup_from_peer_id(hung_up_modem_id);
-                            effects
-                                .push((mid, ModemEffect::Response(b"\r\nNO CARRIER\r\n".to_vec())));
-                        }
-                    }
+                if let Some(target) = self.modems.get_mut(&target_peer) {
+                    target.call_service.receive_hangup_from_peer_id(initiator);
+                    effects
+                        .push((target_peer, ModemEffect::Response(b"\r\nNO CARRIER\r\n".to_vec())));
                 }
+
                 let processed_events = self.process_effects(effects);
                 events.extend(processed_events);
-                events.push(NetworkEvent::ModemHungUp { id: hung_up_modem_id });
+
+                if let Some(initiator_modem) = self.modems.get(&initiator)
+                    && initiator_modem.call_service.calls.is_empty()
+                {
+                    events.push(NetworkEvent::ModemHungUp { id: initiator });
+                }
+            }
+            CommandAction::HoldCall { holder, target } => {
+                if let Some(hold_modem) = self.modems.get_mut(&target) {
+                    hold_modem.call_service.receive_hold(holder);
+                }
+            }
+            CommandAction::ResumeCall { resumer, target } => {
+                if let Some(resume_modem) = self.modems.get_mut(&target) {
+                    resume_modem.call_service.receive_resume(resumer);
+                }
             }
             CommandAction::InitiateEmergencyCall => {} // No-op
             CommandAction::ReceiveSms { to, pdu, status_report } => {
                 self.metrics.sms_sent.fetch_add(1, AtomicOrdering::Relaxed);
                 let peer_id = if let Some(ref num) = to {
-                    let sender_num = self.modems.get(&id).map(|m| m.phone_number());
-                    if sender_num.as_deref().map(normalize_number) == Some(normalize_number(num)) {
+                    let sender_num = self.modems.get(&id).and_then(|m| m.phone_number());
+                    if sender_num.as_ref().map(|n| n.normalized()) == Some(normalize_number(num)) {
                         Some(id)
                     } else if let Some(peer) = self.find_peer_id(id, |m| {
-                        normalize_number(&m.phone_number()) == normalize_number(num)
+                        m.phone_number()
+                            .as_ref()
+                            .is_some_and(|n| n.normalized() == normalize_number(num))
                     }) {
                         Some(peer)
                     } else {
@@ -429,20 +452,22 @@ impl ModemNetworkSimulator {
             }
             CommandAction::ReceiveTextSms { to, text } => {
                 self.metrics.sms_sent.fetch_add(1, AtomicOrdering::Relaxed);
-                let sender_num = self.modems.get(&id).map(|m| m.phone_number());
+                let sender_num = self.modems.get(&id).and_then(|m| m.phone_number());
                 let peer_id =
-                    if sender_num.as_deref().map(normalize_number) == Some(normalize_number(&to)) {
+                    if sender_num.as_ref().map(|n| n.normalized()) == Some(normalize_number(&to)) {
                         Some(id)
                     } else {
                         self.find_peer_id(id, |m| {
-                            normalize_number(&m.phone_number()) == normalize_number(&to)
+                            m.phone_number()
+                                .as_ref()
+                                .is_some_and(|n| n.normalized() == normalize_number(&to))
                         })
                     };
 
                 if let Some(pid) = peer_id {
-                    let sender_num_str = sender_num.unwrap_or_default();
+                    let sender_num_str = sender_num.as_ref().map(|n| n.as_str()).unwrap_or("");
                     if let Some(peer_modem) = self.modems.get_mut(&pid) {
-                        let peer_effects = peer_modem.trigger_incoming_sms(&sender_num_str, &text);
+                        let peer_effects = peer_modem.trigger_incoming_sms(sender_num_str, &text);
                         effects.extend(peer_effects.into_iter().map(|e| (pid, e)));
                     }
                 }
@@ -480,7 +505,17 @@ impl ModemNetworkSimulator {
         target_id: ModemId,
         number: &str,
     ) -> Vec<NetworkEvent> {
-        self.apply_to_modem(target_id, |modem| modem.trigger_incoming_call(number, None))
+        let Some(dial_str) = DialString::parse(number.as_bytes()) else {
+            warn!("Invalid incoming call number: {}", number);
+            return Vec::new();
+        };
+        let Some(phone) = dial_str.clean_number() else {
+            warn!("Invalid incoming call number: {}", number);
+            return Vec::new();
+        };
+        self.apply_to_modem(target_id, |modem| {
+            modem.trigger_incoming_call(Some(&phone), NumberPresentation::Allowed, None)
+        })
     }
 
     pub fn initiate_external_answer(&mut self, id: ModemId) -> Vec<NetworkEvent> {
@@ -522,18 +557,28 @@ impl ModemNetworkSimulator {
     fn initiate_call(
         &mut self,
         caller_id: ModemId,
-        phone_number: &str,
+        phone_number: &PhoneNumber,
+        clir: ClirMode,
     ) -> Vec<(ModemId, ModemEffect)> {
-        debug!("[Network] initiate_call: caller_id={}, phone_number={}", caller_id, phone_number);
+        debug!(
+            "[Network] initiate_call: caller_id={}, phone_number={}",
+            caller_id,
+            phone_number.as_str()
+        );
         if tracing::enabled!(tracing::Level::DEBUG) {
             for (id, modem) in &self.modems {
-                debug!("[Network]   modem id={}, phone_number='{}'", id, modem.phone_number());
+                debug!(
+                    "[Network]   modem id={}, phone_number='{}'",
+                    id,
+                    modem.phone_number().as_ref().map(|n| n.as_str()).unwrap_or("None")
+                );
             }
         }
         // Find target
-        let normalized_target = normalize_number(phone_number);
-        let target_id = self
-            .find_peer_id(caller_id, |m| normalize_number(&m.phone_number()) == normalized_target);
+        let normalized_target = phone_number.normalized();
+        let target_id = self.find_peer_id(caller_id, |m| {
+            m.phone_number().as_ref().is_some_and(|n| n.normalized() == normalized_target)
+        });
 
         if let Some(tid) = target_id {
             // 1. Set peer_id on Caller's dialing call
@@ -546,10 +591,17 @@ impl ModemNetworkSimulator {
             }
 
             // 2. Trigger incoming call on Callee (RING + CLIP + peer_id)
-            let caller_number =
-                self.modems.get(&caller_id).map(|m| m.phone_number()).unwrap_or_default();
+            let caller_number = self.modems.get(&caller_id).and_then(|m| m.phone_number());
             if let Some(callee) = self.modems.get_mut(&tid) {
-                let effects = callee.trigger_incoming_call(&caller_number, Some(caller_id));
+                let number_presentation = match clir {
+                    ClirMode::Invocation => NumberPresentation::Restricted,
+                    _ => NumberPresentation::Allowed,
+                };
+                let effects = callee.trigger_incoming_call(
+                    caller_number.as_ref(),
+                    number_presentation,
+                    Some(caller_id),
+                );
                 return effects.into_iter().map(|e| (tid, e)).collect();
             }
         }
@@ -760,7 +812,7 @@ mod tests {
         // 2. Get modem info
         let info = interface.get_modem_info(chip_id).unwrap();
         assert_eq!(info.id, chip_id);
-        assert!(info.connections.is_empty());
+        assert!(info.calls.is_empty());
         assert!(!info.ringing);
         assert_eq!(info.sms_count, 0);
 

@@ -19,6 +19,8 @@ use crate::{
     capture_actor::CaptureActor,
     error::CaptureError,
     ethernet_pcap::EthernetPcapWriter,
+    modem_pcap::ModemPcapWriter,
+    nci_pcap::NciPcapWriter,
     uwb_pcap::UwbPcapWriter,
     writer::{CaptureWriter, DLT_USER0, PcapWriter},
 };
@@ -151,10 +153,10 @@ impl CaptureActor {
             ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => {
                 EthernetPcapWriter::new(&filepath).await?
             }
+            ChipKind::NFC => NciPcapWriter::new(&filepath).await?,
+            ChipKind::CELLULAR => ModemPcapWriter::new(&filepath).await?,
             // Fallback for custom/unregistered protocols (use DLT_USER0)
-            ChipKind::UNSPECIFIED | ChipKind::NFC | ChipKind::CELLULAR => {
-                Box::new(PcapWriter::new(&filepath, DLT_USER0).await?)
-            }
+            ChipKind::UNSPECIFIED => Box::new(PcapWriter::new(&filepath, DLT_USER0).await?),
         };
         Ok(writer)
     }

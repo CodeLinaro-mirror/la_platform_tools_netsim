@@ -1,16 +1,27 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write};
 
 use modem_rs_derive::CommandParser;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{
+    apdu,
     config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
+    constants::*,
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
-    types::{CmeError, DEFAULT_PIN, ExecutionResult, Parsable},
+    types::{
+        CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN, DEFAULT_PIN2,
+        ExecutionResult, FacilityLockMode, Parsable, PhoneNumber,
+    },
 };
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum SimAccessType {
+    Csim,
+    Cgla,
+}
 
 /// SIM service AT commands.
 #[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
@@ -48,13 +59,13 @@ pub enum SimCommand<'a> {
     QueryPinRetriesSpic,
     /// 3GPP2 C.S0023: Set CDMA subscription source
     #[command(tag = "AT+CCSS=")]
-    SetCdmaSubscriptionSource(u8),
+    SetCdmaSubscriptionSource(CdmaSubscriptionSource),
     /// 3GPP2 C.S0023: Query CDMA subscription source
     #[command(tag = "AT+CCSS?")]
     QueryCdmaSubscriptionSource,
     /// 3GPP2 C.S0023: Set CDMA roaming preference
     #[command(tag = "AT+WRMP=")]
-    SetCdmaRoamingPreference(u8),
+    SetCdmaRoamingPreference(CdmaRoamingPreference),
     /// 3GPP2 C.S0023: Query CDMA roaming preference
     #[command(tag = "AT+WRMP?")]
     QueryCdmaRoamingPreference,
@@ -69,6 +80,10 @@ pub enum SimCommand<'a> {
     /// VENDOR: Update phone number
     #[command(tag = "AT+REMOTEUPADATEPHONENUMBER")]
     UpdatePhoneNumber(#[parser(parse_raw_data)] &'a [u8]),
+    #[command(tag = "AT+CEID")]
+    GetEid,
+    #[command(tag = "AT+CATR")]
+    GetAtr,
 }
 
 const MIN_PIN_LEN: usize = 4;
@@ -76,19 +91,8 @@ const MAX_PIN_LEN: usize = 8;
 const PUK_LEN: usize = 8;
 const DEFAULT_PIN_RETRIES: u32 = 3;
 const DEFAULT_PUK_RETRIES: u32 = 10;
-#[allow(dead_code)]
-const CLA_UNSUPPORTED: u8 = 0xFF;
 
 const DEFAULT_PUK: &str = "12345678";
-
-const APDU_SELECT: u16 = 0xA4;
-const APDU_READ_BINARY: u16 = 0xB0;
-const APDU_READ_RECORD: u16 = 0xB2;
-#[allow(dead_code)]
-const APDU_GET_RESPONSE: u16 = 0xC0;
-const APDU_UPDATE_BINARY: u16 = 0xD6;
-const APDU_UPDATE_RECORD: u16 = 0xDC;
-const APDU_STATUS: u16 = 0xF2;
 
 const DEFAULT_FALLBACK_IMSI: &str = "310260123456789";
 const DEFAULT_FALLBACK_ICCID: &str = "89012608640220133897";
@@ -106,19 +110,11 @@ const EF_FPLMN_ID: u16 = 0x6F7B;
 const EF_MSISDN_ID: u16 = 0x6F40;
 const EF_MBDN_ID: u16 = 0x6FC7;
 const EF_AD_ID: u16 = 0x6FAD;
+const EF_FDN_ID: u16 = 0x6F3B;
 
-// ISO 7816-4 APDU Status Words (SW)
-pub const SW_SUCCESS: u16 = 0x9000;
-pub const SW_WRONG_LENGTH: u16 = 0x6700;
-pub const SW_FILE_NOT_FOUND: u16 = 0x6A82;
-pub const SW_INCORRECT_PARAMS: u16 = 0x6A86;
-pub const SW_REFERENCED_DATA_NOT_FOUND: u16 = 0x6A88;
-pub const SW_CLASS_NOT_SUPPORTED: u16 = 0x6E00;
-pub const SW_INS_NOT_SUPPORTED: u16 = 0x6D00;
-pub const SW_TECHNICAL_PROBLEM: u16 = 0x6F00;
-pub const SW_NO_CHANNEL_AVAILABLE: u16 = 0x6A81;
-#[allow(dead_code)]
-pub const SW_INCORRECT_P1_P2: u16 = 0x6B00;
+// SIM file structure constants (TS 51.011 / TS 31.102)
+const ADN_FOOTER_LEN: usize = 14; // Length of dialing number info excluding alpha identifier
+const BCD_LEN_MAX: usize = 10; // Maximum length of BCD dialing number in ADN/FDN record
 
 // ISO 7816-4 SIM APDU Response Constants
 const RESP_SUCCESS: SimResponse = SimResponse::RestrictedSimAccess { sw: SW_SUCCESS, data: None };
@@ -131,23 +127,7 @@ const RESP_INCORRECT_PARAMS: SimResponse =
 const RESP_REFERENCED_DATA_NOT_FOUND: SimResponse =
     SimResponse::RestrictedSimAccess { sw: SW_REFERENCED_DATA_NOT_FOUND, data: None };
 
-// APDU Instruction Bytes (INS)
-const INS_SELECT: u8 = 0xA4;
-const INS_READ_BINARY: u8 = 0xB0;
-const INS_READ_RECORD: u8 = 0xB2;
-const INS_UPDATE_BINARY: u8 = 0xD6;
-const INS_UPDATE_RECORD: u8 = 0xDC;
-#[allow(dead_code)]
-const INS_GET_RESPONSE: u8 = 0xC0;
-#[allow(dead_code)]
-const INS_GET_DATA: u8 = 0xCA;
-const INS_STATUS: u8 = 0xF2;
-const INS_MANAGE_CHANNEL: u8 = 0x70;
-
 const P2_INVALID_SELECT: u8 = 0xF0;
-
-const MANAGE_CHANNEL_ACTION_OPEN: u8 = 0x00;
-const MANAGE_CHANNEL_ACTION_CLOSE: u8 = 0x80;
 
 // APDU Status Words (SW)
 
@@ -182,12 +162,14 @@ pub enum SimResponse {
     CloseLogicalChannel,
     GenericLogicalChannelAccess(String),
     GenericSimAccess(String),
-    CdmaSubscriptionSource(u8),
-    CdmaRoamingPreference(u8),
+    CdmaSubscriptionSource(CdmaSubscriptionSource),
+    CdmaRoamingPreference(CdmaRoamingPreference),
     SimAuthentication(String),
     FacilityLockStatus(u8),
     PinRetriesSpic(u32),
     PinRemainingAttempts { pin_type: String, retries: u32, default_retries: u32 },
+    Eid(String),
+    Atr(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,7 +200,7 @@ impl std::fmt::Display for SimResponse {
             SimResponse::Iccid(iccid) => write!(f, "{iccid}\r\n"),
             SimResponse::OpenLogicalChannel(channel_id) => write!(f, "{channel_id}\r\n"),
             SimResponse::CloseLogicalChannel => write!(f, "+CCHC\r\n"),
-            SimResponse::GenericLogicalChannelAccess(resp) => write!(f, "{resp}"),
+            SimResponse::GenericLogicalChannelAccess(resp) => write!(f, "+CGLA: {resp}\r\n"),
             SimResponse::GenericSimAccess(resp) => write!(f, "+CSIM: {resp}\r\n"),
             SimResponse::CdmaSubscriptionSource(source) => write!(f, "+CCSS: {source}\r\n"),
             SimResponse::CdmaRoamingPreference(pref) => write!(f, "+WRMP: {pref}\r\n"),
@@ -228,6 +210,8 @@ impl std::fmt::Display for SimResponse {
             SimResponse::PinRemainingAttempts { pin_type, retries, default_retries } => {
                 write!(f, "+CPINR: \"{pin_type}\",{retries},{default_retries}\r\n")
             }
+            SimResponse::Eid(eid) => write!(f, "+CEID: {eid}\r\n"),
+            SimResponse::Atr(atr) => write!(f, "+CATR: {atr}\r\n"),
         }
     }
 }
@@ -242,16 +226,21 @@ pub struct SimService {
     puk1: String,
     pin1_retries: u32,
     puk1_retries: u32,
+    pin2: String,
     pin2_retries: u32,
     puk2_retries: u32,
+    fdn_enabled: bool,
     fs: FileSystem,
     sms_messages: HashMap<u8, Vec<u8>>,
     logical_channels: [bool; 4],
     selected_aids: [Option<String>; 4],
     selected_files: [Option<u16>; 4],
-    cdma_subscription_source: u8,
-    cdma_roaming_preference: u8,
+    response_buffer: [Vec<u8>; 4],
+    cdma_subscription_source: CdmaSubscriptionSource,
+    cdma_roaming_preference: CdmaRoamingPreference,
     adfs: Vec<crate::config::ApplicationDedicatedFile>,
+    eid: Option<String>,
+    atr: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -301,17 +290,26 @@ impl SimService {
             },
             pin1_retries: profile.pin_profile.pin1_retries.unwrap_or(DEFAULT_PIN_RETRIES),
             puk1_retries: profile.pin_profile.puk1_retries.unwrap_or(DEFAULT_PUK_RETRIES),
+            pin2: if !profile.pin_profile.pin2.is_empty() {
+                profile.pin_profile.pin2.clone()
+            } else {
+                DEFAULT_PIN2.to_string()
+            },
             pin2_retries: profile.pin_profile.pin2_retries.unwrap_or(DEFAULT_PIN_RETRIES),
             puk2_retries: profile.pin_profile.puk2_retries.unwrap_or(DEFAULT_PUK_RETRIES),
+            fdn_enabled: false,
             fs: profile.sim_io.file_system.clone(),
             sms_messages: HashMap::new(),
             // Channel 0 is the basic channel and is always open by default.
             logical_channels: [true, false, false, false],
             selected_aids: [None, None, None, None],
             selected_files: [None; 4],
-            cdma_subscription_source: 0,
-            cdma_roaming_preference: 0,
+            response_buffer: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
+            cdma_subscription_source: CdmaSubscriptionSource::default(),
+            cdma_roaming_preference: CdmaRoamingPreference::default(),
             adfs: profile.adfs.clone(),
+            eid: profile.eid.clone(),
+            atr: profile.atr.clone(),
         };
 
         // Ensure boot-essential files are present in the filesystem and correctly
@@ -394,55 +392,45 @@ impl SimService {
         service
     }
 
-    fn lookup_cgla(&self, aid: &str, file_id: Option<u16>, command: &str) -> Option<String> {
+    fn lookup_cgla(
+        &self,
+        active_aid: &str,
+        file_id: Option<u16>,
+        apdu: &apdu::ParsedApdu<'_>,
+    ) -> Option<String> {
+        let is_select_aid = apdu.ins == apdu::Instruction::Select && apdu.p1 == 0x04;
+
+        let aid =
+            if is_select_aid { hex::encode_upper(apdu.data()) } else { active_aid.to_string() };
+
         let adf = self.adfs.iter().find(|am| am.aid == aid)?;
 
-        let lookup = |cmd: &str| {
-            if let Some(fid) = file_id
-                && let Some(file_mock) = adf.files.iter().find(|f| f.id == fid)
-                && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd == cmd)
+        if !is_select_aid
+            && let Some(fid) = file_id
+            && let Some(file_mock) = adf.files.iter().find(|f| f.id == fid)
+            && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd.matches(apdu))
+        {
+            return Some(m.response.to_string());
+        }
+
+        if apdu.ins == apdu::Instruction::Select
+            && (apdu.p1 == 0x00 || apdu.p1 == 0x08)
+            && apdu.data().len() >= 2
+        {
+            let target_fid = ((apdu.data()[0] as u16) << 8) | (apdu.data()[1] as u16);
+            if let Some(file_mock) = adf.files.iter().find(|f| f.id == target_fid)
+                && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd.matches(apdu))
             {
                 return Some(m.response.to_string());
             }
-            adf.cgla.iter().find(|m| m.cmd == cmd).map(|m| m.response.to_string())
-        };
-
-        if let Some(resp) = lookup(command) {
-            return Some(resp);
         }
 
-        // Fallback: strip "00" CLA if present and try again.
-        // Some XML profiles exclude the "00" CLA prefix.
-        if let Some(stripped) = command.strip_prefix("00")
-            && !stripped.is_empty()
-            && let Some(resp) = lookup(stripped)
-        {
-            return Some(resp);
-        }
-
-        None
+        adf.cgla.iter().find(|m| m.cmd.matches(apdu)).map(|m| m.response.to_string())
     }
 
-    fn lookup_csim(&self, command: &str) -> Option<String> {
+    fn lookup_csim(&self, apdu: &apdu::ParsedApdu<'_>) -> Option<String> {
         let adf = self.adfs.iter().find(|am| am.aid == "CSIM")?;
-
-        let lookup =
-            |cmd: &str| adf.csim.iter().find(|m| m.cmd == cmd).map(|m| m.response.to_string());
-
-        if let Some(resp) = lookup(command) {
-            return Some(resp);
-        }
-
-        // Fallback: strip "00" CLA if present and try again.
-        // Some XML profiles exclude the "00" CLA prefix.
-        if let Some(stripped) = command.strip_prefix("00")
-            && !stripped.is_empty()
-            && let Some(resp) = lookup(stripped)
-        {
-            return Some(resp);
-        }
-
-        None
+        adf.csim.iter().find(|m| m.cmd.matches(apdu)).map(|m| m.response.to_string())
     }
 
     fn get_imsi(&self) -> String {
@@ -457,16 +445,78 @@ impl SimService {
             .unwrap_or_else(|| DEFAULT_FALLBACK_ICCID.to_string())
     }
 
-    pub fn get_msisdn(&self) -> String {
-        find_ef(&self.fs.master_file, EF_MSISDN_ID)
-            .and_then(|ef| decode_msisdn(&ef.data))
-            .unwrap_or_default()
+    pub(crate) fn get_msisdn(&self) -> Option<PhoneNumber> {
+        let raw =
+            find_ef(&self.fs.master_file, EF_MSISDN_ID).and_then(|ef| decode_msisdn(&ef.data))?;
+        PhoneNumber::parse(raw.as_bytes()).map(|(_, p)| p).ok()
     }
 
     pub fn set_msisdn(&mut self, msisdn: &str) {
         let encoded = encode_msisdn_str(msisdn);
         if let Some(ef) = find_ef_mut(&mut self.fs.master_file, EF_MSISDN_ID) {
             ef.data = encoded;
+        }
+    }
+
+    fn select_sim_file(&mut self, idx: usize, apdu: &apdu::ParsedApdu<'_>) -> Result<(), u16> {
+        let Ok(p1) = apdu::SelectP1::try_from(apdu.p1) else {
+            return Err(SW_INCORRECT_PARAMS);
+        };
+        match p1 {
+            apdu::SelectP1::ByDfName => {
+                if apdu.data().is_empty() {
+                    return Err(SW_FILE_NOT_FOUND);
+                }
+                let aid_upper = hex::encode_upper(apdu.data());
+                if self.adfs.iter().any(|am| am.aid == aid_upper) {
+                    self.selected_aids[idx] = Some(aid_upper);
+                    self.selected_files[idx] = None;
+                    Ok(())
+                } else {
+                    Err(SW_FILE_NOT_FOUND)
+                }
+            }
+            apdu::SelectP1::ByFid | apdu::SelectP1::ByPathFromMf => {
+                if apdu.data().len() != 2 {
+                    return Err(SW_WRONG_LENGTH);
+                }
+                let fid = ((apdu.data()[0] as u16) << 8) | (apdu.data()[1] as u16);
+                let is_file_in_active_adf = if let Some(active_aid) = &self.selected_aids[idx]
+                    && let Some(adf) = self.adfs.iter().find(|a| a.aid == *active_aid)
+                {
+                    let in_overrides = adf.files.iter().any(|f| f.id == fid);
+                    let in_fs_subtree =
+                        if let Some(adf_df) = find_df(&self.fs.master_file, ADF_DEFAULT_FILE_ID) {
+                            find_ef(adf_df, fid).is_some() || find_df(adf_df, fid).is_some()
+                        } else {
+                            false
+                        };
+                    in_overrides || in_fs_subtree
+                } else {
+                    false
+                };
+                if find_ef(&self.fs.master_file, fid).is_some()
+                    || find_df(&self.fs.master_file, fid).is_some()
+                    || is_file_in_active_adf
+                    || matches!(
+                        fid,
+                        EF_ICCID_ID
+                            | EF_IMSI_ID
+                            | EF_MSISDN_ID
+                            | EF_FPLMN_ID
+                            | EF_MBDN_ID
+                            | EF_AD_ID
+                    )
+                {
+                    self.selected_files[idx] = Some(fid);
+                    if !is_file_in_active_adf {
+                        self.selected_aids[idx] = None;
+                    }
+                    Ok(())
+                } else {
+                    Err(SW_FILE_NOT_FOUND)
+                }
+            }
         }
     }
 
@@ -603,9 +653,25 @@ impl SimService {
         Ok(Some(SimResponse::Iccid(self.get_iccid())))
     }
 
+    fn handle_get_eid(&self) -> SimResult {
+        if let Some(eid) = &self.eid {
+            Ok(Some(SimResponse::Eid(eid.clone())))
+        } else {
+            Err(ExecutionResult::cme_error(CmeError::NotFound))
+        }
+    }
+
+    fn handle_get_atr(&self) -> SimResult {
+        if let Some(atr) = &self.atr {
+            Ok(Some(SimResponse::Atr(atr.clone())))
+        } else {
+            Err(ExecutionResult::cme_error(CmeError::NotFound))
+        }
+    }
+
     fn update_sim_file(
         &mut self,
-        command: u16,
+        command: apdu::Instruction,
         file_id: u16,
         p1: u8,
         p2: u8,
@@ -613,7 +679,7 @@ impl SimService {
     ) -> Result<(), SimResponse> {
         // Update in the file system if it exists there
         if let Some(ef) = find_ef_mut(&mut self.fs.master_file, file_id) {
-            if command == APDU_UPDATE_BINARY {
+            if command == apdu::Instruction::UpdateBinary {
                 let offset = ((p1 as usize) << 8) | (p2 as usize);
                 let Ok(new_bytes) = hex::decode(hex_str) else {
                     return Err(RESP_INCORRECT_PARAMS);
@@ -623,31 +689,38 @@ impl SimService {
                 }
                 ef.data[offset..offset + new_bytes.len()].copy_from_slice(&new_bytes);
                 Ok(())
-            } else if command == APDU_UPDATE_RECORD {
+            } else if command == apdu::Instruction::UpdateRecord {
                 // UPDATE RECORD
-                let Ok(new_bytes) = hex::decode(hex_str) else {
-                    return Err(RESP_INCORRECT_PARAMS);
-                };
-                if let Some(rec_len) = ef.record_len
-                    && rec_len > 0
-                {
-                    if p1 == 0 {
+                if let Ok(mode) = apdu::RecordMode::try_from(p2) {
+                    if mode != apdu::RecordMode::AbsoluteMode {
                         return Err(RESP_INCORRECT_PARAMS);
                     }
-                    if new_bytes.len() != rec_len {
-                        return Err(RESP_WRONG_LENGTH);
+                    let Ok(new_bytes) = hex::decode(hex_str) else {
+                        return Err(RESP_INCORRECT_PARAMS);
+                    };
+                    if let Some(rec_len) = ef.record_len
+                        && rec_len > 0
+                    {
+                        if p1 == 0 {
+                            return Err(RESP_INCORRECT_PARAMS);
+                        }
+                        if new_bytes.len() != rec_len {
+                            return Err(RESP_WRONG_LENGTH);
+                        }
+                        let record_num = p1 as usize;
+                        let start = (record_num - 1) * rec_len;
+                        let end = start + rec_len;
+                        if end > ef.data.len() {
+                            return Err(RESP_REFERENCED_DATA_NOT_FOUND);
+                        }
+                        ef.data[start..end].copy_from_slice(&new_bytes);
+                        return Ok(());
                     }
-                    let record_num = p1 as usize;
-                    let start = (record_num - 1) * rec_len;
-                    let end = start + rec_len;
-                    if end > ef.data.len() {
-                        return Err(RESP_REFERENCED_DATA_NOT_FOUND);
-                    }
-                    ef.data[start..end].copy_from_slice(&new_bytes);
-                    return Ok(());
+                    ef.data = new_bytes;
+                    Ok(())
+                } else {
+                    Err(RESP_INCORRECT_PARAMS)
                 }
-                ef.data = new_bytes;
-                Ok(())
             } else {
                 Err(RESP_INCORRECT_PARAMS)
             }
@@ -686,25 +759,36 @@ impl SimService {
         }
     }
 
-    fn read_record_from_fs(&self, file_id: u16, record_num: u8) -> Result<String, SimResponse> {
-        if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
-            if let Some(rec_len) = ef.record_len
-                && rec_len > 0
-            {
-                let record_num = record_num as usize;
-                if record_num > 0 {
-                    let start = (record_num - 1) * rec_len;
-                    let end = start + rec_len;
-                    if end <= ef.data.len() {
-                        return Ok(hex::encode_upper(&ef.data[start..end]));
+    fn read_record_from_fs(
+        &self,
+        file_id: u16,
+        record_num: u8,
+        p2: u8,
+    ) -> Result<String, SimResponse> {
+        if let Ok(mode) = apdu::RecordMode::try_from(p2) {
+            if mode != apdu::RecordMode::AbsoluteMode {
+                return Err(RESP_INCORRECT_PARAMS);
+            }
+            if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
+                if let Some(rec_len) = ef.record_len
+                    && rec_len > 0
+                {
+                    let record_num = record_num as usize;
+                    if record_num > 0 {
+                        let start = (record_num - 1) * rec_len;
+                        let end = start + rec_len;
+                        if end <= ef.data.len() {
+                            return Ok(hex::encode_upper(&ef.data[start..end]));
+                        }
                     }
+                    return Err(RESP_REFERENCED_DATA_NOT_FOUND);
                 }
                 Err(RESP_REFERENCED_DATA_NOT_FOUND)
             } else {
                 Err(RESP_FILE_NOT_FOUND)
             }
         } else {
-            Err(RESP_FILE_NOT_FOUND)
+            Err(RESP_INCORRECT_PARAMS)
         }
     }
 
@@ -717,10 +801,11 @@ impl SimService {
         p3: u8,
         data: Option<String>,
     ) -> SimResult {
+        let ins = apdu::Instruction::from(command as u8);
         // 1. Handle UPDATE BINARY and UPDATE RECORD
-        if command == APDU_UPDATE_BINARY || command == APDU_UPDATE_RECORD {
+        if ins == apdu::Instruction::UpdateBinary || ins == apdu::Instruction::UpdateRecord {
             let resp = if let Some(hex_str) = data {
-                match self.update_sim_file(command, file_id, p1, p2, &hex_str) {
+                match self.update_sim_file(ins, file_id, p1, p2, &hex_str) {
                     Ok(()) => RESP_SUCCESS,
                     Err(err_resp) => err_resp,
                 }
@@ -731,7 +816,7 @@ impl SimService {
         }
 
         // 2. Try to read from the loaded FileSystem first (for READ BINARY and SELECT)
-        if command == APDU_READ_BINARY {
+        if ins == apdu::Instruction::ReadBinary {
             match self.read_binary_from_fs(file_id, p1, p2, p3) {
                 Ok(data_hex) => {
                     return Ok(Some(SimResponse::RestrictedSimAccess {
@@ -741,8 +826,8 @@ impl SimService {
                 }
                 Err(err_resp) => return Ok(Some(err_resp)),
             }
-        } else if command == APDU_READ_RECORD {
-            match self.read_record_from_fs(file_id, p1) {
+        } else if ins == apdu::Instruction::ReadRecord {
+            match self.read_record_from_fs(file_id, p1, p2) {
                 Ok(record_hex) => {
                     return Ok(Some(SimResponse::RestrictedSimAccess {
                         sw: SW_SUCCESS,
@@ -751,12 +836,14 @@ impl SimService {
                 }
                 Err(err_resp) => return Ok(Some(err_resp)),
             }
-        } else if command == APDU_SELECT && find_df(&self.fs.master_file, file_id).is_some() {
+        } else if ins == apdu::Instruction::Select
+            && find_df(&self.fs.master_file, file_id).is_some()
+        {
             return Ok(Some(SimResponse::RestrictedSimAccess {
                 sw: SW_SUCCESS,
                 data: Some("6210".to_string()),
             }));
-        } else if command == APDU_STATUS {
+        } else if ins == apdu::Instruction::Status {
             // Return FCP template for Master File (MF)
             return Ok(Some(SimResponse::RestrictedSimAccess {
                 sw: SW_SUCCESS,
@@ -806,102 +893,141 @@ impl SimService {
         Ok(Some(SimResponse::CloseLogicalChannel))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn process_logical_channel_apdu(
         &mut self,
+        access_type: SimAccessType,
         idx: usize,
-        cla: u8,
-        ins: u8,
-        p1: u8,
-        p2: u8,
-        le: u8,
-        apdu_data: &[u8],
-        cmd_hex: &str,
+        apdu: &apdu::ParsedApdu<'_>,
     ) -> String {
-        if cla == CLA_UNSUPPORTED {
-            return format_sim_response_hex("+CGLA", "", SW_CLASS_NOT_SUPPORTED);
+        if !apdu.class.is_supported() {
+            return format_sim_payload_status(SW_CLASS_NOT_SUPPORTED);
         }
 
-        // 1. Update state based on APDU instruction (like SELECT)
-        if ins == INS_SELECT {
-            if matches!(p1, 0x00 | 0x01 | 0x02 | 0x08) && apdu_data.len() >= 2 {
-                let fid = ((apdu_data[0] as u16) << 8) | (apdu_data[1] as u16);
-                self.selected_files[idx] = Some(fid);
-            } else if p1 == 0x04 && !apdu_data.is_empty() {
-                self.selected_aids[idx] = Some(hex::encode_upper(apdu_data));
-                self.selected_files[idx] = None;
-            }
+        let active_aid = self.selected_aids[idx].as_deref();
+        let selected_fid = self.selected_files[idx];
+
+        if apdu.ins != apdu::Instruction::GetResponse {
+            self.response_buffer[idx].clear();
         }
 
         // 2. Immediate validation check for invalid SELECT P2 parameter
-        if ins == INS_SELECT && p2 == P2_INVALID_SELECT {
-            return format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS);
+        if apdu.ins == apdu::Instruction::Select && apdu.p2 == P2_INVALID_SELECT {
+            return format_sim_payload_status(SW_INCORRECT_PARAMS);
         }
 
         // 3. Honor explicit APDU mappings defined in the XML profile
-        let cmd_hex_upper = cmd_hex.to_ascii_uppercase();
-        let active_aid = self.selected_aids[idx].as_deref().unwrap_or("");
-        let selected_fid = self.selected_files[idx];
-
-        if let Some(resp) = self.lookup_cgla(active_aid, selected_fid, &cmd_hex_upper) {
-            return format!("+CGLA: {resp}\r\n");
+        let profile_response = match access_type {
+            SimAccessType::Cgla => self.lookup_cgla(active_aid.unwrap_or(""), selected_fid, apdu),
+            SimAccessType::Csim => self.lookup_csim(apdu),
+        };
+        if let Some(resp) = profile_response {
+            if apdu.ins == apdu::Instruction::Select {
+                if let Some(sw) = get_status_word_from_payload(&resp)
+                    && !is_error_sw(sw)
+                {
+                    // Ignore any error because the explicit XML profile
+                    // mapping is authoritative
+                    let _ = self.select_sim_file(idx, apdu);
+                }
+            } else if apdu.ins == apdu::Instruction::ManageChannel
+                && let Some(sw) = get_status_word_from_payload(&resp)
+                && sw == SW_SUCCESS
+                && let Ok(action) = apdu::ManageChannelAction::try_from(apdu.p1)
+            {
+                match action {
+                    apdu::ManageChannelAction::Open => {
+                        if let Some(channel_idx) = get_channel_idx_from_open_response(&resp)
+                            && channel_idx < self.logical_channels.len()
+                        {
+                            self.logical_channels[channel_idx] = true;
+                            self.selected_files[channel_idx] = Some(MF_FILE_ID);
+                            if access_type == SimAccessType::Csim {
+                                self.selected_aids[channel_idx] = Some("CSIM".to_string());
+                            }
+                        }
+                    }
+                    apdu::ManageChannelAction::Close => {
+                        let target_idx = if apdu.p2 == 0 { idx } else { apdu.p2 as usize };
+                        if target_idx != 0 && target_idx < self.logical_channels.len() {
+                            self.logical_channels[target_idx] = false;
+                            self.selected_aids[target_idx] = None;
+                            self.selected_files[target_idx] = None;
+                            self.response_buffer[target_idx].clear();
+                        }
+                    }
+                }
+            }
+            return resp;
         }
 
         // 4. Process standard filesystem APDUs
-        let response_data = match ins {
-            INS_READ_BINARY => {
+        let response_data = match apdu.ins {
+            apdu::Instruction::ReadBinary => {
                 if let Some(fid) = selected_fid {
-                    match self.read_binary_from_fs(fid, p1, p2, le) {
-                        Ok(data_hex) => {
-                            Some(format_sim_response_hex("+CGLA", &data_hex, SW_SUCCESS))
-                        }
+                    match self.read_binary_from_fs(
+                        fid,
+                        apdu.p1,
+                        apdu.p2,
+                        apdu.expected_length().unwrap_or(0),
+                    ) {
+                        Ok(data_hex) => Some(format_sim_payload_data(&data_hex, SW_SUCCESS)),
                         Err(SimResponse::RestrictedSimAccess { sw, .. }) => {
-                            Some(format_sim_response_hex("+CGLA", "", sw))
+                            Some(format_sim_payload_status(sw))
                         }
-                        Err(_) => Some(format_sim_response_hex("+CGLA", "", SW_TECHNICAL_PROBLEM)),
+                        Err(_) => Some(format_sim_payload_status(SW_TECHNICAL_PROBLEM)),
                     }
                 } else {
                     None
                 }
             }
-            INS_READ_RECORD => {
+            apdu::Instruction::ReadRecord => {
                 if let Some(fid) = selected_fid {
-                    match self.read_record_from_fs(fid, p1) {
-                        Ok(record_hex) => {
-                            Some(format_sim_response_hex("+CGLA", &record_hex, SW_SUCCESS))
-                        }
+                    match self.read_record_from_fs(fid, apdu.p1, apdu.p2) {
+                        Ok(record_hex) => Some(format_sim_payload_data(&record_hex, SW_SUCCESS)),
                         Err(SimResponse::RestrictedSimAccess { sw, .. }) => {
-                            Some(format_sim_response_hex("+CGLA", "", sw))
+                            Some(format_sim_payload_status(sw))
                         }
-                        Err(_) => Some(format_sim_response_hex("+CGLA", "", SW_TECHNICAL_PROBLEM)),
+                        Err(_) => Some(format_sim_payload_status(SW_TECHNICAL_PROBLEM)),
                     }
                 } else {
                     None
                 }
             }
-            INS_UPDATE_BINARY => {
+            apdu::Instruction::UpdateBinary => {
                 if let Some(fid) = selected_fid {
-                    let data_hex = hex::encode_upper(apdu_data);
-                    match self.update_sim_file(APDU_UPDATE_BINARY, fid, p1, p2, &data_hex) {
-                        Ok(()) => Some(format_sim_response_hex("+CGLA", "", SW_SUCCESS)),
+                    let data_hex = hex::encode_upper(apdu.data());
+                    match self.update_sim_file(
+                        apdu::Instruction::UpdateBinary,
+                        fid,
+                        apdu.p1,
+                        apdu.p2,
+                        &data_hex,
+                    ) {
+                        Ok(()) => Some(format_sim_payload_status(SW_SUCCESS)),
                         Err(SimResponse::RestrictedSimAccess { sw, .. }) => {
-                            Some(format_sim_response_hex("+CGLA", "", sw))
+                            Some(format_sim_payload_status(sw))
                         }
-                        Err(_) => Some(format_sim_response_hex("+CGLA", "", SW_TECHNICAL_PROBLEM)),
+                        Err(_) => Some(format_sim_payload_status(SW_TECHNICAL_PROBLEM)),
                     }
                 } else {
                     None
                 }
             }
-            INS_UPDATE_RECORD => {
+            apdu::Instruction::UpdateRecord => {
                 if let Some(fid) = selected_fid {
-                    let data_hex = hex::encode_upper(apdu_data);
-                    match self.update_sim_file(APDU_UPDATE_RECORD, fid, p1, p2, &data_hex) {
-                        Ok(()) => Some(format_sim_response_hex("+CGLA", "", SW_SUCCESS)),
+                    let data_hex = hex::encode_upper(apdu.data());
+                    match self.update_sim_file(
+                        apdu::Instruction::UpdateRecord,
+                        fid,
+                        apdu.p1,
+                        apdu.p2,
+                        &data_hex,
+                    ) {
+                        Ok(()) => Some(format_sim_payload_status(SW_SUCCESS)),
                         Err(SimResponse::RestrictedSimAccess { sw, .. }) => {
-                            Some(format_sim_response_hex("+CGLA", "", sw))
+                            Some(format_sim_payload_status(sw))
                         }
-                        Err(_) => Some(format_sim_response_hex("+CGLA", "", SW_TECHNICAL_PROBLEM)),
+                        Err(_) => Some(format_sim_payload_status(SW_TECHNICAL_PROBLEM)),
                     }
                 } else {
                     None
@@ -913,62 +1039,78 @@ impl SimService {
         // 5. Handle basic control APDUs or return error
         match response_data {
             Some(resp) => resp,
-            None => match ins {
-                INS_SELECT => {
-                    if let Some(fid) = selected_fid
-                        && (find_ef(&self.fs.master_file, fid).is_some()
-                            || find_df(&self.fs.master_file, fid).is_some()
-                            || matches!(
-                                fid,
-                                EF_ICCID_ID
-                                    | EF_IMSI_ID
-                                    | EF_MSISDN_ID
-                                    | EF_FPLMN_ID
-                                    | EF_MBDN_ID
-                                    | EF_AD_ID
-                            ))
-                    {
-                        format_sim_response_hex("+CGLA", "", SW_SUCCESS)
+            None => match apdu.ins {
+                apdu::Instruction::Select => {
+                    if let Ok(p2) = apdu::SelectP2::try_from(apdu.p2) {
+                        if p2 == apdu::SelectP2::ReturnProprietary {
+                            return format_sim_payload_status(SW_INCORRECT_PARAMS);
+                        }
+                        match self.select_sim_file(idx, apdu) {
+                            Ok(()) => {
+                                if p2 == apdu::SelectP2::ReturnFcp {
+                                    let fid =
+                                        self.selected_files[idx].unwrap_or(ADF_DEFAULT_FILE_ID);
+                                    let fcp_hex =
+                                        generate_df_fcp(fid, self.selected_aids[idx].as_deref());
+                                    if let Ok(fcp_bytes) = hex::decode(&fcp_hex) {
+                                        let len = fcp_bytes.len();
+                                        self.response_buffer[idx] = fcp_bytes;
+                                        let sw_low = if len >= 256 { 0 } else { len as u8 };
+                                        let sw = ((SW_BYTES_REMAINING_PREFIX as u16) << 8)
+                                            | (sw_low as u16);
+                                        return format_sim_payload_status(sw);
+                                    }
+                                }
+                                format_sim_payload_status(SW_SUCCESS)
+                            }
+                            Err(sw) => format_sim_payload_status(sw),
+                        }
                     } else {
-                        format_sim_response_hex("+CGLA", "", SW_FILE_NOT_FOUND)
+                        format_sim_payload_status(SW_INCORRECT_PARAMS)
                     }
                 }
-                INS_STATUS => format_sim_response_hex("+CGLA", STATUS_FCP_HEX, SW_SUCCESS),
-                INS_MANAGE_CHANNEL => match p1 {
-                    MANAGE_CHANNEL_ACTION_OPEN => {
-                        if let Some(channel_idx) =
-                            self.logical_channels.iter().position(|&open| !open)
-                        {
-                            self.logical_channels[channel_idx] = true;
-                            let channel_hex = format!("{channel_idx:02X}");
-                            format_sim_response_hex("+CGLA", &channel_hex, SW_SUCCESS)
-                        } else {
-                            format_sim_response_hex("+CGLA", "", SW_NO_CHANNEL_AVAILABLE)
+                apdu::Instruction::Status => format_sim_payload_data(STATUS_FCP_HEX, SW_SUCCESS),
+                apdu::Instruction::ManageChannel => {
+                    let Ok(action) = apdu::ManageChannelAction::try_from(apdu.p1) else {
+                        return format_sim_payload_status(SW_INCORRECT_PARAMS);
+                    };
+                    match action {
+                        apdu::ManageChannelAction::Open => {
+                            if let Some(channel_idx) =
+                                self.logical_channels.iter().position(|&open| !open)
+                            {
+                                self.logical_channels[channel_idx] = true;
+                                let channel_hex = format!("{channel_idx:02X}");
+                                format_sim_payload_data(&channel_hex, SW_SUCCESS)
+                            } else {
+                                format_sim_payload_status(SW_NO_CHANNEL_AVAILABLE)
+                            }
+                        }
+                        apdu::ManageChannelAction::Close => {
+                            let target_idx = if apdu.p2 == 0 { idx } else { apdu.p2 as usize };
+                            if target_idx == 0 {
+                                format_sim_payload_status(SW_INCORRECT_PARAMS) // 6A86
+                            } else if target_idx >= self.logical_channels.len()
+                                || !self.logical_channels[target_idx]
+                            {
+                                format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND) // 6A88
+                            } else {
+                                self.logical_channels[target_idx] = false;
+                                self.selected_aids[target_idx] = None;
+                                self.selected_files[target_idx] = None;
+                                self.response_buffer[target_idx].clear();
+                                format_sim_payload_status(SW_SUCCESS)
+                            }
                         }
                     }
-                    MANAGE_CHANNEL_ACTION_CLOSE => {
-                        let target_idx = p2 as usize;
-                        if target_idx == 0 {
-                            format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS) // 6A86
-                        } else if target_idx >= self.logical_channels.len() {
-                            format_sim_response_hex("+CGLA", "", SW_REFERENCED_DATA_NOT_FOUND) // 6A88
-                        } else if !self.logical_channels[target_idx] {
-                            format_sim_response_hex("+CGLA", "", SW_NO_CHANNEL_AVAILABLE) // 6A81
-                        } else {
-                            self.logical_channels[target_idx] = false;
-                            self.selected_aids[target_idx] = None;
-                            self.selected_files[target_idx] = None;
-                            format_sim_response_hex("+CGLA", "", SW_SUCCESS)
-                        }
-                    }
-                    _ => format_sim_response_hex("+CGLA", "", SW_INCORRECT_PARAMS),
-                },
+                }
+                apdu::Instruction::GetResponse => self.handle_get_response(idx, apdu),
                 _ => {
-                    warn!(
-                        "[SimService] Transmit logical channel: command not found in profile: {}, ins: {:02X}",
-                        cmd_hex_upper, ins
-                    );
-                    format_sim_response_hex("+CGLA", "", SW_INS_NOT_SUPPORTED)
+                    if access_type == SimAccessType::Cgla {
+                        format_sim_payload_status(SW_INS_NOT_SUPPORTED)
+                    } else {
+                        format_sim_payload_status(SW_INCORRECT_PARAMS)
+                    }
                 }
             },
         }
@@ -986,89 +1128,76 @@ impl SimService {
         let data_str = std::str::from_utf8(data).unwrap_or("");
         let data_clean = data_str.trim_matches('"');
 
-        // Parse APDU bytes
         let apdu_bytes = match hex::decode(data_clean) {
             Ok(b) => b,
             Err(_) => {
                 return Ok(Some(SimResponse::GenericLogicalChannelAccess(
-                    format_sim_response_hex("+CGLA", "", SW_TECHNICAL_PROBLEM),
+                    format_sim_payload_status(SW_TECHNICAL_PROBLEM),
                 )));
             }
         };
 
-        if apdu_bytes.len() < 4 {
-            return Ok(Some(SimResponse::GenericLogicalChannelAccess(format_sim_response_hex(
-                "+CGLA",
-                "",
-                SW_TECHNICAL_PROBLEM,
+        let parsed = match apdu::ParsedApdu::parse(&apdu_bytes) {
+            Ok(p) => p,
+            Err(sw) => {
+                return Ok(Some(SimResponse::GenericLogicalChannelAccess(
+                    format_sim_payload_status(sw),
+                )));
+            }
+        };
+
+        if !parsed.class.is_supported()
+            || (parsed.class.channel() != 0 && parsed.class.channel() != idx)
+        {
+            return Ok(Some(SimResponse::GenericLogicalChannelAccess(format_sim_payload_status(
+                SW_CLASS_NOT_SUPPORTED,
             ))));
         }
 
-        let cla = apdu_bytes[0];
-        let ins = apdu_bytes[1];
-        let p1 = apdu_bytes[2];
-        let p2 = apdu_bytes[3];
-
-        let mut apdu_data = Vec::new();
-        let mut le = 0u8;
-
-        if apdu_bytes.len() == 5 {
-            // Case 2 APDU: CLA INS P1 P2 Le
-            le = apdu_bytes[4];
-        } else if apdu_bytes.len() > 5 {
-            let lc = apdu_bytes[4] as usize;
-            if apdu_bytes.len() == 5 + lc {
-                // Case 3 APDU: CLA INS P1 P2 Lc Data
-                apdu_data = apdu_bytes[5..].to_vec();
-            } else if apdu_bytes.len() == 6 + lc {
-                // Case 4 APDU: CLA INS P1 P2 Lc Data Le
-                apdu_data = apdu_bytes[5..5 + lc].to_vec();
-                le = apdu_bytes[5 + lc];
-            } else {
-                return Ok(Some(SimResponse::GenericLogicalChannelAccess(
-                    format_sim_response_hex("+CGLA", "", SW_WRONG_LENGTH),
-                )));
-            }
-        }
-
-        let response_data =
-            self.process_logical_channel_apdu(idx, cla, ins, p1, p2, le, &apdu_data, data_clean);
+        let response_data = self.process_logical_channel_apdu(SimAccessType::Cgla, idx, &parsed);
 
         Ok(Some(SimResponse::GenericLogicalChannelAccess(response_data)))
     }
 
-    fn handle_csim_manage_channel(&mut self, p1: u8, p2: u8) -> SimResult {
-        if p1 == MANAGE_CHANNEL_ACTION_OPEN {
-            // Open channel
-            if let Some(channel_idx) = self.logical_channels.iter().position(|&open| !open) {
-                self.logical_channels[channel_idx] = true;
-                self.selected_aids[channel_idx] = Some("CSIM".to_string()); // CSIM channel
-                let resp_hex = format!("{channel_idx:02X}{SW_SUCCESS:04X}");
-                Ok(Some(SimResponse::GenericSimAccess(format!("{},{resp_hex}", resp_hex.len()))))
-            } else {
-                // No channel available
-                Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_NO_CHANNEL_AVAILABLE:04X}"))))
-            }
-        } else if p1 == MANAGE_CHANNEL_ACTION_CLOSE {
-            // Close channel
-            let channel_idx = p2 as usize;
-            if channel_idx == 0 || channel_idx >= self.logical_channels.len() {
-                let status = if channel_idx == 0 {
-                    SW_INCORRECT_PARAMS
+    fn handle_csim_manage_channel(&mut self, channel_idx: usize, p1: u8, p2: u8) -> SimResult {
+        let Ok(action) = apdu::ManageChannelAction::try_from(p1) else {
+            let status = SW_INCORRECT_PARAMS;
+            return Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))));
+        };
+        match action {
+            apdu::ManageChannelAction::Open => {
+                if let Some(channel_idx) = self.logical_channels.iter().position(|&open| !open) {
+                    self.logical_channels[channel_idx] = true;
+                    self.selected_aids[channel_idx] = Some("CSIM".to_string()); // CSIM channel
+                    let resp_hex = format!("{channel_idx:02X}{SW_SUCCESS:04X}");
+                    Ok(Some(SimResponse::GenericSimAccess(format!(
+                        "{},{resp_hex}",
+                        resp_hex.len()
+                    ))))
                 } else {
-                    SW_REFERENCED_DATA_NOT_FOUND
-                };
-                Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
-            } else if !self.logical_channels[channel_idx] {
-                Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_NO_CHANNEL_AVAILABLE:04X}"))))
-            } else {
-                self.logical_channels[channel_idx] = false;
-                self.selected_aids[channel_idx] = None;
-                self.selected_files[channel_idx] = None;
-                Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_SUCCESS:04X}"))))
+                    // No channel available
+                    Ok(Some(SimResponse::GenericSimAccess(format!(
+                        "4,{SW_NO_CHANNEL_AVAILABLE:04X}"
+                    ))))
+                }
             }
-        } else {
-            Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_INCORRECT_PARAMS:04X}"))))
+            apdu::ManageChannelAction::Close => {
+                let target_idx = if p2 == 0 { channel_idx } else { p2 as usize };
+                if target_idx == 0 {
+                    let status = SW_INCORRECT_PARAMS;
+                    Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
+                } else if target_idx >= self.logical_channels.len()
+                    || !self.logical_channels[target_idx]
+                {
+                    let status = SW_REFERENCED_DATA_NOT_FOUND;
+                    Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
+                } else {
+                    self.logical_channels[target_idx] = false;
+                    self.selected_aids[target_idx] = None;
+                    self.selected_files[target_idx] = None;
+                    Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_SUCCESS:04X}"))))
+                }
+            }
         }
     }
 
@@ -1078,36 +1207,31 @@ impl SimService {
             Ok(b) => b,
             Err(_) => return Err(ExecutionResult::cme_error(CmeError::Custom(100, "unknown"))),
         };
-        if apdu_bytes.len() < 4 {
-            return Err(ExecutionResult::cme_error(CmeError::Custom(100, "unknown")));
-        }
-        let _cla = apdu_bytes[0];
-        let ins = apdu_bytes[1];
-        let p1 = apdu_bytes[2];
-        let p2 = apdu_bytes[3];
 
-        if ins == INS_MANAGE_CHANNEL {
-            self.handle_csim_manage_channel(p1, p2)
-        } else {
-            let cmd_hex_upper = apdu_str.to_ascii_uppercase();
-            if let Some(resp) = self.lookup_csim(&cmd_hex_upper) {
-                Ok(Some(SimResponse::GenericSimAccess(resp)))
-            } else {
-                match ins {
-                    INS_SELECT => {
-                        Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_SUCCESS:04X}"))))
-                    }
-                    _ => {
-                        warn!(
-                            "[SimService] Unhandled INS in CSIM: {:02X}, cmd: {}",
-                            ins, cmd_hex_upper
-                        );
-                        Ok(Some(SimResponse::GenericSimAccess(format!(
-                            "4,{SW_INCORRECT_PARAMS:04X}"
-                        ))))
-                    }
-                }
+        let parsed = match apdu::ParsedApdu::parse(&apdu_bytes) {
+            Ok(p) => p,
+            Err(sw) => {
+                let payload = format_sim_payload_status(sw);
+                return Ok(Some(SimResponse::GenericSimAccess(payload)));
             }
+        };
+
+        let channel_idx = parsed.class.channel();
+        if !parsed.class.is_supported()
+            || channel_idx >= self.logical_channels.len()
+            || !self.logical_channels[channel_idx]
+        {
+            return Ok(Some(SimResponse::GenericSimAccess(format_sim_payload_status(
+                SW_CLASS_NOT_SUPPORTED,
+            ))));
+        }
+
+        if parsed.ins == apdu::Instruction::ManageChannel {
+            self.handle_csim_manage_channel(channel_idx, parsed.p1, parsed.p2)
+        } else {
+            let payload =
+                self.process_logical_channel_apdu(SimAccessType::Csim, channel_idx, &parsed);
+            Ok(Some(SimResponse::GenericSimAccess(payload)))
         }
     }
 
@@ -1134,7 +1258,7 @@ impl SimService {
             Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
         }
     }
-    fn handle_set_cdma_subscription_source(&mut self, source: u8) -> SimResult {
+    fn handle_set_cdma_subscription_source(&mut self, source: CdmaSubscriptionSource) -> SimResult {
         self.cdma_subscription_source = source;
         Ok(None)
     }
@@ -1144,7 +1268,10 @@ impl SimService {
         Ok(Some(SimResponse::CdmaSubscriptionSource(source)))
     }
 
-    fn handle_set_cdma_roaming_preference(&mut self, preference: u8) -> SimResult {
+    fn handle_set_cdma_roaming_preference(
+        &mut self,
+        preference: CdmaRoamingPreference,
+    ) -> SimResult {
         self.cdma_roaming_preference = preference;
         Ok(None)
     }
@@ -1182,14 +1309,16 @@ impl SimService {
 
     pub fn handle_set_facility_lock(
         &mut self,
-        mode: u8,
+        mode: FacilityLockMode,
         passwd: Option<QuotedString>,
     ) -> SimResult {
-        if (mode == 0 || mode == 1) && self.state == SimState::PukRequired {
+        if (mode == FacilityLockMode::Unlock || mode == FacilityLockMode::Lock)
+            && self.state == SimState::PukRequired
+        {
             return Err(ExecutionResult::cme_error(CmeError::SimPukRequired));
         }
         match mode {
-            0 => {
+            FacilityLockMode::Unlock => {
                 let passwd = match passwd {
                     Some(p) => p,
                     None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
@@ -1211,7 +1340,7 @@ impl SimService {
                     Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                 }
             }
-            1 => {
+            FacilityLockMode::Lock => {
                 let passwd = match passwd {
                     Some(p) => p,
                     None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
@@ -1233,9 +1362,96 @@ impl SimService {
                     Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                 }
             }
-            2 => Ok(Some(SimResponse::FacilityLockStatus(if self.pin_enabled { 1 } else { 0 }))),
-            _ => Err(ExecutionResult::Unhandled),
+            FacilityLockMode::QueryStatus => {
+                Ok(Some(SimResponse::FacilityLockStatus(if self.pin_enabled { 1 } else { 0 })))
+            }
         }
+    }
+
+    pub(crate) fn handle_set_fdn_lock(
+        &mut self,
+        mode: FacilityLockMode,
+        passwd: Option<QuotedString>,
+    ) -> SimResult {
+        if (mode == FacilityLockMode::Unlock || mode == FacilityLockMode::Lock)
+            && self.pin2_retries == 0
+        {
+            return Err(ExecutionResult::cme_error(CmeError::SimPuk2Required));
+        }
+
+        match mode {
+            FacilityLockMode::Unlock | FacilityLockMode::Lock => {
+                let passwd = match passwd {
+                    Some(p) => p,
+                    None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
+                };
+                if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&passwd.as_ref().len()) {
+                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
+                }
+                if passwd.as_ref() == self.pin2.as_bytes() {
+                    self.fdn_enabled = mode == FacilityLockMode::Lock;
+                    self.pin2_retries = DEFAULT_PIN_RETRIES;
+                    Ok(None)
+                } else {
+                    self.pin2_retries = self.pin2_retries.saturating_sub(1);
+                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
+                }
+            }
+            FacilityLockMode::QueryStatus => {
+                Ok(Some(SimResponse::FacilityLockStatus(if self.fdn_enabled { 1 } else { 0 })))
+            }
+        }
+    }
+
+    pub(crate) fn is_fdn_allowed(&self, number: &PhoneNumber) -> bool {
+        if !self.fdn_enabled {
+            return true;
+        }
+
+        let Some(fdn_ef) = find_ef(&self.fs.master_file, EF_FDN_ID) else {
+            return false;
+        };
+
+        let record_len = fdn_ef.record_len.unwrap_or(28);
+        if record_len < ADN_FOOTER_LEN {
+            return false;
+        }
+
+        let normalized_target = number.normalized();
+
+        for record in fdn_ef.data.chunks(record_len) {
+            if record.len() < record_len {
+                continue;
+            }
+            if record.iter().all(|&b| b == 0xFF) {
+                continue;
+            }
+
+            let len_offset = record_len - ADN_FOOTER_LEN;
+            let len_byte = record[len_offset];
+            if len_byte == 0xFF || len_byte == 0 {
+                continue;
+            }
+
+            let bcd_len = (len_byte as usize).saturating_sub(1).min(BCD_LEN_MAX);
+            if bcd_len == 0 {
+                continue;
+            }
+
+            let bcd_start = len_offset + 2;
+            let bcd_bytes = &record[bcd_start..bcd_start + bcd_len];
+
+            let decoded_number = crate::pdu::bcd::bcd_to_string(bcd_bytes);
+            if decoded_number.is_empty() {
+                continue;
+            }
+
+            if normalized_target.starts_with(&decoded_number) {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn handle_query_pin_retries_spic(&self) -> SimResult {
@@ -1260,7 +1476,7 @@ impl SimService {
     }
 
     pub fn execute<'a>(&mut self, command: &SimCommand<'a>) -> ExecutionResult {
-        info!("[SimService] Executing SIM command: {:?}", command);
+        info!("[SimService] Executing SIM command: {command:?}");
         if self.state == SimState::Absent {
             return ExecutionResult::cme_error(CmeError::SimNotInserted); /* SIM not inserted */
         }
@@ -1299,9 +1515,40 @@ impl SimService {
             SimCommand::UpdatePhoneNumber(phone_number) => {
                 self.handle_update_phone_number(phone_number)
             }
+            SimCommand::GetEid => self.handle_get_eid(),
+            SimCommand::GetAtr => self.handle_get_atr(),
         };
 
         sim_result.into()
+    }
+
+    fn handle_get_response(&mut self, idx: usize, apdu: &apdu::ParsedApdu<'_>) -> String {
+        if apdu.p1 != 0x00 || apdu.p2 != 0x00 {
+            return format_sim_payload_status(SW_INCORRECT_PARAMS);
+        }
+        if self.response_buffer[idx].is_empty() {
+            return format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND);
+        }
+
+        let req_len = if let Some(le) = apdu.expected_length() {
+            if le == 0 { 256 } else { le as usize }
+        } else {
+            self.response_buffer[idx].len()
+        };
+
+        let available = self.response_buffer[idx].len();
+        let take_len = req_len.min(available);
+        let chunk: Vec<u8> = self.response_buffer[idx].drain(..take_len).collect();
+        let remaining = self.response_buffer[idx].len();
+        let hex_data = hex::encode_upper(&chunk);
+
+        if remaining > 0 {
+            let sw_low = if remaining >= 256 { 0 } else { remaining as u8 };
+            let sw = ((SW_BYTES_REMAINING_PREFIX as u16) << 8) | (sw_low as u16);
+            format_sim_payload_data(&hex_data, sw)
+        } else {
+            format_sim_payload_data(&hex_data, SW_SUCCESS)
+        }
     }
 }
 
@@ -1335,6 +1582,26 @@ fn encode_msisdn_str(msisdn: &str) -> Vec<u8> {
     result.extend_from_slice(&[0xFF, 0xFF]);
 
     result
+}
+
+fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
+    let mut fcp_bytes = hex::decode(STATUS_FCP_HEX).unwrap();
+    // Overwrite File ID in FCP template (Tag '83' at index 6: 83 02 3F 00)
+    fcp_bytes[8] = ((df_id >> 8) & 0xFF) as u8;
+    fcp_bytes[9] = (df_id & 0xFF) as u8;
+
+    if df_id == ADF_DEFAULT_FILE_ID
+        && let Some(aid) = active_aid
+        && let Ok(aid_bytes) = hex::decode(aid)
+    {
+        // Append Tag '84' (DF Name / AID)
+        fcp_bytes.push(TAG_DF_NAME);
+        fcp_bytes.push(aid_bytes.len() as u8);
+        fcp_bytes.extend(aid_bytes);
+        // Update Tag '62' length at index 1
+        fcp_bytes[1] = (fcp_bytes.len() - 2) as u8;
+    }
+    hex::encode_upper(fcp_bytes)
 }
 
 pub(crate) fn find_df(df: &DedicatedFile, id: u16) -> Option<&DedicatedFile> {
@@ -1449,7 +1716,172 @@ fn decode_msisdn(bytes: &[u8]) -> Option<String> {
     Some(msisdn)
 }
 
-fn format_sim_response_hex(prefix: &str, data_hex: &str, sw: u16) -> String {
-    let combined = format!("{}{:04X}", data_hex, sw);
-    format!("{prefix}: {},{combined}\r\n", combined.len())
+fn format_sim_payload_data(data_hex: &str, status_word: u16) -> String {
+    let combined_len = data_hex.len() + 4;
+    let mut result = String::with_capacity(combined_len + 6); // 6 for len and comma
+    write!(&mut result, "{},{}{:04X}", combined_len, data_hex, status_word).unwrap();
+    result
+}
+
+fn format_sim_payload_status(status_word: u16) -> String {
+    format_sim_payload_data("", status_word)
+}
+
+// Helper functions for state synchronization and status word parsing
+fn get_status_word_from_payload(payload: &str) -> Option<u16> {
+    let part2 = payload.split(',').nth(1)?;
+    if part2.len() < 4 {
+        return None;
+    }
+    let sw_str = &part2[part2.len() - 4..];
+    u16::from_str_radix(sw_str, 16).ok()
+}
+
+fn is_error_sw(sw: u16) -> bool {
+    let high = (sw >> 8) as u8;
+    !matches!(high, 0x90 | 0x91 | 0x92 | 0x9F | 0x61 | 0x62 | 0x63)
+}
+
+fn get_channel_idx_from_open_response(payload: &str) -> Option<usize> {
+    let part2 = payload.split(',').nth(1)?;
+    if part2.len() < 6 {
+        return None;
+    }
+    let channel_hex = &part2[0..2];
+    usize::from_str_radix(channel_hex, 16).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::{
+            DedicatedFile, ElementaryFile, FileSystem, PinProfile, SimFile, SimIo, SimProfile,
+        },
+        parser::QuotedString,
+        types::FacilityLockMode,
+    };
+
+    fn create_test_fdn_profile(fdn_data: Vec<u8>) -> SimProfile {
+        SimProfile {
+            iccid: "89014103211118500720".to_string(),
+            imsi: "310260123456789".to_string(),
+            pin_profile: PinProfile { pin2: "5678".to_string(), ..Default::default() },
+            sim_io: SimIo {
+                file_system: FileSystem {
+                    master_file: DedicatedFile {
+                        file_id: 0x3F00,
+                        files: vec![
+                            SimFile::ElementaryFile(ElementaryFile {
+                                file_id: 0x2FE2,
+                                record_len: None,
+                                data: hex::decode("89014103211118500720").unwrap(),
+                            }),
+                            SimFile::DedicatedFile(DedicatedFile {
+                                file_id: 0x7F10, // DF_TELECOM
+                                files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                    file_id: 0x6F3B, // EF_FDN
+                                    record_len: Some(28),
+                                    data: fdn_data,
+                                })],
+                            }),
+                        ],
+                    },
+                },
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_is_fdn_allowed_disabled_by_default() {
+        let mut fdn_record = vec![0xFF; 28];
+        fdn_record[14] = 4; // len: 3 BCD + 1 TON
+        fdn_record[15] = 0x81; // National
+        fdn_record[16] = 0x21; // '1','2'
+        fdn_record[17] = 0x43; // '3','4'
+        fdn_record[18] = 0xF5; // '5', filler
+
+        let profile = create_test_fdn_profile(fdn_record);
+        let service = SimService::new(&profile);
+
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("98765")));
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("12345")));
+    }
+
+    #[test]
+    fn test_is_fdn_allowed_enabled_matching() {
+        let mut fdn_record = vec![0xFF; 28];
+        fdn_record[14] = 4; // len
+        fdn_record[15] = 0x81;
+        fdn_record[16] = 0x21;
+        fdn_record[17] = 0x43;
+        fdn_record[18] = 0xF5; // "12345"
+
+        let mut profile = create_test_fdn_profile(fdn_record);
+        profile.pin_profile.pin2 = "5678".to_string();
+        let mut service = SimService::new(&profile);
+
+        service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"5678"))).unwrap();
+        assert!(service.fdn_enabled);
+
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("12345")));
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("1234567")));
+        assert!(!service.is_fdn_allowed(&PhoneNumber::new("1234")));
+        assert!(!service.is_fdn_allowed(&PhoneNumber::new("98765")));
+
+        // Security bypass fix verification (characters 'a' in BCD)
+        let mut fdn_record_with_a = vec![0xFF; 28];
+        fdn_record_with_a[14] = 3; // len: 2 bytes BCD + 1 TON
+        fdn_record_with_a[15] = 0x81;
+        fdn_record_with_a[16] = 0x21; // "12"
+        fdn_record_with_a[17] = 0xC3; // "3a"
+
+        let profile_a = create_test_fdn_profile(fdn_record_with_a);
+        let mut service_a = SimService::new(&profile_a);
+        service_a.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"5678"))).unwrap();
+
+        assert!(!service_a.is_fdn_allowed(&PhoneNumber::new("12345")));
+    }
+
+    #[test]
+    fn test_handle_set_fdn_lock_lockout() {
+        let fdn_record = vec![0xFF; 28];
+        let mut profile = create_test_fdn_profile(fdn_record);
+        profile.pin_profile.pin2 = "5678".to_string();
+        profile.pin_profile.pin2_retries = Some(3);
+        let mut service = SimService::new(&profile);
+
+        // Try invalid length PIN2 -> fails immediately, does NOT decrement retries
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"123")));
+        assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::IncorrectPassword)));
+        assert_eq!(service.pin2_retries, 3);
+
+        let res =
+            service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"123456789")));
+        assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::IncorrectPassword)));
+        assert_eq!(service.pin2_retries, 3);
+
+        // Try wrong PIN2 -> retries decrement
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
+        assert!(res.is_err());
+        assert_eq!(service.pin2_retries, 2);
+
+        // Try wrong PIN2 again
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
+        assert!(res.is_err());
+        assert_eq!(service.pin2_retries, 1);
+
+        // Try wrong PIN2 third time -> retries reach 0
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
+        assert!(res.is_err());
+        assert_eq!(service.pin2_retries, 0);
+
+        // Try CORRECT PIN2 now that it is blocked -> should STILL fail with
+        // SimPuk2Required!
+        let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"5678")));
+        assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::SimPuk2Required)));
+
+        assert!(!service.fdn_enabled);
+    }
 }
