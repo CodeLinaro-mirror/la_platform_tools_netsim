@@ -14,7 +14,6 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
 use crate::{
-    call_service::CallState,
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
     time::{Clock, SystemClock},
@@ -315,28 +314,6 @@ impl ModemNetworkSimulator {
                 self.metrics.calls_initiated.fetch_add(1, AtomicOrdering::Relaxed);
                 effects.extend(self.initiate_call(id, &args.number, args.clir));
             }
-            CommandAction::InitiateCallAndHold(args) => {
-                self.metrics.calls_initiated.fetch_add(1, AtomicOrdering::Relaxed);
-
-                // Find peer to hold
-                let peer_to_hold = self.find_peer_id(id, |m| m.call_service.is_active());
-
-                if let Some(peer_id) = peer_to_hold
-                    && let Some(peer) = self.modems.get_mut(&peer_id)
-                {
-                    peer.call_service.receive_hold(id);
-                }
-
-                effects.extend(self.initiate_call(id, &args.number, args.clir));
-            }
-            CommandAction::SwapCalls(active_peer, held_peer) => {
-                if let Some(modem) = self.modems.get_mut(&active_peer) {
-                    modem.call_service.receive_hold(id);
-                }
-                if let Some(modem) = self.modems.get_mut(&held_peer) {
-                    modem.call_service.receive_resume(id);
-                }
-            }
             CommandAction::InitiateRemoteCall(phone_number) => {
                 events.push(NetworkEvent::NewConnection {
                     id,
@@ -351,8 +328,16 @@ impl ModemNetworkSimulator {
             CommandAction::AnswerCall(answered_modem_id) => {
                 self.metrics.calls_answered.fetch_add(1, AtomicOrdering::Relaxed);
 
-                let caller_id =
-                    self.find_peer_id(answered_modem_id, |m| m.call_service.is_dialing());
+                let caller_id = self
+                    .find_peer_id(answered_modem_id, |m| {
+                        m.call_service
+                            .calls
+                            .iter()
+                            .any(|c| c.state.is_outbound() && c.peer_id == Some(answered_modem_id))
+                    })
+                    .or_else(|| {
+                        self.find_peer_id(answered_modem_id, |m| m.call_service.has_outbound())
+                    });
 
                 if let Some(cid) = caller_id {
                     // Caller connects
@@ -371,16 +356,13 @@ impl ModemNetworkSimulator {
             }
             CommandAction::HangupCall { initiator, target_peer } => {
                 self.metrics.calls_hung_up.fetch_add(1, AtomicOrdering::Relaxed);
-                let mut effects = Vec::new();
 
                 if let Some(target) = self.modems.get_mut(&target_peer) {
                     target.call_service.receive_hangup_from_peer_id(initiator);
-                    effects
-                        .push((target_peer, ModemEffect::Response(b"\r\nNO CARRIER\r\n".to_vec())));
+                    // Goldfish RIL uses RING as universal URC to trigger callRing/callStateChanged
+                    // for remote call teardown
+                    effects.push((target_peer, ModemEffect::Response(b"RING\r\n".to_vec())));
                 }
-
-                let processed_events = self.process_effects(effects);
-                events.extend(processed_events);
 
                 if let Some(initiator_modem) = self.modems.get(&initiator)
                     && initiator_modem.call_service.calls.is_empty()
@@ -391,11 +373,13 @@ impl ModemNetworkSimulator {
             CommandAction::HoldCall { holder, target } => {
                 if let Some(hold_modem) = self.modems.get_mut(&target) {
                     hold_modem.call_service.receive_hold(holder);
+                    effects.push((target, ModemEffect::Response(b"RING\r\n".to_vec())));
                 }
             }
             CommandAction::ResumeCall { resumer, target } => {
                 if let Some(resume_modem) = self.modems.get_mut(&target) {
                     resume_modem.call_service.receive_resume(resumer);
+                    effects.push((target, ModemEffect::Response(b"RING\r\n".to_vec())));
                 }
             }
             CommandAction::InitiateEmergencyCall => {} // No-op
@@ -568,7 +552,7 @@ impl ModemNetworkSimulator {
         if tracing::enabled!(tracing::Level::DEBUG) {
             for (id, modem) in &self.modems {
                 debug!(
-                    "[Network]   modem id={}, phone_number='{}'",
+                    "[Network]   registered modem id={}, phone_number='{}'",
                     id,
                     modem.phone_number().as_ref().map(|n| n.as_str()).unwrap_or("None")
                 );
@@ -579,12 +563,13 @@ impl ModemNetworkSimulator {
         let target_id = self.find_peer_id(caller_id, |m| {
             m.phone_number().as_ref().is_some_and(|n| n.normalized() == normalized_target)
         });
+        debug!("[Network] target_id found for call: {:?}", target_id);
 
         if let Some(tid) = target_id {
             // 1. Set peer_id on Caller's dialing call
             if let Some(caller) = self.modems.get_mut(&caller_id)
                 && let Some(call) =
-                    caller.call_service.calls.iter_mut().find(|c| c.state == CallState::Dialing)
+                    caller.call_service.calls.iter_mut().find(|c| c.state.is_outbound())
             {
                 call.peer_id = Some(tid);
                 debug!("[Network] Set peer_id of caller {} to {} for dialing call", caller_id, tid);
@@ -661,10 +646,6 @@ impl ModemNetworkSimulator {
 
     pub fn get_modem_mut(&mut self, id: ModemId) -> Option<&mut ModemImpl> {
         self.modems.get_mut(&id)
-    }
-
-    pub fn external_echo_for_debug(&self, text: String) {
-        debug!("[DEBUG] {}", text);
     }
 
     pub fn schedule_event(&mut self, modem_id: ModemId, delay: Duration, event: ModemEvent) {
@@ -793,8 +774,6 @@ mod tests {
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(&1));
         assert!(ids.contains(&2));
-
-        simulator.external_echo_for_debug("Test debug echo".to_string());
     }
 
     #[test]

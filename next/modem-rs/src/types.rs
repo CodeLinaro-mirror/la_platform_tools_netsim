@@ -243,8 +243,6 @@ pub enum CommandAction {
     InitiateEmergencyCall,
     AnswerCall(ModemId),
     HangupCall { initiator: ModemId, target_peer: ModemId },
-    InitiateCallAndHold(DialArgs),
-    SwapCalls(ModemId, ModemId),
     HoldCall { holder: ModemId, target: ModemId },
     ResumeCall { resumer: ModemId, target: ModemId },
     ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
