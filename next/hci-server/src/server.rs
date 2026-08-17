@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 
 use device_actor::DeviceClient;
 use futures::StreamExt;
@@ -16,27 +16,10 @@ use tracing::{info, warn};
 
 /// Start the async TCP transport for HCI connections
 ///
-/// Binds to `hci_port` and loops, passing each accepted connection to
-/// `handle_hci_client`.
-pub async fn run(hci_port: u16, device_client: DeviceClient) {
-    let listener = match TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, hci_port))).await
-    {
-        Ok(l) => l,
-        Err(e) => {
-            warn!(
-                "Failed to bind to 127.0.0.1:{hci_port} in HCI socket server, trying [::1]:{hci_port}: {e}"
-            );
-            match TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, hci_port))).await {
-                Ok(l) => l,
-                Err(e) => {
-                    warn!("Failed to start HCI socket server: {e}");
-                    return;
-                }
-            }
-        }
-    };
-
-    info!("Hci socket server is listening on: {hci_port}");
+/// Loops, passing each accepted connection to `handle_hci_client`.
+pub async fn run(listener: TcpListener, device_client: DeviceClient) {
+    let port = listener.local_addr().map(|a| a.port()).unwrap_or(0);
+    info!("Hci socket server is listening on: {port}");
 
     loop {
         match listener.accept().await {
