@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::types::CtecTechnology;
 
-pub const CALL_RING_TIMEOUT: Duration = Duration::from_secs(1);
+pub const CALL_RING_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DEFAULT_PLMN: &str = "310260";
 pub const DEFAULT_OPERATOR_NAME_LONG: &str = "Android Virtual Operator";
 pub const DEFAULT_OPERATOR_NAME_SHORT: &str = "Android";
