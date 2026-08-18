@@ -3,7 +3,10 @@
 
 // src/data_service.rs
 
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+};
 
 use modem_rs_derive::CommandParser;
 
@@ -11,7 +14,10 @@ use crate::{
     cuttlefish::read_cuttlefish_config,
     modem::ModemImpl,
     parser::QuotedString,
-    types::{DEFAULT_DNS, DEFAULT_GATEWAY, ExecutionResult, Parsable, PdpType},
+    types::{
+        DEFAULT_DNS, DEFAULT_GATEWAY, DEFAULT_IPV4_ADDR, DEFAULT_IPV6_ADDR, DEFAULT_IPV6_DNS,
+        DEFAULT_IPV6_GATEWAY, DEFAULT_IPV6_PREFIX, ExecutionResult, Parsable, PdpType,
+    },
 };
 
 /// Data service AT commands.
@@ -189,19 +195,19 @@ type DataResult = Result<Option<DataResponse>, ExecutionResult>;
 
 pub struct DataService {
     pdp_contexts: BTreeMap<u8, PdpContext>,
-    ip_address: Option<String>,
+    ip_address: Option<IpAddr>,
     prefixlen: Option<u32>,
-    gateway: Option<String>,
-    dns: Option<String>,
+    gateway: Option<IpAddr>,
+    dns: Option<IpAddr>,
     ps_attached: bool,
 }
 
 impl DataService {
     pub fn new(
-        ip_address: Option<String>,
+        ip_address: Option<IpAddr>,
         prefixlen: Option<u32>,
-        gateway: Option<String>,
-        dns: Option<String>,
+        gateway: Option<IpAddr>,
+        dns: Option<IpAddr>,
     ) -> Self {
         Self {
             pdp_contexts: BTreeMap::new(),
@@ -215,12 +221,29 @@ impl DataService {
 
     pub fn from_env() -> Self {
         if let Some(config) = read_cuttlefish_config() {
-            Self::new(
-                Some(config.ip_address),
-                Some(config.prefixlen),
-                Some(config.gateway),
-                Some(config.dns),
-            )
+            let ip_address = config
+                .ip_address
+                .parse::<IpAddr>()
+                .map_err(|_err| {
+                    tracing::warn!("Configured IP ({}) is invalid.", config.ip_address);
+                })
+                .ok();
+            let gateway = config
+                .gateway
+                .parse::<IpAddr>()
+                .map_err(|_err| {
+                    tracing::warn!("Configured gateway ({}) is invalid.", config.gateway);
+                })
+                .ok();
+            let dns = config
+                .dns
+                .parse::<IpAddr>()
+                .map_err(|_err| {
+                    tracing::warn!("Configured DNS ({}) is invalid.", config.dns);
+                })
+                .ok();
+
+            Self::new(ip_address, Some(config.prefixlen), gateway, dns)
         } else {
             Self::default()
         }
@@ -444,39 +467,95 @@ impl DataService {
         Ok(None)
     }
 
-    fn get_ip_address(&self, cid: u8) -> String {
+    fn get_ipv4_address(&self, cid: u8, base_ip: Ipv4Addr) -> Ipv4Addr {
+        let octets = base_ip.octets();
         if cid <= 1 {
-            self.ip_address.clone().unwrap_or_else(|| "10.0.2.15".to_string())
+            base_ip
         } else {
-            // If a custom base IP is configured (e.g., from Cuttlefish), assign IPs
-            // sequentially (base, base+1, base+2...). Otherwise, fall back to
-            // the legacy Goldfish RIL behavior which uses 10.0.2.15 for cid=1,
-            // and 10.0.2.100+ for cid > 1.
-            if let Some(ip) =
-                self.ip_address.as_ref().and_then(|s| s.parse::<std::net::Ipv4Addr>().ok())
-            {
-                let octets = ip.octets();
-                let raw_last_octet = (octets[3] as u32) + (cid.saturating_sub(1) as u32);
-                if raw_last_octet > 254 {
+            let raw_last_octet = (octets[3] as u32) + (cid.saturating_sub(1) as u32);
+            if raw_last_octet > 254 {
+                tracing::warn!(
+                    "IP address last octet saturated to 254 for cid {cid}. Base IP: {base_ip}, calculated octet: {raw_last_octet}"
+                );
+            }
+            let last_octet = std::cmp::min(raw_last_octet, 254) as u8;
+            Ipv4Addr::new(octets[0], octets[1], octets[2], last_octet)
+        }
+    }
+
+    fn get_ipv6_address(&self, cid: u8, base_ip: Ipv6Addr) -> Ipv6Addr {
+        let mut segments = base_ip.segments();
+        let offset = cid.saturating_sub(1) as u16;
+        segments[7] = segments[7].saturating_add(offset);
+        Ipv6Addr::from(segments)
+    }
+
+    fn get_ip_address(&self, cid: u8, pdp_type: &PdpType) -> IpAddr {
+        match self.ip_address {
+            Some(IpAddr::V4(ipv4)) => {
+                if *pdp_type == PdpType::Ipv6 {
                     tracing::warn!(
-                        "IP address last octet saturated to 254 for cid {cid}. Base IP: {}, calculated octet: {raw_last_octet}",
-                        self.ip_address.as_ref().unwrap()
+                        "Configured IP ({}) is IPv4, but IPv6 was requested. Using IPv4 anyway.",
+                        ipv4
                     );
                 }
-                let last_octet = std::cmp::min(raw_last_octet, 254) as u8;
-                return std::net::Ipv4Addr::new(octets[0], octets[1], octets[2], last_octet)
-                    .to_string();
+                IpAddr::V4(self.get_ipv4_address(cid, ipv4))
             }
-            let last_octet = std::cmp::min(98u8.saturating_add(cid), 254);
-            format!("10.0.2.{last_octet}")
+            Some(IpAddr::V6(ipv6)) => {
+                if *pdp_type != PdpType::Ipv6 {
+                    tracing::warn!(
+                        "Configured IP ({}) is IPv6, but IPv4 was requested. Using IPv6 anyway.",
+                        ipv6
+                    );
+                }
+                IpAddr::V6(self.get_ipv6_address(cid, ipv6))
+            }
+            None => self.get_default_ip(cid, pdp_type),
+        }
+    }
+
+    fn get_default_ip(&self, cid: u8, pdp_type: &PdpType) -> IpAddr {
+        if *pdp_type == PdpType::Ipv6 {
+            IpAddr::V6(self.get_ipv6_address(cid, DEFAULT_IPV6_ADDR))
+        } else {
+            if cid <= 1 {
+                IpAddr::V4(DEFAULT_IPV4_ADDR)
+            } else {
+                let octets = DEFAULT_IPV4_ADDR.octets();
+                let last_octet = std::cmp::min(98u8.saturating_add(cid), 254);
+                IpAddr::V4(Ipv4Addr::new(octets[0], octets[1], octets[2], last_octet))
+            }
+        }
+    }
+
+    fn get_gateway(&self, resolved_ip: &IpAddr) -> IpAddr {
+        match (resolved_ip, self.gateway) {
+            (IpAddr::V4(_), Some(IpAddr::V4(gw))) => IpAddr::V4(gw),
+            (IpAddr::V6(_), Some(IpAddr::V6(gw))) => IpAddr::V6(gw),
+            (IpAddr::V4(_), _) => IpAddr::V4(DEFAULT_GATEWAY),
+            (IpAddr::V6(_), _) => IpAddr::V6(DEFAULT_IPV6_GATEWAY),
+        }
+    }
+
+    fn get_dns(&self, resolved_ip: &IpAddr) -> IpAddr {
+        match (resolved_ip, self.dns) {
+            (IpAddr::V4(_), Some(IpAddr::V4(dns))) => IpAddr::V4(dns),
+            (IpAddr::V6(_), Some(IpAddr::V6(dns))) => IpAddr::V6(dns),
+            (IpAddr::V4(_), _) => IpAddr::V4(DEFAULT_DNS),
+            (IpAddr::V6(_), _) => IpAddr::V6(DEFAULT_IPV6_DNS),
         }
     }
 
     pub fn handle_show_pdp_address(&self, cid: u8) -> DataResult {
         if let Some(context) = self.pdp_contexts.get(&cid) {
-            let ip_address =
-                if context.active { self.get_ip_address(cid) } else { "0.0.0.0".to_string() };
-            Ok(Some(DataResponse::PdpAddress { cid, ip_address }))
+            if context.active {
+                let requested_type =
+                    if context.pdp_type == PdpType::Ipv6 { PdpType::Ipv6 } else { PdpType::Ip };
+                let ip_address = self.get_ip_address(cid, &requested_type).to_string();
+                Ok(Some(DataResponse::PdpAddress { cid, ip_address }))
+            } else {
+                Err(ExecutionResult::error())
+            }
         } else {
             Err(ExecutionResult::error())
         }
@@ -485,12 +564,42 @@ impl DataService {
     pub fn handle_read_dynamic_param(&self, cid: u8) -> DataResult {
         if let Some(context) = self.pdp_contexts.get(&cid) {
             if context.active {
-                let ip_address = self.get_ip_address(cid);
                 let apn = context.apn.clone();
-                let gateway = self.gateway.clone().unwrap_or_else(|| DEFAULT_GATEWAY.to_string());
-                let dns = self.dns.clone().unwrap_or_else(|| DEFAULT_DNS.to_string());
-                let prefix = self.prefixlen.unwrap_or(24);
-                Ok(Some(DataResponse::DynamicParam { cid, apn, ip_address, prefix, gateway, dns }))
+                // TODO(b/542980136): Support true dual-stack (IPV4V6) by returning both IPv4
+                // and IPv6 parameters. Currently, we only enable IPv6 if it is
+                // purely IPV6 to avoid breaking IPv4 compatibility on IPV4V6.
+                let is_ipv6 = context.pdp_type == PdpType::Ipv6;
+                let requested_type = if is_ipv6 { PdpType::Ipv6 } else { PdpType::Ip };
+
+                let ip_address = self.get_ip_address(cid, &requested_type);
+                let gateway = self.get_gateway(&ip_address);
+                let dns = self.get_dns(&ip_address);
+
+                let (ip_str, gw_str, dns_str, prefix) = if ip_address.is_ipv6() {
+                    (
+                        ip_address.to_string(),
+                        gateway.to_string(),
+                        dns.to_string(),
+                        self.prefixlen
+                            .filter(|&p| (Ipv4Addr::BITS + 1..=Ipv6Addr::BITS).contains(&p))
+                            .unwrap_or(DEFAULT_IPV6_PREFIX),
+                    )
+                } else {
+                    (
+                        ip_address.to_string(),
+                        gateway.to_string(),
+                        dns.to_string(),
+                        self.prefixlen.unwrap_or(24),
+                    )
+                };
+                Ok(Some(DataResponse::DynamicParam {
+                    cid,
+                    apn,
+                    ip_address: ip_str,
+                    prefix,
+                    gateway: gw_str,
+                    dns: dns_str,
+                }))
             } else {
                 Err(ExecutionResult::error())
             }
@@ -662,18 +771,108 @@ mod tests {
             crate::cuttlefish::read_cuttlefish_config_with_params(config_path_str, "1").unwrap();
 
         let service = DataService::new(
-            Some(config.ip_address),
+            config.ip_address.parse::<IpAddr>().ok(),
             Some(config.prefixlen),
-            Some(config.gateway),
-            Some(config.dns),
+            config.gateway.parse::<IpAddr>().ok(),
+            config.dns.parse::<IpAddr>().ok(),
         );
-        assert_eq!(service.ip_address, Some("192.168.97.2".to_string()));
+        assert_eq!(service.ip_address, Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2))));
         assert_eq!(service.prefixlen, Some(30));
-        assert_eq!(service.gateway, Some("192.168.97.1".to_string()));
-        assert_eq!(service.dns, Some("8.8.8.8".to_string()));
+        assert_eq!(service.gateway, Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 1))));
+        assert_eq!(service.dns, Some(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
 
         // Test fallback IP generation
-        assert_eq!(service.get_ip_address(1), "192.168.97.2");
-        assert_eq!(service.get_ip_address(2), "192.168.97.3");
+        assert_eq!(
+            service.get_ip_address(1, &PdpType::Ip),
+            IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2))
+        );
+        assert_eq!(
+            service.get_ip_address(2, &PdpType::Ip),
+            IpAddr::V4(Ipv4Addr::new(192, 168, 97, 3))
+        );
+        assert_eq!(
+            service.get_ip_address(255, &PdpType::Ip),
+            IpAddr::V4(Ipv4Addr::new(192, 168, 97, 254))
+        );
+
+        // Test IPv6 request on Cuttlefish (warns and returns the configured IPv4
+        // address anyway)
+        assert_eq!(
+            service.get_ip_address(1, &PdpType::Ipv6),
+            IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2))
+        );
+
+        // Test Goldfish path (no config IP)
+        let goldfish_service = DataService::new(None, None, None, None);
+        assert_eq!(
+            goldfish_service.get_ip_address(1, &PdpType::Ipv6),
+            IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15))
+        );
+        assert_eq!(
+            goldfish_service.get_ip_address(2, &PdpType::Ipv6),
+            IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x16))
+        );
+        assert_eq!(
+            goldfish_service.get_ip_address(1, &PdpType::Ip),
+            IpAddr::V4(Ipv4Addr::new(10, 0, 2, 15))
+        );
+        assert_eq!(
+            goldfish_service.get_ip_address(2, &PdpType::Ip),
+            IpAddr::V4(Ipv4Addr::new(10, 0, 2, 100))
+        ); // Goldfish jump
+    }
+
+    #[test]
+    fn test_dynamic_param_prefix_filtering() {
+        // Test IPv6 context ignores small IPv4 prefixlen (e.g. 30) and defaults to
+        // DEFAULT_IPV6_PREFIX (64)
+        let mut service = DataService::new(None, Some(30), None, None);
+        service.pdp_contexts.insert(
+            1,
+            PdpContext {
+                pdp_type: PdpType::Ipv6,
+                apn: "test.apn".to_string(),
+                active: true,
+                qos: Qos::default(),
+                req_qos: Qos::default(),
+                gprs_qos: Qos::default(),
+                gprs_req_qos: Qos::default(),
+            },
+        );
+
+        let res = service.handle_read_dynamic_param(1).unwrap();
+        match res {
+            Some(DataResponse::DynamicParam { prefix, .. }) => {
+                assert_eq!(prefix, DEFAULT_IPV6_PREFIX);
+            }
+            _ => panic!("Expected DynamicParam response"),
+        }
+
+        // Test with valid IPv6 prefixlen (e.g. 48)
+        let mut service_v6_prefix = DataService::new(
+            Some(IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15))),
+            Some(48),
+            Some(IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2))),
+            Some(IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3))),
+        );
+        service_v6_prefix.pdp_contexts.insert(
+            1,
+            PdpContext {
+                pdp_type: PdpType::Ipv6,
+                apn: "test.apn".to_string(),
+                active: true,
+                qos: Qos::default(),
+                req_qos: Qos::default(),
+                gprs_qos: Qos::default(),
+                gprs_req_qos: Qos::default(),
+            },
+        );
+        let res_v6 = service_v6_prefix.handle_read_dynamic_param(1).unwrap();
+        match res_v6 {
+            Some(DataResponse::DynamicParam { prefix, .. }) => {
+                assert_eq!(prefix, 48);
+            }
+            _ => panic!("Expected DynamicParam response"),
+        }
     }
 }
