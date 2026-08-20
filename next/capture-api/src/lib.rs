@@ -171,4 +171,10 @@ pub struct CaptureInfo {
     pub records_written: u64,
     /// Number of bytes written.
     pub bytes_written: u64,
+    /// Timestamp (seconds since Unix epoch) when capture was started.
+    pub seconds: i64,
+    /// Subsecond nanoseconds when capture was started.
+    pub nanos: i32,
+    /// Path to the capture file on disk.
+    pub filepath: Option<std::path::PathBuf>,
 }

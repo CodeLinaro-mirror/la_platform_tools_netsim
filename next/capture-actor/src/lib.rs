@@ -21,6 +21,9 @@ mod writer;
 
 use actor_framework::ResourceActor;
 pub use capture_actor::CaptureActor;
+pub use capture_api::{
+    CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo, CaptureSender, Direction,
+};
 pub use error::CaptureError;
 pub use modem_pcap::ModemPcapWriter;
 pub use writer::{

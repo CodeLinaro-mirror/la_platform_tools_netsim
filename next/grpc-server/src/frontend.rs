@@ -4,13 +4,16 @@
 use std::sync::Arc;
 
 use device_actor::{DeviceClient, DeviceError};
-use futures::FutureExt;
-use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
+use futures::{FutureExt, SinkExt};
+use grpcio::{RpcContext, RpcStatus, RpcStatusCode, ServerStreamingSink, UnarySink, WriteFlags};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
-use netsim_model::{ClientError, Pose};
+use netsim_model::{ChipId, ClientError, Pose};
 use netsim_proto::{
     empty::Empty,
-    frontend::{ListDeviceResponse, ListLinkResponse},
+    frontend::{
+        GetCaptureRequest, GetCaptureResponse, ListCaptureResponse, ListDeviceResponse,
+        ListLinkResponse, PatchCaptureRequest,
+    },
     frontend_grpc::FrontendService,
     protobuf,
 };
@@ -22,6 +25,7 @@ pub struct FrontendClient {
     device_client: DeviceClient,
     link_client: Arc<dyn LinkClient>,
     ap_client: ap_actor::ApClient,
+    capture_client: capture_actor::CaptureClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
 }
@@ -31,10 +35,11 @@ impl FrontendClient {
         device_client: DeviceClient,
         link_client: Arc<dyn LinkClient>,
         ap_client: ap_actor::ApClient,
+        capture_client: capture_actor::CaptureClient,
         version: String,
         frontend_stats: Arc<netsim_model::FrontendStats>,
     ) -> Self {
-        Self { device_client, link_client, ap_client, version, frontend_stats }
+        Self { device_client, link_client, ap_client, capture_client, version, frontend_stats }
     }
 
     async fn handle_create_link(
@@ -317,6 +322,147 @@ impl FrontendClient {
         }
         Ok(())
     }
+
+    async fn handle_list_capture(
+        client: capture_actor::CaptureClient,
+    ) -> Result<ListCaptureResponse, RpcStatus> {
+        let captures = client.list_captures().await.map_err(to_rpc_status)?;
+        let mut response = ListCaptureResponse::new();
+        for info in captures {
+            let mut capture = netsim_proto::model::Capture::new();
+            capture.id = info.chip_id.0;
+            capture.chip_kind = protobuf::EnumOrUnknown::new(
+                crate::frontend_converter::to_proto_chip_kind(info.chip_kind),
+            );
+            capture.device_name = info.device_name;
+            capture.state = Some(info.enabled);
+            capture.size = info.bytes_written.min(i32::MAX as u64) as i32;
+            capture.records = info.records_written.min(i32::MAX as u64) as i32;
+            let mut timestamp = protobuf::well_known_types::timestamp::Timestamp::new();
+            timestamp.seconds = info.seconds;
+            timestamp.nanos = info.nanos;
+            capture.timestamp = protobuf::MessageField::some(timestamp);
+            capture.valid = true;
+            response.captures.push(capture);
+        }
+        Ok(response)
+    }
+
+    async fn handle_patch_capture(
+        client: capture_actor::CaptureClient,
+        req: PatchCaptureRequest,
+    ) -> Result<(), RpcStatus> {
+        let id = ChipId(req.id);
+        let patch = req.patch.into_option().ok_or_else(|| {
+            RpcStatus::with_message(
+                RpcStatusCode::INVALID_ARGUMENT,
+                "No patch provided".to_string(),
+            )
+        })?;
+        let state = patch.state.ok_or_else(|| {
+            RpcStatus::with_message(
+                RpcStatusCode::INVALID_ARGUMENT,
+                "Capture patch state not provided".to_string(),
+            )
+        })?;
+        client.update_capture(id, state).await.map(|_| ()).map_err(to_rpc_status)
+    }
+
+    async fn handle_get_capture(
+        client: capture_actor::CaptureClient,
+        req: GetCaptureRequest,
+        mut sink: ServerStreamingSink<GetCaptureResponse>,
+    ) {
+        let id = ChipId(req.id);
+        let info = match client.get_capture(id).await {
+            Ok(Some(info)) => info,
+            Ok(None) => {
+                let _ = sink
+                    .fail(RpcStatus::with_message(
+                        RpcStatusCode::NOT_FOUND,
+                        format!("Capture not found for chip id {}", req.id),
+                    ))
+                    .await;
+                return;
+            }
+            Err(e) => {
+                let _ = sink.fail(to_rpc_status(e)).await;
+                return;
+            }
+        };
+
+        let Some(filepath) = info.filepath else {
+            let _ = sink
+                .fail(RpcStatus::with_message(
+                    RpcStatusCode::NOT_FOUND,
+                    format!("Capture file path not found for chip id {}", req.id),
+                ))
+                .await;
+            return;
+        };
+
+        let file = match tokio::fs::File::open(&filepath).await {
+            Ok(f) => f,
+            Err(e) => {
+                let _ = sink
+                    .fail(RpcStatus::with_message(
+                        RpcStatusCode::NOT_FOUND,
+                        format!("Failed to open capture file {}: {e}", filepath.display()),
+                    ))
+                    .await;
+                return;
+            }
+        };
+        let mut reader = tokio::io::BufReader::new(file);
+
+        const CHUNK_LEN: usize = 16384;
+        let mut buffer = vec![0u8; CHUNK_LEN];
+
+        loop {
+            use tokio::io::AsyncReadExt;
+            let length = match reader.read(&mut buffer).await {
+                Ok(l) => l,
+                Err(e) => {
+                    let _ = sink
+                        .fail(RpcStatus::with_message(
+                            RpcStatusCode::INTERNAL,
+                            format!("Failed to read capture file: {e}"),
+                        ))
+                        .await;
+                    return;
+                }
+            };
+            if length == 0 {
+                break;
+            }
+            let mut response = GetCaptureResponse::new();
+            response.capture_stream = buffer[..length].to_vec();
+            if let Err(e) = sink.send((response, WriteFlags::default())).await {
+                tracing::warn!("Failed to send get_capture response chunk: {e:?}");
+                return;
+            }
+        }
+        if let Err(e) = sink.close().await {
+            tracing::warn!("Failed to close get_capture sink: {e:?}");
+        }
+    }
+}
+
+fn to_rpc_status(e: ClientError) -> RpcStatus {
+    match e {
+        ClientError::Chip(netsim_model::ChipError::ChipNotFound(id)) => {
+            RpcStatus::with_message(RpcStatusCode::NOT_FOUND, format!("Chip not found: {}", id.0))
+        }
+        ClientError::Framework(ref framework)
+            if matches!(
+                framework.downcast_ref::<netsim_model::ChipError>(),
+                Some(netsim_model::ChipError::ChipNotFound(_))
+            ) =>
+        {
+            RpcStatus::with_message(RpcStatusCode::NOT_FOUND, format!("Chip not found: {e}"))
+        }
+        _ => RpcStatus::with_message(RpcStatusCode::INTERNAL, format!("{e}")),
+    }
 }
 
 async fn reply<T>(sink: UnarySink<T>, res: Result<T, RpcStatus>) {
@@ -477,6 +623,37 @@ impl FrontendService for FrontendClient {
             reply(sink, res).await;
         });
     }
+
+    fn list_capture(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<ListCaptureResponse>) {
+        self.frontend_stats.list_capture.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let client = self.capture_client.clone();
+        ctx.spawn(async move {
+            let res = Self::handle_list_capture(client).await;
+            reply(sink, res).await;
+        });
+    }
+
+    fn patch_capture(&mut self, ctx: RpcContext, req: PatchCaptureRequest, sink: UnarySink<Empty>) {
+        self.frontend_stats.patch_capture.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let client = self.capture_client.clone();
+        ctx.spawn(async move {
+            let res = Self::handle_patch_capture(client, req).await.map(|_| Empty::new());
+            reply(sink, res).await;
+        });
+    }
+
+    fn get_capture(
+        &mut self,
+        ctx: RpcContext,
+        req: GetCaptureRequest,
+        sink: ServerStreamingSink<GetCaptureResponse>,
+    ) {
+        self.frontend_stats.get_capture.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let client = self.capture_client.clone();
+        ctx.spawn(async move {
+            Self::handle_get_capture(client, req, sink).await;
+        });
+    }
 }
 
 #[cfg(test)]
@@ -578,5 +755,125 @@ mod tests {
         assert_eq!(resp.links[0].id, 1);
         assert_eq!(resp.links[0].sender_id, 10);
         assert_eq!(resp.links[0].receiver_id, 11);
+    }
+
+    #[tokio::test]
+    async fn test_list_capture() {
+        let (capture_runner, capture_client) = capture_actor::new();
+        let capture_actor_state = capture_actor::CaptureActor::new(false, None);
+        tokio::spawn(capture_runner.run(capture_actor_state));
+
+        // 1. Initial capture created disabled -> timestamp is 0
+        let enabled_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let create = capture_actor::CaptureCreate {
+            chip_kind: ChipKind::BLUETOOTH,
+            device_name: "test-device".to_string(),
+            enabled_flag,
+        };
+        capture_client.create_capture(ChipId(10), create).await.unwrap();
+
+        let resp = FrontendClient::handle_list_capture(capture_client.clone()).await.unwrap();
+        assert_eq!(resp.captures.len(), 1);
+        assert_eq!(resp.captures[0].id, 10);
+        assert_eq!(resp.captures[0].device_name, "test-device");
+        assert_eq!(
+            resp.captures[0].chip_kind,
+            protobuf::EnumOrUnknown::new(netsim_proto::common::ChipKind::BLUETOOTH)
+        );
+        assert_eq!(resp.captures[0].state, Some(false));
+        assert!(resp.captures[0].valid);
+        assert_eq!(resp.captures[0].records, 0);
+        assert_eq!(resp.captures[0].size, 0);
+        assert_eq!(resp.captures[0].timestamp.seconds, 0);
+        assert_eq!(resp.captures[0].timestamp.nanos, 0);
+
+        // 2. Patch capture to ON -> verify state is true and timestamp is populated
+        let mut req = netsim_proto::frontend::PatchCaptureRequest::new();
+        req.id = 10;
+        let mut patch = netsim_proto::frontend::patch_capture_request::PatchCapture::new();
+        patch.state = Some(true);
+        req.patch = protobuf::MessageField::some(patch);
+        FrontendClient::handle_patch_capture(capture_client.clone(), req).await.unwrap();
+
+        let resp = FrontendClient::handle_list_capture(capture_client.clone()).await.unwrap();
+        assert_eq!(resp.captures[0].state, Some(true));
+        assert!(resp.captures[0].timestamp.seconds > 0);
+    }
+
+    #[tokio::test]
+    async fn test_patch_capture() {
+        let (capture_runner, capture_client) = capture_actor::new();
+        let capture_actor_state = capture_actor::CaptureActor::new(false, None);
+        tokio::spawn(capture_runner.run(capture_actor_state));
+
+        let enabled_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let create = capture_actor::CaptureCreate {
+            chip_kind: ChipKind::WIFI,
+            device_name: "test-wifi".to_string(),
+            enabled_flag,
+        };
+        let chip_id = ChipId(20);
+        capture_client.create_capture(chip_id, create).await.unwrap();
+
+        // Enable capture
+        let mut req = netsim_proto::frontend::PatchCaptureRequest::new();
+        req.id = chip_id.0;
+        let mut patch = netsim_proto::frontend::patch_capture_request::PatchCapture::new();
+        patch.state = Some(true);
+        req.patch = protobuf::MessageField::some(patch);
+        FrontendClient::handle_patch_capture(capture_client.clone(), req).await.unwrap();
+
+        let info = capture_client.get_capture(chip_id).await.unwrap().unwrap();
+        assert!(info.enabled);
+        assert!(info.seconds > 0);
+
+        // Disable capture
+        let mut req = netsim_proto::frontend::PatchCaptureRequest::new();
+        req.id = chip_id.0;
+        let mut patch = netsim_proto::frontend::patch_capture_request::PatchCapture::new();
+        patch.state = Some(false);
+        req.patch = protobuf::MessageField::some(patch);
+        FrontendClient::handle_patch_capture(capture_client.clone(), req).await.unwrap();
+
+        let info = capture_client.get_capture(chip_id).await.unwrap().unwrap();
+        assert!(!info.enabled);
+    }
+
+    #[tokio::test]
+    async fn test_patch_capture_missing_state() {
+        let (capture_runner, capture_client) = capture_actor::new();
+        let capture_actor_state = capture_actor::CaptureActor::new(false, None);
+        tokio::spawn(capture_runner.run(capture_actor_state));
+
+        // Missing patch message
+        let mut req = netsim_proto::frontend::PatchCaptureRequest::new();
+        req.id = 1;
+        let res = FrontendClient::handle_patch_capture(capture_client.clone(), req).await;
+        assert_eq!(res.unwrap_err().code(), RpcStatusCode::INVALID_ARGUMENT);
+
+        // Patch message without state field
+        let mut req = netsim_proto::frontend::PatchCaptureRequest::new();
+        req.id = 1;
+        let patch = netsim_proto::frontend::patch_capture_request::PatchCapture::new();
+        req.patch = protobuf::MessageField::some(patch);
+        let res = FrontendClient::handle_patch_capture(capture_client, req).await;
+        assert_eq!(res.unwrap_err().code(), RpcStatusCode::INVALID_ARGUMENT);
+    }
+
+    #[test]
+    fn test_to_rpc_status() {
+        let err = ClientError::Chip(netsim_model::ChipError::ChipNotFound(ChipId(42)));
+        let status = to_rpc_status(err);
+        assert_eq!(status.code(), RpcStatusCode::NOT_FOUND);
+
+        let err =
+            ClientError::Framework(Box::new(netsim_model::ChipError::ChipNotFound(ChipId(42))));
+        let status = to_rpc_status(err);
+        assert_eq!(status.code(), RpcStatusCode::NOT_FOUND);
+
+        let err =
+            ClientError::Framework(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "err")));
+        let status = to_rpc_status(err);
+        assert_eq!(status.code(), RpcStatusCode::INTERNAL);
     }
 }
