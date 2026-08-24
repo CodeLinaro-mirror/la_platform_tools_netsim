@@ -1,18 +1,14 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    net::{Ipv6Addr, SocketAddr},
-};
+use std::{collections::HashMap, net::SocketAddr};
 
 use bytes::BytesMut;
 use device_actor::DeviceClient;
 use http::{Response, StatusCode, header::CONNECTION};
-use socket2::{Domain, Protocol, Socket, Type};
 use tokio::{
     io::AsyncReadExt,
-    net::{TcpSocket, TcpStream},
+    net::{TcpListener, TcpStream},
 };
 use tracing::{error, info, warn};
 
@@ -26,32 +22,8 @@ const TARGET_PATH: &str = "/v1/websocket/bt";
 const MAX_HTTP_BUFFER_SIZE: usize = 2048;
 const CHANNEL_CAPACITY: usize = 100;
 
-pub fn bind(websocket_port: u16) -> Result<tokio::net::TcpListener, ServerError> {
-    let addr = SocketAddr::from((Ipv6Addr::UNSPECIFIED, websocket_port));
-
-    let socket = Socket::new(Domain::IPV6, Type::STREAM, Some(Protocol::TCP))?;
-
-    if let Err(e) = socket.set_only_v6(false) {
-        warn!("Failed to set IPV6_V6ONLY=0 for WebSocket server: {e}");
-    }
-
-    socket.set_nonblocking(true)?;
-
-    let tokio_socket = TcpSocket::from_std_stream(socket.into());
-
-    if let Err(e) = tokio_socket.set_reuseaddr(true) {
-        warn!("Failed to set SO_REUSEADDR for WebSocket server: {e}");
-    }
-
-    tokio_socket.bind(addr)?;
-
-    let listener = tokio_socket.listen(128)?;
-
-    Ok(listener)
-}
-
-pub async fn run(listener: tokio::net::TcpListener, device_client: DeviceClient) {
-    let port = listener.local_addr().unwrap().port();
+pub async fn run(listener: TcpListener, device_client: DeviceClient) {
+    let port = listener.local_addr().map(|a| a.port()).unwrap_or(0);
     info!("WebSocket server is listening on: {port}");
 
     loop {

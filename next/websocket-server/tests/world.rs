@@ -178,7 +178,7 @@ impl TestWorld {
 
         let device_client = DeviceClient::new(Box::new(mock));
 
-        let listener = websocket_server::server::bind(0).expect("Failed to bind");
+        let listener = common::util::net::bind_tcp_loopback(0).expect("Failed to bind");
         let port = listener.local_addr().unwrap().port();
 
         tokio::spawn(async move {
@@ -229,15 +229,6 @@ impl TestWorld {
     ) -> usize {
         let path = build_path(name, address);
         self.connect_internal("127.0.0.1", &path).await.expect("Failed to connect client")
-    }
-
-    pub async fn given_an_ipv6_websocket_client_connected(
-        &mut self,
-        name: Option<&str>,
-        address: Option<&str>,
-    ) -> usize {
-        let path = build_path(name, address);
-        self.connect_internal("::1", &path).await.expect("Failed to connect client via IPv6")
     }
 
     pub async fn when_client_attempts_to_connect_to_invalid_path(&mut self) {

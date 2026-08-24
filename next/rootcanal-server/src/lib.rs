@@ -5,7 +5,7 @@
 //! its protocol by translating console commands into Netsim device actor
 //! updates.
 
-use std::{fmt::Write as _, io, net::SocketAddr};
+use std::{fmt::Write as _, io};
 
 use device_actor::DeviceClient;
 use netsim_model::{
@@ -17,15 +17,6 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 use tracing::{error, info, warn};
-
-/// Binds a TCP listener to `127.0.0.1:<port>` in non-blocking mode,
-/// ready to be converted into a Tokio TcpListener.
-pub fn bind(port: u16) -> io::Result<TcpListener> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let std_listener = std::net::TcpListener::bind(addr)?;
-    std_listener.set_nonblocking(true)?;
-    TcpListener::from_std(std_listener)
-}
 
 /// Starts the asynchronous TCP server loop.
 ///
