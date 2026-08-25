@@ -102,7 +102,8 @@ impl ModemImpl {
                 } else {
                     number_presentation as u8
                 };
-                let clip = format!("+CLIP: \"{}\",{},,,,{mode}\r\n", val.number, val.toa);
+                let number_str = val.number.strip_prefix('+').unwrap_or(val.number);
+                let clip = format!("+CLIP: \"{number_str}\",{},,,,{mode}\r\n", val.toa);
                 effects.push(ModemEffect::Response(clip.into_bytes()));
             }
 
@@ -130,7 +131,9 @@ impl ModemImpl {
     pub fn trigger_remote_hangup(&mut self) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
         self.call_service.receive_hangup();
-        effects.push(ModemEffect::Response(b"NO CARRIER\r\n".to_vec()));
+        // Goldfish RIL uses RING as universal URC to trigger callRing/callStateChanged
+        // for remote call teardown
+        effects.push(ModemEffect::Response(b"RING\r\n".to_vec()));
         effects
     }
 
@@ -338,7 +341,13 @@ impl ModemImpl {
                 effects.push(ModemEffect::Response(b"TEST_EVENT_FIRED\r\n".to_vec()));
             }
             ModemEvent::CallRingTimeout { call_token } => {
-                self.call_service.handle_ring_timeout(call_token);
+                let res = self.call_service.handle_ring_timeout(self.id, call_token);
+                let result: ExecutionResult = res.into();
+                if let ExecutionResult::Success(handled) = result {
+                    for action in handled.actions {
+                        effects.push(ModemEffect::Action(action));
+                    }
+                }
             }
             ModemEvent::AttachNetwork => {
                 if self.sim_service.is_present() {
@@ -365,7 +374,7 @@ impl ModemImpl {
     }
 
     pub fn is_ringing(&self) -> bool {
-        self.call_service.is_incoming() || self.call_service.is_alerting()
+        self.call_service.has_incoming() || self.call_service.has_alerting()
     }
 
     pub fn get_active_calls(&self) -> Vec<String> {

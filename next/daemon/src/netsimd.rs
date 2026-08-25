@@ -12,8 +12,12 @@ use std::{
 use capture_actor::CaptureClient;
 use common::{
     system::netsimd_temp_dir,
-    util::os_utils::{
-        get_discovery_directory, get_hci_port, get_instance, get_instance_name, redirect_std_stream,
+    util::{
+        net::bind_tcp_loopback,
+        os_utils::{
+            get_discovery_directory, get_hci_port, get_instance, get_instance_name,
+            redirect_std_stream,
+        },
     },
 };
 use device_actor::DeviceClient;
@@ -229,6 +233,7 @@ async fn setup_grpc_listener(
     cell_client: cell_actor::CellClient,
     nfc_client: nfc_actor::NfcClient,
     wifi_client: wifi_actor::WifiClient,
+    capture_client: CaptureClient,
     version: String,
     frontend_stats: Arc<netsim_model::FrontendStats>,
 ) -> Result<(u16, grpcio::Server), RunResult> {
@@ -249,6 +254,7 @@ async fn setup_grpc_listener(
         cell_client,
         nfc_client,
         wifi_client,
+        capture_client,
         packet_streamer_service,
         version,
         frontend_stats,
@@ -570,6 +576,7 @@ impl NetsimDaemon {
             cell_client.clone(),
             nfc_client.clone(),
             wifi_client.clone(),
+            capture_client.clone(),
             get_version(),
             frontend_stats.clone(),
         )
@@ -577,10 +584,25 @@ impl NetsimDaemon {
 
         // HCI TCP socket server
         let instance_num = get_instance(args.instance);
+        let is_explicit_hci = args.hci_port.is_some() || std::env::var("NETSIM_HCI_PORT").is_ok();
         let resolved_hci_port =
             resolve_port_with_env(args.hci_port, "NETSIM_HCI_PORT", |name| std::env::var(name))
                 .unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
-        tokio::spawn(hci_server::server::run(resolved_hci_port, device_client.clone()));
+        let mut actual_hci_port = None;
+        match bind_tcp_loopback(resolved_hci_port) {
+            Ok(listener) => {
+                actual_hci_port = Some(listener.local_addr().map_err(init_error)?.port());
+                tokio::spawn(hci_server::server::run(listener, device_client.clone()));
+            }
+            Err(e) => {
+                if is_explicit_hci {
+                    return Err(init_error(format!(
+                        "Failed to bind requested HCI socket server port {resolved_hci_port}: {e}"
+                    )));
+                }
+                warn!("Failed to start HCI socket server: {e}");
+            }
+        }
 
         // WebSocket server
         let mut actual_ws_port = None;
@@ -588,34 +610,43 @@ impl NetsimDaemon {
             resolve_port_with_env(args.ws_port, "NETSIM_WS_PORT", |name| std::env::var(name));
         let websocket_port = resolved_ws_port_opt.map(|p| p + instance_num - 1);
         if let Some(ws_port) = websocket_port {
-            match websocket_server::server::bind(ws_port) {
+            match bind_tcp_loopback(ws_port) {
                 Ok(listener) => {
                     actual_ws_port = Some(listener.local_addr().map_err(init_error)?.port());
                     tokio::spawn(websocket_server::server::run(listener, device_client.clone()));
                 }
                 Err(e) => {
-                    error!("Failed to bind WebSocket server: {e}");
+                    return Err(init_error(format!(
+                        "Failed to bind requested WebSocket server port {ws_port}: {e}"
+                    )));
                 }
             }
         }
 
         // Rootcanal legacy control server
         #[cfg(feature = "cuttlefish")]
-        let actual_test_port = {
-            let mut port = None;
+        let actual_test_addr = {
+            let mut addr = None;
+            let is_explicit_test = args.test_port.is_some();
             let test_port = args.test_port.unwrap_or_else(|| 7500 + instance_num - 1);
-            match rootcanal_server::bind(test_port) {
+            match bind_tcp_loopback(test_port) {
                 Ok(listener) => {
-                    port = Some(listener.local_addr().map_err(init_error)?.port());
+                    let local_addr = listener.local_addr().map_err(init_error)?;
+                    addr = Some(local_addr);
                     // Spawn legacy Rootcanal control server for host-side test runners (like
                     // pts-bot/mmi2grpc).
                     tokio::spawn(rootcanal_server::run(listener, device_client.clone()));
                 }
                 Err(e) => {
+                    if is_explicit_test {
+                        return Err(init_error(format!(
+                            "Failed to bind requested Rootcanal control server port {test_port}: {e}"
+                        )));
+                    }
                     error!("Failed to bind Rootcanal control server: {e}");
                 }
             }
-            port
+            addr
         };
 
         let mut actual_tcp_port = None;
@@ -645,15 +676,14 @@ impl NetsimDaemon {
         let mut ini_data = HashMap::from([
             ("pid".to_string(), std::process::id().to_string()),
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
-            ("hci.port".to_string(), resolved_hci_port.to_string()),
         ]);
+        if let Some(port) = actual_hci_port {
+            ini_data.insert("hci.port".to_string(), port.to_string());
+        }
         #[cfg(feature = "cuttlefish")]
-        if let Some(port) = actual_test_port {
-            listener_addresses.insert(
-                "netsim_rootcanal".to_string(),
-                StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], port))),
-            );
-            ini_data.insert("test.port".to_string(), port.to_string());
+        if let Some(addr) = actual_test_addr {
+            listener_addresses.insert("netsim_rootcanal".to_string(), StreamAddress::Tcp(addr));
+            ini_data.insert("test.port".to_string(), addr.port().to_string());
         }
         if let Some(port) = actual_tcp_port {
             ini_data.insert("tcp.port".to_string(), port.to_string());

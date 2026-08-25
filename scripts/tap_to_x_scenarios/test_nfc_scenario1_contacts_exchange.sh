@@ -6,17 +6,22 @@
 
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-ADB="${ANDROID_SDK_ROOT:-${HOME}/Library/Android/sdk}/platform-tools/adb"
-NETSIM_BIN="${ANDROID_SDK_ROOT:-${HOME}/Library/Android/sdk}/emulator/netsim"
+if [[ "$(uname)" == "Darwin" ]]; then
+    DEFAULT_SDK="${HOME}/Library/Android/sdk"
+else
+    DEFAULT_SDK="${HOME}/Android/Sdk"
+fi
+SDK_DIR="${ANDROID_SDK_ROOT:-${DEFAULT_SDK}}"
+ADB="${SDK_DIR}/platform-tools/adb"
+NETSIM_BIN="${SDK_DIR}/emulator/netsim"
 
 SENDER="emulator-5554"
 RECEIVER="emulator-5556"
 
 echo "=========================================================="
 echo " Starting Tap-to-X Scenario 1: Contacts Exchange"
-echo " Sender:   ${SENDER} (Pixel 10)"
-echo " Receiver: ${RECEIVER} (Pixel 10 (2))"
+echo " Sender:   ${SENDER}"
+echo " Receiver: ${RECEIVER}"
 echo " Specification: Both devices on Home Screen (Background Reader Mode)"
 echo "=========================================================="
 
@@ -39,12 +44,18 @@ echo "[2/6] Configuring logging and clearing logcats..."
 
 # 3. Position devices out of NFC range (1.0m)
 echo "[3/6] Moving devices apart to 1.0m..."
-"${NETSIM_BIN}" move "Pixel 10" 1.0 0.0 0.0
+DEV_SENDER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "^(P10|Pixel 10|Pixel_10)[[:space:]]" | head -n 1 | awk -F'  +' '{print $1}' || true)
+DEV_RECEIVER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "^(P10_2|Pixel 10 \(2\)|Pixel_10_2)[[:space:]]" | head -n 1 | awk -F'  +' '{print $1}' || true)
+DEV_SENDER="${DEV_SENDER:-Pixel 10}"
+DEV_RECEIVER="${DEV_RECEIVER:-Pixel 10 (2)}"
+echo "Identified Netsim Devices: Sender=${DEV_SENDER}, Receiver=${DEV_RECEIVER}"
+"${NETSIM_BIN}" move "${DEV_SENDER}" 1.0 0.0 0.0
+"${NETSIM_BIN}" move "${DEV_RECEIVER}" 0.0 0.0 0.0
 sleep 2
 
 # 4. Trigger Physical NFC Tap Proximity (0.02m) & Motion Sensor Tap
-echo "[4/6] Moving Pixel 10 to 0.02m (Physical Tap Contact) & simulating tap motion..."
-"${NETSIM_BIN}" move "Pixel 10" 0.02 0.0 0.0
+echo "[4/6] Moving ${DEV_SENDER} to 0.02m (Physical Tap Contact) & simulating tap motion..."
+"${NETSIM_BIN}" move "${DEV_SENDER}" 0.02 0.0 0.0
 
 # Simulate physical bump / tap acceleration pulse on both devices
 "${ADB}" -s "${SENDER}" emu sensor set acceleration 0 25.0 5.0 2>/dev/null || true
@@ -86,6 +97,22 @@ echo "=========================================================="
 echo " Final Radio Statistics:"
 echo "=========================================================="
 "${NETSIM_BIN}" devices
-echo "==========================================================="
-echo " Scenario 1 Verification Complete!"
-echo "==========================================================="
+
+echo "=========================================================="
+echo " Scenario 1 Verification Evaluation:"
+echo "=========================================================="
+SENDER_LOG=$("${ADB}" -s "${SENDER}" logcat -d -s GestureExchange:V NearbySharing:V HostEmulationManager:V 2>/dev/null || true)
+RECEIVER_LOG=$("${ADB}" -s "${RECEIVER}" logcat -d -s GestureExchange:V NearbySharing:V HostEmulationManager:V 2>/dev/null || true)
+
+SENDER_EVENTS=$(echo "${SENDER_LOG}" | grep -iE "A00000047609|transceive|SELECT_PRIMARY_AID" | wc -l)
+RECEIVER_EVENTS=$(echo "${RECEIVER_LOG}" | grep -iE "A00000047609|HostApdu|handleSelectAid" | wc -l)
+
+if [ "${SENDER_EVENTS}" -gt 0 ] && [ "${RECEIVER_EVENTS}" -gt 0 ]; then
+    echo " [RESULT: PASS] Tap-to-X Scenario 1: Contacts Exchange Passed (${SENDER_EVENTS} sender / ${RECEIVER_EVENTS} receiver events)"
+    echo "=========================================================="
+else
+    echo " [RESULT: FAIL] Tap-to-X Scenario 1: No bilateral NFC APDU exchange detected (Sender: ${SENDER_EVENTS}, Receiver: ${RECEIVER_EVENTS})"
+    echo "=========================================================="
+    exit 1
+fi
+

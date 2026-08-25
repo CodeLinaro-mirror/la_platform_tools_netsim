@@ -508,8 +508,8 @@ async fn test_nfc_stats_counters() {
                         && pkt.protocol() == rf::Protocol::IsoDep
                         && pkt.technology() == rf::Technology::NfcA
                     {
-                        if let Ok(cmd) = rf::T4ATSelectCommand::decode_full(&bytes) {
-                            let resp = rf::T4ATSelectResponse {
+                        if let Ok(cmd) = rf::IsoDepT4ATSelectCommand::decode_full(&bytes) {
+                            let resp = rf::IsoDepT4ATSelectResponse {
                                 sender: rf_device_id,
                                 receiver: cmd.sender(),
                                 bitrate: rf::BitRate::BitRate106KbitS,

@@ -93,12 +93,15 @@ async fn run_reader(mut reader: RfReader, state: Arc<Mutex<ServiceState>>) {
                                 info!("Received unexpected NfcAPollResponse from {}", sender);
                             }
                         }
-                        Ok(rf::RfPacketChild::T4ATSelectResponse(select_resp)) => {
+                        Ok(rf::RfPacketChild::IsoDepT4ATSelectResponse(select_resp)) => {
                             let sender = select_resp.sender();
                             if let Some(responder) = state.pending_select.take() {
                                 let _ = responder.send(());
                             } else {
-                                info!("Received unexpected T4ATSelectResponse from {}", sender);
+                                info!(
+                                    "Received unexpected IsoDepT4ATSelectResponse from {}",
+                                    sender
+                                );
                             }
                         }
                         _ => {}
@@ -245,7 +248,7 @@ impl CasimirControlServiceImpl {
             }
         };
 
-        // 2. Send T4ATSelectCommand
+        // 2. Send IsoDepT4ATSelectCommand
         let (select_tx, select_rx) = oneshot::channel();
         let sender_id_val = {
             let mut state = self.state.lock().await;
@@ -253,7 +256,7 @@ impl CasimirControlServiceImpl {
             state.device_id
         };
 
-        let select_cmd = rf::T4ATSelectCommand {
+        let select_cmd = rf::IsoDepT4ATSelectCommand {
             sender: sender_id_val, // Use assigned device ID!
             receiver: remote_id,
             bitrate: rf::BitRate::BitRate106KbitS,

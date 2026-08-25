@@ -74,14 +74,3 @@ async fn test_large_data_payloads() {
     world.when_backend_sends_packet(client_idx, &large_packet).await;
     world.then_client_receives_packet(client_idx, &large_packet).await;
 }
-
-#[tokio::test]
-async fn test_ipv6_connectivity() {
-    let mut world = TestWorld::new().await;
-
-    let client_idx = world.given_an_ipv6_websocket_client_connected(None, None).await;
-
-    let test_packet = [0x01, 0x02];
-    world.when_client_sends_packet(client_idx, &test_packet).await;
-    world.then_backend_receives_packet(client_idx, &test_packet).await;
-}

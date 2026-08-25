@@ -41,6 +41,7 @@ pub fn start(
     cell_client: cell_actor::CellClient,
     nfc_client: nfc_actor::NfcClient,
     wifi_client: wifi_actor::WifiClient,
+    capture_client: capture_actor::CaptureClient,
 
     packet_streamer_service: PacketStreamerService,
 
@@ -76,6 +77,7 @@ pub fn start(
             device_client.clone(),
             Arc::new(link_client),
             ap_client,
+            capture_client,
             version,
             frontend_stats,
         ));
@@ -152,6 +154,10 @@ mod tests {
         let wifi_client =
             wifi_actor::WifiClient::new(actor_framework::ResourceClient::new(wifi_tx));
 
+        let (capture_tx, _capture_rx) = mpsc::channel(10);
+        let capture_client =
+            capture_actor::CaptureClient::new(actor_framework::ResourceClient::new(capture_tx));
+
         let (new_connection_tx, _new_connection_rx) = mpsc::channel(10);
         let packet_streamer_service =
             crate::packet_streamer::PacketStreamerService::new(new_connection_tx);
@@ -168,6 +174,7 @@ mod tests {
             cell_client,
             nfc_client,
             wifi_client,
+            capture_client,
             packet_streamer_service,
             "test_version".to_string(),
             Arc::new(netsim_model::FrontendStats::default()),
