@@ -59,8 +59,12 @@ impl CaptureClient {
     }
 
     /// Creates a new capture session for a chip.
-    pub async fn create_capture(&self, params: CaptureCreate) -> Result<ChipId, ClientError> {
-        self.inner.create(params).err_into::<ClientError>().await
+    pub async fn create_capture(
+        &self,
+        chip_id: ChipId,
+        params: CaptureCreate,
+    ) -> Result<ChipId, ClientError> {
+        self.inner.create_with_id(chip_id, params).err_into::<ClientError>().await
     }
 
     /// Updates the capture state (enable/disable) for a chip.

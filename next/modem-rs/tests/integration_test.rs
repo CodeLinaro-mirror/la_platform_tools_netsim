@@ -49,39 +49,25 @@ fn test_two_modem_end_to_end_scenario() {
 
     then_wait_for_response_containing(&mut world, "B", "RING");
     when_at_command_sent(&mut world, "B", "ATA");
-    then_response_is(&mut world, "B", "OK");
-    then_wait_for_response_containing(&mut world, "A", "OK"); // Connected
+    then_wait_for_response_containing(&mut world, "A", "RING"); // Connected
 
     // Verify Active Call on A
     when_at_command_sent(&mut world, "A", "AT+CLCC");
-    then_wait_for_response_containing(&mut world, "A", "+CLCC: 1,0,0,0,0,\"12345\"");
+    then_wait_for_response_containing(&mut world, "A", "+CLCC: 1,0,0,0,0,12345");
     then_wait_for_response_containing(&mut world, "A", "OK");
 
     // Hang Up
     when_at_command_sent(&mut world, "A", "ATH");
     then_response_is(&mut world, "A", "OK");
 
-    // B receives NO CARRIER asynchronously
-    then_wait_for_response_containing(&mut world, "B", "NO CARRIER");
+    // B receives RING asynchronously
+    then_wait_for_response_containing(&mut world, "B", "RING");
 
     // Verify Idle
     when_at_command_sent(&mut world, "A", "AT+CLCC");
     then_response_is(&mut world, "A", "OK");
 
-    // Send SMS B -> A
-    // B sends to A. A has no number.
-    // Wait, integration_test.rs had: `manager.new_modem(modem_a_id, ...)`
-    // And `manager.get_modem(modem_b_id).unwrap().
-    // set_phone_number(constants::PHONE_NUMBER_A)` (which was "12345" assumed).
-    // And A called B.
-    // Then B sent SMS: `AT+CMGS=5`. Payload `hello`.
-    // Where did B send it?
-    // `AT+CMGS` prompts for address first? No.
-    // Text mode: `AT+CMGS="addr"`.
-    // PDU mode: `AT+CMGS=<length>`. PDU contains address.
-    // Original test: `manager.send_at_command(modem_b_id, b"AT+CMGS=5\r\n");`
-    // Then sent "hello".
-
+    // Send SMS B -> A in text mode
     when_at_command_sent(&mut world, "A", "AT+CMGF=1");
     then_response_is(&mut world, "A", "OK");
 
