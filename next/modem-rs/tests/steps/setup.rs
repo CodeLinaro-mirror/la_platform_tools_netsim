@@ -212,11 +212,14 @@ pub fn create_profile_with_msisdn() -> SimProfile {
                             record_len: None,
                             data: hex::decode(TEST_ICCID).unwrap(),
                         }),
-                        SimFile::ElementaryFile(ElementaryFile {
-                            file_id: UiccFileId::Msisdn.into(),
+                        SimFile::DedicatedFile(DedicatedFile {
+                            file_id: UiccFileId::Telecom.into(),
+                            files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                file_id: UiccFileId::Msisdn.into(),
 
-                            record_len: Some(EF_MSISDN_RECORD_LEN),
-                            data: vec![0xFF; EF_MSISDN_RECORD_LEN],
+                                record_len: Some(EF_MSISDN_RECORD_LEN),
+                                data: vec![0xFF; EF_MSISDN_RECORD_LEN],
+                            })],
                         }),
                     ],
                 },
