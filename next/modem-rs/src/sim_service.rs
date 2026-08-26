@@ -8,12 +8,12 @@ use tracing::{debug, info};
 
 use crate::{
     apdu,
-    config::{FileSystem, OverwritePolicy, SimFile, SimProfile},
+    config::{FileSystem, OverwritePolicy, ProfileMetadata, SimFile, SimProfile},
     constants::*,
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
     types::{
         AdnRecord, CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN,
-        DEFAULT_PIN2, ExecutionResult, FacilityLockMode, Parsable, PhoneNumber,
+        DEFAULT_PIN2, ExecutionResult, FacilityLockMode, Parsable, PhoneNumber, Plmn,
     },
 };
 
@@ -414,6 +414,7 @@ type SimResult = Result<Option<SimResponse>, ExecutionResult>;
 
 // Holds all state related to the SIM card.
 pub struct SimService {
+    provisioned: bool,
     state: SimState,
     pin_enabled: bool,
     pin1: String,
@@ -437,14 +438,64 @@ pub struct SimService {
     atr: Option<String>,
 }
 
+impl Default for SimService {
+    fn default() -> Self {
+        Self {
+            provisioned: false,
+            state: SimState::Absent,
+            pin_enabled: false,
+            pin1: DEFAULT_PIN.to_string(),
+            puk1: DEFAULT_PUK.to_string(),
+            pin1_retries: DEFAULT_PIN_RETRIES,
+            puk1_retries: DEFAULT_PUK_RETRIES,
+            pin2: DEFAULT_PIN2.to_string(),
+            pin2_retries: DEFAULT_PIN_RETRIES,
+            puk2_retries: DEFAULT_PUK_RETRIES,
+            fdn_enabled: false,
+            fs: FileSystem::default(),
+            sms_messages: HashMap::new(),
+            // Channel 0 is the basic channel and is always open by default.
+            logical_channels: [true, false, false, false],
+            selected_aids: [const { None }; 4],
+            selected_files: [None; 4],
+            response_buffer: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
+            cdma_subscription_source: CdmaSubscriptionSource::default(),
+            cdma_roaming_preference: CdmaRoamingPreference::default(),
+            adfs: Vec::new(),
+            eid: None,
+            atr: None,
+        }
+    }
+}
+
 impl SimService {
-    /// Creates a new SimService from a SIM profile configuration.
-    pub fn new(profile: &SimProfile) -> Self {
-        let pin_enabled = matches!(
-            profile.pin_profile.state,
-            crate::config::PinState::EnabledNotVerified | crate::config::PinState::EnabledVerified
-        );
-        let state = if profile.pin_profile.puk1_retries == Some(0)
+    /// Creates a new unloaded SimService.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a new SimService with the given profile loaded.
+    pub fn from_profile(profile: &SimProfile) -> Self {
+        let mut service = Self::new();
+        service.load_profile(profile);
+        service
+    }
+
+    /// Returns true if a profile is currently provisioned in this SIM slot.
+    pub(crate) fn is_provisioned(&self) -> bool {
+        self.provisioned
+    }
+
+    /// Unprovisions and completely wipes the SIM card, restoring to default.
+    fn clear_profile(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Loads a SIM profile configuration into the service, rebuilding the
+    /// filesystem and resetting credentials and logical channels.
+    pub fn load_profile(&mut self, profile: &SimProfile) {
+        self.provisioned = true;
+        self.state = if profile.pin_profile.puk1_retries == Some(0)
             || profile.pin_profile.state == crate::config::PinState::PermBlocked
         {
             SimState::PermBlocked
@@ -455,61 +506,49 @@ impl SimService {
                 _ => SimState::Ready,
             }
         };
-
-        let imsi = if profile.imsi.is_empty() {
-            DEFAULT_FALLBACK_IMSI.to_string()
+        self.pin_enabled = matches!(
+            profile.pin_profile.state,
+            crate::config::PinState::EnabledNotVerified | crate::config::PinState::EnabledVerified
+        );
+        self.pin1 = if !profile.pin_profile.pin1.is_empty() {
+            profile.pin_profile.pin1.clone()
         } else {
-            profile.imsi.clone()
+            DEFAULT_PIN.to_string()
         };
-
-        let iccid = if profile.iccid.is_empty() {
-            DEFAULT_FALLBACK_ICCID.to_string()
+        self.puk1 = if !profile.pin_profile.puk1.is_empty() {
+            profile.pin_profile.puk1.clone()
         } else {
-            profile.iccid.clone()
+            DEFAULT_PUK.to_string()
         };
-
-        let mut service = Self {
-            state,
-            pin_enabled,
-            pin1: if !profile.pin_profile.pin1.is_empty() {
-                profile.pin_profile.pin1.clone()
-            } else {
-                DEFAULT_PIN.to_string()
-            },
-            puk1: if !profile.pin_profile.puk1.is_empty() {
-                profile.pin_profile.puk1.clone()
-            } else {
-                DEFAULT_PUK.to_string()
-            },
-            pin1_retries: profile.pin_profile.pin1_retries.unwrap_or(DEFAULT_PIN_RETRIES),
-            puk1_retries: profile.pin_profile.puk1_retries.unwrap_or(DEFAULT_PUK_RETRIES),
-            pin2: if !profile.pin_profile.pin2.is_empty() {
-                profile.pin_profile.pin2.clone()
-            } else {
-                DEFAULT_PIN2.to_string()
-            },
-            pin2_retries: profile.pin_profile.pin2_retries.unwrap_or(DEFAULT_PIN_RETRIES),
-            puk2_retries: profile.pin_profile.puk2_retries.unwrap_or(DEFAULT_PUK_RETRIES),
-            fdn_enabled: false,
-            fs: profile.sim_io.file_system.clone(),
-            sms_messages: HashMap::new(),
-            // Channel 0 is the basic channel and is always open by default.
-            logical_channels: [true, false, false, false],
-            selected_aids: [None, None, None, None],
-            selected_files: [None; 4],
-            response_buffer: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
-            cdma_subscription_source: CdmaSubscriptionSource::default(),
-            cdma_roaming_preference: CdmaRoamingPreference::default(),
-            adfs: profile.adfs.clone(),
-            eid: profile.eid.clone(),
-            atr: profile.atr.clone(),
+        self.pin1_retries = profile.pin_profile.pin1_retries.unwrap_or(DEFAULT_PIN_RETRIES);
+        self.puk1_retries = profile.pin_profile.puk1_retries.unwrap_or(DEFAULT_PUK_RETRIES);
+        self.pin2 = if !profile.pin_profile.pin2.is_empty() {
+            profile.pin_profile.pin2.clone()
+        } else {
+            DEFAULT_PIN2.to_string()
         };
+        self.pin2_retries = profile.pin_profile.pin2_retries.unwrap_or(DEFAULT_PIN_RETRIES);
+        self.puk2_retries = profile.pin_profile.puk2_retries.unwrap_or(DEFAULT_PUK_RETRIES);
+        self.fdn_enabled = false;
+        self.sms_messages.clear();
+        self.fs = profile.sim_io.file_system.clone();
+        self.logical_channels = [true, false, false, false];
+        self.selected_aids = [const { None }; 4];
+        self.selected_files = [None; 4];
+        self.response_buffer = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+        self.adfs = profile.adfs.clone();
+        self.eid = profile.eid.clone();
+        self.atr = profile.atr.clone();
 
-        let iccid_swapped = crate::pdu::bcd::string_to_bcd(&iccid);
-        let imsi_encoded = crate::pdu::bcd::encode_imsi(&imsi);
+        let iccid = if profile.iccid.is_empty() { DEFAULT_FALLBACK_ICCID } else { &profile.iccid };
+        let iccid_swapped = crate::pdu::bcd::string_to_bcd(iccid);
+
+        let imsi = if profile.imsi.is_empty() { DEFAULT_FALLBACK_IMSI } else { &profile.imsi };
+        let imsi_encoded = crate::pdu::bcd::encode_imsi(imsi);
+
         let requested_msisdn = PhoneNumber::parse(profile.msisdn.as_bytes()).map(|(_, p)| p).ok();
-        service.fs.normalize_record_lengths();
-        let existing_msisdn_ef = service.fs.find_ef_in_telecom_or_usim(UiccFileId::Msisdn);
+        self.fs.normalize_record_lengths();
+        let existing_msisdn_ef = self.fs.find_ef_in_telecom_or_usim(UiccFileId::Msisdn);
         let msisdn_record_len =
             existing_msisdn_ef.and_then(|ef| ef.record_len()).unwrap_or_else(|| {
                 UiccFileId::Msisdn.default_record_len().expect("file id is record based")
@@ -521,16 +560,11 @@ impl SimService {
             .unwrap_or_else(|| vec![0xFF; msisdn_record_len]);
         let fplmn_data = EF_FPLMN_DATA_FALLBACK.to_vec();
 
-        service.fs.ensure_ef_present(
-            UiccFileId::Iccid,
-            None,
-            iccid_swapped,
-            OverwritePolicy::Always,
-        );
+        self.fs.ensure_ef_present(UiccFileId::Iccid, None, iccid_swapped, OverwritePolicy::Always);
         if let Some(encoded) = imsi_encoded {
-            service.fs.ensure_ef_present(UiccFileId::Imsi, None, encoded, OverwritePolicy::Always);
+            self.fs.ensure_ef_present(UiccFileId::Imsi, None, encoded, OverwritePolicy::Always);
         }
-        service.fs.ensure_ef_present_in_telecom_and_usim(
+        self.fs.ensure_ef_present_in_telecom_and_usim(
             UiccFileId::Msisdn,
             Some(msisdn_record_len),
             msisdn_data,
@@ -538,7 +572,7 @@ impl SimService {
         );
 
         let existing_mbdn_ef =
-            service.fs.find_ef_in_telecom_or_usim(UiccFileId::MailboxDialingNumbers);
+            self.fs.find_ef_in_telecom_or_usim(UiccFileId::MailboxDialingNumbers);
         let mbdn_record_len =
             existing_mbdn_ef.and_then(|ef| ef.record_len()).unwrap_or_else(|| {
                 UiccFileId::MailboxDialingNumbers
@@ -552,15 +586,14 @@ impl SimService {
             mbdn_data.resize(DEFAULT_MBDN_RECORD_COUNT * mbdn_record_len, 0xFF);
         }
 
-        service.fs.ensure_ef_present_in_telecom_and_usim(
+        self.fs.ensure_ef_present_in_telecom_and_usim(
             UiccFileId::MailboxDialingNumbers,
             Some(mbdn_record_len),
             mbdn_data,
             OverwritePolicy::IfUninitialized,
         );
 
-        let existing_fdn_ef =
-            service.fs.find_ef_in_telecom_or_usim(UiccFileId::FixedDialingNumbers);
+        let existing_fdn_ef = self.fs.find_ef_in_telecom_or_usim(UiccFileId::FixedDialingNumbers);
         let fdn_record_len = existing_fdn_ef.and_then(|ef| ef.record_len()).unwrap_or_else(|| {
             UiccFileId::FixedDialingNumbers.default_record_len().expect("file id is record based")
         });
@@ -571,21 +604,58 @@ impl SimService {
             fdn_data.resize(DEFAULT_FDN_RECORD_COUNT * fdn_record_len, 0xFF);
         }
 
-        service.fs.ensure_ef_present_in_telecom_and_usim(
+        self.fs.ensure_ef_present_in_telecom_and_usim(
             UiccFileId::FixedDialingNumbers,
             Some(fdn_record_len),
             fdn_data,
             OverwritePolicy::IfUninitialized,
         );
 
-        service.fs.ensure_ef_present(
+        self.fs.ensure_ef_present(
             UiccFileId::ForbiddenPlmn,
             None,
             fplmn_data,
             OverwritePolicy::Never,
         );
+    }
 
-        service
+    /// Inserts a SIM card by applying the provided profile. Fails if a SIM is
+    /// already provisioned.
+    pub(crate) fn insert_sim(&mut self, profile: &SimProfile) -> bool {
+        if self.is_provisioned() {
+            return false;
+        }
+        self.load_profile(profile);
+        true
+    }
+
+    /// Removes and unprovisions the SIM card, clearing the filesystem and
+    /// credentials.
+    pub(crate) fn remove_sim(&mut self) -> bool {
+        let was_provisioned = self.is_provisioned();
+        self.clear_profile();
+        was_provisioned
+    }
+
+    /// Returns the home PLMN (MCC + MNC) derived from the active SIM's EF_IMSI,
+    /// or `None` if the SIM is absent or has no valid IMSI.
+    pub(crate) fn home_plmn(&self) -> Option<Plmn> {
+        self.get_imsi().and_then(|imsi| Plmn::from_imsi(&imsi, None))
+    }
+
+    /// Returns summary metadata for the active SIM profile, or `None` if the
+    /// SIM is absent.
+    pub(crate) fn get_profile_metadata(&self) -> Option<ProfileMetadata> {
+        if !self.is_present() {
+            return None;
+        }
+        Some(ProfileMetadata {
+            iccid: self.get_iccid().unwrap_or_default(),
+            imsi: self.get_imsi().unwrap_or_default(),
+            msisdn: self.get_msisdn().map(|p| p.to_string()).unwrap_or_default(),
+            home_plmn: self.home_plmn(),
+            eid: self.eid.clone(),
+        })
     }
 
     fn lookup_cgla(
@@ -629,18 +699,18 @@ impl SimService {
         adf.csim.iter().find(|m| m.cmd.matches(apdu)).map(|m| m.response.to_string())
     }
 
-    fn get_imsi(&self) -> String {
-        self.fs
-            .find_ef(UiccFileId::Imsi)
-            .and_then(|ef| decode_imsi(&ef.data))
-            .unwrap_or_else(|| DEFAULT_FALLBACK_IMSI.to_string())
+    pub(crate) fn get_imsi(&self) -> Option<String> {
+        if !self.is_present() {
+            return None;
+        }
+        self.fs.find_ef(UiccFileId::Imsi).and_then(|ef| decode_imsi(&ef.data))
     }
 
-    fn get_iccid(&self) -> String {
-        self.fs
-            .find_ef(UiccFileId::Iccid)
-            .map(|ef| crate::pdu::bcd::bcd_to_string(&ef.data))
-            .unwrap_or_else(|| DEFAULT_FALLBACK_ICCID.to_string())
+    pub(crate) fn get_iccid(&self) -> Option<String> {
+        if !self.is_present() {
+            return None;
+        }
+        self.fs.find_ef(UiccFileId::Iccid).map(|ef| crate::pdu::bcd::bcd_to_string(&ef.data))
     }
 
     pub(crate) fn get_msisdn(&self) -> Option<PhoneNumber> {
@@ -648,7 +718,7 @@ impl SimService {
         ef.records().find_map(|r| AdnRecord::decode(r).and_then(|adn| adn.number))
     }
 
-    pub fn set_msisdn(&mut self, msisdn: Option<&PhoneNumber>) {
+    pub(crate) fn set_msisdn(&mut self, msisdn: Option<&PhoneNumber>) {
         let record_len = self
             .fs
             .find_ef_in_telecom_or_usim(UiccFileId::Msisdn)
@@ -724,7 +794,7 @@ impl SimService {
         }
     }
 
-    pub fn get_cpin_urc(&self) -> Option<String> {
+    pub(crate) fn get_cpin_urc(&self) -> Option<String> {
         let status = match self.state {
             SimState::Absent => return Some("+CPIN: ABSENT\r\n".to_string()),
             SimState::Ready => RequiredPin::None,
@@ -735,11 +805,14 @@ impl SimService {
         Some(format!("{}", SimResponse::PinStatus(status)))
     }
 
-    pub fn is_present(&self) -> bool {
-        self.state != SimState::Absent
+    pub(crate) fn is_present(&self) -> bool {
+        self.provisioned && self.state != SimState::Absent
     }
 
-    pub fn set_present(&mut self, present: bool) -> bool {
+    pub(crate) fn set_present(&mut self, present: bool) -> bool {
+        if present && !self.provisioned {
+            return false;
+        }
         let old_state = self.state;
         if present {
             if self.state == SimState::Absent {
@@ -755,17 +828,24 @@ impl SimService {
             }
         } else {
             self.state = SimState::Absent;
+            self.logical_channels = [true, false, false, false];
+            self.selected_aids = [const { None }; 4];
+            self.selected_files = [None; 4];
+            self.response_buffer = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
         }
         self.state != old_state
     }
 
     // --- Public API for other services ---
 
-    pub fn get_sms_count(&self) -> usize {
+    pub(crate) fn get_sms_count(&self) -> usize {
+        if !self.is_present() {
+            return 0;
+        }
         self.sms_messages.len()
     }
 
-    pub fn store_sms(&mut self, pdu: &[u8]) -> Option<u8> {
+    pub(crate) fn store_sms(&mut self, pdu: &[u8]) -> Option<u8> {
         if !self.is_present() {
             return None;
         }
@@ -774,14 +854,14 @@ impl SimService {
         Some(index)
     }
 
-    pub fn read_sms(&self, index: u8) -> Result<Option<Vec<u8>>, CmeError> {
+    pub(crate) fn read_sms(&self, index: u8) -> Result<Option<Vec<u8>>, CmeError> {
         if !self.is_present() {
             return Err(CmeError::SimNotInserted);
         }
         if let Some(pdu) = self.sms_messages.get(&index) { Ok(Some(pdu.clone())) } else { Ok(None) }
     }
 
-    pub fn delete_sms(&mut self, index: u8) -> bool {
+    pub(crate) fn delete_sms(&mut self, index: u8) -> bool {
         if !self.is_present() {
             return false;
         }
@@ -858,11 +938,19 @@ impl SimService {
     }
 
     fn handle_get_imsi(&self) -> SimResult {
-        Ok(Some(SimResponse::Imsi(self.get_imsi())))
+        if let Some(imsi) = self.get_imsi() {
+            Ok(Some(SimResponse::Imsi(imsi)))
+        } else {
+            Err(ExecutionResult::cme_error(CmeError::NotFound))
+        }
     }
 
     fn handle_get_iccid(&self) -> SimResult {
-        Ok(Some(SimResponse::Iccid(self.get_iccid())))
+        if let Some(iccid) = self.get_iccid() {
+            Ok(Some(SimResponse::Iccid(iccid)))
+        } else {
+            Err(ExecutionResult::cme_error(CmeError::NotFound))
+        }
     }
 
     fn handle_get_eid(&self) -> SimResult {
@@ -1535,7 +1623,7 @@ impl SimService {
         Ok(None)
     }
 
-    pub fn handle_set_facility_lock(
+    pub(crate) fn handle_set_facility_lock(
         &mut self,
         mode: FacilityLockMode,
         passwd: Option<QuotedString>,
@@ -1683,7 +1771,7 @@ impl SimService {
         }))
     }
 
-    pub fn execute<'a>(&mut self, command: &SimCommand<'a>) -> ExecutionResult {
+    pub(crate) fn execute<'a>(&mut self, command: &SimCommand<'a>) -> ExecutionResult {
         info!("[SimService] Executing SIM command: {command:?}");
         if self.state == SimState::Absent {
             return ExecutionResult::cme_error(CmeError::SimNotInserted); /* SIM not inserted */
@@ -1907,7 +1995,8 @@ mod tests {
         fdn_record[18] = 0xF5; // '5', filler
 
         let profile = create_test_fdn_profile(fdn_record);
-        let service = SimService::new(&profile);
+        let mut service = SimService::new();
+        service.load_profile(&profile);
 
         assert!(service.is_fdn_allowed(&PhoneNumber::new("98765")));
         assert!(service.is_fdn_allowed(&PhoneNumber::new("12345")));
@@ -1924,7 +2013,8 @@ mod tests {
 
         let mut profile = create_test_fdn_profile(fdn_record);
         profile.pin_profile.pin2 = "5678".to_string();
-        let mut service = SimService::new(&profile);
+        let mut service = SimService::new();
+        service.load_profile(&profile);
 
         service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"5678"))).unwrap();
         assert!(service.fdn_enabled);
@@ -1945,7 +2035,8 @@ mod tests {
         fdn_record_with_a[17] = 0xC3; // "3a"
 
         let profile_a = create_test_fdn_profile(fdn_record_with_a);
-        let mut service_a = SimService::new(&profile_a);
+        let mut service_a = SimService::new();
+        service_a.load_profile(&profile_a);
         service_a.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"5678"))).unwrap();
 
         assert!(!service_a.is_fdn_allowed(&PhoneNumber::new("12345")));
@@ -1957,7 +2048,8 @@ mod tests {
         let mut profile = create_test_fdn_profile(fdn_record);
         profile.pin_profile.pin2 = "5678".to_string();
         profile.pin_profile.pin2_retries = Some(3);
-        let mut service = SimService::new(&profile);
+        let mut service = SimService::new();
+        service.load_profile(&profile);
 
         // Try invalid length PIN2 -> fails immediately, does NOT decrement retries
         let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"123")));
@@ -2090,7 +2182,8 @@ mod tests {
     #[test]
     fn test_handle_sim_io_get_response_truncation() {
         let profile = SimProfile::default();
-        let mut service = SimService::new(&profile);
+        let mut service = SimService::new();
+        service.load_profile(&profile);
         let res = service
             .handle_sim_io(
                 apdu::Instruction::GetResponse,
@@ -2112,7 +2205,7 @@ mod tests {
     #[test]
     fn test_set_msisdn_preserves_subsequent_records() {
         let profile = SimProfile::default();
-        let mut service = SimService::new(&profile);
+        let mut service = SimService::from_profile(&profile);
         let msisdn_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
 
         // Populate EF_MSISDN in DF_TELECOM with 2 records
@@ -2161,7 +2254,136 @@ mod tests {
             },
             ..Default::default()
         };
-        let service = SimService::new(&profile);
+        let service = SimService::from_profile(&profile);
         assert_eq!(service.get_msisdn(), Some(second_number));
+    }
+
+    #[test]
+    fn test_sim_lifecycle_hot_swap_and_removal() {
+        let default_prof =
+            crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_DEFAULT).unwrap();
+        let mut service = SimService::new();
+        service.load_profile(&default_prof);
+
+        assert!(service.is_present());
+        assert_eq!(service.get_imsi().as_deref(), Some("310260000000000"));
+        assert_eq!(service.get_cpin_urc(), Some("+CPIN: READY\r\n".to_string()));
+
+        let meta = service.get_profile_metadata().unwrap();
+        assert_eq!(meta.imsi, "310260000000000");
+        assert_eq!(meta.home_plmn.as_ref().map(Plmn::as_str), Some("310260"));
+
+        // Store an SMS to verify it gets cleared on removal
+        service.store_sms(&[1, 2, 3]);
+        assert_eq!(service.get_sms_count(), 1);
+
+        // Test ejection (set_present(false)) vs removal (remove_sim)
+        assert!(service.set_present(false));
+        assert!(!service.is_present());
+        assert!(service.is_provisioned());
+        assert_eq!(service.get_cpin_urc(), Some("+CPIN: ABSENT\r\n".to_string()));
+
+        // Re-inserting the ejected card restores presence
+        assert!(service.set_present(true));
+        assert!(service.is_present());
+        assert!(service.is_provisioned());
+        assert_eq!(service.get_cpin_urc(), Some("+CPIN: READY\r\n".to_string()));
+
+        // Remove SIM (unprovisions and completely clears the card)
+        assert!(service.remove_sim());
+        assert!(!service.is_present());
+        assert!(!service.is_provisioned());
+        assert_eq!(service.get_cpin_urc(), Some("+CPIN: ABSENT\r\n".to_string()));
+
+        // Attempting to present an unprovisioned card fails
+        assert!(!service.set_present(true));
+
+        // When SIM is unprovisioned, queries return None and SMS is empty
+        assert_eq!(service.get_profile_metadata(), None);
+        assert_eq!(service.get_imsi(), None);
+        assert_eq!(service.get_iccid(), None);
+        assert_eq!(service.home_plmn(), None);
+        assert_eq!(service.get_sms_count(), 0);
+
+        // Insert Tel Alaska profile into empty slot
+        let alaska_prof =
+            crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_TEL_ALASKA).unwrap();
+        assert!(service.insert_sim(&alaska_prof));
+        assert!(service.is_present());
+        assert!(service.is_provisioned());
+        assert!(!service.insert_sim(&alaska_prof));
+        assert_eq!(service.get_imsi().as_deref(), Some("311740123456789"));
+        assert_eq!(service.get_iccid().as_deref(), Some("89860318640220133897"));
+        assert_eq!(service.get_cpin_urc(), Some("+CPIN: READY\r\n".to_string()));
+
+        let alaska_meta = service.get_profile_metadata().unwrap();
+        assert_eq!(alaska_meta.imsi, "311740123456789");
+        assert_eq!(alaska_meta.home_plmn.as_ref().map(Plmn::as_str), Some("311740"));
+    }
+
+    #[test]
+    fn test_load_profile_resets_logical_channels() {
+        let default_prof =
+            crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_DEFAULT).unwrap();
+        let mut service = SimService::new();
+        service.load_profile(&default_prof);
+
+        // Open logical channel 1
+        let res = service.handle_open_logical_channel(b"").unwrap();
+        assert_eq!(res, Some(SimResponse::OpenLogicalChannel(1)));
+        assert!(service.logical_channels[1]);
+
+        // Load new profile
+        let cts_prof = crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_CTS).unwrap();
+        service.load_profile(&cts_prof);
+
+        // Logical channel 1 should be closed, channel 0 open
+        assert!(service.logical_channels[0]);
+        assert!(!service.logical_channels[1]);
+        assert_eq!(service.selected_aids[1], None);
+        assert_eq!(service.selected_files[1], None);
+    }
+
+    #[test]
+    fn test_load_profile_clears_sms_messages() {
+        let default_prof =
+            crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_DEFAULT).unwrap();
+        let mut service = SimService::new();
+        service.load_profile(&default_prof);
+
+        // Store an SMS message on the SIM card
+        let dummy_pdu = [0x00, 0x01, 0x02, 0x03];
+        let index = service.store_sms(&dummy_pdu);
+        assert_eq!(index, Some(1));
+        assert_eq!(service.get_sms_count(), 1);
+
+        // Switching or reloading profile should clear stored SMS records
+        let alaska_prof =
+            crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_TEL_ALASKA).unwrap();
+        service.load_profile(&alaska_prof);
+        assert_eq!(service.get_sms_count(), 0);
+    }
+
+    #[test]
+    fn test_set_present_false_resets_channels_and_buffers() {
+        let default_prof =
+            crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_DEFAULT).unwrap();
+        let mut service = SimService::new();
+        service.load_profile(&default_prof);
+
+        // Open logical channel 1 and buffer response data
+        let res = service.handle_open_logical_channel(b"").unwrap();
+        assert_eq!(res, Some(SimResponse::OpenLogicalChannel(1)));
+        assert!(service.logical_channels[1]);
+        service.response_buffer[1] = vec![0x12, 0x34];
+
+        // Toggling SIM presence to false must tear down logical channels, reset
+        // selected files, and clear buffers
+        assert!(service.set_present(false));
+        assert!(!service.is_present());
+        assert_eq!(service.logical_channels, [true, false, false, false]);
+        assert_eq!(service.selected_aids, [const { None }; 4]);
+        assert_eq!(service.selected_files, [None; 4]);
+        assert!(service.response_buffer[1].is_empty());
     }
 }

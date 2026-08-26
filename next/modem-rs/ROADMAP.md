@@ -91,6 +91,11 @@ docs (e.g., Google Fi, Pixel) but are not yet scheduled in specific phases.
   - Requirement: Support for testing dual SIM scenarios (DSDS) and multiple
     active subscriptions.
   - Source: Google Fi Team.
+- **eSIM & eUICC Profile Lifecycle Management (GSMA SGP.22)**:
+  - Requirement: Support GSMA SGP.22 eSIM profile lifecycle operations (download,
+    activation, deactivation, deletion, and dynamic UICC filesystem swapping) to
+    support Android LPA and CTS testing.
+  - Source: Android Telephony / LPA & Emulator Teams.
 - **IPv6 Support**:
   - Requirement: Proper IPv6 address allocation (SLAAC/DHCPv6) for mobile data
     to support modern network requirements.
@@ -257,8 +262,8 @@ a massive amount of work to reach feature parity with the C++
 - [ ] **Integrate with NVRAM Configuration:**
   - [ ] Use a configuration management system to store and retrieve
         network-related settings.
-- [ ] **Integrate with `SimService`:**
-  - [ ] Use the `SimService` to initialize the network operator.
+- [x] **Integrate with `SimService`:**
+  - [x] Use the `SimService` to initialize the network operator.
 
 ### SIM Service (`src/sim_service.rs`)
 
@@ -272,13 +277,30 @@ missing most of the features and complexity of the C++ `sim_service.cpp`.
   - [x] Implement a parser for the XML-based SIM profile.
   - [x] Implement full `AT+CRSM` command handling (fallback mappings and clean response formatting).
   - [x] Implement full `AT+CSIM` command handling.
-- [ ] **Implement full PIN/PUK Management (`AT+CPIN`):**
-  - [ ] Handle all SIM states (ABSENT, NOT_READY, READY, PIN, PUK).
-  - [ ] Handle all PIN/PUK operations correctly.
+- [x] **Implement full PIN/PUK Management (`AT+CPIN`):**
+  - [x] Handle all SIM states (ABSENT, NOT_READY, READY, PIN, PUK).
+  - [x] Handle all PIN/PUK operations correctly.
 - [ ] **Implement Facility Lock (`AT+CLCK`):**
   - [ ] Add support for locking, unlocking, and querying all facilities.
 - [x] **Enhance Logical Channel Support (`AT+CCHO`, `AT+CCHC`, `AT+CGLA`)**: Implemented basic open/close channel lifecycle and transmit APDU mocking.
   - [x] Add support for Application Identifiers (AIDs).
+- [ ] **eSIM & eUICC Support (GSMA SGP.22 & GlobalPlatform Card Spec)**:
+  - [ ] **Phase 1: ISD-R Logical Channel & Basic SGP.22 ES10**:
+    - [ ] Add `STORE DATA` (`0xE2`) APDU instruction handling and block chaining.
+    - [ ] Add zero-dependency ASN.1 BER-TLV decoder and encoder for SGP.22 tags.
+    - [ ] Auto-register standard GSMA ISD-R AID (`A0000005591010FFFFFFFF8900000100`) on `AT+CCHO`.
+    - [ ] Implement basic ES10 info queries: `GetEUICCInfo1` (`0xBF20`), `GetEUICCInfo2` (`0xBF22`), `GetEUICCChallenge` (`0xBF2E`), and `GetConfiguredAddresses` (`0xBF3C`).
+  - [ ] **Phase 2: Profile Storage & SGP.22 Profile Lifecycle Management**:
+    - [ ] Implement multi-profile `ProfileStore` holding `EsimProfile` structures with embedded UICC filesystems.
+    - [ ] Support profile lifecycle commands: `GetProfilesInfo` (`0xBF2D`), `EnableProfile` (`0xBF31`), `DisableProfile` (`0xBF32`), `DeleteProfile` (`0xBF33`), `SetNickname` (`0xBF29`), `ResetMemory` (`0xBF34`).
+    - [x] Implement dynamic active `FileSystem` swapping and SIM Refresh notifications (`+CUSATP: 01` / reset URC).
+  - [ ] **Phase 3: eSIM In-Band BPP & Out-of-Band Provisioning**:
+    - [ ] Handle `AuthenticateServer` (`0xBF38`) and `PrepareDownload` (`0xBF21`).
+    - [ ] Parse in-band Bound Profile Packages via `LoadBoundProfilePackage` (`0xBF36` / `0xBF37`).
+    - [ ] Provide out-of-band programmatic API / CLI fixtures for injecting test eSIM profiles.
+  - [ ] **Phase 4: Goldfish HAL Alignment & CTS Verification**:
+    - [ ] Update Goldfish `RadioConfig::getSimTypeInfo` to report `SimType::ESIM` when EID is present.
+    - [ ] Validate end-to-end with Android LPA UI and CTS test suites (`CtsCarrierApiTestCases`, `CtsTelephonyTestCases`).
 - [x] **Implement CDMA Features (`AT+CCSS`, `AT+WRMP`):**
   - [x] Implement the CDMA-specific commands.
 - [x] **Implement SIM Authentication (`^MBAU`):**
@@ -379,6 +401,10 @@ reference implementations.
   - Reference for CDMA-specific commands (`AT+CCSS`, `AT+WRMP`).
 - **3GPP TS 31.111 / 11.14**: _USIM Application Toolkit (USAT)_.
   - Reference for STK (SIM Toolkit) commands and envelope structures.
+- **GSMA SGP.22**: _RSP (Remote SIM Provisioning) Technical Specification v2.2+_.
+  - Reference for ES10 interface (LPA to eUICC), ISD-R AID, ASN.1 BER-TLV definitions, and profile lifecycle procedures.
+- **GlobalPlatform Card Specification v2.3**: _Card Specification & Amendment D (Secure Channel Protocol)_.
+  - Reference for `STORE DATA` APDU command structure and logical channel management.
 
 ### Source Implementations
 

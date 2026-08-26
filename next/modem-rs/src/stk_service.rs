@@ -129,6 +129,12 @@ enum TerminalResponseAction {
     None,
 }
 
+impl Default for StkService {
+    fn default() -> Self {
+        Self::new(Stk::default())
+    }
+}
+
 impl StkService {
     pub fn new(stk_config: Stk) -> Self {
         let has_menu = !stk_config.setup_menu.text.is_empty();
