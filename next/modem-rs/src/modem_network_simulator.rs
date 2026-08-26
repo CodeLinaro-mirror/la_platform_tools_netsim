@@ -14,6 +14,8 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
 use crate::{
+    config::SimProfile,
+    constants::{DEFAULT_FALLBACK_MSISDN, DEFAULT_MSISDN_PREFIX},
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
     time::{Clock, SystemClock},
@@ -68,6 +70,7 @@ pub struct ModemNetworkSimulator {
     host_event_tx: mpsc::UnboundedSender<HostEvent>,
     metrics: Arc<Metrics>,
     clock: Arc<dyn Clock>,
+    modem_chip_count: usize,
 }
 
 impl ModemNetworkSimulator {
@@ -88,6 +91,7 @@ impl ModemNetworkSimulator {
             event_queue: BinaryHeap::new(),
             metrics: Arc::new(Metrics::default()),
             clock,
+            modem_chip_count: 0,
         }
     }
 
@@ -186,28 +190,24 @@ impl ModemNetworkSimulator {
         &mut self,
         id: ModemId,
         sink: ModemSink,
-        profile: Option<crate::config::SimProfile>,
+        profile: Option<SimProfile>,
         sim_type: Option<i32>,
         quirks: Quirks,
     ) -> Result<(), ModemError> {
         if self.modems.contains_key(&id) {
             return Err(ModemError::DuplicateModemId(id));
         }
+        self.modem_chip_count += 1;
         let mut profile = profile.unwrap_or_default();
         if profile.msisdn.is_empty() {
-            let num_modems = self.modems.len();
-            profile.msisdn =
-                format!("{}{:03}", crate::constants::DEFAULT_MSISDN_PREFIX, num_modems + 1);
+            profile.msisdn = format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count);
         }
         let target_msisdn = profile.msisdn.clone();
-        let mut modem = crate::modem::ModemImpl::new(id, profile, quirks);
+        let mut modem = ModemImpl::new(id, profile, quirks);
         // Override the default dummy number with a unique generated one to prevent
         // conflicts when launching multiple default emulators. Custom profiles are
         // preserved.
-        if modem
-            .phone_number()
-            .as_ref()
-            .is_some_and(|n| n.normalized() == crate::constants::DEFAULT_FALLBACK_MSISDN)
+        if modem.phone_number().as_ref().is_some_and(|n| n.normalized() == DEFAULT_FALLBACK_MSISDN)
         {
             modem.set_phone_number(&target_msisdn);
         }

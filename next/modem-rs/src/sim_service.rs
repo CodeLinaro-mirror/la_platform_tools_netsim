@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::HashMap, fmt::Write, iter::once};
 
 use modem_rs_derive::CommandParser;
 use tracing::info;
@@ -13,7 +13,7 @@ use crate::{
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
     types::{
         CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN, DEFAULT_PIN2,
-        ExecutionResult, FacilityLockMode, Parsable, PhoneNumber,
+        ExecutionResult, FacilityLockMode, Parsable, PhoneNumber, TypeOfAddress,
     },
 };
 
@@ -34,7 +34,7 @@ pub enum SimCommand<'a> {
     EnterPin(PinString<'a>, Option<PinString<'a>>),
     #[command(tag = "AT+CRSM=")]
     SimIo {
-        command: u16,
+        command: apdu::Instruction,
         file_id: u16,
         p1: u8,
         p2: u8,
@@ -98,19 +98,220 @@ const DEFAULT_FALLBACK_IMSI: &str = "310260123456789";
 const DEFAULT_FALLBACK_ICCID: &str = "89012608640220133897";
 const EF_FPLMN_DATA_FALLBACK: &[u8] = &[0xFF; 12];
 const EF_MSISDN_RECORD_FALLBACK: &[u8] = &[
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x91,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x07, 0x91,
     0x51, 0x55, 0x21, 0x43, 0x65, 0xF7, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 ];
 const STATUS_FCP_HEX: &str = "62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF";
 
-// SIM Elementary File IDs (EF IDs)
-pub(crate) const EF_IMSI_ID: u16 = 0x6F07;
-pub(crate) const EF_ICCID_ID: u16 = 0x2FE2;
-const EF_FPLMN_ID: u16 = 0x6F7B;
-const EF_MSISDN_ID: u16 = 0x6F40;
-const EF_MBDN_ID: u16 = 0x6FC7;
-const EF_AD_ID: u16 = 0x6FAD;
-const EF_FDN_ID: u16 = 0x6F3B;
+/// 3GPP TS 51.011 §9.3 Access Condition Levels.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum AccessLevel {
+    #[default]
+    Always = 0x0,
+    Pin1 = 0x1,
+    Pin2 = 0x2,
+    Never = 0xF,
+}
+
+/// 3GPP TS 51.011 §9.2.1 Access Conditions (Bytes 9–12).
+///
+/// Encodes 4-bit nibbles:
+/// - Byte 9:  `[read: 4 bits | update: 4 bits]`
+/// - Byte 10: `[increase: 4 bits | rfu: 4 bits]`
+/// - Byte 11: `[rehabilitate: 4 bits | invalidate: 4 bits]`
+/// - Byte 12: RFU / Administrative management (`0x00`)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AccessConditions {
+    pub read: AccessLevel,
+    pub update: AccessLevel,
+    pub increase: AccessLevel,
+    pub rehabilitate: AccessLevel,
+    pub invalidate: AccessLevel,
+}
+
+impl AccessConditions {
+    pub fn to_bytes(self) -> [u8; 4] {
+        [
+            ((self.read as u8) << 4) | (self.update as u8),
+            (self.increase as u8) << 4,
+            ((self.rehabilitate as u8) << 4) | (self.invalidate as u8),
+            0x00, // Byte 12: RFU
+        ]
+    }
+}
+
+/// 3GPP TS 51.011 §9.2.1 Byte 13: Elementary File Status.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum FileStatus {
+    #[default]
+    Valid = 0x00,
+    Invalidated = 0x01,
+}
+
+/// 3GPP TS 51.011 §9.2.1 Byte 13: DF Characteristics (Clock Stop mode and
+/// preference).
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum ClockStopPreference {
+    #[default]
+    NotAllowed = 0x00,
+    NoPreference = 0x04,
+    HighLevel = 0x05,
+    LowLevel = 0x06,
+}
+
+/// 3GPP TS 51.011 §9.2.1 Bytes 16–22: CHV and Administrative Status for DF/MF.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChvStatus {
+    pub num_chvs: u8,
+    pub chv1_status: u8,
+    pub unblock_chv1_status: u8,
+    pub chv2_status: u8,
+    pub unblock_chv2_status: u8,
+}
+
+impl ChvStatus {
+    pub fn to_bytes(self) -> [u8; 7] {
+        [
+            self.num_chvs,
+            self.chv1_status,
+            self.unblock_chv1_status,
+            self.chv2_status,
+            self.unblock_chv2_status,
+            0x00, // Byte 21: RFU
+            0x00, // Byte 22: RFU / Administrative data
+        ]
+    }
+}
+
+/// SIM File Type in 3GPP TS 51.011 §9.2.1 response header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SimFileType {
+    Master = 0x01,
+    Dedicated = 0x02,
+    Elementary = 0x04,
+}
+
+/// Elementary File (EF) structure in 3GPP TS 51.011 §9.2.1 byte 14.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ElementaryFileStructure {
+    Transparent = 0x00,
+    LinearFixed = 0x01,
+}
+
+/// 3GPP TS 51.011 §9.2.1 response header for Elementary Files (EF).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElementaryFileResponseHeader {
+    pub file_size: u16,
+    pub file_id: u16,
+    pub file_type: SimFileType,
+    pub access_conditions: AccessConditions,
+    pub file_status: FileStatus,
+    pub structure: ElementaryFileStructure,
+    pub record_len: Option<u8>,
+}
+
+impl ElementaryFileResponseHeader {
+    pub fn new(file_id: u16, file_size: usize, record_len: Option<usize>) -> Self {
+        let (structure, r_len) = match record_len {
+            Some(rlen) => (ElementaryFileStructure::LinearFixed, Some(rlen as u8)),
+            None => (ElementaryFileStructure::Transparent, None),
+        };
+        Self {
+            file_size: file_size as u16,
+            file_id,
+            file_type: SimFileType::Elementary,
+            access_conditions: AccessConditions::default(),
+            file_status: FileStatus::Valid,
+            structure,
+            record_len: r_len,
+        }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let following_data: &[u8] = match self.structure {
+            ElementaryFileStructure::LinearFixed => {
+                &[0x02, self.structure as u8, self.record_len.unwrap_or(0)]
+            }
+            ElementaryFileStructure::Transparent => &[0x00, self.structure as u8],
+        };
+
+        [0x00, 0x00] // Bytes 1-2: RFU
+            .into_iter()
+            .chain(self.file_size.to_be_bytes()) // Bytes 3-4: File size
+            .chain(self.file_id.to_be_bytes()) // Bytes 5-6: File ID
+            .chain(once(self.file_type as u8)) // Byte 7: File type
+            .chain(once(0x00)) // Byte 8: Cyclic increase pointer / RFU
+            .chain(self.access_conditions.to_bytes()) // Bytes 9-12: Access conditions
+            .chain(once(self.file_status as u8)) // Byte 13: File status
+            .chain(following_data.iter().copied()) // Bytes 14+: Following data & structure
+            .collect()
+    }
+}
+
+/// 3GPP TS 51.011 §9.2.1 response header for Dedicated Files (DF) / Master File
+/// (MF).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DedicatedFileResponseHeader {
+    pub memory_allocated: u16,
+    pub file_id: u16,
+    pub file_type: SimFileType,
+    pub clock_stop: ClockStopPreference,
+    pub num_df_children: u8,
+    pub num_ef_children: u8,
+    pub chv_status: ChvStatus,
+}
+
+impl DedicatedFileResponseHeader {
+    pub fn new(file_id: u16, is_mf: bool, num_df_children: usize, num_ef_children: usize) -> Self {
+        Self {
+            memory_allocated: 0,
+            file_id,
+            file_type: if is_mf { SimFileType::Master } else { SimFileType::Dedicated },
+            clock_stop: ClockStopPreference::default(),
+            num_df_children: num_df_children as u8,
+            num_ef_children: num_ef_children as u8,
+            chv_status: ChvStatus::default(),
+        }
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        [0x00, 0x00] // Bytes 1-2: RFU
+            .into_iter()
+            .chain(self.memory_allocated.to_be_bytes()) // Bytes 3-4: Memory allocated
+            .chain(self.file_id.to_be_bytes()) // Bytes 5-6: File ID
+            .chain(once(self.file_type as u8)) // Byte 7: File type
+            .chain([0x00; 5]) // Bytes 8-12: RFU
+            .chain(once(self.clock_stop as u8)) // Byte 13: DF characteristics
+            .chain(once(self.num_df_children)) // Byte 14: Direct child DFs
+            .chain(once(self.num_ef_children)) // Byte 15: Direct child EFs
+            .chain(self.chv_status.to_bytes()) // Bytes 16-22: CHV & admin status
+            .collect()
+    }
+}
+
+/// Strongly-typed container for SIM file response headers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SimResponseHeader {
+    Elementary(ElementaryFileResponseHeader),
+    Dedicated(DedicatedFileResponseHeader),
+}
+
+impl SimResponseHeader {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            Self::Elementary(ef) => ef.to_bytes(),
+            Self::Dedicated(df) => df.to_bytes(),
+        }
+    }
+}
 
 // SIM file structure constants (TS 51.011 / TS 31.102)
 const ADN_FOOTER_LEN: usize = 14; // Length of dialing number info excluding alpha identifier
@@ -316,12 +517,12 @@ impl SimService {
         // synchronized
         fn ensure_ef_present(
             df: &mut DedicatedFile,
-            id: u16,
-            _size: usize,
+            id: impl Into<u16>,
             record_len: Option<usize>,
             data: Vec<u8>,
             policy: OverwritePolicy,
         ) {
+            let id = id.into();
             if let Some(ef) = find_ef_mut(df, id) {
                 let should_overwrite = match policy {
                     OverwritePolicy::Always => true,
@@ -348,8 +549,7 @@ impl SimService {
 
         ensure_ef_present(
             &mut service.fs.master_file,
-            EF_ICCID_ID,
-            10,
+            UiccFileId::Iccid,
             None,
             iccid_swapped,
             OverwritePolicy::Always,
@@ -357,35 +557,39 @@ impl SimService {
         if let Some(encoded) = imsi_encoded {
             ensure_ef_present(
                 &mut service.fs.master_file,
-                EF_IMSI_ID,
-                9,
+                UiccFileId::Imsi,
                 None,
                 encoded,
                 OverwritePolicy::Always,
             );
         }
+        if find_df_mut(&mut service.fs.master_file, UiccFileId::Telecom).is_none() {
+            service.fs.master_file.files.push(SimFile::DedicatedFile(DedicatedFile {
+                file_id: UiccFileId::Telecom.as_u16(),
+                files: Vec::new(),
+            }));
+        }
+        let telecom_df = find_df_mut(&mut service.fs.master_file, UiccFileId::Telecom)
+            .expect("DF_TELECOM must exist");
         ensure_ef_present(
-            &mut service.fs.master_file,
-            EF_MSISDN_ID,
-            28,
-            Some(28),
+            telecom_df,
+            UiccFileId::Msisdn,
+            Some(EF_MSISDN_RECORD_LEN),
             msisdn_encoded,
             OverwritePolicy::IfUninitialized,
         );
         ensure_ef_present(
             &mut service.fs.master_file,
-            EF_FPLMN_ID,
-            12,
+            UiccFileId::ForbiddenPlmn,
             None,
             fplmn_data,
             OverwritePolicy::Never,
         );
         ensure_ef_present(
             &mut service.fs.master_file,
-            EF_MBDN_ID,
-            152,
-            Some(38),
-            vec![0xFF; 152],
+            UiccFileId::MailboxDialingNumbers,
+            Some(EF_MBDN_RECORD_LEN),
+            vec![0xFF; 4 * EF_MBDN_RECORD_LEN],
             OverwritePolicy::Never,
         );
 
@@ -434,26 +638,29 @@ impl SimService {
     }
 
     fn get_imsi(&self) -> String {
-        find_ef(&self.fs.master_file, EF_IMSI_ID)
+        find_ef(&self.fs.master_file, UiccFileId::Imsi)
             .and_then(|ef| decode_imsi(&ef.data))
             .unwrap_or_else(|| DEFAULT_FALLBACK_IMSI.to_string())
     }
 
     fn get_iccid(&self) -> String {
-        find_ef(&self.fs.master_file, EF_ICCID_ID)
+        find_ef(&self.fs.master_file, UiccFileId::Iccid)
             .map(|ef| crate::pdu::bcd::bcd_to_string(&ef.data))
             .unwrap_or_else(|| DEFAULT_FALLBACK_ICCID.to_string())
     }
 
     pub(crate) fn get_msisdn(&self) -> Option<PhoneNumber> {
-        let raw =
-            find_ef(&self.fs.master_file, EF_MSISDN_ID).and_then(|ef| decode_msisdn(&ef.data))?;
+        let raw = find_df(&self.fs.master_file, UiccFileId::Telecom)
+            .and_then(|telecom| find_ef(telecom, UiccFileId::Msisdn))
+            .and_then(|ef| decode_msisdn(&ef.data))?;
         PhoneNumber::parse(raw.as_bytes()).map(|(_, p)| p).ok()
     }
 
     pub fn set_msisdn(&mut self, msisdn: &str) {
         let encoded = encode_msisdn_str(msisdn);
-        if let Some(ef) = find_ef_mut(&mut self.fs.master_file, EF_MSISDN_ID) {
+        if let Some(telecom) = find_df_mut(&mut self.fs.master_file, UiccFileId::Telecom)
+            && let Some(ef) = find_ef_mut(telecom, UiccFileId::Msisdn)
+        {
             ef.data = encoded;
         }
     }
@@ -485,12 +692,13 @@ impl SimService {
                     && let Some(adf) = self.adfs.iter().find(|a| a.aid == *active_aid)
                 {
                     let in_overrides = adf.files.iter().any(|f| f.id == fid);
-                    let in_fs_subtree =
-                        if let Some(adf_df) = find_df(&self.fs.master_file, ADF_DEFAULT_FILE_ID) {
-                            find_ef(adf_df, fid).is_some() || find_df(adf_df, fid).is_some()
-                        } else {
-                            false
-                        };
+                    let in_fs_subtree = if let Some(adf_df) =
+                        find_df(&self.fs.master_file, UiccFileId::AdfDefault)
+                    {
+                        find_ef(adf_df, fid).is_some() || find_df(adf_df, fid).is_some()
+                    } else {
+                        false
+                    };
                     in_overrides || in_fs_subtree
                 } else {
                     false
@@ -498,15 +706,7 @@ impl SimService {
                 if find_ef(&self.fs.master_file, fid).is_some()
                     || find_df(&self.fs.master_file, fid).is_some()
                     || is_file_in_active_adf
-                    || matches!(
-                        fid,
-                        EF_ICCID_ID
-                            | EF_IMSI_ID
-                            | EF_MSISDN_ID
-                            | EF_FPLMN_ID
-                            | EF_MBDN_ID
-                            | EF_AD_ID
-                    )
+                    || UiccFileId::is_virtual_fallback_id(fid)
                 {
                     self.selected_files[idx] = Some(fid);
                     if !is_file_in_active_adf {
@@ -672,11 +872,13 @@ impl SimService {
     fn update_sim_file(
         &mut self,
         command: apdu::Instruction,
-        file_id: u16,
+        file_id: impl Into<u16>,
         p1: u8,
         p2: u8,
+        p3: u8,
         hex_str: &str,
     ) -> Result<(), SimResponse> {
+        let file_id = file_id.into();
         // Update in the file system if it exists there
         if let Some(ef) = find_ef_mut(&mut self.fs.master_file, file_id) {
             if command == apdu::Instruction::UpdateBinary {
@@ -684,6 +886,9 @@ impl SimService {
                 let Ok(new_bytes) = hex::decode(hex_str) else {
                     return Err(RESP_INCORRECT_PARAMS);
                 };
+                if p3 > 0 && new_bytes.len() != p3 as usize {
+                    return Err(RESP_WRONG_LENGTH);
+                }
                 if offset + new_bytes.len() > ef.data.len() {
                     ef.data.resize(offset + new_bytes.len(), 0xFF);
                 }
@@ -692,7 +897,7 @@ impl SimService {
             } else if command == apdu::Instruction::UpdateRecord {
                 // UPDATE RECORD
                 if let Ok(mode) = apdu::RecordMode::try_from(p2) {
-                    if mode != apdu::RecordMode::AbsoluteMode {
+                    if !mode.is_absolute() {
                         return Err(RESP_INCORRECT_PARAMS);
                     }
                     let Ok(new_bytes) = hex::decode(hex_str) else {
@@ -704,7 +909,7 @@ impl SimService {
                         if p1 == 0 {
                             return Err(RESP_INCORRECT_PARAMS);
                         }
-                        if new_bytes.len() != rec_len {
+                        if new_bytes.len() != rec_len || (p3 > 0 && p3 as usize != rec_len) {
                             return Err(RESP_WRONG_LENGTH);
                         }
                         let record_num = p1 as usize;
@@ -716,6 +921,9 @@ impl SimService {
                         ef.data[start..end].copy_from_slice(&new_bytes);
                         return Ok(());
                     }
+                    if p3 > 0 && new_bytes.len() != p3 as usize {
+                        return Err(RESP_WRONG_LENGTH);
+                    }
                     ef.data = new_bytes;
                     Ok(())
                 } else {
@@ -724,10 +932,7 @@ impl SimService {
             } else {
                 Err(RESP_INCORRECT_PARAMS)
             }
-        } else if matches!(
-            file_id,
-            EF_ICCID_ID | EF_IMSI_ID | EF_MSISDN_ID | EF_FPLMN_ID | EF_MBDN_ID | EF_AD_ID
-        ) {
+        } else if UiccFileId::is_virtual_fallback_id(file_id) {
             Ok(())
         } else {
             Err(RESP_FILE_NOT_FOUND)
@@ -736,11 +941,12 @@ impl SimService {
 
     fn read_binary_from_fs(
         &self,
-        file_id: u16,
+        file_id: impl Into<u16>,
         p1: u8,
         p2: u8,
         p3: u8,
     ) -> Result<String, SimResponse> {
+        let file_id = file_id.into();
         if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
             let offset = ((p1 as usize) << 8) | (p2 as usize);
             let ef_size = ef.size();
@@ -761,14 +967,16 @@ impl SimService {
 
     fn read_record_from_fs(
         &self,
-        file_id: u16,
+        file_id: impl Into<u16>,
         record_num: u8,
         p2: u8,
+        p3: u8,
     ) -> Result<String, SimResponse> {
         if let Ok(mode) = apdu::RecordMode::try_from(p2) {
-            if mode != apdu::RecordMode::AbsoluteMode {
+            if !mode.is_absolute() {
                 return Err(RESP_INCORRECT_PARAMS);
             }
+            let file_id = file_id.into();
             if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
                 if let Some(rec_len) = ef.record_len
                     && rec_len > 0
@@ -778,7 +986,12 @@ impl SimService {
                         let start = (record_num - 1) * rec_len;
                         let end = start + rec_len;
                         if end <= ef.data.len() {
-                            return Ok(hex::encode_upper(&ef.data[start..end]));
+                            let p3_usize = p3 as usize;
+                            if p3_usize > rec_len {
+                                return Err(RESP_WRONG_LENGTH);
+                            }
+                            let length = if p3_usize == 0 { rec_len } else { p3_usize };
+                            return Ok(hex::encode_upper(&ef.data[start..start + length]));
                         }
                     }
                     return Err(RESP_REFERENCED_DATA_NOT_FOUND);
@@ -794,18 +1007,17 @@ impl SimService {
 
     fn handle_sim_io(
         &mut self,
-        command: u16,
+        command: apdu::Instruction,
         file_id: u16,
         p1: u8,
         p2: u8,
         p3: u8,
         data: Option<String>,
     ) -> SimResult {
-        let ins = apdu::Instruction::from(command as u8);
         // 1. Handle UPDATE BINARY and UPDATE RECORD
-        if ins == apdu::Instruction::UpdateBinary || ins == apdu::Instruction::UpdateRecord {
+        if command.is_update() {
             let resp = if let Some(hex_str) = data {
-                match self.update_sim_file(ins, file_id, p1, p2, &hex_str) {
+                match self.update_sim_file(command, file_id, p1, p2, p3, &hex_str) {
                     Ok(()) => RESP_SUCCESS,
                     Err(err_resp) => err_resp,
                 }
@@ -816,7 +1028,7 @@ impl SimService {
         }
 
         // 2. Try to read from the loaded FileSystem first (for READ BINARY and SELECT)
-        if ins == apdu::Instruction::ReadBinary {
+        if command == apdu::Instruction::ReadBinary {
             match self.read_binary_from_fs(file_id, p1, p2, p3) {
                 Ok(data_hex) => {
                     return Ok(Some(SimResponse::RestrictedSimAccess {
@@ -826,8 +1038,8 @@ impl SimService {
                 }
                 Err(err_resp) => return Ok(Some(err_resp)),
             }
-        } else if ins == apdu::Instruction::ReadRecord {
-            match self.read_record_from_fs(file_id, p1, p2) {
+        } else if command == apdu::Instruction::ReadRecord {
+            match self.read_record_from_fs(file_id, p1, p2, p3) {
                 Ok(record_hex) => {
                     return Ok(Some(SimResponse::RestrictedSimAccess {
                         sw: SW_SUCCESS,
@@ -836,19 +1048,52 @@ impl SimService {
                 }
                 Err(err_resp) => return Ok(Some(err_resp)),
             }
-        } else if ins == apdu::Instruction::Select
+        } else if command == apdu::Instruction::Select
             && find_df(&self.fs.master_file, file_id).is_some()
         {
             return Ok(Some(SimResponse::RestrictedSimAccess {
                 sw: SW_SUCCESS,
                 data: Some("6210".to_string()),
             }));
-        } else if ins == apdu::Instruction::Status {
+        } else if command == apdu::Instruction::Status {
             // Return FCP template for Master File (MF)
             return Ok(Some(SimResponse::RestrictedSimAccess {
                 sw: SW_SUCCESS,
                 data: Some(STATUS_FCP_HEX.to_string()),
             }));
+        } else if command == apdu::Instruction::GetResponse {
+            let header_opt = if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
+                Some(SimResponseHeader::Elementary(ElementaryFileResponseHeader::new(
+                    ef.file_id,
+                    ef.data.len(),
+                    ef.record_len,
+                )))
+            } else if let Some(df) = find_df(&self.fs.master_file, file_id) {
+                let df_count =
+                    df.files.iter().filter(|f| matches!(f, SimFile::DedicatedFile(_))).count();
+                let ef_count =
+                    df.files.iter().filter(|f| matches!(f, SimFile::ElementaryFile(_))).count();
+                let is_mf = df.file_id == UiccFileId::MasterFile.as_u16();
+                Some(SimResponseHeader::Dedicated(DedicatedFileResponseHeader::new(
+                    df.file_id, is_mf, df_count, ef_count,
+                )))
+            } else {
+                None
+            };
+
+            if let Some(header) = header_opt {
+                let header_bytes = header.to_bytes();
+                let p3_usize = p3 as usize;
+                if p3_usize > header_bytes.len() {
+                    return Ok(Some(RESP_WRONG_LENGTH));
+                }
+                let resp_data =
+                    if p3_usize > 0 { &header_bytes[..p3_usize] } else { &header_bytes[..] };
+                return Ok(Some(SimResponse::RestrictedSimAccess {
+                    sw: SW_SUCCESS,
+                    data: Some(hex::encode_upper(resp_data)),
+                }));
+            }
         }
 
         Ok(Some(RESP_FILE_NOT_FOUND))
@@ -940,7 +1185,8 @@ impl SimService {
                             && channel_idx < self.logical_channels.len()
                         {
                             self.logical_channels[channel_idx] = true;
-                            self.selected_files[channel_idx] = Some(MF_FILE_ID);
+                            self.selected_files[channel_idx] =
+                                Some(UiccFileId::MasterFile.as_u16());
                             if access_type == SimAccessType::Csim {
                                 self.selected_aids[channel_idx] = Some("CSIM".to_string());
                             }
@@ -982,7 +1228,12 @@ impl SimService {
             }
             apdu::Instruction::ReadRecord => {
                 if let Some(fid) = selected_fid {
-                    match self.read_record_from_fs(fid, apdu.p1, apdu.p2) {
+                    match self.read_record_from_fs(
+                        fid,
+                        apdu.p1,
+                        apdu.p2,
+                        apdu.expected_length().unwrap_or(0),
+                    ) {
                         Ok(record_hex) => Some(format_sim_payload_data(&record_hex, SW_SUCCESS)),
                         Err(SimResponse::RestrictedSimAccess { sw, .. }) => {
                             Some(format_sim_payload_status(sw))
@@ -1001,6 +1252,7 @@ impl SimService {
                         fid,
                         apdu.p1,
                         apdu.p2,
+                        apdu.data().len() as u8,
                         &data_hex,
                     ) {
                         Ok(()) => Some(format_sim_payload_status(SW_SUCCESS)),
@@ -1021,6 +1273,7 @@ impl SimService {
                         fid,
                         apdu.p1,
                         apdu.p2,
+                        apdu.data().len() as u8,
                         &data_hex,
                     ) {
                         Ok(()) => Some(format_sim_payload_status(SW_SUCCESS)),
@@ -1048,8 +1301,8 @@ impl SimService {
                         match self.select_sim_file(idx, apdu) {
                             Ok(()) => {
                                 if p2 == apdu::SelectP2::ReturnFcp {
-                                    let fid =
-                                        self.selected_files[idx].unwrap_or(ADF_DEFAULT_FILE_ID);
+                                    let fid = self.selected_files[idx]
+                                        .unwrap_or(UiccFileId::AdfDefault.as_u16());
                                     let fcp_hex =
                                         generate_df_fcp(fid, self.selected_aids[idx].as_deref());
                                     if let Ok(fcp_bytes) = hex::decode(&fcp_hex) {
@@ -1408,7 +1661,7 @@ impl SimService {
             return true;
         }
 
-        let Some(fdn_ef) = find_ef(&self.fs.master_file, EF_FDN_ID) else {
+        let Some(fdn_ef) = find_ef(&self.fs.master_file, UiccFileId::FixedDialingNumbers) else {
             return false;
         };
 
@@ -1562,24 +1815,24 @@ fn encode_msisdn_str(msisdn: &str) -> Vec<u8> {
     }
 
     let ton_npi = if msisdn.starts_with('+') || (digits.len() == 11 && digits.starts_with('1')) {
-        0x91
+        TypeOfAddress::International
     } else {
-        0x81
+        TypeOfAddress::National
     };
 
     let swapped_bytes = crate::pdu::bcd::string_to_bcd(&digits);
     let bcd_len = (1 + swapped_bytes.len()) as u8;
 
-    let mut result = Vec::with_capacity(28);
-    result.resize(14, 0x00);
+    let mut result = Vec::with_capacity(EF_MSISDN_RECORD_LEN);
+    result.resize(ADN_ALPHA_IDENTIFIER_LEN, 0xFF);
     result.push(bcd_len);
-    result.push(ton_npi);
+    result.push(ton_npi.as_u8());
 
     let mut dialing = swapped_bytes;
-    dialing.resize(10, 0xFF);
+    dialing.resize(ADN_DIALING_NUMBER_LEN, 0xFF);
     result.extend(dialing);
 
-    result.extend_from_slice(&[0xFF, 0xFF]);
+    result.extend_from_slice(&ADN_CAPABILITY_EXT_BYTES);
 
     result
 }
@@ -1590,7 +1843,7 @@ fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
     fcp_bytes[8] = ((df_id >> 8) & 0xFF) as u8;
     fcp_bytes[9] = (df_id & 0xFF) as u8;
 
-    if df_id == ADF_DEFAULT_FILE_ID
+    if df_id == UiccFileId::AdfDefault.as_u16()
         && let Some(aid) = active_aid
         && let Ok(aid_bytes) = hex::decode(aid)
     {
@@ -1604,7 +1857,8 @@ fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
     hex::encode_upper(fcp_bytes)
 }
 
-pub(crate) fn find_df(df: &DedicatedFile, id: u16) -> Option<&DedicatedFile> {
+pub(crate) fn find_df(df: &DedicatedFile, id: impl Into<u16>) -> Option<&DedicatedFile> {
+    let id = id.into();
     if df.file_id == id {
         return Some(df);
     }
@@ -1618,7 +1872,26 @@ pub(crate) fn find_df(df: &DedicatedFile, id: u16) -> Option<&DedicatedFile> {
     None
 }
 
-pub(crate) fn find_ef(df: &DedicatedFile, id: u16) -> Option<&ElementaryFile> {
+pub(crate) fn find_df_mut(
+    df: &mut DedicatedFile,
+    id: impl Into<u16>,
+) -> Option<&mut DedicatedFile> {
+    let id = id.into();
+    if df.file_id == id {
+        return Some(df);
+    }
+    for file in &mut df.files {
+        if let SimFile::DedicatedFile(sub_df) = file
+            && let Some(found) = find_df_mut(sub_df, id)
+        {
+            return Some(found);
+        }
+    }
+    None
+}
+
+pub(crate) fn find_ef(df: &DedicatedFile, id: impl Into<u16>) -> Option<&ElementaryFile> {
+    let id = id.into();
     for file in &df.files {
         match file {
             SimFile::ElementaryFile(ef) => {
@@ -1636,7 +1909,11 @@ pub(crate) fn find_ef(df: &DedicatedFile, id: u16) -> Option<&ElementaryFile> {
     None
 }
 
-pub(crate) fn find_ef_mut(df: &mut DedicatedFile, id: u16) -> Option<&mut ElementaryFile> {
+pub(crate) fn find_ef_mut(
+    df: &mut DedicatedFile,
+    id: impl Into<u16>,
+) -> Option<&mut ElementaryFile> {
+    let id = id.into();
     for file in &mut df.files {
         match file {
             SimFile::ElementaryFile(ef) => {
@@ -1698,7 +1975,7 @@ fn decode_msisdn(bytes: &[u8]) -> Option<String> {
     }
     // Byte 16 (index 15) is TON/NPI.
     let ton_npi = bytes[15];
-    let is_international = ton_npi == 0x91;
+    let is_international = ton_npi == TypeOfAddress::International.as_u8();
 
     let mut msisdn = if is_international { "+".to_string() } else { "".to_string() };
 
@@ -1770,17 +2047,17 @@ mod tests {
             sim_io: SimIo {
                 file_system: FileSystem {
                     master_file: DedicatedFile {
-                        file_id: 0x3F00,
+                        file_id: UiccFileId::MasterFile.as_u16(),
                         files: vec![
                             SimFile::ElementaryFile(ElementaryFile {
-                                file_id: 0x2FE2,
+                                file_id: UiccFileId::Iccid.as_u16(),
                                 record_len: None,
                                 data: hex::decode("89014103211118500720").unwrap(),
                             }),
                             SimFile::DedicatedFile(DedicatedFile {
-                                file_id: 0x7F10, // DF_TELECOM
+                                file_id: UiccFileId::Telecom.as_u16(),
                                 files: vec![SimFile::ElementaryFile(ElementaryFile {
-                                    file_id: 0x6F3B, // EF_FDN
+                                    file_id: UiccFileId::FixedDialingNumbers.as_u16(),
                                     record_len: Some(28),
                                     data: fdn_data,
                                 })],
@@ -1883,5 +2160,122 @@ mod tests {
         assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::SimPuk2Required)));
 
         assert!(!service.fdn_enabled);
+    }
+
+    #[test]
+    fn test_elementary_file_response_header_serialization() {
+        let ef_header = ElementaryFileResponseHeader::new(0x6F40, 28, Some(28));
+        let bytes = ef_header.to_bytes();
+        assert_eq!(bytes.len(), 16);
+        assert_eq!(bytes[0..2], [0x00, 0x00]);
+        assert_eq!(bytes[2..4], [0x00, 28]);
+        assert_eq!(bytes[4], 0x6F);
+        assert_eq!(bytes[5], 0x40);
+        assert_eq!(bytes[6], SimFileType::Elementary as u8);
+        assert_eq!(bytes[7], 0x00);
+        assert_eq!(bytes[8..12], [0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(bytes[12], FileStatus::Valid as u8);
+        assert_eq!(bytes[13], 0x02);
+        assert_eq!(bytes[14], ElementaryFileStructure::LinearFixed as u8);
+        assert_eq!(bytes[15], 28);
+    }
+
+    #[test]
+    fn test_transparent_elementary_file_response_header_serialization() {
+        let ef_header = ElementaryFileResponseHeader::new(0x6F07, 9, None);
+        let bytes = ef_header.to_bytes();
+        assert_eq!(bytes.len(), 15);
+        assert_eq!(bytes[0..2], [0x00, 0x00]);
+        assert_eq!(bytes[2..4], [0x00, 9]);
+        assert_eq!(bytes[4], 0x6F);
+        assert_eq!(bytes[5], 0x07);
+        assert_eq!(bytes[6], SimFileType::Elementary as u8);
+        assert_eq!(bytes[7], 0x00);
+        assert_eq!(bytes[8..12], [0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(bytes[12], FileStatus::Valid as u8);
+        assert_eq!(bytes[13], 0x00);
+        assert_eq!(bytes[14], ElementaryFileStructure::Transparent as u8);
+    }
+
+    #[test]
+    fn test_access_conditions_nibble_packing() {
+        let custom_ac = AccessConditions {
+            read: AccessLevel::Pin1,
+            update: AccessLevel::Pin2,
+            increase: AccessLevel::Never,
+            rehabilitate: AccessLevel::Always,
+            invalidate: AccessLevel::Pin1,
+        };
+        let bytes = custom_ac.to_bytes();
+        assert_eq!(bytes[0], 0x12); // read: 1, update: 2
+        assert_eq!(bytes[1], 0xF0); // increase: F, rfu: 0
+        assert_eq!(bytes[2], 0x01); // rehabilitate: 0, invalidate: 1
+        assert_eq!(bytes[3], 0x00); // RFU: 00
+    }
+
+    #[test]
+    fn test_chv_status_serialization() {
+        let custom_chv = ChvStatus {
+            num_chvs: 2,
+            chv1_status: 0x83,
+            unblock_chv1_status: 0x0A,
+            chv2_status: 0x03,
+            unblock_chv2_status: 0x0A,
+        };
+        let bytes = custom_chv.to_bytes();
+        assert_eq!(bytes, [2, 0x83, 0x0A, 0x03, 0x0A, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_dedicated_file_response_header_serialization() {
+        let df_header = DedicatedFileResponseHeader::new(0x7F10, false, 0, 2);
+        let bytes = df_header.to_bytes();
+        assert_eq!(bytes.len(), 22);
+        assert_eq!(bytes[0..2], [0x00, 0x00]);
+        assert_eq!(bytes[2..4], [0x00, 0x00]);
+        assert_eq!(bytes[4], 0x7F);
+        assert_eq!(bytes[5], 0x10);
+        assert_eq!(bytes[6], SimFileType::Dedicated as u8);
+        assert_eq!(bytes[7..12], [0x00; 5]);
+        assert_eq!(bytes[12], ClockStopPreference::NotAllowed as u8);
+        assert_eq!(bytes[13], 0);
+        assert_eq!(bytes[14], 2);
+        assert_eq!(bytes[15..22], [0x00; 7]);
+    }
+
+    #[test]
+    fn test_find_df_mut() {
+        let mut mf = DedicatedFile {
+            file_id: UiccFileId::MasterFile.as_u16(),
+            files: vec![SimFile::DedicatedFile(DedicatedFile {
+                file_id: UiccFileId::Telecom.as_u16(),
+                files: vec![],
+            })],
+        };
+        let telecom = find_df_mut(&mut mf, UiccFileId::Telecom);
+        assert!(telecom.is_some());
+        assert_eq!(telecom.unwrap().file_id, UiccFileId::Telecom.as_u16());
+    }
+
+    #[test]
+    fn test_handle_sim_io_get_response_truncation() {
+        let profile = SimProfile::default();
+        let mut service = SimService::new(&profile);
+        let res = service
+            .handle_sim_io(
+                apdu::Instruction::GetResponse,
+                UiccFileId::Msisdn.as_u16(),
+                0,
+                0,
+                15,
+                None,
+            )
+            .unwrap();
+        if let Some(SimResponse::RestrictedSimAccess { sw, data }) = res {
+            assert_eq!(sw, SW_SUCCESS);
+            assert_eq!(data.unwrap().len(), 30); // 15 bytes = 30 hex characters
+        } else {
+            panic!("Expected RestrictedSimAccess");
+        }
     }
 }
