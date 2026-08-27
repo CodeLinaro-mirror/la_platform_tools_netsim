@@ -2,10 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::{
+    constants::{EF_MBDN_RECORD_LEN, UiccFileId},
+    profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML},
+    sim_service::find_ef,
+};
 
 #[test]
 fn test_parse_default_profile() {
-    let profile = parse_xml_profile(crate::profiles::PROFILE_DEFAULT_XML);
+    let profile = parse_xml_profile(PROFILE_DEFAULT_XML);
     assert!(profile.is_ok(), "Failed to parse default profile: {:?}", profile.err());
     let profile = profile.unwrap();
     assert_eq!(profile.imsi, "310260000000000");
@@ -14,7 +19,7 @@ fn test_parse_default_profile() {
 
 #[test]
 fn test_parse_cts_profile() {
-    let profile = parse_xml_profile(crate::profiles::PROFILE_CTS_XML);
+    let profile = parse_xml_profile(PROFILE_CTS_XML);
     assert!(profile.is_ok(), "Failed to parse CTS profile: {:?}", profile.err());
     let profile = profile.unwrap();
     assert_eq!(profile.imsi, "310260000000000");
@@ -23,7 +28,7 @@ fn test_parse_cts_profile() {
 
 #[test]
 fn test_parse_tel_alaska_profile() {
-    let profile = parse_xml_profile(crate::profiles::PROFILE_TEL_ALASKA_XML);
+    let profile = parse_xml_profile(PROFILE_TEL_ALASKA_XML);
     assert!(profile.is_ok(), "Failed to parse TelAlaska profile: {:?}", profile.err());
     let profile = profile.unwrap();
     assert_eq!(profile.imsi, "311740123456789");
@@ -44,7 +49,7 @@ fn test_invalid_record_number_fails() {
     assert_eq!(
         result.unwrap_err(),
         XmlProfileError::InvalidValue {
-            file_id: 0x6FC7,
+            file_id: UiccFileId::MailboxDialingNumbers.as_u16(),
             field: "SIMIO p1 (record number)".to_string(),
             value: "0".to_string(),
             expected: "1-indexed record number between 1 and 255".to_string(),
@@ -73,7 +78,8 @@ fn test_parameter_normalization() {
         </MF>
     </IccProfile>"#;
     let profile = parse_xml_profile(xml).unwrap();
-    let ef = crate::sim_service::find_ef(&profile.sim_io.file_system.master_file, 0x6FC7).unwrap();
+    let ef = find_ef(&profile.sim_io.file_system.master_file, UiccFileId::MailboxDialingNumbers)
+        .unwrap();
     assert_eq!(ef.record_len, Some(1));
     assert_eq!(ef.data, hex::decode("FFFFFFFFFFFFFFFFFF01").unwrap());
 }
@@ -89,10 +95,11 @@ fn test_deduce_record_len_from_dc_mappings() {
         </MF>
     </IccProfile>"#;
     let profile = parse_xml_profile(xml).unwrap();
-    let ef = crate::sim_service::find_ef(&profile.sim_io.file_system.master_file, 0x6FC7).unwrap();
-    assert_eq!(ef.record_len, Some(38)); // 0x26 = 38
-    assert_eq!(ef.size(), 76); // 2 records * 38 bytes
-    assert_eq!(ef.data, vec![0xFF; 76]);
+    let ef = find_ef(&profile.sim_io.file_system.master_file, UiccFileId::MailboxDialingNumbers)
+        .unwrap();
+    assert_eq!(ef.record_len, Some(EF_MBDN_RECORD_LEN));
+    assert_eq!(ef.size(), 2 * EF_MBDN_RECORD_LEN);
+    assert_eq!(ef.data, vec![0xFF; 2 * EF_MBDN_RECORD_LEN]);
 }
 
 #[test]

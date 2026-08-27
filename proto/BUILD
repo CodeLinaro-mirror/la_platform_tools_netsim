@@ -233,13 +233,18 @@ genrule(
         "@rootcanal//:proto/rootcanal/configuration.proto",
     ],
     outs = [
-        "netsim/frontend.grpc.pb.h",
+        "netsim/cell.grpc.pb.cc",
+        "netsim/cell.grpc.pb.h",
+        "netsim/cell_mock.grpc.pb.h",
         "netsim/frontend.grpc.pb.cc",
-        "netsim/packet_streamer.grpc.pb.h",
+        "netsim/frontend.grpc.pb.h",
+        "netsim/frontend_mock.grpc.pb.h",
         "netsim/packet_streamer.grpc.pb.cc",
+        "netsim/packet_streamer.grpc.pb.h",
+        "netsim/packet_streamer_mock.grpc.pb.h",
     ],
     cmd = """
-        SRCS="netsim/frontend.proto netsim/packet_streamer.proto"
+        SRCS="netsim/cell.proto netsim/frontend.proto netsim/packet_streamer.proto"
 
         # Calculate include paths
         # We need the root of the 'netsim' proto package
@@ -254,7 +259,7 @@ genrule(
         for f in $$SRCS; do
             $(location @protobuf//:protoc) \\
                 --plugin=protoc-gen-grpc=$(location @grpc//src/compiler:grpc_cpp_plugin) \\
-                --grpc_out=$(@D) \\
+                --grpc_out=generate_mock_code=true:$(@D) \\
                 --proto_path=$$NETSIM_PROTO_ROOT \\
                 --proto_path=$$ROOTCANAL_PROTO_ROOT \\
                 --proto_path=$$PROTOBUF_ROOT \\

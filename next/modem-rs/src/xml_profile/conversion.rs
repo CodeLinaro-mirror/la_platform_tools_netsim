@@ -8,7 +8,7 @@ use crate::{
         ApduMapping, ApplicationDedicatedFile, ApplicationFileOverride, DedicatedFile,
         ElementaryFile, SimFile, StkMenuItem,
     },
-    constants::{ADF_DEFAULT_FILE_ID, MF_FILE_ID},
+    constants::UiccFileId,
 };
 
 struct SimIoMapping {
@@ -113,7 +113,7 @@ pub fn convert_xml_dedicated_file(
                 sub_files.push(SimFile::ElementaryFile(ElementaryFile::try_from(ef)?));
             }
             XmlDedicatedFileMember::ApplicationDedicated(xml_adf) => {
-                let file_id = xml_adf.path.unwrap_or(ADF_DEFAULT_FILE_ID);
+                let file_id = xml_adf.path.unwrap_or(UiccFileId::AdfDefault.as_u16());
                 let parsed_adf = ParsedAdf::try_from(xml_adf)?;
 
                 adfs.push(parsed_adf.adf);
@@ -125,7 +125,7 @@ pub fn convert_xml_dedicated_file(
         }
     }
 
-    let file_id = xml_df.path.unwrap_or(MF_FILE_ID);
+    let file_id = xml_df.path.unwrap_or(UiccFileId::MasterFile.as_u16());
     Ok((DedicatedFile { file_id, files: sub_files }, adfs))
 }
 

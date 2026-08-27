@@ -6,7 +6,12 @@
 
 set -euo pipefail
 
-SDK_DIR="${ANDROID_SDK_ROOT:-${HOME}/Library/Android/sdk}"
+if [[ "$(uname)" == "Darwin" ]]; then
+    DEFAULT_SDK="${HOME}/Library/Android/sdk"
+else
+    DEFAULT_SDK="${HOME}/Android/Sdk"
+fi
+SDK_DIR="${ANDROID_SDK_ROOT:-${DEFAULT_SDK}}"
 ADB_BIN="${SDK_DIR}/platform-tools/adb"
 MOBUTILS_APK="${HOME}/Downloads/mobileutilities_binary.apk"
 

@@ -7,10 +7,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SDK_DIR="${ANDROID_SDK_ROOT:-${HOME}/Library/Android/sdk}"
+if [[ "$(uname)" == "Darwin" ]]; then
+    DEFAULT_SDK="${HOME}/Library/Android/sdk"
+else
+    DEFAULT_SDK="${HOME}/Android/Sdk"
+fi
+SDK_DIR="${ANDROID_SDK_ROOT:-${DEFAULT_SDK}}"
 EMULATOR_BIN="${SDK_DIR}/emulator/emulator"
 NETSIM_BIN="${SDK_DIR}/emulator/netsim"
-NETSIMD_BIN="${SDK_DIR}/emulator/netsimdx"
+NETSIMD_BIN="${SDK_DIR}/emulator/netsimd"
 ADB_BIN="${SDK_DIR}/platform-tools/adb"
 
 echo "=========================================================="
@@ -20,9 +25,11 @@ echo "=========================================================="
 
 # 1. Clean up existing processes
 echo "[1/4] Terminating existing emulator and netsimd instances..."
+pkill -9 -f "qemu-system-x86_64" 2>/dev/null || true
 pkill -9 -f "qemu-system-aarch64" 2>/dev/null || true
 pkill -9 -f "netsimd" 2>/dev/null || true
 pkill -9 -f "netsimdx" 2>/dev/null || true
+rm -f ~/.android/avd/Pixel_10*.avd/*.lock 2>/dev/null || true
 sleep 2
 
 # 2. Start Netsim Daemon with Host DNS routing
@@ -43,8 +50,8 @@ while true; do
     CURRENT_TIME=$(date +%s)
     ELAPSED=$((CURRENT_TIME - START_TIME))
 
-    if [ "$ELAPSED" -ge 90 ]; then
-        echo "ERROR: Timed out waiting for emulators to boot after 90s!"
+    if [ "$ELAPSED" -ge 240 ]; then
+        echo "ERROR: Timed out waiting for emulators to boot after 240s!"
         exit 1
     fi
 

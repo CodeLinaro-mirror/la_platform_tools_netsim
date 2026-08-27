@@ -105,14 +105,51 @@ impl PhoneNumber {
         self.0.strip_prefix('+').unwrap_or(&self.0)
     }
 
-    pub fn toa(&self) -> u8 {
-        if self.0.starts_with('+') { 145 } else { 129 }
+    pub fn toa(&self) -> TypeOfAddress {
+        TypeOfAddress::from_number(&self.0)
     }
 
     pub fn is_gprs_dial(&self) -> bool {
         self.0.starts_with("*99")
             && self.0.ends_with('#')
             && self.0.as_bytes().get(3).is_some_and(|&c| c == b'*' || c == b'#')
+    }
+}
+
+/// Type of Address (TON/NPI) as defined in 3GPP TS 24.008 / TS 23.040 Table
+/// 9.1.2.5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TypeOfAddress {
+    /// National / Unknown numbering plan (0x81 = 129).
+    National = 129,
+    /// International numbering plan with E.164 (0x91 = 145).
+    International = 145,
+}
+
+impl TypeOfAddress {
+    pub fn from_number(number: &str) -> Self {
+        if number.starts_with('+') { Self::International } else { Self::National }
+    }
+
+    pub const fn is_international(self) -> bool {
+        matches!(self, Self::International)
+    }
+
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+}
+
+impl fmt::Display for TypeOfAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl From<TypeOfAddress> for u8 {
+    fn from(toa: TypeOfAddress) -> Self {
+        toa as u8
     }
 }
 
@@ -1051,7 +1088,7 @@ impl<'a> Parsable<'a> for CallWaitingPresentation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FormattedNumber<'a> {
     pub number: &'a str,
-    pub toa: u8,
+    pub toa: TypeOfAddress,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1066,12 +1103,14 @@ pub enum NumberPresentation {
 impl NumberPresentation {
     pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
         match self {
-            Self::Restricted | Self::NotAvailable => FormattedNumber { number: "", toa: 129 },
+            Self::Restricted | Self::NotAvailable => {
+                FormattedNumber { number: "", toa: TypeOfAddress::National }
+            }
             Self::Allowed => {
                 if let Some(num) = number {
                     FormattedNumber { number: num.as_str(), toa: num.toa() }
                 } else {
-                    FormattedNumber { number: "", toa: 129 }
+                    FormattedNumber { number: "", toa: TypeOfAddress::National }
                 }
             }
         }
@@ -1569,6 +1608,13 @@ impl std::fmt::Display for Facility {
     }
 }
 
+impl<'a> Parsable<'a> for crate::apdu::Instruction {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        Ok((input, crate::apdu::Instruction::from(val)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1676,9 +1722,9 @@ mod tests {
 
     #[test]
     fn test_phone_number_toa() {
-        assert_eq!(PhoneNumber::new("+16505550100").toa(), 145);
-        assert_eq!(PhoneNumber::new("16505550100").toa(), 129);
-        assert_eq!(PhoneNumber::new("12345").toa(), 129);
+        assert_eq!(PhoneNumber::new("+16505550100").toa(), TypeOfAddress::International);
+        assert_eq!(PhoneNumber::new("16505550100").toa(), TypeOfAddress::National);
+        assert_eq!(PhoneNumber::new("12345").toa(), TypeOfAddress::National);
     }
 
     #[test]
@@ -1688,25 +1734,25 @@ mod tests {
         // Allowed
         let formatted = NumberPresentation::Allowed.format_number(Some(&phone));
         assert_eq!(formatted.number, "12345");
-        assert_eq!(formatted.toa, 129);
+        assert_eq!(formatted.toa, TypeOfAddress::National);
 
         let int_phone = PhoneNumber::new("+12345");
         let formatted = NumberPresentation::Allowed.format_number(Some(&int_phone));
         assert_eq!(formatted.number, "+12345");
-        assert_eq!(formatted.toa, 145);
+        assert_eq!(formatted.toa, TypeOfAddress::International);
 
         let formatted = NumberPresentation::Allowed.format_number(None);
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, 129);
+        assert_eq!(formatted.toa, TypeOfAddress::National);
 
         // Restricted
         let formatted = NumberPresentation::Restricted.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, 129);
+        assert_eq!(formatted.toa, TypeOfAddress::National);
 
         // Not Available
         let formatted = NumberPresentation::NotAvailable.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, 129);
+        assert_eq!(formatted.toa, TypeOfAddress::National);
     }
 }
