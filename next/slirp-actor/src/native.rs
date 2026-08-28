@@ -144,8 +144,8 @@ async fn handle_udp_connection(
     req_tx: mpsc::UnboundedSender<slirp::SlirpRequest>,
 ) {
     let bind_addr = match dest {
-        SocketAddr::V4(_) => "0.0.0.0:0",
-        SocketAddr::V6(_) => "[::]:0",
+        SocketAddr::V4(_) => SocketAddr::from((std::net::Ipv4Addr::UNSPECIFIED, 0)),
+        SocketAddr::V6(_) => SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, 0)),
     };
     let socket = match UdpSocket::bind(bind_addr).await {
         Ok(s) => {
@@ -228,8 +228,12 @@ fn rewrite_icmp_echo_id(
 #[cfg(not(target_os = "windows"))]
 fn create_icmp_socket(dest_ip: IpAddr) -> std::io::Result<UdpSocket> {
     let (domain, bind_addr, proto) = match dest_ip {
-        IpAddr::V4(_) => (Domain::IPV4, SocketAddr::from(([0, 0, 0, 0], 0)), Protocol::ICMPV4),
-        IpAddr::V6(_) => (Domain::IPV6, SocketAddr::from(([0; 16], 0)), Protocol::ICMPV6),
+        IpAddr::V4(_) => {
+            (Domain::IPV4, SocketAddr::from((std::net::Ipv4Addr::UNSPECIFIED, 0)), Protocol::ICMPV4)
+        }
+        IpAddr::V6(_) => {
+            (Domain::IPV6, SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, 0)), Protocol::ICMPV6)
+        }
     };
     let socket = Socket::new(domain, Type::DGRAM, Some(proto))?;
     socket.set_nonblocking(true)?;
