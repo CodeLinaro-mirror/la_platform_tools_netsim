@@ -851,7 +851,11 @@ fn test_cgla_close_closed_channel() {
         "A",
         &format!("AT+CGLA=0,10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH1}\""),
     );
-    then_response_is(&mut world, "A", &format!("+CGLA: 4,{}", RESP_ERROR_NO_CHANNEL_AVAILABLE));
+    then_response_is(
+        &mut world,
+        "A",
+        &format!("+CGLA: 4,{}", RESP_ERROR_REFERENCED_DATA_NOT_FOUND),
+    );
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -862,7 +866,7 @@ fn test_cgla_validation_errors() {
 
     // Too short APDU (less than 4 bytes)
     when_at_command_sent(&mut world, "A", "AT+CGLA=0,4,\"0070\"");
-    then_response_is(&mut world, "A", "+CGLA: 4,6F00");
+    then_response_is(&mut world, "A", "+CGLA: 4,6700");
     then_response_is(&mut world, "A", "OK");
 
     // Invalid hex data
@@ -918,7 +922,11 @@ fn test_csim_close_closed_channel_and_invalid_action() {
         "A",
         &format!("AT+CSIM=10,\"{APDU_MANAGE_CHANNEL_CLOSE_CH1}\""),
     );
-    then_response_is(&mut world, "A", &format!("+CSIM: 4,{}", RESP_ERROR_NO_CHANNEL_AVAILABLE));
+    then_response_is(
+        &mut world,
+        "A",
+        &format!("+CSIM: 4,{}", RESP_ERROR_REFERENCED_DATA_NOT_FOUND),
+    );
     then_response_is(&mut world, "A", "OK");
 
     // Close channel 0 (invalid operation)
@@ -1018,7 +1026,7 @@ fn test_default_sim_profile_reads() {
 
     // 2. Query IMSI (AT+CIMI) -> parsed from USIM ADF
     when_at_command_sent(&mut world, "A", "AT+CIMI");
-    then_response_is(&mut world, "A", "311740123456789");
+    then_response_is(&mut world, "A", "310260000000000");
     then_response_is(&mut world, "A", "OK");
 
     // 3. Query ICCID (AT+CICCID) -> parsed from CCID tag in EF_ICCID
@@ -1036,6 +1044,48 @@ fn test_default_sim_profile_reads() {
     //    0x2F05)
     when_at_command_sent(&mut world, "A", "AT+CRSM=176,12037,0,0,4");
     then_response_is(&mut world, "A", "+CRSM: 144,0,FFFFFFFF");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cuttlefish_default_tel_alaska_sim_profile_reads() {
+    let mut world = World::new();
+    // Cuttlefish modems default to the TelAlaska profile (PROFILE_TEL_ALASKA_XML)
+    given_cuttlefish_modem(&mut world, "A");
+
+    // Verify CPIN status is READY
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: READY");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query IMSI (AT+CIMI) -> parsed from USIM ADF (TelAlaska 311740)
+    when_at_command_sent(&mut world, "A", "AT+CIMI");
+    then_response_is(&mut world, "A", "311740123456789");
+    then_response_is(&mut world, "A", "OK");
+
+    // Enable verbose error reporting
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query EID -> should return NotFound CME ERROR (22) because CardProfile is
+    // missing
+    when_at_command_sent(&mut world, "A", "AT+CEID");
+    then_response_is(&mut world, "A", "+CME ERROR: 22");
+
+    // Query ATR -> should return NotFound CME ERROR (22) because CardProfile is
+    // missing
+    when_at_command_sent(&mut world, "A", "AT+CATR");
+    then_response_is(&mut world, "A", "+CME ERROR: 22");
+
+    // Enable radio and wait for registration
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
+
+    // Query COPS -> returns TelAlaska PLMN (311740) derived from SIM profile
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,2,311740");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -1186,7 +1236,7 @@ fn test_apdu_read_record_transparent_file() {
 
     // Try to read record 1 of ICCID
     when_at_command_sent(&mut world, "A", "AT+CRSM=178,12258,1,4,10");
-    then_response_is(&mut world, "A", "+CRSM: 106,130");
+    then_response_is(&mut world, "A", "+CRSM: 106,136");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -1300,5 +1350,441 @@ fn test_cgla_invalid_file_and_channel_handling() {
     // Try to select a non-existent file ID (e.g. 0xFFFF)
     when_at_command_sent(&mut world, "A", "AT+CGLA=0,16,\"00A4000402FFFF0C\"");
     then_response_is(&mut world, "A", "+CGLA: 4,6A82");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_csim_select_and_unhandled_ins() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. SELECT command via CSIM returns success
+    when_at_command_sent(&mut world, "A", "AT+CSIM=14,\"00A40004022FE2\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Unhandled INS via CSIM returns SW_INCORRECT_PARAMS (6A86) as baseline
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"00FE000000\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6A86");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. APDU with mismatched Lc length via CSIM returns SW_WRONG_LENGTH (6700)
+    when_at_command_sent(&mut world, "A", "AT+CSIM=14,\"00A400040A1122\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6700");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_csim_invalid_channel_rejection() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Send command with CLA 40 (Format 2, channel 4) -> out of bounds (max 3
+    //    supported)
+    // Expect SW_CLASS_NOT_SUPPORTED (6E00)
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"40B0000005\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6E00");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Send command with CLA 01 (Format 1, channel 1) which is closed
+    // Expect SW_CLASS_NOT_SUPPORTED (6E00)
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"01B0000005\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6E00");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_lenient_cla_rejection() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Open channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Open channel 2
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,029000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Transmit on channel 1 with APDU specifying channel 2 (CLA 02)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"02F2000000\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6E00");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_get_eid_and_atr() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // EID from default profile (iccprofile_for_sim0.xml)
+    // <EID>89049032000001000000000254806852</EID>
+    when_at_command_sent(&mut world, "A", "AT+CEID");
+    then_response_is(&mut world, "A", "+CEID: 89049032000001000000000254806852");
+    then_response_is(&mut world, "A", "OK");
+
+    // ATR from default profile (iccprofile_for_sim0.xml)
+    // <ATR>3F979580BFFE8210428031A073BE211797</ATR>
+    when_at_command_sent(&mut world, "A", "AT+CATR");
+    then_response_is(&mut world, "A", "+CATR: 3F979580BFFE8210428031A073BE211797");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_select_by_aid() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 2); // CTS profile with USIM AID
+
+    // Open channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // Select USIM AID (A0000000871002FF86FF0389FFFFFFFF) on channel 1
+    when_at_command_sent(
+        &mut world,
+        "A",
+        "AT+CGLA=1,42,\"01A4040010A0000000871002FF86FF0389FFFFFFFF\"",
+    );
+    then_response_is(&mut world, "A", "+CGLA: 4,6147");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_close_other_channel_success() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // 1. Open channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Open channel 2
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000002\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,029000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Close channel 2 from channel 0 -> should succeed
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070800200\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000"); // SW_SUCCESS
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Verify channel 2 is closed by trying to close it again -> should fail with
+    //    6A88
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070800200\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A88"); // SW_REFERENCED_DATA_NOT_FOUND
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_get_eid_and_atr_not_found() {
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A");
+
+    // Default CMEE is 0 (disable), so it should return generic "ERROR"
+    when_at_command_sent(&mut world, "A", "AT+CEID");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+CATR");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Enable CMEE=1 (numeric error), should return "+CME ERROR: 22" (NotFound)
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CEID");
+    then_response_is(&mut world, "A", "+CME ERROR: 22");
+
+    when_at_command_sent(&mut world, "A", "AT+CATR");
+    then_response_is(&mut world, "A", "+CME ERROR: 22");
+}
+
+#[test]
+fn test_cgla_select_profile_failure_rollback() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 2); // CTS profile
+
+    // 1. Select EF_ICCID (0x2FE2) on channel 0 -> success
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A4000C022FE2\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Attempt to select invalid file FFFF -> fails with 6A82 (defined in CTS
+    //    profile)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A4000C02FFFF\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A82");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_manage_channel_profile_sync() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 2); // CTS profile
+
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CSIM: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,14,\"01A4000C022FE2\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_close_channel_self_explicit() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    when_at_command_sent(&mut world, "A", "AT+CMEE=2");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"0170800100\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01F2000000\"");
+    then_response_is(&mut world, "A", "+CME ERROR: not found");
+}
+
+#[test]
+fn test_cgla_close_channel_cross() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    when_at_command_sent(&mut world, "A", "AT+CMEE=2");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,029000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"0170800200\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=2,10,\"02F2000000\"");
+    then_response_is(&mut world, "A", "+CME ERROR: not found");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01F2000000\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CGLA: 110,62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_aid_reset_on_select_outside() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 2); // CTS profile with USIM AID
+
+    when_at_command_sent(
+        &mut world,
+        "A",
+        "AT+CSIM=42,\"00A4040010A0000000871002FF86FF0389FFFFFFFF\"",
+    );
+    then_response_is(&mut world, "A", "+CSIM: 4,6147");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSIM=14,\"00A40004027F10\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"00F2000000\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CSIM: 110,62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_select_invalid_p2() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // P2 = 08 (ReturnProprietary) is unsupported, should return SW_INCORRECT_PARAMS
+    // (6A86)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40008027F10\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A86");
+    then_response_is(&mut world, "A", "OK");
+
+    // Invalid P2 (e.g. 01) should return SW_INCORRECT_PARAMS (6A86)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40001027F10\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A86");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_read_record_invalid_p2() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // Select EF_MSISDN (linear fixed)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40004026F40\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // Read record 1 with P2 = 02 (NextRecord - unsupported), should return 6A86
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00B2010200\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A86");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_read_record_invalid_p2() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // Read record 1 of EF_MSISDN (6F40) via CRSM with P2 = 02 (NextRecord -
+    // unsupported), should return 6A86 (sw 106,134)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,2,0");
+    then_response_is(&mut world, "A", "+CRSM: 106,134");
+    then_response_is(&mut world, "A", "OK");
+
+    // With P2 = 04 (AbsoluteMode - supported)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,000000000000000000000000000007915155251100F1FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_select_aid_does_not_match_file_id_mock() {
+    let mut world = World::new();
+    let xml = r#"<IccProfile>
+        <MF>
+            <ADF aid="A0000000871002FF86FF0389FFFFFFFF">
+                <File id="A000">
+                    <CGLA cmd="00A4000402A000">4,6F00</CGLA>
+                </File>
+                <CGLA cmd="00A4040010A0000000871002FF86FF0389FFFFFFFF">4,9000</CGLA>
+            </ADF>
+        </MF>
+    </IccProfile>"#;
+    given_modem_with_xml_profile(&mut world, "A", xml);
+
+    when_at_command_sent(
+        &mut world,
+        "A",
+        "AT+CGLA=0,42,\"00A4040010A0000000871002FF86FF0389FFFFFFFF\"",
+    );
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_get_response_retrieves_buffered_data() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Send SELECT command for MF (3F00) with P2=00 (ReturnFcp) on channel 0
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40000023F00\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6135");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Issuing GET_RESPONSE (0xC0) retrieves the buffered FCP template (53 bytes
+    //    = 0x35)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00C0000035\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CGLA: 110,62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cgla_get_response_partial_reads() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40000023F00\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6135");
+    then_response_is(&mut world, "A", "OK");
+
+    // Read first 10 (0x0A) bytes -> 43 (0x2B) bytes remaining, status word 612B
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00C000000A\"");
+    then_response_is(&mut world, "A", "+CGLA: 24,62338202782183023F00612B");
+    then_response_is(&mut world, "A", "OK");
+
+    // Read remaining 43 (0x2B) bytes -> status word 9000
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00C000002B\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CGLA: 90,A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_response_buffer_cleared_on_other_command() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40000023F00\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6135");
+    then_response_is(&mut world, "A", "OK");
+
+    // Send another command (e.g. STATUS 0xF2) -> clears response buffer
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00F2000000\"");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CGLA: 110,62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF9000",
+    );
+    then_response_is(&mut world, "A", "OK");
+
+    // GET_RESPONSE now returns 6A88 because buffer was cleared
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"00C0000035\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A88");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_response_buffer_cleared_on_channel_close() {
+    let mut world = World::new();
+    given_modem_with_sim_type(&mut world, "A", 1);
+
+    // 1. Open channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Select MF on channel 1 (buffers FCP)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,14,\"01A40000023F00\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6135");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Close channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070800101\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Open channel 1 again
+    when_at_command_sent(&mut world, "A", "AT+CGLA=0,10,\"0070000001\"");
+    then_response_is(&mut world, "A", "+CGLA: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. GET_RESPONSE on channel 1 returns 6A88 because buffer was cleared on close
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01C0000035\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,6A88");
     then_response_is(&mut world, "A", "OK");
 }

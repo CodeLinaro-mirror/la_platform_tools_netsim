@@ -6,21 +6,25 @@ use tracing::debug;
 
 use crate::{
     data_service::DataService,
-    parser::{parse_raw_data, parse_until_semicolon},
-    types::{AT_OK, CommandAction, ExecutionResult, ModemId, Parsable},
+    parser::parse_raw_data,
+    sim_service::SimService,
+    types::{
+        CallHoldAction, CallHoldParam, ClirMode, CmeError, CommandAction, DialArgs,
+        ExecutionResult, ModemId, NumberPresentation, Parsable, PhoneNumber,
+    },
 };
 
 /// Call service AT commands.
-#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+#[derive(Debug, PartialEq, Clone, CommandParser)]
 pub enum CallCommand<'a> {
     #[command(tag = "ATD")]
-    Dial(#[parser(parse_until_semicolon)] &'a [u8]),
+    Dial(DialArgs),
     #[command(tag = "ATA")]
     Answer,
     #[command(tag = "ATH")]
     Hangup,
     #[command(tag = "AT+CHLD=")]
-    CallHold(u8),
+    CallHold(CallHoldParam),
     #[command(tag = "AT+CLCC")]
     QueryCurrentCalls,
     #[command(tag = "AT+CMUT=")]
@@ -37,7 +41,7 @@ pub enum CallCommand<'a> {
     QueryEmergencyMode,
     /// VENDOR: Remote call
     #[command(tag = "AT+REMOTECALL=")]
-    RemoteCall(#[parser(parse_raw_data)] &'a [u8]),
+    RemoteCall(PhoneNumber),
     /// VENDOR: Ring indication
     #[command(tag = "RING")]
     Ring,
@@ -49,23 +53,44 @@ pub enum CallDirection {
     Incoming = 1,
 }
 
+/// Standard 3GPP TS 27.007 §7.18 (+CLCC) voice call states.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CallState {
+    /// Connected voice call.
     Active = 0,
+    /// Call on hold.
     Held = 1,
+    /// Outgoing call dialing.
     Dialing = 2,
+    /// Outgoing call ringing remote peer.
     Alerting = 3,
+    /// Inbound call ringing.
     Incoming = 4,
+    /// Inbound call waiting while another call is active.
     Waiting = 5,
 }
 
 impl CallState {
-    fn is_waiting(self) -> bool {
-        matches!(self, CallState::Waiting | CallState::Incoming)
+    pub fn is_outbound(self) -> bool {
+        matches!(self, CallState::Dialing | CallState::Alerting)
     }
 
-    fn should_promote(self, has_waiting: bool) -> bool {
-        self.is_waiting() || (self == CallState::Held && !has_waiting)
+    fn is_inbound(self) -> bool {
+        matches!(self, CallState::Incoming | CallState::Waiting)
+    }
+
+    fn is_foreground(self) -> bool {
+        matches!(self, CallState::Active | CallState::Dialing | CallState::Alerting)
+    }
+
+    fn is_answerable(self) -> bool {
+        matches!(self, CallState::Alerting | CallState::Incoming | CallState::Waiting)
+    }
+
+    /// Prioritizes answering inbound calls over resuming held calls during
+    /// accept/swap operations.
+    fn should_promote_to_active(self, has_inbound: bool) -> bool {
+        self.is_inbound() || (self == CallState::Held && !has_inbound)
     }
 }
 
@@ -76,8 +101,9 @@ pub struct CallStatus {
     pub direction: CallDirection,
     pub is_voice_mode: bool,
     pub is_multi_party: bool,
-    pub number: String,
+    pub number: Option<PhoneNumber>,
     pub peer_id: Option<ModemId>,
+    pub number_presentation: NumberPresentation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,7 +112,7 @@ pub enum CallResponse {
     CurrentCalls(Vec<CallStatus>),
     Mute(bool),
     EmergencyMode(bool),
-    WithAction(CommandAction),
+    WithActions(Vec<CommandAction>),
     Empty,
 }
 
@@ -96,16 +122,17 @@ impl std::fmt::Display for CallResponse {
             CallResponse::Ring => write!(f, "RING\r\n"),
             CallResponse::CurrentCalls(calls) => {
                 for call in calls {
-                    let toa = if call.number.starts_with('+') { 145 } else { 129 };
+                    let val = call.number_presentation.format_number(call.number.as_ref());
                     write!(
                         f,
-                        "+CLCC: {},{},{},{},{},\"{}\",{toa}\r\n",
+                        "+CLCC: {},{},{},{},{},{},{}\r\n",
                         call.id,
                         call.direction as u8,
                         call.state as u8,
                         if call.is_voice_mode { 0 } else { 1 },
                         call.is_multi_party as u8,
-                        call.number,
+                        val.number.strip_prefix('+').unwrap_or(val.number),
+                        val.toa,
                     )?;
                 }
                 Ok(())
@@ -116,7 +143,7 @@ impl std::fmt::Display for CallResponse {
             CallResponse::EmergencyMode(mode) => {
                 write!(f, "+WSOS: {}\r\n", if *mode { 1 } else { 0 })
             }
-            CallResponse::WithAction(_) => Ok(()),
+            CallResponse::WithActions(_) => Ok(()),
             CallResponse::Empty => Ok(()),
         }
     }
@@ -133,10 +160,6 @@ pub struct CallService {
 }
 
 impl CallService {
-    fn has_waiting_call(&self) -> bool {
-        self.calls.iter().any(|c| c.state.is_waiting())
-    }
-
     fn has_call_in_state(&self, state: CallState) -> bool {
         self.calls.iter().any(|c| c.state == state)
     }
@@ -151,11 +174,12 @@ impl CallService {
         (1..=u8::MAX).find(|&id| !self.has_call(id))
     }
 
-    pub fn add_call(
+    fn add_call(
         &mut self,
         state: CallState,
         direction: CallDirection,
-        number: String,
+        number: Option<PhoneNumber>,
+        number_presentation: NumberPresentation,
         peer_id: Option<ModemId>,
     ) -> Option<u8> {
         let id = self.allocate_id()?;
@@ -167,14 +191,23 @@ impl CallService {
             is_multi_party: false,
             number,
             peer_id,
+            number_presentation,
         });
         Some(id)
     }
 
-    pub fn remove_call(&mut self, id: u8) {
+    fn remove_call(&mut self, id: u8) {
         if let Some(pos) = self.calls.iter().position(|c| c.id == id) {
             self.calls.remove(pos);
         }
+    }
+
+    /// Returns true if this call is currently part of an active or held
+    /// multi-party conference with >= 2 remote participants in the same
+    /// state, per 3GPP TS 22.084.
+    fn is_multiparty_call(&self, call: &CallStatus) -> bool {
+        call.is_multi_party
+            && self.calls.iter().filter(|c| c.state == call.state && c.is_multi_party).count() >= 2
     }
 
     // --- Helper methods for external services ---
@@ -187,60 +220,98 @@ impl CallService {
         self.calls.retain(|c| c.peer_id != Some(peer_id));
     }
 
-    pub fn handle_ring_timeout(&mut self, _call_token: u32) {
-        self.calls.retain(|c| c.state != CallState::Incoming);
+    pub fn handle_ring_timeout(&mut self, id: ModemId, _call_token: u32) -> CallResult {
+        let mut actions = Vec::new();
+        self.calls.retain(|call| {
+            if call.state.is_inbound() {
+                if let Some(peer_id) = call.peer_id {
+                    actions.push(CommandAction::HangupCall { initiator: id, target_peer: peer_id });
+                }
+                false
+            } else {
+                true
+            }
+        });
+        if !actions.is_empty() { Ok(Some(CallResponse::WithActions(actions))) } else { Ok(None) }
     }
 
-    pub fn ring(&mut self, number: String, peer_id: Option<ModemId>) -> CallResult {
-        if self.add_call(CallState::Incoming, CallDirection::Incoming, number, peer_id).is_none() {
+    pub fn ring(
+        &mut self,
+        number: Option<PhoneNumber>,
+        number_presentation: NumberPresentation,
+        peer_id: Option<ModemId>,
+    ) -> CallResult {
+        let initial_state =
+            if self.has_active() { CallState::Waiting } else { CallState::Incoming };
+        if self
+            .add_call(initial_state, CallDirection::Incoming, number, number_presentation, peer_id)
+            .is_none()
+        {
             return Err(ExecutionResult::error());
         }
         Ok(Some(CallResponse::Ring))
     }
 
-    pub fn receive_hold(&mut self) {
-        debug!("[CallService] Receiving hold");
-        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Active) {
+    pub fn receive_hold(&mut self, peer_id: ModemId) {
+        debug!("[CallService] Receiving hold from {:?}", peer_id);
+        if let Some(call) = self.calls.iter_mut().find(|c| c.peer_id == Some(peer_id)) {
             call.state = CallState::Held;
         }
     }
 
-    pub fn receive_resume(&mut self) {
-        debug!("[CallService] Receiving resume");
-        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Held) {
+    pub fn receive_resume(&mut self, peer_id: ModemId) {
+        debug!("[CallService] Receiving resume from {:?}", peer_id);
+        if let Some(call) = self.calls.iter_mut().find(|c| c.peer_id == Some(peer_id)) {
             call.state = CallState::Active;
         }
     }
 
+    pub fn trigger_remote_hold(&mut self, on_hold: bool) {
+        let target_state = if on_hold { CallState::Active } else { CallState::Held };
+        let new_state = if on_hold { CallState::Held } else { CallState::Active };
+        // Prioritize independent calls created directly via CLI/RPC (peer_id is None)
+        if let Some(call) =
+            self.calls.iter_mut().find(|c| c.state == target_state && c.peer_id.is_none())
+        {
+            call.state = new_state;
+        } else if let Some(call) = self.calls.iter_mut().find(|c| c.state == target_state) {
+            call.state = new_state;
+        }
+    }
+
     pub fn remote_answer(&mut self) -> bool {
-        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Dialing) {
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state.is_outbound()) {
             call.state = CallState::Active;
             return true;
         }
         false
     }
 
-    pub fn is_idle(&self) -> bool {
+    fn is_idle(&self) -> bool {
         self.calls.is_empty()
     }
 
-    pub fn is_dialing(&self) -> bool {
-        self.has_call_in_state(CallState::Dialing)
-    }
-
-    pub fn is_alerting(&self) -> bool {
+    pub fn has_alerting(&self) -> bool {
         self.has_call_in_state(CallState::Alerting)
     }
 
-    pub fn is_active(&self) -> bool {
+    pub fn has_outbound(&self) -> bool {
+        self.calls.iter().any(|c| c.state.is_outbound())
+    }
+
+    fn has_inbound(&self) -> bool {
+        self.calls.iter().any(|c| c.state.is_inbound())
+    }
+
+    fn has_active(&self) -> bool {
         self.has_call_in_state(CallState::Active)
     }
 
-    pub fn is_held(&self) -> bool {
+    fn has_held(&self) -> bool {
         self.has_call_in_state(CallState::Held)
     }
 
-    pub fn is_incoming(&self) -> bool {
+    pub fn has_incoming(&self) -> bool {
         self.has_call_in_state(CallState::Incoming)
     }
 
@@ -248,16 +319,16 @@ impl CallService {
         debug!("[CallService] Connecting to peer {peer_id}");
         debug!("[CallService] Calls before connect: {:?}", self.calls);
 
-        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Dialing) {
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state.is_outbound()) {
             call.state = CallState::Active;
             call.peer_id = Some(peer_id);
-            debug!("[CallService] Connected as caller. Calls: {:?}", self.calls);
-            return Some(AT_OK.to_vec());
+            debug!("[CallService] Connected as caller.");
+            return Some(b"RING\r\n".to_vec());
         }
 
-        if let Some(call) =
-            self.calls.iter_mut().find(|c| c.state == CallState::Active && c.peer_id.is_none())
-        {
+        if let Some(call) = self.calls.iter_mut().find(|c| {
+            c.state == CallState::Active && (c.peer_id.is_none() || c.peer_id == Some(peer_id))
+        }) {
             call.peer_id = Some(peer_id);
             debug!("[CallService] Connected as callee (peer_id set). Calls: {:?}", self.calls);
             return None;
@@ -267,230 +338,347 @@ impl CallService {
         None
     }
 
-    // --- Pure command handlers ---
+    // --- Command handlers ---
 
-    pub fn handle_dial(
+    fn handle_dial(
         &mut self,
-        number: &[u8],
+        args: DialArgs,
+        id: ModemId,
         data_service: &mut DataService,
+        sim_service: &SimService,
+        clir_mode: ClirMode,
     ) -> ExecutionResult {
-        debug!("[CallService] Dialing number: {}", String::from_utf8_lossy(number));
+        debug!("[CallService] Dialing number: {}", args.number.as_str());
         // GPRS dial commands (e.g. ATD*99#) are GPRS packet-data requests and are
         // handled by DataService.
-        if crate::constants::is_gprs_dial(number) {
-            return data_service.handle_gprs_dial(number).into();
+        if args.number.is_gprs_dial() {
+            return data_service.handle_gprs_dial(args.number.as_str().as_bytes()).into();
         }
 
-        let result = self.handle_voice_dial(number);
+        let result = self.handle_voice_dial(id, args, sim_service, clir_mode);
         result.into()
     }
 
-    fn handle_voice_dial(&mut self, number: &[u8]) -> CallResult {
-        let Some(dial_str) = parse_number(number) else {
-            return Err(ExecutionResult::error());
-        };
-        let mut is_emergency = false;
-        let clean_number = if let Some(pos) = dial_str.find('@') {
-            is_emergency = true;
-            // TODO: Support emergency categories and CLIR suffixes (e.g. @1,#I) currently
-            // they are discarded.
-            &dial_str[..pos]
-        } else {
-            let stripped = dial_str.trim_end_matches([';', 'i', 'I']);
-            if stripped == "911" {
-                is_emergency = true;
-            }
-            stripped
-        };
-
-        // '+' is only valid as the very first character (international prefix)
-        let is_valid = !clean_number.is_empty()
-            && clean_number.bytes().enumerate().all(|(i, b)| match b {
-                b'+' => i == 0,
-                b'0'..=b'9' | b'*' | b'#' => true,
-                _ => false,
-            });
-
-        if !is_valid {
-            return Err(ExecutionResult::error());
+    fn handle_voice_dial(
+        &mut self,
+        id: ModemId,
+        args: DialArgs,
+        sim_service: &SimService,
+        clir_mode: ClirMode,
+    ) -> CallResult {
+        if args.is_emergency {
+            return Ok(Some(CallResponse::WithActions(vec![CommandAction::InitiateEmergencyCall])));
         }
 
-        if is_emergency {
-            return Ok(Some(CallResponse::WithAction(CommandAction::InitiateEmergencyCall)));
+        if !sim_service.is_fdn_allowed(&args.number) {
+            return Err(ExecutionResult::cme_error(CmeError::FixedDialNumberOnlyAllowed));
         }
 
         debug!("[CallService] Calls before dial: {:?}", self.calls);
-        if self.is_dialing() {
-            return Ok(Some(CallResponse::Empty));
+        if self.has_outbound() {
+            return Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed));
         }
 
-        let mut did_hold = false;
+        let mut actions = Vec::new();
         for call in self.calls.iter_mut() {
             if call.state == CallState::Active {
                 call.state = CallState::Held;
-                did_hold = true;
+                if let Some(peer_id) = call.peer_id {
+                    actions.push(CommandAction::HoldCall { holder: id, target: peer_id });
+                }
             }
         }
 
-        let clean_number_str = clean_number.to_string();
         if self
-            .add_call(CallState::Dialing, CallDirection::Outgoing, clean_number_str.clone(), None)
+            .add_call(
+                CallState::Dialing,
+                CallDirection::Outgoing,
+                Some(args.number.clone()),
+                NumberPresentation::Allowed,
+                None,
+            )
             .is_none()
         {
             return Err(ExecutionResult::error());
         }
         debug!("[CallService] Calls after dial: {:?}", self.calls);
 
-        let action = if did_hold {
-            CommandAction::InitiateCallAndHold(clean_number_str)
-        } else {
-            CommandAction::InitiateCall(clean_number_str)
-        };
+        let call_clir =
+            if args.clir == ClirMode::SubscriptionDefault { clir_mode } else { args.clir };
 
-        Ok(Some(CallResponse::WithAction(action)))
+        actions.push(CommandAction::InitiateCall(DialArgs {
+            number: args.number,
+            clir: call_clir,
+            is_emergency: false,
+        }));
+
+        Ok(Some(CallResponse::WithActions(actions)))
     }
 
-    pub fn handle_answer(&mut self, id: ModemId) -> CallResult {
-        debug!("[CallService] Answering call");
-        debug!("[CallService] Calls before answer: {:?}", self.calls);
-        if let Some(call) =
-            self.calls.iter_mut().find(|c| c.state == CallState::Alerting || c.state.is_waiting())
-        {
+    fn handle_answer(&mut self, id: ModemId) -> CallResult {
+        debug!("[CallService modem={id}] Answering call");
+        debug!("[CallService modem={id}] Calls before answer: {:?}", self.calls);
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state.is_answerable()) {
             call.state = CallState::Active;
-            debug!("[CallService] Calls after answer: {:?}", self.calls);
-            return Ok(Some(CallResponse::WithAction(CommandAction::AnswerCall(id))));
+            debug!("[CallService modem={id}] Calls after answer: {:?}", self.calls);
+            return Ok(Some(CallResponse::WithActions(vec![CommandAction::AnswerCall(id)])));
         }
         Err(ExecutionResult::error())
     }
 
-    pub fn handle_hangup(&mut self, id: ModemId) -> CallResult {
+    fn handle_hangup(&mut self, id: ModemId) -> CallResult {
         if self.is_idle() {
             return Err(ExecutionResult::error());
         }
+        let actions: Vec<CommandAction> = self
+            .calls
+            .iter()
+            .filter_map(|call| {
+                call.peer_id.map(|peer_id| CommandAction::HangupCall {
+                    initiator: id,
+                    target_peer: peer_id,
+                })
+            })
+            .collect();
         self.calls.clear();
-        Ok(Some(CallResponse::WithAction(CommandAction::HangupCall(id))))
+        if !actions.is_empty() { Ok(Some(CallResponse::WithActions(actions))) } else { Ok(None) }
     }
 
-    pub fn handle_call_hold(&mut self, raw_chld_op: u8, id: ModemId) -> CallResult {
-        debug!("[CallService] Call hold operation: {raw_chld_op}");
+    fn handle_call_hold(&mut self, chld: CallHoldParam, id: ModemId) -> CallResult {
+        debug!("[CallService] Call hold operation: {chld:?}");
         debug!("[CallService] Calls before hold op: {:?}", self.calls);
 
-        let (op, index) = if raw_chld_op >= 100 {
-            (raw_chld_op / 100, Some(raw_chld_op % 100))
-        } else if raw_chld_op >= 10 {
-            (raw_chld_op / 10, Some(raw_chld_op % 10))
-        } else {
-            (raw_chld_op, None)
-        };
+        let (op, index) = (chld.op, chld.call_id);
 
-        // Validate index for ops that require it (1 and 2)
-        if index.is_some_and(|idx| (op == 1 || op == 2) && !self.has_call(idx)) {
+        // Releasing when no calls exist is a no-op that succeeds with OK.
+        if self.calls.is_empty()
+            && (op == CallHoldAction::ReleaseHeld || op == CallHoldAction::ReleaseAndAccept)
+        {
+            return Ok(None);
+        }
+
+        // Validate index if specified for operations targeting a specific call
+        if let Some(idx) = index
+            && !self.has_call(idx)
+        {
             return Err(ExecutionResult::error());
         }
 
         match op {
-            0 => {
+            CallHoldAction::ReleaseHeld => {
+                let mut actions = Vec::new();
                 let prev_len = self.calls.len();
-                self.calls.retain(|c| c.state != CallState::Held && !c.state.is_waiting());
+                let has_inbound = self.has_inbound();
+                self.calls.retain(|call| {
+                    let should_drop = if has_inbound {
+                        call.state.is_inbound()
+                    } else {
+                        call.state == CallState::Held
+                    };
+                    if should_drop {
+                        if let Some(peer_id) = call.peer_id {
+                            actions.push(CommandAction::HangupCall {
+                                initiator: id,
+                                target_peer: peer_id,
+                            });
+                        }
+                        false
+                    } else {
+                        true
+                    }
+                });
                 if self.calls.len() < prev_len {
-                    return Ok(Some(CallResponse::WithAction(CommandAction::HangupCall(id))));
+                    return Ok(Some(CallResponse::WithActions(actions)));
                 }
             }
-            1 => {
-                let prev_len = self.calls.len();
+            CallHoldAction::ReleaseAndAccept => {
+                let mut actions = Vec::new();
                 if let Some(idx) = index {
+                    if let Some(call) = self.calls.iter().find(|c| c.id == idx)
+                        && let Some(peer_id) = call.peer_id
+                    {
+                        actions.push(CommandAction::HangupCall {
+                            initiator: id,
+                            target_peer: peer_id,
+                        });
+                    }
                     self.remove_call(idx);
                 } else {
-                    self.calls.retain(|c| c.state != CallState::Active);
-                    let has_waiting = self.has_waiting_call();
+                    let has_inbound = self.has_inbound();
+                    self.calls.retain(|c| {
+                        if c.state.is_foreground() {
+                            if let Some(peer) = c.peer_id {
+                                actions.push(CommandAction::HangupCall {
+                                    initiator: id,
+                                    target_peer: peer,
+                                });
+                            }
+                            false
+                        } else {
+                            true
+                        }
+                    });
                     for call in self.calls.iter_mut() {
-                        if call.state.should_promote(has_waiting) {
+                        let was_inbound = call.state.is_inbound();
+                        if call.state.should_promote_to_active(has_inbound) {
+                            if was_inbound {
+                                actions.push(CommandAction::AnswerCall(id));
+                            } else if let Some(peer_id) = call.peer_id {
+                                actions.push(CommandAction::ResumeCall {
+                                    resumer: id,
+                                    target: peer_id,
+                                });
+                            }
                             call.state = CallState::Active;
                         }
                     }
                 }
-                if self.calls.len() < prev_len {
-                    return Ok(Some(CallResponse::WithAction(CommandAction::HangupCall(id))));
+                if !actions.is_empty() {
+                    return Ok(Some(CallResponse::WithActions(actions)));
                 }
             }
-            2 => {
+            CallHoldAction::HoldAndAccept => {
+                let mut actions = Vec::new();
                 if let Some(idx) = index {
                     for call in self.calls.iter_mut() {
                         if call.id == idx {
+                            if call.state == CallState::Held
+                                && let Some(peer_id) = call.peer_id
+                            {
+                                actions.push(CommandAction::ResumeCall {
+                                    resumer: id,
+                                    target: peer_id,
+                                });
+                            } else if call.state.is_inbound() {
+                                actions.push(CommandAction::AnswerCall(id));
+                            }
                             call.state = CallState::Active;
                             call.is_multi_party = false;
                         } else if call.state == CallState::Active {
+                            if let Some(peer_id) = call.peer_id {
+                                actions
+                                    .push(CommandAction::HoldCall { holder: id, target: peer_id });
+                            }
                             call.state = CallState::Held;
                         }
                     }
                 } else {
-                    let has_waiting = self.has_waiting_call();
+                    let has_inbound = self.has_inbound();
                     for call in self.calls.iter_mut() {
                         if call.state == CallState::Active {
+                            if let Some(peer_id) = call.peer_id {
+                                actions
+                                    .push(CommandAction::HoldCall { holder: id, target: peer_id });
+                            }
                             call.state = CallState::Held;
-                        } else if call.state.should_promote(has_waiting) {
-                            call.state = CallState::Active;
+                        } else {
+                            let was_inbound = call.state.is_inbound();
+                            if call.state.should_promote_to_active(has_inbound) {
+                                if was_inbound {
+                                    actions.push(CommandAction::AnswerCall(id));
+                                } else if let Some(peer_id) = call.peer_id {
+                                    actions.push(CommandAction::ResumeCall {
+                                        resumer: id,
+                                        target: peer_id,
+                                    });
+                                }
+                                call.state = CallState::Active;
+                            }
                         }
                     }
                 }
+                if !actions.is_empty() {
+                    return Ok(Some(CallResponse::WithActions(actions)));
+                }
             }
-            3 => {
-                if !self.is_active() || !self.is_held() {
+            CallHoldAction::Conference => {
+                if !self.has_active() || !self.has_held() {
                     return Err(ExecutionResult::error());
                 }
+                let mut actions = Vec::new();
                 for call in self.calls.iter_mut() {
-                    if call.state == CallState::Held {
-                        call.state = CallState::Active;
-                    }
-                    if call.state == CallState::Active {
-                        call.is_multi_party = true;
+                    match call.state {
+                        CallState::Held => {
+                            call.state = CallState::Active;
+                            call.is_multi_party = true;
+                            if let Some(peer_id) = call.peer_id {
+                                actions.push(CommandAction::ResumeCall {
+                                    resumer: id,
+                                    target: peer_id,
+                                });
+                            }
+                        }
+                        CallState::Active => {
+                            call.is_multi_party = true;
+                        }
+                        _ => {}
                     }
                 }
+                if !actions.is_empty() {
+                    return Ok(Some(CallResponse::WithActions(actions)));
+                }
             }
-            4 => {
+            CallHoldAction::Transfer => {
                 // ECT: Connect remote parties and disconnect us.
                 // TODO: Support true ECT by bridging peers in the simulator, but it is
                 // currently unsupported in the Android Emulator RIL.
                 // For now, we hang up to avoid leaking state.
                 return self.handle_hangup(id);
             }
-            _ => return Err(ExecutionResult::error()),
+            CallHoldAction::UserToUserSignaling => {
+                return Err(ExecutionResult::error());
+            }
         }
         debug!("[CallService] Calls after hold op: {:?}", self.calls);
         Ok(None)
     }
 
-    pub fn handle_query_current_calls(&self) -> CallResult {
+    fn handle_query_current_calls(&self) -> CallResult {
         if self.calls.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(CallResponse::CurrentCalls(self.calls.clone())))
+            let calls = self
+                .calls
+                .iter()
+                .cloned()
+                .map(|mut c| {
+                    c.is_multi_party = self.is_multiparty_call(&c);
+                    c
+                })
+                .collect();
+            Ok(Some(CallResponse::CurrentCalls(calls)))
         }
     }
 
-    pub fn handle_remote_call(&mut self, number: &[u8]) -> CallResult {
-        let Some(number_str) = parse_number(number) else {
-            return Err(ExecutionResult::error());
-        };
+    fn handle_remote_call(&mut self, number: PhoneNumber) -> CallResult {
         if self
-            .add_call(CallState::Incoming, CallDirection::Incoming, number_str.clone(), None)
+            .add_call(
+                CallState::Dialing,
+                CallDirection::Outgoing,
+                Some(number.clone()),
+                NumberPresentation::Allowed,
+                None,
+            )
             .is_none()
         {
             return Err(ExecutionResult::error());
         }
-        Ok(Some(CallResponse::WithAction(CommandAction::InitiateRemoteCall(number_str))))
+        Ok(Some(CallResponse::WithActions(vec![CommandAction::InitiateRemoteCall(number)])))
     }
 
-    pub fn handle_set_mute(&mut self, mute: u8) -> CallResult {
+    fn handle_set_mute(&mut self, mute: u8) -> CallResult {
+        if mute > 1 {
+            return Err(ExecutionResult::error());
+        }
         self.mute = mute == 1;
         Ok(None)
     }
 
-    pub fn handle_query_mute(&self) -> CallResult {
+    fn handle_query_mute(&self) -> CallResult {
         Ok(Some(CallResponse::Mute(self.mute)))
     }
 
-    pub fn handle_send_dtmf(&self, dtmf: &[u8]) -> CallResult {
+    fn handle_send_dtmf(&self, dtmf: &[u8]) -> CallResult {
         debug!("[CallService] Send DTMF: {}", String::from_utf8_lossy(dtmf));
 
         if std::str::from_utf8(dtmf).is_ok_and(is_valid_dtmf_format) {
@@ -500,12 +688,12 @@ impl CallService {
         }
     }
 
-    pub fn handle_set_emergency_mode(&mut self, mode: u8) -> CallResult {
+    fn handle_set_emergency_mode(&mut self, mode: u8) -> CallResult {
         self.emergency_mode = mode == 1;
         Ok(None)
     }
 
-    pub fn handle_query_emergency_mode(&self) -> CallResult {
+    fn handle_query_emergency_mode(&self) -> CallResult {
         Ok(Some(CallResponse::EmergencyMode(self.emergency_mode)))
     }
 
@@ -514,15 +702,19 @@ impl CallService {
         command: &CallCommand<'a>,
         id: ModemId,
         data_service: &mut DataService,
+        sim_service: &SimService,
+        clir_mode: ClirMode,
     ) -> ExecutionResult {
         let res = match command {
-            CallCommand::Dial(number) => return self.handle_dial(number, data_service),
+            CallCommand::Dial(args) => {
+                return self.handle_dial(args.clone(), id, data_service, sim_service, clir_mode);
+            }
             CallCommand::Answer => self.handle_answer(id),
             CallCommand::Hangup => self.handle_hangup(id),
             CallCommand::CallHold(op) => self.handle_call_hold(*op, id),
             CallCommand::QueryCurrentCalls => self.handle_query_current_calls(),
-            CallCommand::Ring => self.ring("".to_string(), None),
-            CallCommand::RemoteCall(number) => self.handle_remote_call(number),
+            CallCommand::Ring => self.ring(None, NumberPresentation::Allowed, None),
+            CallCommand::RemoteCall(number) => self.handle_remote_call(number.clone()),
             CallCommand::SetMute(mute) => self.handle_set_mute(*mute),
             CallCommand::QueryMute => self.handle_query_mute(),
             CallCommand::SendDtmf(dtmf) => self.handle_send_dtmf(dtmf),
@@ -533,18 +725,15 @@ impl CallService {
     }
 }
 
-fn parse_number(number: &[u8]) -> Option<String> {
-    std::str::from_utf8(number).ok().map(|s| s.trim().to_string())
-}
-
 fn is_valid_dtmf_format(dtmf_str: &str) -> bool {
     let (digit_part, duration_part) =
         dtmf_str.split_once(',').map(|(d, dur)| (d, Some(dur))).unwrap_or((dtmf_str, None));
 
-    if digit_part.len() != 1 {
+    let clean_digit = digit_part.trim_matches('"');
+    if clean_digit.len() != 1 {
         return false;
     }
-    let digit = digit_part.as_bytes()[0];
+    let digit = clean_digit.as_bytes()[0];
     if !matches!(digit, b'0'..=b'9' | b'#' | b'*' | b'A'..=b'D' | b'a'..=b'd') {
         return false;
     }
@@ -554,4 +743,27 @@ fn is_valid_dtmf_format(dtmf_str: &str) -> bool {
     }
 
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CallDirection, CallService, CallState};
+    use crate::types::{NumberPresentation, PhoneNumber};
+
+    #[test]
+    fn test_clcc_not_available() {
+        let mut service = CallService::default();
+        service.add_call(
+            CallState::Incoming,
+            CallDirection::Incoming,
+            Some(PhoneNumber::new("123456")),
+            NumberPresentation::NotAvailable,
+            None,
+        );
+
+        let calls_res = service.handle_query_current_calls().unwrap().unwrap();
+        let formatted = calls_res.to_string();
+
+        assert_eq!(formatted, "+CLCC: 1,1,4,0,0,,129\r\n");
+    }
 }

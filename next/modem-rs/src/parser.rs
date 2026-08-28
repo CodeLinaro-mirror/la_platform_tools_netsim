@@ -122,7 +122,7 @@ pub fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Top-level AT Command wrapper enum across all modem-rs services.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Command<'a> {
     Sim(SimCommand<'a>),
     Call(CallCommand<'a>),
@@ -153,6 +153,10 @@ impl<'a> Command<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{
+        CallMode, CallWaitingMode, CallWaitingPresentation, ClirMode, CopsFormat, CopsMode,
+        DialArgs, PdpType, PhoneNumber, ProductSerialNumberType,
+    };
 
     #[test]
     fn test_parse_cpin_query() {
@@ -172,7 +176,12 @@ mod tests {
     fn test_parse_cmee() {
         let (rem, cmd) = Command::parse(b"AT+CMEE=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Misc(MiscCommand::SetReportMobileEquipmentError(1)));
+        assert_eq!(
+            cmd,
+            Command::Misc(MiscCommand::SetReportMobileEquipmentError(
+                crate::types::CmeeMode::Numeric
+            ))
+        );
 
         let (rem, cmd) = Command::parse(b"AT+CMEE?").unwrap();
         assert!(rem.is_empty());
@@ -191,7 +200,7 @@ mod tests {
             cmd,
             Command::Data(DataCommand::DefinePdpContext(
                 1,
-                QuotedString(b"IP"),
+                PdpType::Ip,
                 QuotedString(b"apn"),
                 None,
                 None,
@@ -209,7 +218,7 @@ mod tests {
             cmd,
             Command::Data(DataCommand::DefinePdpContext(
                 1,
-                QuotedString(b"IPV6"),
+                PdpType::Ipv6,
                 QuotedString(b"fast.t-mobile.com"),
                 None,
                 Some(0),
@@ -298,28 +307,31 @@ mod tests {
     fn test_parse_cmgf() {
         let (rem, cmd) = Command::parse(b"AT+CMGF=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Sms(SmsCommand::SetSmsMessageFormat(1)));
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetSmsMessageFormat(crate::sms_service::MessageFormat::Text))
+        );
     }
 
     #[test]
     fn test_parse_stk() {
         let (rem, cmd) = Command::parse(b"AT+STK=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStk(1)));
+        assert_eq!(cmd, Command::Stk(StkCommand::SetStk(true)));
     }
 
     #[test]
     fn test_parse_stken() {
         let (rem, cmd) = Command::parse(b"AT+STKEN=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStkEnabled(1)));
+        assert_eq!(cmd, Command::Stk(StkCommand::SetStkEnabled(true)));
     }
 
     #[test]
     fn test_parse_stkur() {
         let (rem, cmd) = Command::parse(b"AT+STKUR=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStkUnsolicitedResult(1)));
+        assert_eq!(cmd, Command::Stk(StkCommand::SetStkUnsolicitedResult(true)));
     }
 
     #[test]
@@ -359,28 +371,43 @@ mod tests {
     fn test_parse_gprs_dial() {
         let (rem, cmd) = Command::parse(b"ATD*99***1#\r\n").unwrap();
         assert_eq!(rem, b"\r\n");
-        assert_eq!(cmd, Command::Call(CallCommand::Dial(b"*99***1#")));
+        let expected_dial_args = DialArgs {
+            number: PhoneNumber::new("*99***1#"),
+            clir: ClirMode::SubscriptionDefault,
+            is_emergency: false,
+        };
+        assert_eq!(cmd, Command::Call(CallCommand::Dial(expected_dial_args)));
     }
 
     #[test]
     fn test_parse_ccwa_set_single_arg() {
         let (rem, cmd) = Command::parse(b"AT+CCWA=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Sup(SupCommand::SetCallWaiting(1, None, None)));
+        assert_eq!(
+            cmd,
+            Command::Sup(SupCommand::SetCallWaiting(CallWaitingPresentation::Enable, None, None))
+        );
     }
 
     #[test]
     fn test_parse_ccwa_set_multiple_args() {
         let (rem, cmd) = Command::parse(b"AT+CCWA=1,2,7").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Sup(SupCommand::SetCallWaiting(1, Some(2), Some(7))));
+        assert_eq!(
+            cmd,
+            Command::Sup(SupCommand::SetCallWaiting(
+                CallWaitingPresentation::Enable,
+                Some(CallWaitingMode::Query),
+                Some(7)
+            ))
+        );
     }
 
     #[test]
     fn test_parse_cmod_set() {
         let (rem, cmd) = Command::parse(b"AT+CMOD=0").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Misc(MiscCommand::SetCallMode(0)));
+        assert_eq!(cmd, Command::Misc(MiscCommand::SetCallMode(CallMode::SingleMode)));
     }
 
     #[test]
@@ -401,14 +428,14 @@ mod tests {
     fn test_parse_clir_set_goldfish() {
         let (rem, cmd) = Command::parse(b"AT+CLIR: 0").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Sup(SupCommand::SetClirGoldfish(0)));
+        assert_eq!(cmd, Command::Sup(SupCommand::SetClirGoldfish(ClirMode::SubscriptionDefault)));
     }
 
     #[test]
     fn test_parse_clir_set_standard() {
         let (rem, cmd) = Command::parse(b"AT+CLIR=0").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Sup(SupCommand::SetClir(0)));
+        assert_eq!(cmd, Command::Sup(SupCommand::SetClir(ClirMode::SubscriptionDefault)));
     }
 
     #[test]
@@ -422,7 +449,12 @@ mod tests {
     fn test_parse_cgsn_set() {
         let (rem, cmd) = Command::parse(b"AT+CGSN=2").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Misc(MiscCommand::GetProductSerialNumberGsmWithType(2)));
+        assert_eq!(
+            cmd,
+            Command::Misc(MiscCommand::GetProductSerialNumberGsmWithType(
+                ProductSerialNumberType::ImeiWithSvn
+            ))
+        );
     }
 
     #[test]
@@ -431,7 +463,11 @@ mod tests {
         assert!(rem.is_empty());
         assert_eq!(
             cmd,
-            Command::Network(NetworkCommand::SetOperator { mode: 3, format: Some(2), oper: None })
+            Command::Network(NetworkCommand::SetOperator {
+                mode: CopsMode::SetFormatOnly,
+                format: Some(CopsFormat::Numeric),
+                oper: None,
+            })
         );
     }
 

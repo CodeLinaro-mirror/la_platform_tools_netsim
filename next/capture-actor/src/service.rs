@@ -19,6 +19,8 @@ use crate::{
     capture_actor::CaptureActor,
     error::CaptureError,
     ethernet_pcap::EthernetPcapWriter,
+    modem_pcap::ModemPcapWriter,
+    nci_pcap::NciPcapWriter,
     uwb_pcap::UwbPcapWriter,
     writer::{CaptureWriter, DLT_USER0, PcapWriter},
 };
@@ -49,14 +51,26 @@ pub(crate) struct InternalCaptureInfo {
 
 impl InternalCaptureInfo {
     pub fn from_create_params(id: ChipId, params: CaptureCreate) -> Result<Self, CaptureError> {
+        let enabled = params.enabled_flag.load(Ordering::SeqCst);
+        let (seconds, nanos) = if enabled {
+            let d = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default();
+            (d.as_secs() as i64, d.subsec_nanos() as i32)
+        } else {
+            (0, 0)
+        };
         Ok(Self {
             info: CaptureInfo {
                 chip_id: id,
                 chip_kind: params.chip_kind,
                 device_name: params.device_name,
-                enabled: params.enabled_flag.load(Ordering::SeqCst),
+                enabled,
                 records_written: 0,
                 bytes_written: 0,
+                seconds,
+                nanos,
+                filepath: None,
             },
             enabled_flag: params.enabled_flag,
             has_warned_on_write: false,
@@ -66,15 +80,38 @@ impl InternalCaptureInfo {
 }
 
 impl CaptureActor {
+    fn get_filepath(
+        &self,
+        id: ChipId,
+        device_name: &str,
+        chip_kind: ChipKind,
+    ) -> std::path::PathBuf {
+        let safe_device_name: String = device_name
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .collect();
+        let filename = format!("netsim-{}-{safe_device_name}-{chip_kind:?}.pcap", id.0);
+        if let Some(dir) = self.capture_dir.as_ref() {
+            dir.join(filename)
+        } else {
+            let mut path = common::system::netsimd_temp_dir();
+            path.push("pcaps");
+            path.join(filename)
+        }
+    }
+
     pub(crate) async fn create_entity(
         &mut self,
         entity: &mut InternalCaptureInfo,
         ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
+        entity.info.filepath = Some(self.get_filepath(
+            entity.info.chip_id,
+            &entity.info.device_name,
+            entity.info.chip_kind,
+        ));
         // If enabled by default (either via params or context), set up the writer
         if entity.info.enabled || self.default_capture_enabled {
-            entity.info.enabled = true;
-            entity.enabled_flag.store(true, Ordering::SeqCst);
             self.update_entity(entity, true, ctx).await?;
         }
         Ok(())
@@ -86,12 +123,20 @@ impl CaptureActor {
         enabled: bool,
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
-        if entity.info.enabled != enabled {
+        let state_changed = entity.info.enabled != enabled;
+        if state_changed {
             entity.info.enabled = enabled;
             entity.enabled_flag.store(enabled, Ordering::SeqCst);
         }
 
         if entity.info.enabled {
+            if state_changed || (entity.info.seconds == 0 && entity.info.nanos == 0) {
+                let d = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default();
+                entity.info.seconds = d.as_secs() as i64;
+                entity.info.nanos = d.subsec_nanos() as i32;
+            }
             // If enabling, create a writer if one does not exist.
             if !self.writers.contains_key(&entity.info.chip_id) {
                 let writer = self.create_writer(entity).await?;
@@ -125,24 +170,14 @@ impl CaptureActor {
         &self,
         entity: &InternalCaptureInfo,
     ) -> Result<Box<dyn CaptureWriter>, CaptureError> {
-        let _timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let filename = format!(
-            "netsim-{:?}-{:}-{:?}.pcap",
-            entity.info.chip_id, entity.info.device_name, entity.info.chip_kind
-        );
-        let filepath = if let Some(dir) = self.capture_dir.as_ref() {
-            dir.join(&filename)
-        } else {
-            let mut path = common::system::netsimd_temp_dir();
-            path.push("pcaps");
-            if let Err(e) = std::fs::create_dir_all(&path) {
-                warn!("Failed to create default pcap directory {}: {}", path.display(), e);
-            }
-            path.join(&filename)
-        };
+        let filepath = entity.info.filepath.clone().unwrap_or_else(|| {
+            self.get_filepath(entity.info.chip_id, &entity.info.device_name, entity.info.chip_kind)
+        });
+        if let Some(pcap_dir) = filepath.parent()
+            && let Err(e) = std::fs::create_dir_all(pcap_dir)
+        {
+            warn!("Failed to create pcap directory {}: {}", pcap_dir.display(), e);
+        }
         info!("Creating capture file: {}", filepath.display());
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
             ChipKind::BLUETOOTH => BluetoothH4Writer::new(&filepath).await?,
@@ -151,10 +186,10 @@ impl CaptureActor {
             ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => {
                 EthernetPcapWriter::new(&filepath).await?
             }
+            ChipKind::NFC => NciPcapWriter::new(&filepath).await?,
+            ChipKind::CELLULAR => ModemPcapWriter::new(&filepath).await?,
             // Fallback for custom/unregistered protocols (use DLT_USER0)
-            ChipKind::UNSPECIFIED | ChipKind::NFC | ChipKind::CELLULAR => {
-                Box::new(PcapWriter::new(&filepath, DLT_USER0).await?)
-            }
+            ChipKind::UNSPECIFIED => Box::new(PcapWriter::new(&filepath, DLT_USER0).await?),
         };
         Ok(writer)
     }

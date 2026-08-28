@@ -1,6 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+mod apdu;
 mod call_service;
 pub mod config;
 mod constants;
@@ -14,7 +15,7 @@ mod modem_network_simulator;
 mod network_service;
 mod parser;
 mod pdu;
-mod profiles;
+pub mod profiles;
 mod sim_service;
 mod sms_service;
 mod stk_service;

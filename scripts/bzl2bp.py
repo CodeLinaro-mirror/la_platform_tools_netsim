@@ -777,7 +777,7 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
     )
 
   soong_name = (
-      "netsimd" if name == "daemon" else f"netsim_next_{name.replace('-', '_')}"
+      "netsimd" if name == "daemon" else ("netsim" if name == "netsim" else f"netsim_next_{name.replace('-', '_')}")
   )
 
   bin_dict = {

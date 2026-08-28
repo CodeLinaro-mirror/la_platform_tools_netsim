@@ -22,8 +22,23 @@ pub struct SimProfile {
     pub stk: Stk,
     pub sim_io: SimIo,
     pub enable_unsolicited_urcs: Option<bool>,
+    pub eid: Option<String>,
+    pub atr: Option<String>,
     #[serde(default)]
     pub adfs: Vec<ApplicationDedicatedFile>,
+}
+
+impl SimProfile {
+    /// Returns the home PLMN (MCC + MNC) derived from the SIM's IMSI.
+    ///
+    /// Extracts the 6-digit PLMN prefix (assuming a 3-digit MNC, as used by all
+    /// standard emulator test profiles).
+    /// Note: Supporting 2-digit MNCs for arbitrary 15-digit IMSIs requires
+    /// reading the MNC length from EF_AD (0x6FAD).
+    /// Falls back to `DEFAULT_PLMN` if `imsi` is missing or unpopulated.
+    pub fn home_plmn(&self) -> &str {
+        if self.imsi.len() >= 6 { &self.imsi[..6] } else { crate::constants::DEFAULT_PLMN }
+    }
 }
 
 /// Represents the PIN profile configuration.
@@ -56,6 +71,10 @@ pub struct Stk {
 /// Represents a single STK menu item.
 #[derive(Debug, Deserialize, Default, Clone, PartialEq)]
 pub struct StkMenuItem {
+    #[serde(default)]
+    pub id: u8,
+    #[serde(default)]
+    pub menu_id: u8,
     pub text: String,
     #[serde(default)]
     pub items: Vec<StkMenuItem>,
@@ -130,9 +149,9 @@ impl ElementaryFile {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ApduMapping {
-    pub cmd: String,
+    pub cmd: crate::apdu::ParsedApdu<'static>,
     pub response: String,
 }
 

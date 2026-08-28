@@ -17,7 +17,10 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    types::{AT_OK, CmeError, CommandAction, ExecutionResult, HandledCommand, ModemId, Response},
+    types::{
+        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HandledCommand, ModemId,
+        NumberPresentation, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
+    },
 };
 
 /// Represents a single modem device.
@@ -58,13 +61,14 @@ pub enum ModemEffect {
 impl ModemImpl {
     pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile, quirks: Quirks) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
+        let home_plmn = profile.home_plmn();
         Self {
             id,
             enable_unsolicited_urcs: enable_unsol,
             sim_service: SimService::new(&profile),
-            network_service: NetworkService::new(quirks),
+            network_service: NetworkService::new(quirks, home_plmn),
             sms_service: SmsService::default(),
-            stk_service: StkService::default(),
+            stk_service: StkService::new(profile.stk.clone()),
             sup_service: SupService::default(),
             misc_service: MiscService::default(),
             call_service: CallService::default(),
@@ -76,11 +80,12 @@ impl ModemImpl {
 
     pub fn trigger_incoming_call(
         &mut self,
-        number: &str,
+        number: Option<&PhoneNumber>,
+        number_presentation: NumberPresentation,
         peer_id: Option<ModemId>,
     ) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
-        let call_res = self.call_service.ring(number.to_string(), peer_id);
+        let call_res = self.call_service.ring(number.cloned(), number_presentation, peer_id);
         let result: ExecutionResult = call_res.into();
         if let ExecutionResult::Success(handled) = result {
             for response in handled.responses {
@@ -90,8 +95,16 @@ impl ModemImpl {
                 }
             }
             if self.sup_service.clip_enabled() {
-                let clip = format!("+CLIP: \"{number}\",129,,,,0\r\n");
-                effects.push(ModemEffect::Response(clip.as_bytes().to_vec()));
+                let val = number_presentation.format_number(number);
+                let mode = if number_presentation == NumberPresentation::Allowed && number.is_none()
+                {
+                    NumberPresentation::NotAvailable as u8
+                } else {
+                    number_presentation as u8
+                };
+                let number_str = val.number.strip_prefix('+').unwrap_or(val.number);
+                let clip = format!("+CLIP: \"{number_str}\",{},,,,{mode}\r\n", val.toa);
+                effects.push(ModemEffect::Response(clip.into_bytes()));
             }
 
             effects.push(ModemEffect::Schedule {
@@ -103,7 +116,7 @@ impl ModemImpl {
     }
 
     pub fn trigger_remote_answer(&mut self) -> Vec<ModemEffect> {
-        let mut effects = Vec::new(); // Was missing initialization in original block? No, Vec::new() was at end.
+        let mut effects = Vec::new();
         if self.call_service.remote_answer() {
             effects.push(ModemEffect::Response(AT_OK.to_vec()));
         }
@@ -111,18 +124,16 @@ impl ModemImpl {
     }
 
     pub fn trigger_remote_hold(&mut self, on_hold: bool) -> Vec<ModemEffect> {
-        if on_hold {
-            self.call_service.receive_hold();
-        } else {
-            self.call_service.receive_resume();
-        }
+        self.call_service.trigger_remote_hold(on_hold);
         Vec::new()
     }
 
     pub fn trigger_remote_hangup(&mut self) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
         self.call_service.receive_hangup();
-        effects.push(ModemEffect::Response(b"NO CARRIER\r\n".to_vec()));
+        // Goldfish RIL uses RING as universal URC to trigger callRing/callStateChanged
+        // for remote call teardown
+        effects.push(ModemEffect::Response(b"RING\r\n".to_vec()));
         effects
     }
 
@@ -180,7 +191,7 @@ impl ModemImpl {
         self.sim_service.set_msisdn(number);
     }
 
-    pub fn phone_number(&self) -> String {
+    pub fn phone_number(&self) -> Option<PhoneNumber> {
         self.sim_service.get_msisdn()
     }
 
@@ -248,7 +259,9 @@ impl ModemImpl {
                 let sms_res = if store {
                     self.sms_service.handle_store_sms(&mut self.sim_service, pdu)
                 } else {
-                    self.sms_service.handle_sms_body(pdu, &self.phone_number())
+                    let sender = self.phone_number();
+                    let sender_str = sender.as_ref().map(|n| n.as_str()).unwrap_or("");
+                    self.sms_service.handle_sms_body(pdu, sender_str)
                 };
 
                 let exec_res: ExecutionResult = sms_res.into();
@@ -265,9 +278,7 @@ impl ModemImpl {
                 self.sms_service.waiting_for_pdu_store = false;
                 Some(ExecutionResult::Success(HandledCommand::ok()))
             } else {
-                None // Waiting for more data? Or just ignore for now if
-                // incomplete? The emulator usually
-                // sends full line/buffer.
+                None // Return None to wait for more data if the buffer is incomplete.
             }
         } else {
             None
@@ -284,7 +295,7 @@ impl ModemImpl {
                     if !combined.is_empty() {
                         effects.push(ModemEffect::Response(combined.into_bytes()));
                     }
-                    if let Some(act) = handled.action {
+                    for act in handled.actions {
                         effects.push(ModemEffect::Action(act));
                     }
                 }
@@ -312,7 +323,6 @@ impl ModemImpl {
             len -= 1;
         }
         let command_clean = &command_bytes[..len];
-
         let sub_commands = split_chained_commands(command_clean);
         if sub_commands.is_empty() {
             return Vec::new();
@@ -331,7 +341,13 @@ impl ModemImpl {
                 effects.push(ModemEffect::Response(b"TEST_EVENT_FIRED\r\n".to_vec()));
             }
             ModemEvent::CallRingTimeout { call_token } => {
-                self.call_service.handle_ring_timeout(call_token);
+                let res = self.call_service.handle_ring_timeout(self.id, call_token);
+                let result: ExecutionResult = res.into();
+                if let ExecutionResult::Success(handled) = result {
+                    for action in handled.actions {
+                        effects.push(ModemEffect::Action(action));
+                    }
+                }
             }
             ModemEvent::AttachNetwork => {
                 if self.sim_service.is_present() {
@@ -358,7 +374,7 @@ impl ModemImpl {
     }
 
     pub fn is_ringing(&self) -> bool {
-        self.call_service.is_incoming() || self.call_service.is_alerting()
+        self.call_service.has_incoming() || self.call_service.has_alerting()
     }
 
     pub fn get_active_calls(&self) -> Vec<String> {
@@ -366,8 +382,24 @@ impl ModemImpl {
             .calls
             .iter()
             .filter(|c| c.state == crate::call_service::CallState::Active)
-            .map(|c| c.number.clone())
+            .map(|c| {
+                c.number.as_ref().map(|n: &PhoneNumber| n.as_str().to_string()).unwrap_or_default()
+            })
             .collect()
+    }
+
+    pub fn set_operator(&mut self, operator: &str) -> Vec<ModemEffect> {
+        let mode = if operator.is_empty() { CopsMode::Automatic } else { CopsMode::Manual };
+        let oper = if operator.is_empty() { None } else { Some(operator.as_bytes()) };
+        let mut effects = Vec::new();
+        if let Ok(Some(crate::network_service::NetworkResponse::Urcs(urcs))) =
+            self.network_service.set_operator_manual(mode, oper)
+        {
+            effects.extend(
+                urcs.into_iter().map(|u| ModemEffect::Response(u.to_string().into_bytes())),
+            );
+        }
+        effects
     }
 
     pub fn call_service(&self) -> &CallService {
@@ -383,7 +415,8 @@ impl ModemImpl {
     ) -> ExecutionResult {
         let mut result = self.execute(command);
         if let ExecutionResult::Success(ref mut handled) = result {
-            if let Command::Network(NetworkCommand::SetRadioPower(1)) = command {
+            if let Command::Network(NetworkCommand::SetRadioPower(RadioPowerLevel::Full)) = command
+            {
                 effects.push(ModemEffect::Schedule {
                     delay: std::time::Duration::from_millis(10),
                     event: ModemEvent::AttachNetwork,
@@ -394,7 +427,7 @@ impl ModemImpl {
                     NetworkCommand::SetVoiceNetworkRegistration(m)
                     | NetworkCommand::SetDataNetworkRegistration(m)
                     | NetworkCommand::SetLteNetworkRegistration(m),
-                ) => *m > 0,
+                ) => *m != RegistrationUnsolicitedMode::Disable,
                 _ => false,
             };
             if mode_active && !self.network_service.is_attached() {
@@ -403,7 +436,7 @@ impl ModemImpl {
                     event: ModemEvent::AttachNetwork,
                 });
             }
-            if let Some(action) = handled.action.take() {
+            for action in std::mem::take(&mut handled.actions) {
                 effects.push(ModemEffect::Action(action));
             }
         }
@@ -421,7 +454,16 @@ impl ModemImpl {
             let is_last = i == sub_commands.len() - 1;
             match Command::parse(cmd_bytes) {
                 Ok((rem, command)) => {
-                    if !rem.is_empty() {
+                    let clean_rem = if rem == b"0"
+                        && matches!(
+                            command,
+                            Command::Call(crate::call_service::CallCommand::Hangup)
+                        ) {
+                        b""
+                    } else {
+                        rem
+                    };
+                    if !clean_rem.is_empty() {
                         error!(
                             "Failed to parse AT command {:?} (trailing garbage: {:?})",
                             String::from_utf8_lossy(cmd_bytes),
@@ -493,13 +535,19 @@ impl ModemImpl {
     pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
             Command::Sim(c) => self.sim_service.execute(c),
-            Command::Call(c) => self.call_service.execute(c, self.id, &mut self.data_service),
+            Command::Call(c) => self.call_service.execute(
+                c,
+                self.id,
+                &mut self.data_service,
+                &self.sim_service,
+                self.sup_service.clir_mode(),
+            ),
             Command::Sms(c) => self.sms_service.execute(c, &mut self.sim_service),
             Command::Network(c) => self.network_service.execute(c, self.enable_unsolicited_urcs),
             Command::Data(c) => self.data_service.execute(c),
             Command::Misc(c) => self.misc_service.execute(c),
             Command::Sup(c) => self.sup_service.execute(c, &mut self.sim_service),
-            Command::Stk(c) => self.stk_service.execute(c),
+            Command::Stk(c) => self.stk_service.execute(c, &mut self.sim_service),
         }
     }
 }
@@ -584,6 +632,31 @@ mod tests {
             assert_eq!(resp, b"ERROR\r\n");
         } else {
             panic!("Expected Response effect");
+        }
+    }
+
+    #[test]
+    fn test_trigger_incoming_call_presentation_not_available() {
+        let mut modem = ModemImpl::new(1, SimProfile::default(), Quirks::default());
+        // Enable CLIP via AT command
+        modem.execute_chained_commands(&[b"AT+CLIP=1".to_vec()]);
+
+        let phone = PhoneNumber::new("123456");
+        let effects =
+            modem.trigger_incoming_call(Some(&phone), NumberPresentation::NotAvailable, None);
+
+        assert_eq!(effects.len(), 3);
+
+        if let ModemEffect::Response(resp) = &effects[0] {
+            assert_eq!(std::str::from_utf8(resp).unwrap(), "RING\r\n");
+        } else {
+            panic!("Expected Response effect for RING");
+        }
+
+        if let ModemEffect::Response(resp) = &effects[1] {
+            assert_eq!(std::str::from_utf8(resp).unwrap(), "+CLIP: \"\",129,,,,2\r\n");
+        } else {
+            panic!("Expected Response effect for CLIP");
         }
     }
 }

@@ -77,6 +77,7 @@ pub const RESP_ERROR_NO_CHANNEL_AVAILABLE: &str = "6A81";
 pub const RESP_ERROR_INCORRECT_PARAMS: &str = "6A86";
 pub const RESP_ERROR_FILE_NOT_FOUND: &str = "6A82";
 pub const RESP_ERROR_OUT_OF_BOUNDS: &str = "6A88";
+pub const RESP_ERROR_REFERENCED_DATA_NOT_FOUND: &str = "6A88";
 pub const RESP_ERROR_WRONG_LENGTH: &str = "6700";
 pub const RESP_CRSM_INCORRECT_PARAMS: &str = "+CRSM: 106,134";
 pub const RESP_CRSM_FILE_NOT_FOUND: &str = "+CRSM: 106,130";

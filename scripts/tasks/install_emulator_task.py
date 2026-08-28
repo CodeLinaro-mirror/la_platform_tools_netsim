@@ -208,18 +208,6 @@ class InstallEmulatorManager:
         else:
           logging.warning(f"Binary not found: {src_file}")
 
-      # Copy netsim-ui
-      ui_src_dir = self.local_netsim_dir / "netsim-ui"
-      if not ui_src_dir.exists():
-        ui_src_dir = BAZEL_OUT_DIR / "netsim-ui"
-      if ui_src_dir.exists():
-        shutil.copytree(
-            ui_src_dir,
-            emulator_filepath / "netsim-ui",
-            dirs_exist_ok=True,
-        )
-      else:
-        logging.warning(f"Directory not found: {ui_src_dir}")
     else:
       shutil.copytree(
           emulator_filepath,

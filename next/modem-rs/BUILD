@@ -22,6 +22,7 @@ netsim_rust_library(
     compile_data = [
         "src/profiles/iccprofile_for_sim0.xml",
         "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+        "src/profiles/iccprofile_for_sim_tel_alaska.xml",
     ],
     crate_name = "modem_rs",
     edition = "2024",

@@ -62,7 +62,6 @@ impl Drop for Uwb {
 
 impl WirelessChip for Uwb {
     fn handle_request(&self, packet: &Bytes) {
-        // TODO(b/330788870): Increment tx_count
         self.uci_stream_writer
             .unbounded_send(packet.clone().into())
             .expect("UciStream Receiver Disconnected");

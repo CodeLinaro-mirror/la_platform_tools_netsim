@@ -7,6 +7,7 @@ pub enum XmlProfileError {
     MissingMasterFile,
     InvalidSimIoResponse { file_id: u16, response: String },
     InvalidValue { file_id: u16, field: String, value: String, expected: String },
+    InvalidApduCommand { command: String, error: String },
 }
 
 impl std::fmt::Display for XmlProfileError {
@@ -22,6 +23,9 @@ impl std::fmt::Display for XmlProfileError {
                     f,
                     "Invalid value '{value}' in field '{field}' for file '{file_id:04X}'. Expected: {expected}"
                 )
+            }
+            Self::InvalidApduCommand { command, error } => {
+                write!(f, "Invalid APDU command '{command}': {error}")
             }
         }
     }

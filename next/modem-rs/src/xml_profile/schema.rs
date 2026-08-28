@@ -4,6 +4,14 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct XmlCardProfile {
+    #[serde(rename = "EID")]
+    pub eid: Option<String>,
+    #[serde(rename = "ATR")]
+    pub atr: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename = "IccProfile")]
 pub struct XmlIccProfile {
     #[serde(rename = "MF")]
@@ -17,6 +25,8 @@ pub struct XmlIccProfile {
     pub facility_lock: Option<XmlFacilityLock>,
     #[serde(rename = "SETUPMENU")]
     pub setup_menu: Option<XmlSetupMenu>,
+    #[serde(rename = "CardProfile")]
+    pub card_profile: Option<XmlCardProfile>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -169,6 +179,11 @@ pub struct XmlSetupMenu {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct XmlSelectItem {
+    #[serde(default)]
+    pub id: Option<u8>,
+    #[serde(rename = "menuId")]
+    #[serde(deserialize_with = "deserialize_hex_u8")]
+    pub menu_id: u8,
     pub text: String,
     #[serde(rename = "$value")]
     #[serde(default)]
@@ -185,6 +200,11 @@ pub enum XmlSelectItemOrDisplayText {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct XmlDisplayText {
+    #[serde(default)]
+    pub id: Option<u8>,
+    #[serde(rename = "menuId")]
+    #[serde(deserialize_with = "deserialize_hex_u8")]
+    pub menu_id: u8,
     pub text: String,
 }
 

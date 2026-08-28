@@ -45,6 +45,7 @@ pub(crate) fn parse_xml_profile(xml: &str) -> Result<SimProfile, XmlProfileError
         pin_profile,
         facility_lock,
         setup_menu,
+        card_profile,
     } = xml_profile;
 
     let master_file = master_file.ok_or(XmlProfileError::MissingMasterFile)?;
@@ -83,6 +84,8 @@ pub(crate) fn parse_xml_profile(xml: &str) -> Result<SimProfile, XmlProfileError
         adfs.push(parsed_adf.adf);
     }
 
+    let (eid, atr) = card_profile.map(|cp| (cp.eid, cp.atr)).unwrap_or((None, None));
+
     Ok(SimProfile {
         iccid,
         imsi,
@@ -93,6 +96,8 @@ pub(crate) fn parse_xml_profile(xml: &str) -> Result<SimProfile, XmlProfileError
         stk,
         sim_io,
         enable_unsolicited_urcs: None,
+        eid,
+        atr,
         adfs,
     })
 }

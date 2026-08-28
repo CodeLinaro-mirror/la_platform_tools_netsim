@@ -21,6 +21,8 @@ pub struct CellCreate {
 pub struct Quirks {
     /// Flag for compatibility with Goldfish RIL in SDK 37 and earlier.
     pub goldfish_ril_37_or_earlier: bool,
+    /// Flag indicating if the guest device is Cuttlefish.
+    pub is_cuttlefish: bool,
 }
 
 /// Cellular technology specific chip information.
@@ -49,6 +51,8 @@ pub struct Cell {
     pub voice_registration: RegistrationStatus,
     #[serde(default)]
     pub data_registration: RegistrationStatus,
+    #[serde(default)]
+    pub active_calls: Vec<Call>,
 }
 
 impl Default for Cell {
@@ -64,8 +68,38 @@ impl Default for Cell {
             ber: 0,
             voice_registration: RegistrationStatus::default(),
             data_registration: RegistrationStatus::default(),
+            active_calls: Vec::new(),
         }
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct Call {
+    pub number: String,
+    pub state: CallState,
+    pub direction: CallDirection,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum CallState {
+    #[default]
+    Unknown = 0,
+    Active = 1,
+    Holding = 2,
+    Dialing = 3,
+    Alerting = 4,
+    Incoming = 5,
+    Waiting = 6,
+}
+
+/// Standard 3GPP terms for Outgoing (Mobile Originated) and Incoming (Mobile
+/// Terminated) calls
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum CallDirection {
+    #[default]
+    Unknown = 0,
+    MobileOriginated = 1,
+    MobileTerminated = 2,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
@@ -103,6 +137,7 @@ pub enum ModemAction {
     UpdateNetworkTime { id: ChipId, time: String },
     SetSimStatus { id: ChipId, present: bool },
     SetNetworkTechnology { id: ChipId, tech: RadioTechnology },
+    SetOperator { id: ChipId, operator: String },
 }
 
 /// Cellular specific chip updates.

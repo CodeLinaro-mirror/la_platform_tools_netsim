@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use capture_actor::{DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO};
+use capture_actor::{DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO, DLT_USER0};
 use netsim_model::ChipKind;
 
 use crate::world::World;
@@ -101,4 +101,27 @@ async fn test_cellular_data_capture() {
 
     // And: the PCAP file header has correct Ethernet DLT
     world.then_capture_file_has_dlt(DLT_ETHERNET).await;
+}
+
+// Scenario: Cellular Modem AT packet is captured correctly
+#[tokio::test]
+async fn test_cellular_modem_capture() {
+    let world = World::new().await;
+    let chip_id = 8;
+
+    // Given: an enabled Cellular Modem capture
+    world
+        .when_create_capture(chip_id, ChipKind::CELLULAR, "test_cellular_modem_device", true)
+        .await
+        .unwrap();
+
+    // When: a dummy packet is sent
+    world.when_dummy_packet_is_sent(chip_id).await;
+
+    // Then: the capture info reflects the written packet (4 bytes payload + 8 bytes
+    // TS 27.010 framing)
+    world.then_capture_stats_are(chip_id, 1, 12).await;
+
+    // And: the PCAP file header has correct USER0 DLT (147)
+    world.then_capture_file_has_dlt(DLT_USER0).await;
 }

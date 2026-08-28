@@ -130,6 +130,7 @@
     "https://bcr.bazel.build/modules/cxx.rs/1.0.175/MODULE.bazel": "3a179d8fac944eddf4b5222abfa943603022c829bc35d12a12a34d7d82151d2b",
     "https://bcr.bazel.build/modules/cxx.rs/1.0.175/source.json": "b0cb44f22bdd83cc9973c1e3caf55c7e1a952b5b52034f3a40f87c103ee5efd6",
     "https://bcr.bazel.build/modules/cython/3.0.11-1/MODULE.bazel": "868b3f5c956c3657420d2302004c6bb92606bfa47e314bab7f2ba0630c7c966c",
+    "https://bcr.bazel.build/modules/cython/3.0.11-1/source.json": "da318be900b8ca9c3d1018839d3bebc5a8e1645620d0848fa2c696d4ecf7c296",
     "https://bcr.bazel.build/modules/envoy_api/0.0.0-20241214-918efc9/MODULE.bazel": "24e05f6f52f37be63a795192848555a2c8c855e7814dbc1ed419fb04a7005464",
     "https://bcr.bazel.build/modules/envoy_api/0.0.0-20250128-4de3c74/MODULE.bazel": "1fe72489212c530086e3ffb0e018b2bfef4663200ca03571570f9f006bef1d75",
     "https://bcr.bazel.build/modules/fmt/11.1.0/MODULE.bazel": "c92d66b6bc3cee15ca111cf7677403de19877abe97e0992587f89f3820f7eef5",
