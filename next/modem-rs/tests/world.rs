@@ -213,6 +213,12 @@ impl World {
         self.then_response_is(name, expected_error);
     }
 
+    /// Triggers Emergency Callback Mode (ECBM) on the named modem.
+    pub fn trigger_emergency_callback_mode(&mut self, name: &str, enabled: bool) {
+        let (id, _) = self.get_modem(name);
+        self.manager.trigger_emergency_callback_mode(id, enabled);
+    }
+
     // --- Compound Telephony Workflows ---
 
     /// Dials from `caller` to `callee`'s assigned phone number, verifies `OK`

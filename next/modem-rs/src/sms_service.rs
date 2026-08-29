@@ -494,7 +494,7 @@ impl SmsService {
         match (self.message_format, args) {
             (MessageFormat::Text, SendSmsArgs::Text { destination_address, .. }) => {
                 let destination =
-                    destination_address.as_str().parse::<PhoneNumber>().map_err(|_err| {
+                    PhoneNumber::try_from(destination_address.as_str()).map_err(|_err| {
                         ExecutionResult::cms_error(CmsError::InvalidTextModeParameter)
                     })?;
                 self.transaction_state = SmsTransactionState::Sending {
@@ -549,8 +549,7 @@ impl SmsService {
             self.smsc_address = None;
             self.smsc_tosca = tosca.unwrap_or(TypeOfAddress::Unknown);
         } else {
-            let phone = addr_str
-                .parse::<PhoneNumber>()
+            let phone = PhoneNumber::try_from(addr_str)
                 .map_err(|_err| ExecutionResult::cms_error(CmsError::InvalidPduParameter))?;
             self.smsc_tosca = tosca.unwrap_or_else(|| TypeOfAddress::from_number(phone.as_str()));
             self.smsc_address = Some(phone);

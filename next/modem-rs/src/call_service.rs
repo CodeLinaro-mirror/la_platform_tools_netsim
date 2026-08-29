@@ -32,10 +32,8 @@ pub enum CallCommand {
     QueryMute,
     #[command(tag = "AT+VTS=")]
     SendDtmf(DtmfArgs),
-    /// VENDOR: Set emergency mode
     #[command(tag = "AT+WSOS=")]
     SetEmergencyMode(bool),
-    /// VENDOR: Query emergency mode
     #[command(tag = "AT+WSOS?")]
     QueryEmergencyMode,
     /// VENDOR: Remote call
@@ -130,7 +128,7 @@ impl std::fmt::Display for CallResponse {
                         call.state as u8,
                         if call.is_voice_mode { 0 } else { 1 },
                         call.is_multi_party as u8,
-                        val.number.strip_prefix('+').unwrap_or(val.number),
+                        val.number,
                         val.toa,
                     )?;
                 }
@@ -377,12 +375,19 @@ impl CallService {
         sim_service: &SimService,
         clir_mode: ClirMode,
     ) -> CallResult {
-        if args.is_emergency {
-            return Ok(Some(CallResponse::WithActions(vec![CommandAction::InitiateEmergencyCall])));
+        let is_emergency = args.is_emergency;
+
+        if self.emergency_mode && !is_emergency {
+            return Err(ExecutionResult::cme_error(CmeError::NetworkNotAllowedEmergencyCallsOnly));
         }
 
-        if !sim_service.is_fdn_allowed(&args.number) {
-            return Err(ExecutionResult::cme_error(CmeError::FixedDialNumberOnlyAllowed));
+        if !is_emergency {
+            if let Some(err) = sim_service.gating_error() {
+                return Err(ExecutionResult::cme_error(err));
+            }
+            if !sim_service.is_fdn_allowed(&args.number) {
+                return Err(ExecutionResult::cme_error(CmeError::FixedDialNumberOnlyAllowed));
+            }
         }
 
         debug!("[CallService] Calls before dial: {:?}", self.calls);
@@ -420,7 +425,7 @@ impl CallService {
         actions.push(CommandAction::InitiateCall(DialArgs {
             number: args.number,
             clir: call_clir,
-            is_emergency: false,
+            is_emergency,
         }));
 
         Ok(Some(CallResponse::WithActions(actions)))
@@ -671,9 +676,9 @@ impl CallService {
         Ok(None)
     }
 
-    fn handle_set_emergency_mode(&mut self, mode: bool) -> CallResult {
+    pub fn set_emergency_mode(&mut self, mode: bool) -> CallResponse {
         self.emergency_mode = mode;
-        Ok(None)
+        CallResponse::EmergencyMode(mode)
     }
 
     fn handle_query_emergency_mode(&self) -> CallResult {
@@ -701,7 +706,10 @@ impl CallService {
             CallCommand::SetMute(mute) => self.handle_set_mute(*mute),
             CallCommand::QueryMute => self.handle_query_mute(),
             CallCommand::SendDtmf(dtmf) => self.handle_send_dtmf(dtmf),
-            CallCommand::SetEmergencyMode(mode) => self.handle_set_emergency_mode(*mode),
+            CallCommand::SetEmergencyMode(mode) => {
+                self.set_emergency_mode(*mode);
+                Ok(None)
+            }
             CallCommand::QueryEmergencyMode => self.handle_query_emergency_mode(),
         };
         res.into()

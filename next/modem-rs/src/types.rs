@@ -5,7 +5,13 @@ use std::{str, time::Duration};
 
 pub use modem_rs_derive::ParsableEnum;
 use netsim_model::{Call, CellNetworkConfig, Quirks, RegistrationStatus};
-use nom::IResult;
+use nom::{
+    IResult,
+    branch::alt,
+    bytes::complete::{tag, take_while, take_while1},
+    combinator::{map, opt},
+    sequence::{pair, preceded},
+};
 
 use crate::{
     call_service::CallResponse,
@@ -409,38 +415,35 @@ impl std::error::Error for ParsePhoneNumberError {}
 #[serde(try_from = "String", into = "String")]
 pub struct PhoneNumber(String);
 
+impl TryFrom<&str> for PhoneNumber {
+    type Error = ParsePhoneNumberError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        if s.is_empty() {
+            return Err(ParsePhoneNumberError::Empty);
+        }
+        let (rem, phone) = Self::parse(s.as_bytes())
+            .map_err(|_err| ParsePhoneNumberError::InvalidCharacters(s.to_string()))?;
+        if !rem.is_empty() {
+            return Err(ParsePhoneNumberError::TrailingCharacters(
+                String::from_utf8_lossy(rem).to_string(),
+            ));
+        }
+        Ok(phone)
+    }
+}
+
 impl TryFrom<String> for PhoneNumber {
     type Error = ParsePhoneNumberError;
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
-        s.parse()
+        Self::try_from(s.as_str())
     }
 }
 
 impl From<PhoneNumber> for String {
     fn from(phone: PhoneNumber) -> Self {
         phone.0
-    }
-}
-
-impl std::str::FromStr for PhoneNumber {
-    type Err = ParsePhoneNumberError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.is_empty() {
-            return Err(ParsePhoneNumberError::Empty);
-        }
-        match Self::parse(s.as_bytes()) {
-            Ok((rem, phone)) => {
-                if rem.is_empty() {
-                    Ok(phone)
-                } else {
-                    let trailing = String::from_utf8_lossy(rem).to_string();
-                    Err(ParsePhoneNumberError::TrailingCharacters(trailing))
-                }
-            }
-            Err(_) => Err(ParsePhoneNumberError::InvalidCharacters(s.to_string())),
-        }
     }
 }
 
@@ -470,12 +473,6 @@ impl PhoneNumber {
         self.0.starts_with("*99")
             && self.0.ends_with('#')
             && self.0.as_bytes().get(3).is_some_and(|&c| c == b'*' || c == b'#')
-    }
-}
-
-impl AsRef<str> for PhoneNumber {
-    fn as_ref(&self) -> &str {
-        &self.0
     }
 }
 
@@ -554,7 +551,7 @@ impl AdnRecord {
             digits.insert(0, '+');
         }
 
-        let number = digits.parse().ok();
+        let number = PhoneNumber::try_from(digits).ok();
         Some(Self { alpha_tag, number })
     }
 
@@ -661,7 +658,13 @@ impl From<TypeOfAddress> for u8 {
 impl<'a> Parsable<'a> for PhoneNumber {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         if let Ok((rem, qs)) = QuotedString::parse(input) {
-            let (_, p) = Self::parse(qs.as_str().as_bytes())?;
+            let (inner_rem, p) = Self::parse(qs.as_str().as_bytes())?;
+            if !inner_rem.is_empty() {
+                return Err(nom::Err::Error(nom::error::Error::new(
+                    inner_rem,
+                    nom::error::ErrorKind::Verify,
+                )));
+            }
             return Ok((rem, p));
         }
 
@@ -685,85 +688,59 @@ impl<'a> Parsable<'a> for PhoneNumber {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DialString(String);
+/// 3GPP TS 27.007 §6.2: Dial string CLIR presentation modifier ('I' for
+/// invocation, 'i' for suppression).
+fn parse_clir_modifier(input: &[u8]) -> IResult<&[u8], ClirMode> {
+    alt((
+        map(tag(b"i"), |_bytes| ClirMode::Suppression),
+        map(tag(b"I"), |_bytes| ClirMode::Invocation),
+    ))(input)
+}
 
-impl DialString {
-    pub fn parse(s: &str) -> Option<Self> {
-        let s = s.trim();
-        // Allow all standard dial characters and modifiers
-        let is_valid = !s.is_empty()
-            && s.chars().all(|c| {
-                matches!(c, '0'..='9' | '*' | '#' | '+' | ',' | 'W' | 'w' | 'i' | 'I' | '@')
-            });
-        if !is_valid {
-            return None;
-        }
-        Some(Self(s.to_string()))
-    }
+/// Emergency call dialing metadata (@<category>,#<clir>).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct EmergencyInfo {
+    pub category: Option<u32>,
+    pub clir: Option<ClirMode>,
+}
 
-    pub fn is_emergency(&self) -> bool {
-        self.0.contains('@') || self.clean_number().as_ref().map(|n| n.as_str()) == Some("911")
-    }
-
-    pub fn clir(&self, default: ClirMode) -> ClirMode {
-        let at_pos = self.0.find('@');
-        if let Some(pos) = at_pos {
-            let parts = &self.0[pos + 1..];
-            if let Some(second) = parts.split(',').nth(1) {
-                let clir_part = second.trim_start_matches('#');
-                if clir_part == "i" {
-                    return ClirMode::Suppression;
-                } else if clir_part == "I" {
-                    return ClirMode::Invocation;
-                }
-            }
-        }
-
-        // Find CLIR suffix in the number part (before first pause/wait)
-        let raw_num = if let Some(pos) = at_pos { &self.0[..pos] } else { &self.0 };
-        let num_part = raw_num.split([',', 'W', 'w']).next().unwrap_or("");
-        if num_part.ends_with('i') {
-            ClirMode::Suppression
-        } else if num_part.ends_with('I') {
-            ClirMode::Invocation
-        } else {
-            default
-        }
-    }
-
-    pub fn clean_number(&self) -> Option<PhoneNumber> {
-        let raw_num = if let Some(pos) = self.0.find('@') { &self.0[..pos] } else { &self.0 };
-
-        // Truncate at first pause/wait modifier
-        let num_part = raw_num.split([',', 'W', 'w']).next().unwrap_or("");
-
-        // Strip CLIR suffixes
-        let mut clean = num_part;
-        if clean.ends_with('i') || clean.ends_with('I') {
-            clean = &clean[..clean.len() - 1];
-        }
-
-        // Validate clean number format strictly
-        let is_valid = !clean.is_empty()
-            && clean.bytes().enumerate().all(|(i, b)| match b {
-                b'+' => i == 0,
-                b'0'..=b'9' | b'*' | b'#' => true,
-                _ => false,
-            });
-        if !is_valid {
-            return None;
-        }
-
-        Some(PhoneNumber(clean.to_string()))
+impl<'a> Parsable<'a> for EmergencyInfo {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, _) = tag(b"@")(input)?;
+        let (input, cat_digits) = opt(take_while1(|c: u8| c.is_ascii_digit()))(input)?;
+        let category = cat_digits.and_then(|d| std::str::from_utf8(d).ok()?.parse::<u32>().ok());
+        let (input, clir) = opt(preceded(tag(b",#"), opt(parse_clir_modifier)))(input)?;
+        let clir = clir.flatten();
+        Ok((input, Self { category, clir }))
     }
 }
 
-impl std::str::FromStr for DialString {
-    type Err = ();
+/// Parsed representation of an AT dial string per 3GPP TS 27.007 §6.2.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DialString {
+    pub number: PhoneNumber,
+    pub emergency: Option<EmergencyInfo>,
+    clir: Option<ClirMode>,
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::parse(s).ok_or(())
+impl<'a> Parsable<'a> for DialString {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, number) = PhoneNumber::parse(input)?;
+        let (input, clir) = opt(parse_clir_modifier)(input)?;
+        let (input, _) = opt(pair(
+            tag(b","),
+            take_while(|c: u8| matches!(c, b'0'..=b'9' | b'*' | b'#' | b',')),
+        ))(input)?;
+        let (input, emergency) = opt(EmergencyInfo::parse)(input)?;
+        Ok((input, Self { number, clir, emergency }))
+    }
+}
+
+impl DialString {
+    /// Resolves CLIR mode, giving precedence to emergency CLIR override if
+    /// present.
+    pub fn clir(&self, default: ClirMode) -> ClirMode {
+        self.emergency.as_ref().and_then(|e| e.clir).or(self.clir).unwrap_or(default)
     }
 }
 
@@ -776,19 +753,18 @@ pub struct DialArgs {
 
 impl<'a> Parsable<'a> for DialArgs {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
-        let (input, content) = crate::parser::parse_until_semicolon(input)?;
-        let s = std::str::from_utf8(content).map_err(|_err| {
-            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
-        })?;
-        let dial_str: DialString = s.parse().map_err(|_err| {
-            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))
-        })?;
-        let number = dial_str.clean_number().ok_or_else(|| {
-            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
-        })?;
+        let (tail, content) = crate::parser::parse_until_semicolon(input)?;
+        let (rem, dial_str) = DialString::parse(content)?;
+        if !rem.is_empty() {
+            return Err(nom::Err::Error(nom::error::Error::new(
+                rem,
+                nom::error::ErrorKind::Verify,
+            )));
+        }
         let clir = dial_str.clir(ClirMode::SubscriptionDefault);
-        let is_emergency = dial_str.is_emergency();
-        Ok((input, DialArgs { number, clir, is_emergency }))
+        let is_emergency = dial_str.emergency.is_some();
+        let number = dial_str.number;
+        Ok((tail, DialArgs { number, clir, is_emergency }))
     }
 }
 
@@ -825,7 +801,6 @@ impl<'a> Parsable<'a> for SmsAck {
 pub enum CommandAction {
     InitiateCall(DialArgs),
     InitiateRemoteCall(PhoneNumber),
-    InitiateEmergencyCall,
     AnswerCall(ModemId),
     HangupCall { initiator: ModemId, target_peer: ModemId },
     HoldCall { holder: ModemId, target: ModemId },
@@ -915,6 +890,8 @@ pub enum CmeError {
     TextStringTooLong,
     InvalidCharacters,
     NoNetworkService,
+    /// 3GPP TS 27.007 Section 9.2.1: Network not allowed - emergency calls only
+    NetworkNotAllowedEmergencyCallsOnly,
     NoResources,
     IncorrectParameters,
     FixedDialNumberOnlyAllowed,
@@ -950,6 +927,7 @@ impl CmeError {
             Self::TextStringTooLong => 24,
             Self::InvalidCharacters => 25,
             Self::NoNetworkService => 30,
+            Self::NetworkNotAllowedEmergencyCallsOnly => 32,
             Self::NoResources => 142,
             Self::IncorrectParameters => 50,
             Self::FixedDialNumberOnlyAllowed => 56,
@@ -977,6 +955,9 @@ impl CmeError {
             Self::TextStringTooLong => "text string too long",
             Self::InvalidCharacters => "invalid characters in text string",
             Self::NoNetworkService => "no network service",
+            Self::NetworkNotAllowedEmergencyCallsOnly => {
+                "network not allowed - emergency calls only"
+            }
             Self::NoResources => "no resources",
             Self::IncorrectParameters => "incorrect parameters",
             Self::FixedDialNumberOnlyAllowed => "fixed dialing number only allowed",
@@ -1720,7 +1701,7 @@ impl NumberPresentation {
             }
             Self::Allowed => {
                 if let Some(num) = number {
-                    FormattedNumber { number: num.as_str(), toa: num.toa() }
+                    FormattedNumber { number: num.normalized(), toa: num.toa() }
                 } else {
                     FormattedNumber { number: "", toa: TypeOfAddress::Unknown }
                 }
@@ -1880,7 +1861,6 @@ pub enum Layer2Protocol {
     Ip,
     Packet,
 }
-
 impl std::str::FromStr for Layer2Protocol {
     type Err = ();
 
@@ -2507,52 +2487,66 @@ mod tests {
     }
 
     #[test]
-    fn test_dial_string_clean_number() {
+    fn test_dial_string_number_parsing() {
         // Valid
-        let dial = DialString::parse("12345").unwrap();
-        assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
+        let (rem, dial) = DialString::parse(b"12345").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(dial.number.as_str(), "12345");
 
-        let dial = DialString::parse("+16505550100").unwrap();
-        assert_eq!(dial.clean_number().unwrap().as_str(), "+16505550100");
+        let (rem, dial) = DialString::parse(b"+16505550100").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(dial.number.as_str(), "+16505550100");
 
         // Strips CLIR and modifiers
-        let dial = DialString::parse("12345i,1234").unwrap();
-        assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
+        let (rem, dial) = DialString::parse(b"12345i,1234").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(dial.number.as_str(), "12345");
 
-        let dial = DialString::parse("+12345I,678").unwrap();
-        assert_eq!(dial.clean_number().unwrap().as_str(), "+12345");
+        let (rem, dial) = DialString::parse(b"+12345I,678").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(dial.number.as_str(), "+12345");
 
-        // Strictly rejects invalid dial characters (like 'a')
-        assert!(DialString::parse("123a45").is_none());
-        assert!(DialString::parse("123b45").is_none());
-        assert!(DialString::parse("123c45").is_none());
+        // Remaining unparsed bytes on invalid dial characters (like 'a')
+        let (rem, _) = DialString::parse(b"123a45").unwrap();
+        assert_eq!(rem, b"a45");
+        let (rem, _) = DialString::parse(b"123b45").unwrap();
+        assert_eq!(rem, b"b45");
+        let (rem, _) = DialString::parse(b"123c45").unwrap();
+        assert_eq!(rem, b"c45");
     }
 
     #[test]
     fn test_dial_string_clir() {
-        let dial = DialString::parse("12345i").unwrap();
+        let (rem, dial) = DialString::parse(b"12345i").unwrap();
+        assert_eq!(rem, b"");
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
 
-        let dial = DialString::parse("12345I").unwrap();
+        let (rem, dial) = DialString::parse(b"12345I").unwrap();
+        assert_eq!(rem, b"");
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Invocation);
 
-        let dial = DialString::parse("12345").unwrap();
+        let (rem, dial) = DialString::parse(b"12345").unwrap();
+        assert_eq!(rem, b"");
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::SubscriptionDefault);
         assert_eq!(dial.clir(ClirMode::Invocation), ClirMode::Invocation);
 
         // Modifiers with pause/wait
-        let dial = DialString::parse("12345i,1234").unwrap();
+        let (rem, dial) = DialString::parse(b"12345i,1234").unwrap();
+        assert_eq!(rem, b"");
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
 
-        // Number suffix with @ parameters where @ part has no CLIR suffix
-        let dial = DialString::parse("12345i@1,2").unwrap();
-        assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
+        // Trailing modifier after comma pause is unparsed remainder
+        let (rem, dial2) = DialString::parse(b"12345,1234i").unwrap();
+        assert_eq!(rem, b"i");
+        assert_eq!(dial2.clir(ClirMode::SubscriptionDefault), ClirMode::SubscriptionDefault);
 
-        let dial = DialString::parse("12345I@1,2").unwrap();
+        let (rem, dial) = DialString::parse(b"12345I@1,#").unwrap();
+        assert_eq!(rem, b"");
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Invocation);
 
         // Emergency dial string with CLIR suffix after @
-        let dial = DialString::parse("911@1,#i").unwrap();
+        let (rem, dial) = DialString::parse(b"911@1,#i").unwrap();
+        assert_eq!(rem, b"");
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
     }
 
@@ -2573,7 +2567,69 @@ mod tests {
         let (rem, args) = DialArgs::parse(b"911;\r\n").unwrap();
         assert_eq!(rem, b"\r\n");
         assert_eq!(args.number.as_str(), "911");
+        assert!(!args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"911@;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "911");
         assert!(args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"911@1,#I;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "911");
+        assert_eq!(args.clir, ClirMode::Invocation);
+        assert!(args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"911@1,#i;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "911");
+        assert_eq!(args.clir, ClirMode::Suppression);
+        assert!(args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"911@1,#;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "911");
+        assert_eq!(args.clir, ClirMode::SubscriptionDefault);
+        assert!(args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"911@,#I;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "911");
+        assert_eq!(args.clir, ClirMode::Invocation);
+        assert!(args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"911@,#;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "911");
+        assert_eq!(args.clir, ClirMode::SubscriptionDefault);
+        assert!(args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"999@1,#I;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "999");
+        assert_eq!(args.clir, ClirMode::Invocation);
+        assert!(args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"12345@1,#i;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "12345");
+        assert_eq!(args.clir, ClirMode::Suppression);
+        assert!(args.is_emergency);
+
+        let (rem, args) = DialArgs::parse(b"12345@0;\r\n").unwrap();
+        assert_eq!(rem, b"\r\n");
+        assert_eq!(args.number.as_str(), "12345");
+        assert!(args.is_emergency);
+
+        // Verifies error span points to the invalid remainder within the dial content
+        let err = DialArgs::parse(b"12345extra;\r\n").unwrap_err();
+        match err {
+            nom::Err::Error(e) => {
+                assert_eq!(e.input, b"extra");
+                assert_eq!(e.code, nom::error::ErrorKind::Verify);
+            }
+            _ => panic!("Expected nom::Err::Error"),
+        }
     }
 
     #[test]
@@ -2604,7 +2660,7 @@ mod tests {
 
         let int_phone = PhoneNumber::new_for_test("+12345");
         let formatted = NumberPresentation::Allowed.format_number(Some(&int_phone));
-        assert_eq!(formatted.number, "+12345");
+        assert_eq!(formatted.number, "12345");
         assert_eq!(formatted.toa, TypeOfAddress::International);
 
         let formatted = NumberPresentation::Allowed.format_number(None);
@@ -2938,10 +2994,9 @@ mod tests {
     }
 
     #[test]
-    fn test_phone_number_as_ref() {
+    fn test_phone_number_as_str() {
         let phone = PhoneNumber::new_for_test("+1234567890");
         assert_eq!(phone.as_str(), "+1234567890");
-        assert_eq!(phone.as_ref(), "+1234567890");
         let opt_phone = Some(phone);
         assert_eq!(opt_phone.as_ref().map(PhoneNumber::as_str), Some("+1234567890"));
     }
@@ -2964,8 +3019,13 @@ mod tests {
     }
 
     #[test]
-    fn test_phone_number_serde_and_from_str() {
-        let phone: PhoneNumber = "+16505550100".parse().unwrap();
+    fn test_phone_number_serde_and_parsing() {
+        let (rem, phone) = PhoneNumber::parse(b"+16505550100").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(phone.as_str(), "+16505550100");
+        assert!(phone.is_international());
+
+        let phone = PhoneNumber::try_from("+16505550100".to_string()).unwrap();
         assert_eq!(phone.as_str(), "+16505550100");
         assert!(phone.is_international());
 
@@ -2975,15 +3035,21 @@ mod tests {
         assert_eq!(deserialized, phone);
 
         assert!(matches!(
-            "invalid#phone".parse::<PhoneNumber>(),
+            PhoneNumber::try_from("invalid#phone"),
             Err(ParsePhoneNumberError::InvalidCharacters(_))
         ));
-        assert!(matches!("".parse::<PhoneNumber>(), Err(ParsePhoneNumberError::Empty)));
+        assert!(matches!(PhoneNumber::try_from(""), Err(ParsePhoneNumberError::Empty)));
         assert!(matches!(
-            "12345extra".parse::<PhoneNumber>(),
+            PhoneNumber::try_from("12345extra"),
             Err(ParsePhoneNumberError::TrailingCharacters(_))
         ));
         assert!(serde_json::from_str::<PhoneNumber>("\"invalid#phone\"").is_err());
+
+        // Quoted phone number parsing validates full consumption of quoted content
+        assert!(PhoneNumber::parse(b"\"12345extra\"").is_err());
+        let (rem, phone) = PhoneNumber::parse(b"\"12345\",trailing").unwrap();
+        assert_eq!(rem, b",trailing");
+        assert_eq!(phone.as_str(), "12345");
     }
 
     #[test]

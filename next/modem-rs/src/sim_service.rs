@@ -623,6 +623,18 @@ impl SimService {
         self.state == SimState::Ready
     }
 
+    /// Returns the CME error corresponding to a non-ready SIM lifecycle state,
+    /// or None if the SIM is ready for normal operation.
+    pub(crate) fn gating_error(&self) -> Option<CmeError> {
+        match self.state {
+            SimState::Absent => Some(CmeError::SimNotInserted),
+            SimState::PinRequired => Some(CmeError::SimPinRequired),
+            SimState::PukRequired => Some(CmeError::SimPukRequired),
+            SimState::PermBlocked => Some(CmeError::SimFailure),
+            SimState::Ready => None,
+        }
+    }
+
     /// Unprovisions and completely wipes the SIM card, restoring to default.
     fn clear_profile(&mut self) {
         *self = Self::default();

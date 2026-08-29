@@ -7,7 +7,7 @@ use netsim_model::{CellNetworkConfig, Quirks, RadioTechnology, RegistrationStatu
 use tracing::{debug, error};
 
 use crate::{
-    call_service::CallService,
+    call_service::{CallResponse, CallService},
     config::SimProfile,
     constants::CALL_RING_TIMEOUT,
     data_service::DataService,
@@ -116,7 +116,7 @@ impl ModemImpl {
                 } else {
                     number_presentation as u8
                 };
-                let number_str = val.number.strip_prefix('+').unwrap_or(val.number);
+                let number_str = val.number;
                 let clip = format!("+CLIP: \"{number_str}\",{},,,,{mode}\r\n", val.toa);
                 effects.push(ModemEffect::Response(clip.into_bytes()));
             }
@@ -147,7 +147,7 @@ impl ModemImpl {
         self.call_service.receive_hangup();
         // Goldfish RIL uses RING as universal URC to trigger callRing/callStateChanged
         // for remote call teardown
-        effects.push(ModemEffect::Response(b"RING\r\n".to_vec()));
+        effects.push(ModemEffect::Response(CallResponse::Ring.to_string().into_bytes()));
         effects
     }
 
@@ -191,6 +191,15 @@ impl ModemImpl {
         let response = self.misc_service.current_time_update();
         effects.push(ModemEffect::Response(response.to_string().into_bytes()));
         effects
+    }
+
+    /// Sets Emergency Callback Mode (ECBM) and emits a `+WSOS` URC.
+    ///
+    /// TODO(b/562993662): Expose via cell.proto / ModemAction when external
+    /// ECBM simulation is needed.
+    pub fn trigger_emergency_callback_mode(&mut self, enabled: bool) -> Vec<ModemEffect> {
+        let response = self.call_service.set_emergency_mode(enabled);
+        vec![ModemEffect::Response(response.to_string().into_bytes())]
     }
 
     pub fn set_phone_number(&mut self, phone: PhoneNumber) {

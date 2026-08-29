@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
 use crate::{
+    call_service::CallResponse,
     config::{ProfileMetadata, SimProfile},
     constants::{DEFAULT_FALLBACK_MSISDN, DEFAULT_MSISDN_PREFIX},
     metrics::{Metrics, MetricsSnapshot},
@@ -22,8 +23,8 @@ use crate::{
     profiles::get_builtin_profile,
     time::{Clock, SystemClock},
     types::{
-        ClirMode, CommandAction, DialString, HostEvent, ModemError, ModemId, ModemSink,
-        NumberPresentation, PhoneNumber,
+        ClirMode, CommandAction, HostEvent, ModemError, ModemId, ModemSink, NumberPresentation,
+        Parsable, PhoneNumber,
     },
 };
 
@@ -313,7 +314,7 @@ impl ModemNetworkSimulator {
             Some(msisdn) => msisdn,
             None => {
                 let s = format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count);
-                s.parse::<PhoneNumber>().map_err(|e| {
+                PhoneNumber::try_from(s.clone()).map_err(|e| {
                     ModemError::InvalidProfile(format!("Invalid generated phone number '{s}': {e}"))
                 })?
             }
@@ -515,7 +516,7 @@ impl ModemNetworkSimulator {
         match action {
             CommandAction::InitiateCall(args) => {
                 self.metrics.calls_initiated.fetch_add(1, AtomicOrdering::Relaxed);
-                effects.extend(self.initiate_call(id, &args.number, args.clir));
+                effects.extend(self.initiate_call(id, &args.number, args.clir, args.is_emergency));
             }
             CommandAction::InitiateRemoteCall(phone_number) => {
                 events.push(NetworkEvent::NewConnection {
@@ -526,6 +527,7 @@ impl ModemNetworkSimulator {
                     id,
                     &phone_number,
                     ClirMode::SubscriptionDefault,
+                    false,
                 ));
             }
             CommandAction::AnswerCall(answered_modem_id) => {
@@ -585,7 +587,6 @@ impl ModemNetworkSimulator {
                     effects.push((target, ModemEffect::Response(b"RING\r\n".to_vec())));
                 }
             }
-            CommandAction::InitiateEmergencyCall => {} // No-op
             CommandAction::ReceiveSms { to, pdu, status_report } => {
                 self.metrics.sms_sent.fetch_add(1, AtomicOrdering::Relaxed);
                 let peer_id = if let Some(ref num) = to {
@@ -728,14 +729,14 @@ impl ModemNetworkSimulator {
         target_id: ModemId,
         number: &str,
     ) -> Vec<NetworkEvent> {
-        let Some(dial_str) = DialString::parse(number) else {
+        let Ok((rem, phone)) = PhoneNumber::parse(number.as_bytes()) else {
             warn!("Invalid incoming call number: {}", number);
             return Vec::new();
         };
-        let Some(phone) = dial_str.clean_number() else {
+        if !rem.is_empty() {
             warn!("Invalid incoming call number: {}", number);
             return Vec::new();
-        };
+        }
         self.apply_to_modem(target_id, |modem| {
             modem.trigger_incoming_call(Some(&phone), NumberPresentation::Allowed, None)
         })
@@ -770,6 +771,16 @@ impl ModemNetworkSimulator {
         self.apply_to_modem(id, |modem| modem.trigger_network_time_update())
     }
 
+    // TODO(b/562993662): Plumb through ModemAction when exposed in cell.proto /
+    // netsim gsm.
+    pub fn trigger_emergency_callback_mode(
+        &mut self,
+        id: ModemId,
+        enabled: bool,
+    ) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.trigger_emergency_callback_mode(enabled))
+    }
+
     pub fn update_physical_channel_configs(&mut self, id: ModemId) -> Vec<NetworkEvent> {
         self.apply_to_modem(id, |modem| {
             modem.data_service.on_update_physical_channel_configs(modem)
@@ -782,12 +793,28 @@ impl ModemNetworkSimulator {
         caller_id: ModemId,
         phone_number: &PhoneNumber,
         clir: ClirMode,
+        is_emergency: bool,
     ) -> Vec<(ModemId, ModemEffect)> {
         debug!(
-            "[Network] initiate_call: caller_id={}, phone_number={}",
+            "[Network] initiate_call: caller_id={}, phone_number={}, is_emergency={}",
             caller_id,
-            phone_number.as_str()
+            phone_number.as_str(),
+            is_emergency,
         );
+        if is_emergency {
+            debug!("[Network] Emergency call initiated for caller {}", caller_id);
+            if let Some(caller) = self.modems.get_mut(&caller_id) {
+                if caller.call_service.remote_answer() {
+                    self.metrics.calls_answered.fetch_add(1, AtomicOrdering::Relaxed);
+                    return vec![(
+                        caller_id,
+                        ModemEffect::Response(CallResponse::Ring.to_string().into_bytes()),
+                    )];
+                }
+                warn!("[Network] Emergency call remote_answer failed for caller {}", caller_id);
+            }
+            return Vec::new();
+        }
         if tracing::enabled!(tracing::Level::DEBUG) {
             for (id, modem) in &self.modems {
                 debug!(
