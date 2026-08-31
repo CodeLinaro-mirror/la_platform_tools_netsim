@@ -313,6 +313,33 @@ impl<'a> Parsable<'a> for DialArgs {
     }
 }
 
+/// 3GPP TS 27.005 §4.4: New message acknowledgement (<n> parameter).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmsAck {
+    /// Message routing to TE is acknowledged (0 or 1 per TS 27.005 §4.4).
+    Success,
+    /// Message routing to TE is not acknowledged / rejected (2 per TS 27.005
+    /// §4.4).
+    Failure,
+}
+
+impl SmsAck {
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Success)
+    }
+}
+
+impl<'a> Parsable<'a> for SmsAck {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 | 1 => Ok((input, Self::Success)),
+            2 => Ok((input, Self::Failure)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
 // Actions that a command can request to be executed by the
 // CellularNetworkSimulator.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -326,6 +353,7 @@ pub enum CommandAction {
     ResumeCall { resumer: ModemId, target: ModemId },
     ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
     ReceiveTextSms { to: String, text: String },
+    AcknowledgeIncomingSms { ack: SmsAck },
     None,
 }
 
