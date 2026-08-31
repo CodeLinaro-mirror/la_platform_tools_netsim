@@ -11,9 +11,19 @@ use netsim_model::{Call, Quirks, RegistrationStatus};
 use nom::IResult;
 
 use crate::{
-    call_service::CallResponse, data_service::DataResponse, misc_service::MiscResponse,
-    network_service::NetworkResponse, parser::QuotedString, sim_service::SimResponse,
-    sms_service::SmsResponse, stk_service::StkResponse, sup_service::SupResponse,
+    call_service::CallResponse,
+    constants::{
+        ADN_ALPHA_IDENTIFIER_LEN, ADN_CAPABILITY_EXT_BYTES, ADN_DIALING_NUMBER_LEN,
+        EF_MSISDN_RECORD_LEN,
+    },
+    data_service::DataResponse,
+    misc_service::MiscResponse,
+    network_service::NetworkResponse,
+    parser::QuotedString,
+    sim_service::SimResponse,
+    sms_service::SmsResponse,
+    stk_service::StkResponse,
+    sup_service::SupResponse,
 };
 
 pub trait Parsable<'a>: Sized {
@@ -113,6 +123,38 @@ impl PhoneNumber {
         self.0.starts_with("*99")
             && self.0.ends_with('#')
             && self.0.as_bytes().get(3).is_some_and(|&c| c == b'*' || c == b'#')
+    }
+
+    /// Encodes this phone number as a 3GPP EF_MSISDN (0x6F40) linear fixed
+    /// record per TS 31.102 §4.4.2.3 and TS 51.011 §10.5.1.
+    pub fn encode_msisdn(&self) -> Vec<u8> {
+        let digits: String = self.0.chars().filter(|c| c.is_ascii_digit()).collect();
+        if digits.is_empty() {
+            return vec![0xFF; EF_MSISDN_RECORD_LEN];
+        }
+
+        let ton_npi = if self.0.starts_with('+') || (digits.len() == 11 && digits.starts_with('1'))
+        {
+            TypeOfAddress::International
+        } else {
+            self.toa()
+        };
+
+        let swapped_bytes = crate::pdu::bcd::string_to_bcd(&digits);
+        let bcd_len = (1 + swapped_bytes.len()) as u8;
+
+        let mut result = Vec::with_capacity(EF_MSISDN_RECORD_LEN);
+        result.resize(ADN_ALPHA_IDENTIFIER_LEN, 0xFF);
+        result.push(bcd_len);
+        result.push(ton_npi.as_u8());
+
+        let mut dialing = swapped_bytes;
+        dialing.resize(ADN_DIALING_NUMBER_LEN, 0xFF);
+        result.extend(dialing);
+
+        result.extend_from_slice(&ADN_CAPABILITY_EXT_BYTES);
+
+        result
     }
 }
 
@@ -1754,5 +1796,28 @@ mod tests {
         let formatted = NumberPresentation::NotAvailable.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
         assert_eq!(formatted.toa, TypeOfAddress::National);
+    }
+
+    #[test]
+    fn test_phone_number_encode_msisdn() {
+        let phone = PhoneNumber::new("+15555215554");
+        let record = phone.encode_msisdn();
+        assert_eq!(record.len(), EF_MSISDN_RECORD_LEN);
+        // Alpha identifier is padded with 0xFF
+        assert_eq!(&record[..14], &[0xFF; 14]);
+        // Length of BCD number is 7 (1 byte TON + 6 bytes dialed digits)
+        assert_eq!(record[14], 7);
+        // International TON/NPI
+        assert_eq!(record[15], 0x91);
+        // Dialing digits 15555215554 -> 51 55 25 51 55 F4
+        assert_eq!(&record[16..22], &[0x51, 0x55, 0x25, 0x51, 0x55, 0xF4]);
+        // Trailing dialing bytes padded with 0xFF
+        assert_eq!(&record[22..26], &[0xFF; 4]);
+        // Capability/Extension bytes
+        assert_eq!(&record[26..28], &[0xFF, 0xFF]);
+
+        // Empty digits returns standard unassigned 0xFF record
+        let empty = PhoneNumber::new("");
+        assert_eq!(empty.encode_msisdn(), vec![0xFF; EF_MSISDN_RECORD_LEN]);
     }
 }
