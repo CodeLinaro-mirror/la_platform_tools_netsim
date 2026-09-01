@@ -12,6 +12,7 @@ netsim_rust_library(
     edition = "2024",
     test_deps = [
         "//next/actor-framework:testing",
+        "//next/common",
         "@mockall",
     ],
     deps = [
@@ -25,7 +26,6 @@ netsim_rust_library(
         "@http",
         "@httparse",
         "@ring",
-        "@socket2",
         "@thiserror",
         "@tokio",
         "@tokio-stream",

@@ -3,7 +3,9 @@
 
 use hex;
 use modem_rs::{
-    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile, config::PinProfile,
+    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile,
+    config::PinProfile,
+    constants::{EF_FDN_RECORD_LEN, EF_MBDN_RECORD_LEN, EF_MSISDN_RECORD_LEN, UiccFileId},
     test_utils::MockModemHandler,
 };
 use netsim_model::Quirks;
@@ -132,9 +134,9 @@ pub fn create_legacy_test_profile() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: 0x3F00,
+                    file_id: UiccFileId::MasterFile.into(),
                     files: vec![SimFile::ElementaryFile(ElementaryFile {
-                        file_id: 0x2FE2,
+                        file_id: UiccFileId::Iccid.into(),
 
                         record_len: None,
                         data: hex::decode(TEST_ICCID).unwrap(),
@@ -161,9 +163,9 @@ pub fn create_locked_sim_profile() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: 0x3F00,
+                    file_id: UiccFileId::MasterFile.into(),
                     files: vec![SimFile::ElementaryFile(ElementaryFile {
-                        file_id: 0x2FE2,
+                        file_id: UiccFileId::Iccid.into(),
 
                         record_len: None,
                         data: hex::decode(TEST_ICCID).unwrap(),
@@ -202,19 +204,22 @@ pub fn create_profile_with_msisdn() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: 0x3F00,
+                    file_id: UiccFileId::MasterFile.into(),
                     files: vec![
                         SimFile::ElementaryFile(ElementaryFile {
-                            file_id: 0x2FE2,
+                            file_id: UiccFileId::Iccid.into(),
 
                             record_len: None,
                             data: hex::decode(TEST_ICCID).unwrap(),
                         }),
-                        SimFile::ElementaryFile(ElementaryFile {
-                            file_id: 0x6F40, // EF_MSISDN
+                        SimFile::DedicatedFile(DedicatedFile {
+                            file_id: UiccFileId::Telecom.into(),
+                            files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                file_id: UiccFileId::Msisdn.into(),
 
-                            record_len: Some(28),
-                            data: vec![0xFF; 28],
+                                record_len: Some(EF_MSISDN_RECORD_LEN),
+                                data: vec![0xFF; EF_MSISDN_RECORD_LEN],
+                            })],
                         }),
                     ],
                 },
@@ -251,25 +256,25 @@ pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: 0x3F00,
+                    file_id: UiccFileId::MasterFile.into(),
                     files: vec![
                         SimFile::ElementaryFile(ElementaryFile {
-                            file_id: 0x2FE2,
+                            file_id: UiccFileId::Iccid.into(),
 
                             record_len: None,
                             data: hex::decode(TEST_ICCID).unwrap(),
                         }),
                         SimFile::ElementaryFile(ElementaryFile {
-                            file_id: 0x6F7B, // EF_FPLMN
+                            file_id: UiccFileId::ForbiddenPlmn.into(),
 
                             record_len: None,
                             data: vec![0xFF; 12],
                         }),
                         SimFile::ElementaryFile(ElementaryFile {
-                            file_id: 0x6FC7, // EF_MBDN
+                            file_id: UiccFileId::MailboxDialingNumbers.into(),
 
-                            record_len: Some(38),
-                            data: vec![0xFF; 152],
+                            record_len: Some(EF_MBDN_RECORD_LEN),
+                            data: vec![0xFF; 4 * EF_MBDN_RECORD_LEN],
                         }),
                     ],
                 },
@@ -318,18 +323,18 @@ pub fn create_fdn_sim_profile() -> SimProfile {
         sim_io: SimIo {
             file_system: FileSystem {
                 master_file: DedicatedFile {
-                    file_id: 0x3F00,
+                    file_id: UiccFileId::MasterFile.into(),
                     files: vec![
                         SimFile::ElementaryFile(ElementaryFile {
-                            file_id: 0x2FE2,
+                            file_id: UiccFileId::Iccid.into(),
                             record_len: None,
                             data: hex::decode(TEST_ICCID).unwrap(),
                         }),
                         SimFile::DedicatedFile(DedicatedFile {
-                            file_id: 0x7F10, // DF_TELECOM
+                            file_id: UiccFileId::Telecom.into(),
                             files: vec![SimFile::ElementaryFile(ElementaryFile {
-                                file_id: 0x6F3B, // EF_FDN
-                                record_len: Some(28),
+                                file_id: UiccFileId::FixedDialingNumbers.into(),
+                                record_len: Some(EF_FDN_RECORD_LEN),
                                 data: fdn_data,
                             })],
                         }),

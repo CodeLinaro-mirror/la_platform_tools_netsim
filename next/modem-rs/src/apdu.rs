@@ -114,6 +114,12 @@ pub enum Instruction {
     Unknown(u8),
 }
 
+impl Instruction {
+    pub const fn is_update(self) -> bool {
+        matches!(self, Self::UpdateBinary | Self::UpdateRecord)
+    }
+}
+
 impl From<u8> for Instruction {
     fn from(val: u8) -> Self {
         match val {
@@ -185,6 +191,12 @@ pub enum RecordMode {
     NextRecord = 0x02,     // Unsupported by simulator
     PreviousRecord = 0x03, // Unsupported by simulator
     AbsoluteMode = 0x04,
+}
+
+impl RecordMode {
+    pub const fn is_absolute(self) -> bool {
+        matches!(self, Self::AbsoluteMode)
+    }
 }
 
 impl TryFrom<u8> for RecordMode {

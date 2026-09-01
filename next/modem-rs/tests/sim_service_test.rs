@@ -605,7 +605,7 @@ fn test_apdu_msisdn_update() {
     then_response_is(
         &mut world,
         "A",
-        "+CRSM: 144,0,000000000000000000000000000007915155251100F1FFFFFFFFFFFF",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
     );
     then_response_is(&mut world, "A", "OK");
 
@@ -613,7 +613,7 @@ fn test_apdu_msisdn_update() {
     when_at_command_sent(
         &mut world,
         "A",
-        "AT+CRSM=220,28480,1,4,28,\"000000000000000000000000000007915155255155F4FFFFFFFFFFFF\"",
+        "AT+CRSM=220,28480,1,4,28,\"FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF\"",
     );
     then_response_is(&mut world, "A", "+CRSM: 144,0");
     then_response_is(&mut world, "A", "OK");
@@ -623,7 +623,7 @@ fn test_apdu_msisdn_update() {
     then_response_is(
         &mut world,
         "A",
-        "+CRSM: 144,0,000000000000000000000000000007915155255155F4FFFFFFFFFFFF",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF",
     );
     then_response_is(&mut world, "A", "OK");
 }
@@ -637,7 +637,7 @@ fn test_apdu_update_record_invalid_record_number() {
     when_at_command_sent(
         &mut world,
         "A",
-        "AT+CRSM=220,28480,0,4,28,\"000000000000000000000000000007915155255155F4FFFFFFFFFFFF\"",
+        "AT+CRSM=220,28480,0,4,28,\"FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF\"",
     );
     then_response_is(&mut world, "A", "+CRSM: 106,134"); // SW_INCORRECT_PARAMS (6A86)
     then_response_is(&mut world, "A", "OK");
@@ -661,7 +661,7 @@ fn test_apdu_update_record_invalid_hex() {
 
     // UPDATE RECORD with invalid hex characters (e.g. 'G' at the end)
     // MSISDN record length is 28 bytes (56 hex characters)
-    let invalid_hex = "000000000000000000000000000007915155255155F4FFFFFFFFFFFG";
+    let invalid_hex = "FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFG";
     when_at_command_sent(&mut world, "A", &format!("AT+CRSM=220,28480,1,4,28,\"{invalid_hex}\""));
     then_response_is(&mut world, "A", "+CRSM: 106,134"); // SW_INCORRECT_PARAMS (6A86)
     then_response_is(&mut world, "A", "OK");
@@ -676,7 +676,7 @@ fn test_apdu_update_record_out_of_bounds() {
     when_at_command_sent(
         &mut world,
         "A",
-        "AT+CRSM=220,28480,5,4,28,\"000000000000000000000000000007915155255155F4FFFFFFFFFFFF\"",
+        "AT+CRSM=220,28480,5,4,28,\"FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF\"",
     );
     then_response_is(&mut world, "A", "+CRSM: 106,136"); // SW_REFERENCED_DATA_NOT_FOUND (6A88)
     then_response_is(&mut world, "A", "OK");
@@ -1660,7 +1660,7 @@ fn test_crsm_read_record_invalid_p2() {
     then_response_is(
         &mut world,
         "A",
-        "+CRSM: 144,0,000000000000000000000000000007915155251100F1FFFFFFFFFFFF",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
     );
     then_response_is(&mut world, "A", "OK");
 }
@@ -1786,5 +1786,88 @@ fn test_response_buffer_cleared_on_channel_close() {
     // 5. GET_RESPONSE on channel 1 returns 6A88 because buffer was cleared on close
     when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01C0000035\"");
     then_response_is(&mut world, "A", "+CGLA: 4,6A88");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_get_response_ef_msisdn() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 15
+    // Header format (15 bytes): 00 00 00 1C 6F 40 04 00 00 00 00 00 00 02 01
+    when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,15");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,0000001C6F40040000000000000201");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_get_response_df_telecom() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // GET_RESPONSE for DF_TELECOM (7F10 / 32528) with P3 = 22
+    // Header format: File ID at bytes 4-5 is 7F10, File Type at byte 6 is 02 (DF)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=192,32528,0,0,22");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,000000007F1002000000000000000100000000000000");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_get_response_wrong_length() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 50 > 15 byte header
+    when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,50");
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_read_record_wrong_length() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // READ_RECORD for EF_MSISDN (6F40 / 28480) with P3 = 50 > 28 byte record
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,50");
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_read_record_p3_truncation() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // READ_RECORD for EF_MSISDN (6F40 / 28480) with P3 = 14 (alpha identifier only)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,14");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_update_binary_wrong_length() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // UPDATE_BINARY with mismatched P3 (data is 6 bytes = 12 hex chars, P3 is 10)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=214,28539,0,0,10,\"40F21040F220\"");
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_update_record_wrong_length() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // UPDATE_RECORD with mismatched P3 (data is 28 bytes, P3 is 20)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        "AT+CRSM=220,28480,1,4,20,\"FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF\"",
+    );
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
     then_response_is(&mut world, "A", "OK");
 }

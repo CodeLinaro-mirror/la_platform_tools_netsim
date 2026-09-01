@@ -64,10 +64,10 @@ mod tests {
                                 && packet.technology() == rf::Technology::NfcA
                                 && packet.protocol() == rf::Protocol::IsoDep
                             {
-                                match rf::T4ATSelectCommand::decode_full(&bytes) {
+                                match rf::IsoDepT4ATSelectCommand::decode_full(&bytes) {
                                     Ok(select_cmd) => {
-                                        info!("MockTag: Received T4ATSelectCommand (decoded directly) from {}", select_cmd.sender());
-                                        let resp = rf::T4ATSelectResponse {
+                                        info!("MockTag: Received IsoDepT4ATSelectCommand (decoded directly) from {}", select_cmd.sender());
+                                        let resp = rf::IsoDepT4ATSelectResponse {
                                             sender: id,
                                             receiver: select_cmd.sender(),
                                             bitrate: rf::BitRate::BitRate106KbitS,
@@ -79,7 +79,7 @@ mod tests {
                                         continue;
                                     }
                                     Err(e) => {
-                                        tracing::error!("MockTag: Failed to decode T4ATSelectCommand: {:?}", e);
+                                        tracing::error!("MockTag: Failed to decode IsoDepT4ATSelectCommand: {:?}", e);
                                     }
                                 }
                             }

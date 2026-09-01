@@ -17,7 +17,6 @@ http = "0.2"
 httparse = "1.9"
 netsim-model = { path = "../model" }
 ring = "0.17.2"
-socket2 = "0.5"
 thiserror = "1.0"
 tokio = { version = "1.32.0", features = ["full"] }
 tokio-stream = "0.1"
@@ -26,4 +25,5 @@ tungstenite = { version = ">=0.19.0", default-features = false }
 
 [dev-dependencies]
 actor-framework = { path = "../actor-framework", features = ["testing"] }
+common = { path = "../common" }
 mockall = "0.13"
