@@ -5,7 +5,6 @@ use super::*;
 use crate::{
     constants::{EF_MBDN_RECORD_LEN, UiccFileId},
     profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML},
-    sim_service::find_ef,
 };
 
 #[test]
@@ -78,8 +77,7 @@ fn test_parameter_normalization() {
         </MF>
     </IccProfile>"#;
     let profile = parse_xml_profile(xml).unwrap();
-    let ef = find_ef(&profile.sim_io.file_system.master_file, UiccFileId::MailboxDialingNumbers)
-        .unwrap();
+    let ef = profile.sim_io.file_system.find_ef(UiccFileId::MailboxDialingNumbers).unwrap();
     assert_eq!(ef.record_len, Some(1));
     assert_eq!(ef.data, hex::decode("FFFFFFFFFFFFFFFFFF01").unwrap());
 }
@@ -95,8 +93,7 @@ fn test_deduce_record_len_from_dc_mappings() {
         </MF>
     </IccProfile>"#;
     let profile = parse_xml_profile(xml).unwrap();
-    let ef = find_ef(&profile.sim_io.file_system.master_file, UiccFileId::MailboxDialingNumbers)
-        .unwrap();
+    let ef = profile.sim_io.file_system.find_ef(UiccFileId::MailboxDialingNumbers).unwrap();
     assert_eq!(ef.record_len, Some(EF_MBDN_RECORD_LEN));
     assert_eq!(ef.size(), 2 * EF_MBDN_RECORD_LEN);
     assert_eq!(ef.data, vec![0xFF; 2 * EF_MBDN_RECORD_LEN]);
