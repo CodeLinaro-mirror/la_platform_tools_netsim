@@ -53,6 +53,7 @@ use crate::{
 
 pub mod api;
 pub use api::*;
+pub use dns::discover_host_dns_servers;
 
 pub struct Slirp {
     config: Config,
