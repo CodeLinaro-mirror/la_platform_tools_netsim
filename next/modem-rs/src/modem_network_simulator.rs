@@ -198,16 +198,21 @@ impl ModemNetworkSimulator {
             return Err(ModemError::DuplicateModemId(id));
         }
         self.modem_chip_count += 1;
-        let mut profile = profile.unwrap_or_default();
-        if profile.msisdn.is_empty() {
-            profile.msisdn = format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count);
-        }
-        let target_msisdn = profile.msisdn.clone();
+        let profile = profile.unwrap_or_default();
+        let target_msisdn = if profile.msisdn.is_empty() {
+            format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count)
+        } else {
+            profile.msisdn.clone()
+        };
         let mut modem = ModemImpl::new(id, profile, quirks);
         // Override the default dummy number with a unique generated one to prevent
         // conflicts when launching multiple default emulators. Custom profiles are
         // preserved.
-        if modem.phone_number().as_ref().is_some_and(|n| n.normalized() == DEFAULT_FALLBACK_MSISDN)
+        if modem.phone_number().is_none()
+            || modem
+                .phone_number()
+                .as_ref()
+                .is_some_and(|n| n.normalized() == DEFAULT_FALLBACK_MSISDN)
         {
             modem.set_phone_number(&target_msisdn);
         }

@@ -1871,3 +1871,56 @@ fn test_crsm_update_record_wrong_length() {
     then_response_is(&mut world, "A", "+CRSM: 103,0");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_msisdn_in_default_sim0_profile() {
+    let mut world = World::new();
+    // PROFILE_DEFAULT_XML defines EF_MSISDN in DF_TELECOM (0x7F10) with dummy
+    // number 15551234567
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_DEFAULT_XML);
+
+    // Initial MSISDN should be resolved from DF_TELECOM and overridden to
+    // 15555211001
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_msisdn_in_tel_alaska_profile() {
+    let mut world = World::new();
+    // PROFILE_TEL_ALASKA_XML defines EF_MSISDN in ADF_USIM (0x7FFF) with dummy
+    // number 15551234567
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_TEL_ALASKA_XML);
+
+    // Initial MSISDN should be resolved from ADF_USIM, populated in DF_TELECOM, and
+    // overridden to 15555211001
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_msisdn_in_cts_profile() {
+    let mut world = World::new();
+    // PROFILE_CTS_XML defines EF_MSISDN in ADF_USIM (0x7FFF) with custom number
+    // +8618810189440
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
+
+    // Custom non-fallback MSISDN should be preserved from ADF_USIM
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,00000000000000000000000000000891688118109844F0FFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
