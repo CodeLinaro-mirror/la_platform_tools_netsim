@@ -3,10 +3,8 @@
 
 use hex;
 use modem_rs::{
-    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile,
-    config::PinProfile,
-    constants::{EF_FDN_RECORD_LEN, EF_MBDN_RECORD_LEN, EF_MSISDN_RECORD_LEN, UiccFileId},
-    test_utils::MockModemHandler,
+    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile, config::PinProfile,
+    constants::UiccFileId, test_utils::MockModemHandler,
 };
 use netsim_model::Quirks;
 
@@ -217,8 +215,13 @@ pub fn create_profile_with_msisdn() -> SimProfile {
                             files: vec![SimFile::ElementaryFile(ElementaryFile {
                                 file_id: UiccFileId::Msisdn.into(),
 
-                                record_len: Some(EF_MSISDN_RECORD_LEN),
-                                data: vec![0xFF; EF_MSISDN_RECORD_LEN],
+                                record_len: UiccFileId::Msisdn.default_record_len(),
+                                data: vec![
+                                    0xFF;
+                                    UiccFileId::Msisdn
+                                        .default_record_len()
+                                        .expect("file id is record based")
+                                ],
                             })],
                         }),
                     ],
@@ -273,8 +276,13 @@ pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
                         SimFile::ElementaryFile(ElementaryFile {
                             file_id: UiccFileId::MailboxDialingNumbers.into(),
 
-                            record_len: Some(EF_MBDN_RECORD_LEN),
-                            data: vec![0xFF; 4 * EF_MBDN_RECORD_LEN],
+                            record_len: UiccFileId::MailboxDialingNumbers.default_record_len(),
+                            data: vec![
+                                0xFF;
+                                4 * UiccFileId::MailboxDialingNumbers
+                                    .default_record_len()
+                                    .expect("file id is record based")
+                            ],
                         }),
                     ],
                 },
@@ -334,7 +342,7 @@ pub fn create_fdn_sim_profile() -> SimProfile {
                             file_id: UiccFileId::Telecom.into(),
                             files: vec![SimFile::ElementaryFile(ElementaryFile {
                                 file_id: UiccFileId::FixedDialingNumbers.into(),
-                                record_len: Some(EF_FDN_RECORD_LEN),
+                                record_len: UiccFileId::FixedDialingNumbers.default_record_len(),
                                 data: fdn_data,
                             })],
                         }),

@@ -13,8 +13,7 @@ use nom::IResult;
 use crate::{
     call_service::CallResponse,
     constants::{
-        ADN_ALPHA_IDENTIFIER_LEN, ADN_CAPABILITY_EXT_BYTES, ADN_DIALING_NUMBER_LEN,
-        EF_MSISDN_RECORD_LEN,
+        ADN_ALPHA_IDENTIFIER_LEN, ADN_CAPABILITY_EXT_BYTES, ADN_DIALING_NUMBER_LEN, UiccFileId,
     },
     data_service::DataResponse,
     misc_service::MiscResponse,
@@ -128,9 +127,10 @@ impl PhoneNumber {
     /// Encodes this phone number as a 3GPP EF_MSISDN (0x6F40) linear fixed
     /// record per TS 31.102 §4.4.2.3 and TS 51.011 §10.5.1.
     pub fn encode_msisdn(&self) -> Vec<u8> {
+        let record_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
         let digits: String = self.0.chars().filter(|c| c.is_ascii_digit()).collect();
         if digits.is_empty() {
-            return vec![0xFF; EF_MSISDN_RECORD_LEN];
+            return vec![0xFF; record_len];
         }
 
         let ton_npi = if self.0.starts_with('+') || (digits.len() == 11 && digits.starts_with('1'))
@@ -143,7 +143,7 @@ impl PhoneNumber {
         let swapped_bytes = crate::pdu::bcd::string_to_bcd(&digits);
         let bcd_len = (1 + swapped_bytes.len()) as u8;
 
-        let mut result = Vec::with_capacity(EF_MSISDN_RECORD_LEN);
+        let mut result = Vec::with_capacity(record_len);
         result.resize(ADN_ALPHA_IDENTIFIER_LEN, 0xFF);
         result.push(bcd_len);
         result.push(ton_npi.as_u8());
@@ -1828,9 +1828,10 @@ mod tests {
 
     #[test]
     fn test_phone_number_encode_msisdn() {
+        let record_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
         let phone = PhoneNumber::new("+15555215554");
         let record = phone.encode_msisdn();
-        assert_eq!(record.len(), EF_MSISDN_RECORD_LEN);
+        assert_eq!(record.len(), record_len);
         // Alpha identifier is padded with 0xFF
         assert_eq!(&record[..14], &[0xFF; 14]);
         // Length of BCD number is 7 (1 byte TON + 6 bytes dialed digits)
@@ -1846,6 +1847,6 @@ mod tests {
 
         // Empty digits returns standard unassigned 0xFF record
         let empty = PhoneNumber::new("");
-        assert_eq!(empty.encode_msisdn(), vec![0xFF; EF_MSISDN_RECORD_LEN]);
+        assert_eq!(empty.encode_msisdn(), vec![0xFF; record_len]);
     }
 }
