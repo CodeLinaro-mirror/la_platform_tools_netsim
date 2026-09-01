@@ -8,7 +8,7 @@ use tracing::info;
 
 use crate::{
     apdu,
-    config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
+    config::{DedicatedFile, ElementaryFile, FileSystem, OverwritePolicy, SimFile, SimProfile},
     constants::*,
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
     types::{
@@ -440,13 +440,6 @@ pub struct SimService {
     atr: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum OverwritePolicy {
-    Always,
-    IfUninitialized,
-    Never,
-}
-
 impl SimService {
     /// Creates a new SimService from a SIM profile configuration.
     pub fn new(profile: &SimProfile) -> Self {
@@ -507,35 +500,6 @@ impl SimService {
             atr: profile.atr.clone(),
         };
 
-        // Ensure boot-essential files are present in the filesystem and correctly
-        // synchronized
-        fn ensure_ef_present(
-            df: &mut DedicatedFile,
-            id: impl Into<u16>,
-            record_len: Option<usize>,
-            data: Vec<u8>,
-            policy: OverwritePolicy,
-        ) {
-            let id = id.into();
-            if let Some(ef) = find_ef_mut(df, id) {
-                let should_overwrite = match policy {
-                    OverwritePolicy::Always => true,
-                    OverwritePolicy::IfUninitialized => ef.data.iter().all(|&b| b == 0xFF),
-                    OverwritePolicy::Never => false,
-                };
-                if should_overwrite {
-                    ef.data = data;
-                    ef.record_len = record_len;
-                }
-            } else {
-                df.files.push(SimFile::ElementaryFile(ElementaryFile {
-                    file_id: id,
-                    record_len,
-                    data,
-                }));
-            }
-        }
-
         let iccid_swapped = crate::pdu::bcd::string_to_bcd(&iccid);
         let imsi_encoded = crate::pdu::bcd::encode_imsi(&imsi);
         let requested_msisdn = PhoneNumber::parse(profile.msisdn.as_bytes()).map(|(_, p)| p).ok();
@@ -544,66 +508,59 @@ impl SimService {
             .as_ref()
             .map(|p| p.encode_msisdn())
             .or_else(|| {
-                find_df(&service.fs.master_file, UiccFileId::Telecom)
-                    .and_then(|df| find_ef(df, UiccFileId::Msisdn))
+                service
+                    .fs
+                    .find_df(UiccFileId::Telecom)
+                    .and_then(|df| df.find_ef(UiccFileId::Msisdn))
                     .or_else(|| {
-                        find_df(&service.fs.master_file, UiccFileId::AdfDefault)
-                            .and_then(|df| find_ef(df, UiccFileId::Msisdn))
+                        service
+                            .fs
+                            .find_df(UiccFileId::AdfDefault)
+                            .and_then(|df| df.find_ef(UiccFileId::Msisdn))
                     })
                     .map(|ef| ef.data.clone())
             })
             .unwrap_or_else(|| vec![0xFF; EF_MSISDN_RECORD_LEN]);
         let fplmn_data = EF_FPLMN_DATA_FALLBACK.to_vec();
 
-        ensure_ef_present(
-            &mut service.fs.master_file,
+        service.fs.ensure_ef_present(
             UiccFileId::Iccid,
             None,
             iccid_swapped,
             OverwritePolicy::Always,
         );
         if let Some(encoded) = imsi_encoded {
-            ensure_ef_present(
-                &mut service.fs.master_file,
-                UiccFileId::Imsi,
-                None,
-                encoded,
-                OverwritePolicy::Always,
-            );
+            service.fs.ensure_ef_present(UiccFileId::Imsi, None, encoded, OverwritePolicy::Always);
         }
-        if find_df_mut(&mut service.fs.master_file, UiccFileId::Telecom).is_none() {
+        if service.fs.find_df_mut(UiccFileId::Telecom).is_none() {
             service.fs.master_file.files.push(SimFile::DedicatedFile(DedicatedFile {
                 file_id: UiccFileId::Telecom.as_u16(),
                 files: Vec::new(),
             }));
         }
-        let telecom_df = find_df_mut(&mut service.fs.master_file, UiccFileId::Telecom)
-            .expect("DF_TELECOM must exist");
-        ensure_ef_present(
-            telecom_df,
+        let telecom_df =
+            service.fs.find_df_mut(UiccFileId::Telecom).expect("DF_TELECOM must exist");
+        telecom_df.ensure_ef_present(
             UiccFileId::Msisdn,
             Some(EF_MSISDN_RECORD_LEN),
             msisdn_data.clone(),
             OverwritePolicy::IfUninitialized,
         );
-        if let Some(adf_df) = find_df_mut(&mut service.fs.master_file, UiccFileId::AdfDefault) {
-            ensure_ef_present(
-                adf_df,
+        if let Some(adf_df) = service.fs.find_df_mut(UiccFileId::AdfDefault) {
+            adf_df.ensure_ef_present(
                 UiccFileId::Msisdn,
                 Some(EF_MSISDN_RECORD_LEN),
                 msisdn_data,
                 OverwritePolicy::IfUninitialized,
             );
         }
-        ensure_ef_present(
-            &mut service.fs.master_file,
+        service.fs.ensure_ef_present(
             UiccFileId::ForbiddenPlmn,
             None,
             fplmn_data,
             OverwritePolicy::Never,
         );
-        ensure_ef_present(
-            &mut service.fs.master_file,
+        service.fs.ensure_ef_present(
             UiccFileId::MailboxDialingNumbers,
             Some(EF_MBDN_RECORD_LEN),
             vec![0xFF; 4 * EF_MBDN_RECORD_LEN],
@@ -655,23 +612,28 @@ impl SimService {
     }
 
     fn get_imsi(&self) -> String {
-        find_ef(&self.fs.master_file, UiccFileId::Imsi)
+        self.fs
+            .find_ef(UiccFileId::Imsi)
             .and_then(|ef| decode_imsi(&ef.data))
             .unwrap_or_else(|| DEFAULT_FALLBACK_IMSI.to_string())
     }
 
     fn get_iccid(&self) -> String {
-        find_ef(&self.fs.master_file, UiccFileId::Iccid)
+        self.fs
+            .find_ef(UiccFileId::Iccid)
             .map(|ef| crate::pdu::bcd::bcd_to_string(&ef.data))
             .unwrap_or_else(|| DEFAULT_FALLBACK_ICCID.to_string())
     }
 
     pub(crate) fn get_msisdn(&self) -> Option<PhoneNumber> {
-        let raw = find_df(&self.fs.master_file, UiccFileId::Telecom)
-            .and_then(|telecom| find_ef(telecom, UiccFileId::Msisdn))
+        let raw = self
+            .fs
+            .find_df(UiccFileId::Telecom)
+            .and_then(|telecom| telecom.find_ef(UiccFileId::Msisdn))
             .or_else(|| {
-                find_df(&self.fs.master_file, UiccFileId::AdfDefault)
-                    .and_then(|usim| find_ef(usim, UiccFileId::Msisdn))
+                self.fs
+                    .find_df(UiccFileId::AdfDefault)
+                    .and_then(|usim| usim.find_ef(UiccFileId::Msisdn))
             })
             .and_then(|ef| decode_msisdn(&ef.data))?;
         PhoneNumber::parse(raw.as_bytes()).map(|(_, p)| p).ok()
@@ -680,26 +642,17 @@ impl SimService {
     pub fn set_msisdn(&mut self, msisdn: Option<&PhoneNumber>) {
         let encoded =
             msisdn.map(|p| p.encode_msisdn()).unwrap_or_else(|| vec![0xFF; EF_MSISDN_RECORD_LEN]);
-        if let Some(telecom) = find_df_mut(&mut self.fs.master_file, UiccFileId::Telecom) {
-            if let Some(ef) = find_ef_mut(telecom, UiccFileId::Msisdn) {
-                ef.data = encoded.clone();
-            } else {
-                telecom.files.push(SimFile::ElementaryFile(ElementaryFile {
-                    file_id: UiccFileId::Msisdn.into(),
-                    record_len: Some(EF_MSISDN_RECORD_LEN),
-                    data: encoded.clone(),
-                }));
-            }
-        }
-        if let Some(usim) = find_df_mut(&mut self.fs.master_file, UiccFileId::AdfDefault) {
-            if let Some(ef) = find_ef_mut(usim, UiccFileId::Msisdn) {
-                ef.data = encoded;
-            } else {
-                usim.files.push(SimFile::ElementaryFile(ElementaryFile {
-                    file_id: UiccFileId::Msisdn.into(),
-                    record_len: Some(EF_MSISDN_RECORD_LEN),
-                    data: encoded,
-                }));
+        for df_id in [UiccFileId::Telecom, UiccFileId::AdfDefault] {
+            if let Some(df) = self.fs.find_df_mut(df_id) {
+                if let Some(ef) = df.find_ef_mut(UiccFileId::Msisdn) {
+                    ef.data = encoded.clone();
+                } else {
+                    df.files.push(SimFile::ElementaryFile(ElementaryFile {
+                        file_id: UiccFileId::Msisdn.into(),
+                        record_len: Some(EF_MSISDN_RECORD_LEN),
+                        data: encoded.clone(),
+                    }));
+                }
             }
         }
     }
@@ -731,19 +684,18 @@ impl SimService {
                     && let Some(adf) = self.adfs.iter().find(|a| a.aid == *active_aid)
                 {
                     let in_overrides = adf.files.iter().any(|f| f.id == fid);
-                    let in_fs_subtree = if let Some(adf_df) =
-                        find_df(&self.fs.master_file, UiccFileId::AdfDefault)
-                    {
-                        find_ef(adf_df, fid).is_some() || find_df(adf_df, fid).is_some()
-                    } else {
-                        false
-                    };
+                    let in_fs_subtree =
+                        if let Some(adf_df) = self.fs.find_df(UiccFileId::AdfDefault) {
+                            adf_df.find_ef(fid).is_some() || adf_df.find_df(fid).is_some()
+                        } else {
+                            false
+                        };
                     in_overrides || in_fs_subtree
                 } else {
                     false
                 };
-                if find_ef(&self.fs.master_file, fid).is_some()
-                    || find_df(&self.fs.master_file, fid).is_some()
+                if self.fs.find_ef(fid).is_some()
+                    || self.fs.find_df(fid).is_some()
                     || is_file_in_active_adf
                     || UiccFileId::is_virtual_fallback_id(fid)
                 {
@@ -919,7 +871,7 @@ impl SimService {
     ) -> Result<(), SimResponse> {
         let file_id = file_id.into();
         // Update in the file system if it exists there
-        if let Some(ef) = find_ef_mut(&mut self.fs.master_file, file_id) {
+        if let Some(ef) = self.fs.find_ef_mut(file_id) {
             if command == apdu::Instruction::UpdateBinary {
                 let offset = ((p1 as usize) << 8) | (p2 as usize);
                 let Ok(new_bytes) = hex::decode(hex_str) else {
@@ -986,7 +938,7 @@ impl SimService {
         p3: u8,
     ) -> Result<String, SimResponse> {
         let file_id = file_id.into();
-        if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
+        if let Some(ef) = self.fs.find_ef(file_id) {
             let offset = ((p1 as usize) << 8) | (p2 as usize);
             let ef_size = ef.size();
             if offset > ef_size {
@@ -1016,7 +968,7 @@ impl SimService {
                 return Err(RESP_INCORRECT_PARAMS);
             }
             let file_id = file_id.into();
-            if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
+            if let Some(ef) = self.fs.find_ef(file_id) {
                 if let Some(rec_len) = ef.record_len
                     && rec_len > 0
                 {
@@ -1087,9 +1039,7 @@ impl SimService {
                 }
                 Err(err_resp) => return Ok(Some(err_resp)),
             }
-        } else if command == apdu::Instruction::Select
-            && find_df(&self.fs.master_file, file_id).is_some()
-        {
+        } else if command == apdu::Instruction::Select && self.fs.find_df(file_id).is_some() {
             return Ok(Some(SimResponse::RestrictedSimAccess {
                 sw: SW_SUCCESS,
                 data: Some("6210".to_string()),
@@ -1101,13 +1051,13 @@ impl SimService {
                 data: Some(STATUS_FCP_HEX.to_string()),
             }));
         } else if command == apdu::Instruction::GetResponse {
-            let header_opt = if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
+            let header_opt = if let Some(ef) = self.fs.find_ef(file_id) {
                 Some(SimResponseHeader::Elementary(ElementaryFileResponseHeader::new(
                     ef.file_id,
                     ef.data.len(),
                     ef.record_len,
                 )))
-            } else if let Some(df) = find_df(&self.fs.master_file, file_id) {
+            } else if let Some(df) = self.fs.find_df(file_id) {
                 let df_count =
                     df.files.iter().filter(|f| matches!(f, SimFile::DedicatedFile(_))).count();
                 let ef_count =
@@ -1702,7 +1652,7 @@ impl SimService {
             return true;
         }
 
-        let Some(fdn_ef) = find_ef(&self.fs.master_file, UiccFileId::FixedDialingNumbers) else {
+        let Some(fdn_ef) = self.fs.find_ef(UiccFileId::FixedDialingNumbers) else {
             return false;
         };
 
@@ -1864,80 +1814,6 @@ fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
         fcp_bytes[1] = (fcp_bytes.len() - 2) as u8;
     }
     hex::encode_upper(fcp_bytes)
-}
-
-pub(crate) fn find_df(df: &DedicatedFile, id: impl Into<u16>) -> Option<&DedicatedFile> {
-    let id = id.into();
-    if df.file_id == id {
-        return Some(df);
-    }
-    for file in &df.files {
-        if let SimFile::DedicatedFile(df) = file
-            && let Some(found) = find_df(df, id)
-        {
-            return Some(found);
-        }
-    }
-    None
-}
-
-pub(crate) fn find_df_mut(
-    df: &mut DedicatedFile,
-    id: impl Into<u16>,
-) -> Option<&mut DedicatedFile> {
-    let id = id.into();
-    if df.file_id == id {
-        return Some(df);
-    }
-    for file in &mut df.files {
-        if let SimFile::DedicatedFile(sub_df) = file
-            && let Some(found) = find_df_mut(sub_df, id)
-        {
-            return Some(found);
-        }
-    }
-    None
-}
-
-pub(crate) fn find_ef(df: &DedicatedFile, id: impl Into<u16>) -> Option<&ElementaryFile> {
-    let id = id.into();
-    for file in &df.files {
-        match file {
-            SimFile::ElementaryFile(ef) => {
-                if ef.file_id == id {
-                    return Some(ef);
-                }
-            }
-            SimFile::DedicatedFile(df) => {
-                if let Some(ef) = find_ef(df, id) {
-                    return Some(ef);
-                }
-            }
-        }
-    }
-    None
-}
-
-pub(crate) fn find_ef_mut(
-    df: &mut DedicatedFile,
-    id: impl Into<u16>,
-) -> Option<&mut ElementaryFile> {
-    let id = id.into();
-    for file in &mut df.files {
-        match file {
-            SimFile::ElementaryFile(ef) => {
-                if ef.file_id == id {
-                    return Some(ef);
-                }
-            }
-            SimFile::DedicatedFile(df) => {
-                if let Some(ef) = find_ef_mut(df, id) {
-                    return Some(ef);
-                }
-            }
-        }
-    }
-    None
 }
 
 fn decode_imsi(bytes: &[u8]) -> Option<String> {
@@ -2261,7 +2137,7 @@ mod tests {
                 files: vec![],
             })],
         };
-        let telecom = find_df_mut(&mut mf, UiccFileId::Telecom);
+        let telecom = mf.find_df_mut(UiccFileId::Telecom);
         assert!(telecom.is_some());
         assert_eq!(telecom.unwrap().file_id, UiccFileId::Telecom.as_u16());
     }
