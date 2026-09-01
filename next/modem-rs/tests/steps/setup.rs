@@ -250,6 +250,116 @@ pub fn given_modem_with_msisdn_in_fs(world: &mut World, name: &str) {
     world.modems.insert(name.to_string(), (id, handler));
 }
 
+/// Helper function to create a SIM profile with a 2-record EF_MSISDN in the
+/// filesystem.
+pub fn create_profile_with_multi_record_msisdn() -> SimProfile {
+    let line1 = hex::decode("4C696E6531FFFFFFFFFFFFFFFFFF07915155111111F1FFFFFFFFFFFF").unwrap();
+    let line2 = hex::decode("4C696E6532FFFFFFFFFFFFFFFFFF07915155222222F2FFFFFFFFFFFF").unwrap();
+    let mut data = Vec::new();
+    data.extend(line1);
+    data.extend(line2);
+
+    SimProfile {
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: UiccFileId::MasterFile.into(),
+                    files: vec![
+                        SimFile::ElementaryFile(ElementaryFile {
+                            file_id: UiccFileId::Iccid.into(),
+                            record_len: None,
+                            data: hex::decode(TEST_ICCID).unwrap(),
+                        }),
+                        SimFile::DedicatedFile(DedicatedFile {
+                            file_id: UiccFileId::Telecom.into(),
+                            files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                file_id: UiccFileId::Msisdn.into(),
+                                record_len: UiccFileId::Msisdn.default_record_len(),
+                                data,
+                            })],
+                        }),
+                    ],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a SIM profile that has a 2-record EF_MSISDN in the
+/// filesystem.
+pub fn given_modem_with_multi_record_msisdn_in_fs(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+    let profile = create_profile_with_multi_record_msisdn();
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+        .expect("Failed to create modem with multi-record MSISDN in FS");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Helper function to create a SIM profile with a custom record length
+/// EF_MSISDN.
+pub fn create_profile_with_custom_record_len_msisdn(record_len: usize) -> SimProfile {
+    SimProfile {
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: UiccFileId::MasterFile.into(),
+                    files: vec![
+                        SimFile::ElementaryFile(ElementaryFile {
+                            file_id: UiccFileId::Iccid.into(),
+                            record_len: None,
+                            data: hex::decode(TEST_ICCID).unwrap(),
+                        }),
+                        SimFile::DedicatedFile(DedicatedFile {
+                            file_id: UiccFileId::Telecom.into(),
+                            files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                file_id: UiccFileId::Msisdn.into(),
+                                record_len: Some(record_len),
+                                data: vec![0xFF; record_len],
+                            })],
+                        }),
+                    ],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a SIM profile that has a custom record length EF_MSISDN
+/// in the filesystem.
+pub fn given_modem_with_custom_record_len_msisdn_in_fs(
+    world: &mut World,
+    name: &str,
+    record_len: usize,
+) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+    let profile = create_profile_with_custom_record_len_msisdn(record_len);
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+        .expect("Failed to create modem with custom record len MSISDN in FS");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
 /// Helper function to create a SIM profile with EF_FPLMN and EF_MBDN in the
 /// filesystem.
 pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
@@ -273,16 +383,18 @@ pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
                             record_len: None,
                             data: vec![0xFF; 12],
                         }),
-                        SimFile::ElementaryFile(ElementaryFile {
-                            file_id: UiccFileId::MailboxDialingNumbers.into(),
-
-                            record_len: UiccFileId::MailboxDialingNumbers.default_record_len(),
-                            data: vec![
-                                0xFF;
-                                4 * UiccFileId::MailboxDialingNumbers
-                                    .default_record_len()
-                                    .expect("file id is record based")
-                            ],
+                        SimFile::DedicatedFile(DedicatedFile {
+                            file_id: UiccFileId::Telecom.as_u16(),
+                            files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                file_id: UiccFileId::MailboxDialingNumbers.into(),
+                                record_len: UiccFileId::MailboxDialingNumbers.default_record_len(),
+                                data: vec![
+                                    0xFF;
+                                    4 * UiccFileId::MailboxDialingNumbers
+                                        .default_record_len()
+                                        .expect("file id is record based")
+                                ],
+                            })],
                         }),
                     ],
                 },
@@ -369,5 +481,51 @@ pub fn given_modem_with_fdn_sim_profile(world: &mut World, name: &str) {
         .manager
         .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
         .expect("Failed to create modem with FDN SIM profile");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Creates a 2G GSM SIM profile with MF (0x3F00) and DF_TELECOM (0x7F10)
+/// without any Application Dedicated Files (ADFs).
+pub fn create_2g_sim_profile() -> SimProfile {
+    SimProfile {
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: UiccFileId::MasterFile.into(),
+                    files: vec![
+                        SimFile::ElementaryFile(ElementaryFile {
+                            file_id: UiccFileId::Iccid.into(),
+                            record_len: None,
+                            data: hex::decode(TEST_ICCID).unwrap(),
+                        }),
+                        SimFile::DedicatedFile(DedicatedFile {
+                            file_id: UiccFileId::Telecom.into(),
+                            files: Vec::new(),
+                        }),
+                    ],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a 2G SIM profile (no ADFs).
+pub fn given_modem_with_2g_sim_profile(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    let profile = create_2g_sim_profile();
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+        .expect("Failed to create modem with 2G SIM profile");
     world.modems.insert(name.to_string(), (id, handler));
 }

@@ -101,6 +101,24 @@ impl UiccFileId {
     pub const fn is_record_based(self) -> bool {
         self.default_record_len().is_some()
     }
+
+    /// Returns true if this Elementary File uses the 3GPP ADN record format.
+    pub const fn is_adn(self) -> bool {
+        matches!(
+            self,
+            Self::Msisdn
+                | Self::MailboxDialingNumbers
+                | Self::FixedDialingNumbers
+                | Self::AbbreviatedDialingNumbers
+                | Self::AbbreviatedDialingNumbersUsim
+        )
+    }
+
+    /// Returns true if this file should be synchronized across DF_TELECOM and
+    /// ADF_USIM.
+    pub const fn is_dual_df_synced(self) -> bool {
+        matches!(self, Self::Msisdn | Self::MailboxDialingNumbers | Self::FixedDialingNumbers)
+    }
 }
 
 impl From<UiccFileId> for u16 {
@@ -138,8 +156,17 @@ impl TryFrom<u16> for UiccFileId {
 // 51.011 §10.5.1)
 pub const ADN_ALPHA_IDENTIFIER_LEN: usize = 14;
 pub const ADN_DIALING_NUMBER_LEN: usize = 10;
+pub const ADN_FOOTER_LEN: usize = 14;
 pub const ADN_CAPABILITY_EXT_BYTES: [u8; 2] = [0xFF, 0xFF];
 
+/// Default number of linear-fixed records provisioned for EF_MBDN.
+/// TS 31.102 §4.4.2.3 specifies 4 default mailbox types: Voice, Fax, Electronic
+/// Mail, and Other.
+pub const DEFAULT_MBDN_RECORD_COUNT: usize = 4;
+
+/// Default number of linear-fixed records provisioned for EF_FDN (Fixed
+/// Dialling Numbers).
+pub const DEFAULT_FDN_RECORD_COUNT: usize = 10;
 pub const TAG_DF_NAME: u8 = 0x84;
 
 // ISO 7816-4 APDU Status Words (SW)

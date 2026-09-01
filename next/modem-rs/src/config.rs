@@ -302,6 +302,44 @@ impl FileSystem {
     pub fn normalize_record_lengths(&mut self) {
         self.master_file.normalize_record_lengths();
     }
+
+    /// Ensures an Elementary File is present in DF_TELECOM (creating DF_TELECOM
+    /// if missing), and also synchronizes it into ADF_USIM if ADF_USIM is
+    /// present in the file system.
+    ///
+    /// A 2G SIM does not have an Application Dedicated File (ADF); ADFs exist
+    /// only on 3G/LTE UICCs (ETSI TS 102 221 / 3GPP TS 31.102). Therefore,
+    /// ADF_USIM is only populated if already present, preserving 2G SIM
+    /// profile congruence.
+    pub fn ensure_ef_present_in_telecom_and_usim(
+        &mut self,
+        id: impl Into<u16>,
+        record_len: Option<usize>,
+        data: Vec<u8>,
+        policy: OverwritePolicy,
+    ) {
+        let id = id.into();
+        if self.find_df_mut(crate::constants::UiccFileId::Telecom).is_none() {
+            self.master_file.files.push(SimFile::DedicatedFile(DedicatedFile {
+                file_id: crate::constants::UiccFileId::Telecom.as_u16(),
+                files: Vec::new(),
+            }));
+        }
+        if let Some(telecom) = self.find_df_mut(crate::constants::UiccFileId::Telecom) {
+            telecom.ensure_ef_present(id, record_len, data.clone(), policy);
+        }
+        if let Some(usim) = self.find_df_mut(crate::constants::UiccFileId::AdfDefault) {
+            usim.ensure_ef_present(id, record_len, data, policy);
+        }
+    }
+
+    /// Finds an Elementary File in DF_TELECOM, falling back to ADF_USIM.
+    pub fn find_ef_in_telecom_or_usim(&self, id: impl Into<u16>) -> Option<&ElementaryFile> {
+        let id = id.into();
+        self.find_df(crate::constants::UiccFileId::Telecom).and_then(|df| df.find_ef(id)).or_else(
+            || self.find_df(crate::constants::UiccFileId::AdfDefault).and_then(|df| df.find_ef(id)),
+        )
+    }
 }
 
 /// Errors that can occur when updating a record in an Elementary File.
@@ -658,5 +696,79 @@ mod tests {
         );
         assert_eq!(res, Err(SW_INCORRECT_PARAMS));
         assert_eq!(transparent.data, vec![0x00; 10]);
+    }
+
+    #[test]
+    fn test_ensure_ef_present_in_telecom_and_usim() {
+        let mut fs =
+            FileSystem { master_file: DedicatedFile { file_id: 0x3F00, files: Vec::new() } };
+
+        // 1. Without ADF_USIM present (2G SIM profile): DF_TELECOM is created,
+        // but ADF_USIM (0x7FFF) is NOT synthesized.
+        fs.ensure_ef_present_in_telecom_and_usim(
+            crate::constants::UiccFileId::Msisdn,
+            Some(28),
+            vec![0xFF; 28],
+            OverwritePolicy::Never,
+        );
+
+        let telecom = fs.find_df(crate::constants::UiccFileId::Telecom).unwrap();
+        assert!(telecom.find_ef(crate::constants::UiccFileId::Msisdn).is_some());
+        assert!(fs.find_df(crate::constants::UiccFileId::AdfDefault).is_none());
+
+        // 2. With ADF_USIM present (3G/LTE UICC profile): both are populated.
+        fs.master_file.files.push(SimFile::DedicatedFile(DedicatedFile {
+            file_id: crate::constants::UiccFileId::AdfDefault.as_u16(),
+            files: Vec::new(),
+        }));
+        fs.ensure_ef_present_in_telecom_and_usim(
+            crate::constants::UiccFileId::Msisdn,
+            Some(28),
+            vec![0xAA; 28],
+            OverwritePolicy::Always,
+        );
+        let usim = fs.find_df(crate::constants::UiccFileId::AdfDefault).unwrap();
+        assert!(usim.find_ef(crate::constants::UiccFileId::Msisdn).is_some());
+    }
+
+    #[test]
+    fn test_find_ef_in_telecom_or_usim() {
+        let mut fs =
+            FileSystem { master_file: DedicatedFile { file_id: 0x3F00, files: Vec::new() } };
+
+        // Neither Telecom nor USIM exists
+        assert!(fs.find_ef_in_telecom_or_usim(crate::constants::UiccFileId::Msisdn).is_none());
+
+        // EF in USIM only
+        fs.master_file.files.push(SimFile::DedicatedFile(DedicatedFile {
+            file_id: crate::constants::UiccFileId::AdfDefault.as_u16(),
+            files: Vec::new(),
+        }));
+        if let Some(usim) = fs.find_df_mut(crate::constants::UiccFileId::AdfDefault) {
+            usim.ensure_ef_present(
+                crate::constants::UiccFileId::Msisdn,
+                Some(28),
+                vec![1; 28],
+                OverwritePolicy::Never,
+            );
+        }
+        let ef = fs.find_ef_in_telecom_or_usim(crate::constants::UiccFileId::Msisdn).unwrap();
+        assert_eq!(ef.data, vec![1; 28]);
+
+        // EF in Telecom takes precedence over USIM
+        fs.master_file.files.push(SimFile::DedicatedFile(DedicatedFile {
+            file_id: crate::constants::UiccFileId::Telecom.as_u16(),
+            files: Vec::new(),
+        }));
+        if let Some(telecom) = fs.find_df_mut(crate::constants::UiccFileId::Telecom) {
+            telecom.ensure_ef_present(
+                crate::constants::UiccFileId::Msisdn,
+                Some(28),
+                vec![2; 28],
+                OverwritePolicy::Never,
+            );
+        }
+        let ef = fs.find_ef_in_telecom_or_usim(crate::constants::UiccFileId::Msisdn).unwrap();
+        assert_eq!(ef.data, vec![2; 28]);
     }
 }
