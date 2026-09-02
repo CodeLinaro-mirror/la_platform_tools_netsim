@@ -12,7 +12,7 @@ use crate::{
     parser::{QuotedString, parse_raw_data},
     types::{
         AccessTechnology, CmeError, CopsFormat, CopsMode, CtecTechnology, ExecutionResult,
-        OperatorStatus, Parsable, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
+        OperatorStatus, Parsable, Plmn, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
         SignalStrength,
     },
 };
@@ -321,7 +321,7 @@ pub struct NetworkService {
     data_unsol_mode: RegistrationUnsolicitedMode,
     lte_unsol_mode: RegistrationUnsolicitedMode,
     radio_power: RadioPowerLevel,
-    plmn: String,
+    plmn: Option<Plmn>,
     cops_mode: CopsMode,
     cops_format: CopsFormat,
     current_network_mode: CtecTechnology,
@@ -332,7 +332,7 @@ pub struct NetworkService {
 }
 
 impl NetworkService {
-    pub fn new(quirks: Quirks, home_plmn: &str) -> Self {
+    pub fn new(quirks: Quirks, home_plmn: Option<Plmn>) -> Self {
         Self {
             voice_registration: RegistrationStatus::NotRegistered,
             data_registration: RegistrationStatus::NotRegistered,
@@ -341,7 +341,7 @@ impl NetworkService {
             data_unsol_mode: RegistrationUnsolicitedMode::default(),
             lte_unsol_mode: RegistrationUnsolicitedMode::default(),
             radio_power: RadioPowerLevel::default(),
-            plmn: home_plmn.to_string(),
+            plmn: home_plmn,
             cops_mode: CopsMode::Automatic,
             // Non-standard default: While 3GPP TS 27.007 § 7.3 specifies format 0 (long format
             // alphanumeric) as the default when AT+COPS is queried without setting
@@ -377,6 +377,14 @@ impl NetworkService {
 
     pub fn detach_network(&mut self) {
         self.is_attached = false;
+    }
+
+    pub fn set_home_plmn(&mut self, plmn: Option<Plmn>) {
+        self.plmn = plmn;
+    }
+
+    pub fn home_plmn(&self) -> Option<&Plmn> {
+        self.plmn.as_ref()
     }
 
     pub fn set_operator_manual(&mut self, mode: CopsMode, oper: Option<&[u8]>) -> NetworkResult {
@@ -522,7 +530,7 @@ impl NetworkService {
             is_registered,
             mode: self.cops_mode,
             format: self.cops_format,
-            plmn: self.plmn.clone(),
+            plmn: self.plmn.as_ref().map(|p| p.to_string()).unwrap_or_default(),
             quirks: self.quirks,
         }))
     }
@@ -562,9 +570,10 @@ impl NetworkService {
                         self.cops_format = fmt;
                     }
 
-                    let is_valid_operator = op_str == self.plmn
-                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
-                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
+                    let is_valid_operator =
+                        self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
+                            || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
+                            || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
 
                     if is_valid_operator {
                         let mut urcs = Vec::new();
@@ -642,7 +651,7 @@ impl NetworkService {
                         self.cops_format = fmt;
                     }
 
-                    let manual_success = op_str == self.plmn
+                    let manual_success = self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
                         || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
                         || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
                     let mut urcs = Vec::new();
@@ -671,7 +680,7 @@ impl NetworkService {
             status,
             long_name: DEFAULT_OPERATOR_NAME_LONG.to_string(),
             short_name: DEFAULT_OPERATOR_NAME_SHORT.to_string(),
-            numeric: self.plmn.clone(),
+            numeric: self.plmn.as_ref().map(|p| p.to_string()).unwrap_or_default(),
             act: self.act,
         };
         Ok(Some(NetworkResponse::AvailableOperators(vec![default_op])))

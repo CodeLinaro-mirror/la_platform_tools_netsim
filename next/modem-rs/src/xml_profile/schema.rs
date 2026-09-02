@@ -142,7 +142,7 @@ pub struct XmlApduMapping {
 #[derive(Debug, Deserialize, Clone)]
 pub struct XmlPinProfile {
     #[serde(rename = "PINSTATE")]
-    pub pin_state: Option<String>,
+    pub pin_state: Option<crate::config::PinState>,
     #[serde(rename = "PINCODE")]
     pub pin_code: Option<String>,
     #[serde(rename = "PUKCODE")]

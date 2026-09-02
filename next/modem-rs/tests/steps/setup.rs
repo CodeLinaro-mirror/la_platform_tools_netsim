@@ -3,8 +3,8 @@
 
 use hex;
 use modem_rs::{
-    DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile, config::PinProfile,
-    constants::UiccFileId, test_utils::MockModemHandler,
+    DedicatedFile, ElementaryFile, FileSystem, PinState, SimFile, SimIo, SimProfile,
+    config::PinProfile, constants::UiccFileId, test_utils::MockModemHandler,
 };
 use netsim_model::Quirks;
 
@@ -153,7 +153,7 @@ pub fn create_locked_sim_profile() -> SimProfile {
         iccid: TEST_ICCID.to_string(),
         imsi: TEST_IMSI.to_string(),
         pin_profile: PinProfile {
-            state: "EnabledNotVerified".to_string(),
+            state: PinState::EnabledNotVerified,
             pin1: LOCKED_PIN.to_string(),
             puk1: TEST_PUK.to_string(),
             ..Default::default()
@@ -191,6 +191,53 @@ pub fn given_modem_with_locked_sim(world: &mut World, name: &str) {
         .manager
         .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
         .expect("Failed to create modem with locked SIM");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+/// Helper function to create a SIM profile with PIN permanently blocked.
+pub fn create_perm_blocked_sim_profile() -> SimProfile {
+    SimProfile {
+        iccid: TEST_ICCID.to_string(),
+        imsi: TEST_IMSI.to_string(),
+        pin_profile: PinProfile {
+            state: PinState::PermBlocked,
+            pin1: LOCKED_PIN.to_string(),
+            puk1: TEST_PUK.to_string(),
+            puk1_retries: Some(0),
+            ..Default::default()
+        },
+        sim_io: SimIo {
+            file_system: FileSystem {
+                master_file: DedicatedFile {
+                    file_id: UiccFileId::MasterFile.into(),
+                    files: vec![SimFile::ElementaryFile(ElementaryFile {
+                        file_id: UiccFileId::Iccid.into(),
+
+                        record_len: None,
+                        data: hex::decode(TEST_ICCID).unwrap(),
+                    })],
+                },
+            },
+        },
+        ..Default::default()
+    }
+}
+
+/// Creates a modem with a permanently blocked SIM profile.
+pub fn given_modem_with_perm_blocked_sim(world: &mut World, name: &str) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    let profile = create_perm_blocked_sim_profile();
+
+    world
+        .manager
+        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+        .expect("Failed to create modem with perm blocked SIM");
     world.modems.insert(name.to_string(), (id, handler));
 }
 

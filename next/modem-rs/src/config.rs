@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer};
 use crate::{
     apdu,
     constants::{SW_INCORRECT_PARAMS, SW_REFERENCED_DATA_NOT_FOUND, SW_WRONG_LENGTH, UiccFileId},
+    types::Plmn,
 };
 
 fn deserialize_hex_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
@@ -36,20 +37,74 @@ pub struct SimProfile {
 impl SimProfile {
     /// Returns the home PLMN (MCC + MNC) derived from the SIM's IMSI.
     ///
-    /// Extracts the 6-digit PLMN prefix (assuming a 3-digit MNC, as used by all
-    /// standard emulator test profiles).
-    /// Note: Supporting 2-digit MNCs for arbitrary 15-digit IMSIs requires
-    /// reading the MNC length from EF_AD (0x6FAD).
-    /// Falls back to `DEFAULT_PLMN` if `imsi` is missing or unpopulated.
-    pub fn home_plmn(&self) -> &str {
-        if self.imsi.len() >= 6 { &self.imsi[..6] } else { crate::constants::DEFAULT_PLMN }
+    /// Returns `None` if `imsi` is missing or contains fewer than 5 digits.
+    pub fn home_plmn(&self) -> Option<Plmn> {
+        Plmn::from_imsi(&self.imsi, None)
     }
+
+    /// Returns summary metadata for this SIM profile.
+    pub fn metadata(&self) -> ProfileMetadata {
+        ProfileMetadata {
+            iccid: self.iccid.clone(),
+            imsi: self.imsi.clone(),
+            msisdn: self.msisdn.clone(),
+            home_plmn: self.home_plmn(),
+            eid: self.eid.clone(),
+        }
+    }
+}
+
+/// Summary metadata for a SIM profile.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ProfileMetadata {
+    pub iccid: String,
+    pub imsi: String,
+    pub msisdn: String,
+    pub home_plmn: Option<Plmn>,
+    pub eid: Option<String>,
+}
+
+/// Represents the PIN state from an ICC profile or Android RIL definition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum PinState {
+    #[default]
+    #[serde(rename = "PINSTATE_UNKNOWN", alias = "Unknown", alias = "UNKNOWN")]
+    Unknown,
+    #[serde(
+        rename = "PINSTATE_ENABLED_NOT_VERIFIED",
+        alias = "EnabledNotVerified",
+        alias = "ENABLED_NOT_VERIFIED"
+    )]
+    EnabledNotVerified,
+    #[serde(
+        rename = "PINSTATE_ENABLED_VERIFIED",
+        alias = "EnabledVerified",
+        alias = "ENABLED_VERIFIED"
+    )]
+    EnabledVerified,
+    #[serde(rename = "PINSTATE_DISABLED", alias = "Disabled", alias = "DISABLED")]
+    Disabled,
+    #[serde(
+        rename = "PINSTATE_ENABLED_BLOCKED",
+        alias = "Blocked",
+        alias = "PINSTATE_BLOCKED",
+        alias = "BLOCKED"
+    )]
+    Blocked,
+    #[serde(
+        rename = "PINSTATE_ENABLED_PERM_BLOCKED",
+        alias = "PermBlocked",
+        alias = "PINSTATE_PERM_BLOCKED",
+        alias = "PERM_BLOCKED"
+    )]
+    PermBlocked,
 }
 
 /// Represents the PIN profile configuration.
 #[derive(Debug, Deserialize, Default, Clone, PartialEq)]
 pub struct PinProfile {
-    pub state: String,
+    #[serde(default)]
+    pub state: PinState,
     pub pin1: String,
     pub puk1: String,
     pub pin2: String,
@@ -770,5 +825,48 @@ mod tests {
         }
         let ef = fs.find_ef_in_telecom_or_usim(crate::constants::UiccFileId::Msisdn).unwrap();
         assert_eq!(ef.data, vec![2; 28]);
+    }
+
+    #[test]
+    fn test_sim_profile_home_plmn() {
+        let mut profile = SimProfile::default();
+        assert_eq!(profile.home_plmn(), None);
+
+        profile.imsi = "31026".to_string();
+        assert_eq!(profile.home_plmn().as_ref().map(Plmn::as_str), Some("31026"));
+
+        profile.imsi = "310260123456789".to_string();
+        assert_eq!(profile.home_plmn().as_ref().map(Plmn::as_str), Some("310260"));
+
+        profile.imsi = "311740".to_string();
+        assert_eq!(profile.home_plmn().as_ref().map(Plmn::as_str), Some("311740"));
+
+        // No fallback for invalid/short IMSI
+        profile.imsi = "123".to_string();
+        assert_eq!(profile.home_plmn(), None);
+    }
+
+    #[test]
+    fn test_pin_state_serde() {
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            state: PinState,
+        }
+
+        let json1 = r#"{"state": "PINSTATE_ENABLED_NOT_VERIFIED"}"#;
+        let w1: Wrapper = serde_json::from_str(json1).unwrap();
+        assert_eq!(w1.state, PinState::EnabledNotVerified);
+
+        let json2 = r#"{"state": "EnabledNotVerified"}"#;
+        let w2: Wrapper = serde_json::from_str(json2).unwrap();
+        assert_eq!(w2.state, PinState::EnabledNotVerified);
+
+        let json3 = r#"{"state": "PINSTATE_UNKNOWN"}"#;
+        let w3: Wrapper = serde_json::from_str(json3).unwrap();
+        assert_eq!(w3.state, PinState::Unknown);
+
+        let json4 = r#"{"state": "Blocked"}"#;
+        let w4: Wrapper = serde_json::from_str(json4).unwrap();
+        assert_eq!(w4.state, PinState::Blocked);
     }
 }

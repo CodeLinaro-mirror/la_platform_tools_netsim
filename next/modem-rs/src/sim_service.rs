@@ -343,6 +343,7 @@ pub enum SimState {
     Ready,
     PinRequired,
     PukRequired,
+    PermBlocked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -439,12 +440,20 @@ pub struct SimService {
 impl SimService {
     /// Creates a new SimService from a SIM profile configuration.
     pub fn new(profile: &SimProfile) -> Self {
-        let pin_enabled =
-            matches!(profile.pin_profile.state.as_str(), "EnabledNotVerified" | "EnabledVerified");
-        let state = if profile.pin_profile.state.as_str() == "EnabledNotVerified" {
-            SimState::PinRequired
+        let pin_enabled = matches!(
+            profile.pin_profile.state,
+            crate::config::PinState::EnabledNotVerified | crate::config::PinState::EnabledVerified
+        );
+        let state = if profile.pin_profile.puk1_retries == Some(0)
+            || profile.pin_profile.state == crate::config::PinState::PermBlocked
+        {
+            SimState::PermBlocked
         } else {
-            SimState::Ready
+            match profile.pin_profile.state {
+                crate::config::PinState::EnabledNotVerified => SimState::PinRequired,
+                crate::config::PinState::Blocked => SimState::PukRequired,
+                _ => SimState::Ready,
+            }
         };
 
         let imsi = if profile.imsi.is_empty() {
@@ -721,6 +730,7 @@ impl SimService {
             SimState::Ready => RequiredPin::None,
             SimState::PinRequired => RequiredPin::SimPin,
             SimState::PukRequired => RequiredPin::SimPuk,
+            SimState::PermBlocked => return None,
         };
         Some(format!("{}", SimResponse::PinStatus(status)))
     }
@@ -733,7 +743,9 @@ impl SimService {
         let old_state = self.state;
         if present {
             if self.state == SimState::Absent {
-                self.state = if self.puk1_retries == 0 || self.pin1_retries == 0 {
+                self.state = if self.puk1_retries == 0 {
+                    SimState::PermBlocked
+                } else if self.pin1_retries == 0 {
                     SimState::PukRequired
                 } else if self.pin_enabled {
                     SimState::PinRequired
@@ -784,6 +796,7 @@ impl SimService {
             SimState::Ready => RequiredPin::None,
             SimState::PinRequired => RequiredPin::SimPin,
             SimState::PukRequired => RequiredPin::SimPuk,
+            SimState::PermBlocked => return Err(ExecutionResult::cme_error(CmeError::SimFailure)),
         };
         Ok(Some(SimResponse::PinStatus(status)))
     }
@@ -831,12 +844,16 @@ impl SimService {
                         Ok(None)
                     } else {
                         self.puk1_retries = self.puk1_retries.saturating_sub(1);
+                        if self.puk1_retries == 0 {
+                            self.state = SimState::PermBlocked;
+                        }
                         Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
                     }
                 } else {
                     Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))
                 }
             }
+            SimState::PermBlocked => Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed)),
         }
     }
 
@@ -1444,6 +1461,12 @@ impl SimService {
         old_password: QuotedString,
         new_password: QuotedString,
     ) -> SimResult {
+        if self.state == SimState::PermBlocked {
+            return Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed));
+        }
+        if self.state == SimState::PukRequired {
+            return Err(ExecutionResult::cme_error(CmeError::SimPukRequired));
+        }
         if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&old_password.as_ref().len())
             || !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&new_password.as_ref().len())
         {
@@ -1517,10 +1540,13 @@ impl SimService {
         mode: FacilityLockMode,
         passwd: Option<QuotedString>,
     ) -> SimResult {
-        if (mode == FacilityLockMode::Unlock || mode == FacilityLockMode::Lock)
-            && self.state == SimState::PukRequired
-        {
-            return Err(ExecutionResult::cme_error(CmeError::SimPukRequired));
+        if mode == FacilityLockMode::Unlock || mode == FacilityLockMode::Lock {
+            if self.state == SimState::PermBlocked {
+                return Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed));
+            }
+            if self.state == SimState::PukRequired {
+                return Err(ExecutionResult::cme_error(CmeError::SimPukRequired));
+            }
         }
         match mode {
             FacilityLockMode::Unlock => {

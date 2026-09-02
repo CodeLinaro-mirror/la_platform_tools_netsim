@@ -192,3 +192,24 @@ fn test_parse_fcp_linear_fixed_c0_simio() {
     assert_eq!(ef.size(), 84);
     assert_eq!(ef.data, vec![0xFF; 84]);
 }
+
+#[test]
+fn test_parse_pin_state() {
+    let xml = r#"<IccProfile>
+        <MF></MF>
+        <PinProfile>
+            <PINSTATE>PINSTATE_ENABLED_NOT_VERIFIED</PINSTATE>
+        </PinProfile>
+    </IccProfile>"#;
+    let profile = parse_xml_profile(xml).unwrap();
+    assert_eq!(profile.pin_profile.state, crate::config::PinState::EnabledNotVerified);
+
+    let xml2 = r#"<IccProfile>
+        <MF></MF>
+        <PinProfile>
+            <PINSTATE>EnabledVerified</PINSTATE>
+        </PinProfile>
+    </IccProfile>"#;
+    let profile2 = parse_xml_profile(xml2).unwrap();
+    assert_eq!(profile2.pin_profile.state, crate::config::PinState::EnabledVerified);
+}

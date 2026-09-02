@@ -76,11 +76,13 @@ pub type ModemId = u32;
 // Custom error type for the library.
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModemError {
     DuplicateModemId(ModemId),
+    UnknownModemId(ModemId),
     NotFound,
     InvalidConfig(String),
+    InvalidProfile(String),
 }
 
 impl std::error::Error for ModemError {}
@@ -89,9 +91,224 @@ impl fmt::Display for ModemError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ModemError::DuplicateModemId(id) => write!(f, "Duplicate modem ID: {id}"),
+            ModemError::UnknownModemId(id) => write!(f, "Unknown modem ID: {id}"),
             ModemError::NotFound => write!(f, "Modem network not found"),
             ModemError::InvalidConfig(msg) => write!(f, "Invalid configuration: {msg}"),
+            ModemError::InvalidProfile(msg) => write!(f, "Invalid SIM profile: {msg}"),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlmnError {
+    InvalidLength(usize),
+    InvalidDigits(String),
+    InvalidMcc(String),
+    InvalidMnc(String),
+}
+
+impl std::error::Error for PlmnError {}
+
+impl fmt::Display for PlmnError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PlmnError::InvalidLength(len) => {
+                write!(
+                    f,
+                    "PLMN length must be 5 digits (2-digit MNC) or 6 digits (3-digit MNC), got {len}"
+                )
+            }
+            PlmnError::InvalidDigits(s) => {
+                write!(f, "PLMN must contain only ASCII decimal digits, got: {s:?}")
+            }
+            PlmnError::InvalidMcc(s) => {
+                write!(f, "MCC must be exactly 3 ASCII decimal digits, got: {s:?}")
+            }
+            PlmnError::InvalidMnc(s) => {
+                write!(f, "MNC must be 2 or 3 ASCII decimal digits, got: {s:?}")
+            }
+        }
+    }
+}
+
+/// Represents a Public Land Mobile Network (PLMN) identity per 3GPP TS 23.003
+/// §2.2 and ITU-T Recommendation E.212.
+///
+/// Composed of:
+/// - Mobile Country Code (MCC): Exactly 3 decimal digits.
+/// - Mobile Network Code (MNC): Either 2 decimal digits (total 5 digits) or 3
+///   decimal digits (total 6 digits).
+///
+/// The distinction between 2- and 3-digit MNCs is governed by carrier
+/// assignment and signaled on SIM cards via `EF_AD` (Administrative Data) byte
+/// 4 (3GPP TS 31.102 §4.2.18).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(into = "String", try_from = "String")]
+pub enum Plmn {
+    /// 5-digit PLMN with a 2-digit Mobile Network Code (3-digit MCC + 2-digit
+    /// MNC). Standard in European (ITU-T Region 2) and international GSM
+    /// networks (e.g. "20810").
+    TwoDigitMnc([u8; 5]),
+
+    /// 6-digit PLMN with a 3-digit Mobile Network Code (3-digit MCC + 3-digit
+    /// MNC). Standard in North American (ITU-T Region 3) networks (e.g. US
+    /// carriers "310260", "311740").
+    ThreeDigitMnc([u8; 6]),
+}
+
+impl Plmn {
+    /// Validates and constructs a PLMN (must be 5 or 6 ASCII decimal digits).
+    pub fn parse(s: &str) -> Result<Self, PlmnError> {
+        let trimmed = s.trim();
+        let bytes = trimmed.as_bytes();
+        if !bytes.iter().all(u8::is_ascii_digit) {
+            return Err(PlmnError::InvalidDigits(s.to_string()));
+        }
+        match bytes.len() {
+            5 => {
+                let mut b = [0u8; 5];
+                b.copy_from_slice(bytes);
+                Ok(Self::TwoDigitMnc(b))
+            }
+            6 => {
+                let mut b = [0u8; 6];
+                b.copy_from_slice(bytes);
+                Ok(Self::ThreeDigitMnc(b))
+            }
+            len => Err(PlmnError::InvalidLength(len)),
+        }
+    }
+
+    /// Creates a PLMN from string or string-like slice.
+    pub fn new(s: impl AsRef<str>) -> Result<Self, PlmnError> {
+        Self::parse(s.as_ref())
+    }
+
+    /// Constructs a PLMN from separate MCC and MNC strings.
+    pub fn from_mcc_mnc(mcc: &str, mnc: &str) -> Result<Self, PlmnError> {
+        let mcc = mcc.trim();
+        let mnc = mnc.trim();
+        if mcc.len() != 3 || !mcc.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(PlmnError::InvalidMcc(mcc.to_string()));
+        }
+        let mcc_bytes = mcc.as_bytes();
+        let mnc_bytes = mnc.as_bytes();
+        match mnc.len() {
+            2 if mnc.bytes().all(|b| b.is_ascii_digit()) => {
+                let mut bytes = [0u8; 5];
+                bytes[..3].copy_from_slice(mcc_bytes);
+                bytes[3..].copy_from_slice(mnc_bytes);
+                Ok(Self::TwoDigitMnc(bytes))
+            }
+            3 if mnc.bytes().all(|b| b.is_ascii_digit()) => {
+                let mut bytes = [0u8; 6];
+                bytes[..3].copy_from_slice(mcc_bytes);
+                bytes[3..].copy_from_slice(mnc_bytes);
+                Ok(Self::ThreeDigitMnc(bytes))
+            }
+            _ => Err(PlmnError::InvalidMnc(mnc.to_string())),
+        }
+    }
+
+    /// Derives the home PLMN from an IMSI string.
+    ///
+    /// If `mnc_len` is specified (e.g. from EF_AD byte 4 per 3GPP TS 31.102
+    /// §4.2.18), it is honored. Otherwise defaults to a 3-digit MNC if len
+    /// is at least 6, or 2-digit MNC if len is 5. Returns `None` if IMSI is
+    /// shorter than 5 digits or non-numeric.
+    pub fn from_imsi(imsi: &str, mnc_len: Option<usize>) -> Option<Self> {
+        let digits = imsi.trim().as_bytes();
+        if digits.len() < 5 || !digits.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        match mnc_len {
+            Some(2) => {
+                let mut b = [0u8; 5];
+                b.copy_from_slice(&digits[..5]);
+                Some(Self::TwoDigitMnc(b))
+            }
+            Some(3) if digits.len() >= 6 => {
+                let mut b = [0u8; 6];
+                b.copy_from_slice(&digits[..6]);
+                Some(Self::ThreeDigitMnc(b))
+            }
+            _ => {
+                if digits.len() >= 6 {
+                    let mut b = [0u8; 6];
+                    b.copy_from_slice(&digits[..6]);
+                    Some(Self::ThreeDigitMnc(b))
+                } else {
+                    let mut b = [0u8; 5];
+                    b.copy_from_slice(&digits[..5]);
+                    Some(Self::TwoDigitMnc(b))
+                }
+            }
+        }
+    }
+
+    /// Returns the raw byte slice of ASCII decimal digits (length 5 or 6).
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::TwoDigitMnc(b) => b,
+            Self::ThreeDigitMnc(b) => b,
+        }
+    }
+
+    /// Returns the PLMN as an ASCII string slice (length 5 or 6).
+    pub fn as_str(&self) -> &str {
+        str::from_utf8(self.as_bytes()).expect("PLMN bytes are validated ASCII digits")
+    }
+
+    /// Returns the 3-digit Mobile Country Code (MCC).
+    pub fn mcc(&self) -> &str {
+        &self.as_str()[..3]
+    }
+
+    /// Returns the 2- or 3-digit Mobile Network Code (MNC).
+    pub fn mnc(&self) -> &str {
+        &self.as_str()[3..]
+    }
+
+    /// Returns the length of the Mobile Network Code (2 or 3).
+    pub fn mnc_length(&self) -> usize {
+        match self {
+            Self::TwoDigitMnc(_) => 2,
+            Self::ThreeDigitMnc(_) => 3,
+        }
+    }
+}
+
+impl fmt::Display for Plmn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl fmt::Debug for Plmn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Plmn(\"{}\")", self.as_str())
+    }
+}
+
+impl From<Plmn> for String {
+    fn from(plmn: Plmn) -> Self {
+        plmn.as_str().to_string()
+    }
+}
+
+impl TryFrom<String> for Plmn {
+    type Error = PlmnError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        Self::parse(&s)
+    }
+}
+
+impl TryFrom<&str> for Plmn {
+    type Error = PlmnError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
     }
 }
 
@@ -2134,5 +2351,76 @@ mod tests {
         let dec = AdnRecord::decode(&enc).unwrap();
         assert_eq!(dec.alpha_tag.as_deref(), Some("Alpha tag in 50-byte record"));
         assert_eq!(dec.number.as_ref().map(|p| p.as_str()), Some("+15550001111"));
+    }
+
+    #[test]
+    fn test_plmn_parse_and_accessors() {
+        // Valid 5-digit PLMN (e.g. UK Vodafone 234-15)
+        let plmn5 = Plmn::parse("23415").unwrap();
+        assert_eq!(plmn5.mcc(), "234");
+        assert_eq!(plmn5.mnc(), "15");
+        assert_eq!(plmn5.mnc_length(), 2);
+        assert_eq!(plmn5.as_str(), "23415");
+        assert_eq!(format!("{plmn5}"), "23415");
+        assert!(matches!(plmn5, Plmn::TwoDigitMnc(_)));
+
+        // Valid 6-digit PLMN (e.g. US T-Mobile 310-260)
+        let plmn6 = Plmn::parse("310260").unwrap();
+        assert_eq!(plmn6.mcc(), "310");
+        assert_eq!(plmn6.mnc(), "260");
+        assert_eq!(plmn6.mnc_length(), 3);
+        assert_eq!(plmn6.as_str(), "310260");
+        assert!(matches!(plmn6, Plmn::ThreeDigitMnc(_)));
+
+        // Construction from separate MCC/MNC
+        let from_parts = Plmn::from_mcc_mnc("311", "740").unwrap();
+        assert_eq!(from_parts.as_str(), "311740");
+        assert_eq!(from_parts.mnc_length(), 3);
+
+        let from_parts_2digit = Plmn::from_mcc_mnc("310", "26").unwrap();
+        assert_eq!(from_parts_2digit.as_str(), "31026");
+        assert_eq!(from_parts_2digit.mnc_length(), 2);
+
+        // Construction with surrounding whitespace
+        let from_trimmed = Plmn::from_mcc_mnc(" 310 \t", "\n260 ").unwrap();
+        assert_eq!(from_trimmed.as_str(), "310260");
+
+        // Derivation from IMSI
+        let derived_default = Plmn::from_imsi("310260000000000", None).unwrap();
+        assert_eq!(derived_default.as_str(), "310260");
+
+        let derived_explicit_2digit = Plmn::from_imsi("310260000000000", Some(2)).unwrap();
+        assert_eq!(derived_explicit_2digit.as_str(), "31026");
+
+        let derived_short_imsi = Plmn::from_imsi("31026", None).unwrap();
+        assert_eq!(derived_short_imsi.as_str(), "31026");
+
+        // Invalid formats must return Err / None
+        assert!(matches!(Plmn::parse("1234"), Err(PlmnError::InvalidLength(4))));
+        assert!(matches!(Plmn::parse("1234567"), Err(PlmnError::InvalidLength(7))));
+        assert!(matches!(Plmn::parse("3102A"), Err(PlmnError::InvalidDigits(_))));
+        assert!(matches!(Plmn::parse(""), Err(PlmnError::InvalidLength(0))));
+        assert_eq!(Plmn::from_mcc_mnc(" 12 ", "345"), Err(PlmnError::InvalidMcc("12".to_string())));
+        assert_eq!(Plmn::from_mcc_mnc("12A", "345"), Err(PlmnError::InvalidMcc("12A".to_string())));
+        assert_eq!(Plmn::from_mcc_mnc("123", " 4 "), Err(PlmnError::InvalidMnc("4".to_string())));
+        assert_eq!(
+            Plmn::from_mcc_mnc("123", "4567"),
+            Err(PlmnError::InvalidMnc("4567".to_string()))
+        );
+        assert_eq!(Plmn::from_mcc_mnc("123", "4B"), Err(PlmnError::InvalidMnc("4B".to_string())));
+        assert!(Plmn::from_imsi("1234", None).is_none());
+        assert!(Plmn::from_imsi("", None).is_none());
+    }
+
+    #[test]
+    fn test_plmn_serde() {
+        let plmn = Plmn::parse("310260").unwrap();
+        let json = serde_json::to_string(&plmn).unwrap();
+        assert_eq!(json, "\"310260\"");
+        let deserialized: Plmn = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, plmn);
+
+        let invalid_json = "\"1234\"";
+        assert!(serde_json::from_str::<Plmn>(invalid_json).is_err());
     }
 }
