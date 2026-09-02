@@ -365,7 +365,7 @@ mod tests {
         // SAFETY: this is safe because `sin6_addr` is type `in6_addr.`
         let in_v6_ip_octets = unsafe {
             std::slice::from_raw_parts(
-                &in_v6.sin6_addr as *const _ as *const u8,
+                (&in_v6.sin6_addr as *const in6_addr).cast::<u8>(),
                 mem::size_of::<in6_addr>(),
             )
         };
@@ -393,7 +393,7 @@ mod tests {
         // SAFETY: this is safe because `sin_addr` is type `in_addr.`
         let in_v4_ip_octets = unsafe {
             std::slice::from_raw_parts(
-                &in_v4.sin_addr as *const _ as *const u8,
+                (&in_v4.sin_addr as *const in_addr).cast::<u8>(),
                 mem::size_of::<in_addr>(),
             )
         };

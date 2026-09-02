@@ -2090,10 +2090,10 @@ mod tests {
         let msisdn_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
 
         // Populate EF_MSISDN in DF_TELECOM with 2 records
-        if let Some(telecom) = service.fs.find_df_mut(UiccFileId::Telecom) {
-            if let Some(ef) = telecom.find_ef_mut(UiccFileId::Msisdn) {
-                ef.data = vec![0xAA; 2 * msisdn_len];
-            }
+        if let Some(telecom) = service.fs.find_df_mut(UiccFileId::Telecom)
+            && let Some(ef) = telecom.find_ef_mut(UiccFileId::Msisdn)
+        {
+            ef.data = vec![0xAA; 2 * msisdn_len];
         }
 
         let new_num = PhoneNumber::new("+15555215554");
