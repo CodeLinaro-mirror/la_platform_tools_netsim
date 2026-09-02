@@ -3,7 +3,7 @@
 
 //! APDU parsing helpers for ISO/IEC 7816-4.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt};
 
 use crate::constants::SW_WRONG_LENGTH;
 
@@ -117,6 +117,44 @@ pub enum Instruction {
 impl Instruction {
     pub const fn is_update(self) -> bool {
         matches!(self, Self::UpdateBinary | Self::UpdateRecord)
+    }
+
+    pub const fn as_u8(self) -> u8 {
+        match self {
+            Self::ReadBinary => 0xB0,
+            Self::ReadRecord => 0xB2,
+            Self::UpdateRecord => 0xDC,
+            Self::Select => 0xA4,
+            Self::UpdateBinary => 0xD6,
+            Self::Status => 0xF2,
+            Self::ManageChannel => 0x70,
+            Self::GetResponse => 0xC0,
+            Self::Unknown(val) => val,
+        }
+    }
+}
+
+impl From<Instruction> for u8 {
+    fn from(ins: Instruction) -> Self {
+        ins.as_u8()
+    }
+}
+
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_u8())
+    }
+}
+
+impl fmt::UpperHex for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::UpperHex::fmt(&self.as_u8(), f)
+    }
+}
+
+impl fmt::LowerHex for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::LowerHex::fmt(&self.as_u8(), f)
     }
 }
 

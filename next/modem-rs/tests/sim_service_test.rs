@@ -2102,3 +2102,38 @@ fn test_2g_sim_profile_preserves_type_without_adf() {
     then_response_is(&mut world, "A", "+CSIM: 4,6A82");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_cphs_mwi_not_found_in_default_sim0_profile() {
+    let mut world = World::new();
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_DEFAULT_XML);
+
+    use modem_rs::{apdu::Instruction, constants::UiccFileId};
+
+    // ReadBinary on EF_VOICE_MAIL_INDICATOR_CPHS should return SW_FILE_NOT_FOUND
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!(
+            "AT+CRSM={},{},0,0,1",
+            Instruction::ReadBinary,
+            UiccFileId::VoiceMailIndicatorCphs
+        ),
+    );
+    then_response_is(&mut world, "A", RESP_CRSM_FILE_NOT_FOUND);
+    then_response_is(&mut world, "A", "OK");
+
+    // GetResponse on EF_VOICE_MAIL_INDICATOR_CPHS should also return
+    // SW_FILE_NOT_FOUND
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!(
+            "AT+CRSM={},{},0,0,15",
+            Instruction::GetResponse,
+            UiccFileId::VoiceMailIndicatorCphs
+        ),
+    );
+    then_response_is(&mut world, "A", RESP_CRSM_FILE_NOT_FOUND);
+    then_response_is(&mut world, "A", "OK");
+}

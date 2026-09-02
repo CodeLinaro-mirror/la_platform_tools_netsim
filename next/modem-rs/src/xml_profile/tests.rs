@@ -1,9 +1,13 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::Deserialize;
+use serde_xml_rs::{Deserializer, EventReader, ParserConfig};
+
 use super::*;
 use crate::{
-    constants::UiccFileId,
+    apdu::Instruction,
+    constants::{SW_FILE_NOT_FOUND, SW_SUCCESS, UiccFileId},
     profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML},
 };
 
@@ -212,4 +216,219 @@ fn test_parse_pin_state() {
     </IccProfile>"#;
     let profile2 = parse_xml_profile(xml2).unwrap();
     assert_eq!(profile2.pin_profile.state, crate::config::PinState::EnabledVerified);
+}
+
+#[test]
+fn test_xml_simio_status_word() {
+    let simio = schema::XmlSimIo {
+        command: Instruction::GetResponse,
+        p1: 0,
+        p2: 0,
+        p3: 0x0F,
+        response: "106,130".to_string(),
+    };
+    assert_eq!(simio.command, Instruction::GetResponse);
+    assert_eq!(simio.status_word(), Some(SW_FILE_NOT_FOUND));
+
+    let success_simio = schema::XmlSimIo {
+        command: Instruction::ReadBinary,
+        p1: 0,
+        p2: 0,
+        p3: 4,
+        response: "144,0,00000003".to_string(),
+    };
+    assert_eq!(success_simio.command, Instruction::ReadBinary);
+    assert_eq!(success_simio.status_word(), Some(SW_SUCCESS));
+}
+
+#[test]
+fn test_xml_elementary_file_is_file_not_found() {
+    let xml_ef = schema::XmlElementaryFile {
+        id: UiccFileId::VoiceMailIndicatorCphs.as_u16(),
+        structure: Some(schema::XmlFileStructure::Transparent),
+        members: vec![schema::XmlElementaryFileMember::Simio(schema::XmlSimIo {
+            command: Instruction::GetResponse,
+            p1: 0,
+            p2: 0,
+            p3: 0x0F,
+            response: "106,130".to_string(),
+        })],
+    };
+    assert!(xml_ef.is_file_not_found());
+}
+
+#[test]
+fn test_ef_with_file_not_found_is_omitted() {
+    let target_fid = UiccFileId::VoiceMailIndicatorCphs;
+    let get_response_cmd = Instruction::GetResponse;
+    let xml = format!(
+        r#"<IccProfile>
+        <MF>
+            <EF id="{target_fid:04X}" structure="transparent">
+                <SIMIO cmd="{get_response_cmd:02X}" p1="0" p2="0" p3="F">106,130</SIMIO>
+            </EF>
+        </MF>
+    </IccProfile>"#
+    );
+    let profile = parse_xml_profile(&xml).unwrap();
+    assert!(profile.sim_io.file_system.find_ef(target_fid).is_none());
+}
+
+fn find_xml_ef_in_df<'a>(
+    df: &'a schema::XmlDedicatedFile,
+    target_id: u16,
+) -> Option<&'a schema::XmlElementaryFile> {
+    for member in &df.members {
+        match member {
+            schema::XmlDedicatedFileMember::Elementary(ef) if ef.id == target_id => {
+                return Some(ef);
+            }
+            schema::XmlDedicatedFileMember::Dedicated(sub_df) => {
+                if let Some(ef) = find_xml_ef_in_df(sub_df, target_id) {
+                    return Some(ef);
+                }
+            }
+            schema::XmlDedicatedFileMember::ApplicationDedicated(adf) => {
+                if let Some(ef) = find_xml_ef_in_adf(adf, target_id) {
+                    return Some(ef);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn find_xml_ef_in_adf<'a>(
+    adf: &'a schema::XmlApplicationDedicatedFile,
+    target_id: u16,
+) -> Option<&'a schema::XmlElementaryFile> {
+    for member in &adf.members {
+        match member {
+            schema::XmlApplicationDedicatedFileMember::ElementaryFile(ef) if ef.id == target_id => {
+                return Some(ef);
+            }
+            schema::XmlApplicationDedicatedFileMember::DedicatedFile(df) => {
+                if let Some(ef) = find_xml_ef_in_df(df, target_id) {
+                    return Some(ef);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+#[test]
+fn test_builtin_profiles_omit_cphs_mwi() {
+    for (name, xml) in [
+        ("default", PROFILE_DEFAULT_XML),
+        ("cts", PROFILE_CTS_XML),
+        ("tel_alaska", PROFILE_TEL_ALASKA_XML),
+    ] {
+        // 1. Verify that the raw XML profile actually defines EF 0x6F11 with status
+        //    word 106,130
+        let config = ParserConfig::new()
+            .max_entity_expansion_depth(0)
+            .max_entity_expansion_length(0)
+            .trim_whitespace(true)
+            .whitespace_to_characters(true)
+            .cdata_to_characters(true)
+            .ignore_comments(true)
+            .coalesce_characters(true);
+        let reader = EventReader::new_with_config(xml.as_bytes(), config);
+        let mut deserializer = Deserializer::new(reader);
+        let raw_profile = schema::XmlIccProfile::deserialize(&mut deserializer)
+            .unwrap_or_else(|e| panic!("failed to deserialize raw {name} profile: {e:?}"));
+
+        let target_fid = UiccFileId::VoiceMailIndicatorCphs.as_u16();
+        let raw_ef = raw_profile
+            .application_dedicated_files
+            .iter()
+            .find_map(|adf| find_xml_ef_in_adf(adf, target_fid))
+            .or_else(|| {
+                raw_profile.master_file.as_ref().and_then(|mf| find_xml_ef_in_df(mf, target_fid))
+            })
+            .unwrap_or_else(|| panic!("{name} profile must define raw EF 0x{target_fid:04X}"));
+
+        assert!(
+            raw_ef.is_file_not_found(),
+            "{name} profile EF 0x{target_fid:04X} must be marked as not found"
+        );
+        let simio = raw_ef
+            .members
+            .iter()
+            .find_map(|m| match m {
+                schema::XmlElementaryFileMember::Simio(s) => Some(s),
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                panic!("{name} profile EF 0x{target_fid:04X} must have a SIMIO mapping")
+            });
+        assert_eq!(simio.command, Instruction::GetResponse);
+        assert_eq!(simio.status_word(), Some(SW_FILE_NOT_FOUND));
+
+        // 2. Verify that parsing the profile filters out EF from the filesystem
+        let profile = parse_xml_profile(xml)
+            .unwrap_or_else(|e| panic!("failed to parse {name} profile: {e:?}"));
+        assert!(
+            profile.sim_io.file_system.find_ef(target_fid).is_none(),
+            "{name} profile unexpectedly contains EF 0x{target_fid:04X}"
+        );
+    }
+}
+
+#[test]
+fn test_sim_service_with_parsed_profile_rejects_missing_ef() {
+    let profile = parse_xml_profile(PROFILE_DEFAULT_XML).unwrap();
+    let mut service = crate::sim_service::SimService::from_profile(&profile);
+    let target_fid = UiccFileId::VoiceMailIndicatorCphs.as_u16();
+
+    let get_resp_cmd = crate::sim_service::SimCommand::SimIo {
+        command: Instruction::GetResponse,
+        file_id: target_fid,
+        p1: 0,
+        p2: 0,
+        p3: 15,
+        data: None,
+        path: None,
+    };
+    let result = service.execute(&get_resp_cmd);
+    assert_eq!(
+        result,
+        crate::types::ExecutionResult::Success(crate::types::HandledCommand {
+            responses: vec![
+                crate::types::Response::Sim(crate::sim_service::SimResponse::RestrictedSimAccess {
+                    sw: SW_FILE_NOT_FOUND,
+                    data: None,
+                }),
+                crate::types::Response::Ok,
+            ],
+            actions: vec![],
+        })
+    );
+
+    let read_binary_cmd = crate::sim_service::SimCommand::SimIo {
+        command: Instruction::ReadBinary,
+        file_id: target_fid,
+        p1: 0,
+        p2: 0,
+        p3: 0,
+        data: None,
+        path: None,
+    };
+    let result = service.execute(&read_binary_cmd);
+    assert_eq!(
+        result,
+        crate::types::ExecutionResult::Success(crate::types::HandledCommand {
+            responses: vec![
+                crate::types::Response::Sim(crate::sim_service::SimResponse::RestrictedSimAccess {
+                    sw: SW_FILE_NOT_FOUND,
+                    data: None,
+                }),
+                crate::types::Response::Ok,
+            ],
+            actions: vec![],
+        })
+    );
 }
