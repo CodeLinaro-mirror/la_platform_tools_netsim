@@ -792,14 +792,15 @@ fn test_apdu_update_record_non_record_file() {
     let mut world = World::new();
     given_modem_with_fplmn_and_mbdn_in_fs(&mut world, "A");
 
-    // FPLMN (28539) is transparent. Try UPDATE RECORD (220) on it.
+    // FPLMN (28539) is transparent. Try UPDATE RECORD (220) on it - must fail with
+    // SW_INCORRECT_PARAMS.
     when_at_command_sent(&mut world, "A", "AT+CRSM=220,28539,1,4,6,\"AABBCCDDEEFF\"");
-    then_response_is(&mut world, "A", "+CRSM: 144,0");
+    then_response_is(&mut world, "A", "+CRSM: 106,134");
     then_response_is(&mut world, "A", "OK");
 
-    // Read it back (should be overwritten entirely)
-    when_at_command_sent(&mut world, "A", "AT+CRSM=176,28539,0,0,6");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,AABBCCDDEEFF");
+    // Read it back (content should be unchanged)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,28539,0,0,12");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFF");
     then_response_is(&mut world, "A", "OK");
 }
 

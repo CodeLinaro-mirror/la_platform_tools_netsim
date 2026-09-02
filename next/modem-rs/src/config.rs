@@ -3,6 +3,11 @@
 
 use serde::{Deserialize, Deserializer};
 
+use crate::{
+    apdu,
+    constants::{SW_INCORRECT_PARAMS, SW_REFERENCED_DATA_NOT_FOUND, SW_WRONG_LENGTH, UiccFileId},
+};
+
 fn deserialize_hex_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
 where
     D: Deserializer<'de>,
@@ -147,6 +152,8 @@ impl DedicatedFile {
         policy: OverwritePolicy,
     ) {
         let id = id.into();
+        let record_len = record_len
+            .or_else(|| UiccFileId::try_from(id).ok().and_then(UiccFileId::default_record_len));
         if let Some(ef) = self.find_ef_mut(id) {
             let should_overwrite = match policy {
                 OverwritePolicy::Always => true,
@@ -163,6 +170,25 @@ impl DedicatedFile {
                 record_len,
                 data,
             }));
+        }
+    }
+
+    /// Recursively normalizes record lengths for all known record-based
+    /// Elementary Files.
+    pub fn normalize_record_lengths(&mut self) {
+        for file in &mut self.files {
+            match file {
+                SimFile::ElementaryFile(ef) => {
+                    if ef.record_len.is_none() {
+                        ef.record_len = UiccFileId::try_from(ef.file_id)
+                            .ok()
+                            .and_then(UiccFileId::default_record_len);
+                    }
+                }
+                SimFile::DedicatedFile(df) => {
+                    df.normalize_record_lengths();
+                }
+            }
         }
     }
 
@@ -231,6 +257,17 @@ impl DedicatedFile {
         }
         None
     }
+
+    pub fn update_record(
+        &mut self,
+        id: impl Into<u16>,
+        record_number: usize,
+        record_data: &[u8],
+    ) -> Result<(), RecordUpdateError> {
+        let id = id.into();
+        let ef = self.find_ef_mut(id).ok_or(RecordUpdateError::FileNotFound)?;
+        ef.update_record(record_number, record_data)
+    }
 }
 
 impl FileSystem {
@@ -259,6 +296,22 @@ impl FileSystem {
     ) {
         self.master_file.ensure_ef_present(id, record_len, data, policy);
     }
+
+    /// Recursively normalizes record lengths for all known record-based
+    /// Elementary Files.
+    pub fn normalize_record_lengths(&mut self) {
+        self.master_file.normalize_record_lengths();
+    }
+}
+
+/// Errors that can occur when updating a record in an Elementary File.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum RecordUpdateError {
+    InvalidRecordNumber,
+    NotRecordBased,
+    WrongLength { expected: usize, actual: usize },
+    RecordNotFound,
+    FileNotFound,
 }
 
 /// Represents an Elementary File (EF), which contains the actual data.
@@ -277,6 +330,151 @@ impl ElementaryFile {
     /// Returns the size of the file in bytes.
     pub fn size(&self) -> usize {
         self.data.len()
+    }
+
+    /// Returns the configured record length, or the canonical 3GPP default, or
+    /// `None` if transparent.
+    pub fn record_len(&self) -> Option<usize> {
+        self.record_len.or_else(|| {
+            UiccFileId::try_from(self.file_id).ok().and_then(UiccFileId::default_record_len)
+        })
+    }
+
+    /// Returns the number of complete records stored in this file, or 0 if not
+    /// record-based.
+    pub fn record_count(&self) -> usize {
+        match self.record_len() {
+            Some(rec_len) if rec_len > 0 => self.data.len() / rec_len,
+            _ => 0,
+        }
+    }
+
+    /// Returns a 1-based record slice, or `None` if `record_number == 0`,
+    /// `record_len` is not set, or the record index exceeds the current
+    /// file buffer.
+    pub fn record(&self, record_number: usize) -> Option<&[u8]> {
+        if record_number == 0 {
+            return None;
+        }
+        let rec_len = self.record_len()?;
+        if rec_len == 0 {
+            return None;
+        }
+        let start = (record_number - 1) * rec_len;
+        let end = start + rec_len;
+        if end <= self.data.len() { Some(&self.data[start..end]) } else { None }
+    }
+
+    /// Returns a mutable 1-based record slice, or `None` if `record_number ==
+    /// 0`, `record_len` is not set, or the record index exceeds the current
+    /// file buffer.
+    pub fn record_mut(&mut self, record_number: usize) -> Option<&mut [u8]> {
+        if record_number == 0 {
+            return None;
+        }
+        let rec_len = self.record_len()?;
+        if rec_len == 0 {
+            return None;
+        }
+        let start = (record_number - 1) * rec_len;
+        let end = start + rec_len;
+        if end <= self.data.len() { Some(&mut self.data[start..end]) } else { None }
+    }
+
+    /// Returns an iterator yielding each record in this linear-fixed file.
+    pub fn records(&self) -> impl Iterator<Item = &[u8]> {
+        let rec_len = self.record_len().unwrap_or(0);
+        let slice: &[u8] = if rec_len > 0 { &self.data } else { &[] };
+        let chunk_size = if rec_len > 0 { rec_len } else { 1 };
+        slice.chunks_exact(chunk_size)
+    }
+
+    /// Updates a 1-based record in-place within a linear-fixed Elementary File.
+    ///
+    /// Returns `Ok(())` on success, or a `RecordUpdateError` if the record
+    /// number is 0, the file is not record-based, the payload length
+    /// mismatches the record length, or the record index is out of bounds.
+    pub fn update_record(
+        &mut self,
+        record_number: usize,
+        record_data: &[u8],
+    ) -> Result<(), RecordUpdateError> {
+        if record_number == 0 {
+            return Err(RecordUpdateError::InvalidRecordNumber);
+        }
+        let Some(rec_len) = self.record_len() else {
+            return Err(RecordUpdateError::NotRecordBased);
+        };
+        if rec_len == 0 {
+            return Err(RecordUpdateError::NotRecordBased);
+        }
+        if record_data.len() != rec_len {
+            return Err(RecordUpdateError::WrongLength {
+                expected: rec_len,
+                actual: record_data.len(),
+            });
+        }
+        let Some(rec_slice) = self.record_mut(record_number) else {
+            return Err(RecordUpdateError::RecordNotFound);
+        };
+        rec_slice.copy_from_slice(record_data);
+        Ok(())
+    }
+
+    /// Updates the content of this Elementary File from an APDU command.
+    ///
+    /// Returns `Ok(())` on success, or `Err(status_word)` on error.
+    pub fn update(
+        &mut self,
+        command: apdu::Instruction,
+        p1: u8,
+        p2: u8,
+        p3: u8,
+        hex_str: &str,
+    ) -> Result<(), u16> {
+        match command {
+            apdu::Instruction::UpdateBinary => {
+                let offset = u16::from_be_bytes([p1, p2]) as usize;
+                let Ok(new_bytes) = hex::decode(hex_str) else {
+                    return Err(SW_INCORRECT_PARAMS);
+                };
+                if p3 > 0 && new_bytes.len() != p3 as usize {
+                    return Err(SW_WRONG_LENGTH);
+                }
+                if offset + new_bytes.len() > self.data.len() {
+                    self.data.resize(offset + new_bytes.len(), 0xFF);
+                }
+                self.data[offset..offset + new_bytes.len()].copy_from_slice(&new_bytes);
+                Ok(())
+            }
+            apdu::Instruction::UpdateRecord => {
+                let Ok(mode) = apdu::RecordMode::try_from(p2) else {
+                    return Err(SW_INCORRECT_PARAMS);
+                };
+                if !mode.is_absolute() {
+                    return Err(SW_INCORRECT_PARAMS);
+                }
+                let Ok(new_bytes) = hex::decode(hex_str) else {
+                    return Err(SW_INCORRECT_PARAMS);
+                };
+                let Some(rec_len) = self.record_len() else {
+                    return Err(SW_INCORRECT_PARAMS);
+                };
+                if rec_len == 0 || p1 == 0 {
+                    return Err(SW_INCORRECT_PARAMS);
+                }
+                if new_bytes.len() != rec_len || (p3 > 0 && p3 as usize != rec_len) {
+                    return Err(SW_WRONG_LENGTH);
+                }
+                let record_num = p1 as usize;
+                let Some(rec_slice) = self.record_mut(record_num) else {
+                    return Err(SW_REFERENCED_DATA_NOT_FOUND);
+                };
+                rec_slice.copy_from_slice(&new_bytes);
+                Ok(())
+            }
+            _ => Err(SW_INCORRECT_PARAMS),
+        }
     }
 }
 
@@ -302,4 +500,163 @@ pub struct ApplicationDedicatedFile {
     pub csim: Vec<ApduMapping>,
     #[serde(default)]
     pub files: Vec<ApplicationFileOverride>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_elementary_file_update_record_in_place() {
+        let mut ef = ElementaryFile { file_id: 0x6F40, record_len: Some(10), data: vec![0xAA; 20] };
+        let new_rec1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        assert_eq!(ef.update_record(1, &new_rec1), Ok(()));
+        assert_eq!(&ef.data[..10], &new_rec1);
+        assert_eq!(&ef.data[10..], &[0xAA; 10]);
+
+        let new_rec2 = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+        assert_eq!(ef.update_record(2, &new_rec2), Ok(()));
+        assert_eq!(&ef.data[..10], &new_rec1);
+        assert_eq!(&ef.data[10..], &new_rec2);
+    }
+
+    #[test]
+    fn test_elementary_file_update_record_errors() {
+        let mut ef = ElementaryFile { file_id: 0x6F40, record_len: Some(10), data: vec![0xAA; 20] };
+        // Invalid record number 0
+        assert_eq!(ef.update_record(0, &[0; 10]), Err(RecordUpdateError::InvalidRecordNumber));
+        // Wrong length
+        assert_eq!(
+            ef.update_record(1, &[0; 5]),
+            Err(RecordUpdateError::WrongLength { expected: 10, actual: 5 })
+        );
+        // Record out of bounds
+        assert_eq!(ef.update_record(3, &[0; 10]), Err(RecordUpdateError::RecordNotFound));
+
+        // Transparent file (not record-based)
+        let mut transparent =
+            ElementaryFile { file_id: 0x2FE2, record_len: None, data: vec![0xAA; 10] };
+        assert_eq!(transparent.update_record(1, &[0; 10]), Err(RecordUpdateError::NotRecordBased));
+    }
+
+    #[test]
+    fn test_dedicated_file_update_record() {
+        let mut df = DedicatedFile {
+            file_id: 0x7F10,
+            files: vec![SimFile::ElementaryFile(ElementaryFile {
+                file_id: 0x6F40,
+                record_len: Some(3),
+                data: vec![0xAA; 6],
+            })],
+        };
+        assert_eq!(df.update_record(0x6F40u16, 1, &[0x11, 0x22, 0x33]), Ok(()));
+        let ef = df.find_ef(0x6F40u16).unwrap();
+        assert_eq!(&ef.data[..3], &[0x11, 0x22, 0x33]);
+        assert_eq!(&ef.data[3..], &[0xAA; 3]);
+
+        // File not found in DF
+        assert_eq!(
+            df.update_record(0x6F38u16, 1, &[0x11, 0x22, 0x33]),
+            Err(RecordUpdateError::FileNotFound)
+        );
+    }
+
+    #[test]
+    fn test_elementary_file_records_methods() {
+        let mut ef = ElementaryFile {
+            file_id: 0x6F40,
+            record_len: Some(5),
+            data: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        };
+        assert_eq!(ef.record_len(), Some(5));
+        assert_eq!(ef.record_count(), 2);
+        assert_eq!(ef.record(1), Some(&[1, 2, 3, 4, 5][..]));
+        assert_eq!(ef.record(2), Some(&[6, 7, 8, 9, 10][..]));
+        assert_eq!(ef.record(3), None);
+        assert_eq!(ef.record(0), None);
+
+        let records: Vec<&[u8]> = ef.records().collect();
+        assert_eq!(records, vec![&[1, 2, 3, 4, 5][..], &[6, 7, 8, 9, 10][..]]);
+
+        if let Some(rec) = ef.record_mut(2) {
+            rec[0] = 99;
+        }
+        assert_eq!(ef.record(2), Some(&[99, 7, 8, 9, 10][..]));
+
+        // File without record_len
+        let transparent =
+            ElementaryFile { file_id: 0x2FE2, record_len: None, data: vec![0x11, 0x22] };
+        assert_eq!(transparent.record_len(), None);
+        assert_eq!(transparent.record_count(), 0);
+        assert_eq!(transparent.record(1), None);
+        assert_eq!(transparent.records().count(), 0);
+
+        // Fallback for known record-based file with record_len == None
+        let msisdn_none =
+            ElementaryFile { file_id: 0x6F40, record_len: None, data: vec![0xFF; 56] };
+        assert_eq!(msisdn_none.record_len(), Some(28));
+        assert_eq!(msisdn_none.record_count(), 2);
+    }
+
+    #[test]
+    fn test_normalize_record_lengths() {
+        let mut fs = FileSystem {
+            master_file: DedicatedFile {
+                file_id: 0x3F00,
+                files: vec![
+                    SimFile::ElementaryFile(ElementaryFile {
+                        file_id: 0x2FE2,
+                        record_len: None,
+                        data: vec![0x11; 10],
+                    }),
+                    SimFile::DedicatedFile(DedicatedFile {
+                        file_id: 0x7F10,
+                        files: vec![
+                            SimFile::ElementaryFile(ElementaryFile {
+                                file_id: 0x6F40,
+                                record_len: None,
+                                data: Vec::new(),
+                            }),
+                            SimFile::ElementaryFile(ElementaryFile {
+                                file_id: 0x6FC7,
+                                record_len: None,
+                                data: vec![0xAA; 76],
+                            }),
+                        ],
+                    }),
+                ],
+            },
+        };
+
+        fs.normalize_record_lengths();
+
+        // 0x2FE2 (ICCID) remains None
+        let iccid = fs.find_ef(0x2FE2u16).unwrap();
+        assert_eq!(iccid.record_len, None);
+
+        // 0x6F40 (MSISDN) populated with Some(28) and data preserved
+        let msisdn = fs.find_ef(0x6F40u16).unwrap();
+        assert_eq!(msisdn.record_len, Some(28));
+        assert_eq!(msisdn.data, Vec::<u8>::new());
+
+        // 0x6FC7 (MBDN) populated with Some(38) and data preserved
+        let mbdn = fs.find_ef(0x6FC7u16).unwrap();
+        assert_eq!(mbdn.record_len, Some(38));
+        assert_eq!(mbdn.data, vec![0xAA; 76]);
+    }
+
+    #[test]
+    fn test_elementary_file_update_rejects_update_record_on_transparent() {
+        let mut transparent =
+            ElementaryFile { file_id: 0x2FE2, record_len: None, data: vec![0x00; 10] };
+        let res = transparent.update(
+            crate::apdu::Instruction::UpdateRecord,
+            1,
+            4,
+            10,
+            "AABBCCDDEEFF00112233",
+        );
+        assert_eq!(res, Err(SW_INCORRECT_PARAMS));
+        assert_eq!(transparent.data, vec![0x00; 10]);
+    }
 }

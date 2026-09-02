@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    constants::{EF_MBDN_RECORD_LEN, UiccFileId},
+    constants::UiccFileId,
     profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML},
 };
 
@@ -94,9 +94,11 @@ fn test_deduce_record_len_from_dc_mappings() {
     </IccProfile>"#;
     let profile = parse_xml_profile(xml).unwrap();
     let ef = profile.sim_io.file_system.find_ef(UiccFileId::MailboxDialingNumbers).unwrap();
-    assert_eq!(ef.record_len, Some(EF_MBDN_RECORD_LEN));
-    assert_eq!(ef.size(), 2 * EF_MBDN_RECORD_LEN);
-    assert_eq!(ef.data, vec![0xFF; 2 * EF_MBDN_RECORD_LEN]);
+    let mbdn_len =
+        UiccFileId::MailboxDialingNumbers.default_record_len().expect("file id is record based");
+    assert_eq!(ef.record_len, Some(mbdn_len));
+    assert_eq!(ef.size(), 2 * mbdn_len);
+    assert_eq!(ef.data, vec![0xFF; 2 * mbdn_len]);
 }
 
 #[test]
@@ -171,4 +173,22 @@ fn test_parse_eid_and_atr() {
     let profile = parse_xml_profile(xml).unwrap();
     assert_eq!(profile.eid, Some("89049032000001000000000254806852".to_string()));
     assert_eq!(profile.atr, Some("3F979580BFFE8210428031A073BE211797".to_string()));
+}
+
+#[test]
+fn test_parse_fcp_linear_fixed_c0_simio() {
+    // Tag 0x82 len 5: 02 (linear fixed) 00 00 1C (rec_len = 28) 03 (num_records =
+    // 3) Tag 0x80 len 2: 00 54 (file_size = 84 = 3 * 28)
+    let xml = r#"<IccProfile>
+        <MF>
+            <EF id="4F33">
+                <SIMIO cmd="C0" p1="0" p2="0" p3="1C">98,130,621982050200001C0383024F338A01058B036F060180020054</SIMIO>
+            </EF>
+        </MF>
+    </IccProfile>"#;
+    let profile = parse_xml_profile(xml).unwrap();
+    let ef = profile.sim_io.file_system.find_ef(0x4F33u16).unwrap();
+    assert_eq!(ef.record_len, Some(28));
+    assert_eq!(ef.size(), 84);
+    assert_eq!(ef.data, vec![0xFF; 84]);
 }

@@ -4,7 +4,7 @@
 use std::{collections::HashMap, fmt::Write, iter::once};
 
 use modem_rs_derive::CommandParser;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     apdu,
@@ -503,7 +503,11 @@ impl SimService {
         let iccid_swapped = crate::pdu::bcd::string_to_bcd(&iccid);
         let imsi_encoded = crate::pdu::bcd::encode_imsi(&imsi);
         let requested_msisdn = PhoneNumber::parse(profile.msisdn.as_bytes()).map(|(_, p)| p).ok();
-
+        service.fs.normalize_record_lengths();
+        let msisdn_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
+        let mbdn_len = UiccFileId::MailboxDialingNumbers
+            .default_record_len()
+            .expect("file id is record based");
         let msisdn_data = requested_msisdn
             .as_ref()
             .map(|p| p.encode_msisdn())
@@ -520,7 +524,7 @@ impl SimService {
                     })
                     .map(|ef| ef.data.clone())
             })
-            .unwrap_or_else(|| vec![0xFF; EF_MSISDN_RECORD_LEN]);
+            .unwrap_or_else(|| vec![0xFF; msisdn_len]);
         let fplmn_data = EF_FPLMN_DATA_FALLBACK.to_vec();
 
         service.fs.ensure_ef_present(
@@ -542,14 +546,14 @@ impl SimService {
             service.fs.find_df_mut(UiccFileId::Telecom).expect("DF_TELECOM must exist");
         telecom_df.ensure_ef_present(
             UiccFileId::Msisdn,
-            Some(EF_MSISDN_RECORD_LEN),
+            Some(msisdn_len),
             msisdn_data.clone(),
             OverwritePolicy::IfUninitialized,
         );
         if let Some(adf_df) = service.fs.find_df_mut(UiccFileId::AdfDefault) {
             adf_df.ensure_ef_present(
                 UiccFileId::Msisdn,
-                Some(EF_MSISDN_RECORD_LEN),
+                Some(msisdn_len),
                 msisdn_data,
                 OverwritePolicy::IfUninitialized,
             );
@@ -562,8 +566,8 @@ impl SimService {
         );
         service.fs.ensure_ef_present(
             UiccFileId::MailboxDialingNumbers,
-            Some(EF_MBDN_RECORD_LEN),
-            vec![0xFF; 4 * EF_MBDN_RECORD_LEN],
+            Some(mbdn_len),
+            vec![0xFF; 4 * mbdn_len],
             OverwritePolicy::Never,
         );
 
@@ -595,7 +599,7 @@ impl SimService {
             && (apdu.p1 == 0x00 || apdu.p1 == 0x08)
             && apdu.data().len() >= 2
         {
-            let target_fid = ((apdu.data()[0] as u16) << 8) | (apdu.data()[1] as u16);
+            let target_fid = u16::from_be_bytes([apdu.data()[0], apdu.data()[1]]);
             if let Some(file_mock) = adf.files.iter().find(|f| f.id == target_fid)
                 && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd.matches(apdu))
             {
@@ -635,21 +639,23 @@ impl SimService {
                     .find_df(UiccFileId::AdfDefault)
                     .and_then(|usim| usim.find_ef(UiccFileId::Msisdn))
             })
-            .and_then(|ef| decode_msisdn(&ef.data))?;
+            .and_then(|ef| ef.record(1).and_then(decode_msisdn))?;
         PhoneNumber::parse(raw.as_bytes()).map(|(_, p)| p).ok()
     }
 
     pub fn set_msisdn(&mut self, msisdn: Option<&PhoneNumber>) {
-        let encoded =
-            msisdn.map(|p| p.encode_msisdn()).unwrap_or_else(|| vec![0xFF; EF_MSISDN_RECORD_LEN]);
+        let msisdn_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
+        let encoded = msisdn.map(|p| p.encode_msisdn()).unwrap_or_else(|| vec![0xFF; msisdn_len]);
         for df_id in [UiccFileId::Telecom, UiccFileId::AdfDefault] {
             if let Some(df) = self.fs.find_df_mut(df_id) {
                 if let Some(ef) = df.find_ef_mut(UiccFileId::Msisdn) {
-                    ef.data = encoded.clone();
+                    if let Err(e) = ef.update_record(1, &encoded) {
+                        debug!("Failed to update MSISDN record 1 in {df_id:?}: {e:?}");
+                    }
                 } else {
                     df.files.push(SimFile::ElementaryFile(ElementaryFile {
                         file_id: UiccFileId::Msisdn.into(),
-                        record_len: Some(EF_MSISDN_RECORD_LEN),
+                        record_len: Some(msisdn_len),
                         data: encoded.clone(),
                     }));
                 }
@@ -679,7 +685,7 @@ impl SimService {
                 if apdu.data().len() != 2 {
                     return Err(SW_WRONG_LENGTH);
                 }
-                let fid = ((apdu.data()[0] as u16) << 8) | (apdu.data()[1] as u16);
+                let fid = u16::from_be_bytes([apdu.data()[0], apdu.data()[1]]);
                 let is_file_in_active_adf = if let Some(active_aid) = &self.selected_aids[idx]
                     && let Some(adf) = self.adfs.iter().find(|a| a.aid == *active_aid)
                 {
@@ -872,57 +878,7 @@ impl SimService {
         let file_id = file_id.into();
         // Update in the file system if it exists there
         if let Some(ef) = self.fs.find_ef_mut(file_id) {
-            if command == apdu::Instruction::UpdateBinary {
-                let offset = ((p1 as usize) << 8) | (p2 as usize);
-                let Ok(new_bytes) = hex::decode(hex_str) else {
-                    return Err(RESP_INCORRECT_PARAMS);
-                };
-                if p3 > 0 && new_bytes.len() != p3 as usize {
-                    return Err(RESP_WRONG_LENGTH);
-                }
-                if offset + new_bytes.len() > ef.data.len() {
-                    ef.data.resize(offset + new_bytes.len(), 0xFF);
-                }
-                ef.data[offset..offset + new_bytes.len()].copy_from_slice(&new_bytes);
-                Ok(())
-            } else if command == apdu::Instruction::UpdateRecord {
-                // UPDATE RECORD
-                if let Ok(mode) = apdu::RecordMode::try_from(p2) {
-                    if !mode.is_absolute() {
-                        return Err(RESP_INCORRECT_PARAMS);
-                    }
-                    let Ok(new_bytes) = hex::decode(hex_str) else {
-                        return Err(RESP_INCORRECT_PARAMS);
-                    };
-                    if let Some(rec_len) = ef.record_len
-                        && rec_len > 0
-                    {
-                        if p1 == 0 {
-                            return Err(RESP_INCORRECT_PARAMS);
-                        }
-                        if new_bytes.len() != rec_len || (p3 > 0 && p3 as usize != rec_len) {
-                            return Err(RESP_WRONG_LENGTH);
-                        }
-                        let record_num = p1 as usize;
-                        let start = (record_num - 1) * rec_len;
-                        let end = start + rec_len;
-                        if end > ef.data.len() {
-                            return Err(RESP_REFERENCED_DATA_NOT_FOUND);
-                        }
-                        ef.data[start..end].copy_from_slice(&new_bytes);
-                        return Ok(());
-                    }
-                    if p3 > 0 && new_bytes.len() != p3 as usize {
-                        return Err(RESP_WRONG_LENGTH);
-                    }
-                    ef.data = new_bytes;
-                    Ok(())
-                } else {
-                    Err(RESP_INCORRECT_PARAMS)
-                }
-            } else {
-                Err(RESP_INCORRECT_PARAMS)
-            }
+            ef.update(command, p1, p2, p3, hex_str).map_err(map_sw_to_response)
         } else if UiccFileId::is_virtual_fallback_id(file_id) {
             Ok(())
         } else {
@@ -939,7 +895,7 @@ impl SimService {
     ) -> Result<String, SimResponse> {
         let file_id = file_id.into();
         if let Some(ef) = self.fs.find_ef(file_id) {
-            let offset = ((p1 as usize) << 8) | (p2 as usize);
+            let offset = u16::from_be_bytes([p1, p2]) as usize;
             let ef_size = ef.size();
             if offset > ef_size {
                 return Err(RESP_INCORRECT_PARAMS);
@@ -969,23 +925,13 @@ impl SimService {
             }
             let file_id = file_id.into();
             if let Some(ef) = self.fs.find_ef(file_id) {
-                if let Some(rec_len) = ef.record_len
-                    && rec_len > 0
-                {
-                    let record_num = record_num as usize;
-                    if record_num > 0 {
-                        let start = (record_num - 1) * rec_len;
-                        let end = start + rec_len;
-                        if end <= ef.data.len() {
-                            let p3_usize = p3 as usize;
-                            if p3_usize > rec_len {
-                                return Err(RESP_WRONG_LENGTH);
-                            }
-                            let length = if p3_usize == 0 { rec_len } else { p3_usize };
-                            return Ok(hex::encode_upper(&ef.data[start..start + length]));
-                        }
+                if let Some(record) = ef.record(record_num as usize) {
+                    let p3_usize = p3 as usize;
+                    if p3_usize > record.len() {
+                        return Err(RESP_WRONG_LENGTH);
                     }
-                    return Err(RESP_REFERENCED_DATA_NOT_FOUND);
+                    let length = if p3_usize == 0 { record.len() } else { p3_usize };
+                    return Ok(hex::encode_upper(&record[..length]));
                 }
                 Err(RESP_REFERENCED_DATA_NOT_FOUND)
             } else {
@@ -1656,22 +1602,17 @@ impl SimService {
             return false;
         };
 
-        let record_len = fdn_ef.record_len.unwrap_or(28);
-        if record_len < ADN_FOOTER_LEN {
+        let normalized_target = number.normalized();
+        if normalized_target.is_empty() {
             return false;
         }
 
-        let normalized_target = number.normalized();
-
-        for record in fdn_ef.data.chunks(record_len) {
-            if record.len() < record_len {
-                continue;
-            }
-            if record.iter().all(|&b| b == 0xFF) {
+        for record in fdn_ef.records() {
+            if record.len() < ADN_FOOTER_LEN || record.iter().all(|&b| b == 0xFF) {
                 continue;
             }
 
-            let len_offset = record_len - ADN_FOOTER_LEN;
+            let len_offset = record.len() - ADN_FOOTER_LEN;
             let len_byte = record[len_offset];
             if len_byte == 0xFF || len_byte == 0 {
                 continue;
@@ -1887,6 +1828,15 @@ fn format_sim_payload_data(data_hex: &str, status_word: u16) -> String {
 
 fn format_sim_payload_status(status_word: u16) -> String {
     format_sim_payload_data("", status_word)
+}
+
+fn map_sw_to_response(sw: u16) -> SimResponse {
+    match sw {
+        SW_INCORRECT_PARAMS => RESP_INCORRECT_PARAMS,
+        SW_WRONG_LENGTH => RESP_WRONG_LENGTH,
+        SW_REFERENCED_DATA_NOT_FOUND => RESP_REFERENCED_DATA_NOT_FOUND,
+        _ => SimResponse::RestrictedSimAccess { sw, data: None },
+    }
 }
 
 // Helper functions for state synchronization and status word parsing
@@ -2162,5 +2112,30 @@ mod tests {
         } else {
             panic!("Expected RestrictedSimAccess");
         }
+    }
+
+    #[test]
+    fn test_set_msisdn_preserves_subsequent_records() {
+        let profile = SimProfile::default();
+        let mut service = SimService::new(&profile);
+        let msisdn_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
+
+        // Populate EF_MSISDN in DF_TELECOM with 2 records
+        if let Some(telecom) = service.fs.find_df_mut(UiccFileId::Telecom) {
+            if let Some(ef) = telecom.find_ef_mut(UiccFileId::Msisdn) {
+                ef.data = vec![0xAA; 2 * msisdn_len];
+            }
+        }
+
+        let new_num = PhoneNumber::new("+15555215554");
+        service.set_msisdn(Some(&new_num));
+
+        let telecom = service.fs.find_df(UiccFileId::Telecom).unwrap();
+        let ef = telecom.find_ef(UiccFileId::Msisdn).unwrap();
+        assert_eq!(ef.record_count(), 2);
+        // Record 1 was updated with encoded MSISDN
+        assert_eq!(ef.record(1).unwrap(), &new_num.encode_msisdn());
+        // Record 2 was preserved
+        assert_eq!(ef.record(2).unwrap(), &[0xAA; 28]);
     }
 }
