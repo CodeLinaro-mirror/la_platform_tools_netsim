@@ -131,19 +131,26 @@ async fn handle_new_connection(
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
         ChipKind::CELLULAR => {
-            let (goldfish_ril_37_or_earlier, is_cuttlefish) = match chip_info.device_info.as_ref() {
+            let (goldfish_ril_37_or_earlier, is_cuttlefish, auto_ctzv) = match chip_info
+                .device_info
+                .as_ref()
+            {
                 Some(d) => {
                     let is_emulator = d.kind == "EMULATOR";
                     let is_cuttlefish = d.kind == "CUTTLEFISH";
                     let sdk_version = d.sdk_version.parse::<i32>().unwrap_or(0);
-                    (is_emulator && sdk_version < 38, is_cuttlefish)
+                    (is_emulator && sdk_version < 38, is_cuttlefish, is_emulator || is_cuttlefish)
                 }
-                None => (false, false),
+                None => (false, false, false),
             };
             Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
                 sim_type: chip.sim_type,
                 sim_profile: chip.sim_profile.clone(),
-                quirks: netsim_model::Quirks { goldfish_ril_37_or_earlier, is_cuttlefish },
+                quirks: netsim_model::Quirks {
+                    goldfish_ril_37_or_earlier,
+                    is_cuttlefish,
+                    auto_ctzv,
+                },
                 ..Default::default()
             }))
         }

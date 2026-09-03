@@ -39,6 +39,7 @@ netsim_rust_library(
         "@bytes",
         "@chrono",
         "@hex",
+        "@jiff",
         "@nom",
         "@serde",
         "@serde-xml-rs",

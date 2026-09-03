@@ -30,6 +30,19 @@ pub fn given_modem(world: &mut World, name: &str) {
     world.modems.insert(name.to_string(), (id, handler));
 }
 
+/// Creates a modem with custom quirks.
+pub fn given_modem_with_quirks(world: &mut World, name: &str, quirks: Quirks) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(quirks.goldfish_ril_37_or_earlier);
+
+    world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
 /// Creates a Goldfish 37 (or earlier) modem with the given name.
 pub fn given_goldfish_37_modem(world: &mut World, name: &str) {
     if world.modems.contains_key(name) {
