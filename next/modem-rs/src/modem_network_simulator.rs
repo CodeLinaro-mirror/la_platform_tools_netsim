@@ -18,6 +18,7 @@ use crate::{
     constants::{DEFAULT_FALLBACK_MSISDN, DEFAULT_MSISDN_PREFIX},
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
+    network_service::RegistrationType,
     profiles::get_builtin_profile,
     time::{Clock, SystemClock},
     types::{
@@ -205,10 +206,10 @@ impl ModemNetworkSimulator {
                 self.set_signal_strength(id.0, rssi, ber)
             }
             ModemAction::SetVoiceRegistration { id, status } => {
-                self.set_voice_registration(id.0, status)
+                self.set_registration(id.0, RegistrationType::Voice, status)
             }
             ModemAction::SetDataRegistration { id, status } => {
-                self.set_data_registration(id.0, status)
+                self.set_registration(id.0, RegistrationType::Data, status)
             }
             ModemAction::IncomingCall { target_id, number } => {
                 self.initiate_external_incoming_call(target_id.0, &number)
@@ -558,13 +559,13 @@ impl ModemNetworkSimulator {
             }
             CommandAction::HoldCall { holder, target } => {
                 if let Some(hold_modem) = self.modems.get_mut(&target) {
-                    hold_modem.call_service.receive_hold(holder);
+                    hold_modem.call_service.receive_peer_hold(holder, true);
                     effects.push((target, ModemEffect::Response(b"RING\r\n".to_vec())));
                 }
             }
             CommandAction::ResumeCall { resumer, target } => {
                 if let Some(resume_modem) = self.modems.get_mut(&target) {
-                    resume_modem.call_service.receive_resume(resumer);
+                    resume_modem.call_service.receive_peer_hold(resumer, false);
                     effects.push((target, ModemEffect::Response(b"RING\r\n".to_vec())));
                 }
             }
@@ -681,12 +682,21 @@ impl ModemNetworkSimulator {
         })
     }
 
+    pub fn set_registration(
+        &mut self,
+        id: ModemId,
+        reg_type: RegistrationType,
+        status: RegistrationStatus,
+    ) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.set_registration(reg_type, status))
+    }
+
     pub fn set_voice_registration(
         &mut self,
         id: ModemId,
         status: RegistrationStatus,
     ) -> Vec<NetworkEvent> {
-        self.apply_to_modem(id, |modem| modem.set_voice_registration(status))
+        self.set_registration(id, RegistrationType::Voice, status)
     }
 
     pub fn set_data_registration(
@@ -694,7 +704,7 @@ impl ModemNetworkSimulator {
         id: ModemId,
         status: RegistrationStatus,
     ) -> Vec<NetworkEvent> {
-        self.apply_to_modem(id, |modem| modem.set_data_registration(status))
+        self.set_registration(id, RegistrationType::Data, status)
     }
 
     pub fn initiate_external_incoming_call(

@@ -253,10 +253,6 @@ impl MiscService {
         Ok(None)
     }
 
-    fn handle_set_ipr(&self) -> MiscResult {
-        Ok(None)
-    }
-
     fn handle_set_report_mobile_equipment_error(&mut self, mode: CmeeMode) -> MiscResult {
         self.cmee_mode = mode;
         Ok(None)
@@ -273,30 +269,6 @@ impl MiscService {
     fn handle_goldfish_init_sequence(&mut self) -> MiscResult {
         self.quiet_mode = false;
         self.verbose_mode = true;
-        Ok(None)
-    }
-
-    fn handle_set_echo(&self, _echo: bool) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_speaker_volume(&mut self, vol: u8) -> MiscResult {
-        self.speaker_volume = vol;
-        Ok(None)
-    }
-
-    fn handle_set_speaker_mute(&mut self, mute: SpeakerMuteMode) -> MiscResult {
-        self.speaker_mute = mute;
-        Ok(None)
-    }
-
-    fn handle_set_quiet_mode(&mut self, quiet: bool) -> MiscResult {
-        self.quiet_mode = quiet;
-        Ok(None)
-    }
-
-    fn handle_set_verbose_mode(&mut self, verbose: bool) -> MiscResult {
-        self.verbose_mode = verbose;
         Ok(None)
     }
 
@@ -326,58 +298,6 @@ impl MiscService {
         }))
     }
 
-    fn handle_write_active_configuration(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_reset(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_get_identification_information(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_auto_answer(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_command_termination_character(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_response_formatting_character(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_command_line_editing_character(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_pause_before_blind_dialing(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_connection_completion_timeout(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_comma_dial_modifier_time(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_automatic_disconnect_delay(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_call_mode(&self, _mode: CallMode) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_character_set(&self) -> MiscResult {
-        Ok(None)
-    }
-
     fn handle_get_manufacturer_identification(&self) -> MiscResult {
         Ok(Some(MiscResponse::ManufacturerIdentification("Android".to_string())))
     }
@@ -401,7 +321,7 @@ impl MiscService {
             }
             MiscCommand::SetTeTaControlCharacterFraming(f, p) => self.handle_set_icf(*f, *p),
             MiscCommand::SetTeTaLocalDataFlowControl(d1, d2) => self.handle_set_ifc(*d1, *d2),
-            MiscCommand::SetTeTaFixedLocalRate(_) => self.handle_set_ipr(),
+            MiscCommand::SetTeTaFixedLocalRate(_) => Ok(None),
             MiscCommand::SetTime(time) => self.handle_set_time(*time),
             MiscCommand::QueryTime => self.handle_query_time(),
             MiscCommand::SetReportMobileEquipmentError(mode) => {
@@ -414,41 +334,39 @@ impl MiscService {
                 self.handle_query_supported_report_mobile_equipment_error()
             }
             MiscCommand::GoldfishInitSequence => self.handle_goldfish_init_sequence(),
-            MiscCommand::SetEcho(echo) => self.handle_set_echo(*echo),
-            MiscCommand::SetSpeakerVolume(vol) => self.handle_set_speaker_volume(*vol),
-            MiscCommand::SetSpeakerMute(mute) => self.handle_set_speaker_mute(*mute),
-            MiscCommand::SetQuietMode(quiet) => self.handle_set_quiet_mode(*quiet),
-            MiscCommand::SetVerboseMode(verbose) => self.handle_set_verbose_mode(*verbose),
+            MiscCommand::SetSpeakerVolume(vol) => {
+                self.speaker_volume = *vol;
+                Ok(None)
+            }
+            MiscCommand::SetSpeakerMute(mute) => {
+                self.speaker_mute = *mute;
+                Ok(None)
+            }
+            MiscCommand::SetQuietMode(quiet) => {
+                self.quiet_mode = *quiet;
+                Ok(None)
+            }
+            MiscCommand::SetVerboseMode(verbose) => {
+                self.verbose_mode = *verbose;
+                Ok(None)
+            }
             MiscCommand::ResetToFactoryDefaults => self.handle_reset_to_factory_defaults(),
             MiscCommand::ViewActiveConfiguration => self.handle_view_active_configuration(),
-            MiscCommand::WriteActiveConfiguration => self.handle_write_active_configuration(),
-            MiscCommand::Reset => self.handle_reset(),
-            MiscCommand::GetIdentificationInformation => {
-                self.handle_get_identification_information()
-            }
-            MiscCommand::SetAutoAnswer(_) => self.handle_set_auto_answer(),
-            MiscCommand::SetCommandTerminationCharacter(_) => {
-                self.handle_set_command_termination_character()
-            }
-            MiscCommand::SetResponseFormattingCharacter(_) => {
-                self.handle_set_response_formatting_character()
-            }
-            MiscCommand::SetCommandLineEditingCharacter(_) => {
-                self.handle_set_command_line_editing_character()
-            }
-            MiscCommand::SetPauseBeforeBlindDialing(_) => {
-                self.handle_set_pause_before_blind_dialing()
-            }
-            MiscCommand::SetConnectionCompletionTimeout(_) => {
-                self.handle_set_connection_completion_timeout()
-            }
-            MiscCommand::SetCommaDialModifierTime(_) => self.handle_set_comma_dial_modifier_time(),
-            MiscCommand::SetAutomaticDisconnectDelay(_) => {
-                self.handle_set_automatic_disconnect_delay()
-            }
-            MiscCommand::SetCallMode(mode) => self.handle_set_call_mode(*mode),
-            MiscCommand::SetCharacterSet(_) => self.handle_set_character_set(),
-            MiscCommand::Test => Ok(None),
+            MiscCommand::WriteActiveConfiguration
+            | MiscCommand::Reset
+            | MiscCommand::GetIdentificationInformation
+            | MiscCommand::SetAutoAnswer(_)
+            | MiscCommand::SetCommandTerminationCharacter(_)
+            | MiscCommand::SetResponseFormattingCharacter(_)
+            | MiscCommand::SetCommandLineEditingCharacter(_)
+            | MiscCommand::SetPauseBeforeBlindDialing(_)
+            | MiscCommand::SetConnectionCompletionTimeout(_)
+            | MiscCommand::SetCommaDialModifierTime(_)
+            | MiscCommand::SetAutomaticDisconnectDelay(_)
+            | MiscCommand::SetCallMode(_)
+            | MiscCommand::SetCharacterSet(_)
+            | MiscCommand::SetEcho(_)
+            | MiscCommand::Test => Ok(None),
         };
 
         misc_result.into()

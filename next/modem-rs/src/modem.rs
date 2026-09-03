@@ -12,7 +12,7 @@ use crate::{
     constants::CALL_RING_TIMEOUT,
     data_service::DataService,
     misc_service::MiscService,
-    network_service::{NetworkCommand, NetworkService},
+    network_service::{NetworkCommand, NetworkService, RegistrationType},
     parser::Command,
     sim_service::SimService,
     sms_service::SmsService,
@@ -204,20 +204,24 @@ impl ModemImpl {
         self.network_service.set_signal_strength(rssi, ber);
     }
 
-    pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Vec<ModemEffect> {
-        let mut effects = Vec::new();
-        if let Some(response) = self.network_service.set_voice_registration(status) {
-            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+    pub fn set_registration(
+        &mut self,
+        reg_type: RegistrationType,
+        status: RegistrationStatus,
+    ) -> Vec<ModemEffect> {
+        if let Some(response) = self.network_service.set_registration(reg_type, status) {
+            vec![ModemEffect::Response(response.into_bytes())]
+        } else {
+            Vec::new()
         }
-        effects
+    }
+
+    pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Vec<ModemEffect> {
+        self.set_registration(RegistrationType::Voice, status)
     }
 
     pub fn set_data_registration(&mut self, status: RegistrationStatus) -> Vec<ModemEffect> {
-        let mut effects = Vec::new();
-        if let Some(response) = self.network_service.set_data_registration(status) {
-            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-        }
-        effects
+        self.set_registration(RegistrationType::Data, status)
     }
 
     pub(crate) fn set_sim_status(&mut self, present: bool) -> Vec<ModemEffect> {
@@ -228,8 +232,18 @@ impl ModemImpl {
         let mut effects = Vec::new();
         if changed {
             if !present {
-                effects.extend(self.set_voice_registration(RegistrationStatus::NotRegistered));
-                effects.extend(self.set_data_registration(RegistrationStatus::NotRegistered));
+                effects.extend(
+                    self.set_registration(
+                        RegistrationType::Voice,
+                        RegistrationStatus::NotRegistered,
+                    ),
+                );
+                effects.extend(
+                    self.set_registration(
+                        RegistrationType::Data,
+                        RegistrationStatus::NotRegistered,
+                    ),
+                );
                 self.network_service.detach_network();
                 self.network_service.set_home_plmn(None);
                 self.stk_service = StkService::default();
@@ -289,8 +303,12 @@ impl ModemImpl {
         self.network_service.set_home_plmn(home_plmn);
 
         // Reset network registration to trigger fresh attachment to new home PLMN
-        effects.extend(self.set_voice_registration(RegistrationStatus::NotRegistered));
-        effects.extend(self.set_data_registration(RegistrationStatus::NotRegistered));
+        effects.extend(
+            self.set_registration(RegistrationType::Voice, RegistrationStatus::NotRegistered),
+        );
+        effects.extend(
+            self.set_registration(RegistrationType::Data, RegistrationStatus::NotRegistered),
+        );
         self.network_service.detach_network();
 
         if home_plmn.is_some() {

@@ -937,36 +937,12 @@ impl SimService {
         }
     }
 
-    fn handle_get_imsi(&self) -> SimResult {
-        if let Some(imsi) = self.get_imsi() {
-            Ok(Some(SimResponse::Imsi(imsi)))
-        } else {
-            Err(ExecutionResult::cme_error(CmeError::NotFound))
-        }
-    }
-
-    fn handle_get_iccid(&self) -> SimResult {
-        if let Some(iccid) = self.get_iccid() {
-            Ok(Some(SimResponse::Iccid(iccid)))
-        } else {
-            Err(ExecutionResult::cme_error(CmeError::NotFound))
-        }
-    }
-
-    fn handle_get_eid(&self) -> SimResult {
-        if let Some(eid) = &self.eid {
-            Ok(Some(SimResponse::Eid(eid.clone())))
-        } else {
-            Err(ExecutionResult::cme_error(CmeError::NotFound))
-        }
-    }
-
-    fn handle_get_atr(&self) -> SimResult {
-        if let Some(atr) = &self.atr {
-            Ok(Some(SimResponse::Atr(atr.clone())))
-        } else {
-            Err(ExecutionResult::cme_error(CmeError::NotFound))
-        }
+    fn get_optional_field(
+        val: Option<String>,
+        constructor: impl FnOnce(String) -> SimResponse,
+    ) -> SimResult {
+        val.map(|v| Some(constructor(v)))
+            .ok_or_else(|| ExecutionResult::cme_error(CmeError::NotFound))
     }
 
     fn update_sim_file(
@@ -1572,28 +1548,6 @@ impl SimService {
             Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
         }
     }
-    fn handle_set_cdma_subscription_source(&mut self, source: CdmaSubscriptionSource) -> SimResult {
-        self.cdma_subscription_source = source;
-        Ok(None)
-    }
-
-    fn handle_query_cdma_subscription_source(&self) -> SimResult {
-        let source = self.cdma_subscription_source;
-        Ok(Some(SimResponse::CdmaSubscriptionSource(source)))
-    }
-
-    fn handle_set_cdma_roaming_preference(
-        &mut self,
-        preference: CdmaRoamingPreference,
-    ) -> SimResult {
-        self.cdma_roaming_preference = preference;
-        Ok(None)
-    }
-
-    fn handle_query_cdma_roaming_preference(&self) -> SimResult {
-        let preference = self.cdma_roaming_preference;
-        Ok(Some(SimResponse::CdmaRoamingPreference(preference)))
-    }
 
     fn handle_sim_authentication(&self, data: &[u8]) -> SimResult {
         let data_str = std::str::from_utf8(data).unwrap_or("");
@@ -1784,8 +1738,8 @@ impl SimService {
                 let data_str = data.and_then(|d| String::from_utf8(d.0.to_vec()).ok());
                 self.handle_sim_io(*command, *file_id, *p1, *p2, *p3, data_str)
             }
-            SimCommand::GetImsi => self.handle_get_imsi(),
-            SimCommand::GetIccid => self.handle_get_iccid(),
+            SimCommand::GetImsi => Self::get_optional_field(self.get_imsi(), SimResponse::Imsi),
+            SimCommand::GetIccid => Self::get_optional_field(self.get_iccid(), SimResponse::Iccid),
             SimCommand::OpenLogicalChannel(aid) => self.handle_open_logical_channel(aid),
             SimCommand::CloseLogicalChannel(channel_id) => {
                 self.handle_close_logical_channel(*channel_id)
@@ -1799,20 +1753,26 @@ impl SimService {
             SimCommand::QueryPinRetries(pin_type) => self.handle_query_pin_retries_cpinr(*pin_type),
             SimCommand::QueryPinRetriesSpic => self.handle_query_pin_retries_spic(),
             SimCommand::SetCdmaSubscriptionSource(source) => {
-                self.handle_set_cdma_subscription_source(*source)
+                self.cdma_subscription_source = *source;
+                Ok(None)
             }
-            SimCommand::QueryCdmaSubscriptionSource => self.handle_query_cdma_subscription_source(),
+            SimCommand::QueryCdmaSubscriptionSource => {
+                Ok(Some(SimResponse::CdmaSubscriptionSource(self.cdma_subscription_source)))
+            }
             SimCommand::SetCdmaRoamingPreference(preference) => {
-                self.handle_set_cdma_roaming_preference(*preference)
+                self.cdma_roaming_preference = *preference;
+                Ok(None)
             }
-            SimCommand::QueryCdmaRoamingPreference => self.handle_query_cdma_roaming_preference(),
+            SimCommand::QueryCdmaRoamingPreference => {
+                Ok(Some(SimResponse::CdmaRoamingPreference(self.cdma_roaming_preference)))
+            }
             SimCommand::SimAuthentication(data) => self.handle_sim_authentication(data),
             SimCommand::SimAuthenticationVendor(data) => self.handle_sim_authentication(data),
             SimCommand::UpdatePhoneNumber(phone_number) => {
                 self.handle_update_phone_number(phone_number)
             }
-            SimCommand::GetEid => self.handle_get_eid(),
-            SimCommand::GetAtr => self.handle_get_atr(),
+            SimCommand::GetEid => Self::get_optional_field(self.eid.clone(), SimResponse::Eid),
+            SimCommand::GetAtr => Self::get_optional_field(self.atr.clone(), SimResponse::Atr),
         };
 
         sim_result.into()

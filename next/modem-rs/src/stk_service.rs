@@ -314,26 +314,12 @@ impl StkService {
         Err(ExecutionResult::error())
     }
 
-    fn handle_set_stk(&self) -> StkResult {
-        Ok(StkExecutionResult::default())
-    }
-
-    fn handle_set_stk_enabled(&mut self, enabled: bool) -> StkResult {
-        self.stk_enabled = enabled;
+    fn sync_stk_menu_urc(&self) -> StkExecutionResult {
         let mut urcs = Vec::new();
         if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
             urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
         }
-        Ok(StkExecutionResult { response: None, urcs })
-    }
-
-    fn handle_set_stk_unsolicited_result(&mut self, reporting: bool) -> StkResult {
-        self.stk_reporting = reporting;
-        let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
-            urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
-        }
-        Ok(StkExecutionResult { response: None, urcs })
+        StkExecutionResult { response: None, urcs }
     }
 
     fn handle_query_stk_ready(&self) -> StkResult {
@@ -344,15 +330,6 @@ impl StkService {
             }),
             urcs: Vec::new(),
         })
-    }
-
-    fn handle_set_stk_ready(&mut self, download: u8, _profile: Option<QuotedString>) -> StkResult {
-        self.stk_enabled = download == 1;
-        let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
-            urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
-        }
-        Ok(StkExecutionResult { response: None, urcs })
     }
 
     fn handle_send_stk_terminal_response(&mut self, response: QuotedString) -> StkResult {
@@ -418,8 +395,9 @@ impl StkService {
         }
         let res = match command {
             StkCommand::QueryStkReady => self.handle_query_stk_ready(),
-            StkCommand::SetStkReady(download, profile) => {
-                self.handle_set_stk_ready(*download, *profile)
+            StkCommand::SetStkReady(download, _profile) => {
+                self.stk_enabled = *download == 1;
+                Ok(self.sync_stk_menu_urc())
             }
             StkCommand::SendStkEnvelope(envelope_command) => {
                 self.handle_envelope_command(envelope_command.as_ref())
@@ -427,10 +405,14 @@ impl StkService {
             StkCommand::SendStkTerminalResponse(response) => {
                 self.handle_send_stk_terminal_response(*response)
             }
-            StkCommand::SetStk(_) => self.handle_set_stk(),
-            StkCommand::SetStkEnabled(enabled) => self.handle_set_stk_enabled(*enabled),
+            StkCommand::SetStk(_) => Ok(StkExecutionResult::default()),
+            StkCommand::SetStkEnabled(enabled) => {
+                self.stk_enabled = *enabled;
+                Ok(self.sync_stk_menu_urc())
+            }
             StkCommand::SetStkUnsolicitedResult(reporting) => {
-                self.handle_set_stk_unsolicited_result(*reporting)
+                self.stk_reporting = *reporting;
+                Ok(self.sync_stk_menu_urc())
             }
         };
         res.map_or_else(|e| e, ExecutionResult::from)
