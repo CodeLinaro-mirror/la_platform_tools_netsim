@@ -4,16 +4,16 @@
 use std::{collections::HashMap, fmt::Write, iter::once};
 
 use modem_rs_derive::CommandParser;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     apdu,
-    config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimProfile},
+    config::{FileSystem, OverwritePolicy, SimFile, SimProfile},
     constants::*,
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
     types::{
-        CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN, DEFAULT_PIN2,
-        ExecutionResult, FacilityLockMode, Parsable, PhoneNumber, TypeOfAddress,
+        AdnRecord, CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN,
+        DEFAULT_PIN2, ExecutionResult, FacilityLockMode, Parsable, PhoneNumber,
     },
 };
 
@@ -97,10 +97,6 @@ const DEFAULT_PUK: &str = "12345678";
 const DEFAULT_FALLBACK_IMSI: &str = "310260123456789";
 const DEFAULT_FALLBACK_ICCID: &str = "89012608640220133897";
 const EF_FPLMN_DATA_FALLBACK: &[u8] = &[0xFF; 12];
-const EF_MSISDN_RECORD_FALLBACK: &[u8] = &[
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x07, 0x91,
-    0x51, 0x55, 0x21, 0x43, 0x65, 0xF7, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-];
 const STATUS_FCP_HEX: &str = "62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF";
 
 /// 3GPP TS 51.011 §9.3 Access Condition Levels.
@@ -313,10 +309,6 @@ impl SimResponseHeader {
     }
 }
 
-// SIM file structure constants (TS 51.011 / TS 31.102)
-const ADN_FOOTER_LEN: usize = 14; // Length of dialing number info excluding alpha identifier
-const BCD_LEN_MAX: usize = 10; // Maximum length of BCD dialing number in ADN/FDN record
-
 // ISO 7816-4 SIM APDU Response Constants
 const RESP_SUCCESS: SimResponse = SimResponse::RestrictedSimAccess { sw: SW_SUCCESS, data: None };
 const RESP_WRONG_LENGTH: SimResponse =
@@ -444,13 +436,6 @@ pub struct SimService {
     atr: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum OverwritePolicy {
-    Always,
-    IfUninitialized,
-    Never,
-}
-
 impl SimService {
     /// Creates a new SimService from a SIM profile configuration.
     pub fn new(profile: &SimProfile) -> Self {
@@ -473,8 +458,6 @@ impl SimService {
         } else {
             profile.iccid.clone()
         };
-
-        let msisdn = profile.msisdn.clone();
 
         let mut service = Self {
             state,
@@ -513,83 +496,83 @@ impl SimService {
             atr: profile.atr.clone(),
         };
 
-        // Ensure boot-essential files are present in the filesystem and correctly
-        // synchronized
-        fn ensure_ef_present(
-            df: &mut DedicatedFile,
-            id: impl Into<u16>,
-            record_len: Option<usize>,
-            data: Vec<u8>,
-            policy: OverwritePolicy,
-        ) {
-            let id = id.into();
-            if let Some(ef) = find_ef_mut(df, id) {
-                let should_overwrite = match policy {
-                    OverwritePolicy::Always => true,
-                    OverwritePolicy::IfUninitialized => ef.data.iter().all(|&b| b == 0xFF),
-                    OverwritePolicy::Never => false,
-                };
-                if should_overwrite {
-                    ef.data = data;
-                    ef.record_len = record_len;
-                }
-            } else {
-                df.files.push(SimFile::ElementaryFile(ElementaryFile {
-                    file_id: id,
-                    record_len,
-                    data,
-                }));
-            }
-        }
-
         let iccid_swapped = crate::pdu::bcd::string_to_bcd(&iccid);
         let imsi_encoded = crate::pdu::bcd::encode_imsi(&imsi);
-        let msisdn_encoded = encode_msisdn_str(&msisdn);
+        let requested_msisdn = PhoneNumber::parse(profile.msisdn.as_bytes()).map(|(_, p)| p).ok();
+        service.fs.normalize_record_lengths();
+        let existing_msisdn_ef = service.fs.find_ef_in_telecom_or_usim(UiccFileId::Msisdn);
+        let msisdn_record_len =
+            existing_msisdn_ef.and_then(|ef| ef.record_len()).unwrap_or_else(|| {
+                UiccFileId::Msisdn.default_record_len().expect("file id is record based")
+            });
+        let msisdn_data = requested_msisdn
+            .as_ref()
+            .map(|p| AdnRecord::encode_from_number(p, msisdn_record_len))
+            .or_else(|| existing_msisdn_ef.map(|ef| ef.data.clone()))
+            .unwrap_or_else(|| vec![0xFF; msisdn_record_len]);
         let fplmn_data = EF_FPLMN_DATA_FALLBACK.to_vec();
 
-        ensure_ef_present(
-            &mut service.fs.master_file,
+        service.fs.ensure_ef_present(
             UiccFileId::Iccid,
             None,
             iccid_swapped,
             OverwritePolicy::Always,
         );
         if let Some(encoded) = imsi_encoded {
-            ensure_ef_present(
-                &mut service.fs.master_file,
-                UiccFileId::Imsi,
-                None,
-                encoded,
-                OverwritePolicy::Always,
-            );
+            service.fs.ensure_ef_present(UiccFileId::Imsi, None, encoded, OverwritePolicy::Always);
         }
-        if find_df_mut(&mut service.fs.master_file, UiccFileId::Telecom).is_none() {
-            service.fs.master_file.files.push(SimFile::DedicatedFile(DedicatedFile {
-                file_id: UiccFileId::Telecom.as_u16(),
-                files: Vec::new(),
-            }));
-        }
-        let telecom_df = find_df_mut(&mut service.fs.master_file, UiccFileId::Telecom)
-            .expect("DF_TELECOM must exist");
-        ensure_ef_present(
-            telecom_df,
+        service.fs.ensure_ef_present_in_telecom_and_usim(
             UiccFileId::Msisdn,
-            Some(EF_MSISDN_RECORD_LEN),
-            msisdn_encoded,
+            Some(msisdn_record_len),
+            msisdn_data,
             OverwritePolicy::IfUninitialized,
         );
-        ensure_ef_present(
-            &mut service.fs.master_file,
+
+        let existing_mbdn_ef =
+            service.fs.find_ef_in_telecom_or_usim(UiccFileId::MailboxDialingNumbers);
+        let mbdn_record_len =
+            existing_mbdn_ef.and_then(|ef| ef.record_len()).unwrap_or_else(|| {
+                UiccFileId::MailboxDialingNumbers
+                    .default_record_len()
+                    .expect("file id is record based")
+            });
+        let mut mbdn_data = existing_mbdn_ef
+            .map(|ef| ef.data.clone())
+            .unwrap_or_else(|| vec![0xFF; DEFAULT_MBDN_RECORD_COUNT * mbdn_record_len]);
+        if mbdn_data.len() < DEFAULT_MBDN_RECORD_COUNT * mbdn_record_len {
+            mbdn_data.resize(DEFAULT_MBDN_RECORD_COUNT * mbdn_record_len, 0xFF);
+        }
+
+        service.fs.ensure_ef_present_in_telecom_and_usim(
+            UiccFileId::MailboxDialingNumbers,
+            Some(mbdn_record_len),
+            mbdn_data,
+            OverwritePolicy::IfUninitialized,
+        );
+
+        let existing_fdn_ef =
+            service.fs.find_ef_in_telecom_or_usim(UiccFileId::FixedDialingNumbers);
+        let fdn_record_len = existing_fdn_ef.and_then(|ef| ef.record_len()).unwrap_or_else(|| {
+            UiccFileId::FixedDialingNumbers.default_record_len().expect("file id is record based")
+        });
+        let mut fdn_data = existing_fdn_ef
+            .map(|ef| ef.data.clone())
+            .unwrap_or_else(|| vec![0xFF; DEFAULT_FDN_RECORD_COUNT * fdn_record_len]);
+        if fdn_data.len() < DEFAULT_FDN_RECORD_COUNT * fdn_record_len {
+            fdn_data.resize(DEFAULT_FDN_RECORD_COUNT * fdn_record_len, 0xFF);
+        }
+
+        service.fs.ensure_ef_present_in_telecom_and_usim(
+            UiccFileId::FixedDialingNumbers,
+            Some(fdn_record_len),
+            fdn_data,
+            OverwritePolicy::IfUninitialized,
+        );
+
+        service.fs.ensure_ef_present(
             UiccFileId::ForbiddenPlmn,
             None,
             fplmn_data,
-            OverwritePolicy::Never,
-        );
-        ensure_ef_present(
-            &mut service.fs.master_file,
-            UiccFileId::MailboxDialingNumbers,
-            Some(EF_MBDN_RECORD_LEN),
-            vec![0xFF; 4 * EF_MBDN_RECORD_LEN],
             OverwritePolicy::Never,
         );
 
@@ -621,7 +604,7 @@ impl SimService {
             && (apdu.p1 == 0x00 || apdu.p1 == 0x08)
             && apdu.data().len() >= 2
         {
-            let target_fid = ((apdu.data()[0] as u16) << 8) | (apdu.data()[1] as u16);
+            let target_fid = u16::from_be_bytes([apdu.data()[0], apdu.data()[1]]);
             if let Some(file_mock) = adf.files.iter().find(|f| f.id == target_fid)
                 && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd.matches(apdu))
             {
@@ -638,30 +621,43 @@ impl SimService {
     }
 
     fn get_imsi(&self) -> String {
-        find_ef(&self.fs.master_file, UiccFileId::Imsi)
+        self.fs
+            .find_ef(UiccFileId::Imsi)
             .and_then(|ef| decode_imsi(&ef.data))
             .unwrap_or_else(|| DEFAULT_FALLBACK_IMSI.to_string())
     }
 
     fn get_iccid(&self) -> String {
-        find_ef(&self.fs.master_file, UiccFileId::Iccid)
+        self.fs
+            .find_ef(UiccFileId::Iccid)
             .map(|ef| crate::pdu::bcd::bcd_to_string(&ef.data))
             .unwrap_or_else(|| DEFAULT_FALLBACK_ICCID.to_string())
     }
 
     pub(crate) fn get_msisdn(&self) -> Option<PhoneNumber> {
-        let raw = find_df(&self.fs.master_file, UiccFileId::Telecom)
-            .and_then(|telecom| find_ef(telecom, UiccFileId::Msisdn))
-            .and_then(|ef| decode_msisdn(&ef.data))?;
-        PhoneNumber::parse(raw.as_bytes()).map(|(_, p)| p).ok()
+        let ef = self.fs.find_ef_in_telecom_or_usim(UiccFileId::Msisdn)?;
+        ef.records().find_map(|r| AdnRecord::decode(r).and_then(|adn| adn.number))
     }
 
-    pub fn set_msisdn(&mut self, msisdn: &str) {
-        let encoded = encode_msisdn_str(msisdn);
-        if let Some(telecom) = find_df_mut(&mut self.fs.master_file, UiccFileId::Telecom)
-            && let Some(ef) = find_ef_mut(telecom, UiccFileId::Msisdn)
-        {
-            ef.data = encoded;
+    pub fn set_msisdn(&mut self, msisdn: Option<&PhoneNumber>) {
+        let record_len = self
+            .fs
+            .find_ef_in_telecom_or_usim(UiccFileId::Msisdn)
+            .and_then(|ef| ef.record_len())
+            .unwrap_or_else(|| {
+                UiccFileId::Msisdn.default_record_len().expect("file id is record based")
+            });
+
+        let encoded = msisdn
+            .map(|num| AdnRecord::encode_from_number(num, record_len))
+            .unwrap_or_else(|| vec![0xFF; record_len]);
+
+        for df_id in [UiccFileId::Telecom, UiccFileId::AdfDefault] {
+            if let Some(df) = self.fs.find_df_mut(df_id)
+                && let Err(e) = df.update_record(UiccFileId::Msisdn, 1, &encoded)
+            {
+                debug!("Failed to update MSISDN record 1 in {df_id:?}: {e:?}");
+            }
         }
     }
 
@@ -687,24 +683,23 @@ impl SimService {
                 if apdu.data().len() != 2 {
                     return Err(SW_WRONG_LENGTH);
                 }
-                let fid = ((apdu.data()[0] as u16) << 8) | (apdu.data()[1] as u16);
+                let fid = u16::from_be_bytes([apdu.data()[0], apdu.data()[1]]);
                 let is_file_in_active_adf = if let Some(active_aid) = &self.selected_aids[idx]
                     && let Some(adf) = self.adfs.iter().find(|a| a.aid == *active_aid)
                 {
                     let in_overrides = adf.files.iter().any(|f| f.id == fid);
-                    let in_fs_subtree = if let Some(adf_df) =
-                        find_df(&self.fs.master_file, UiccFileId::AdfDefault)
-                    {
-                        find_ef(adf_df, fid).is_some() || find_df(adf_df, fid).is_some()
-                    } else {
-                        false
-                    };
+                    let in_fs_subtree =
+                        if let Some(adf_df) = self.fs.find_df(UiccFileId::AdfDefault) {
+                            adf_df.find_ef(fid).is_some() || adf_df.find_df(fid).is_some()
+                        } else {
+                            false
+                        };
                     in_overrides || in_fs_subtree
                 } else {
                     false
                 };
-                if find_ef(&self.fs.master_file, fid).is_some()
-                    || find_df(&self.fs.master_file, fid).is_some()
+                if self.fs.find_ef(fid).is_some()
+                    || self.fs.find_df(fid).is_some()
                     || is_file_in_active_adf
                     || UiccFileId::is_virtual_fallback_id(fid)
                 {
@@ -879,59 +874,26 @@ impl SimService {
         hex_str: &str,
     ) -> Result<(), SimResponse> {
         let file_id = file_id.into();
-        // Update in the file system if it exists there
-        if let Some(ef) = find_ef_mut(&mut self.fs.master_file, file_id) {
-            if command == apdu::Instruction::UpdateBinary {
-                let offset = ((p1 as usize) << 8) | (p2 as usize);
-                let Ok(new_bytes) = hex::decode(hex_str) else {
-                    return Err(RESP_INCORRECT_PARAMS);
-                };
-                if p3 > 0 && new_bytes.len() != p3 as usize {
-                    return Err(RESP_WRONG_LENGTH);
+        let is_dual_synced = UiccFileId::try_from(file_id).is_ok_and(UiccFileId::is_dual_df_synced);
+
+        if is_dual_synced {
+            let mut updated = false;
+            for df_id in [UiccFileId::Telecom, UiccFileId::AdfDefault] {
+                if let Some(df) = self.fs.find_df_mut(df_id)
+                    && let Some(ef) = df.find_ef_mut(file_id)
+                {
+                    ef.update(command, p1, p2, p3, hex_str).map_err(map_sw_to_response)?;
+                    updated = true;
                 }
-                if offset + new_bytes.len() > ef.data.len() {
-                    ef.data.resize(offset + new_bytes.len(), 0xFF);
-                }
-                ef.data[offset..offset + new_bytes.len()].copy_from_slice(&new_bytes);
-                Ok(())
-            } else if command == apdu::Instruction::UpdateRecord {
-                // UPDATE RECORD
-                if let Ok(mode) = apdu::RecordMode::try_from(p2) {
-                    if !mode.is_absolute() {
-                        return Err(RESP_INCORRECT_PARAMS);
-                    }
-                    let Ok(new_bytes) = hex::decode(hex_str) else {
-                        return Err(RESP_INCORRECT_PARAMS);
-                    };
-                    if let Some(rec_len) = ef.record_len
-                        && rec_len > 0
-                    {
-                        if p1 == 0 {
-                            return Err(RESP_INCORRECT_PARAMS);
-                        }
-                        if new_bytes.len() != rec_len || (p3 > 0 && p3 as usize != rec_len) {
-                            return Err(RESP_WRONG_LENGTH);
-                        }
-                        let record_num = p1 as usize;
-                        let start = (record_num - 1) * rec_len;
-                        let end = start + rec_len;
-                        if end > ef.data.len() {
-                            return Err(RESP_REFERENCED_DATA_NOT_FOUND);
-                        }
-                        ef.data[start..end].copy_from_slice(&new_bytes);
-                        return Ok(());
-                    }
-                    if p3 > 0 && new_bytes.len() != p3 as usize {
-                        return Err(RESP_WRONG_LENGTH);
-                    }
-                    ef.data = new_bytes;
-                    Ok(())
-                } else {
-                    Err(RESP_INCORRECT_PARAMS)
-                }
-            } else {
-                Err(RESP_INCORRECT_PARAMS)
             }
+            if updated {
+                return Ok(());
+            }
+        }
+
+        // Update in the file system if it exists there
+        if let Some(ef) = self.fs.find_ef_mut(file_id) {
+            ef.update(command, p1, p2, p3, hex_str).map_err(map_sw_to_response)
         } else if UiccFileId::is_virtual_fallback_id(file_id) {
             Ok(())
         } else {
@@ -947,8 +909,8 @@ impl SimService {
         p3: u8,
     ) -> Result<String, SimResponse> {
         let file_id = file_id.into();
-        if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
-            let offset = ((p1 as usize) << 8) | (p2 as usize);
+        if let Some(ef) = self.fs.find_ef(file_id) {
+            let offset = u16::from_be_bytes([p1, p2]) as usize;
             let ef_size = ef.size();
             if offset > ef_size {
                 return Err(RESP_INCORRECT_PARAMS);
@@ -977,24 +939,14 @@ impl SimService {
                 return Err(RESP_INCORRECT_PARAMS);
             }
             let file_id = file_id.into();
-            if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
-                if let Some(rec_len) = ef.record_len
-                    && rec_len > 0
-                {
-                    let record_num = record_num as usize;
-                    if record_num > 0 {
-                        let start = (record_num - 1) * rec_len;
-                        let end = start + rec_len;
-                        if end <= ef.data.len() {
-                            let p3_usize = p3 as usize;
-                            if p3_usize > rec_len {
-                                return Err(RESP_WRONG_LENGTH);
-                            }
-                            let length = if p3_usize == 0 { rec_len } else { p3_usize };
-                            return Ok(hex::encode_upper(&ef.data[start..start + length]));
-                        }
+            if let Some(ef) = self.fs.find_ef(file_id) {
+                if let Some(record) = ef.record(record_num as usize) {
+                    let p3_usize = p3 as usize;
+                    if p3_usize > record.len() {
+                        return Err(RESP_WRONG_LENGTH);
                     }
-                    return Err(RESP_REFERENCED_DATA_NOT_FOUND);
+                    let length = if p3_usize == 0 { record.len() } else { p3_usize };
+                    return Ok(hex::encode_upper(&record[..length]));
                 }
                 Err(RESP_REFERENCED_DATA_NOT_FOUND)
             } else {
@@ -1048,9 +1000,7 @@ impl SimService {
                 }
                 Err(err_resp) => return Ok(Some(err_resp)),
             }
-        } else if command == apdu::Instruction::Select
-            && find_df(&self.fs.master_file, file_id).is_some()
-        {
+        } else if command == apdu::Instruction::Select && self.fs.find_df(file_id).is_some() {
             return Ok(Some(SimResponse::RestrictedSimAccess {
                 sw: SW_SUCCESS,
                 data: Some("6210".to_string()),
@@ -1062,13 +1012,13 @@ impl SimService {
                 data: Some(STATUS_FCP_HEX.to_string()),
             }));
         } else if command == apdu::Instruction::GetResponse {
-            let header_opt = if let Some(ef) = find_ef(&self.fs.master_file, file_id) {
+            let header_opt = if let Some(ef) = self.fs.find_ef(file_id) {
                 Some(SimResponseHeader::Elementary(ElementaryFileResponseHeader::new(
                     ef.file_id,
-                    ef.data.len(),
-                    ef.record_len,
+                    ef.size(),
+                    ef.record_len(),
                 )))
-            } else if let Some(df) = find_df(&self.fs.master_file, file_id) {
+            } else if let Some(df) = self.fs.find_df(file_id) {
                 let df_count =
                     df.files.iter().filter(|f| matches!(f, SimFile::DedicatedFile(_))).count();
                 let ef_count =
@@ -1555,7 +1505,9 @@ impl SimService {
 
     fn handle_update_phone_number(&mut self, phone_number: &[u8]) -> SimResult {
         if let Ok(num_str) = std::str::from_utf8(phone_number) {
-            self.set_msisdn(num_str);
+            let cleaned = num_str.trim_start_matches('=').trim_matches('"');
+            let phone = PhoneNumber::parse(cleaned.as_bytes()).map(|(_, p)| p).ok();
+            self.set_msisdn(phone.as_ref());
         }
         Ok(None)
     }
@@ -1661,46 +1613,23 @@ impl SimService {
             return true;
         }
 
-        let Some(fdn_ef) = find_ef(&self.fs.master_file, UiccFileId::FixedDialingNumbers) else {
+        let Some(fdn_ef) = self.fs.find_ef(UiccFileId::FixedDialingNumbers) else {
             return false;
         };
 
-        let record_len = fdn_ef.record_len.unwrap_or(28);
-        if record_len < ADN_FOOTER_LEN {
+        let normalized_target = number.normalized();
+        if normalized_target.is_empty() {
             return false;
         }
 
-        let normalized_target = number.normalized();
-
-        for record in fdn_ef.data.chunks(record_len) {
-            if record.len() < record_len {
-                continue;
-            }
-            if record.iter().all(|&b| b == 0xFF) {
-                continue;
-            }
-
-            let len_offset = record_len - ADN_FOOTER_LEN;
-            let len_byte = record[len_offset];
-            if len_byte == 0xFF || len_byte == 0 {
-                continue;
-            }
-
-            let bcd_len = (len_byte as usize).saturating_sub(1).min(BCD_LEN_MAX);
-            if bcd_len == 0 {
-                continue;
-            }
-
-            let bcd_start = len_offset + 2;
-            let bcd_bytes = &record[bcd_start..bcd_start + bcd_len];
-
-            let decoded_number = crate::pdu::bcd::bcd_to_string(bcd_bytes);
-            if decoded_number.is_empty() {
-                continue;
-            }
-
-            if normalized_target.starts_with(&decoded_number) {
-                return true;
+        for record in fdn_ef.records() {
+            if let Some(record) = AdnRecord::decode(record)
+                && let Some(fdn_number) = record.number
+            {
+                let normalized_fdn = fdn_number.normalized();
+                if !normalized_fdn.is_empty() && normalized_target.starts_with(normalized_fdn) {
+                    return true;
+                }
             }
         }
 
@@ -1805,38 +1734,6 @@ impl SimService {
     }
 }
 
-fn encode_msisdn_str(msisdn: &str) -> Vec<u8> {
-    if msisdn.is_empty() {
-        return EF_MSISDN_RECORD_FALLBACK.to_vec();
-    }
-    let digits: String = msisdn.chars().filter(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return EF_MSISDN_RECORD_FALLBACK.to_vec();
-    }
-
-    let ton_npi = if msisdn.starts_with('+') || (digits.len() == 11 && digits.starts_with('1')) {
-        TypeOfAddress::International
-    } else {
-        TypeOfAddress::National
-    };
-
-    let swapped_bytes = crate::pdu::bcd::string_to_bcd(&digits);
-    let bcd_len = (1 + swapped_bytes.len()) as u8;
-
-    let mut result = Vec::with_capacity(EF_MSISDN_RECORD_LEN);
-    result.resize(ADN_ALPHA_IDENTIFIER_LEN, 0xFF);
-    result.push(bcd_len);
-    result.push(ton_npi.as_u8());
-
-    let mut dialing = swapped_bytes;
-    dialing.resize(ADN_DIALING_NUMBER_LEN, 0xFF);
-    result.extend(dialing);
-
-    result.extend_from_slice(&ADN_CAPABILITY_EXT_BYTES);
-
-    result
-}
-
 fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
     let mut fcp_bytes = hex::decode(STATUS_FCP_HEX).unwrap();
     // Overwrite File ID in FCP template (Tag '83' at index 6: 83 02 3F 00)
@@ -1855,80 +1752,6 @@ fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
         fcp_bytes[1] = (fcp_bytes.len() - 2) as u8;
     }
     hex::encode_upper(fcp_bytes)
-}
-
-pub(crate) fn find_df(df: &DedicatedFile, id: impl Into<u16>) -> Option<&DedicatedFile> {
-    let id = id.into();
-    if df.file_id == id {
-        return Some(df);
-    }
-    for file in &df.files {
-        if let SimFile::DedicatedFile(df) = file
-            && let Some(found) = find_df(df, id)
-        {
-            return Some(found);
-        }
-    }
-    None
-}
-
-pub(crate) fn find_df_mut(
-    df: &mut DedicatedFile,
-    id: impl Into<u16>,
-) -> Option<&mut DedicatedFile> {
-    let id = id.into();
-    if df.file_id == id {
-        return Some(df);
-    }
-    for file in &mut df.files {
-        if let SimFile::DedicatedFile(sub_df) = file
-            && let Some(found) = find_df_mut(sub_df, id)
-        {
-            return Some(found);
-        }
-    }
-    None
-}
-
-pub(crate) fn find_ef(df: &DedicatedFile, id: impl Into<u16>) -> Option<&ElementaryFile> {
-    let id = id.into();
-    for file in &df.files {
-        match file {
-            SimFile::ElementaryFile(ef) => {
-                if ef.file_id == id {
-                    return Some(ef);
-                }
-            }
-            SimFile::DedicatedFile(df) => {
-                if let Some(ef) = find_ef(df, id) {
-                    return Some(ef);
-                }
-            }
-        }
-    }
-    None
-}
-
-pub(crate) fn find_ef_mut(
-    df: &mut DedicatedFile,
-    id: impl Into<u16>,
-) -> Option<&mut ElementaryFile> {
-    let id = id.into();
-    for file in &mut df.files {
-        match file {
-            SimFile::ElementaryFile(ef) => {
-                if ef.file_id == id {
-                    return Some(ef);
-                }
-            }
-            SimFile::DedicatedFile(df) => {
-                if let Some(ef) = find_ef_mut(df, id) {
-                    return Some(ef);
-                }
-            }
-        }
-    }
-    None
 }
 
 fn decode_imsi(bytes: &[u8]) -> Option<String> {
@@ -1962,35 +1785,13 @@ fn decode_imsi(bytes: &[u8]) -> Option<String> {
     Some(imsi)
 }
 
-fn decode_msisdn(bytes: &[u8]) -> Option<String> {
-    // Minimum size of EF_MSISDN is 28 bytes.
-    if bytes.len() < 28 {
-        return None;
+fn map_sw_to_response(sw: u16) -> SimResponse {
+    match sw {
+        SW_INCORRECT_PARAMS => RESP_INCORRECT_PARAMS,
+        SW_WRONG_LENGTH => RESP_WRONG_LENGTH,
+        SW_REFERENCED_DATA_NOT_FOUND => RESP_REFERENCED_DATA_NOT_FOUND,
+        _ => SimResponse::RestrictedSimAccess { sw, data: None },
     }
-    // Alpha identifier is first 14 bytes.
-    // Byte 15 (index 14) is length of BCD number (including TON/NPI).
-    let bcd_len = bytes[14] as usize;
-    if bcd_len == 0 || bcd_len > 11 {
-        return None;
-    }
-    // Byte 16 (index 15) is TON/NPI.
-    let ton_npi = bytes[15];
-    let is_international = ton_npi == TypeOfAddress::International.as_u8();
-
-    let mut msisdn = if is_international { "+".to_string() } else { "".to_string() };
-
-    // Remaining bytes are dialing number
-    for &b in &bytes[16..15 + bcd_len] {
-        let low = b & 0x0F;
-        let high = b >> 4;
-        if low <= 9 {
-            msisdn.push((b'0' + low) as char);
-        }
-        if high <= 9 {
-            msisdn.push((b'0' + high) as char);
-        }
-    }
-    Some(msisdn)
 }
 
 fn format_sim_payload_data(data_hex: &str, status_word: u16) -> String {
@@ -2106,6 +1907,9 @@ mod tests {
         assert!(service.is_fdn_allowed(&PhoneNumber::new("1234567")));
         assert!(!service.is_fdn_allowed(&PhoneNumber::new("1234")));
         assert!(!service.is_fdn_allowed(&PhoneNumber::new("98765")));
+        // Normalized international dialing matches domestic FDN entry
+        assert!(service.is_fdn_allowed(&PhoneNumber::new("+12345")));
+        assert!(!service.is_fdn_allowed(&PhoneNumber::new("")));
 
         // Security bypass fix verification (characters 'a' in BCD)
         let mut fdn_record_with_a = vec![0xFF; 28];
@@ -2252,7 +2056,7 @@ mod tests {
                 files: vec![],
             })],
         };
-        let telecom = find_df_mut(&mut mf, UiccFileId::Telecom);
+        let telecom = mf.find_df_mut(UiccFileId::Telecom);
         assert!(telecom.is_some());
         assert_eq!(telecom.unwrap().file_id, UiccFileId::Telecom.as_u16());
     }
@@ -2277,5 +2081,61 @@ mod tests {
         } else {
             panic!("Expected RestrictedSimAccess");
         }
+    }
+
+    #[test]
+    fn test_set_msisdn_preserves_subsequent_records() {
+        let profile = SimProfile::default();
+        let mut service = SimService::new(&profile);
+        let msisdn_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
+
+        // Populate EF_MSISDN in DF_TELECOM with 2 records
+        if let Some(telecom) = service.fs.find_df_mut(UiccFileId::Telecom) {
+            if let Some(ef) = telecom.find_ef_mut(UiccFileId::Msisdn) {
+                ef.data = vec![0xAA; 2 * msisdn_len];
+            }
+        }
+
+        let new_num = PhoneNumber::new("+15555215554");
+        service.set_msisdn(Some(&new_num));
+
+        let telecom = service.fs.find_df(UiccFileId::Telecom).unwrap();
+        let ef = telecom.find_ef(UiccFileId::Msisdn).unwrap();
+        assert_eq!(ef.record_count(), 2);
+        // Record 1 was updated with encoded MSISDN
+        assert_eq!(ef.record(1).unwrap(), &AdnRecord::encode_from_number(&new_num, msisdn_len));
+        // Record 2 was preserved
+        assert_eq!(ef.record(2).unwrap(), &[0xAA; 28]);
+    }
+
+    #[test]
+    fn test_get_msisdn_falls_back_when_first_record_empty() {
+        let record_len = 28;
+        // Record 1: uninitialized (all 0xFF)
+        let mut data = vec![0xFF; record_len];
+        // Record 2: valid phone number "+15559876543"
+        let second_number = PhoneNumber::new("+15559876543");
+        data.extend(AdnRecord::encode_from_number(&second_number, record_len));
+
+        let profile = SimProfile {
+            sim_io: SimIo {
+                file_system: FileSystem {
+                    master_file: DedicatedFile {
+                        file_id: UiccFileId::MasterFile.as_u16(),
+                        files: vec![SimFile::DedicatedFile(DedicatedFile {
+                            file_id: UiccFileId::Telecom.as_u16(),
+                            files: vec![SimFile::ElementaryFile(ElementaryFile {
+                                file_id: UiccFileId::Msisdn.as_u16(),
+                                record_len: Some(record_len),
+                                data,
+                            })],
+                        })],
+                    },
+                },
+            },
+            ..Default::default()
+        };
+        let service = SimService::new(&profile);
+        assert_eq!(service.get_msisdn(), Some(second_number));
     }
 }

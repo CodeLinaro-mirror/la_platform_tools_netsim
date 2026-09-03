@@ -19,7 +19,8 @@ use crate::{
     sup_service::SupService,
     types::{
         AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HandledCommand, ModemId,
-        NumberPresentation, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
+        NumberPresentation, Parsable, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode,
+        Response,
     },
 };
 
@@ -188,7 +189,8 @@ impl ModemImpl {
     }
 
     pub fn set_phone_number(&mut self, number: &str) {
-        self.sim_service.set_msisdn(number);
+        let phone = PhoneNumber::parse(number.as_bytes()).map(|(_, p)| p).ok();
+        self.sim_service.set_msisdn(phone.as_ref());
     }
 
     pub fn phone_number(&self) -> Option<PhoneNumber> {

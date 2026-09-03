@@ -129,3 +129,14 @@ pub fn when_sim_status_set(world: &mut World, name: &str, present: bool) {
     let action = ModemAction::SetSimStatus { id: ChipId(id), present };
     world.manager.dispatch(action);
 }
+
+/// Updates the phone number on the specified modem (mirroring the Netsim gRPC
+/// path).
+pub fn when_phone_number_set(world: &mut World, name: &str, number: &str) {
+    let (id, _) = world.get_modem(name);
+    if let Some(modem) = world.manager.get_modem_mut(id) {
+        modem.set_phone_number(number);
+    } else {
+        panic!("Failed to retrieve modem '{name}'");
+    }
+}

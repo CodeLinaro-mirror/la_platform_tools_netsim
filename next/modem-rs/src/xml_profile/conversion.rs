@@ -295,6 +295,66 @@ fn infer_records_from_update(
     Ok((max_rec_num, inferred_rec_len))
 }
 
+struct FcpDescriptor {
+    is_linear_fixed: bool,
+    record_len: Option<usize>,
+    num_records: Option<usize>,
+    file_size: Option<usize>,
+}
+
+fn parse_fcp_response(response: &str) -> Option<FcpDescriptor> {
+    let mut parts = response.split(',');
+    let _sw1 = parts.next()?;
+    let _sw2 = parts.next()?;
+    let hex_data = parts.next()?.trim();
+    let bytes = hex::decode(hex_data).ok()?;
+
+    if bytes.len() < 2 || bytes[0] != 0x62 {
+        return None;
+    }
+
+    let mut idx = 2;
+    let mut is_linear_fixed = false;
+    let mut record_len = None;
+    let mut num_records = None;
+    let mut file_size = None;
+
+    while idx + 2 <= bytes.len() {
+        let tag = bytes[idx];
+        let len = bytes[idx + 1] as usize;
+        idx += 2;
+        if idx + len > bytes.len() {
+            break;
+        }
+        let val = &bytes[idx..idx + len];
+        match tag {
+            0x82 => {
+                if len >= 1 && (val[0] & 0x07) == 0x02 {
+                    is_linear_fixed = true;
+                }
+                if len >= 4 {
+                    let r_len = u16::from_be_bytes([val[2], val[3]]) as usize;
+                    if r_len > 0 {
+                        record_len = Some(r_len);
+                    }
+                }
+                if len >= 5 {
+                    num_records = Some(val[4] as usize);
+                }
+            }
+            0x80 => {
+                if len >= 2 {
+                    file_size = Some(u16::from_be_bytes([val[0], val[1]]) as usize);
+                }
+            }
+            _ => {}
+        }
+        idx += len;
+    }
+
+    Some(FcpDescriptor { is_linear_fixed, record_len, num_records, file_size })
+}
+
 impl TryFrom<XmlElementaryFile> for ElementaryFile {
     type Error = XmlProfileError;
     fn try_from(xml_ef: XmlElementaryFile) -> Result<Self, Self::Error> {
@@ -375,7 +435,25 @@ impl TryFrom<XmlElementaryFile> for ElementaryFile {
             }
         }
 
-        let structure = xml_ef.structure.unwrap_or(XmlFileStructure::Transparent);
+        let fcp = simio_mappings
+            .iter()
+            .find(|m| m.cmd == apdu::Instruction::GetResponse)
+            .and_then(|m| parse_fcp_response(&m.response));
+
+        let canonical_len =
+            UiccFileId::try_from(file_id).ok().and_then(UiccFileId::default_record_len);
+
+        let structure = xml_ef
+            .structure
+            .or_else(|| {
+                if fcp.as_ref().is_some_and(|f| f.is_linear_fixed) || canonical_len.is_some() {
+                    Some(XmlFileStructure::LinearFixed)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(XmlFileStructure::Transparent);
+
         let mut record_len = None;
 
         if structure == XmlFileStructure::LinearFixed {
@@ -386,17 +464,33 @@ impl TryFrom<XmlElementaryFile> for ElementaryFile {
             inferred.max_rec_num = std::cmp::max(inferred.max_rec_num, update_max_rec_num);
             inferred.rec_len = update_inferred_rec_len;
 
-            if inferred.max_rec_num > 0 {
-                if inferred.rec_len == 0 {
-                    return Err(XmlProfileError::InvalidValue {
-                        file_id,
-                        field: "structure".to_string(),
-                        value: "linear fixed".to_string(),
-                        expected: "determined record length (>0)".to_string(),
-                    });
-                }
+            if inferred.max_rec_num > 0 && inferred.rec_len > 0 {
                 record_len = Some(inferred.rec_len);
                 data = inferred.compile()?;
+            } else if let Some(fcp_desc) = fcp
+                && let Some(r_len) = fcp_desc.record_len
+            {
+                record_len = Some(r_len);
+                let total_size = fcp_desc
+                    .file_size
+                    .or_else(|| fcp_desc.num_records.map(|n| n * r_len))
+                    .unwrap_or(r_len);
+                if data.is_empty() {
+                    data = vec![0xFF; total_size];
+                }
+            }
+
+            if record_len.is_none() {
+                record_len = canonical_len;
+            }
+
+            if record_len.is_none() {
+                return Err(XmlProfileError::InvalidValue {
+                    file_id,
+                    field: "structure".to_string(),
+                    value: "linear fixed".to_string(),
+                    expected: "determined record length (>0)".to_string(),
+                });
             }
         }
 

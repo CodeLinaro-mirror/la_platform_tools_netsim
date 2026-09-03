@@ -510,8 +510,115 @@ fn test_sms_status_report() {
 
     // B should receive the CMT unsolicited response
     then_wait_for_response_containing(&mut world, "B", "+CMT: ,20");
+    then_wait_for_response_containing(&mut world, "B", "00240B915155255155");
+
+    // B acknowledges delivery via AT+CNMA=1 per 3GPP TS 27.005
+    when_at_command_sent(&mut world, "B", "AT+CNMA=1");
+    then_response_is(&mut world, "B", "OK");
 
     // A should receive the CDS unsolicited response (Status Report)
     then_wait_for_response_containing(&mut world, "A", "+CDS: 25");
     then_response_contains(&mut world, "A", "0002010B915155255155F4");
+}
+
+#[test]
+fn test_sms_status_report_rejected() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_B);
+    given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_A);
+
+    when_at_command_sent(&mut world, "A", "AT+CMGF=0");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "B", "AT+CMGF=0");
+    then_response_is(&mut world, "B", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGS=15");
+    then_response_is(&mut world, "A", "> ");
+
+    let pdu_with_srr_ctrl_z = "0031000B915155255155F40000AA01F01A";
+    when_hex_bytes_sent(&mut world, "A", pdu_with_srr_ctrl_z);
+
+    then_response_contains(&mut world, "A", "+CMGS: ");
+    then_response_is(&mut world, "A", "OK");
+
+    then_wait_for_response_containing(&mut world, "B", "+CMT: ,20");
+    then_wait_for_response_containing(&mut world, "B", "00240B915155255155");
+
+    // B rejects the SMS via AT+CNMA=2 (negative ACK)
+    when_at_command_sent(&mut world, "B", "AT+CNMA=2");
+    then_response_is(&mut world, "B", "OK");
+
+    // A should NOT receive any CDS response
+    then_no_response(&mut world, "A");
+}
+
+#[test]
+fn test_sms_stop_and_wait_fifo_delivery() {
+    let mut world = World::new();
+    given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_B);
+    given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_A);
+    given_modem_with_number(&mut world, "C", "15555215556");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGF=0");
+    then_response_is(&mut world, "A", "OK");
+    when_at_command_sent(&mut world, "B", "AT+CMGF=0");
+    then_response_is(&mut world, "B", "OK");
+    when_at_command_sent(&mut world, "C", "AT+CMGF=0");
+    then_response_is(&mut world, "C", "OK");
+
+    // 1. A sends SMS 1 with SRR to B
+    when_at_command_sent(&mut world, "A", "AT+CMGS=15");
+    then_response_is(&mut world, "A", "> ");
+
+    let pdu1 = "0031000B915155255155F40000AA01F01A";
+    when_hex_bytes_sent(&mut world, "A", pdu1);
+
+    then_response_contains(&mut world, "A", "+CMGS: ");
+    then_response_is(&mut world, "A", "OK");
+
+    // B receives +CMT: for SMS 1
+    then_wait_for_response_containing(&mut world, "B", "+CMT: ,20");
+    then_wait_for_response_containing(&mut world, "B", "00240B915155255155");
+
+    // 2. C sends SMS 2 with SRR to B (while B has NOT acknowledged SMS 1 yet)
+    when_at_command_sent(&mut world, "C", "AT+CMGS=15");
+    then_response_is(&mut world, "C", "> ");
+
+    let pdu2 = "0031000B915155255155F40000AA01F11A";
+    when_hex_bytes_sent(&mut world, "C", pdu2);
+
+    then_response_contains(&mut world, "C", "+CMGS: ");
+    then_response_is(&mut world, "C", "OK");
+
+    // Stop-and-wait: B must NOT receive +CMT: for SMS 2 yet!
+    then_no_response(&mut world, "B");
+    then_no_response(&mut world, "A");
+    then_no_response(&mut world, "C");
+
+    // 3. B acknowledges SMS 1 via AT+CNMA=1
+    when_at_command_sent(&mut world, "B", "AT+CNMA=1");
+    then_response_is(&mut world, "B", "OK");
+
+    // A receives status report for SMS 1
+    then_wait_for_response_containing(&mut world, "A", "+CDS: 25");
+    then_response_contains(&mut world, "A", "0002010B915155255155F4");
+
+    // B now receives +CMT: for queued SMS 2!
+    then_wait_for_response_containing(&mut world, "B", "+CMT: ,20");
+    then_wait_for_response_containing(&mut world, "B", "00240B915155255155");
+
+    // 4. B acknowledges SMS 2 via AT+CNMA=1
+    when_at_command_sent(&mut world, "B", "AT+CNMA=1");
+    then_response_is(&mut world, "B", "OK");
+
+    // C receives status report for SMS 2
+    then_wait_for_response_containing(&mut world, "C", "+CDS: 25");
+}
+
+#[test]
+fn test_cnma_invalid_val() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CNMA=3");
+    then_response_is(&mut world, "A", "ERROR");
 }
