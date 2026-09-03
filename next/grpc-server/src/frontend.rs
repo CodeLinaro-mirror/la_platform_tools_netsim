@@ -871,8 +871,7 @@ mod tests {
         let status = to_rpc_status(err);
         assert_eq!(status.code(), RpcStatusCode::NOT_FOUND);
 
-        let err =
-            ClientError::Framework(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "err")));
+        let err = ClientError::Framework(Box::new(std::io::Error::other("err")));
         let status = to_rpc_status(err);
         assert_eq!(status.code(), RpcStatusCode::INTERNAL);
     }

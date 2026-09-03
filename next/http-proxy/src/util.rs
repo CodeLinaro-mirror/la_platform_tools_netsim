@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn parse_configuration_string_with_errors() {
-        let dummy_error = || Box::new(std::io::Error::new(std::io::ErrorKind::Other, "dummy"));
+        let dummy_error = || Box::new(std::io::Error::other("dummy"));
         let data = [
             ("http://", Error::MalformedConfigString),
             ("", Error::MalformedConfigString),

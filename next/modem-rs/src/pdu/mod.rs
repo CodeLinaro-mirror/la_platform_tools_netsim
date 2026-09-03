@@ -498,7 +498,7 @@ mod tests {
         assert_eq!(rx_bytes[1], 0x24); // PDU-Type (DELIVER, SRI=1, MMS=1)
 
         // Expected OA BCD for "+12345": length=5, type=0x91, digits=21 43 F5
-        let expected_oa = vec![5, 0x91, 0x21, 0x43, 0xF5];
+        let expected_oa = [5, 0x91, 0x21, 0x43, 0xF5];
         assert_eq!(rx_bytes[2..7], expected_oa[..]);
     }
 

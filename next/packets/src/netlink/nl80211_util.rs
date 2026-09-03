@@ -538,7 +538,7 @@ mod tests {
         assert_eq!(parsed_s, s);
 
         assert_eq!(
-            parse_string_from_payload(&[b'w', b'o', b'r', b'l', b'd']), // No null terminator
+            parse_string_from_payload(b"world"), // No null terminator
             Err(NetlinkError::InvalidString)
         );
         let invalid_utf8_payload = [0xff, 0xfe, 0xfd, 0];

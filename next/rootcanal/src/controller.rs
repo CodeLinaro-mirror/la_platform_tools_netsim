@@ -612,7 +612,7 @@ mod tests {
             destination_address: dest,
             packet_boundary_flag: 0,
             broadcast_flag: 0,
-            data: vec![].into(),
+            data: vec![],
         };
         let mut acl_empty_bytes = Vec::new();
         acl_empty.encode(&mut acl_empty_bytes).unwrap();
@@ -627,7 +627,7 @@ mod tests {
             destination_address: dest,
             packet_boundary_flag: 0,
             broadcast_flag: 0,
-            data: vec![1, 2, 3].into(),
+            data: vec![1, 2, 3],
         };
         let mut acl_payload_bytes = Vec::new();
         acl_payload.encode(&mut acl_payload_bytes).unwrap();
