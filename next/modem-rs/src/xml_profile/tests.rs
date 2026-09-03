@@ -274,10 +274,10 @@ fn test_ef_with_file_not_found_is_omitted() {
     assert!(profile.sim_io.file_system.find_ef(target_fid).is_none());
 }
 
-fn find_xml_ef_in_df<'a>(
-    df: &'a schema::XmlDedicatedFile,
+fn find_xml_ef_in_df(
+    df: &schema::XmlDedicatedFile,
     target_id: u16,
-) -> Option<&'a schema::XmlElementaryFile> {
+) -> Option<&schema::XmlElementaryFile> {
     for member in &df.members {
         match member {
             schema::XmlDedicatedFileMember::Elementary(ef) if ef.id == target_id => {
@@ -299,10 +299,10 @@ fn find_xml_ef_in_df<'a>(
     None
 }
 
-fn find_xml_ef_in_adf<'a>(
-    adf: &'a schema::XmlApplicationDedicatedFile,
+fn find_xml_ef_in_adf(
+    adf: &schema::XmlApplicationDedicatedFile,
     target_id: u16,
-) -> Option<&'a schema::XmlElementaryFile> {
+) -> Option<&schema::XmlElementaryFile> {
     for member in &adf.members {
         match member {
             schema::XmlApplicationDedicatedFileMember::ElementaryFile(ef) if ef.id == target_id => {
