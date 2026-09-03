@@ -128,12 +128,11 @@ pub struct AccessConditions {
 }
 
 impl AccessConditions {
-    pub fn to_bytes(self) -> [u8; 4] {
+    pub fn to_bytes(self) -> [u8; 3] {
         [
             ((self.read as u8) << 4) | (self.update as u8),
             (self.increase as u8) << 4,
             ((self.rehabilitate as u8) << 4) | (self.invalidate as u8),
-            0x00, // Byte 12: RFU
         ]
     }
 }
@@ -245,9 +244,9 @@ impl ElementaryFileResponseHeader {
             .chain(self.file_id.to_be_bytes()) // Bytes 5-6: File ID
             .chain(once(self.file_type as u8)) // Byte 7: File type
             .chain(once(0x00)) // Byte 8: Cyclic increase pointer / RFU
-            .chain(self.access_conditions.to_bytes()) // Bytes 9-12: Access conditions
-            .chain(once(self.file_status as u8)) // Byte 13: File status
-            .chain(following_data.iter().copied()) // Bytes 14+: Following data & structure
+            .chain(self.access_conditions.to_bytes()) // Bytes 9-11: Access conditions
+            .chain(once(self.file_status as u8)) // Byte 12: File status
+            .chain(following_data.iter().copied()) // Bytes 13+: Following data & structure
             .collect()
     }
 }
@@ -2088,35 +2087,35 @@ mod tests {
     fn test_elementary_file_response_header_serialization() {
         let ef_header = ElementaryFileResponseHeader::new(0x6F40, 28, Some(28));
         let bytes = ef_header.to_bytes();
-        assert_eq!(bytes.len(), 16);
+        assert_eq!(bytes.len(), 15);
         assert_eq!(bytes[0..2], [0x00, 0x00]);
         assert_eq!(bytes[2..4], [0x00, 28]);
         assert_eq!(bytes[4], 0x6F);
         assert_eq!(bytes[5], 0x40);
         assert_eq!(bytes[6], SimFileType::Elementary as u8);
         assert_eq!(bytes[7], 0x00);
-        assert_eq!(bytes[8..12], [0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(bytes[12], FileStatus::Valid as u8);
-        assert_eq!(bytes[13], 0x02);
-        assert_eq!(bytes[14], ElementaryFileStructure::LinearFixed as u8);
-        assert_eq!(bytes[15], 28);
+        assert_eq!(bytes[8..11], [0x00, 0x00, 0x00]);
+        assert_eq!(bytes[11], FileStatus::Valid as u8);
+        assert_eq!(bytes[12], 0x02);
+        assert_eq!(bytes[13], ElementaryFileStructure::LinearFixed as u8);
+        assert_eq!(bytes[14], 28);
     }
 
     #[test]
     fn test_transparent_elementary_file_response_header_serialization() {
         let ef_header = ElementaryFileResponseHeader::new(0x6F07, 9, None);
         let bytes = ef_header.to_bytes();
-        assert_eq!(bytes.len(), 15);
+        assert_eq!(bytes.len(), 14);
         assert_eq!(bytes[0..2], [0x00, 0x00]);
         assert_eq!(bytes[2..4], [0x00, 9]);
         assert_eq!(bytes[4], 0x6F);
         assert_eq!(bytes[5], 0x07);
         assert_eq!(bytes[6], SimFileType::Elementary as u8);
         assert_eq!(bytes[7], 0x00);
-        assert_eq!(bytes[8..12], [0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(bytes[12], FileStatus::Valid as u8);
-        assert_eq!(bytes[13], 0x00);
-        assert_eq!(bytes[14], ElementaryFileStructure::Transparent as u8);
+        assert_eq!(bytes[8..11], [0x00, 0x00, 0x00]);
+        assert_eq!(bytes[11], FileStatus::Valid as u8);
+        assert_eq!(bytes[12], 0x00);
+        assert_eq!(bytes[13], ElementaryFileStructure::Transparent as u8);
     }
 
     #[test]
@@ -2132,7 +2131,6 @@ mod tests {
         assert_eq!(bytes[0], 0x12); // read: 1, update: 2
         assert_eq!(bytes[1], 0xF0); // increase: F, rfu: 0
         assert_eq!(bytes[2], 0x01); // rehabilitate: 0, invalidate: 1
-        assert_eq!(bytes[3], 0x00); // RFU: 00
     }
 
     #[test]

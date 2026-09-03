@@ -1796,9 +1796,9 @@ fn test_crsm_get_response_ef_msisdn() {
     given_modem_with_msisdn_in_fs(&mut world, "A");
 
     // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 15
-    // Header format (15 bytes): 00 00 00 1C 6F 40 04 00 00 00 00 00 00 02 01
+    // Header format (15 bytes): 00 00 00 1C 6F 40 04 00 00 00 00 00 02 01 1C
     when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,15");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,0000001C6F40040000000000000201");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,0000001C6F4004000000000002011C");
     then_response_is(&mut world, "A", "OK");
 }
 
