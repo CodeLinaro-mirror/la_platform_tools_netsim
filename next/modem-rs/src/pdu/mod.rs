@@ -9,6 +9,8 @@ use nom::{
 };
 use tracing::{debug, warn};
 
+use crate::types::TypeOfAddress;
+
 pub(crate) mod bcd;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -289,7 +291,7 @@ pub(crate) fn get_current_timestamp_bcd() -> Vec<u8> {
 pub fn encode_address(number: &str) -> Vec<u8> {
     let clean_number = number.strip_prefix('+').unwrap_or(number);
     let address_len_digits = clean_number.len() as u8;
-    let address_type = if number.starts_with('+') { 0x91 } else { 0x81 };
+    let address_type = TypeOfAddress::from_number(number).as_u8();
     let bcd_digits = bcd::string_to_bcd(clean_number);
 
     once(address_len_digits).chain(once(address_type)).chain(bcd_digits).collect()
@@ -496,7 +498,7 @@ mod tests {
         assert_eq!(rx_bytes[1], 0x24); // PDU-Type (DELIVER, SRI=1, MMS=1)
 
         // Expected OA BCD for "+12345": length=5, type=0x91, digits=21 43 F5
-        let expected_oa = vec![5, 0x91, 0x21, 0x43, 0xF5];
+        let expected_oa = [5, 0x91, 0x21, 0x43, 0xF5];
         assert_eq!(rx_bytes[2..7], expected_oa[..]);
     }
 

@@ -14,8 +14,10 @@ NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
 NETSIM_CLIPPY_FLAGS = [
     "-Dwarnings",
     # Async / Concurrency
+    "-Dclippy::await_holding_lock",
     "-Dclippy::future_not_send",
     "-Dclippy::large_futures",
+    "-Dclippy::let_underscore_future",
     "-Dclippy::mutex_atomic",
     "-Dclippy::rc_mutex",
     "-Dclippy::significant_drop_in_scrutinee",
@@ -40,11 +42,15 @@ def _netsim_rustfmt_test_impl(ctx):
     toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
     rustfmt, config = toolchain.rustfmt, ctx.file.config
 
+    seen = {}
     srcs = []
     for t in ctx.attr.targets:
         info = t[rust_common.crate_info] if rust_common.crate_info in t else getattr(t, "crate_info", None)
         if info:
-            srcs.extend([s for s in info.srcs.to_list() if s.is_source])
+            for s in info.srcs.to_list():
+                if s.is_source and s.short_path not in seen:
+                    seen[s.short_path] = True
+                    srcs.append(s)
 
     if not srcs:
         fail("No sources to format")
@@ -256,10 +262,19 @@ def _netsim_clippy_test_impl(ctx):
             t_args.add("-L", "dependency=%s" % lib_dir)
         t_args.add("--sysroot=%s" % sysroot)
         t_args.add("-L", "%s/lib/rustlib/%s/lib" % (sysroot, target_triple))
+        t_args.add_all(ctx.attr.clippy_flags)
         if info.type == "bin" and not "test" in t.label.name:
             t_args.add("--crate-type=bin")
         elif info.type == "test" or "test" in t.label.name:
             t_args.add("--test")
+
+            # In test targets, allow idiomatic test patterns:
+            # - unwrap_in_result: tests returning Result often assert via .unwrap()
+            # - field_reassign_with_default: initializing mock structs in tests
+            # - module_inception: tests/tests.rs having mod tests
+            t_args.add("-Aclippy::unwrap_in_result")
+            t_args.add("-Aclippy::field_reassign_with_default")
+            t_args.add("-Aclippy::module_inception")
         else:
             t_args.add("--crate-type=rlib")
         t_args.add("--crate-name=%s" % info.name)
@@ -268,7 +283,6 @@ def _netsim_clippy_test_impl(ctx):
         t_args.add("-Cembed-bitcode=no")
         if not is_windows:
             t_args.add("--remap-path-prefix=$(pwd)=.")
-        t_args.add_all(ctx.attr.clippy_flags)
         t_args.add(root_file.path)
 
         # We run clippy-driver via a wrapper that always exits 0, even if clippy fails.
@@ -507,6 +521,8 @@ def netsim_rust_library(
 
     # 5. Common Targets (Clippy, Rustfmt)
     tgs = [":" + name]
+    if enable_unit_test:
+        tgs.append(":test")
     if has_integration_test:
         tgs.append(":integration-test")
 

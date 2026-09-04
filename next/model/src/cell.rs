@@ -23,6 +23,9 @@ pub struct Quirks {
     pub goldfish_ril_37_or_earlier: bool,
     /// Flag indicating if the guest device is Cuttlefish.
     pub is_cuttlefish: bool,
+    /// Flag indicating whether CTZV (NITZ time zone reporting) should be
+    /// enabled by default.
+    pub auto_ctzv: bool,
 }
 
 /// Cellular technology specific chip information.
@@ -134,7 +137,7 @@ pub enum ModemAction {
     IncomingSms { id: ChipId, sender: String, text: String },
     IncomingPdu { id: ChipId, pdu: String },
     UpdatePhysicalChannelConfigs { id: ChipId },
-    UpdateNetworkTime { id: ChipId, time: String },
+    UpdateNetworkTime { id: ChipId },
     SetSimStatus { id: ChipId, present: bool },
     SetNetworkTechnology { id: ChipId, tech: RadioTechnology },
     SetOperator { id: ChipId, operator: String },

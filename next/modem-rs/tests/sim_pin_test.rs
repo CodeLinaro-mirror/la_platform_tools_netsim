@@ -96,3 +96,68 @@ fn test_query_sim_pin_facility_lock() {
     then_response_is(&mut world, "B", "+CLCK: 1");
     then_response_is(&mut world, "B", "OK");
 }
+
+#[test]
+fn test_perm_blocked_sim_profile() {
+    let mut world = World::new();
+    given_modem_with_perm_blocked_sim(&mut world, "A");
+
+    // Enable verbose errors
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Query SIM status -> should return CME ERROR 13 (SimFailure)
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", CME_ERROR_SIM_FAILURE);
+
+    // Attempting PIN entry should return CME ERROR 3 (OperationNotAllowed)
+    when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{LOCKED_PIN}\""));
+    then_response_is(&mut world, "A", CME_ERROR_OPERATION_NOT_ALLOWED);
+
+    // Attempting PUK entry should return CME ERROR 3 (OperationNotAllowed)
+    when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{TEST_PUK}\",\"{NEW_PIN}\""));
+    then_response_is(&mut world, "A", CME_ERROR_OPERATION_NOT_ALLOWED);
+
+    // Attempting password change should return CME ERROR 3
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CPWD=\"SC\",\"{LOCKED_PIN}\",\"{NEW_PIN}\""),
+    );
+    then_response_is(&mut world, "A", CME_ERROR_OPERATION_NOT_ALLOWED);
+}
+
+#[test]
+fn test_puk_retries_exhaustion_transitions_to_perm_blocked() {
+    let mut world = World::new();
+    given_modem_with_locked_sim(&mut world, "A");
+
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Exhaust PIN retries (3 attempts)
+    for _ in 0..DEFAULT_PIN_RETRIES {
+        when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{INVALID_PIN}\""));
+        then_response_is(&mut world, "A", CME_ERROR_INCORRECT_PASSWORD);
+    }
+
+    // Verify state transitioned to SIM PUK
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: SIM PUK");
+    then_response_is(&mut world, "A", "OK");
+
+    // Exhaust PUK retries (10 attempts)
+    for _ in 0..DEFAULT_PUK_RETRIES {
+        when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{INVALID_PUK}\",\"{NEW_PIN}\""));
+        then_response_is(&mut world, "A", CME_ERROR_INCORRECT_PASSWORD);
+    }
+
+    // After exhausting PUK retries, SIM is PermBlocked:
+    // AT+CPIN? returns CME ERROR 13.
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", CME_ERROR_SIM_FAILURE);
+
+    // Any further unlock attempts must fail with CME ERROR 3
+    when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{TEST_PUK}\",\"{NEW_PIN}\""));
+    then_response_is(&mut world, "A", CME_ERROR_OPERATION_NOT_ALLOWED);
+}

@@ -1,25 +1,28 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Write, time::Duration};
+use std::{fmt::Write, sync::Arc, time::Duration};
 
 use netsim_model::{Quirks, RadioTechnology, RegistrationStatus};
 use tracing::{debug, error};
 
 use crate::{
     call_service::CallService,
+    config::SimProfile,
     constants::CALL_RING_TIMEOUT,
     data_service::DataService,
     misc_service::MiscService,
-    network_service::{NetworkCommand, NetworkService},
+    network_service::{NetworkCommand, NetworkService, RegistrationType},
     parser::Command,
     sim_service::SimService,
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
+    time::Clock,
     types::{
-        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HandledCommand, ModemId,
-        NumberPresentation, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
+        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HandledCommand, ModemError,
+        ModemId, NumberPresentation, Parsable, PhoneNumber, RadioPowerLevel,
+        RegistrationUnsolicitedMode, Response,
     },
 };
 
@@ -59,18 +62,29 @@ pub enum ModemEffect {
 }
 
 impl ModemImpl {
-    pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile, quirks: Quirks) -> Self {
+    pub(crate) fn new(
+        id: ModemId,
+        profile: SimProfile,
+        quirks: Quirks,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         let home_plmn = profile.home_plmn();
+        let mut sim_service = SimService::new();
+        sim_service.load_profile(&profile);
+        let mut misc_service = MiscService::new(clock);
+        if quirks.auto_ctzv {
+            misc_service.set_ctzv_mode(true);
+        }
         Self {
             id,
             enable_unsolicited_urcs: enable_unsol,
-            sim_service: SimService::new(&profile),
+            sim_service,
             network_service: NetworkService::new(quirks, home_plmn),
             sms_service: SmsService::default(),
             stk_service: StkService::new(profile.stk.clone()),
             sup_service: SupService::default(),
-            misc_service: MiscService::default(),
+            misc_service,
             call_service: CallService::default(),
             data_service: DataService::from_env(),
             quirks,
@@ -172,23 +186,16 @@ impl ModemImpl {
         effects
     }
 
-    pub fn trigger_network_time_update(&mut self, time: &str) -> Vec<ModemEffect> {
-        self.misc_service.set_time(time.to_string());
+    pub fn trigger_network_time_update(&mut self) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
-        // Extract timezone for +CTZV
-        if let Some(pos) = time.rfind('+').or_else(|| time.rfind('-')) {
-            // Basic check to avoid date separators if any
-            if pos > 10 {
-                let zone = &time[pos..];
-                let response = format!("+CTZV: {zone}\r\n");
-                effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-            }
-        }
+        let response = self.misc_service.current_time_update();
+        effects.push(ModemEffect::Response(response.to_string().into_bytes()));
         effects
     }
 
     pub fn set_phone_number(&mut self, number: &str) {
-        self.sim_service.set_msisdn(number);
+        let phone = PhoneNumber::parse(number.as_bytes()).map(|(_, p)| p).ok();
+        self.sim_service.set_msisdn(phone.as_ref());
     }
 
     pub fn phone_number(&self) -> Option<PhoneNumber> {
@@ -199,35 +206,59 @@ impl ModemImpl {
         self.network_service.set_signal_strength(rssi, ber);
     }
 
-    pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Vec<ModemEffect> {
-        let mut effects = Vec::new();
-        if let Some(response) = self.network_service.set_voice_registration(status) {
-            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+    pub fn set_registration(
+        &mut self,
+        reg_type: RegistrationType,
+        status: RegistrationStatus,
+    ) -> Vec<ModemEffect> {
+        if let Some(response) = self.network_service.set_registration(reg_type, status) {
+            vec![ModemEffect::Response(response.into_bytes())]
+        } else {
+            Vec::new()
         }
-        effects
+    }
+
+    pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Vec<ModemEffect> {
+        self.set_registration(RegistrationType::Voice, status)
     }
 
     pub fn set_data_registration(&mut self, status: RegistrationStatus) -> Vec<ModemEffect> {
-        let mut effects = Vec::new();
-        if let Some(response) = self.network_service.set_data_registration(status) {
-            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-        }
-        effects
+        self.set_registration(RegistrationType::Data, status)
     }
 
-    pub fn set_sim_status(&mut self, present: bool) -> Vec<ModemEffect> {
+    pub(crate) fn set_sim_status(&mut self, present: bool) -> Vec<ModemEffect> {
+        if present && !self.sim_service.is_provisioned() {
+            return Vec::new();
+        }
         let changed = self.sim_service.set_present(present);
         let mut effects = Vec::new();
         if changed {
             if !present {
-                effects.extend(self.set_voice_registration(RegistrationStatus::NotRegistered));
-                effects.extend(self.set_data_registration(RegistrationStatus::NotRegistered));
+                effects.extend(
+                    self.set_registration(
+                        RegistrationType::Voice,
+                        RegistrationStatus::NotRegistered,
+                    ),
+                );
+                effects.extend(
+                    self.set_registration(
+                        RegistrationType::Data,
+                        RegistrationStatus::NotRegistered,
+                    ),
+                );
                 self.network_service.detach_network();
+                self.network_service.set_home_plmn(None);
+                self.stk_service = StkService::default();
+                self.call_service.calls.clear();
             } else {
-                effects.push(ModemEffect::Schedule {
-                    delay: Duration::from_millis(10),
-                    event: ModemEvent::AttachNetwork,
-                });
+                let home_plmn = self.sim_service.home_plmn();
+                self.network_service.set_home_plmn(home_plmn);
+                if home_plmn.is_some() {
+                    effects.push(ModemEffect::Schedule {
+                        delay: Duration::from_millis(10),
+                        event: ModemEvent::AttachNetwork,
+                    });
+                }
             }
             if !self.quirks.goldfish_ril_37_or_earlier
                 && let Some(urc) = self.sim_service.get_cpin_urc()
@@ -236,6 +267,87 @@ impl ModemImpl {
             }
         }
         effects
+    }
+
+    /// Ejects the SIM tray, cutting electrical power to the card while
+    /// preserving non-volatile data on the card.
+    pub(crate) fn eject_sim(&mut self) -> Vec<ModemEffect> {
+        self.set_sim_status(false)
+    }
+
+    /// Re-inserts the SIM tray with the existing provisioned card.
+    ///
+    /// Fails if no SIM card is provisioned in the tray.
+    pub(crate) fn reinsert_sim(&mut self) -> Result<Vec<ModemEffect>, ModemError> {
+        if !self.sim_service.is_provisioned() {
+            return Err(ModemError::InvalidConfig(
+                "Cannot re-insert: SIM tray is empty".to_string(),
+            ));
+        }
+        Ok(self.set_sim_status(true))
+    }
+
+    /// Removes and unprovisions the SIM card completely, wiping the filesystem
+    /// and credentials.
+    pub(crate) fn remove_sim(&mut self) -> Vec<ModemEffect> {
+        let effects = self.set_sim_status(false);
+        self.sim_service.remove_sim();
+        effects
+    }
+
+    /// Synchronizes STK service and network registration state after a SIM
+    /// change (profile switch or card insertion).
+    fn sync_network_after_sim_change(&mut self, profile: &SimProfile) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
+        let home_plmn = profile.home_plmn();
+
+        self.stk_service = StkService::new(profile.stk.clone());
+        self.network_service.set_home_plmn(home_plmn);
+
+        // Reset network registration to trigger fresh attachment to new home PLMN
+        effects.extend(
+            self.set_registration(RegistrationType::Voice, RegistrationStatus::NotRegistered),
+        );
+        effects.extend(
+            self.set_registration(RegistrationType::Data, RegistrationStatus::NotRegistered),
+        );
+        self.network_service.detach_network();
+
+        if home_plmn.is_some() {
+            effects.push(ModemEffect::Schedule {
+                delay: Duration::from_millis(10),
+                event: ModemEvent::AttachNetwork,
+            });
+        }
+
+        if !self.quirks.goldfish_ril_37_or_earlier
+            && let Some(urc) = self.sim_service.get_cpin_urc()
+        {
+            effects.push(ModemEffect::Response(urc.as_bytes().to_vec()));
+        }
+
+        effects
+    }
+
+    /// Switches the active SIM profile, rebuilding the SIM filesystem and
+    /// resynchronizing network operator, MSISDN, STK, and registration
+    /// states.
+    pub(crate) fn switch_sim_profile(&mut self, profile: SimProfile) -> Vec<ModemEffect> {
+        self.sim_service.load_profile(&profile);
+        self.sync_network_after_sim_change(&profile)
+    }
+
+    /// Inserts a SIM card into the modem by applying the provided profile.
+    /// Fails if a SIM card is already provisioned.
+    pub(crate) fn insert_sim(
+        &mut self,
+        profile: SimProfile,
+    ) -> Result<Vec<ModemEffect>, ModemError> {
+        if !self.sim_service.insert_sim(&profile) {
+            return Err(ModemError::InvalidConfig("SIM card is already inserted".to_string()));
+        }
+
+        Ok(self.sync_network_after_sim_change(&profile))
     }
 
     pub fn set_network_technology(&mut self, tech: RadioTechnology) -> Vec<ModemEffect> {
@@ -351,7 +463,10 @@ impl ModemImpl {
             }
             ModemEvent::AttachNetwork => {
                 if self.sim_service.is_present() {
-                    let responses = self.network_service.attach_network();
+                    let mut responses = self.network_service.attach_network();
+                    if self.misc_service.ctzv_enabled() && self.enable_unsolicited_urcs {
+                        responses.push(self.misc_service.current_time_update().to_string());
+                    }
                     if self.enable_unsolicited_urcs {
                         let combined = responses
                             .iter()
@@ -616,11 +731,12 @@ fn starts_with_ignore_case(s: &[u8], prefix: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::SimProfile;
+    use crate::{config::SimProfile, time::SystemClock};
 
     #[test]
     fn test_execute_chained_commands_parse_error() {
-        let mut modem = ModemImpl::new(1, SimProfile::default(), Quirks::default());
+        let mut modem =
+            ModemImpl::new(1, SimProfile::default(), Quirks::default(), Arc::new(SystemClock));
         // We pass a command Y that returns Err on Command::parse(Y).
         // Since Y does not start with AT or RING, and we bypass split_chained_commands,
         // we can pass it directly to execute_chained_commands.
@@ -637,7 +753,8 @@ mod tests {
 
     #[test]
     fn test_trigger_incoming_call_presentation_not_available() {
-        let mut modem = ModemImpl::new(1, SimProfile::default(), Quirks::default());
+        let mut modem =
+            ModemImpl::new(1, SimProfile::default(), Quirks::default(), Arc::new(SystemClock));
         // Enable CLIP via AT command
         modem.execute_chained_commands(&[b"AT+CLIP=1".to_vec()]);
 

@@ -1,8 +1,0 @@
-# Copyright 2026 The Android Open Source Project
-# SPDX-License-Identifier: Apache-2.0
-
-# Non-Volatile RAM State for the Modem
-
-operator_numeric = "311740"
-network_selection_mode = "Automatic"
-emergency_mode = false

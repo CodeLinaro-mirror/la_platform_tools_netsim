@@ -605,7 +605,7 @@ fn test_apdu_msisdn_update() {
     then_response_is(
         &mut world,
         "A",
-        "+CRSM: 144,0,000000000000000000000000000007915155251100F1FFFFFFFFFFFF",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
     );
     then_response_is(&mut world, "A", "OK");
 
@@ -613,7 +613,7 @@ fn test_apdu_msisdn_update() {
     when_at_command_sent(
         &mut world,
         "A",
-        "AT+CRSM=220,28480,1,4,28,\"000000000000000000000000000007915155255155F4FFFFFFFFFFFF\"",
+        "AT+CRSM=220,28480,1,4,28,\"FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF\"",
     );
     then_response_is(&mut world, "A", "+CRSM: 144,0");
     then_response_is(&mut world, "A", "OK");
@@ -623,7 +623,7 @@ fn test_apdu_msisdn_update() {
     then_response_is(
         &mut world,
         "A",
-        "+CRSM: 144,0,000000000000000000000000000007915155255155F4FFFFFFFFFFFF",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF",
     );
     then_response_is(&mut world, "A", "OK");
 }
@@ -637,7 +637,7 @@ fn test_apdu_update_record_invalid_record_number() {
     when_at_command_sent(
         &mut world,
         "A",
-        "AT+CRSM=220,28480,0,4,28,\"000000000000000000000000000007915155255155F4FFFFFFFFFFFF\"",
+        "AT+CRSM=220,28480,0,4,28,\"FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF\"",
     );
     then_response_is(&mut world, "A", "+CRSM: 106,134"); // SW_INCORRECT_PARAMS (6A86)
     then_response_is(&mut world, "A", "OK");
@@ -661,7 +661,7 @@ fn test_apdu_update_record_invalid_hex() {
 
     // UPDATE RECORD with invalid hex characters (e.g. 'G' at the end)
     // MSISDN record length is 28 bytes (56 hex characters)
-    let invalid_hex = "000000000000000000000000000007915155255155F4FFFFFFFFFFFG";
+    let invalid_hex = "FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFG";
     when_at_command_sent(&mut world, "A", &format!("AT+CRSM=220,28480,1,4,28,\"{invalid_hex}\""));
     then_response_is(&mut world, "A", "+CRSM: 106,134"); // SW_INCORRECT_PARAMS (6A86)
     then_response_is(&mut world, "A", "OK");
@@ -676,7 +676,7 @@ fn test_apdu_update_record_out_of_bounds() {
     when_at_command_sent(
         &mut world,
         "A",
-        "AT+CRSM=220,28480,5,4,28,\"000000000000000000000000000007915155255155F4FFFFFFFFFFFF\"",
+        "AT+CRSM=220,28480,5,4,28,\"FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF\"",
     );
     then_response_is(&mut world, "A", "+CRSM: 106,136"); // SW_REFERENCED_DATA_NOT_FOUND (6A88)
     then_response_is(&mut world, "A", "OK");
@@ -792,14 +792,15 @@ fn test_apdu_update_record_non_record_file() {
     let mut world = World::new();
     given_modem_with_fplmn_and_mbdn_in_fs(&mut world, "A");
 
-    // FPLMN (28539) is transparent. Try UPDATE RECORD (220) on it.
+    // FPLMN (28539) is transparent. Try UPDATE RECORD (220) on it - must fail with
+    // SW_INCORRECT_PARAMS.
     when_at_command_sent(&mut world, "A", "AT+CRSM=220,28539,1,4,6,\"AABBCCDDEEFF\"");
-    then_response_is(&mut world, "A", "+CRSM: 144,0");
+    then_response_is(&mut world, "A", "+CRSM: 106,134");
     then_response_is(&mut world, "A", "OK");
 
-    // Read it back (should be overwritten entirely)
-    when_at_command_sent(&mut world, "A", "AT+CRSM=176,28539,0,0,6");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,AABBCCDDEEFF");
+    // Read it back (content should be unchanged)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,28539,0,0,12");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFF");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -1660,7 +1661,7 @@ fn test_crsm_read_record_invalid_p2() {
     then_response_is(
         &mut world,
         "A",
-        "+CRSM: 144,0,000000000000000000000000000007915155251100F1FFFFFFFFFFFF",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
     );
     then_response_is(&mut world, "A", "OK");
 }
@@ -1786,5 +1787,353 @@ fn test_response_buffer_cleared_on_channel_close() {
     // 5. GET_RESPONSE on channel 1 returns 6A88 because buffer was cleared on close
     when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01C0000035\"");
     then_response_is(&mut world, "A", "+CGLA: 4,6A88");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_get_response_ef_msisdn() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 15
+    // Header format (15 bytes): 00 00 00 1C 6F 40 04 00 00 00 00 00 02 01 1C
+    when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,15");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,0000001C6F4004000000000002011C");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_get_response_df_telecom() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // GET_RESPONSE for DF_TELECOM (7F10 / 32528) with P3 = 22
+    // Header format: File ID at bytes 4-5 is 7F10, File Type at byte 6 is 02 (DF),
+    // num_ef_children at byte 15 is 03
+    when_at_command_sent(&mut world, "A", "AT+CRSM=192,32528,0,0,22");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,000000007F1002000000000000000300000000000000");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_get_response_wrong_length() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 50 > 15 byte header
+    when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,50");
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_read_record_wrong_length() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // READ_RECORD for EF_MSISDN (6F40 / 28480) with P3 = 50 > 28 byte record
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,50");
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_read_record_p3_truncation() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // READ_RECORD for EF_MSISDN (6F40 / 28480) with P3 = 14 (alpha identifier only)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,14");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_update_binary_wrong_length() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // UPDATE_BINARY with mismatched P3 (data is 6 bytes = 12 hex chars, P3 is 10)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=214,28539,0,0,10,\"40F21040F220\"");
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_crsm_update_record_wrong_length() {
+    let mut world = World::new();
+    given_modem_with_msisdn_in_fs(&mut world, "A");
+
+    // UPDATE_RECORD with mismatched P3 (data is 28 bytes, P3 is 20)
+    when_at_command_sent(
+        &mut world,
+        "A",
+        "AT+CRSM=220,28480,1,4,20,\"FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155255155F4FFFFFFFFFFFF\"",
+    );
+    then_response_is(&mut world, "A", "+CRSM: 103,0");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_msisdn_in_default_sim0_profile() {
+    let mut world = World::new();
+    // PROFILE_DEFAULT_XML defines EF_MSISDN in DF_TELECOM (0x7F10) with dummy
+    // number 15551234567
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_DEFAULT_XML);
+
+    // Initial MSISDN should be resolved from DF_TELECOM and overridden to
+    // 15555211001
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_msisdn_in_tel_alaska_profile() {
+    let mut world = World::new();
+    // PROFILE_TEL_ALASKA_XML defines EF_MSISDN in ADF_USIM (0x7FFF) with dummy
+    // number 15551234567
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_TEL_ALASKA_XML);
+
+    // Initial MSISDN should be resolved from ADF_USIM, populated in DF_TELECOM, and
+    // overridden to 15555211001
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_msisdn_in_cts_profile() {
+    let mut world = World::new();
+    // PROFILE_CTS_XML defines EF_MSISDN in ADF_USIM (0x7FFF) with custom number
+    // +8618810189440
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
+
+    // Custom non-fallback MSISDN should be preserved from ADF_USIM
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,00000000000000000000000000000891688118109844F0FFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_carrier_api_cts_profile_mbdn_update_and_read() {
+    let mut world = World::new();
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
+
+    let tag_a_payload =
+        "74616741FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF06812143658709FFFFFFFFFFFFFF";
+    let tag_b_payload =
+        "74616742FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF06819078563412FFFFFFFFFFFFFF";
+
+    // 1. Open logical channel 1
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"0070000000\"");
+    then_response_is(&mut world, "A", "+CSIM: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Select EF_MBDN (0x6FC7) on channel 1
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,14,\"01A40004026FC7\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Update record 1 with tagA payload via UPDATE RECORD (0xDC)
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=1,86,\"01DC010426{tag_a_payload}\""));
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Read record 1 via READ RECORD (0xB2)
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01B2010426\"");
+    then_response_is(&mut world, "A", &format!("+CGLA: 80,{tag_a_payload}9000"));
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Update record 2 with tagB payload
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=1,86,\"01DC020426{tag_b_payload}\""));
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 6. Read record 2
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01B2020426\"");
+    then_response_is(&mut world, "A", &format!("+CGLA: 80,{tag_b_payload}9000"));
+    then_response_is(&mut world, "A", "OK");
+
+    // 7. Verify record 1 is still tagA
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01B2010426\"");
+    then_response_is(&mut world, "A", &format!("+CGLA: 80,{tag_a_payload}9000"));
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_dual_df_synchronization_mbdn_and_msisdn() {
+    let mut world = World::new();
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
+
+    let mbdn_payload =
+        "74616741FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF06812143658709FFFFFFFFFFFFFF";
+
+    // 1. Update EF_MBDN via AT+CRSM (targeting DF_TELECOM path)
+    when_at_command_sent(&mut world, "A", &format!("AT+CRSM=220,28615,1,4,38,\"{mbdn_payload}\""));
+    then_response_is(&mut world, "A", "+CRSM: 144,0");
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Open logical channel 1 (ADF_USIM path)
+    when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"0070000000\"");
+    then_response_is(&mut world, "A", "+CSIM: 6,019000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 3. Select EF_MBDN on channel 1 and read record 1 -> should reflect the CRSM
+    //    update!
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,14,\"01A40004026FC7\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"01B2010426\"");
+    then_response_is(&mut world, "A", &format!("+CGLA: 80,{mbdn_payload}9000"));
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Update EF_MSISDN via CGLA (ADF_USIM path)
+    let msisdn_payload = "74616741FFFFFFFFFFFFFFFFFFFF06812143658709FFFFFFFFFFFFFF";
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,14,\"01A40004026F40\"");
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", &format!("AT+CGLA=1,66,\"01DC01041C{msisdn_payload}\""));
+    then_response_is(&mut world, "A", "+CGLA: 4,9000");
+    then_response_is(&mut world, "A", "OK");
+
+    // 5. Read EF_MSISDN via AT+CRSM -> should reflect the CGLA update!
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(&mut world, "A", &format!("+CRSM: 144,0,{msisdn_payload}"));
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_multi_record_msisdn_preservation() {
+    let mut world = World::new();
+    given_modem_with_multi_record_msisdn_in_fs(&mut world, "A");
+
+    // Read record 1 via AT+CRSM
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,4C696E6531FFFFFFFFFFFFFFFFFF07915155111111F1FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+
+    // Read record 2 via AT+CRSM
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,2,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,4C696E6532FFFFFFFFFFFFFFFFFF07915155222222F2FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+
+    // Update Line 1 programmatically (as done via Netsim gRPC)
+    when_phone_number_set(&mut world, "A", "15553333333");
+
+    // Verify record 1 reflects update
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155333333F3FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+
+    // Crucially verify record 2 was NOT truncated or destroyed
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,2,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,4C696E6532FFFFFFFFFFFFFFFFFF07915155222222F2FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_custom_record_len_msisdn_update() {
+    let mut world = World::new();
+    // Custom record length = 34 bytes (20 bytes alpha tag + 14 bytes footer)
+    given_modem_with_custom_record_len_msisdn_in_fs(&mut world, "A", 34);
+
+    // Update phone number programmatically (as done via Netsim gRPC)
+    when_phone_number_set(&mut world, "A", "15554444444");
+
+    // Read record 1 via AT+CRSM (length 34 bytes)
+    // 20 bytes of 0xFF alpha tag (40 hex chars) + 14 bytes footer (28 hex chars)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,34");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155444444F4FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_2g_sim_profile_preserves_type_without_adf() {
+    let mut world = World::new();
+    given_modem_with_2g_sim_profile(&mut world, "A");
+
+    // 1. MSISDN is initialized in DF_TELECOM (0x7F10)
+    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
+    );
+    then_response_is(&mut world, "A", "OK");
+
+    // 2. Selecting 0x7FFF (AdfDefault) fails with SW_FILE_NOT_FOUND (6A82),
+    // proving ADF_USIM was not synthesized on a 2G SIM.
+    when_at_command_sent(&mut world, "A", "AT+CSIM=14,\"00A40004027FFF\"");
+    then_response_is(&mut world, "A", "+CSIM: 4,6A82");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_cphs_mwi_not_found_in_default_sim0_profile() {
+    let mut world = World::new();
+    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_DEFAULT_XML);
+
+    use modem_rs::{apdu::Instruction, constants::UiccFileId};
+
+    // ReadBinary on EF_VOICE_MAIL_INDICATOR_CPHS should return SW_FILE_NOT_FOUND
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!(
+            "AT+CRSM={},{},0,0,1",
+            Instruction::ReadBinary,
+            UiccFileId::VoiceMailIndicatorCphs
+        ),
+    );
+    then_response_is(&mut world, "A", RESP_CRSM_FILE_NOT_FOUND);
+    then_response_is(&mut world, "A", "OK");
+
+    // GetResponse on EF_VOICE_MAIL_INDICATOR_CPHS should also return
+    // SW_FILE_NOT_FOUND
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!(
+            "AT+CRSM={},{},0,0,15",
+            Instruction::GetResponse,
+            UiccFileId::VoiceMailIndicatorCphs
+        ),
+    );
+    then_response_is(&mut world, "A", RESP_CRSM_FILE_NOT_FOUND);
     then_response_is(&mut world, "A", "OK");
 }

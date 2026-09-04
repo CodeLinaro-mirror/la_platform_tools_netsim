@@ -132,6 +132,7 @@ fn is_unsolicited_response(response: &[u8]) -> bool {
         || s.starts_with("+CGEV:")
         || s.starts_with("+CSQ:")
         || s.starts_with("+CUSATEND")
+        || s.starts_with("%CTZV:")
 }
 
 /// Normalizes the expected response string to bytes.

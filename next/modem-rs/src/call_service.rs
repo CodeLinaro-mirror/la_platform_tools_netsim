@@ -252,17 +252,14 @@ impl CallService {
         Ok(Some(CallResponse::Ring))
     }
 
-    pub fn receive_hold(&mut self, peer_id: ModemId) {
-        debug!("[CallService] Receiving hold from {:?}", peer_id);
+    pub fn receive_peer_hold(&mut self, peer_id: ModemId, on_hold: bool) {
+        debug!(
+            "[CallService] Receiving {} from {:?}",
+            if on_hold { "hold" } else { "resume" },
+            peer_id
+        );
         if let Some(call) = self.calls.iter_mut().find(|c| c.peer_id == Some(peer_id)) {
-            call.state = CallState::Held;
-        }
-    }
-
-    pub fn receive_resume(&mut self, peer_id: ModemId) {
-        debug!("[CallService] Receiving resume from {:?}", peer_id);
-        if let Some(call) = self.calls.iter_mut().find(|c| c.peer_id == Some(peer_id)) {
-            call.state = CallState::Active;
+            call.state = if on_hold { CallState::Held } else { CallState::Active };
         }
     }
 

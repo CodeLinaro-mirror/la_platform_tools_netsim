@@ -5,7 +5,7 @@
 /// models.
 mod conversion;
 /// Error types and implementations for XML profile parsing.
-mod error;
+pub mod error;
 /// XML deserialization structs matching the SIM XML profile schema.
 mod schema;
 /// Recursive search helper functions to locate CCID and IMSI within the XML
@@ -15,7 +15,7 @@ mod search;
 mod tests;
 
 use conversion::{ParsedAdf, convert_xml_dedicated_file};
-pub(crate) use error::XmlProfileError;
+pub use error::XmlProfileError;
 use schema::XmlIccProfile;
 use search::{find_ccid, find_imsi};
 use serde::Deserialize;
@@ -24,7 +24,7 @@ use serde_xml_rs::{Deserializer, EventReader, ParserConfig};
 use crate::config::{FacilityLocks, FileSystem, PinProfile, SimIo, SimProfile, Stk, StkMenuItem};
 
 /// Parses an XML SIM ICC profile into a SimProfile.
-pub(crate) fn parse_xml_profile(xml: &str) -> Result<SimProfile, XmlProfileError> {
+pub fn parse_xml_profile(xml: &str) -> Result<SimProfile, XmlProfileError> {
     let config = ParserConfig::new()
         .max_entity_expansion_depth(0)
         .max_entity_expansion_length(0)
@@ -54,7 +54,7 @@ pub(crate) fn parse_xml_profile(xml: &str) -> Result<SimProfile, XmlProfileError
 
     let pin_profile = pin_profile
         .map(|p| PinProfile {
-            state: p.pin_state.unwrap_or_else(|| "Unknown".to_string()),
+            state: p.pin_state.unwrap_or_default(),
             pin1: p.pin_code.unwrap_or_default(),
             puk1: p.puk_code.unwrap_or_default(),
             pin2: p.pin2_code.unwrap_or_default(),
