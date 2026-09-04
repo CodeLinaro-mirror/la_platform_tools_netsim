@@ -211,11 +211,16 @@ fn test_send_dtmf() {
 //   Given a modem "A"
 //   When AT command "AT+WSOS=1" is sent to "A"
 //   Then response from "A" is "OK"
+//   When AT command "AT+WSOS=0" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_set_emergency_mode() {
     let mut world = World::new();
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+WSOS=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+WSOS=0");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -235,6 +240,13 @@ fn test_query_emergency_mode() {
 
     when_at_command_sent(&mut world, "A", "AT+WSOS?");
     then_response_is(&mut world, "A", "+WSOS: 1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+WSOS=0");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+WSOS?");
+    then_response_is(&mut world, "A", "+WSOS: 0");
     then_response_is(&mut world, "A", "OK");
 }
 

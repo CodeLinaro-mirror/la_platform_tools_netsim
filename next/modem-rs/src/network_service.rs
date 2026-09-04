@@ -766,13 +766,15 @@ impl NetworkService {
             Err(_) => return Err(ExecutionResult::error()),
         };
 
-        // Validate allowed technologies mask
-        let allowed_mask = crate::constants::SUPPORTED_CTEC_TECHS
+        // Validate allowed technologies mask across each priority byte (4-byte priority
+        // mask). Each byte represents a priority tier and must only contain
+        // supported technologies from SUPPORTED_CTEC_TECHS. A preferred_mask of
+        // 0 represents "automatic" or "no preference" and is allowed.
+        let tier_mask = crate::constants::SUPPORTED_CTEC_TECHS
             .iter()
-            .fold(0u32, |acc, &tech| acc | (tech as u32));
+            .fold(0u8, |acc, &tech| acc | (tech as u8));
 
-        // Validate preferred mask only contains supported technologies
-        if (preferred_mask & !allowed_mask) != 0 {
+        if preferred_mask.to_le_bytes().iter().any(|&tier| (tier & !tier_mask) != 0) {
             return Err(ExecutionResult::error());
         }
 

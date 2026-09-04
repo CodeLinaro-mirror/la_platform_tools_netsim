@@ -385,14 +385,50 @@ fn test_set_ctec_invalid() {
     when_at_command_sent(&mut world, "A", "AT+CTEC=99,\"21\"");
     then_response_is(&mut world, "A", "ERROR");
 
-    // Invalid preferred mask (0x200 is not supported, only 0x63 is supported)
-    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"200\"");
+    // Invalid preferred mask (0x80 has bit 7 set which is unsupported in any tier)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"80\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Invalid preferred mask (0x4 is CDMA, which is not in SUPPORTED_CTEC_TECHS)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"4\"");
     then_response_is(&mut world, "A", "ERROR");
 
     // Invalid current tech (5 is index, but we expect mask. 5 as mask is 0b101
     // which is invalid)
     when_at_command_sent(&mut world, "A", "AT+CTEC=5,\"21\"");
     then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_set_ctec_multi_byte_priority() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Multi-byte priority masks (e.g. 0x201 = 1st priority GSM (1), 2nd priority
+    // WCDMA (2))
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"201\"");
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "OK");
+
+    // Multi-byte priority mask with LTE (0x20 in byte 2 -> 0x200000)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"200000\"");
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_set_ctec_preferred_mask_zero() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Setting preferred_mask = 0 represents "automatic" or "no preference"
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"0\"");
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CTEC?");
+    then_response_is(&mut world, "A", "+CTEC: 1,0");
+    then_response_is(&mut world, "A", "OK");
 }
 
 #[test]

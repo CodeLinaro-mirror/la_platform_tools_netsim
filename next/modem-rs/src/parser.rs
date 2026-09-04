@@ -155,6 +155,7 @@ mod tests {
     use super::*;
     use crate::{
         apdu::Instruction,
+        sms_service::{MessageStatus, MessageStorage},
         types::{
             CallMode, CallWaitingMode, CallWaitingPresentation, ClirMode, CopsFormat, CopsMode,
             DialArgs, PdpType, PhoneNumber, ProductSerialNumberType,
@@ -486,5 +487,90 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+INVALID").unwrap();
         assert!(!rem.is_empty());
         assert_eq!(cmd, Command::Misc(MiscCommand::Test));
+    }
+
+    #[test]
+    fn test_parse_cmgw() {
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::ReceivedUnread)))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::ReceivedRead))));
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,2").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::StoredUnsent))));
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,3").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::StoredSent))));
+
+        // Out-of-range stat values fail to parse into MessageStatus, leaving trailing
+        // unparsed bytes
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,4").unwrap();
+        assert!(!rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,99").unwrap();
+        assert!(!rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
+    }
+
+    #[test]
+    fn test_parse_wsos() {
+        let (rem, cmd) = Command::parse(b"AT+WSOS=0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Call(CallCommand::SetEmergencyMode(false)));
+
+        let (rem, cmd) = Command::parse(b"AT+WSOS=1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Call(CallCommand::SetEmergencyMode(true)));
+
+        // AT+WSOS=2 should fail parsing (bool only accepts 0 and 1)
+        assert!(CallCommand::parse(b"AT+WSOS=2").is_err());
+    }
+
+    #[test]
+    fn test_parse_cpms() {
+        let (rem, cmd) = Command::parse(b"AT+CPMS=\"SM\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetPreferredMessageStorage(MessageStorage::Sim, None, None))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CPMS=\"SM\",\"ME\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetPreferredMessageStorage(
+                MessageStorage::Sim,
+                Some(MessageStorage::Me),
+                None
+            ))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CPMS=\"SM\",\"ME\",\"SM\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetPreferredMessageStorage(
+                MessageStorage::Sim,
+                Some(MessageStorage::Me),
+                Some(MessageStorage::Sim)
+            ))
+        );
+
+        // Invalid storage string fails parsing
+        assert!(SmsCommand::parse(b"AT+CPMS=\"INVALID\"").is_err());
     }
 }

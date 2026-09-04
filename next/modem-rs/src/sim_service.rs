@@ -11,6 +11,7 @@ use crate::{
     config::{FileSystem, OverwritePolicy, ProfileMetadata, SimFile, SimProfile},
     constants::*,
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
+    sms_service::{MessageStatus, StoredSms},
     types::{
         AdnRecord, CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN,
         DEFAULT_PIN2, ExecutionResult, FacilityLockMode, Parsable, PhoneNumber, Plmn,
@@ -425,7 +426,7 @@ pub struct SimService {
     puk2_retries: u32,
     fdn_enabled: bool,
     fs: FileSystem,
-    sms_messages: HashMap<u8, Vec<u8>>,
+    sms_messages: HashMap<u8, StoredSms>,
     logical_channels: [bool; 4],
     selected_aids: [Option<String>; 4],
     selected_files: [Option<u16>; 4],
@@ -844,20 +845,24 @@ impl SimService {
         self.sms_messages.len()
     }
 
-    pub(crate) fn store_sms(&mut self, pdu: &[u8]) -> Option<u8> {
+    pub(crate) fn store_sms(&mut self, pdu: &[u8], stat: MessageStatus) -> Option<u8> {
         if !self.is_present() {
             return None;
         }
         let index = self.sms_messages.len() as u8 + 1;
-        self.sms_messages.insert(index, pdu.to_vec());
+        self.sms_messages.insert(index, StoredSms { pdu: pdu.to_vec(), stat });
         Some(index)
     }
 
-    pub(crate) fn read_sms(&self, index: u8) -> Result<Option<Vec<u8>>, CmeError> {
+    pub(crate) fn read_sms(&self, index: u8) -> Result<Option<(Vec<u8>, MessageStatus)>, CmeError> {
         if !self.is_present() {
             return Err(CmeError::SimNotInserted);
         }
-        if let Some(pdu) = self.sms_messages.get(&index) { Ok(Some(pdu.clone())) } else { Ok(None) }
+        if let Some(sms) = self.sms_messages.get(&index) {
+            Ok(Some((sms.pdu.clone(), sms.stat)))
+        } else {
+            Ok(None)
+        }
     }
 
     pub(crate) fn delete_sms(&mut self, index: u8) -> bool {
@@ -2232,7 +2237,7 @@ mod tests {
         assert_eq!(meta.home_plmn.as_ref().map(Plmn::as_str), Some("310260"));
 
         // Store an SMS to verify it gets cleared on removal
-        service.store_sms(&[1, 2, 3]);
+        service.store_sms(&[1, 2, 3], MessageStatus::StoredUnsent);
         assert_eq!(service.get_sms_count(), 1);
 
         // Test ejection (set_present(false)) vs removal (remove_sim)
@@ -2311,7 +2316,7 @@ mod tests {
 
         // Store an SMS message on the SIM card
         let dummy_pdu = [0x00, 0x01, 0x02, 0x03];
-        let index = service.store_sms(&dummy_pdu);
+        let index = service.store_sms(&dummy_pdu, MessageStatus::StoredUnsent);
         assert_eq!(index, Some(1));
         assert_eq!(service.get_sms_count(), 1);
 
