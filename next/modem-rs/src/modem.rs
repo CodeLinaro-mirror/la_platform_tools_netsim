@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Write, time::Duration};
+use std::{fmt::Write, sync::Arc, time::Duration};
 
 use netsim_model::{Quirks, RadioTechnology, RegistrationStatus};
 use tracing::{debug, error};
@@ -18,6 +18,7 @@ use crate::{
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
+    time::Clock,
     types::{
         AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HandledCommand, ModemError,
         ModemId, NumberPresentation, Parsable, PhoneNumber, RadioPowerLevel,
@@ -61,11 +62,20 @@ pub enum ModemEffect {
 }
 
 impl ModemImpl {
-    pub(crate) fn new(id: ModemId, profile: SimProfile, quirks: Quirks) -> Self {
+    pub(crate) fn new(
+        id: ModemId,
+        profile: SimProfile,
+        quirks: Quirks,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         let home_plmn = profile.home_plmn();
         let mut sim_service = SimService::new();
         sim_service.load_profile(&profile);
+        let mut misc_service = MiscService::new(clock);
+        if quirks.auto_ctzv {
+            misc_service.set_ctzv_mode(true);
+        }
         Self {
             id,
             enable_unsolicited_urcs: enable_unsol,
@@ -74,7 +84,7 @@ impl ModemImpl {
             sms_service: SmsService::default(),
             stk_service: StkService::new(profile.stk.clone()),
             sup_service: SupService::default(),
-            misc_service: MiscService::default(),
+            misc_service,
             call_service: CallService::default(),
             data_service: DataService::from_env(),
             quirks,
@@ -176,18 +186,10 @@ impl ModemImpl {
         effects
     }
 
-    pub fn trigger_network_time_update(&mut self, time: &str) -> Vec<ModemEffect> {
-        self.misc_service.set_time(time.to_string());
+    pub fn trigger_network_time_update(&mut self) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
-        // Extract timezone for +CTZV
-        if let Some(pos) = time.rfind('+').or_else(|| time.rfind('-')) {
-            // Basic check to avoid date separators if any
-            if pos > 10 {
-                let zone = &time[pos..];
-                let response = format!("+CTZV: {zone}\r\n");
-                effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
-            }
-        }
+        let response = self.misc_service.current_time_update();
+        effects.push(ModemEffect::Response(response.to_string().into_bytes()));
         effects
     }
 
@@ -443,7 +445,10 @@ impl ModemImpl {
             }
             ModemEvent::AttachNetwork => {
                 if self.sim_service.is_present() {
-                    let responses = self.network_service.attach_network();
+                    let mut responses = self.network_service.attach_network();
+                    if self.misc_service.ctzv_enabled() && self.enable_unsolicited_urcs {
+                        responses.push(self.misc_service.current_time_update().to_string());
+                    }
                     if self.enable_unsolicited_urcs {
                         let combined = responses
                             .iter()
@@ -708,11 +713,12 @@ fn starts_with_ignore_case(s: &[u8], prefix: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::SimProfile;
+    use crate::{config::SimProfile, time::SystemClock};
 
     #[test]
     fn test_execute_chained_commands_parse_error() {
-        let mut modem = ModemImpl::new(1, SimProfile::default(), Quirks::default());
+        let mut modem =
+            ModemImpl::new(1, SimProfile::default(), Quirks::default(), Arc::new(SystemClock));
         // We pass a command Y that returns Err on Command::parse(Y).
         // Since Y does not start with AT or RING, and we bypass split_chained_commands,
         // we can pass it directly to execute_chained_commands.
@@ -729,7 +735,8 @@ mod tests {
 
     #[test]
     fn test_trigger_incoming_call_presentation_not_available() {
-        let mut modem = ModemImpl::new(1, SimProfile::default(), Quirks::default());
+        let mut modem =
+            ModemImpl::new(1, SimProfile::default(), Quirks::default(), Arc::new(SystemClock));
         // Enable CLIP via AT command
         modem.execute_chained_commands(&[b"AT+CLIP=1".to_vec()]);
 

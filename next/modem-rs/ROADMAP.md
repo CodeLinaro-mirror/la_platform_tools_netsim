@@ -225,10 +225,10 @@ for handling time, time zones, and initialization commands.
   - [x] Update `parser.rs` to support optional parameters.
   - [x] Add support for the `snt` parameter to return different types of
         identification information (IMEI, SVN, etc.).
-- [ ] **Add time and time zone support:**
-  - [ ] Implement logic for parsing the time zone from the system.
-  - [ ] Implement logic for calculating the time zone offset.
-  - [ ] Implement the `%CTZV` unsolicited response for time updates.
+- [x] **Add time and time zone support:**
+  - [x] Implement logic for parsing the time zone from the system.
+  - [x] Implement logic for calculating the time zone offset.
+  - [x] Implement the `%CTZV` unsolicited response for time updates.
 - [x] **Add initialization commands:**
   - [x] Implement the missing initialization commands (e.g., `E0Q0V1`, `S0=0`,
         `+CMEE=1`).

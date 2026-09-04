@@ -94,9 +94,9 @@ pub fn when_external_call_held(world: &mut World, name: &str, on_hold: bool) {
     world.manager.dispatch(action);
 }
 
-pub fn when_network_time_updated(world: &mut World, name: &str, time: &str) {
+pub fn when_network_time_updated(world: &mut World, name: &str) {
     let (id, _) = world.get_modem(name);
-    let action = ModemAction::UpdateNetworkTime { id: ChipId(id), time: time.to_string() };
+    let action = ModemAction::UpdateNetworkTime { id: ChipId(id) };
     world.manager.dispatch(action);
 }
 

@@ -220,7 +220,7 @@ impl ModemNetworkSimulator {
                 self.send_incoming_sms(id.0, &sender, &text)
             }
             ModemAction::IncomingPdu { id, pdu } => self.send_incoming_pdu(id.0, &pdu),
-            ModemAction::UpdateNetworkTime { id, time } => self.update_network_time(id.0, &time),
+            ModemAction::UpdateNetworkTime { id } => self.update_network_time(id.0),
             ModemAction::UpdatePhysicalChannelConfigs { id } => {
                 self.update_physical_channel_configs(id.0)
             }
@@ -311,7 +311,7 @@ impl ModemNetworkSimulator {
         } else {
             profile.msisdn.clone()
         };
-        let mut modem = ModemImpl::new(id, profile, quirks);
+        let mut modem = ModemImpl::new(id, profile, quirks, self.clock.clone());
         // Override the default dummy number with a unique generated one to prevent
         // conflicts when launching multiple default emulators. Custom profiles are
         // preserved.
@@ -740,8 +740,8 @@ impl ModemNetworkSimulator {
         self.apply_to_modem(id, |modem| modem.trigger_incoming_pdu(pdu))
     }
 
-    pub fn update_network_time(&mut self, id: ModemId, time: &str) -> Vec<NetworkEvent> {
-        self.apply_to_modem(id, |modem| modem.trigger_network_time_update(time))
+    pub fn update_network_time(&mut self, id: ModemId) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.trigger_network_time_update())
     }
 
     pub fn update_physical_channel_configs(&mut self, id: ModemId) -> Vec<NetworkEvent> {

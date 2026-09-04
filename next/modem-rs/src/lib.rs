@@ -34,6 +34,7 @@ pub use config::{
     SimIo, SimProfile,
 };
 pub use metrics::MetricsSnapshot;
+pub use misc_service::NitzTime;
 pub use modem::ModemEvent;
 pub use modem_network_simulator::{ModemNetworkSimulator, NetworkEvent, ScheduledEvent};
 pub use netsim_model::RegistrationStatus;
