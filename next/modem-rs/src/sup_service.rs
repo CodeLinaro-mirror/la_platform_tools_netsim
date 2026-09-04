@@ -165,16 +165,6 @@ impl SupService {
         Ok(Some(SupResponse::Clir { n: self.clir_mode, m: ClirStatus::Active }))
     }
 
-    fn handle_set_clir(&mut self, clir: ClirMode) -> SupResult {
-        self.clir_mode = clir;
-        Ok(None)
-    }
-
-    fn handle_set_clip(&mut self, enabled: ClipActivation) -> SupResult {
-        self.clip_enabled = enabled;
-        Ok(None)
-    }
-
     fn handle_query_clip(&self) -> SupResult {
         Ok(Some(SupResponse::Clip {
             activation: self.clip_enabled,
@@ -248,14 +238,6 @@ impl SupService {
         }
     }
 
-    fn handle_supp_service_notification(&self) -> SupResult {
-        Ok(None)
-    }
-
-    fn handle_set_colp(&self) -> SupResult {
-        Ok(None)
-    }
-
     pub fn execute<'a>(
         &mut self,
         command: &SupCommand<'a>,
@@ -279,15 +261,18 @@ impl SupService {
             }
             SupCommand::QueryClir => self.handle_query_clir(),
             SupCommand::SetClir(clir) | SupCommand::SetClirGoldfish(clir) => {
-                self.handle_set_clir(*clir)
+                self.clir_mode = *clir;
+                Ok(None)
             }
-            SupCommand::SetClip(enabled) => self.handle_set_clip(*enabled),
+            SupCommand::SetClip(enabled) => {
+                self.clip_enabled = *enabled;
+                Ok(None)
+            }
             SupCommand::QueryClip => self.handle_query_clip(),
-            SupCommand::SetColp(_) => self.handle_set_colp(),
+            SupCommand::SetColp(_) | SupCommand::SuppServiceNotification(_, _) => Ok(None),
             SupCommand::SetCallWaiting(n, mode, class) => {
                 self.handle_set_call_waiting(*n, *mode, *class)
             }
-            SupCommand::SuppServiceNotification(_, _) => self.handle_supp_service_notification(),
             SupCommand::SetUssd { mode, message, dcs } => {
                 self.handle_set_ussd(*mode, *message, *dcs)
             }

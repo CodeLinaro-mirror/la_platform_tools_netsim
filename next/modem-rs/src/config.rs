@@ -442,10 +442,7 @@ impl ElementaryFile {
         }
     }
 
-    /// Returns a 1-based record slice, or `None` if `record_number == 0`,
-    /// `record_len` is not set, or the record index exceeds the current
-    /// file buffer.
-    pub fn record(&self, record_number: usize) -> Option<&[u8]> {
+    fn record_range(&self, record_number: usize) -> Option<std::ops::Range<usize>> {
         if record_number == 0 {
             return None;
         }
@@ -455,23 +452,21 @@ impl ElementaryFile {
         }
         let start = (record_number - 1) * rec_len;
         let end = start + rec_len;
-        if end <= self.data.len() { Some(&self.data[start..end]) } else { None }
+        if end <= self.data.len() { Some(start..end) } else { None }
+    }
+
+    /// Returns a 1-based record slice, or `None` if `record_number == 0`,
+    /// `record_len` is not set, or the record index exceeds the current
+    /// file buffer.
+    pub fn record(&self, record_number: usize) -> Option<&[u8]> {
+        self.record_range(record_number).map(|r| &self.data[r])
     }
 
     /// Returns a mutable 1-based record slice, or `None` if `record_number ==
     /// 0`, `record_len` is not set, or the record index exceeds the current
     /// file buffer.
     pub fn record_mut(&mut self, record_number: usize) -> Option<&mut [u8]> {
-        if record_number == 0 {
-            return None;
-        }
-        let rec_len = self.record_len()?;
-        if rec_len == 0 {
-            return None;
-        }
-        let start = (record_number - 1) * rec_len;
-        let end = start + rec_len;
-        if end <= self.data.len() { Some(&mut self.data[start..end]) } else { None }
+        self.record_range(record_number).map(|r| &mut self.data[r])
     }
 
     /// Returns an iterator yielding each record in this linear-fixed file.
