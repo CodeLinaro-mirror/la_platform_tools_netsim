@@ -12,7 +12,7 @@ use crate::{
     parser::{QuotedString, parse_raw_data},
     types::{
         AccessTechnology, CmeError, CopsFormat, CopsMode, CtecTechnology, ExecutionResult,
-        OperatorStatus, Parsable, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
+        OperatorStatus, Parsable, Plmn, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
         SignalStrength,
     },
 };
@@ -321,7 +321,7 @@ pub struct NetworkService {
     data_unsol_mode: RegistrationUnsolicitedMode,
     lte_unsol_mode: RegistrationUnsolicitedMode,
     radio_power: RadioPowerLevel,
-    plmn: String,
+    plmn: Option<Plmn>,
     cops_mode: CopsMode,
     cops_format: CopsFormat,
     current_network_mode: CtecTechnology,
@@ -332,7 +332,7 @@ pub struct NetworkService {
 }
 
 impl NetworkService {
-    pub fn new(quirks: Quirks, home_plmn: &str) -> Self {
+    pub fn new(quirks: Quirks, home_plmn: Option<Plmn>) -> Self {
         Self {
             voice_registration: RegistrationStatus::NotRegistered,
             data_registration: RegistrationStatus::NotRegistered,
@@ -341,7 +341,7 @@ impl NetworkService {
             data_unsol_mode: RegistrationUnsolicitedMode::default(),
             lte_unsol_mode: RegistrationUnsolicitedMode::default(),
             radio_power: RadioPowerLevel::default(),
-            plmn: home_plmn.to_string(),
+            plmn: home_plmn,
             cops_mode: CopsMode::Automatic,
             // Non-standard default: While 3GPP TS 27.007 § 7.3 specifies format 0 (long format
             // alphanumeric) as the default when AT+COPS is queried without setting
@@ -379,6 +379,14 @@ impl NetworkService {
         self.is_attached = false;
     }
 
+    pub fn set_home_plmn(&mut self, plmn: Option<Plmn>) {
+        self.plmn = plmn;
+    }
+
+    pub fn home_plmn(&self) -> Option<&Plmn> {
+        self.plmn.as_ref()
+    }
+
     pub fn set_operator_manual(&mut self, mode: CopsMode, oper: Option<&[u8]>) -> NetworkResult {
         self.handle_set_operator(mode, Some(CopsFormat::LongAlphanumeric), oper)
     }
@@ -402,16 +410,7 @@ impl NetworkService {
         self.voice_registration = RegistrationStatus::RegisteredHome;
         self.data_registration = RegistrationStatus::RegisteredHome;
 
-        let mut urcs = Vec::new();
-        if let Some(urc) = self.format_creg_urc(self.voice_registration) {
-            urcs.push(urc);
-        }
-        if let Some(urc) = self.format_cgreg_urc(self.data_registration) {
-            urcs.push(urc);
-        }
-        if let Some(urc) = self.format_cereg_urc(self.data_registration) {
-            urcs.push(urc);
-        }
+        let mut urcs = self.all_registration_urcs();
         let (rssi, ber) = self.signal_strength;
         urcs.push(NetworkUrc::SignalStrength { rssi, ber, act: self.act });
 
@@ -435,27 +434,46 @@ impl NetworkService {
     }
 
     pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Option<String> {
-        if self.voice_registration != status {
-            self.voice_registration = status;
-            self.format_creg_urc(status).map(|u| u.to_string())
-        } else {
-            None
-        }
+        self.set_registration(RegistrationType::Voice, status)
     }
 
     pub fn set_data_registration(&mut self, status: RegistrationStatus) -> Option<String> {
-        if self.data_registration != status {
-            self.data_registration = status;
-            let mut urcs = String::new();
-            if let Some(cgreg) = self.format_cgreg_urc(status) {
-                urcs.push_str(&cgreg.to_string());
+        self.set_registration(RegistrationType::Data, status)
+    }
+
+    pub fn set_registration(
+        &mut self,
+        reg_type: RegistrationType,
+        status: RegistrationStatus,
+    ) -> Option<String> {
+        match reg_type {
+            RegistrationType::Voice => {
+                if self.voice_registration != status {
+                    self.voice_registration = status;
+                    self.format_registration_urc(RegistrationType::Voice, status)
+                        .map(|u| u.to_string())
+                } else {
+                    None
+                }
             }
-            if let Some(cereg) = self.format_cereg_urc(status) {
-                urcs.push_str(&cereg.to_string());
+            RegistrationType::Data | RegistrationType::Lte => {
+                if self.data_registration != status {
+                    self.data_registration = status;
+                    let mut urcs = String::new();
+                    if let Some(cgreg) =
+                        self.format_registration_urc(RegistrationType::Data, status)
+                    {
+                        urcs.push_str(&cgreg.to_string());
+                    }
+                    if let Some(cereg) = self.format_registration_urc(RegistrationType::Lte, status)
+                    {
+                        urcs.push_str(&cereg.to_string());
+                    }
+                    if urcs.is_empty() { None } else { Some(urcs) }
+                } else {
+                    None
+                }
             }
-            if urcs.is_empty() { None } else { Some(urcs) }
-        } else {
-            None
         }
     }
 
@@ -482,14 +500,8 @@ impl NetworkService {
             self.act = new_act;
             if self.is_attached {
                 let mut urcs = String::new();
-                if let Some(creg) = self.format_creg_urc(self.voice_registration) {
-                    urcs.push_str(&creg.to_string());
-                }
-                if let Some(cgreg) = self.format_cgreg_urc(self.data_registration) {
-                    urcs.push_str(&cgreg.to_string());
-                }
-                if let Some(cereg) = self.format_cereg_urc(self.data_registration) {
-                    urcs.push_str(&cereg.to_string());
+                for urc in self.all_registration_urcs() {
+                    urcs.push_str(&urc.to_string());
                 }
                 let (rssi, ber) = self.signal_strength;
                 urcs.push_str(&build_csq_response_string(rssi, ber, self.act));
@@ -522,7 +534,7 @@ impl NetworkService {
             is_registered,
             mode: self.cops_mode,
             format: self.cops_format,
-            plmn: self.plmn.clone(),
+            plmn: self.plmn.as_ref().map(|p| p.to_string()).unwrap_or_default(),
             quirks: self.quirks,
         }))
     }
@@ -562,9 +574,10 @@ impl NetworkService {
                         self.cops_format = fmt;
                     }
 
-                    let is_valid_operator = op_str == self.plmn
-                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
-                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
+                    let is_valid_operator =
+                        self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
+                            || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
+                            || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
 
                     if is_valid_operator {
                         let mut urcs = Vec::new();
@@ -581,16 +594,7 @@ impl NetworkService {
                         self.is_attached = false;
                         self.voice_registration = RegistrationStatus::Denied;
                         self.data_registration = RegistrationStatus::Denied;
-                        let mut urcs = Vec::new();
-                        if let Some(urc) = self.format_creg_urc(self.voice_registration) {
-                            urcs.push(urc);
-                        }
-                        if let Some(urc) = self.format_cgreg_urc(self.data_registration) {
-                            urcs.push(urc);
-                        }
-                        if let Some(urc) = self.format_cereg_urc(self.data_registration) {
-                            urcs.push(urc);
-                        }
+                        let urcs = self.all_registration_urcs();
                         Err(ExecutionResult::Error {
                             cme: Some(CmeError::NoNetworkService),
                             urcs: vec![Response::Network(NetworkResponse::Urcs(urcs))],
@@ -610,15 +614,7 @@ impl NetworkService {
                     self.is_attached = false;
                     self.voice_registration = RegistrationStatus::NotRegistered;
                     self.data_registration = RegistrationStatus::NotRegistered;
-                    if let Some(urc) = self.format_creg_urc(self.voice_registration) {
-                        urcs.push(urc);
-                    }
-                    if let Some(urc) = self.format_cgreg_urc(self.data_registration) {
-                        urcs.push(urc);
-                    }
-                    if let Some(urc) = self.format_cereg_urc(self.data_registration) {
-                        urcs.push(urc);
-                    }
+                    urcs = self.all_registration_urcs();
                 }
                 if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
             }
@@ -642,7 +638,7 @@ impl NetworkService {
                         self.cops_format = fmt;
                     }
 
-                    let manual_success = op_str == self.plmn
+                    let manual_success = self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
                         || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
                         || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
                     let mut urcs = Vec::new();
@@ -671,7 +667,7 @@ impl NetworkService {
             status,
             long_name: DEFAULT_OPERATOR_NAME_LONG.to_string(),
             short_name: DEFAULT_OPERATOR_NAME_SHORT.to_string(),
-            numeric: self.plmn.clone(),
+            numeric: self.plmn.as_ref().map(|p| p.to_string()).unwrap_or_default(),
             act: self.act,
         };
         Ok(Some(NetworkResponse::AvailableOperators(vec![default_op])))
@@ -686,11 +682,34 @@ impl NetworkService {
         Ok(None)
     }
 
-    fn handle_query_voice_registration(&self) -> NetworkResult {
+    fn unsol_mode(&self, reg_type: RegistrationType) -> RegistrationUnsolicitedMode {
+        match reg_type {
+            RegistrationType::Voice => self.voice_unsol_mode,
+            RegistrationType::Data => self.data_unsol_mode,
+            RegistrationType::Lte => self.lte_unsol_mode,
+        }
+    }
+
+    fn unsol_mode_mut(&mut self, reg_type: RegistrationType) -> &mut RegistrationUnsolicitedMode {
+        match reg_type {
+            RegistrationType::Voice => &mut self.voice_unsol_mode,
+            RegistrationType::Data => &mut self.data_unsol_mode,
+            RegistrationType::Lte => &mut self.lte_unsol_mode,
+        }
+    }
+
+    pub fn registration_status(&self, reg_type: RegistrationType) -> RegistrationStatus {
+        match reg_type {
+            RegistrationType::Voice => self.voice_registration,
+            RegistrationType::Data | RegistrationType::Lte => self.data_registration,
+        }
+    }
+
+    fn handle_query_registration(&self, reg_type: RegistrationType) -> NetworkResult {
         Ok(Some(NetworkResponse::RegistrationQuery {
-            reg_type: RegistrationType::Voice,
-            unsol_mode: self.voice_unsol_mode,
-            status: self.voice_registration,
+            reg_type,
+            unsol_mode: self.unsol_mode(reg_type),
+            status: self.registration_status(reg_type),
             lac: Some(DUMMY_LAC.to_string()),
             cid: Some(DUMMY_CID.to_string()),
             act: Some(self.act),
@@ -698,67 +717,21 @@ impl NetworkService {
         }))
     }
 
-    fn handle_set_voice_registration(
+    fn handle_set_registration(
         &mut self,
+        reg_type: RegistrationType,
         mode: RegistrationUnsolicitedMode,
     ) -> NetworkResult {
         info!(
-            "handle_set_voice_registration: mode={mode}, current_reg={:?}",
-            self.voice_registration
+            "handle_set_registration({reg_type:?}): mode={mode}, current_reg={:?}",
+            self.registration_status(reg_type)
         );
-        self.voice_unsol_mode = mode;
+        *self.unsol_mode_mut(reg_type) = mode;
         let mut urcs = Vec::new();
-        if self.voice_registration != RegistrationStatus::NotRegistered
+        let status = self.registration_status(reg_type);
+        if status != RegistrationStatus::NotRegistered
             && mode != RegistrationUnsolicitedMode::Disable
-            && let Some(urc) = self.format_creg_urc(self.voice_registration)
-        {
-            urcs.push(urc);
-        }
-        if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
-    }
-
-    fn handle_query_data_registration(&self) -> NetworkResult {
-        Ok(Some(NetworkResponse::RegistrationQuery {
-            reg_type: RegistrationType::Data,
-            unsol_mode: self.data_unsol_mode,
-            status: self.data_registration,
-            lac: Some(DUMMY_LAC.to_string()),
-            cid: Some(DUMMY_CID.to_string()),
-            act: Some(self.act),
-            quirks: self.quirks,
-        }))
-    }
-
-    fn handle_set_data_registration(&mut self, mode: RegistrationUnsolicitedMode) -> NetworkResult {
-        self.data_unsol_mode = mode;
-        let mut urcs = Vec::new();
-        if self.data_registration != RegistrationStatus::NotRegistered
-            && mode != RegistrationUnsolicitedMode::Disable
-            && let Some(urc) = self.format_cgreg_urc(self.data_registration)
-        {
-            urcs.push(urc);
-        }
-        if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
-    }
-
-    fn handle_query_lte_registration(&self) -> NetworkResult {
-        Ok(Some(NetworkResponse::RegistrationQuery {
-            reg_type: RegistrationType::Lte,
-            unsol_mode: self.lte_unsol_mode,
-            status: self.data_registration,
-            lac: Some(DUMMY_LAC.to_string()),
-            cid: Some(DUMMY_CID.to_string()),
-            act: Some(self.act),
-            quirks: self.quirks,
-        }))
-    }
-
-    fn handle_set_lte_registration(&mut self, mode: RegistrationUnsolicitedMode) -> NetworkResult {
-        self.lte_unsol_mode = mode;
-        let mut urcs = Vec::new();
-        if self.data_registration != RegistrationStatus::NotRegistered
-            && mode != RegistrationUnsolicitedMode::Disable
-            && let Some(urc) = self.format_cereg_urc(self.data_registration)
+            && let Some(urc) = self.format_registration_urc(reg_type, status)
         {
             urcs.push(urc);
         }
@@ -816,15 +789,7 @@ impl NetworkService {
 
         let mut urcs = Vec::new();
         if self.is_attached {
-            if let Some(urc) = self.format_creg_urc(self.voice_registration) {
-                urcs.push(urc);
-            }
-            if let Some(urc) = self.format_cgreg_urc(self.data_registration) {
-                urcs.push(urc);
-            }
-            if let Some(urc) = self.format_cereg_urc(self.data_registration) {
-                urcs.push(urc);
-            }
+            urcs = self.all_registration_urcs();
             let (rssi, ber) = self.signal_strength;
             urcs.push(NetworkUrc::SignalStrength { rssi, ber, act: self.act });
         }
@@ -855,94 +820,55 @@ impl NetworkService {
             self.data_registration = RegistrationStatus::NotRegistered;
 
             if enable_unsolicited_urcs {
-                if let Some(urc) = self.format_creg_urc(self.voice_registration) {
-                    urcs.push(urc);
-                }
-                if let Some(urc) = self.format_cgreg_urc(self.data_registration) {
-                    urcs.push(urc);
-                }
-                if let Some(urc) = self.format_cereg_urc(self.data_registration) {
-                    urcs.push(urc);
-                }
+                urcs = self.all_registration_urcs();
             }
         }
 
         if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
     }
 
-    fn format_creg_urc(&self, status: RegistrationStatus) -> Option<NetworkUrc> {
+    fn format_registration_urc(
+        &self,
+        reg_type: RegistrationType,
+        status: RegistrationStatus,
+    ) -> Option<NetworkUrc> {
         let force_location_info = self.quirks.goldfish_ril_37_or_earlier;
-        if self.voice_unsol_mode == RegistrationUnsolicitedMode::Disable {
+        let unsol_mode = self.unsol_mode(reg_type);
+        if unsol_mode == RegistrationUnsolicitedMode::Disable {
             None
-        } else if self.voice_unsol_mode == RegistrationUnsolicitedMode::EnableWithLocation
+        } else if unsol_mode == RegistrationUnsolicitedMode::EnableWithLocation
             || force_location_info
         {
             Some(NetworkUrc::Registration {
-                reg_type: RegistrationType::Voice,
+                reg_type,
                 status,
                 lac: Some(DUMMY_LAC.to_string()),
                 cid: Some(DUMMY_CID.to_string()),
                 act: Some(self.act),
             })
         } else {
-            Some(NetworkUrc::Registration {
-                reg_type: RegistrationType::Voice,
-                status,
-                lac: None,
-                cid: None,
-                act: None,
-            })
+            Some(NetworkUrc::Registration { reg_type, status, lac: None, cid: None, act: None })
         }
     }
 
-    fn format_cgreg_urc(&self, status: RegistrationStatus) -> Option<NetworkUrc> {
-        let force_location_info = self.quirks.goldfish_ril_37_or_earlier;
-        if self.data_unsol_mode == RegistrationUnsolicitedMode::Disable {
-            None
-        } else if self.data_unsol_mode == RegistrationUnsolicitedMode::EnableWithLocation
-            || force_location_info
+    fn all_registration_urcs(&self) -> Vec<NetworkUrc> {
+        let mut urcs = Vec::new();
+        if let Some(urc) =
+            self.format_registration_urc(RegistrationType::Voice, self.voice_registration)
         {
-            Some(NetworkUrc::Registration {
-                reg_type: RegistrationType::Data,
-                status,
-                lac: Some(DUMMY_LAC.to_string()),
-                cid: Some(DUMMY_CID.to_string()),
-                act: Some(self.act),
-            })
-        } else {
-            Some(NetworkUrc::Registration {
-                reg_type: RegistrationType::Data,
-                status,
-                lac: None,
-                cid: None,
-                act: None,
-            })
+            urcs.push(urc);
         }
-    }
-
-    fn format_cereg_urc(&self, status: RegistrationStatus) -> Option<NetworkUrc> {
-        let force_location_info = self.quirks.goldfish_ril_37_or_earlier;
-        if self.lte_unsol_mode == RegistrationUnsolicitedMode::Disable {
-            None
-        } else if self.lte_unsol_mode == RegistrationUnsolicitedMode::EnableWithLocation
-            || force_location_info
+        if let Some(urc) =
+            self.format_registration_urc(RegistrationType::Data, self.data_registration)
         {
-            Some(NetworkUrc::Registration {
-                reg_type: RegistrationType::Lte,
-                status,
-                lac: Some(DUMMY_LAC.to_string()),
-                cid: Some(DUMMY_CID.to_string()),
-                act: Some(self.act),
-            })
-        } else {
-            Some(NetworkUrc::Registration {
-                reg_type: RegistrationType::Lte,
-                status,
-                lac: None,
-                cid: None,
-                act: None,
-            })
+            urcs.push(urc);
         }
+        if let Some(urc) =
+            self.format_registration_urc(RegistrationType::Lte, self.data_registration)
+        {
+            urcs.push(urc);
+        }
+        urcs
     }
 
     pub fn execute<'a>(
@@ -960,17 +886,23 @@ impl NetworkService {
             NetworkCommand::QueryExtendedSignalQuality => {
                 self.handle_query_extended_signal_quality()
             }
-            NetworkCommand::QueryVoiceNetworkRegistration => self.handle_query_voice_registration(),
+            NetworkCommand::QueryVoiceNetworkRegistration => {
+                self.handle_query_registration(RegistrationType::Voice)
+            }
             NetworkCommand::SetVoiceNetworkRegistration(mode) => {
-                self.handle_set_voice_registration(*mode)
+                self.handle_set_registration(RegistrationType::Voice, *mode)
             }
-            NetworkCommand::QueryDataNetworkRegistration => self.handle_query_data_registration(),
+            NetworkCommand::QueryDataNetworkRegistration => {
+                self.handle_query_registration(RegistrationType::Data)
+            }
             NetworkCommand::SetDataNetworkRegistration(mode) => {
-                self.handle_set_data_registration(*mode)
+                self.handle_set_registration(RegistrationType::Data, *mode)
             }
-            NetworkCommand::QueryLteNetworkRegistration => self.handle_query_lte_registration(),
+            NetworkCommand::QueryLteNetworkRegistration => {
+                self.handle_query_registration(RegistrationType::Lte)
+            }
             NetworkCommand::SetLteNetworkRegistration(mode) => {
-                self.handle_set_lte_registration(*mode)
+                self.handle_set_registration(RegistrationType::Lte, *mode)
             }
             NetworkCommand::QueryRadioPower => self.handle_query_radio_power(),
             NetworkCommand::SetRadioPower(power) => {

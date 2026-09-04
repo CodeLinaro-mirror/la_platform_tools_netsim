@@ -94,9 +94,9 @@ pub fn when_external_call_held(world: &mut World, name: &str, on_hold: bool) {
     world.manager.dispatch(action);
 }
 
-pub fn when_network_time_updated(world: &mut World, name: &str, time: &str) {
+pub fn when_network_time_updated(world: &mut World, name: &str) {
     let (id, _) = world.get_modem(name);
-    let action = ModemAction::UpdateNetworkTime { id: ChipId(id), time: time.to_string() };
+    let action = ModemAction::UpdateNetworkTime { id: ChipId(id) };
     world.manager.dispatch(action);
 }
 
@@ -128,4 +128,15 @@ pub fn when_sim_status_set(world: &mut World, name: &str, present: bool) {
     let (id, _) = world.get_modem(name);
     let action = ModemAction::SetSimStatus { id: ChipId(id), present };
     world.manager.dispatch(action);
+}
+
+/// Updates the phone number on the specified modem (mirroring the Netsim gRPC
+/// path).
+pub fn when_phone_number_set(world: &mut World, name: &str, number: &str) {
+    let (id, _) = world.get_modem(name);
+    if let Some(modem) = world.manager.get_modem_mut(id) {
+        modem.set_phone_number(number);
+    } else {
+        panic!("Failed to retrieve modem '{name}'");
+    }
 }

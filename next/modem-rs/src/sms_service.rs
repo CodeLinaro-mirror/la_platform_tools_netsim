@@ -9,7 +9,10 @@ use nom::IResult;
 use crate::{
     parser::{QuotedString, parse_raw_data},
     sim_service::SimService, // Required for Sim storage
-    types::{CommandAction, ExecutionResult, HandledCommand, Parsable, Response, SmsBroadcastMode},
+    types::{
+        CommandAction, ExecutionResult, HandledCommand, Parsable, Response, SmsAck,
+        SmsBroadcastMode,
+    },
 };
 
 /// SMS service AT commands.
@@ -29,7 +32,7 @@ pub enum SmsCommand<'a> {
     DeleteSms(u8),
     /// 3GPP TS 27.005: New message acknowledgement with value (e.g. AT+CNMA=1)
     #[command(tag = "AT+CNMA=")]
-    SendSmsAckWithVal(u8),
+    SendSmsAckWithVal(SmsAck),
     /// 3GPP TS 27.005: New message acknowledgement
     #[command(tag = "AT+CNMA")]
     SendSmsAck,
@@ -288,8 +291,8 @@ impl SmsService {
         })))
     }
 
-    pub fn handle_send_sms_ack(&self) -> SmsResult {
-        Ok(SmsSuccess::new(None))
+    pub fn handle_send_sms_ack(&self, ack: SmsAck) -> SmsResult {
+        Ok(SmsSuccess::with_actions(None, vec![CommandAction::AcknowledgeIncomingSms { ack }]))
     }
 
     pub fn handle_wait_for_store_sms(&mut self, len: u8) -> SmsResult {
@@ -382,7 +385,8 @@ impl SmsService {
             SmsCommand::StoreSms(len) => self.handle_wait_for_store_sms(*len),
             SmsCommand::ReadSms(index) => self.handle_read_sms(sim_service, *index),
             SmsCommand::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
-            SmsCommand::SendSmsAck | SmsCommand::SendSmsAckWithVal(_) => self.handle_send_sms_ack(),
+            SmsCommand::SendSmsAck => self.handle_send_sms_ack(SmsAck::Success),
+            SmsCommand::SendSmsAckWithVal(ack) => self.handle_send_sms_ack(*ack),
             SmsCommand::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
             SmsCommand::SetPreferredMessageStorage(storage1, storage2, storage3) => {
                 self.handle_set_preferred_message_storage(*storage1, *storage2, *storage3)

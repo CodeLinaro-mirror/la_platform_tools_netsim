@@ -3,6 +3,8 @@
 
 use serde::Deserialize;
 
+use crate::apdu::Instruction;
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct XmlCardProfile {
     #[serde(rename = "EID")]
@@ -80,8 +82,8 @@ pub enum XmlElementaryFileMember {
 #[derive(Debug, Deserialize, Clone)]
 pub struct XmlSimIo {
     #[serde(rename = "cmd")]
-    #[serde(deserialize_with = "deserialize_hex_u8")]
-    pub command: u8,
+    #[serde(deserialize_with = "deserialize_hex_instruction")]
+    pub command: Instruction,
     #[serde(deserialize_with = "deserialize_hex_u8")]
     pub p1: u8,
     #[serde(deserialize_with = "deserialize_hex_u8")]
@@ -142,7 +144,7 @@ pub struct XmlApduMapping {
 #[derive(Debug, Deserialize, Clone)]
 pub struct XmlPinProfile {
     #[serde(rename = "PINSTATE")]
-    pub pin_state: Option<String>,
+    pub pin_state: Option<crate::config::PinState>,
     #[serde(rename = "PINCODE")]
     pub pin_code: Option<String>,
     #[serde(rename = "PUKCODE")]
@@ -245,4 +247,11 @@ where
     } else {
         u8::from_str_radix(trimmed, 16).map_err(serde::de::Error::custom)
     }
+}
+
+fn deserialize_hex_instruction<'de, D>(deserializer: D) -> Result<Instruction, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_hex_u8(deserializer).map(Instruction::from)
 }

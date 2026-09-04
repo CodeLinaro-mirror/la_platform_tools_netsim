@@ -153,9 +153,12 @@ impl<'a> Command<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{
-        CallMode, CallWaitingMode, CallWaitingPresentation, ClirMode, CopsFormat, CopsMode,
-        DialArgs, PdpType, PhoneNumber, ProductSerialNumberType,
+    use crate::{
+        apdu::Instruction,
+        types::{
+            CallMode, CallWaitingMode, CallWaitingPresentation, ClirMode, CopsFormat, CopsMode,
+            DialArgs, PdpType, PhoneNumber, ProductSerialNumberType,
+        },
     };
 
     #[test]
@@ -341,7 +344,7 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Sim(SimCommand::SimIo {
-                command: 176,
+                command: Instruction::ReadBinary,
                 file_id: 28480,
                 p1: 0,
                 p2: 0,
@@ -356,7 +359,7 @@ mod tests {
         assert_eq!(
             cmd2,
             Command::Sim(SimCommand::SimIo {
-                command: 176,
+                command: Instruction::ReadBinary,
                 file_id: 28480,
                 p1: 0,
                 p2: 0,

@@ -403,7 +403,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_lookup_host_dns() -> io::Result<()> {
-        let rt = Runtime::new().unwrap();
+        let rt = Runtime::new()?;
         let results = rt.block_on(lookup_host_dns(""))?;
         assert_eq!(results.len(), 0);
 

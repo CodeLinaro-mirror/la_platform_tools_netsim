@@ -11,9 +11,16 @@ use netsim_model::{Call, Quirks, RegistrationStatus};
 use nom::IResult;
 
 use crate::{
-    call_service::CallResponse, data_service::DataResponse, misc_service::MiscResponse,
-    network_service::NetworkResponse, parser::QuotedString, sim_service::SimResponse,
-    sms_service::SmsResponse, stk_service::StkResponse, sup_service::SupResponse,
+    call_service::CallResponse,
+    constants::{ADN_CAPABILITY_EXT_BYTES, ADN_DIALING_NUMBER_LEN, ADN_FOOTER_LEN},
+    data_service::DataResponse,
+    misc_service::MiscResponse,
+    network_service::NetworkResponse,
+    parser::QuotedString,
+    sim_service::SimResponse,
+    sms_service::SmsResponse,
+    stk_service::StkResponse,
+    sup_service::SupResponse,
 };
 
 pub trait Parsable<'a>: Sized {
@@ -69,11 +76,13 @@ pub type ModemId = u32;
 // Custom error type for the library.
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModemError {
     DuplicateModemId(ModemId),
+    UnknownModemId(ModemId),
     NotFound,
     InvalidConfig(String),
+    InvalidProfile(String),
 }
 
 impl std::error::Error for ModemError {}
@@ -82,9 +91,224 @@ impl fmt::Display for ModemError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ModemError::DuplicateModemId(id) => write!(f, "Duplicate modem ID: {id}"),
+            ModemError::UnknownModemId(id) => write!(f, "Unknown modem ID: {id}"),
             ModemError::NotFound => write!(f, "Modem network not found"),
             ModemError::InvalidConfig(msg) => write!(f, "Invalid configuration: {msg}"),
+            ModemError::InvalidProfile(msg) => write!(f, "Invalid SIM profile: {msg}"),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlmnError {
+    InvalidLength(usize),
+    InvalidDigits(String),
+    InvalidMcc(String),
+    InvalidMnc(String),
+}
+
+impl std::error::Error for PlmnError {}
+
+impl fmt::Display for PlmnError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PlmnError::InvalidLength(len) => {
+                write!(
+                    f,
+                    "PLMN length must be 5 digits (2-digit MNC) or 6 digits (3-digit MNC), got {len}"
+                )
+            }
+            PlmnError::InvalidDigits(s) => {
+                write!(f, "PLMN must contain only ASCII decimal digits, got: {s:?}")
+            }
+            PlmnError::InvalidMcc(s) => {
+                write!(f, "MCC must be exactly 3 ASCII decimal digits, got: {s:?}")
+            }
+            PlmnError::InvalidMnc(s) => {
+                write!(f, "MNC must be 2 or 3 ASCII decimal digits, got: {s:?}")
+            }
+        }
+    }
+}
+
+/// Represents a Public Land Mobile Network (PLMN) identity per 3GPP TS 23.003
+/// §2.2 and ITU-T Recommendation E.212.
+///
+/// Composed of:
+/// - Mobile Country Code (MCC): Exactly 3 decimal digits.
+/// - Mobile Network Code (MNC): Either 2 decimal digits (total 5 digits) or 3
+///   decimal digits (total 6 digits).
+///
+/// The distinction between 2- and 3-digit MNCs is governed by carrier
+/// assignment and signaled on SIM cards via `EF_AD` (Administrative Data) byte
+/// 4 (3GPP TS 31.102 §4.2.18).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(into = "String", try_from = "String")]
+pub enum Plmn {
+    /// 5-digit PLMN with a 2-digit Mobile Network Code (3-digit MCC + 2-digit
+    /// MNC). Standard in European (ITU-T Region 2) and international GSM
+    /// networks (e.g. "20810").
+    TwoDigitMnc([u8; 5]),
+
+    /// 6-digit PLMN with a 3-digit Mobile Network Code (3-digit MCC + 3-digit
+    /// MNC). Standard in North American (ITU-T Region 3) networks (e.g. US
+    /// carriers "310260", "311740").
+    ThreeDigitMnc([u8; 6]),
+}
+
+impl Plmn {
+    /// Validates and constructs a PLMN (must be 5 or 6 ASCII decimal digits).
+    pub fn parse(s: &str) -> Result<Self, PlmnError> {
+        let trimmed = s.trim();
+        let bytes = trimmed.as_bytes();
+        if !bytes.iter().all(u8::is_ascii_digit) {
+            return Err(PlmnError::InvalidDigits(s.to_string()));
+        }
+        match bytes.len() {
+            5 => {
+                let mut b = [0u8; 5];
+                b.copy_from_slice(bytes);
+                Ok(Self::TwoDigitMnc(b))
+            }
+            6 => {
+                let mut b = [0u8; 6];
+                b.copy_from_slice(bytes);
+                Ok(Self::ThreeDigitMnc(b))
+            }
+            len => Err(PlmnError::InvalidLength(len)),
+        }
+    }
+
+    /// Creates a PLMN from string or string-like slice.
+    pub fn new(s: impl AsRef<str>) -> Result<Self, PlmnError> {
+        Self::parse(s.as_ref())
+    }
+
+    /// Constructs a PLMN from separate MCC and MNC strings.
+    pub fn from_mcc_mnc(mcc: &str, mnc: &str) -> Result<Self, PlmnError> {
+        let mcc = mcc.trim();
+        let mnc = mnc.trim();
+        if mcc.len() != 3 || !mcc.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(PlmnError::InvalidMcc(mcc.to_string()));
+        }
+        let mcc_bytes = mcc.as_bytes();
+        let mnc_bytes = mnc.as_bytes();
+        match mnc.len() {
+            2 if mnc.bytes().all(|b| b.is_ascii_digit()) => {
+                let mut bytes = [0u8; 5];
+                bytes[..3].copy_from_slice(mcc_bytes);
+                bytes[3..].copy_from_slice(mnc_bytes);
+                Ok(Self::TwoDigitMnc(bytes))
+            }
+            3 if mnc.bytes().all(|b| b.is_ascii_digit()) => {
+                let mut bytes = [0u8; 6];
+                bytes[..3].copy_from_slice(mcc_bytes);
+                bytes[3..].copy_from_slice(mnc_bytes);
+                Ok(Self::ThreeDigitMnc(bytes))
+            }
+            _ => Err(PlmnError::InvalidMnc(mnc.to_string())),
+        }
+    }
+
+    /// Derives the home PLMN from an IMSI string.
+    ///
+    /// If `mnc_len` is specified (e.g. from EF_AD byte 4 per 3GPP TS 31.102
+    /// §4.2.18), it is honored. Otherwise defaults to a 3-digit MNC if len
+    /// is at least 6, or 2-digit MNC if len is 5. Returns `None` if IMSI is
+    /// shorter than 5 digits or non-numeric.
+    pub fn from_imsi(imsi: &str, mnc_len: Option<usize>) -> Option<Self> {
+        let digits = imsi.trim().as_bytes();
+        if digits.len() < 5 || !digits.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        match mnc_len {
+            Some(2) => {
+                let mut b = [0u8; 5];
+                b.copy_from_slice(&digits[..5]);
+                Some(Self::TwoDigitMnc(b))
+            }
+            Some(3) if digits.len() >= 6 => {
+                let mut b = [0u8; 6];
+                b.copy_from_slice(&digits[..6]);
+                Some(Self::ThreeDigitMnc(b))
+            }
+            _ => {
+                if digits.len() >= 6 {
+                    let mut b = [0u8; 6];
+                    b.copy_from_slice(&digits[..6]);
+                    Some(Self::ThreeDigitMnc(b))
+                } else {
+                    let mut b = [0u8; 5];
+                    b.copy_from_slice(&digits[..5]);
+                    Some(Self::TwoDigitMnc(b))
+                }
+            }
+        }
+    }
+
+    /// Returns the raw byte slice of ASCII decimal digits (length 5 or 6).
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::TwoDigitMnc(b) => b,
+            Self::ThreeDigitMnc(b) => b,
+        }
+    }
+
+    /// Returns the PLMN as an ASCII string slice (length 5 or 6).
+    pub fn as_str(&self) -> &str {
+        str::from_utf8(self.as_bytes()).expect("PLMN bytes are validated ASCII digits")
+    }
+
+    /// Returns the 3-digit Mobile Country Code (MCC).
+    pub fn mcc(&self) -> &str {
+        &self.as_str()[..3]
+    }
+
+    /// Returns the 2- or 3-digit Mobile Network Code (MNC).
+    pub fn mnc(&self) -> &str {
+        &self.as_str()[3..]
+    }
+
+    /// Returns the length of the Mobile Network Code (2 or 3).
+    pub fn mnc_length(&self) -> usize {
+        match self {
+            Self::TwoDigitMnc(_) => 2,
+            Self::ThreeDigitMnc(_) => 3,
+        }
+    }
+}
+
+impl fmt::Display for Plmn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl fmt::Debug for Plmn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Plmn(\"{}\")", self.as_str())
+    }
+}
+
+impl From<Plmn> for String {
+    fn from(plmn: Plmn) -> Self {
+        plmn.as_str().to_string()
+    }
+}
+
+impl TryFrom<String> for Plmn {
+    type Error = PlmnError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        Self::parse(&s)
+    }
+}
+
+impl TryFrom<&str> for Plmn {
+    type Error = PlmnError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
     }
 }
 
@@ -105,14 +329,193 @@ impl PhoneNumber {
         self.0.strip_prefix('+').unwrap_or(&self.0)
     }
 
-    pub fn toa(&self) -> u8 {
-        if self.0.starts_with('+') { 145 } else { 129 }
+    pub fn is_international(&self) -> bool {
+        self.0.starts_with('+')
+    }
+
+    pub fn toa(&self) -> TypeOfAddress {
+        TypeOfAddress::from_number(&self.0)
     }
 
     pub fn is_gprs_dial(&self) -> bool {
         self.0.starts_with("*99")
             && self.0.ends_with('#')
             && self.0.as_bytes().get(3).is_some_and(|&c| c == b'*' || c == b'#')
+    }
+}
+
+/// Abbreviated Dialling Number (ADN) record per 3GPP TS 31.102 §4.4.2.3 and
+/// TS 51.011 §10.5.1.
+///
+/// Shared linear-fixed record structure for:
+/// - EF_MSISDN (0x6F40)
+/// - EF_MBDN (0x6FC7)
+/// - EF_FDN (0x6F3B)
+/// - EF_ADN (0x6F3A / 0x4F3A)
+/// - EF_SDN (0x6F49)
+/// - EF_BDN (0x6F4D)
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AdnRecord {
+    pub alpha_tag: Option<String>,
+    pub number: Option<PhoneNumber>,
+}
+
+impl AdnRecord {
+    #[cfg(test)]
+    pub fn new(alpha_tag: Option<impl Into<String>>, number: Option<PhoneNumber>) -> Self {
+        Self { alpha_tag: alpha_tag.map(Into::into).filter(|s| !s.is_empty()), number }
+    }
+
+    pub fn from_number(number: &PhoneNumber) -> Self {
+        Self { alpha_tag: None, number: Some(number.clone()) }
+    }
+
+    pub fn encode_from_number(number: &PhoneNumber, record_len: usize) -> Vec<u8> {
+        Self::from_number(number).encode(record_len)
+    }
+
+    /// Decodes an ADN linear-fixed record slice (length >= 14 bytes).
+    ///
+    /// Returns None if the record is empty (all 0xFF) or malformed (< 14
+    /// bytes).
+    pub fn decode(record: &[u8]) -> Option<Self> {
+        if record.len() < ADN_FOOTER_LEN {
+            return None;
+        }
+        if record.iter().all(|&b| b == 0xFF) {
+            return None;
+        }
+
+        let alpha_len = record.len() - ADN_FOOTER_LEN;
+        let alpha_bytes = &record[..alpha_len];
+        let trimmed_alpha = match alpha_bytes.iter().rposition(|&b| b != 0xFF) {
+            Some(last) => &alpha_bytes[..=last],
+            None => &[],
+        };
+        let alpha_tag = if !trimmed_alpha.is_empty() {
+            Some(String::from_utf8_lossy(trimmed_alpha).into_owned())
+        } else {
+            None
+        };
+
+        let len_byte = record[alpha_len];
+        if len_byte <= 1 || len_byte == 0xFF {
+            return Some(Self { alpha_tag, number: None });
+        }
+
+        let bcd_content_len = len_byte as usize;
+        if bcd_content_len > 1 + ADN_DIALING_NUMBER_LEN {
+            return Some(Self { alpha_tag, number: None });
+        }
+
+        let ton_npi = record[alpha_len + 1];
+        let is_international = (ton_npi & 0xF0) == 0x90 || (ton_npi & 0x70) == 0x10;
+
+        let bcd_digits_len = bcd_content_len - 1;
+        let bcd_bytes = &record[alpha_len + 2..alpha_len + 2 + bcd_digits_len];
+        let mut digits = crate::pdu::bcd::bcd_to_string(bcd_bytes);
+
+        if is_international && !digits.is_empty() && !digits.starts_with('+') {
+            digits.insert(0, '+');
+        }
+
+        let number = match PhoneNumber::parse(digits.as_bytes()) {
+            Ok(([], p)) => Some(p),
+            _ => None,
+        };
+        Some(Self { alpha_tag, number })
+    }
+
+    /// Encodes this record into a linear-fixed ADN record of `record_len`
+    /// bytes.
+    pub fn encode(&self, record_len: usize) -> Vec<u8> {
+        if record_len < ADN_FOOTER_LEN {
+            return vec![0xFF; record_len];
+        }
+        let alpha_len = record_len - ADN_FOOTER_LEN;
+        let mut out = vec![0xFF; record_len];
+
+        // 1. Encode Alpha Identifier
+        if let Some(ref tag) = self.alpha_tag {
+            let tag_bytes = tag.as_bytes();
+            let copy_len = tag_bytes.len().min(alpha_len);
+            out[..copy_len].copy_from_slice(&tag_bytes[..copy_len]);
+        }
+
+        // 2. Encode Dialing Number
+        if let Some(ref phone) = self.number {
+            let clean_digits: String = phone
+                .as_str()
+                .chars()
+                .filter(|c| c.is_ascii_digit() || *c == '*' || *c == '#')
+                .collect();
+            if !clean_digits.is_empty() {
+                let ton_npi = if phone.as_str().starts_with('+')
+                    || (clean_digits.len() == 11 && clean_digits.starts_with('1'))
+                {
+                    TypeOfAddress::International
+                } else {
+                    phone.toa()
+                };
+
+                let bcd = crate::pdu::bcd::string_to_bcd(&clean_digits);
+                let dialing_copy = bcd.len().min(ADN_DIALING_NUMBER_LEN);
+                let bcd_len = (1 + dialing_copy) as u8;
+                out[alpha_len] = bcd_len;
+                out[alpha_len + 1] = ton_npi.as_u8();
+                out[alpha_len + 2..alpha_len + 2 + dialing_copy]
+                    .copy_from_slice(&bcd[..dialing_copy]);
+            }
+        }
+
+        // 3. Capability Configuration & Extension Record IDs (bytes 13 and 14 of
+        //    footer)
+        out[record_len - 2..record_len].copy_from_slice(&ADN_CAPABILITY_EXT_BYTES);
+
+        out
+    }
+}
+
+impl fmt::Display for PhoneNumber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Type of Address (TON/NPI) as defined in 3GPP TS 24.008 / TS 23.040 Table
+/// 9.1.2.5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TypeOfAddress {
+    /// National / Unknown numbering plan (0x81 = 129).
+    National = 129,
+    /// International numbering plan with E.164 (0x91 = 145).
+    International = 145,
+}
+
+impl TypeOfAddress {
+    pub fn from_number(number: &str) -> Self {
+        if number.starts_with('+') { Self::International } else { Self::National }
+    }
+
+    pub const fn is_international(self) -> bool {
+        matches!(self, Self::International)
+    }
+
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+}
+
+impl fmt::Display for TypeOfAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl From<TypeOfAddress> for u8 {
+    fn from(toa: TypeOfAddress) -> Self {
+        toa as u8
     }
 }
 
@@ -234,6 +637,33 @@ impl<'a> Parsable<'a> for DialArgs {
     }
 }
 
+/// 3GPP TS 27.005 §4.4: New message acknowledgement (<n> parameter).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmsAck {
+    /// Message routing to TE is acknowledged (0 or 1 per TS 27.005 §4.4).
+    Success,
+    /// Message routing to TE is not acknowledged / rejected (2 per TS 27.005
+    /// §4.4).
+    Failure,
+}
+
+impl SmsAck {
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Success)
+    }
+}
+
+impl<'a> Parsable<'a> for SmsAck {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match val {
+            0 | 1 => Ok((input, Self::Success)),
+            2 => Ok((input, Self::Failure)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+        }
+    }
+}
+
 // Actions that a command can request to be executed by the
 // CellularNetworkSimulator.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -247,6 +677,7 @@ pub enum CommandAction {
     ResumeCall { resumer: ModemId, target: ModemId },
     ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
     ReceiveTextSms { to: String, text: String },
+    AcknowledgeIncomingSms { ack: SmsAck },
     None,
 }
 
@@ -1051,7 +1482,7 @@ impl<'a> Parsable<'a> for CallWaitingPresentation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FormattedNumber<'a> {
     pub number: &'a str,
-    pub toa: u8,
+    pub toa: TypeOfAddress,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1066,12 +1497,14 @@ pub enum NumberPresentation {
 impl NumberPresentation {
     pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
         match self {
-            Self::Restricted | Self::NotAvailable => FormattedNumber { number: "", toa: 129 },
+            Self::Restricted | Self::NotAvailable => {
+                FormattedNumber { number: "", toa: TypeOfAddress::National }
+            }
             Self::Allowed => {
                 if let Some(num) = number {
                     FormattedNumber { number: num.as_str(), toa: num.toa() }
                 } else {
-                    FormattedNumber { number: "", toa: 129 }
+                    FormattedNumber { number: "", toa: TypeOfAddress::National }
                 }
             }
         }
@@ -1569,9 +2002,17 @@ impl std::fmt::Display for Facility {
     }
 }
 
+impl<'a> Parsable<'a> for crate::apdu::Instruction {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        Ok((input, crate::apdu::Instruction::from(val)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::UiccFileId;
 
     #[test]
     fn test_phone_number_parse() {
@@ -1676,9 +2117,9 @@ mod tests {
 
     #[test]
     fn test_phone_number_toa() {
-        assert_eq!(PhoneNumber::new("+16505550100").toa(), 145);
-        assert_eq!(PhoneNumber::new("16505550100").toa(), 129);
-        assert_eq!(PhoneNumber::new("12345").toa(), 129);
+        assert_eq!(PhoneNumber::new("+16505550100").toa(), TypeOfAddress::International);
+        assert_eq!(PhoneNumber::new("16505550100").toa(), TypeOfAddress::National);
+        assert_eq!(PhoneNumber::new("12345").toa(), TypeOfAddress::National);
     }
 
     #[test]
@@ -1688,25 +2129,298 @@ mod tests {
         // Allowed
         let formatted = NumberPresentation::Allowed.format_number(Some(&phone));
         assert_eq!(formatted.number, "12345");
-        assert_eq!(formatted.toa, 129);
+        assert_eq!(formatted.toa, TypeOfAddress::National);
 
         let int_phone = PhoneNumber::new("+12345");
         let formatted = NumberPresentation::Allowed.format_number(Some(&int_phone));
         assert_eq!(formatted.number, "+12345");
-        assert_eq!(formatted.toa, 145);
+        assert_eq!(formatted.toa, TypeOfAddress::International);
 
         let formatted = NumberPresentation::Allowed.format_number(None);
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, 129);
+        assert_eq!(formatted.toa, TypeOfAddress::National);
 
         // Restricted
         let formatted = NumberPresentation::Restricted.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, 129);
+        assert_eq!(formatted.toa, TypeOfAddress::National);
 
         // Not Available
         let formatted = NumberPresentation::NotAvailable.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, 129);
+        assert_eq!(formatted.toa, TypeOfAddress::National);
+    }
+
+    #[test]
+    fn test_adn_record_encode_from_number() {
+        let record_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
+        let phone = PhoneNumber::new("+15555215554");
+        let record = AdnRecord::encode_from_number(&phone, record_len);
+        assert_eq!(record.len(), record_len);
+        // Alpha identifier is padded with 0xFF
+        assert_eq!(&record[..14], &[0xFF; 14]);
+        // Length of BCD number is 7 (1 byte TON + 6 bytes dialed digits)
+        assert_eq!(record[14], 7);
+        // International TON/NPI
+        assert_eq!(record[15], 0x91);
+        // Dialing digits 15555215554 -> 51 55 25 51 55 F4
+        assert_eq!(&record[16..22], &[0x51, 0x55, 0x25, 0x51, 0x55, 0xF4]);
+        // Trailing dialing bytes padded with 0xFF
+        assert_eq!(&record[22..26], &[0xFF; 4]);
+        // Capability/Extension bytes
+        assert_eq!(&record[26..28], &[0xFF, 0xFF]);
+
+        // Empty digits returns standard unassigned 0xFF record
+        let empty = PhoneNumber::new("");
+        assert_eq!(AdnRecord::encode_from_number(&empty, 28), vec![0xFF; 28]);
+    }
+
+    #[test]
+    fn test_adn_record_cts_mbdn_roundtrip() {
+        let cts_hex =
+            "74616741FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF06812143658709FFFFFFFFFFFFFF";
+        let raw_bytes = hex::decode(cts_hex).unwrap();
+        assert_eq!(raw_bytes.len(), 38);
+
+        let decoded = AdnRecord::decode(&raw_bytes).expect("Should decode CTS MBDN record");
+        assert_eq!(decoded.alpha_tag.as_deref(), Some("tagA"));
+        assert_eq!(decoded.number.as_ref().map(|p| p.as_str()), Some("1234567890"));
+
+        let reencoded = decoded.encode(38);
+        assert_eq!(hex::encode_upper(&reencoded), cts_hex);
+    }
+
+    #[test]
+    fn test_adn_record_msisdn_with_alpha_tag() {
+        let record = AdnRecord::new(Some("MySIM"), Some(PhoneNumber::new("+15551234567")));
+        let encoded = record.encode(28);
+        assert_eq!(encoded.len(), 28);
+
+        let decoded = AdnRecord::decode(&encoded).expect("Should decode MSISDN record");
+        assert_eq!(decoded.alpha_tag.as_deref(), Some("MySIM"));
+        assert_eq!(decoded.number.as_ref().map(|p| p.as_str()), Some("+15551234567"));
+    }
+
+    #[test]
+    fn test_adn_record_service_code() {
+        let record = AdnRecord::new(Some("Voicemail"), Some(PhoneNumber::new("*86")));
+        let encoded = record.encode(38);
+        let decoded = AdnRecord::decode(&encoded).expect("Should decode service code record");
+        assert_eq!(decoded.alpha_tag.as_deref(), Some("Voicemail"));
+        assert_eq!(decoded.number.as_ref().map(|p| p.as_str()), Some("*86"));
+    }
+
+    #[test]
+    fn test_adn_record_uninitialized() {
+        assert!(AdnRecord::decode(&[0xFF; 28]).is_none());
+        assert!(AdnRecord::decode(&[0xFF; 38]).is_none());
+        assert!(AdnRecord::decode(&[0xFF; 10]).is_none()); // malformed < 14
+    }
+
+    #[test]
+    fn test_adn_record_long_number_truncation() {
+        let long_number = PhoneNumber::new("123456789012345678901234");
+        let record = AdnRecord::new(Some("Long"), Some(long_number));
+        let encoded = record.encode(28);
+
+        let decoded = AdnRecord::decode(&encoded).expect("Should decode truncated record");
+        assert_eq!(decoded.alpha_tag.as_deref(), Some("Long"));
+        assert_eq!(decoded.number.as_ref().map(|p| p.as_str()), Some("12345678901234567890"));
+    }
+
+    #[test]
+    fn test_adn_record_length_boundaries() {
+        // Less than 14 bytes returns None
+        assert!(AdnRecord::decode(&[]).is_none());
+        assert!(AdnRecord::decode(&[0xFF; 13]).is_none());
+        assert!(AdnRecord::decode(&[0x06, 0x81, 0x21, 0x43, 0x65, 0x87, 0x09]).is_none());
+
+        // encode() with len < 14 returns 0xFF buffer
+        let rec = AdnRecord::new(Some("A"), Some(PhoneNumber::new("123")));
+        assert_eq!(rec.encode(0), Vec::<u8>::new());
+        assert_eq!(rec.encode(13), vec![0xFF; 13]);
+
+        // Exactly 14 bytes (alpha_len == 0)
+        let rec_14 = AdnRecord::new(None::<&str>, Some(PhoneNumber::new("+15551234567")));
+        let encoded_14 = rec_14.encode(14);
+        assert_eq!(encoded_14.len(), 14);
+        let decoded_14 = AdnRecord::decode(&encoded_14).unwrap();
+        assert_eq!(decoded_14.alpha_tag, None);
+        assert_eq!(decoded_14.number.as_ref().map(|p| p.as_str()), Some("+15551234567"));
+
+        // Exactly 14 bytes with alpha_tag truncates alpha to 0 bytes cleanly
+        let rec_with_tag = AdnRecord::new(Some("Tag"), Some(PhoneNumber::new("123456")));
+        let encoded_14_tag = rec_with_tag.encode(14);
+        let decoded_14_tag = AdnRecord::decode(&encoded_14_tag).unwrap();
+        assert_eq!(decoded_14_tag.alpha_tag, None);
+        assert_eq!(decoded_14_tag.number.as_ref().map(|p| p.as_str()), Some("123456"));
+    }
+
+    #[test]
+    fn test_adn_record_odd_vs_even_digit_padding() {
+        // Odd digits: 7 digits ("1234567") -> 4 BCD bytes: 21 43 65 F7
+        let rec_odd = AdnRecord::new(None::<&str>, Some(PhoneNumber::new("1234567")));
+        let encoded_odd = rec_odd.encode(28);
+        assert_eq!(encoded_odd[14], 5); // 1 TON + 4 BCD bytes
+        assert_eq!(encoded_odd[15], 0x81);
+        assert_eq!(&encoded_odd[16..20], &[0x21, 0x43, 0x65, 0xF7]);
+        assert_eq!(&encoded_odd[20..26], &[0xFF; 6]); // Unused 6 bytes in 10-byte buffer
+        let decoded_odd = AdnRecord::decode(&encoded_odd).unwrap();
+        assert_eq!(decoded_odd.number.as_ref().map(|p| p.as_str()), Some("1234567"));
+
+        // Even digits: 8 digits ("12345678") -> 4 BCD bytes: 21 43 65 87
+        let rec_even = AdnRecord::new(None::<&str>, Some(PhoneNumber::new("12345678")));
+        let encoded_even = rec_even.encode(28);
+        assert_eq!(encoded_even[14], 5);
+        assert_eq!(&encoded_even[16..20], &[0x21, 0x43, 0x65, 0x87]);
+        assert_eq!(&encoded_even[20..26], &[0xFF; 6]);
+        let decoded_even = AdnRecord::decode(&encoded_even).unwrap();
+        assert_eq!(decoded_even.number.as_ref().map(|p| p.as_str()), Some("12345678"));
+
+        // Single digit ("5") -> 1 BCD byte: F5, len 2
+        let rec_single = AdnRecord::new(None::<&str>, Some(PhoneNumber::new("5")));
+        let encoded_single = rec_single.encode(28);
+        assert_eq!(encoded_single[14], 2);
+        assert_eq!(encoded_single[16], 0xF5);
+        let decoded_single = AdnRecord::decode(&encoded_single).unwrap();
+        assert_eq!(decoded_single.number.as_ref().map(|p| p.as_str()), Some("5"));
+    }
+
+    #[test]
+    fn test_adn_record_length_byte_edge_cases() {
+        // len_byte == 0 returns number: None
+        let mut raw = vec![0xFF; 28];
+        raw[..4].copy_from_slice(b"Test");
+        raw[14] = 0x00;
+        let dec = AdnRecord::decode(&raw).unwrap();
+        assert_eq!(dec.alpha_tag.as_deref(), Some("Test"));
+        assert_eq!(dec.number, None);
+
+        // len_byte == 1 (TON only, 0 BCD digits) returns number: None
+        raw[14] = 0x01;
+        raw[15] = 0x81;
+        let dec = AdnRecord::decode(&raw).unwrap();
+        assert_eq!(dec.number, None);
+
+        // len_byte > 11 (malformed length byte) returns number: None without panic
+        raw[14] = 12;
+        assert_eq!(AdnRecord::decode(&raw).unwrap().number, None);
+        raw[14] = 254;
+        assert_eq!(AdnRecord::decode(&raw).unwrap().number, None);
+    }
+
+    #[test]
+    fn test_adn_record_illegal_bcd_nibble_rejection() {
+        // Record with illegal nibbles 0xC, 0xD, 0xE in BCD digits
+        let mut raw = vec![0xFF; 28];
+        raw[..4].copy_from_slice(b"Test");
+        raw[14] = 3; // 1 TON + 2 BCD bytes
+        raw[15] = 0x81;
+        raw[16] = 0xC1; // '1' and 'a'
+        raw[17] = 0x32; // '2' and '3'
+        // Decoded string would be "1a23", which PhoneNumber::parse rejects
+        let dec = AdnRecord::decode(&raw).unwrap();
+        assert_eq!(dec.number, None);
+    }
+
+    #[test]
+    fn test_adn_record_alpha_tag_edge_cases() {
+        // Full alpha field with no trailing 0xFF (exactly 14 characters)
+        let rec = AdnRecord::new(Some("12345678901234"), Some(PhoneNumber::new("999")));
+        let enc = rec.encode(28);
+        assert_eq!(&enc[..14], b"12345678901234");
+        let dec = AdnRecord::decode(&enc).unwrap();
+        assert_eq!(dec.alpha_tag.as_deref(), Some("12345678901234"));
+
+        // Alpha field with spaces preserved
+        let rec_spaces = AdnRecord::new(Some("John Doe "), Some(PhoneNumber::new("999")));
+        let enc_spaces = rec_spaces.encode(28);
+        let dec_spaces = AdnRecord::decode(&enc_spaces).unwrap();
+        assert_eq!(dec_spaces.alpha_tag.as_deref(), Some("John Doe "));
+    }
+
+    #[test]
+    fn test_adn_record_large_buffer() {
+        // 50-byte record (alpha_len = 50 - 14 = 36 bytes)
+        let rec = AdnRecord::new(
+            Some("Alpha tag in 50-byte record"),
+            Some(PhoneNumber::new("+15550001111")),
+        );
+        let enc = rec.encode(50);
+        assert_eq!(enc.len(), 50);
+        let dec = AdnRecord::decode(&enc).unwrap();
+        assert_eq!(dec.alpha_tag.as_deref(), Some("Alpha tag in 50-byte record"));
+        assert_eq!(dec.number.as_ref().map(|p| p.as_str()), Some("+15550001111"));
+    }
+
+    #[test]
+    fn test_plmn_parse_and_accessors() {
+        // Valid 5-digit PLMN (e.g. UK Vodafone 234-15)
+        let plmn5 = Plmn::parse("23415").unwrap();
+        assert_eq!(plmn5.mcc(), "234");
+        assert_eq!(plmn5.mnc(), "15");
+        assert_eq!(plmn5.mnc_length(), 2);
+        assert_eq!(plmn5.as_str(), "23415");
+        assert_eq!(format!("{plmn5}"), "23415");
+        assert!(matches!(plmn5, Plmn::TwoDigitMnc(_)));
+
+        // Valid 6-digit PLMN (e.g. US T-Mobile 310-260)
+        let plmn6 = Plmn::parse("310260").unwrap();
+        assert_eq!(plmn6.mcc(), "310");
+        assert_eq!(plmn6.mnc(), "260");
+        assert_eq!(plmn6.mnc_length(), 3);
+        assert_eq!(plmn6.as_str(), "310260");
+        assert!(matches!(plmn6, Plmn::ThreeDigitMnc(_)));
+
+        // Construction from separate MCC/MNC
+        let from_parts = Plmn::from_mcc_mnc("311", "740").unwrap();
+        assert_eq!(from_parts.as_str(), "311740");
+        assert_eq!(from_parts.mnc_length(), 3);
+
+        let from_parts_2digit = Plmn::from_mcc_mnc("310", "26").unwrap();
+        assert_eq!(from_parts_2digit.as_str(), "31026");
+        assert_eq!(from_parts_2digit.mnc_length(), 2);
+
+        // Construction with surrounding whitespace
+        let from_trimmed = Plmn::from_mcc_mnc(" 310 \t", "\n260 ").unwrap();
+        assert_eq!(from_trimmed.as_str(), "310260");
+
+        // Derivation from IMSI
+        let derived_default = Plmn::from_imsi("310260000000000", None).unwrap();
+        assert_eq!(derived_default.as_str(), "310260");
+
+        let derived_explicit_2digit = Plmn::from_imsi("310260000000000", Some(2)).unwrap();
+        assert_eq!(derived_explicit_2digit.as_str(), "31026");
+
+        let derived_short_imsi = Plmn::from_imsi("31026", None).unwrap();
+        assert_eq!(derived_short_imsi.as_str(), "31026");
+
+        // Invalid formats must return Err / None
+        assert!(matches!(Plmn::parse("1234"), Err(PlmnError::InvalidLength(4))));
+        assert!(matches!(Plmn::parse("1234567"), Err(PlmnError::InvalidLength(7))));
+        assert!(matches!(Plmn::parse("3102A"), Err(PlmnError::InvalidDigits(_))));
+        assert!(matches!(Plmn::parse(""), Err(PlmnError::InvalidLength(0))));
+        assert_eq!(Plmn::from_mcc_mnc(" 12 ", "345"), Err(PlmnError::InvalidMcc("12".to_string())));
+        assert_eq!(Plmn::from_mcc_mnc("12A", "345"), Err(PlmnError::InvalidMcc("12A".to_string())));
+        assert_eq!(Plmn::from_mcc_mnc("123", " 4 "), Err(PlmnError::InvalidMnc("4".to_string())));
+        assert_eq!(
+            Plmn::from_mcc_mnc("123", "4567"),
+            Err(PlmnError::InvalidMnc("4567".to_string()))
+        );
+        assert_eq!(Plmn::from_mcc_mnc("123", "4B"), Err(PlmnError::InvalidMnc("4B".to_string())));
+        assert!(Plmn::from_imsi("1234", None).is_none());
+        assert!(Plmn::from_imsi("", None).is_none());
+    }
+
+    #[test]
+    fn test_plmn_serde() {
+        let plmn = Plmn::parse("310260").unwrap();
+        let json = serde_json::to_string(&plmn).unwrap();
+        assert_eq!(json, "\"310260\"");
+        let deserialized: Plmn = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, plmn);
+
+        let invalid_json = "\"1234\"";
+        assert!(serde_json::from_str::<Plmn>(invalid_json).is_err());
     }
 }

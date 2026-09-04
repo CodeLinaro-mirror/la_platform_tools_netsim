@@ -27,7 +27,7 @@ simulator.
 - **Device-to-Device SMS** [IMPLEMENTED]:
   - **Direct Delivery**: SMS messages sent via `AT+CMGS` are instantly routed to
     the target instance and delivered as `+CMT` notifications.
-- **Conference Calling** [PLANNED]: Support for multi-party voice calls
+- **Conference Calling** [IMPLEMENTED]: Support for multi-party voice calls
   involving more than two AVDs.
 - **Simultaneous Services** [PLANNED]: Handling active voice calls concurrent
   with active data sessions.
@@ -91,6 +91,11 @@ docs (e.g., Google Fi, Pixel) but are not yet scheduled in specific phases.
   - Requirement: Support for testing dual SIM scenarios (DSDS) and multiple
     active subscriptions.
   - Source: Google Fi Team.
+- **eSIM & eUICC Profile Lifecycle Management (GSMA SGP.22)**:
+  - Requirement: Support GSMA SGP.22 eSIM profile lifecycle operations (download,
+    activation, deactivation, deletion, and dynamic UICC filesystem swapping) to
+    support Android LPA and CTS testing.
+  - Source: Android Telephony / LPA & Emulator Teams.
 - **IPv6 Support**:
   - Requirement: Proper IPv6 address allocation (SLAAC/DHCPv6) for mobile data
     to support modern network requirements.
@@ -171,12 +176,10 @@ missing several key features and the detailed logic that is present in the C++
 - [ ] **Implement full `ATD` command handling:**
   - [ ] Add support for emergency number dialing with categories and CLIR
         (`ATDnumber@[category],#[clir];`); syntactic parsing is implemented.
-  - [ ] Integrate with `SimService` to perform FDN (Fixed Dialing Number)
+  - [x] Integrate with `SimService` to perform FDN (Fixed Dialing Number)
         checks.
 - [x] **Expand `AT+CHLD` command handling:**
   - [x] Implement all modes (0, 1, 2, 3, 4) of the `AT+CHLD` command.
-- [ ] **Add `AT+CUSD` command handling:**
-  - [ ] Implement the `AT+CUSD=` command for canceling USSD sessions.
 - [ ] **Improve error handling:**
   - [ ] Use specific CME (Cellular Messaging Entity) error codes.
 - [ ] **Enhance state management:**
@@ -195,13 +198,13 @@ contexts, data call activation, and physical channel configurations.
 
 **Tasks:**
 
-- [ ] **Implement `AT+CGACT?` (Query Data Call List):**
-  - [ ] Add a function to return a list of active PDP contexts.
+- [x] **Implement `AT+CGACT?` (Query Data Call List):**
+  - [x] Add a function to return a list of active PDP contexts.
 - [ ] **Enhance `AT+CGDCONT` (Define PDP Context):**
   - [ ] Modify the `handle_define_pdp_context` function to get the IP address,
         DNS servers, and gateways from a configuration source.
-- [ ] **Improve `AT+CGDATA` (Enter Data State):**
-  - [ ] Add a check to the `handle_enter_data_state` function to ensure the
+- [x] **Improve `AT+CGDATA` (Enter Data State):**
+  - [x] Add a check to the `handle_enter_data_state` function to ensure the
         specified PDP context is active.
 - [x] **Implement `AT+CGCONTRDP` (Read Dynamic Parameters):**
   - [x] Modify the `handle_read_dynamic_param` function to return the correct
@@ -222,12 +225,12 @@ for handling time, time zones, and initialization commands.
   - [x] Update `parser.rs` to support optional parameters.
   - [x] Add support for the `snt` parameter to return different types of
         identification information (IMEI, SVN, etc.).
-- [ ] **Add time and time zone support:**
-  - [ ] Implement logic for parsing the time zone from the system.
-  - [ ] Implement logic for calculating the time zone offset.
-  - [ ] Implement the `%CTZV` unsolicited response for time updates.
-- [ ] **Add initialization commands:**
-  - [ ] Implement the missing initialization commands (e.g., `E0Q0V1`, `S0=0`,
+- [x] **Add time and time zone support:**
+  - [x] Implement logic for parsing the time zone from the system.
+  - [x] Implement logic for calculating the time zone offset.
+  - [x] Implement the `%CTZV` unsolicited response for time updates.
+- [x] **Add initialization commands:**
+  - [x] Implement the missing initialization commands (e.g., `E0Q0V1`, `S0=0`,
         `+CMEE=1`).
 
 ### Network Service (`src/network_service.rs`)
@@ -259,8 +262,8 @@ a massive amount of work to reach feature parity with the C++
 - [ ] **Integrate with NVRAM Configuration:**
   - [ ] Use a configuration management system to store and retrieve
         network-related settings.
-- [ ] **Integrate with `SimService`:**
-  - [ ] Use the `SimService` to initialize the network operator.
+- [x] **Integrate with `SimService`:**
+  - [x] Use the `SimService` to initialize the network operator.
 
 ### SIM Service (`src/sim_service.rs`)
 
@@ -269,27 +272,44 @@ missing most of the features and complexity of the C++ `sim_service.cpp`.
 
 **Tasks:**
 
-- [ ] **Implement a robust SIM File System:**
-  - [ ] Create a hierarchical file system model (MF, DF, EF).
-  - [ ] Implement a parser for the XML-based SIM profile.
+- [x] **Implement a robust SIM File System:**
+  - [x] Create a hierarchical file system model (MF, DF, EF).
+  - [x] Implement a parser for the XML-based SIM profile.
   - [x] Implement full `AT+CRSM` command handling (fallback mappings and clean response formatting).
-  - [ ] Implement full `AT+CSIM` command handling.
-- [ ] **Implement full PIN/PUK Management (`AT+CPIN`):**
-  - [ ] Handle all SIM states (ABSENT, NOT_READY, READY, PIN, PUK).
-  - [ ] Handle all PIN/PUK operations correctly.
+  - [x] Implement full `AT+CSIM` command handling.
+- [x] **Implement full PIN/PUK Management (`AT+CPIN`):**
+  - [x] Handle all SIM states (ABSENT, NOT_READY, READY, PIN, PUK).
+  - [x] Handle all PIN/PUK operations correctly.
 - [ ] **Implement Facility Lock (`AT+CLCK`):**
   - [ ] Add support for locking, unlocking, and querying all facilities.
 - [x] **Enhance Logical Channel Support (`AT+CCHO`, `AT+CCHC`, `AT+CGLA`)**: Implemented basic open/close channel lifecycle and transmit APDU mocking.
-  - [ ] Add support for Application Identifiers (AIDs).
-- [ ] **Implement CDMA Features (`AT+CCSS`, `AT+WRMP`):**
-  - [ ] Implement the CDMA-specific commands.
-- [ ] **Implement SIM Authentication (`^MBAU`):**
-  - [ ] Implement the `^MBAU` command.
-- [ ] **Implement Phone Number Management:**
-  - [ ] Implement functions for getting and setting the phone number from the
+  - [x] Add support for Application Identifiers (AIDs).
+- [ ] **eSIM & eUICC Support (GSMA SGP.22 & GlobalPlatform Card Spec)**:
+  - [ ] **Phase 1: ISD-R Logical Channel & Basic SGP.22 ES10**:
+    - [ ] Add `STORE DATA` (`0xE2`) APDU instruction handling and block chaining.
+    - [ ] Add zero-dependency ASN.1 BER-TLV decoder and encoder for SGP.22 tags.
+    - [ ] Auto-register standard GSMA ISD-R AID (`A0000005591010FFFFFFFF8900000100`) on `AT+CCHO`.
+    - [ ] Implement basic ES10 info queries: `GetEUICCInfo1` (`0xBF20`), `GetEUICCInfo2` (`0xBF22`), `GetEUICCChallenge` (`0xBF2E`), and `GetConfiguredAddresses` (`0xBF3C`).
+  - [ ] **Phase 2: Profile Storage & SGP.22 Profile Lifecycle Management**:
+    - [ ] Implement multi-profile `ProfileStore` holding `EsimProfile` structures with embedded UICC filesystems.
+    - [ ] Support profile lifecycle commands: `GetProfilesInfo` (`0xBF2D`), `EnableProfile` (`0xBF31`), `DisableProfile` (`0xBF32`), `DeleteProfile` (`0xBF33`), `SetNickname` (`0xBF29`), `ResetMemory` (`0xBF34`).
+    - [x] Implement dynamic active `FileSystem` swapping and SIM Refresh notifications (`+CUSATP: 01` / reset URC).
+  - [ ] **Phase 3: eSIM In-Band BPP & Out-of-Band Provisioning**:
+    - [ ] Handle `AuthenticateServer` (`0xBF38`) and `PrepareDownload` (`0xBF21`).
+    - [ ] Parse in-band Bound Profile Packages via `LoadBoundProfilePackage` (`0xBF36` / `0xBF37`).
+    - [ ] Provide out-of-band programmatic API / CLI fixtures for injecting test eSIM profiles.
+  - [ ] **Phase 4: Goldfish HAL Alignment & CTS Verification**:
+    - [ ] Update Goldfish `RadioConfig::getSimTypeInfo` to report `SimType::ESIM` when EID is present.
+    - [ ] Validate end-to-end with Android LPA UI and CTS test suites (`CtsCarrierApiTestCases`, `CtsTelephonyTestCases`).
+- [x] **Implement CDMA Features (`AT+CCSS`, `AT+WRMP`):**
+  - [x] Implement the CDMA-specific commands.
+- [x] **Implement SIM Authentication (`^MBAU`):**
+  - [x] Implement the `^MBAU` command.
+- [x] **Implement Phone Number Management:**
+  - [x] Implement functions for getting and setting the phone number from the
         SIM file system.
-- [ ] **Implement FDN (Fixed Dialing Number):**
-  - [ ] Implement the FDN check.
+- [x] **Implement FDN (Fixed Dialing Number):**
+  - [x] Implement the FDN check.
 
 ### SMS Service (`src/sms_service.rs`)
 
@@ -301,8 +321,8 @@ features in the Rust version.
 
 - [x] **Implement PDU Parsing**:
   - [x] Add a PDU parser to handle SMS messages in PDU mode.
-- [ ] **Implement SMS Status Reports:**
-  - [ ] Add the logic for generating and sending SMS status reports.
+- [x] **Implement SMS Status Reports:**
+  - [x] Add the logic for generating and sending SMS status reports.
 - [ ] **Improve Error Handling:**
   - [ ] Use more specific CMS (Cellular Messaging Service) error codes.
 
@@ -313,16 +333,18 @@ complete rewrite to achieve feature parity with the C++ `stk_service.cpp`.
 
 **Tasks:**
 
-- [ ] **Implement an STK Profile Parser:**
-  - [ ] Create a parser for the XML-based STK profile.
+- [x] **Implement an STK Profile Parser:**
+  - [x] Create a parser for the XML-based STK profile.
 - [ ] **Implement Proactive Command Handling:**
-  - [ ] Handle all proactive commands defined in the STK profile.
-- [ ] **Implement Terminal Response Handling (`AT+CUSATT`):**
-  - [ ] Process terminal responses and trigger the correct unsolicited commands.
-- [ ] **Implement Menu Navigation:**
-  - [ ] Create a state management system for navigating the STK menu.
+  - [ ] Handle all proactive commands defined in the STK profile (SETUP MENU,
+        SELECT ITEM, and DISPLAY TEXT are implemented).
+- [x] **Implement Terminal Response Handling (`AT+CUSATT`):**
+  - [x] Process terminal responses and trigger the correct unsolicited commands.
+- [x] **Implement Menu Navigation:**
+  - [x] Create a state management system for navigating the STK menu.
 - [ ] **Integrate with `SimService`:**
-  - [ ] Use the `SimService` to access the ICC profile.
+  - [ ] Use the `SimService` to access the ICC profile (SIM card presence check
+        is implemented).
 
 ### Supplementary Service (`src/sup_service.rs`)
 
@@ -333,11 +355,13 @@ missing most of the features and complexity of the C++ `sup_service.cpp`.
 
 - [ ] **Implement full USSD handling (`AT+CUSD`):**
   - [ ] Add logic for managing USSD sessions.
+  - [ ] Implement the `AT+CUSD=` command for canceling USSD sessions
+        (`AT+CUSD=2`).
 - [x] **Implement full CLIR handling (`AT+CLIR`):**
   - [x] Add the `ClirStatusInfo` struct and logic for setting and querying the
         CLIR status.
-- [ ] **Implement full CLIP handling (`AT+CLIP`):**
-  - [ ] Add logic for setting and querying the CLIP status.
+- [x] **Implement full CLIP handling (`AT+CLIP`):**
+  - [x] Add logic for setting and querying the CLIP status.
 - [x] **Implement full Call Waiting handling (`AT+CCWA`):**
   - [x] Add the `CallWaitingInfo` struct and logic for setting and querying the
         call waiting status.
@@ -377,6 +401,10 @@ reference implementations.
   - Reference for CDMA-specific commands (`AT+CCSS`, `AT+WRMP`).
 - **3GPP TS 31.111 / 11.14**: _USIM Application Toolkit (USAT)_.
   - Reference for STK (SIM Toolkit) commands and envelope structures.
+- **GSMA SGP.22**: _RSP (Remote SIM Provisioning) Technical Specification v2.2+_.
+  - Reference for ES10 interface (LPA to eUICC), ISD-R AID, ASN.1 BER-TLV definitions, and profile lifecycle procedures.
+- **GlobalPlatform Card Specification v2.3**: _Card Specification & Amendment D (Secure Channel Protocol)_.
+  - Reference for `STORE DATA` APDU command structure and logical channel management.
 
 ### Source Implementations
 
