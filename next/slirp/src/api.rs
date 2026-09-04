@@ -174,6 +174,8 @@ pub struct Config {
     pub socks5_proxy: Option<SocketAddr>,
 }
 
+pub const DEFAULT_DNS_SERVER: IpAddr = IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -188,7 +190,7 @@ impl Default for Config {
             domain_name: None,
             dns_search: None,
             client_hostname: None,
-            dns_servers: vec!["8.8.8.8".parse().unwrap()],
+            dns_servers: vec![DEFAULT_DNS_SERVER],
             guestfwd: Vec::new(),
             hostfwd: Vec::new(),
             tftp_root: None,
