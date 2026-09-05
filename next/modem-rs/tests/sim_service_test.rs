@@ -2105,3 +2105,141 @@ fn test_cphs_mwi_not_found_in_default_sim0_profile() {
     then_response_is(&mut world, "A", RESP_CRSM_FILE_NOT_FOUND);
     then_response_is(&mut world, "A", "OK");
 }
+
+fn assert_pin_retries(world: &mut World, modem: &str, pin_type: &str, retries: u32, default: u32) {
+    world.send_and_expect(
+        modem,
+        &format!("AT+CPINR=\"{pin_type}\""),
+        &[&format!("+CPINR: \"{pin_type}\",{retries},{default}"), "OK"],
+    );
+}
+
+#[test]
+fn test_pin1_pin2_isolation_and_facility_locks() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // 1. AT+CPWD="SC" changes PIN1
+    world.send_and_expect_ok("A", "AT+CPWD=\"SC\",\"1234\",\"9999\"");
+
+    // 2. AT+CPWD="P2" changes PIN2 without affecting PIN1
+    world.send_and_expect_ok("A", "AT+CPWD=\"P2\",\"1234\",\"7777\"");
+
+    // Changing with wrong old PIN2 fails with CME ERROR: 16
+    world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"1234\",\"8888\"", "+CME ERROR: 16");
+
+    // Unsupported facility in AT+CPWD returns CME ERROR: 4
+    world.send_and_expect_error("A", "AT+CPWD=\"XX\",\"1234\",\"5678\"", "+CME ERROR: 4");
+
+    // 3. AT+CPIN in READY state validates old PIN1 before update
+    world.send_and_expect_ok("A", "AT+CPIN=\"9999\",\"1111\"");
+    world.send_and_expect_error("A", "AT+CPIN=\"0000\",\"2222\"", "+CME ERROR: 16");
+
+    // 4. AT+CLCK for call barring facilities (AO, OI, etc.)
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 0", "OK"]);
+
+    // Missing password returns CME ERROR: 16 (IncorrectPassword)
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",1", "+CME ERROR: 16");
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",0", "+CME ERROR: 16");
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 0", "OK"]);
+
+    // Lock with correct default barring password "0000" succeeds
+    world.send_and_expect_ok("A", "AT+CLCK=\"AO\",1,\"0000\"");
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 1", "OK"]);
+
+    // Lock with incorrect barring password fails with CME ERROR: 16
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",0,\"wrong\"", "+CME ERROR: 16");
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 1", "OK"]);
+
+    // Unlock with correct barring password "0000" succeeds
+    world.send_and_expect_ok("A", "AT+CLCK=\"AO\",0,\"0000\"");
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 0", "OK"]);
+
+    // Change barring password using AT+CPWD="AB" from "0000" to "4321"
+    world.send_and_expect_ok("A", "AT+CPWD=\"AB\",\"0000\",\"4321\"");
+
+    // Old password fails now
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",0,\"0000\"", "+CME ERROR: 16");
+
+    // New password succeeds
+    world.send_and_expect_ok("A", "AT+CLCK=\"AO\",0,\"4321\"");
+
+    // P2 is only valid in AT+CPWD, not AT+CLCK; AT+CLCK="P2",1 returns CME ERROR: 4
+    world.send_and_expect_error("A", "AT+CLCK=\"P2\",1", "+CME ERROR: 4");
+
+    // Unsupported facility returns CME ERROR: 4
+    world.send_and_expect_error("A", "AT+CLCK=\"ZZ\",2", "+CME ERROR: 4");
+}
+
+#[test]
+fn test_pin2_exhaustion_and_puk2_unlock() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // Attempt invalid PIN2 in CPWD until retries reach 0 (2 attempts return CME
+    // ERROR: 16)
+    for _ in 0..2 {
+        world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"0000\",\"1111\"", "+CME ERROR: 16");
+    }
+
+    // Third failure exhausts retries -> CME ERROR: 18 (SimPuk2Required)
+    world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"0000\",\"1111\"", "+CME ERROR: 18");
+
+    // Subsequent CPWD attempts return SimPuk2Required
+    world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"1234\",\"1111\"", "+CME ERROR: 18");
+
+    // Query PIN retries confirms PIN2 is 0
+    assert_pin_retries(&mut world, "A", "SIM PIN2", 0, 3);
+
+    // Unlock PIN2 via PUK2 using AT+CPIN="<puk2>","<new_pin2>"
+    world.send_and_expect_ok("A", "AT+CPIN=\"12345678\",\"5678\"");
+
+    // PIN2 retries restored to 3
+    assert_pin_retries(&mut world, "A", "SIM PIN2", 3, 3);
+}
+
+#[test]
+fn test_call_barring_lockout_after_failed_attempts() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // 3 failed attempts return CME ERROR: 16
+    for _ in 0..3 {
+        world.send_and_expect_error("A", "AT+CLCK=\"AO\",1,\"wrong\"", "+CME ERROR: 16");
+    }
+
+    // Subsequent lock attempt is blocked -> CME ERROR: 3 (OperationNotAllowed),
+    // even with correct password
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",1,\"0000\"", "+CME ERROR: 3");
+
+    // Subsequent password change attempt is also blocked -> CME ERROR: 3
+    world.send_and_expect_error("A", "AT+CPWD=\"AB\",\"0000\",\"1234\"", "+CME ERROR: 3");
+}
+
+#[test]
+fn test_pin1_retries_decremented_when_pin2_blocked() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // Exhaust PIN2 retries to 0
+    for _ in 0..2 {
+        world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"0000\",\"1111\"", "+CME ERROR: 16");
+    }
+    world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"0000\",\"1111\"", "+CME ERROR: 18");
+    assert_pin_retries(&mut world, "A", "SIM PIN2", 0, 3);
+    assert_pin_retries(&mut world, "A", "SIM PIN", 3, 3);
+
+    // Attempting wrong 4-digit PIN1 in AT+CPIN must decrement PIN1 retries, not
+    // PUK2
+    world.send_and_expect_error("A", "AT+CPIN=\"0000\",\"9999\"", "+CME ERROR: 16");
+    assert_pin_retries(&mut world, "A", "SIM PIN", 2, 3);
+    assert_pin_retries(&mut world, "A", "SIM PUK2", 10, 10);
+}

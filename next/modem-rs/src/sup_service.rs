@@ -135,14 +135,6 @@ impl SupService {
 
     // --- Pure command handlers ---
 
-    fn handle_set_facility_lock(&self, mode: FacilityLockMode) -> SupResult {
-        if mode == FacilityLockMode::QueryStatus {
-            Ok(Some(SupResponse::FacilityLockStatus(0)))
-        } else {
-            Ok(None)
-        }
-    }
-
     fn handle_call_forwarding(
         &mut self,
         mode: CallForwardingMode,
@@ -244,15 +236,9 @@ impl SupService {
         sim_service: &mut SimService,
     ) -> ExecutionResult {
         let sup_result = match command {
-            SupCommand::SetFacilityLock(facility, mode, passwd, _) => match facility {
-                Facility::SimPin => {
-                    return sim_service.handle_set_facility_lock(*mode, *passwd).into();
-                }
-                Facility::FixedDial => {
-                    return sim_service.handle_set_fdn_lock(*mode, *passwd).into();
-                }
-                Facility::Other => self.handle_set_facility_lock(*mode),
-            },
+            SupCommand::SetFacilityLock(facility, mode, passwd, _) => {
+                return sim_service.handle_set_facility_lock(*facility, *mode, *passwd).into();
+            }
             SupCommand::CallForwarding { reason: _, mode, number, r#type, .. } => {
                 self.handle_call_forwarding(*mode, *number, *r#type)
             }

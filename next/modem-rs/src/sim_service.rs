@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt::Write, iter::once};
+use std::{collections::HashMap, fmt::Write, iter::once, ops::RangeInclusive};
 
 use modem_rs_derive::CommandParser;
 use tracing::{debug, info};
@@ -13,8 +13,9 @@ use crate::{
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
     sms_service::{MessageStatus, StoredSms},
     types::{
-        AdnRecord, CdmaRoamingPreference, CdmaSubscriptionSource, CmeError, DEFAULT_PIN,
-        DEFAULT_PIN2, ExecutionResult, FacilityLockMode, Parsable, PhoneNumber, Plmn,
+        AdnRecord, CdmaRoamingPreference, CdmaSubscriptionSource, CmeError,
+        DEFAULT_BARRING_PASSWORD, DEFAULT_PIN, DEFAULT_PIN2, DEFAULT_PUK2, ExecutionResult,
+        Facility, FacilityLockMode, Parsable, PhoneNumber, PinType, Plmn,
     },
 };
 
@@ -30,7 +31,7 @@ pub enum SimCommand<'a> {
     #[command(tag = "AT+CPIN?")]
     GetSimStatus,
     #[command(tag = "AT+CPINR=")]
-    QueryPinRetries(QuotedString<'a>),
+    QueryPinRetries(PinType),
     #[command(tag = "AT+CPIN=")]
     EnterPin(PinString<'a>, Option<PinString<'a>>),
     #[command(tag = "AT+CRSM=")]
@@ -54,7 +55,7 @@ pub enum SimCommand<'a> {
     #[command(tag = "AT+CGLA=")]
     TransmitLogicalChannel(u8, u8, #[parser(parse_raw_data)] &'a [u8]),
     #[command(tag = "AT+CPWD=")]
-    ChangePassword(QuotedString<'a>, QuotedString<'a>, QuotedString<'a>),
+    ChangePassword(Facility, QuotedString<'a>, QuotedString<'a>),
     /// VENDOR: Query PIN retries
     #[command(tag = "AT+SPIC")]
     QueryPinRetriesSpic,
@@ -87,8 +88,7 @@ pub enum SimCommand<'a> {
     GetAtr,
 }
 
-const MIN_PIN_LEN: usize = 4;
-const MAX_PIN_LEN: usize = 8;
+const VALID_PIN_LEN: RangeInclusive<usize> = 4..=8;
 const PUK_LEN: usize = 8;
 const DEFAULT_PIN_RETRIES: u32 = 3;
 const DEFAULT_PUK_RETRIES: u32 = 10;
@@ -412,18 +412,138 @@ impl std::fmt::Display for SimResponse {
 
 type SimResult = Result<Option<SimResponse>, ExecutionResult>;
 
+/// Encapsulates credentials (PIN and PUK), remaining attempts, and maximum
+/// attempts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinEntry {
+    pub pin: String,
+    pub puk: String,
+    pub pin_retries: u32,
+    pub puk_retries: u32,
+    pub max_pin_retries: u32,
+    pub max_puk_retries: u32,
+}
+
+impl PinEntry {
+    pub fn new(pin: &str, puk: &str, max_pin_retries: u32, max_puk_retries: u32) -> Self {
+        Self {
+            pin: pin.to_string(),
+            puk: puk.to_string(),
+            pin_retries: max_pin_retries,
+            puk_retries: max_puk_retries,
+            max_pin_retries,
+            max_puk_retries,
+        }
+    }
+
+    pub fn from_profile(
+        pin: &str,
+        puk: &str,
+        pin_retries: Option<u32>,
+        puk_retries: Option<u32>,
+        default_pin: &str,
+        default_puk: &str,
+    ) -> Self {
+        let pin = if !pin.is_empty() { pin } else { default_pin };
+        let puk = if !puk.is_empty() { puk } else { default_puk };
+        Self::new(
+            pin,
+            puk,
+            pin_retries.unwrap_or(DEFAULT_PIN_RETRIES),
+            puk_retries.unwrap_or(DEFAULT_PUK_RETRIES),
+        )
+    }
+
+    pub fn is_blocked(&self) -> bool {
+        self.pin_retries == 0
+    }
+
+    pub fn is_puk_blocked(&self) -> bool {
+        self.puk_retries == 0
+    }
+
+    pub fn decrement_pin_retries(&mut self) {
+        self.pin_retries = self.pin_retries.saturating_sub(1);
+    }
+
+    pub fn decrement_puk_retries(&mut self) {
+        self.puk_retries = self.puk_retries.saturating_sub(1);
+    }
+
+    pub fn reset_pin_retries(&mut self) {
+        self.pin_retries = self.max_pin_retries;
+    }
+
+    pub fn reset_puk_retries(&mut self) {
+        self.puk_retries = self.max_puk_retries;
+    }
+
+    pub fn pin_attempts(&self) -> (u32, u32) {
+        (self.pin_retries, self.max_pin_retries)
+    }
+
+    pub fn puk_attempts(&self) -> (u32, u32) {
+        (self.puk_retries, self.max_puk_retries)
+    }
+
+    /// Verifies candidate PIN. On match resets retries; on mismatch decrements
+    /// retries.
+    pub fn verify_pin(&mut self, candidate: &[u8]) -> Result<(), CmeError> {
+        if !VALID_PIN_LEN.contains(&candidate.len()) {
+            return Err(CmeError::IncorrectPassword);
+        }
+        if candidate == self.pin.as_bytes() {
+            self.reset_pin_retries();
+            Ok(())
+        } else {
+            self.decrement_pin_retries();
+            Err(CmeError::IncorrectPassword)
+        }
+    }
+
+    /// Changes the PIN after verifying the old PIN.
+    pub fn change_pin(&mut self, old_password: &[u8], new_password: &[u8]) -> Result<(), CmeError> {
+        if !VALID_PIN_LEN.contains(&new_password.len()) {
+            return Err(CmeError::IncorrectPassword);
+        }
+        let valid_pin =
+            std::str::from_utf8(new_password).map_err(|_err| CmeError::IncorrectPassword)?;
+        self.verify_pin(old_password)?;
+        self.pin = valid_pin.to_string();
+        Ok(())
+    }
+
+    /// Unblocks the PIN using the PUK code and sets a new PIN.
+    pub fn unblock_with_puk(
+        &mut self,
+        puk_candidate: &[u8],
+        new_pin: &[u8],
+    ) -> Result<(), CmeError> {
+        if puk_candidate.len() != PUK_LEN || !VALID_PIN_LEN.contains(&new_pin.len()) {
+            return Err(CmeError::IncorrectPassword);
+        }
+        let valid_pin = std::str::from_utf8(new_pin).map_err(|_err| CmeError::IncorrectPassword)?;
+        if puk_candidate == self.puk.as_bytes() {
+            self.pin = valid_pin.to_string();
+            self.reset_pin_retries();
+            self.reset_puk_retries();
+            Ok(())
+        } else {
+            self.decrement_puk_retries();
+            Err(CmeError::IncorrectPassword)
+        }
+    }
+}
+
 // Holds all state related to the SIM card.
 pub struct SimService {
     provisioned: bool,
     state: SimState,
     pin_enabled: bool,
-    pin1: String,
-    puk1: String,
-    pin1_retries: u32,
-    puk1_retries: u32,
-    pin2: String,
-    pin2_retries: u32,
-    puk2_retries: u32,
+    pin1: PinEntry,
+    pin2: PinEntry,
+    call_barring_locks: HashMap<Facility, bool>,
+    barring_password: PinEntry,
     fdn_enabled: bool,
     fs: FileSystem,
     sms_messages: HashMap<u8, StoredSms>,
@@ -444,13 +564,15 @@ impl Default for SimService {
             provisioned: false,
             state: SimState::Absent,
             pin_enabled: false,
-            pin1: DEFAULT_PIN.to_string(),
-            puk1: DEFAULT_PUK.to_string(),
-            pin1_retries: DEFAULT_PIN_RETRIES,
-            puk1_retries: DEFAULT_PUK_RETRIES,
-            pin2: DEFAULT_PIN2.to_string(),
-            pin2_retries: DEFAULT_PIN_RETRIES,
-            puk2_retries: DEFAULT_PUK_RETRIES,
+            pin1: PinEntry::new(DEFAULT_PIN, DEFAULT_PUK, DEFAULT_PIN_RETRIES, DEFAULT_PUK_RETRIES),
+            pin2: PinEntry::new(
+                DEFAULT_PIN2,
+                DEFAULT_PUK2,
+                DEFAULT_PIN_RETRIES,
+                DEFAULT_PUK_RETRIES,
+            ),
+            call_barring_locks: HashMap::new(),
+            barring_password: PinEntry::new(DEFAULT_BARRING_PASSWORD, "", DEFAULT_PIN_RETRIES, 0),
             fdn_enabled: false,
             fs: FileSystem::default(),
             sms_messages: HashMap::new(),
@@ -495,40 +617,35 @@ impl SimService {
     /// filesystem and resetting credentials and logical channels.
     pub fn load_profile(&mut self, profile: &SimProfile) {
         self.provisioned = true;
-        self.state = if profile.pin_profile.puk1_retries == Some(0)
-            || profile.pin_profile.state == crate::config::PinState::PermBlocked
-        {
-            SimState::PermBlocked
-        } else {
-            match profile.pin_profile.state {
-                crate::config::PinState::EnabledNotVerified => SimState::PinRequired,
-                crate::config::PinState::Blocked => SimState::PukRequired,
-                _ => SimState::Ready,
-            }
+        self.state = match (profile.pin_profile.puk1_retries, profile.pin_profile.state) {
+            (Some(0), _) | (_, crate::config::PinState::PermBlocked) => SimState::PermBlocked,
+            (_, crate::config::PinState::EnabledNotVerified) => SimState::PinRequired,
+            (_, crate::config::PinState::Blocked) => SimState::PukRequired,
+            _ => SimState::Ready,
         };
         self.pin_enabled = matches!(
             profile.pin_profile.state,
             crate::config::PinState::EnabledNotVerified | crate::config::PinState::EnabledVerified
         );
-        self.pin1 = if !profile.pin_profile.pin1.is_empty() {
-            profile.pin_profile.pin1.clone()
-        } else {
-            DEFAULT_PIN.to_string()
-        };
-        self.puk1 = if !profile.pin_profile.puk1.is_empty() {
-            profile.pin_profile.puk1.clone()
-        } else {
-            DEFAULT_PUK.to_string()
-        };
-        self.pin1_retries = profile.pin_profile.pin1_retries.unwrap_or(DEFAULT_PIN_RETRIES);
-        self.puk1_retries = profile.pin_profile.puk1_retries.unwrap_or(DEFAULT_PUK_RETRIES);
-        self.pin2 = if !profile.pin_profile.pin2.is_empty() {
-            profile.pin_profile.pin2.clone()
-        } else {
-            DEFAULT_PIN2.to_string()
-        };
-        self.pin2_retries = profile.pin_profile.pin2_retries.unwrap_or(DEFAULT_PIN_RETRIES);
-        self.puk2_retries = profile.pin_profile.puk2_retries.unwrap_or(DEFAULT_PUK_RETRIES);
+        let pp = &profile.pin_profile;
+        self.pin1 = PinEntry::from_profile(
+            &pp.pin1,
+            &pp.puk1,
+            pp.pin1_retries,
+            pp.puk1_retries,
+            DEFAULT_PIN,
+            DEFAULT_PUK,
+        );
+        self.pin2 = PinEntry::from_profile(
+            &pp.pin2,
+            &pp.puk2,
+            pp.pin2_retries,
+            pp.puk2_retries,
+            DEFAULT_PIN2,
+            DEFAULT_PUK2,
+        );
+        self.call_barring_locks.clear();
+        self.barring_password = PinEntry::new(DEFAULT_BARRING_PASSWORD, "", DEFAULT_PIN_RETRIES, 0);
         self.fdn_enabled = false;
         self.sms_messages.clear();
         self.fs = profile.sim_io.file_system.clone();
@@ -571,45 +688,27 @@ impl SimService {
             OverwritePolicy::IfUninitialized,
         );
 
-        let existing_mbdn_ef =
-            self.fs.find_ef_in_telecom_or_usim(UiccFileId::MailboxDialingNumbers);
-        let mbdn_record_len =
-            existing_mbdn_ef.and_then(|ef| ef.record_len()).unwrap_or_else(|| {
-                UiccFileId::MailboxDialingNumbers
-                    .default_record_len()
-                    .expect("file id is record based")
-            });
-        let mut mbdn_data = existing_mbdn_ef
-            .map(|ef| ef.data.clone())
-            .unwrap_or_else(|| vec![0xFF; DEFAULT_MBDN_RECORD_COUNT * mbdn_record_len]);
-        if mbdn_data.len() < DEFAULT_MBDN_RECORD_COUNT * mbdn_record_len {
-            mbdn_data.resize(DEFAULT_MBDN_RECORD_COUNT * mbdn_record_len, 0xFF);
-        }
+        let mut ensure_dialing_numbers = |file_id: UiccFileId, default_count: usize| {
+            let existing_ef = self.fs.find_ef_in_telecom_or_usim(file_id);
+            let record_len = existing_ef
+                .and_then(|ef| ef.record_len())
+                .unwrap_or_else(|| file_id.default_record_len().expect("file id is record based"));
+            let target_len = default_count * record_len;
+            let mut data =
+                existing_ef.map(|ef| ef.data.clone()).unwrap_or_else(|| vec![0xFF; target_len]);
+            if data.len() < target_len {
+                data.resize(target_len, 0xFF);
+            }
+            self.fs.ensure_ef_present_in_telecom_and_usim(
+                file_id,
+                Some(record_len),
+                data,
+                OverwritePolicy::IfUninitialized,
+            );
+        };
 
-        self.fs.ensure_ef_present_in_telecom_and_usim(
-            UiccFileId::MailboxDialingNumbers,
-            Some(mbdn_record_len),
-            mbdn_data,
-            OverwritePolicy::IfUninitialized,
-        );
-
-        let existing_fdn_ef = self.fs.find_ef_in_telecom_or_usim(UiccFileId::FixedDialingNumbers);
-        let fdn_record_len = existing_fdn_ef.and_then(|ef| ef.record_len()).unwrap_or_else(|| {
-            UiccFileId::FixedDialingNumbers.default_record_len().expect("file id is record based")
-        });
-        let mut fdn_data = existing_fdn_ef
-            .map(|ef| ef.data.clone())
-            .unwrap_or_else(|| vec![0xFF; DEFAULT_FDN_RECORD_COUNT * fdn_record_len]);
-        if fdn_data.len() < DEFAULT_FDN_RECORD_COUNT * fdn_record_len {
-            fdn_data.resize(DEFAULT_FDN_RECORD_COUNT * fdn_record_len, 0xFF);
-        }
-
-        self.fs.ensure_ef_present_in_telecom_and_usim(
-            UiccFileId::FixedDialingNumbers,
-            Some(fdn_record_len),
-            fdn_data,
-            OverwritePolicy::IfUninitialized,
-        );
+        ensure_dialing_numbers(UiccFileId::MailboxDialingNumbers, DEFAULT_MBDN_RECORD_COUNT);
+        ensure_dialing_numbers(UiccFileId::FixedDialingNumbers, DEFAULT_FDN_RECORD_COUNT);
 
         self.fs.ensure_ef_present(
             UiccFileId::ForbiddenPlmn,
@@ -816,9 +915,9 @@ impl SimService {
         let old_state = self.state;
         if present {
             if self.state == SimState::Absent {
-                self.state = if self.puk1_retries == 0 {
+                self.state = if self.pin1.puk_retries == 0 {
                     SimState::PermBlocked
-                } else if self.pin1_retries == 0 {
+                } else if self.pin1.pin_retries == 0 {
                     SimState::PukRequired
                 } else if self.pin_enabled {
                     SimState::PinRequired
@@ -885,59 +984,65 @@ impl SimService {
         Ok(Some(SimResponse::PinStatus(status)))
     }
 
+    fn sync_pin1_state(&mut self) {
+        if self.pin1.is_puk_blocked() {
+            self.state = SimState::PermBlocked;
+        } else if self.pin1.is_blocked() {
+            self.state = SimState::PukRequired;
+        }
+    }
+
     fn handle_enter_pin(&mut self, pin_or_puk: PinString, new_pin: Option<PinString>) -> SimResult {
-        let pin_or_puk_len = pin_or_puk.as_ref().len();
-        match self.state {
-            SimState::Absent => unreachable!("Absent state handled in execute"),
-            SimState::Ready => {
+        let input = pin_or_puk.as_ref();
+        let pin_or_puk_len = input.len();
+        let new_pin_bytes = new_pin.as_ref().map(|p| p.as_ref());
+        match (self.state, new_pin_bytes) {
+            (SimState::Absent, _) => unreachable!("Absent state handled in execute"),
+            (SimState::PermBlocked, _) => {
+                Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed))
+            }
+            (SimState::Ready, Some(new_pin)) => {
+                if self.pin2.is_blocked() && pin_or_puk_len == PUK_LEN {
+                    self.pin2
+                        .unblock_with_puk(input, new_pin)
+                        .map_err(ExecutionResult::cme_error)?;
+                    Ok(None)
+                } else {
+                    self.pin1.change_pin(input, new_pin).map_err(|err| {
+                        self.sync_pin1_state();
+                        ExecutionResult::cme_error(err)
+                    })?;
+                    Ok(None)
+                }
+            }
+            (SimState::Ready, None) => {
                 if pin_or_puk_len == 0 {
-                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
-                } else {
-                    Ok(None)
-                }
-            }
-            SimState::PinRequired => {
-                if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&pin_or_puk_len) {
                     return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
                 }
-                if pin_or_puk.as_ref() == self.pin1.as_bytes() {
-                    self.state = SimState::Ready;
-                    self.pin1_retries = DEFAULT_PIN_RETRIES;
-                    Ok(None)
-                } else {
-                    self.pin1_retries = self.pin1_retries.saturating_sub(1);
-                    if self.pin1_retries == 0 {
-                        self.state = SimState::PukRequired;
-                    }
-                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
+                if input == self.pin2.pin.as_bytes() {
+                    self.pin2.reset_pin_retries();
                 }
+                Ok(None)
             }
-            SimState::PukRequired => {
-                if pin_or_puk_len != PUK_LEN {
-                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
-                }
-                if let Some(new_pin) = new_pin {
-                    if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&new_pin.as_ref().len()) {
-                        return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
-                    }
-                    if pin_or_puk.as_ref() == self.puk1.as_bytes() {
-                        self.pin1 = String::from_utf8_lossy(new_pin.as_ref()).to_string();
-                        self.state = SimState::Ready;
-                        self.pin1_retries = DEFAULT_PIN_RETRIES;
-                        self.puk1_retries = DEFAULT_PUK_RETRIES;
-                        Ok(None)
-                    } else {
-                        self.puk1_retries = self.puk1_retries.saturating_sub(1);
-                        if self.puk1_retries == 0 {
-                            self.state = SimState::PermBlocked;
-                        }
-                        Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
-                    }
-                } else {
-                    Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))
-                }
+            (SimState::PinRequired, _) => {
+                self.pin1.verify_pin(input).map_err(|err| {
+                    self.sync_pin1_state();
+                    ExecutionResult::cme_error(err)
+                })?;
+                self.state = SimState::Ready;
+                Ok(None)
             }
-            SimState::PermBlocked => Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed)),
+            (SimState::PukRequired, Some(new_pin)) => {
+                self.pin1.unblock_with_puk(input, new_pin).map_err(|err| {
+                    self.sync_pin1_state();
+                    ExecutionResult::cme_error(err)
+                })?;
+                self.state = SimState::Ready;
+                Ok(None)
+            }
+            (SimState::PukRequired, None) => {
+                Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))
+            }
         }
     }
 
@@ -1525,7 +1630,7 @@ impl SimService {
 
     fn handle_change_password(
         &mut self,
-        _facility: QuotedString,
+        facility: Facility,
         old_password: QuotedString,
         new_password: QuotedString,
     ) -> SimResult {
@@ -1535,21 +1640,77 @@ impl SimService {
         if self.state == SimState::PukRequired {
             return Err(ExecutionResult::cme_error(CmeError::SimPukRequired));
         }
-        if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&old_password.as_ref().len())
-            || !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&new_password.as_ref().len())
-        {
+        let old = old_password.as_ref();
+        let new = new_password.as_ref();
+        if !VALID_PIN_LEN.contains(&old.len()) || !VALID_PIN_LEN.contains(&new.len()) {
             return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
         }
-        if old_password.as_ref() == self.pin1.as_bytes() {
-            self.pin1 = String::from_utf8(new_password.0.to_vec()).unwrap_or_default();
-            self.pin1_retries = DEFAULT_PIN_RETRIES;
-            Ok(None)
-        } else {
-            self.pin1_retries = self.pin1_retries.saturating_sub(1);
-            if self.pin1_retries == 0 {
-                self.state = SimState::PukRequired;
+        match facility {
+            Facility::SimPin | Facility::SimPin2 | Facility::FixedDial => {
+                let is_pin1 = facility == Facility::SimPin;
+
+                if !is_pin1 && self.pin2.is_blocked() {
+                    return Err(ExecutionResult::cme_error(CmeError::SimPuk2Required));
+                }
+
+                let target = if is_pin1 { &mut self.pin1 } else { &mut self.pin2 };
+                target.change_pin(old, new).map_err(|err| {
+                    if is_pin1 {
+                        self.sync_pin1_state();
+                        ExecutionResult::cme_error(CmeError::IncorrectPassword)
+                    } else if self.pin2.is_blocked() {
+                        ExecutionResult::cme_error(CmeError::SimPuk2Required)
+                    } else {
+                        ExecutionResult::cme_error(err)
+                    }
+                })?;
+                Ok(None)
             }
-            Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
+            f if f.is_call_barring() => {
+                if self.barring_password.is_blocked() {
+                    return Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed));
+                }
+                self.barring_password.change_pin(old, new).map_err(ExecutionResult::cme_error)?;
+                Ok(None)
+            }
+            _ => Err(ExecutionResult::cme_error(CmeError::OperationNotSupported)),
+        }
+    }
+
+    pub(crate) fn handle_set_call_barring_lock(
+        &mut self,
+        facility: Facility,
+        mode: FacilityLockMode,
+        passwd: Option<QuotedString>,
+    ) -> SimResult {
+        if (mode == FacilityLockMode::Unlock || mode == FacilityLockMode::Lock)
+            && self.barring_password.is_blocked()
+        {
+            return Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed));
+        }
+
+        match mode {
+            FacilityLockMode::Unlock | FacilityLockMode::Lock => {
+                let passwd = match passwd {
+                    Some(p) if VALID_PIN_LEN.contains(&p.as_ref().len()) => p,
+                    _ => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
+                };
+                self.barring_password
+                    .verify_pin(passwd.as_ref())
+                    .map(|()| {
+                        if mode == FacilityLockMode::Lock {
+                            self.call_barring_locks.insert(facility, true);
+                        } else {
+                            self.call_barring_locks.remove(&facility);
+                        }
+                        None
+                    })
+                    .map_err(ExecutionResult::cme_error)
+            }
+            FacilityLockMode::QueryStatus => {
+                let is_locked = self.call_barring_locks.contains_key(&facility);
+                Ok(Some(SimResponse::FacilityLockStatus(if is_locked { 1 } else { 0 })))
+            }
         }
     }
 
@@ -1583,6 +1744,20 @@ impl SimService {
 
     pub(crate) fn handle_set_facility_lock(
         &mut self,
+        facility: Facility,
+        mode: FacilityLockMode,
+        passwd: Option<QuotedString>,
+    ) -> SimResult {
+        match facility {
+            Facility::SimPin => self.handle_set_pin1_lock(mode, passwd),
+            Facility::FixedDial => self.handle_set_fdn_lock(mode, passwd),
+            f if f.is_call_barring() => self.handle_set_call_barring_lock(f, mode, passwd),
+            _ => Err(ExecutionResult::cme_error(CmeError::OperationNotSupported)),
+        }
+    }
+
+    pub(crate) fn handle_set_pin1_lock(
+        &mut self,
         mode: FacilityLockMode,
         passwd: Option<QuotedString>,
     ) -> SimResult {
@@ -1595,49 +1770,22 @@ impl SimService {
             }
         }
         match mode {
-            FacilityLockMode::Unlock => {
+            FacilityLockMode::Unlock | FacilityLockMode::Lock => {
                 let passwd = match passwd {
-                    Some(p) => p,
-                    None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
+                    Some(p) if VALID_PIN_LEN.contains(&p.as_ref().len()) => p,
+                    _ => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
                 };
-                if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&passwd.as_ref().len()) {
-                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
-                }
-                let passwd_str = String::from_utf8(passwd.to_vec()).unwrap_or_default();
-                if passwd_str == self.pin1 {
-                    self.pin_enabled = false;
-                    self.state = SimState::Ready;
-                    self.pin1_retries = DEFAULT_PIN_RETRIES;
-                    Ok(None)
-                } else {
-                    self.pin1_retries = self.pin1_retries.saturating_sub(1);
-                    if self.pin1_retries == 0 {
-                        self.state = SimState::PukRequired;
-                    }
-                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
-                }
-            }
-            FacilityLockMode::Lock => {
-                let passwd = match passwd {
-                    Some(p) => p,
-                    None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
-                };
-                if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&passwd.as_ref().len()) {
-                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
-                }
-                let passwd_str = String::from_utf8(passwd.to_vec()).unwrap_or_default();
-                if passwd_str == self.pin1 {
-                    self.pin_enabled = true;
-                    self.state = SimState::Ready;
-                    self.pin1_retries = DEFAULT_PIN_RETRIES;
-                    Ok(None)
-                } else {
-                    self.pin1_retries = self.pin1_retries.saturating_sub(1);
-                    if self.pin1_retries == 0 {
-                        self.state = SimState::PukRequired;
-                    }
-                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
-                }
+                self.pin1
+                    .verify_pin(passwd.as_ref())
+                    .map(|()| {
+                        self.pin_enabled = mode == FacilityLockMode::Lock;
+                        self.state = SimState::Ready;
+                        None
+                    })
+                    .map_err(|err| {
+                        self.sync_pin1_state();
+                        ExecutionResult::cme_error(err)
+                    })
             }
             FacilityLockMode::QueryStatus => {
                 Ok(Some(SimResponse::FacilityLockStatus(if self.pin_enabled { 1 } else { 0 })))
@@ -1651,7 +1799,7 @@ impl SimService {
         passwd: Option<QuotedString>,
     ) -> SimResult {
         if (mode == FacilityLockMode::Unlock || mode == FacilityLockMode::Lock)
-            && self.pin2_retries == 0
+            && self.pin2.is_blocked()
         {
             return Err(ExecutionResult::cme_error(CmeError::SimPuk2Required));
         }
@@ -1659,20 +1807,16 @@ impl SimService {
         match mode {
             FacilityLockMode::Unlock | FacilityLockMode::Lock => {
                 let passwd = match passwd {
-                    Some(p) => p,
-                    None => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
+                    Some(p) if VALID_PIN_LEN.contains(&p.as_ref().len()) => p,
+                    _ => return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword)),
                 };
-                if !(MIN_PIN_LEN..=MAX_PIN_LEN).contains(&passwd.as_ref().len()) {
-                    return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
-                }
-                if passwd.as_ref() == self.pin2.as_bytes() {
-                    self.fdn_enabled = mode == FacilityLockMode::Lock;
-                    self.pin2_retries = DEFAULT_PIN_RETRIES;
-                    Ok(None)
-                } else {
-                    self.pin2_retries = self.pin2_retries.saturating_sub(1);
-                    Err(ExecutionResult::cme_error(CmeError::IncorrectPassword))
-                }
+                self.pin2
+                    .verify_pin(passwd.as_ref())
+                    .map(|()| {
+                        self.fdn_enabled = mode == FacilityLockMode::Lock;
+                        None
+                    })
+                    .map_err(ExecutionResult::cme_error)
             }
             FacilityLockMode::QueryStatus => {
                 Ok(Some(SimResponse::FacilityLockStatus(if self.fdn_enabled { 1 } else { 0 })))
@@ -1709,21 +1853,19 @@ impl SimService {
     }
 
     fn handle_query_pin_retries_spic(&self) -> SimResult {
-        let retries = self.pin1_retries;
+        let retries = self.pin1.pin_retries;
         Ok(Some(SimResponse::PinRetriesSpic(retries)))
     }
 
-    fn handle_query_pin_retries_cpinr(&self, pin_type: QuotedString) -> SimResult {
-        let pin_type_str = std::str::from_utf8(pin_type.as_ref()).unwrap_or("");
-        let (retries, default_retries) = match pin_type_str {
-            "SIM PIN" => (self.pin1_retries, DEFAULT_PIN_RETRIES),
-            "SIM PUK" => (self.puk1_retries, DEFAULT_PUK_RETRIES),
-            "SIM PIN2" => (self.pin2_retries, DEFAULT_PIN_RETRIES),
-            "SIM PUK2" => (self.puk2_retries, DEFAULT_PUK_RETRIES),
-            _ => return Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
+    fn handle_query_pin_retries_cpinr(&self, pin_type: PinType) -> SimResult {
+        let (retries, default_retries) = match pin_type {
+            PinType::SimPin => self.pin1.pin_attempts(),
+            PinType::SimPuk => self.pin1.puk_attempts(),
+            PinType::SimPin2 => self.pin2.pin_attempts(),
+            PinType::SimPuk2 => self.pin2.puk_attempts(),
         };
         Ok(Some(SimResponse::PinRemainingAttempts {
-            pin_type: pin_type_str.to_string(),
+            pin_type: pin_type.to_string(),
             retries,
             default_retries,
         }))
@@ -2018,27 +2160,27 @@ mod tests {
         // Try invalid length PIN2 -> fails immediately, does NOT decrement retries
         let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"123")));
         assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::IncorrectPassword)));
-        assert_eq!(service.pin2_retries, 3);
+        assert_eq!(service.pin2.pin_retries, 3);
 
         let res =
             service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"123456789")));
         assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::IncorrectPassword)));
-        assert_eq!(service.pin2_retries, 3);
+        assert_eq!(service.pin2.pin_retries, 3);
 
         // Try wrong PIN2 -> retries decrement
         let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
         assert!(res.is_err());
-        assert_eq!(service.pin2_retries, 2);
+        assert_eq!(service.pin2.pin_retries, 2);
 
         // Try wrong PIN2 again
         let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
         assert!(res.is_err());
-        assert_eq!(service.pin2_retries, 1);
+        assert_eq!(service.pin2.pin_retries, 1);
 
         // Try wrong PIN2 third time -> retries reach 0
         let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString(b"0000")));
         assert!(res.is_err());
-        assert_eq!(service.pin2_retries, 0);
+        assert_eq!(service.pin2.pin_retries, 0);
 
         // Try CORRECT PIN2 now that it is blocked -> should STILL fail with
         // SimPuk2Required!
@@ -2348,5 +2490,48 @@ mod tests {
         assert_eq!(service.selected_aids, [const { None }; 4]);
         assert_eq!(service.selected_files, [None; 4]);
         assert!(service.response_buffer[1].is_empty());
+    }
+
+    #[test]
+    fn test_pin_entry_methods_and_custom_retries() {
+        let mut entry = PinEntry::new("4321", "87654321", 5, 8);
+        assert_eq!(entry.pin_attempts(), (5, 5));
+        assert_eq!(entry.puk_attempts(), (8, 8));
+
+        // Invalid length PIN
+        assert_eq!(entry.verify_pin(b"12"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.pin_retries, 5); // Length error does not decrement
+
+        // Mismatched PIN decrements
+        assert_eq!(entry.verify_pin(b"0000"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.pin_retries, 4);
+
+        // Matching PIN resets to max_pin_retries (5, not default 3)
+        assert_eq!(entry.verify_pin(b"4321"), Ok(()));
+        assert_eq!(entry.pin_retries, 5);
+
+        // Invalid UTF-8 candidate rejected without state corruption
+        assert_eq!(
+            entry.change_pin(b"4321", b"\xFF\xFF\xFF\xFF"),
+            Err(CmeError::IncorrectPassword)
+        );
+        assert_eq!(entry.pin, "4321");
+
+        // Change PIN
+        assert_eq!(entry.change_pin(b"4321", b"9999"), Ok(()));
+        assert_eq!(entry.pin, "9999");
+        assert_eq!(entry.pin_retries, 5);
+
+        // Unblock with PUK
+        entry.pin_retries = 0;
+        assert!(entry.is_blocked());
+        assert_eq!(
+            entry.unblock_with_puk(b"87654321", b"\xFF\xFF\xFF\xFF"),
+            Err(CmeError::IncorrectPassword)
+        );
+        assert_eq!(entry.unblock_with_puk(b"87654321", b"1111"), Ok(()));
+        assert_eq!(entry.pin, "1111");
+        assert_eq!(entry.pin_attempts(), (5, 5));
+        assert_eq!(entry.puk_attempts(), (8, 8));
     }
 }
