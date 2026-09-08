@@ -118,7 +118,7 @@ fn is_final_result_code(expected: &str) -> bool {
         || expected == "CONNECT"
 }
 
-fn is_unsolicited_response(response: &[u8]) -> bool {
+pub(crate) fn is_unsolicited_response(response: &[u8]) -> bool {
     let s = String::from_utf8_lossy(response);
     s.starts_with("+CMT:")
         || s.starts_with("+CMTI:")

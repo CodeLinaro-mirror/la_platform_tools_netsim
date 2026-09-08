@@ -105,20 +105,7 @@ pub fn given_modem_with_number(world: &mut World, name: &str, number: &str) {
 /// This profile includes specific ICCID, IMSI ("123456789012345"), and a file
 /// system with `2FE2`.
 pub fn given_modem_with_sim_profile(world: &mut World, name: &str) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-
-    let profile = create_legacy_test_profile();
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with profile");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_legacy_test_profile());
 }
 
 /// Creates a modem with a custom XML SIM profile.
@@ -191,20 +178,7 @@ pub fn create_locked_sim_profile() -> SimProfile {
 /// Creates a modem with a locked SIM profile (legacy test profile with PIN
 /// EnabledNotVerified).
 pub fn given_modem_with_locked_sim(world: &mut World, name: &str) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-
-    let profile = create_locked_sim_profile();
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with locked SIM");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_locked_sim_profile());
 }
 
 /// Helper function to create a SIM profile with PIN permanently blocked.
@@ -238,20 +212,7 @@ pub fn create_perm_blocked_sim_profile() -> SimProfile {
 
 /// Creates a modem with a permanently blocked SIM profile.
 pub fn given_modem_with_perm_blocked_sim(world: &mut World, name: &str) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-
-    let profile = create_perm_blocked_sim_profile();
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with perm blocked SIM");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_perm_blocked_sim_profile());
 }
 
 /// Helper function to create a SIM profile with EF_MSISDN in the filesystem.
@@ -294,20 +255,7 @@ pub fn create_profile_with_msisdn() -> SimProfile {
 
 /// Creates a modem with a SIM profile that has EF_MSISDN in the filesystem.
 pub fn given_modem_with_msisdn_in_fs(world: &mut World, name: &str) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-
-    let profile = create_profile_with_msisdn();
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with MSISDN in FS");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_profile_with_msisdn());
 }
 
 /// Helper function to create a SIM profile with a 2-record EF_MSISDN in the
@@ -351,19 +299,7 @@ pub fn create_profile_with_multi_record_msisdn() -> SimProfile {
 /// Creates a modem with a SIM profile that has a 2-record EF_MSISDN in the
 /// filesystem.
 pub fn given_modem_with_multi_record_msisdn_in_fs(world: &mut World, name: &str) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-    let profile = create_profile_with_multi_record_msisdn();
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with multi-record MSISDN in FS");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_profile_with_multi_record_msisdn());
 }
 
 /// Helper function to create a SIM profile with a custom record length
@@ -405,19 +341,7 @@ pub fn given_modem_with_custom_record_len_msisdn_in_fs(
     name: &str,
     record_len: usize,
 ) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-    let profile = create_profile_with_custom_record_len_msisdn(record_len);
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with custom record len MSISDN in FS");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_profile_with_custom_record_len_msisdn(record_len));
 }
 
 /// Helper function to create a SIM profile with EF_FPLMN and EF_MBDN in the
@@ -467,20 +391,7 @@ pub fn create_profile_with_fplmn_and_mbdn() -> SimProfile {
 /// Creates a modem with a SIM profile that has EF_FPLMN and EF_MBDN in the
 /// filesystem.
 pub fn given_modem_with_fplmn_and_mbdn_in_fs(world: &mut World, name: &str) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-
-    let profile = create_profile_with_fplmn_and_mbdn();
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with FPLMN and MBDN in FS");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_profile_with_fplmn_and_mbdn());
 }
 
 /// Helper function to create a SIM profile with FDN records.
@@ -528,20 +439,7 @@ pub fn create_fdn_sim_profile() -> SimProfile {
 
 /// Creates a modem with a SIM profile that has FDN records.
 pub fn given_modem_with_fdn_sim_profile(world: &mut World, name: &str) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-
-    let profile = create_fdn_sim_profile();
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with FDN SIM profile");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_fdn_sim_profile());
 }
 
 /// Creates a 2G GSM SIM profile with MF (0x3F00) and DF_TELECOM (0x7F10)
@@ -574,18 +472,5 @@ pub fn create_2g_sim_profile() -> SimProfile {
 
 /// Creates a modem with a 2G SIM profile (no ADFs).
 pub fn given_modem_with_2g_sim_profile(world: &mut World, name: &str) {
-    if world.modems.contains_key(name) {
-        panic!("Modem with name '{name}' already exists");
-    }
-
-    let id = world.next_modem_id();
-    let (handler, sink) = MockModemHandler::new(false);
-
-    let profile = create_2g_sim_profile();
-
-    world
-        .manager
-        .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
-        .expect("Failed to create modem with 2G SIM profile");
-    world.modems.insert(name.to_string(), (id, handler));
+    world.given_modem_with_profile(name, create_2g_sim_profile());
 }

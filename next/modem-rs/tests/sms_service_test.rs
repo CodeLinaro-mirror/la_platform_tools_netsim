@@ -160,9 +160,6 @@ fn test_delete_sms() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    when_at_command_sent(&mut world, "A", "AT+CPMS=\"SM\",\"SM\",\"SM\"");
-    then_wait_for_response_containing(&mut world, "A", "OK");
-
     when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW}"));
     then_prompt_is(&mut world, "A", "> ");
 
