@@ -3,7 +3,7 @@
 
 use std::{
     cmp::Reverse,
-    collections::{BinaryHeap, HashMap, VecDeque},
+    collections::{BinaryHeap, HashMap, VecDeque, hash_map::Entry},
     sync::{Arc, atomic::Ordering as AtomicOrdering},
     time::{Duration, Instant},
 };
@@ -62,6 +62,102 @@ impl Ord for ScheduledEvent {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingStatusReport {
+    sender_id: ModemId,
+    report_response: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct PendingIncomingSms {
+    cmt_response: Vec<u8>,
+    status_report: Option<PendingStatusReport>,
+}
+
+/// Represents the link state for incoming SMS delivery and acknowledgment.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+enum IncomingSmsLinkState {
+    /// No incoming SMS is currently in-flight on the link.
+    #[default]
+    Idle,
+    /// An incoming SMS is in-flight to the modem awaiting recipient
+    /// acknowledgment (`AT+CNMA`), with an optional pending status report
+    /// to dispatch back to the sender if one was requested.
+    Active(Option<PendingStatusReport>),
+}
+
+impl IncomingSmsLinkState {
+    fn is_idle(&self) -> bool {
+        matches!(self, Self::Idle)
+    }
+}
+
+#[derive(Debug)]
+struct AcknowledgedSms {
+    status_report: Option<PendingStatusReport>,
+    next_cmt_response: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Default)]
+struct IncomingSmsQueue {
+    link_state: IncomingSmsLinkState,
+    pending: VecDeque<PendingIncomingSms>,
+}
+
+impl IncomingSmsQueue {
+    /// Enqueues an incoming SMS. If the link is idle, immediately activates it
+    /// and returns `Some(cmt_response)` to deliver. Otherwise, queues it
+    /// and returns `None`.
+    fn enqueue(
+        &mut self,
+        cmt_response: Vec<u8>,
+        status_report: Option<PendingStatusReport>,
+    ) -> Option<Vec<u8>> {
+        if self.link_state.is_idle() {
+            self.link_state = IncomingSmsLinkState::Active(status_report);
+            Some(cmt_response)
+        } else {
+            self.pending.push_back(PendingIncomingSms { cmt_response, status_report });
+            None
+        }
+    }
+
+    /// Acknowledges the active in-flight SMS, transitioning the link to the
+    /// next queued SMS or back to `Idle`. Returns `Some(AcknowledgedSms)`
+    /// if an SMS was active, or `None` if idle.
+    fn acknowledge(&mut self) -> Option<AcknowledgedSms> {
+        match std::mem::take(&mut self.link_state) {
+            IncomingSmsLinkState::Active(status_report) => {
+                let next_cmt_response = self.pending.pop_front().map(|next| {
+                    self.link_state = IncomingSmsLinkState::Active(next.status_report);
+                    next.cmt_response
+                });
+                Some(AcknowledgedSms { status_report, next_cmt_response })
+            }
+            IncomingSmsLinkState::Idle => None,
+        }
+    }
+
+    /// Drops any pending status reports addressed to the removed sender modem.
+    fn remove_sender(&mut self, sender_id: ModemId) {
+        if let IncomingSmsLinkState::Active(Some(report)) = &self.link_state
+            && report.sender_id == sender_id
+        {
+            self.link_state = IncomingSmsLinkState::Active(None);
+        }
+        for pending in &mut self.pending {
+            if pending.status_report.as_ref().is_some_and(|r| r.sender_id == sender_id) {
+                pending.status_report = None;
+            }
+        }
+    }
+
+    /// Returns `true` if the link is idle and no incoming messages are pending.
+    fn is_empty(&self) -> bool {
+        self.link_state.is_idle() && self.pending.is_empty()
+    }
+}
+
 /// Manages multiple modems and simulates network interactions.
 pub struct ModemNetworkSimulator {
     event_queue: BinaryHeap<Reverse<ScheduledEvent>>,
@@ -71,6 +167,7 @@ pub struct ModemNetworkSimulator {
     metrics: Arc<Metrics>,
     clock: Arc<dyn Clock>,
     modem_chip_count: usize,
+    incoming_sms: HashMap<ModemId, IncomingSmsQueue>,
 }
 
 impl ModemNetworkSimulator {
@@ -92,6 +189,7 @@ impl ModemNetworkSimulator {
             metrics: Arc::new(Metrics::default()),
             clock,
             modem_chip_count: 0,
+            incoming_sms: HashMap::new(),
         }
     }
 
@@ -198,16 +296,21 @@ impl ModemNetworkSimulator {
             return Err(ModemError::DuplicateModemId(id));
         }
         self.modem_chip_count += 1;
-        let mut profile = profile.unwrap_or_default();
-        if profile.msisdn.is_empty() {
-            profile.msisdn = format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count);
-        }
-        let target_msisdn = profile.msisdn.clone();
+        let profile = profile.unwrap_or_default();
+        let target_msisdn = if profile.msisdn.is_empty() {
+            format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count)
+        } else {
+            profile.msisdn.clone()
+        };
         let mut modem = ModemImpl::new(id, profile, quirks);
         // Override the default dummy number with a unique generated one to prevent
         // conflicts when launching multiple default emulators. Custom profiles are
         // preserved.
-        if modem.phone_number().as_ref().is_some_and(|n| n.normalized() == DEFAULT_FALLBACK_MSISDN)
+        if modem.phone_number().is_none()
+            || modem
+                .phone_number()
+                .as_ref()
+                .is_some_and(|n| n.normalized() == DEFAULT_FALLBACK_MSISDN)
         {
             modem.set_phone_number(&target_msisdn);
         }
@@ -223,6 +326,10 @@ impl ModemNetworkSimulator {
     pub fn remove_modem(&mut self, id: ModemId) {
         self.modems.remove(&id);
         self.sinks.remove(&id);
+        self.incoming_sms.remove(&id);
+        for queue in self.incoming_sms.values_mut() {
+            queue.remove_sender(id);
+        }
     }
 
     /// Sends an AT command to a modem instance.
@@ -422,15 +529,42 @@ impl ModemNetworkSimulator {
                     response.extend_from_slice(b"\r\n");
                     response.extend_from_slice(&pdu);
                     response.extend_from_slice(b"\r\n");
-                    effects.push((peer_id, ModemEffect::Response(response)));
-
-                    // Send status report back to sender if requested and message was routed
-                    if let Some(report_pdu) = status_report {
+                    let status_report_pending = status_report.map(|report_pdu| {
                         let report_tpdu_len = crate::pdu::calculate_tpdu_len(&report_pdu);
                         let report_str = std::str::from_utf8(&report_pdu).unwrap_or_default();
                         let report_response =
                             format!("+CDS: {report_tpdu_len}\r\n{report_str}\r\n").into_bytes();
-                        effects.push((id, ModemEffect::Response(report_response)));
+                        PendingStatusReport { sender_id: id, report_response }
+                    });
+
+                    let queue = self.incoming_sms.entry(peer_id).or_default();
+                    if let Some(deliver_response) = queue.enqueue(response, status_report_pending) {
+                        effects.push((peer_id, ModemEffect::Response(deliver_response)));
+                    }
+                }
+            }
+            CommandAction::AcknowledgeIncomingSms { ack } => {
+                if let Entry::Occupied(mut entry) = self.incoming_sms.entry(id) {
+                    let queue = entry.get_mut();
+                    if let Some(ack_sms) = queue.acknowledge() {
+                        if let Some(pending) = ack_sms.status_report {
+                            if ack.is_success() {
+                                effects.push((
+                                    pending.sender_id,
+                                    ModemEffect::Response(pending.report_response),
+                                ));
+                            } else {
+                                debug!(
+                                    "Incoming SMS negatively acknowledged by modem {id}, dropping status report"
+                                );
+                            }
+                        }
+                        if let Some(response) = ack_sms.next_cmt_response {
+                            effects.push((id, ModemEffect::Response(response)));
+                        }
+                    }
+                    if queue.is_empty() {
+                        entry.remove();
                     }
                 }
             }
@@ -838,5 +972,54 @@ mod tests {
         let response = handler.wait_for_response();
         assert_eq!(response, b"OK\r\n");
         assert_eq!(handler.try_get_response(), None);
+    }
+
+    #[test]
+    fn test_incoming_sms_link_state_and_remove_modem() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut simulator = ModemNetworkSimulator::new(tx);
+
+        let sender_id = 1;
+        let recipient_id = 2;
+        let (_handler1, sink1) = MockModemHandler::new(false);
+        let (_handler2, sink2) = MockModemHandler::new(false);
+        simulator.new_modem(sender_id, sink1, None, None, Quirks::default()).unwrap();
+        simulator.new_modem(recipient_id, sink2, None, None, Quirks::default()).unwrap();
+
+        let queue = simulator.incoming_sms.entry(recipient_id).or_default();
+        assert!(queue.is_empty());
+
+        let immediate = queue.enqueue(
+            b"+CMT: 1\r\n...".to_vec(),
+            Some(PendingStatusReport { sender_id, report_response: b"+CDS: 25\r\n...".to_vec() }),
+        );
+        assert_eq!(immediate, Some(b"+CMT: 1\r\n...".to_vec()));
+        assert!(!queue.is_empty());
+
+        let queued = queue.enqueue(
+            b"+CMT: 2\r\n...".to_vec(),
+            Some(PendingStatusReport { sender_id, report_response: b"+CDS: 25\r\n...".to_vec() }),
+        );
+        assert_eq!(queued, None);
+
+        // Removing the sender modem drops the status reports in Active and Pending,
+        // while preserving the active in-flight link state and pending message.
+        simulator.remove_modem(sender_id);
+
+        let queue = simulator.incoming_sms.get_mut(&recipient_id).unwrap();
+        assert_eq!(queue.link_state, IncomingSmsLinkState::Active(None));
+        assert_eq!(queue.pending.len(), 1);
+        assert!(queue.pending[0].status_report.is_none());
+
+        // Acknowledge the first SMS
+        let ack_sms = queue.acknowledge().unwrap();
+        assert!(ack_sms.status_report.is_none());
+        assert_eq!(ack_sms.next_cmt_response, Some(b"+CMT: 2\r\n...".to_vec()));
+
+        // Acknowledge the second SMS
+        let ack_sms = queue.acknowledge().unwrap();
+        assert!(ack_sms.status_report.is_none());
+        assert_eq!(ack_sms.next_cmt_response, None);
+        assert!(queue.is_empty());
     }
 }

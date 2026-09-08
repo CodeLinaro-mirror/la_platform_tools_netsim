@@ -173,7 +173,8 @@
     "https://bcr.bazel.build/modules/googleapis/0.0.0-20241220-5e258e33.bcr.1/MODULE.bazel": "ee6c30f82ecd476e61f019fb1151aaab380ea419958ff274ef2f0efca7969f5c",
     "https://bcr.bazel.build/modules/googleapis/0.0.0-20251003-2193a2bf/MODULE.bazel": "cc9e5ed294ed9ebf42cdbbdddd2df29048519e3797004df1e3f369f31ff4f2d4",
     "https://bcr.bazel.build/modules/googleapis/0.0.0-20260514-1dbb1a14/MODULE.bazel": "ff660cb78ff763dd372738e25f0123720c0423915d53089b6ab8a4d4c20ab082",
-    "https://bcr.bazel.build/modules/googleapis/0.0.0-20260514-1dbb1a14/source.json": "f80dadb63769f6028c253908c930a59fd8fe36e9ceef6b68d50a439eb88f77ae",
+    "https://bcr.bazel.build/modules/googleapis/0.0.0-20260825-d10ac924/MODULE.bazel": "97bb3a465e90753ddf91a1cc6b4849982d6b50a26d5645a7375555ad514c5075",
+    "https://bcr.bazel.build/modules/googleapis/0.0.0-20260825-d10ac924/source.json": "bf4b20a624a3d1b52126be45addced038fbd5cfc170297114b70a3a52c414493",
     "https://bcr.bazel.build/modules/googletest/1.11.0/MODULE.bazel": "3a83f095183f66345ca86aa13c58b59f9f94a2f81999c093d4eeaa2d262d12f4",
     "https://bcr.bazel.build/modules/googletest/1.14.0.bcr.1/MODULE.bazel": "22c31a561553727960057361aa33bf20fb2e98584bc4fec007906e27053f80c6",
     "https://bcr.bazel.build/modules/googletest/1.14.0/MODULE.bazel": "cfbcbf3e6eac06ef9d85900f64424708cc08687d1b527f0ef65aa7517af8118f",
@@ -670,6 +671,131 @@
             "attributes": {
               "url": "https://android.googlesource.com/platform/dalvik/+archive/5a81c499a569731e2395f7c8d13c0e0d4e17a2b6.tar.gz",
               "build_file": "@@rules_android+//bzlmod_extensions:com_android_dex.BUILD"
+            }
+          }
+        }
+      }
+    },
+    "@@rules_nodejs+//nodejs:extensions.bzl%node": {
+      "general": {
+        "bzlTransitiveDigest": "q44Ox2Nwogn6OsO0Xw5lhjkd/xmxkvvpwVOn5P4pmHQ=",
+        "usagesDigest": "3r3wO4ubmw71OXuiJaIFgfO+2RlGeyuRizyJGE1kzx0=",
+        "recordedInputs": [],
+        "generatedRepoSpecs": {
+          "nodejs_linux_amd64": {
+            "repoRuleId": "@@rules_nodejs+//nodejs:repositories.bzl%_nodejs_repositories",
+            "attributes": {
+              "node_download_auth": {},
+              "node_repositories": {},
+              "node_urls": [
+                "https://storage.googleapis.com/emu-next-bazel/registry/nodejs/v{version}/{filename}",
+                "https://nodejs.org/dist/v{version}/{filename}"
+              ],
+              "node_version": "20.18.0",
+              "include_headers": false,
+              "platform": "linux_amd64"
+            }
+          },
+          "nodejs_linux_arm64": {
+            "repoRuleId": "@@rules_nodejs+//nodejs:repositories.bzl%_nodejs_repositories",
+            "attributes": {
+              "node_download_auth": {},
+              "node_repositories": {},
+              "node_urls": [
+                "https://storage.googleapis.com/emu-next-bazel/registry/nodejs/v{version}/{filename}",
+                "https://nodejs.org/dist/v{version}/{filename}"
+              ],
+              "node_version": "20.18.0",
+              "include_headers": false,
+              "platform": "linux_arm64"
+            }
+          },
+          "nodejs_linux_s390x": {
+            "repoRuleId": "@@rules_nodejs+//nodejs:repositories.bzl%_nodejs_repositories",
+            "attributes": {
+              "node_download_auth": {},
+              "node_repositories": {},
+              "node_urls": [
+                "https://storage.googleapis.com/emu-next-bazel/registry/nodejs/v{version}/{filename}",
+                "https://nodejs.org/dist/v{version}/{filename}"
+              ],
+              "node_version": "20.18.0",
+              "include_headers": false,
+              "platform": "linux_s390x"
+            }
+          },
+          "nodejs_linux_ppc64le": {
+            "repoRuleId": "@@rules_nodejs+//nodejs:repositories.bzl%_nodejs_repositories",
+            "attributes": {
+              "node_download_auth": {},
+              "node_repositories": {},
+              "node_urls": [
+                "https://storage.googleapis.com/emu-next-bazel/registry/nodejs/v{version}/{filename}",
+                "https://nodejs.org/dist/v{version}/{filename}"
+              ],
+              "node_version": "20.18.0",
+              "include_headers": false,
+              "platform": "linux_ppc64le"
+            }
+          },
+          "nodejs_darwin_amd64": {
+            "repoRuleId": "@@rules_nodejs+//nodejs:repositories.bzl%_nodejs_repositories",
+            "attributes": {
+              "node_download_auth": {},
+              "node_repositories": {},
+              "node_urls": [
+                "https://storage.googleapis.com/emu-next-bazel/registry/nodejs/v{version}/{filename}",
+                "https://nodejs.org/dist/v{version}/{filename}"
+              ],
+              "node_version": "20.18.0",
+              "include_headers": false,
+              "platform": "darwin_amd64"
+            }
+          },
+          "nodejs_darwin_arm64": {
+            "repoRuleId": "@@rules_nodejs+//nodejs:repositories.bzl%_nodejs_repositories",
+            "attributes": {
+              "node_download_auth": {},
+              "node_repositories": {},
+              "node_urls": [
+                "https://storage.googleapis.com/emu-next-bazel/registry/nodejs/v{version}/{filename}",
+                "https://nodejs.org/dist/v{version}/{filename}"
+              ],
+              "node_version": "20.18.0",
+              "include_headers": false,
+              "platform": "darwin_arm64"
+            }
+          },
+          "nodejs_windows_amd64": {
+            "repoRuleId": "@@rules_nodejs+//nodejs:repositories.bzl%_nodejs_repositories",
+            "attributes": {
+              "node_download_auth": {},
+              "node_repositories": {},
+              "node_urls": [
+                "https://storage.googleapis.com/emu-next-bazel/registry/nodejs/v{version}/{filename}",
+                "https://nodejs.org/dist/v{version}/{filename}"
+              ],
+              "node_version": "20.18.0",
+              "include_headers": false,
+              "platform": "windows_amd64"
+            }
+          },
+          "nodejs": {
+            "repoRuleId": "@@rules_nodejs+//nodejs/private:nodejs_repo_host_os_alias.bzl%nodejs_repo_host_os_alias",
+            "attributes": {
+              "user_node_repository_name": "nodejs"
+            }
+          },
+          "nodejs_host": {
+            "repoRuleId": "@@rules_nodejs+//nodejs/private:nodejs_repo_host_os_alias.bzl%nodejs_repo_host_os_alias",
+            "attributes": {
+              "user_node_repository_name": "nodejs"
+            }
+          },
+          "nodejs_toolchains": {
+            "repoRuleId": "@@rules_nodejs+//nodejs/private:nodejs_toolchains_repo.bzl%nodejs_toolchains_repo",
+            "attributes": {
+              "user_node_repository_name": "nodejs"
             }
           }
         }
