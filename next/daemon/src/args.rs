@@ -28,12 +28,11 @@ pub struct Args {
     pub dev: bool,
 
     /// Disable grpc server for CLI
-    /// TODO: Not implemented yet
     #[arg(long, alias = "no_cli_ui")]
     pub no_cli_ui: bool,
 
     /// Disable web server
-    /// TODO: Not implemented yet
+    /// No-op: no web UI is currently implemented
     #[arg(long, alias = "no_web_ui")]
     pub no_web_ui: bool,
 
