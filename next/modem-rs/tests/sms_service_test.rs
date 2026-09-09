@@ -16,7 +16,7 @@ fn test_cmgs() {
     given_modem(&mut world, "A");
 
     when_at_command_sent(&mut world, "A", &format!("AT+CMGS={TEST_SMS_TPDU_LEN}"));
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
     then_response_contains(&mut world, "A", "+CMGS: ");
@@ -28,7 +28,7 @@ fn test_cmgs() {
 //   When AT command "AT+CMGW=16" is sent to "A"
 //   Then response from "A" is "> "
 //   When hex bytes are sent to "A"
-//   Then response from "A" contains "+CMGW: "
+//   Then response from "A" contains "+CMGW: 1"
 //   And response from "A" is "OK"
 //   When AT command "AT+CMGR=1" is sent to "A"
 //   Then response from "A" starts with "+CMGR: 0,,16" and contains PDU
@@ -40,14 +40,73 @@ fn test_store_and_read_sms() {
 
     // PDU Length = 16
     when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW}"));
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
     then_response_contains(&mut world, "A", "+CMGW: 1");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CMGR=1");
-    then_response_contains(&mut world, "A", &format!("+CMGR: 0,,{TEST_SMS_PDU_LEN_CMGW}"));
+    then_response_contains(&mut world, "A", &format!("+CMGR: 2,,{TEST_SMS_TPDU_LEN}"));
+    then_response_is(&mut world, "A", TEST_SMS_PDU);
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_store_sms_with_stat() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Test AT+CMGW=<length>,<stat> syntax with stat = 0 (REC UNREAD)
+    when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW},0"));
+    then_prompt_is(&mut world, "A", "> ");
+
+    when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
+    then_response_contains(&mut world, "A", "+CMGW: 1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGR=1");
+    then_response_contains(&mut world, "A", &format!("+CMGR: 0,,{TEST_SMS_TPDU_LEN}"));
+    then_response_is(&mut world, "A", TEST_SMS_PDU);
+    then_response_is(&mut world, "A", "OK");
+
+    // Test AT+CMGW=<length>,<stat> syntax with stat = 1 (REC READ)
+    when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW},1"));
+    then_prompt_is(&mut world, "A", "> ");
+
+    when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
+    then_response_contains(&mut world, "A", "+CMGW: 2");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGR=2");
+    then_response_contains(&mut world, "A", &format!("+CMGR: 1,,{TEST_SMS_TPDU_LEN}"));
+    then_response_is(&mut world, "A", TEST_SMS_PDU);
+    then_response_is(&mut world, "A", "OK");
+
+    // Test AT+CMGW=<length>,<stat> syntax with stat = 3 (STO SENT)
+    when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW},3"));
+    then_prompt_is(&mut world, "A", "> ");
+
+    when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
+    then_response_contains(&mut world, "A", "+CMGW: 3");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGR=3");
+    then_response_contains(&mut world, "A", &format!("+CMGR: 3,,{TEST_SMS_TPDU_LEN}"));
+    then_response_is(&mut world, "A", TEST_SMS_PDU);
+    then_response_is(&mut world, "A", "OK");
+
+    // Test AT+CMGW=<length> syntax without stat defaults to stat = 2 (STO UNSENT)
+    // per TS 27.005
+    when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW}"));
+    then_prompt_is(&mut world, "A", "> ");
+
+    when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
+    then_response_contains(&mut world, "A", "+CMGW: 4");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CMGR=4");
+    then_response_contains(&mut world, "A", &format!("+CMGR: 2,,{TEST_SMS_TPDU_LEN}"));
     then_response_is(&mut world, "A", TEST_SMS_PDU);
     then_response_is(&mut world, "A", "OK");
 }
@@ -71,14 +130,14 @@ fn test_store_and_read_sms_on_sim() {
     then_wait_for_response_containing(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW}"));
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
     then_response_contains(&mut world, "A", "+CMGW: 1");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CMGR=1");
-    then_response_contains(&mut world, "A", &format!("+CMGR: 0,,{TEST_SMS_PDU_LEN_CMGW}"));
+    then_response_contains(&mut world, "A", &format!("+CMGR: 2,,{TEST_SMS_TPDU_LEN}"));
     then_response_is(&mut world, "A", TEST_SMS_PDU);
     then_response_is(&mut world, "A", "OK");
 }
@@ -105,7 +164,7 @@ fn test_delete_sms() {
     then_wait_for_response_containing(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW}"));
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
     then_response_contains(&mut world, "A", "+CMGW: 1");
@@ -129,7 +188,7 @@ fn test_delete_sms_on_sim() {
     then_wait_for_response_containing(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_PDU_LEN_CMGW}"));
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     when_hex_bytes_sent(&mut world, "A", TEST_SMS_PDU_WITH_CTRL_Z);
     then_response_contains(&mut world, "A", "+CMGW: 1");
@@ -302,6 +361,25 @@ fn test_set_preferred_message_storage() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_set_preferred_message_storage_partial_and_invalid() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Partial update: set only storage1 to "SM", storage2 and storage3 remain
+    // default "ME"
+    when_at_command_sent(&mut world, "A", "AT+CPMS=\"SM\"");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CPMS?");
+    then_response_contains(&mut world, "A", "+CPMS: \"SM\",0,255,\"ME\",0,255,\"ME\",0,255");
+    then_response_is(&mut world, "A", "OK");
+
+    // Invalid storage string returns ERROR
+    when_at_command_sent(&mut world, "A", "AT+CPMS=\"INVALID\"");
+    then_response_is(&mut world, "A", "ERROR");
+}
+
 // Scenario: Send SMS Text Mode
 //   Given a modem "A"
 //   And a modem "B" with number "12345"
@@ -327,7 +405,7 @@ fn test_send_sms_text_mode() {
     then_response_is(&mut world, "B", "OK");
 
     when_at_command_sent(&mut world, "A", &format!("AT+CMGS=\"{SMS_RECEIVER}\""));
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     // Hello + Ctrl-Z
     when_hex_bytes_sent(&mut world, "A", TEXT_SMS_BODY_HEX);
@@ -403,7 +481,7 @@ fn test_sms_send_abort() {
 
     // Start SMS send (PDU mode)
     when_at_command_sent(&mut world, "A", &format!("AT+CMGS={TEST_SMS_TPDU_LEN}"));
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     // Send ESC (1B) to abort
     when_hex_bytes_sent(&mut world, "A", "1B");
@@ -436,7 +514,7 @@ fn test_sms_pdu_error_when_sim_absent() {
     // Start SMS store (PDU mode)
     // AT+CMGW=<length>
     when_at_command_sent(&mut world, "A", &format!("AT+CMGW={TEST_SMS_TPDU_LEN}"));
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     // Send PDU data + Ctrl+Z (0x1A)
     // Since SIM is absent, this should return ERROR (translated from
@@ -498,7 +576,7 @@ fn test_sms_status_report() {
 
     // Send SMS with SRR from A to B
     when_at_command_sent(&mut world, "A", "AT+CMGS=15");
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     // PDU with SRR (0x31)
     let pdu_with_srr_ctrl_z = "0031000B915155255155F40000AA01F01A";
@@ -533,7 +611,7 @@ fn test_sms_status_report_rejected() {
     then_response_is(&mut world, "B", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CMGS=15");
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     let pdu_with_srr_ctrl_z = "0031000B915155255155F40000AA01F01A";
     when_hex_bytes_sent(&mut world, "A", pdu_with_srr_ctrl_z);
@@ -568,7 +646,7 @@ fn test_sms_stop_and_wait_fifo_delivery() {
 
     // 1. A sends SMS 1 with SRR to B
     when_at_command_sent(&mut world, "A", "AT+CMGS=15");
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     let pdu1 = "0031000B915155255155F40000AA01F01A";
     when_hex_bytes_sent(&mut world, "A", pdu1);
@@ -582,7 +660,7 @@ fn test_sms_stop_and_wait_fifo_delivery() {
 
     // 2. C sends SMS 2 with SRR to B (while B has NOT acknowledged SMS 1 yet)
     when_at_command_sent(&mut world, "C", "AT+CMGS=15");
-    then_response_is(&mut world, "C", "> ");
+    then_prompt_is(&mut world, "C", "> ");
 
     let pdu2 = "0031000B915155255155F40000AA01F11A";
     when_hex_bytes_sent(&mut world, "C", pdu2);

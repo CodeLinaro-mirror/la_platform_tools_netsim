@@ -363,31 +363,28 @@ impl ModemImpl {
     /// Receives an AT command from the modem.
     pub fn receive_at_command(&mut self, command_bytes: &[u8]) -> Vec<ModemEffect> {
         // Check for SMS PDU submission first. This requires special state handling.
-        let sms_pdu_action = if self.sms_service.waiting_for_pdu_len.is_some() {
+        let sms_pdu_action = if let Some(waiting) = self.sms_service.waiting_for_pdu {
             if command_bytes.ends_with(b"\x1a") {
                 let pdu = &command_bytes[..command_bytes.len() - 1];
-                let store = self.sms_service.waiting_for_pdu_store;
 
-                let sms_res = if store {
-                    self.sms_service.handle_store_sms(&mut self.sim_service, pdu)
+                let sms_res = if waiting.store {
+                    self.sms_service.handle_store_sms(&mut self.sim_service, pdu, waiting.stat)
                 } else {
                     let sender = self.phone_number();
                     let sender_str = sender.as_ref().map(|n| n.as_str()).unwrap_or("");
-                    self.sms_service.handle_sms_body(pdu, sender_str)
+                    self.sms_service.handle_send_sms(pdu, sender_str)
                 };
 
                 let exec_res: ExecutionResult = sms_res.into();
 
                 // Clear waiting state
-                self.sms_service.waiting_for_pdu_len = None;
-                self.sms_service.waiting_for_pdu_store = false;
+                self.sms_service.waiting_for_pdu = None;
 
                 Some(exec_res)
             } else if command_bytes.contains(&0x1b) {
                 // ESC
                 // Abort
-                self.sms_service.waiting_for_pdu_len = None;
-                self.sms_service.waiting_for_pdu_store = false;
+                self.sms_service.waiting_for_pdu = None;
                 Some(ExecutionResult::Success(HandledCommand::ok()))
             } else {
                 None // Return None to wait for more data if the buffer is incomplete.

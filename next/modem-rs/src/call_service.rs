@@ -35,7 +35,7 @@ pub enum CallCommand<'a> {
     SendDtmf(#[parser(parse_raw_data)] &'a [u8]),
     /// VENDOR: Set emergency mode
     #[command(tag = "AT+WSOS=")]
-    SetEmergencyMode(u8),
+    SetEmergencyMode(bool),
     /// VENDOR: Query emergency mode
     #[command(tag = "AT+WSOS?")]
     QueryEmergencyMode,
@@ -685,8 +685,8 @@ impl CallService {
         }
     }
 
-    fn handle_set_emergency_mode(&mut self, mode: u8) -> CallResult {
-        self.emergency_mode = mode == 1;
+    fn handle_set_emergency_mode(&mut self, mode: bool) -> CallResult {
+        self.emergency_mode = mode;
         Ok(None)
     }
 
