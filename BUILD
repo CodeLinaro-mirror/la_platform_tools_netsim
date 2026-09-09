@@ -37,7 +37,7 @@ genrule(
     name = "netsim_netlink_rust_gen",
     srcs = ["pdl/netlink.pdl"],
     outs = ["netlink_packets.rs"],
-    cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    cmd = "$(execpath @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
     visibility = [
         "//next/packets:__pkg__",
@@ -49,7 +49,7 @@ genrule(
     name = "netsim_mac80211_hwsim_rust_gen",
     srcs = ["pdl/mac80211_hwsim.pdl"],
     outs = ["mac80211_hwsim_packets.rs"],
-    cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    cmd = "$(execpath @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
     visibility = [
         "//next/packets:__pkg__",
@@ -61,7 +61,7 @@ genrule(
     name = "netsim_ieee80211_rust_gen",
     srcs = ["pdl/ieee80211.pdl"],
     outs = ["ieee80211_packets.rs"],
-    cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    cmd = "$(execpath @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
     visibility = [
         "//next/packets:__pkg__",
@@ -73,7 +73,7 @@ genrule(
     name = "netsim_llc_rust_gen",
     srcs = ["pdl/llc.pdl"],
     outs = ["llc_packets.rs"],
-    cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    cmd = "$(execpath @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
     visibility = [
         "//next/packets:__pkg__",
@@ -85,7 +85,7 @@ genrule(
     name = "netsim_link_layer_packets_rust_gen",
     srcs = ["@rootcanal//:packets/link_layer_packets.pdl"],
     outs = ["link_layer_packets.rs"],
-    cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    cmd = "$(execpath @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
     visibility = [
         "//next/packets:__pkg__",

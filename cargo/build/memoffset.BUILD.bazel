@@ -1,0 +1,21 @@
+load("@rules_license//rules:license.bzl", "license")
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(
+    default_applicable_licenses = [":license"],
+    default_visibility = ["//visibility:public"],
+)
+
+license(
+    name = "license",
+    license_kinds = [
+        "@rules_license//licenses/spdx:MIT",
+    ],
+    visibility = [":__subpackages__"],
+)
+
+rust_library(
+    name = "memoffset",
+    srcs = glob(["src/*.rs"]),
+    edition = "2018",
+)

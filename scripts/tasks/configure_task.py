@@ -9,7 +9,7 @@ import platform
 import shutil
 from tasks.task import Task
 from utils import (
-    AOSP_ROOT,
+    NETSIM_ROOT,
     get_bazel_path,
     get_bazel_startup_options,
     run,
@@ -41,6 +41,6 @@ class ConfigureTask(Task):
           [bazel] + startup_options + ["clean", "--expunge"],
           self.env,
           "bazel clean",
-          AOSP_ROOT,
+          NETSIM_ROOT,
       )
     return True
