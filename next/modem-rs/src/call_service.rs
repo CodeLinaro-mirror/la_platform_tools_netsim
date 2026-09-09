@@ -6,17 +6,16 @@ use tracing::debug;
 
 use crate::{
     data_service::DataService,
-    parser::parse_raw_data,
     sim_service::SimService,
     types::{
-        CallHoldAction, CallHoldParam, ClirMode, CmeError, CommandAction, DialArgs,
+        CallHoldAction, CallHoldParam, ClirMode, CmeError, CommandAction, DialArgs, DtmfArgs,
         ExecutionResult, ModemId, NumberPresentation, Parsable, PhoneNumber,
     },
 };
 
 /// Call service AT commands.
 #[derive(Debug, PartialEq, Clone, CommandParser)]
-pub enum CallCommand<'a> {
+pub enum CallCommand {
     #[command(tag = "ATD")]
     Dial(DialArgs),
     #[command(tag = "ATA")]
@@ -28,11 +27,11 @@ pub enum CallCommand<'a> {
     #[command(tag = "AT+CLCC")]
     QueryCurrentCalls,
     #[command(tag = "AT+CMUT=")]
-    SetMute(u8),
+    SetMute(bool),
     #[command(tag = "AT+CMUT?")]
     QueryMute,
     #[command(tag = "AT+VTS=")]
-    SendDtmf(#[parser(parse_raw_data)] &'a [u8]),
+    SendDtmf(DtmfArgs),
     /// VENDOR: Set emergency mode
     #[command(tag = "AT+WSOS=")]
     SetEmergencyMode(bool),
@@ -220,6 +219,21 @@ impl CallService {
         self.calls.retain(|c| c.peer_id != Some(peer_id));
     }
 
+    pub fn hangup_all(&mut self, id: ModemId) -> Vec<CommandAction> {
+        let actions: Vec<CommandAction> = self
+            .calls
+            .iter()
+            .filter_map(|call| {
+                call.peer_id.map(|peer_id| CommandAction::HangupCall {
+                    initiator: id,
+                    target_peer: peer_id,
+                })
+            })
+            .collect();
+        self.calls.clear();
+        actions
+    }
+
     pub fn handle_ring_timeout(&mut self, id: ModemId, _call_token: u32) -> CallResult {
         let mut actions = Vec::new();
         self.calls.retain(|call| {
@@ -232,7 +246,7 @@ impl CallService {
                 true
             }
         });
-        if !actions.is_empty() { Ok(Some(CallResponse::WithActions(actions))) } else { Ok(None) }
+        Ok(Some(CallResponse::WithActions(actions)))
     }
 
     pub fn ring(
@@ -349,7 +363,7 @@ impl CallService {
         // GPRS dial commands (e.g. ATD*99#) are GPRS packet-data requests and are
         // handled by DataService.
         if args.number.is_gprs_dial() {
-            return data_service.handle_gprs_dial(args.number.as_str().as_bytes()).into();
+            return data_service.handle_gprs_dial(args.number.as_str()).into();
         }
 
         let result = self.handle_voice_dial(id, args, sim_service, clir_mode);
@@ -427,18 +441,7 @@ impl CallService {
         if self.is_idle() {
             return Err(ExecutionResult::error());
         }
-        let actions: Vec<CommandAction> = self
-            .calls
-            .iter()
-            .filter_map(|call| {
-                call.peer_id.map(|peer_id| CommandAction::HangupCall {
-                    initiator: id,
-                    target_peer: peer_id,
-                })
-            })
-            .collect();
-        self.calls.clear();
-        if !actions.is_empty() { Ok(Some(CallResponse::WithActions(actions))) } else { Ok(None) }
+        Ok(Some(CallResponse::WithActions(self.hangup_all(id))))
     }
 
     fn handle_call_hold(&mut self, chld: CallHoldParam, id: ModemId) -> CallResult {
@@ -461,10 +464,9 @@ impl CallService {
             return Err(ExecutionResult::error());
         }
 
-        match op {
+        let actions = match op {
             CallHoldAction::ReleaseHeld => {
                 let mut actions = Vec::new();
-                let prev_len = self.calls.len();
                 let has_inbound = self.has_inbound();
                 self.calls.retain(|call| {
                     let should_drop = if has_inbound {
@@ -484,9 +486,7 @@ impl CallService {
                         true
                     }
                 });
-                if self.calls.len() < prev_len {
-                    return Ok(Some(CallResponse::WithActions(actions)));
-                }
+                actions
             }
             CallHoldAction::ReleaseAndAccept => {
                 let mut actions = Vec::new();
@@ -530,9 +530,7 @@ impl CallService {
                         }
                     }
                 }
-                if !actions.is_empty() {
-                    return Ok(Some(CallResponse::WithActions(actions)));
-                }
+                actions
             }
             CallHoldAction::HoldAndAccept => {
                 let mut actions = Vec::new();
@@ -584,9 +582,7 @@ impl CallService {
                         }
                     }
                 }
-                if !actions.is_empty() {
-                    return Ok(Some(CallResponse::WithActions(actions)));
-                }
+                actions
             }
             CallHoldAction::Conference => {
                 if !self.has_active() || !self.has_held() {
@@ -611,9 +607,7 @@ impl CallService {
                         _ => {}
                     }
                 }
-                if !actions.is_empty() {
-                    return Ok(Some(CallResponse::WithActions(actions)));
-                }
+                actions
             }
             CallHoldAction::Transfer => {
                 // ECT: Connect remote parties and disconnect us.
@@ -625,9 +619,9 @@ impl CallService {
             CallHoldAction::UserToUserSignaling => {
                 return Err(ExecutionResult::error());
             }
-        }
+        };
         debug!("[CallService] Calls after hold op: {:?}", self.calls);
-        Ok(None)
+        Ok(Some(CallResponse::WithActions(actions)))
     }
 
     fn handle_query_current_calls(&self) -> CallResult {
@@ -663,11 +657,8 @@ impl CallService {
         Ok(Some(CallResponse::WithActions(vec![CommandAction::InitiateRemoteCall(number)])))
     }
 
-    fn handle_set_mute(&mut self, mute: u8) -> CallResult {
-        if mute > 1 {
-            return Err(ExecutionResult::error());
-        }
-        self.mute = mute == 1;
+    fn handle_set_mute(&mut self, mute: bool) -> CallResult {
+        self.mute = mute;
         Ok(None)
     }
 
@@ -675,14 +666,9 @@ impl CallService {
         Ok(Some(CallResponse::Mute(self.mute)))
     }
 
-    fn handle_send_dtmf(&self, dtmf: &[u8]) -> CallResult {
-        debug!("[CallService] Send DTMF: {}", String::from_utf8_lossy(dtmf));
-
-        if std::str::from_utf8(dtmf).is_ok_and(is_valid_dtmf_format) {
-            Ok(None)
-        } else {
-            Err(ExecutionResult::error())
-        }
+    fn handle_send_dtmf(&self, dtmf: &DtmfArgs) -> CallResult {
+        debug!("[CallService] Send DTMF: {}", dtmf.tone);
+        Ok(None)
     }
 
     fn handle_set_emergency_mode(&mut self, mode: bool) -> CallResult {
@@ -694,9 +680,9 @@ impl CallService {
         Ok(Some(CallResponse::EmergencyMode(self.emergency_mode)))
     }
 
-    pub fn execute<'a>(
+    pub fn execute(
         &mut self,
-        command: &CallCommand<'a>,
+        command: &CallCommand,
         id: ModemId,
         data_service: &mut DataService,
         sim_service: &SimService,
@@ -722,26 +708,6 @@ impl CallService {
     }
 }
 
-fn is_valid_dtmf_format(dtmf_str: &str) -> bool {
-    let (digit_part, duration_part) =
-        dtmf_str.split_once(',').map(|(d, dur)| (d, Some(dur))).unwrap_or((dtmf_str, None));
-
-    let clean_digit = digit_part.trim_matches('"');
-    if clean_digit.len() != 1 {
-        return false;
-    }
-    let digit = clean_digit.as_bytes()[0];
-    if !matches!(digit, b'0'..=b'9' | b'#' | b'*' | b'A'..=b'D' | b'a'..=b'd') {
-        return false;
-    }
-
-    if duration_part.is_some_and(|dur| dur.is_empty() || !dur.chars().all(|c| c.is_ascii_digit())) {
-        return false;
-    }
-
-    true
-}
-
 #[cfg(test)]
 mod tests {
     use super::{CallDirection, CallService, CallState};
@@ -753,7 +719,7 @@ mod tests {
         service.add_call(
             CallState::Incoming,
             CallDirection::Incoming,
-            Some(PhoneNumber::new("123456")),
+            Some(PhoneNumber::new_for_test("123456")),
             NumberPresentation::NotAvailable,
             None,
         );

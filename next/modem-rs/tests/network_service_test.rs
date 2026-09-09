@@ -609,6 +609,33 @@ fn test_network_registration_radio_cycle_cfun_4() {
 }
 
 #[test]
+fn test_radio_power_with_reset() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    // Initialize modem and attach to network
+    when_at_command_sent(&mut world, "A", "AT+CREG=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
+
+    // Send AT+CFUN=1,1 (reset while staying at full power)
+    when_at_command_sent(&mut world, "A", "AT+CFUN=1,1");
+    then_response_is(&mut world, "A", "+CREG: 0");
+    then_response_is(&mut world, "A", "OK");
+
+    // After 10ms delay, modem re-attaches
+    when_time_advances_ms(&mut world, 10);
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
+}
+
+#[test]
 fn test_network_registration_queries() {
     for cmd in ["CREG", "CGREG", "CEREG"] {
         let mut world = World::new();

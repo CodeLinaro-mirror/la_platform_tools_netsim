@@ -9,6 +9,7 @@ use std::{
 };
 
 use modem_rs_derive::CommandParser;
+use nom::IResult;
 
 use crate::{
     cuttlefish::read_cuttlefish_config,
@@ -16,7 +17,8 @@ use crate::{
     parser::QuotedString,
     types::{
         DEFAULT_DNS, DEFAULT_GATEWAY, DEFAULT_IPV4_ADDR, DEFAULT_IPV6_ADDR, DEFAULT_IPV6_DNS,
-        DEFAULT_IPV6_GATEWAY, DEFAULT_IPV6_PREFIX, ExecutionResult, Parsable, PdpType,
+        DEFAULT_IPV6_GATEWAY, DEFAULT_IPV6_PREFIX, ExecutionResult, Layer2Protocol,
+        PacketEventReportingMode, Parsable, PdpContextActivateArgs, PdpType,
     },
 };
 
@@ -35,35 +37,35 @@ pub enum DataCommand<'a> {
     #[command(tag = "AT+CGDCONT?")]
     QueryPdpContext,
     #[command(tag = "AT+CGEQMIN=")]
-    SetQualityOfServiceMinimum(u8, u8, u8, u8, u8, u8),
+    SetQualityOfServiceMinimum(u8, Qos),
     #[command(tag = "AT+CGEQMIN?")]
     QueryQualityOfServiceMinimum,
     #[command(tag = "AT+CGEQREQ=")]
-    SetQualityOfServiceRequested(u8, u8, u8, u8, u8, u8),
+    SetQualityOfServiceRequested(u8, Qos),
     #[command(tag = "AT+CGEQREQ?")]
     QueryQualityOfServiceRequested,
     #[command(tag = "AT+CGQMIN=")]
-    SetQualityOfServiceMinimumGprs(u8, u8, u8, u8, u8, u8),
+    SetQualityOfServiceMinimumGprs(u8, Qos),
     #[command(tag = "AT+CGQMIN?")]
     QueryQualityOfServiceMinimumGprs,
     #[command(tag = "AT+CGQREQ=")]
-    SetQualityOfServiceRequestedGprs(u8, u8, u8, u8, u8, u8),
+    SetQualityOfServiceRequestedGprs(u8, Qos),
     #[command(tag = "AT+CGQREQ?")]
     QueryQualityOfServiceRequestedGprs,
     #[command(tag = "AT+CGACT=")]
-    SetPdpContextActivate(u8, u8),
+    SetPdpContextActivate(PdpContextActivateArgs),
     #[command(tag = "AT+CGACT?")]
     QueryPdpContextActivate,
     #[command(tag = "AT+CGATT=")]
-    SetPsAttach(u8),
+    SetPsAttach(bool),
     #[command(tag = "AT+CGATT?")]
     QueryPsAttach,
     #[command(tag = "AT+CGCMOD=")]
     SetPdpContextModify(u8),
     #[command(tag = "AT+CGDATA=")]
-    EnterDataState(u8),
+    EnterDataState(Option<QuotedString<'a>>, Option<u8>),
     #[command(tag = "AT+CGEREP=")]
-    SetPacketEventReporting(u8, u8),
+    SetPacketEventReporting(PacketEventReportingMode, Option<bool>),
     #[command(tag = "AT+CGPADDR=")]
     ShowPdpAddress(u8),
     #[command(tag = "AT+CGCONTRDP=")]
@@ -78,7 +80,7 @@ pub enum QosType {
     RequestedGprs,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Qos {
     pub precedence: u8,
     pub delay: u8,
@@ -90,6 +92,22 @@ pub struct Qos {
 impl Qos {
     pub const fn new(precedence: u8, delay: u8, reliability: u8, peak: u8, mean: u8) -> Self {
         Self { precedence, delay, reliability, peak, mean }
+    }
+}
+
+impl<'a> Parsable<'a> for Qos {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        use nom::bytes::complete::tag;
+        let (input, precedence) = u8::parse(input)?;
+        let (input, _) = tag(b",")(input)?;
+        let (input, delay) = u8::parse(input)?;
+        let (input, _) = tag(b",")(input)?;
+        let (input, reliability) = u8::parse(input)?;
+        let (input, _) = tag(b",")(input)?;
+        let (input, peak) = u8::parse(input)?;
+        let (input, _) = tag(b",")(input)?;
+        let (input, mean) = u8::parse(input)?;
+        Ok((input, Qos::new(precedence, delay, reliability, peak, mean)))
     }
 }
 
@@ -312,7 +330,7 @@ impl DataService {
             cid,
             PdpContext {
                 pdp_type,
-                apn: String::from_utf8(apn.to_vec()).unwrap_or_default(),
+                apn: apn.as_str().to_string(),
                 active: self.ps_attached, // Goldfish expects data to be auto-activated
                 qos: Qos::default(),
                 req_qos: Qos::default(),
@@ -351,7 +369,7 @@ impl DataService {
             let qos_list = self
                 .pdp_contexts
                 .iter()
-                .map(|(cid, context)| (*cid, context.qos(qos_type).clone()))
+                .map(|(cid, context)| (*cid, *context.qos(qos_type)))
                 .collect();
             let response = match qos_type {
                 QosType::Minimum => DataResponse::QosMinimum(qos_list),
@@ -363,21 +381,25 @@ impl DataService {
         }
     }
 
-    pub fn handle_set_pdp_context_activate(&mut self, cid: u8, state: u8) -> DataResult {
+    pub fn handle_set_pdp_context_activate(&mut self, cid: u8, state: bool) -> DataResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.active = state == 1;
+            context.active = state;
             Ok(None)
         } else {
             Err(ExecutionResult::error())
         }
     }
 
-    pub fn handle_set_ps_attach(&mut self, state: u8) -> DataResult {
-        self.ps_attached = state == 1;
+    pub fn deactivate_all(&mut self) {
+        for context in self.pdp_contexts.values_mut() {
+            context.active = false;
+        }
+    }
+
+    pub fn handle_set_ps_attach(&mut self, state: bool) -> DataResult {
+        self.ps_attached = state;
         if !self.ps_attached {
-            for context in self.pdp_contexts.values_mut() {
-                context.active = false;
-            }
+            self.deactivate_all();
         }
         Ok(None)
     }
@@ -402,7 +424,15 @@ impl DataService {
         if self.pdp_contexts.contains_key(&cid) { Ok(None) } else { Err(ExecutionResult::error()) }
     }
 
-    pub fn handle_enter_data_state(&self, cid: u8) -> DataResult {
+    pub fn handle_enter_data_state(
+        &self,
+        l2p: Option<QuotedString<'_>>,
+        cid: Option<u8>,
+    ) -> DataResult {
+        if l2p.is_some_and(|l| l.as_str().parse::<Layer2Protocol>().is_err()) {
+            return Err(ExecutionResult::error());
+        }
+        let cid = cid.unwrap_or(1);
         match self.pdp_contexts.get(&cid) {
             Some(context) if context.active => Ok(Some(DataResponse::Connect)),
             _ => Err(ExecutionResult::error()),
@@ -558,7 +588,7 @@ impl DataService {
         }
     }
 
-    pub fn handle_gprs_dial(&mut self, number: &[u8]) -> DataResult {
+    pub fn handle_gprs_dial(&mut self, number: &str) -> DataResult {
         match parse_cid_from_gprs_dial(number) {
             Ok(cid) => {
                 if let Some(context) = self.pdp_contexts.get_mut(&cid) {
@@ -579,40 +609,35 @@ impl DataService {
             }
             DataCommand::QueryPdpContext => self.handle_query_pdp_context(),
             DataCommand::QueryQualityOfServiceMinimum => self.handle_query_qos(QosType::Minimum),
-            DataCommand::SetQualityOfServiceMinimum(cid, p, d, r, peak, mean) => {
-                self.handle_set_qos(QosType::Minimum, *cid, Qos::new(*p, *d, *r, *peak, *mean))
+            DataCommand::SetQualityOfServiceMinimum(cid, qos) => {
+                self.handle_set_qos(QosType::Minimum, *cid, *qos)
             }
-            DataCommand::SetQualityOfServiceRequested(cid, p, d, r, peak, mean) => {
-                self.handle_set_qos(QosType::Requested, *cid, Qos::new(*p, *d, *r, *peak, *mean))
+            DataCommand::SetQualityOfServiceRequested(cid, qos) => {
+                self.handle_set_qos(QosType::Requested, *cid, *qos)
             }
             DataCommand::QueryQualityOfServiceRequested => {
                 self.handle_query_qos(QosType::Requested)
             }
-            DataCommand::SetQualityOfServiceMinimumGprs(cid, p, d, r, peak, mean) => {
-                self.handle_set_qos(QosType::MinimumGprs, *cid, Qos::new(*p, *d, *r, *peak, *mean))
+            DataCommand::SetQualityOfServiceMinimumGprs(cid, qos) => {
+                self.handle_set_qos(QosType::MinimumGprs, *cid, *qos)
             }
             DataCommand::QueryQualityOfServiceMinimumGprs => {
                 self.handle_query_qos(QosType::MinimumGprs)
             }
-            DataCommand::SetQualityOfServiceRequestedGprs(cid, p, d, r, peak, mean) => self
-                .handle_set_qos(QosType::RequestedGprs, *cid, Qos::new(*p, *d, *r, *peak, *mean)),
+            DataCommand::SetQualityOfServiceRequestedGprs(cid, qos) => {
+                self.handle_set_qos(QosType::RequestedGprs, *cid, *qos)
+            }
             DataCommand::QueryQualityOfServiceRequestedGprs => {
                 self.handle_query_qos(QosType::RequestedGprs)
             }
-            DataCommand::SetPdpContextActivate(state, cid) => {
-                // Compatibility hack for legacy Goldfish/Reference RIL.
-                // It sends AT+CGACT using non-standard <cid>,<state> format.
-                // We detect this by checking if the parsed state is > 1 (which means it's
-                // actually the CID) or if the parsed CID is 0 (which means it's the state 0).
-                let (real_cid, real_state) =
-                    if *state > 1 || *cid == 0 { (*state, *cid) } else { (*cid, *state) };
-                self.handle_set_pdp_context_activate(real_cid, real_state)
+            DataCommand::SetPdpContextActivate(args) => {
+                self.handle_set_pdp_context_activate(args.cid, args.state)
             }
             DataCommand::QueryPdpContextActivate => self.handle_query_pdp_context_activate(),
             DataCommand::SetPsAttach(state) => self.handle_set_ps_attach(*state),
             DataCommand::QueryPsAttach => self.handle_query_ps_attach(),
             DataCommand::SetPdpContextModify(cid) => self.handle_set_pdp_context_modify(*cid),
-            DataCommand::EnterDataState(cid) => self.handle_enter_data_state(*cid),
+            DataCommand::EnterDataState(l2p, cid) => self.handle_enter_data_state(*l2p, *cid),
             DataCommand::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
             DataCommand::ShowPdpAddress(cid) => self.handle_show_pdp_address(*cid),
             DataCommand::ReadDynamicParam(cid) => self.handle_read_dynamic_param(*cid),
@@ -621,12 +646,12 @@ impl DataService {
     }
 }
 
-fn parse_cid_from_gprs_dial(number: &[u8]) -> Result<u8, ()> {
-    let trimmed = number.strip_suffix(b"#").ok_or(())?;
-    let parts: Vec<&[u8]> = trimmed.split(|&b| b == b'*').collect();
+fn parse_cid_from_gprs_dial(number: &str) -> Result<u8, ()> {
+    let trimmed = number.strip_suffix('#').ok_or(())?;
+    let parts: Vec<&str> = trimmed.split('*').collect();
 
     // Expecting a format like *99, *99*<cid>, or *99***<cid> (at most 5 segments)
-    if parts.len() < 2 || parts.len() > 5 || !parts[0].is_empty() || parts[1] != b"99" {
+    if parts.len() < 2 || parts.len() > 5 || !parts[0].is_empty() || parts[1] != "99" {
         return Err(());
     }
 
@@ -640,8 +665,7 @@ fn parse_cid_from_gprs_dial(number: &[u8]) -> Result<u8, ()> {
     if last_part.is_empty() {
         return Err(());
     }
-    let cid_str = std::str::from_utf8(last_part).map_err(|_err| ())?;
-    let cid = cid_str.parse::<u8>().map_err(|_err| ())?;
+    let cid = last_part.parse::<u8>().map_err(|_err| ())?;
     Ok(cid)
 }
 
@@ -653,11 +677,11 @@ mod tests {
     #[test]
     fn test_data_service_dial_direct() {
         let mut service = DataService::default();
-        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b"test"));
+        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString("test"));
         assert!(res.is_ok());
 
         // Dial
-        let res: ExecutionResult = service.handle_gprs_dial(b"*99***1#").into();
+        let res: ExecutionResult = service.handle_gprs_dial("*99***1#").into();
         if let ExecutionResult::Success(handled) = res {
             assert_eq!(handled.responses, vec![Response::Data(DataResponse::Connect)]);
         } else {
@@ -668,30 +692,30 @@ mod tests {
     #[test]
     fn test_data_service_dial_malformed() {
         let mut service = DataService::default();
-        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b"test"));
+        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString("test"));
         assert!(res.is_ok());
 
         // Dial malformed alphanumeric CID
-        let res: ExecutionResult = service.handle_gprs_dial(b"*99*abc#").into();
+        let res: ExecutionResult = service.handle_gprs_dial("*99*abc#").into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
 
         // Dial empty trailing CID
-        let res: ExecutionResult = service.handle_gprs_dial(b"*99*#").into();
+        let res: ExecutionResult = service.handle_gprs_dial("*99*#").into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
     }
 
     #[test]
     fn test_pdp_context_auto_activation() {
         let mut service = DataService::default();
-        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b""));
+        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(""));
         assert!(service.pdp_contexts.get(&1).unwrap().active);
     }
 
     #[test]
     fn test_pdp_context_no_auto_activation_when_detached() {
         let mut service = DataService::default();
-        let _ = service.handle_set_ps_attach(0);
-        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b""));
+        let _ = service.handle_set_ps_attach(false);
+        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(""));
         assert!(!service.pdp_contexts.get(&1).unwrap().active);
     }
 

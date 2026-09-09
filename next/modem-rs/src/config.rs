@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 use crate::{
     apdu,
     constants::{SW_INCORRECT_PARAMS, SW_REFERENCED_DATA_NOT_FOUND, SW_WRONG_LENGTH, UiccFileId},
-    types::Plmn,
+    types::{PhoneNumber, Plmn},
 };
 
 fn deserialize_hex_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
@@ -17,12 +17,28 @@ where
     u16::from_str_radix(&s, 16).map_err(serde::de::Error::custom)
 }
 
+fn deserialize_optional_phone_number<'de, D>(
+    deserializer: D,
+) -> Result<Option<PhoneNumber>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(s) if !s.trim().is_empty() => {
+            s.parse::<PhoneNumber>().map(Some).map_err(serde::de::Error::custom)
+        }
+        _ => Ok(None),
+    }
+}
+
 /// Represents the SIM profile configuration.
 #[derive(Debug, Deserialize, Default, Clone, PartialEq)]
 pub struct SimProfile {
     pub iccid: String,
     pub imsi: String,
-    pub msisdn: String,
+    #[serde(default, deserialize_with = "deserialize_optional_phone_number")]
+    pub msisdn: Option<PhoneNumber>,
     pub pin_profile: PinProfile,
     pub facility_locks: FacilityLocks,
     pub stk: Stk,
@@ -59,7 +75,8 @@ impl SimProfile {
 pub struct ProfileMetadata {
     pub iccid: String,
     pub imsi: String,
-    pub msisdn: String,
+    #[serde(default, deserialize_with = "deserialize_optional_phone_number")]
+    pub msisdn: Option<PhoneNumber>,
     pub home_plmn: Option<Plmn>,
     pub eid: Option<String>,
 }
@@ -863,5 +880,32 @@ mod tests {
         let json4 = r#"{"state": "Blocked"}"#;
         let w4: Wrapper = serde_json::from_str(json4).unwrap();
         assert_eq!(w4.state, PinState::Blocked);
+    }
+
+    #[test]
+    fn test_sim_profile_msisdn_serde() {
+        let mut profile = SimProfile::default();
+        profile.iccid = "123".to_string();
+        profile.imsi = "456".to_string();
+        profile.msisdn = Some(PhoneNumber::new_for_test("+16505550100"));
+
+        let meta = profile.metadata();
+        assert_eq!(meta.msisdn, Some(PhoneNumber::new_for_test("+16505550100")));
+
+        let json_meta_with_num = r#"{"iccid":"123","imsi":"456","msisdn":"+16505550100"}"#;
+        let m1: ProfileMetadata = serde_json::from_str(json_meta_with_num).unwrap();
+        assert_eq!(m1.msisdn, Some(PhoneNumber::new_for_test("+16505550100")));
+
+        let json_meta_empty = r#"{"iccid":"123","imsi":"456","msisdn":""}"#;
+        let m2: ProfileMetadata = serde_json::from_str(json_meta_empty).unwrap();
+        assert_eq!(m2.msisdn, None);
+
+        let json_meta_null = r#"{"iccid":"123","imsi":"456","msisdn":null}"#;
+        let m3: ProfileMetadata = serde_json::from_str(json_meta_null).unwrap();
+        assert_eq!(m3.msisdn, None);
+
+        let json_meta_omitted = r#"{"iccid":"123","imsi":"456"}"#;
+        let m4: ProfileMetadata = serde_json::from_str(json_meta_omitted).unwrap();
+        assert_eq!(m4.msisdn, None);
     }
 }
