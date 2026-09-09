@@ -3,7 +3,23 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use modem_rs::{ModemId, ModemNetworkSimulator, test_utils::MockModemHandler, time::MockClock};
+use modem_rs::{
+    ModemId, ModemNetworkSimulator, SimProfile, test_utils::MockModemHandler, time::MockClock,
+};
+use netsim_model::Quirks;
+
+use crate::steps::{
+    action::{when_at_command_sent, when_time_advances_ms},
+    check::{
+        then_no_response, then_response_contains, then_response_is,
+        then_wait_for_response_containing,
+    },
+    setup::{
+        given_modem, given_modem_with_fdn_sim_profile, given_modem_with_locked_sim,
+        given_modem_with_number, given_modem_with_perm_blocked_sim, given_modem_with_sim_profile,
+        given_modem_with_xml_profile,
+    },
+};
 
 /// The BDD World for Modem-rs tests.
 pub struct World {
@@ -45,5 +61,208 @@ impl World {
         } else {
             panic!("Modem '{name}' not found");
         }
+    }
+
+    // --- BDD Given (Setup / Preconditions) ---
+
+    /// Creates a modem with the given name.
+    pub fn given_modem(&mut self, name: &str) {
+        given_modem(self, name);
+    }
+
+    /// Creates a modem with the given name and phone number.
+    pub fn given_modem_with_number(&mut self, name: &str, number: &str) {
+        given_modem_with_number(self, name, number);
+    }
+
+    /// Creates a modem with the default SIM profile.
+    pub fn given_modem_with_sim_profile(&mut self, name: &str) {
+        given_modem_with_sim_profile(self, name);
+    }
+
+    /// Creates a modem with an FDN-enabled SIM profile.
+    pub fn given_modem_with_fdn_sim_profile(&mut self, name: &str) {
+        given_modem_with_fdn_sim_profile(self, name);
+    }
+
+    /// Creates a modem with a locked SIM profile.
+    pub fn given_modem_with_locked_sim(&mut self, name: &str) {
+        given_modem_with_locked_sim(self, name);
+    }
+
+    /// Creates a modem with a permanently blocked SIM profile.
+    pub fn given_modem_with_perm_blocked_sim(&mut self, name: &str) {
+        given_modem_with_perm_blocked_sim(self, name);
+    }
+
+    /// Creates a modem with an XML SIM profile string.
+    pub fn given_modem_with_xml_profile(&mut self, name: &str, xml: &str) {
+        given_modem_with_xml_profile(self, name, xml);
+    }
+
+    /// Creates a modem with a specific SIM profile.
+    pub fn given_modem_with_profile(&mut self, name: &str, profile: SimProfile) {
+        if self.modems.contains_key(name) {
+            panic!("Modem with name '{name}' already exists");
+        }
+        let id = self.next_modem_id();
+        let (handler, sink) = MockModemHandler::new(false);
+        self.manager
+            .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+            .expect("Failed to create modem with profile");
+        self.modems.insert(name.to_string(), (id, handler));
+    }
+
+    // --- BDD When (Pure Actions / Stimulus) ---
+
+    /// Sends an AT command string to the specified modem without asserting its
+    /// response.
+    pub fn when_at_command(&mut self, name: &str, command: &str) {
+        when_at_command_sent(self, name, command);
+    }
+
+    /// Advances simulated time and ticks the modem network simulator.
+    pub fn when_time_advances_ms(&mut self, ms: u64) {
+        when_time_advances_ms(self, ms);
+    }
+
+    // --- BDD Then (Pure Verifications / Assertions) ---
+
+    /// Asserts that the next response from the modem exactly matches the
+    /// expected string.
+    pub fn then_response_is(&mut self, name: &str, expected: &str) {
+        then_response_is(self, name, expected);
+    }
+
+    /// Asserts that the modem eventually receives a response containing the
+    /// expected substring.
+    pub fn then_response_contains(&mut self, name: &str, expected: &str) {
+        then_response_contains(self, name, expected);
+    }
+
+    /// Asserts that the modem has no pending responses in its queue.
+    pub fn then_no_response(&mut self, name: &str) {
+        then_no_response(self, name);
+    }
+
+    // --- Compound AT Transactions (Action + Assertion) ---
+
+    /// Sends an AT command and asserts an immediate "OK" response.
+    pub fn send_and_expect_ok(&mut self, name: &str, command: &str) {
+        self.when_at_command(name, command);
+        self.then_response_is(name, "OK");
+    }
+
+    /// Sends an AT command and asserts expected sequential lines.
+    pub fn send_and_expect(&mut self, name: &str, command: &str, expected_lines: &[&str]) {
+        self.when_at_command(name, command);
+        for line in expected_lines {
+            self.then_response_is(name, line);
+        }
+    }
+
+    /// Sends an AT command and asserts an expected error response.
+    pub fn send_and_expect_error(&mut self, name: &str, command: &str, expected_error: &str) {
+        self.when_at_command(name, command);
+        self.then_response_is(name, expected_error);
+    }
+
+    // --- Compound Telephony Workflows ---
+
+    /// Dials from `caller` to `callee`'s assigned phone number, verifies `OK`
+    /// on caller, and waits for `RING` on callee.
+    pub fn dial(&mut self, caller: &str, callee: &str) {
+        let (callee_id, _) = self.get_modem(callee);
+        let callee_num: String = self
+            .manager
+            .get_modem(callee_id)
+            .and_then(|m| m.phone_number().map(|p| p.to_string()))
+            .unwrap_or_else(|| panic!("Modem '{callee}' has no assigned phone number"));
+
+        self.dial_number(caller, &callee_num, callee);
+    }
+
+    /// Dials a specific number from `caller`, verifies `OK` on caller, and
+    /// waits for `RING` on `callee`.
+    pub fn dial_number(&mut self, caller: &str, number: &str, callee: &str) {
+        self.send_and_expect_ok(caller, &format!("ATD{number};"));
+        then_wait_for_response_containing(self, callee, "RING");
+    }
+
+    /// `callee` answers incoming call via `ATA`, verifies `OK` on callee,
+    /// and waits for the connection `RING` URC on `caller`.
+    pub fn answer(&mut self, callee: &str, caller: &str) {
+        self.send_and_expect_ok(callee, "ATA");
+        then_wait_for_response_containing(self, caller, "RING");
+    }
+
+    /// Connects a full 2-party voice call from `caller` to `callee`.
+    pub fn connect_call(&mut self, caller: &str, callee: &str) {
+        self.dial(caller, callee);
+        self.answer(callee, caller);
+    }
+
+    /// Swaps active and held calls on the modem via `AT+CHLD=2`.
+    pub fn swap_calls(&mut self, name: &str) {
+        self.send_and_expect_ok(name, "AT+CHLD=2");
+    }
+
+    /// Merges active and held calls into a multi-party conference via
+    /// `AT+CHLD=3`.
+    pub fn conference(&mut self, name: &str) {
+        self.send_and_expect_ok(name, "AT+CHLD=3");
+    }
+
+    /// Connects the host modem to multiple peers sequentially and merges them
+    /// into a conference.
+    pub fn connect_conference(&mut self, host: &str, peers: &[&str]) {
+        for peer in peers {
+            self.connect_call(host, peer);
+        }
+        self.conference(host);
+    }
+
+    /// Releases all active calls via `ATH`.
+    pub fn hangup(&mut self, name: &str) {
+        self.send_and_expect_ok(name, "ATH");
+    }
+
+    /// Releases all held calls or sets User Determined User Busy (UDUB) for a
+    /// waiting call via `AT+CHLD=0`.
+    pub fn release_held_calls(&mut self, name: &str) {
+        self.send_and_expect_ok(name, "AT+CHLD=0");
+    }
+
+    /// Releases all active calls and accepts other (held or waiting) call via
+    /// `AT+CHLD=1`.
+    pub fn release_active_and_accept_held(&mut self, name: &str) {
+        self.send_and_expect_ok(name, "AT+CHLD=1");
+    }
+
+    /// Releases a specific active call index via `AT+CHLD=1{idx}`.
+    pub fn release_call(&mut self, name: &str, idx: usize) {
+        self.send_and_expect_ok(name, &format!("AT+CHLD=1{idx}"));
+    }
+
+    /// Separates a call from multiparty conference or recovers a specific call
+    /// via `AT+CHLD=2{idx}`.
+    pub fn separate_call(&mut self, name: &str, idx: usize) {
+        self.send_and_expect_ok(name, &format!("AT+CHLD=2{idx}"));
+    }
+
+    /// Queries `AT+CLCC` on the modem and asserts all returned `+CLCC:` lines
+    /// followed by `OK`.
+    pub fn assert_clcc(&mut self, name: &str, expected_lines: &[&str]) {
+        self.when_at_command(name, "AT+CLCC");
+        for line in expected_lines {
+            then_wait_for_response_containing(self, name, line);
+        }
+        then_wait_for_response_containing(self, name, "OK");
+    }
+
+    /// Asserts that the modem has zero active, held, or waiting calls
+    /// (`AT+CLCC` returns only `OK`).
+    pub fn assert_idle(&mut self, name: &str) {
+        self.assert_clcc(name, &[]);
     }
 }

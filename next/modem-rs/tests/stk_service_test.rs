@@ -3,6 +3,29 @@
 
 use crate::{steps::*, world::World};
 
+const SETUP_MENU_URC: &str = concat!(
+    "+CUSATP: ",
+    "D0",
+    "48", // Proactive Command: Tag D0, Len 72 (0x48)
+    "81",
+    "03",
+    "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
+    "82",
+    "02",
+    "8182", // Device IDs: UICC (81) to ME (82)
+    "85",
+    "0D",
+    "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
+    "8F",
+    "18",
+    "50",
+    "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
+    "8F",
+    "14",
+    "4E",
+    "80005500530049004D00200043006100720064" // Item 2: ID 0x4E, "USIM Card"
+);
+
 // Scenario: STK Display Text
 //   Given a modem "A"
 //   When AT command 'AT+CUSATE="D1150121810D050448656C6C6F20576F726C64"' is
@@ -217,32 +240,7 @@ fn test_set_stk_ready() {
 
     then_response_is(&mut world, "A", "OK");
     // Expect SET UP MENU URC from the default profile
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: ",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064" // Item 2: ID 0x4E, "USIM Card"
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 }
 
 #[test]
@@ -284,32 +282,7 @@ fn test_stk_submenu_navigation() {
     when_at_command_sent(&mut world, "A", "AT+CUSATD=1,\"010203\"");
     then_response_is(&mut world, "A", "OK");
     // Setup Menu URC
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: ",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064" // Item 2: ID 0x4E, "USIM Card"
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 
     // 2. Select "SIM" (Item 0x50) from main menu via Envelope (Source ME: 82)
     when_at_command_sent(
@@ -482,32 +455,7 @@ fn test_stk_session_terminated_by_user() {
     // 1. Enable STK
     when_at_command_sent(&mut world, "A", "AT+CUSATD=1,\"010203\"");
     then_response_is(&mut world, "A", "OK");
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: ",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064" // Item 2: ID 0x4E, "USIM Card"
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 
     // 2. Select "SIM" (Item 0x50) to go to submenu
     when_at_command_sent(
@@ -610,32 +558,7 @@ fn test_stk_backward_move() {
     // 1. Enable STK
     when_at_command_sent(&mut world, "A", "AT+CUSATD=1,\"010203\"");
     then_response_is(&mut world, "A", "OK");
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: ",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064" // Item 2: ID 0x4E, "USIM Card"
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 
     // 2. Select "SIM" (Item 0x50) to go to submenu
     when_at_command_sent(
@@ -848,32 +771,7 @@ fn test_stk_reporting_disabled() {
     then_response_is(&mut world, "A", "OK");
     // Setup Menu URC is sent because AT+CUSATD enables reporting by default, we
     // consume it.
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: ",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064" // Item 2: ID 0x4E, "USIM Card"
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 
     // Disable reporting via AT+STKUR=0
     when_at_command_sent(&mut world, "A", "AT+STKUR=0");

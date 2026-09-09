@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use modem_rs::profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML};
+
 use crate::{common::constants::*, steps::*, world::World};
 
 // Scenario: Query PIN Status
@@ -1875,62 +1877,28 @@ fn test_crsm_update_record_wrong_length() {
 }
 
 #[test]
-fn test_msisdn_in_default_sim0_profile() {
-    let mut world = World::new();
-    // PROFILE_DEFAULT_XML defines EF_MSISDN in DF_TELECOM (0x7F10) with dummy
-    // number 15551234567
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_DEFAULT_XML);
+fn test_msisdn_profile_reads() {
+    let test_cases = [
+        (PROFILE_DEFAULT_XML, "FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF"),
+        (PROFILE_TEL_ALASKA_XML, "FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF"),
+        (PROFILE_CTS_XML, "00000000000000000000000000000891688118109844F0FFFFFFFFFF"),
+    ];
 
-    // Initial MSISDN should be resolved from DF_TELECOM and overridden to
-    // 15555211001
-    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
-    );
-    then_response_is(&mut world, "A", "OK");
-}
-
-#[test]
-fn test_msisdn_in_tel_alaska_profile() {
-    let mut world = World::new();
-    // PROFILE_TEL_ALASKA_XML defines EF_MSISDN in ADF_USIM (0x7FFF) with dummy
-    // number 15551234567
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_TEL_ALASKA_XML);
-
-    // Initial MSISDN should be resolved from ADF_USIM, populated in DF_TELECOM, and
-    // overridden to 15555211001
-    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
-    );
-    then_response_is(&mut world, "A", "OK");
-}
-
-#[test]
-fn test_msisdn_in_cts_profile() {
-    let mut world = World::new();
-    // PROFILE_CTS_XML defines EF_MSISDN in ADF_USIM (0x7FFF) with custom number
-    // +8618810189440
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
-
-    // Custom non-fallback MSISDN should be preserved from ADF_USIM
-    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CRSM: 144,0,00000000000000000000000000000891688118109844F0FFFFFFFFFF",
-    );
-    then_response_is(&mut world, "A", "OK");
+    for (profile_xml, expected_record_hex) in test_cases {
+        let mut world = World::new();
+        given_modem_with_xml_profile(&mut world, "A", profile_xml);
+        world.send_and_expect(
+            "A",
+            "AT+CRSM=178,28480,1,4,28",
+            &[&format!("+CRSM: 144,0,{expected_record_hex}"), "OK"],
+        );
+    }
 }
 
 #[test]
 fn test_carrier_api_cts_profile_mbdn_update_and_read() {
     let mut world = World::new();
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
+    given_modem_with_xml_profile(&mut world, "A", PROFILE_CTS_XML);
 
     let tag_a_payload =
         "74616741FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF06812143658709FFFFFFFFFFFFFF";
@@ -1976,7 +1944,7 @@ fn test_carrier_api_cts_profile_mbdn_update_and_read() {
 #[test]
 fn test_dual_df_synchronization_mbdn_and_msisdn() {
     let mut world = World::new();
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
+    given_modem_with_xml_profile(&mut world, "A", PROFILE_CTS_XML);
 
     let mbdn_payload =
         "74616741FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF06812143658709FFFFFFFFFFFFFF";
