@@ -83,13 +83,13 @@ pub use crate::initial_info::{ChipInfo, ChipKind};
 pub use crate::link::{Link, LinkId, LinkUpdate};
 // From stats.rs
 pub use crate::stats::{
-    FrontendStats, NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind,
+    FrontendStats, NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind, WifiStats,
 };
 pub use crate::{
     ap::{Ap, ApCreate, ApUpdate, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID, WifiMode},
     bluetooth::{
         BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode, BluetoothUpdate, Controller,
-        DeviceParams, ScannerParams, SnifferParams,
+        DeviceParams, PacketType, ScannerParams, SnifferParams,
         beacon::{
             AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, Interval,
             Service, TxPower,

@@ -206,3 +206,113 @@ pub mod beacon {
         pub data: Vec<u8>,
     }
 }
+
+/// The type of HCI packet exchanged between the Bluetooth chip and higher
+/// layers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PacketType {
+    /// Unspecified packet type containing raw bytes.
+    #[default]
+    HciPacketUnspecified = 0,
+    /// HCI Command packet.
+    Command = 1,
+    /// ACL (asynchronous connectionless) packet.
+    Acl = 2,
+    /// SCO (synchronous connection-oriented) packet.
+    Sco = 3,
+    /// HCI Event packet.
+    Event = 4,
+    /// ISO (isochronous channel) packet.
+    Iso = 5,
+}
+
+impl PacketType {
+    /// Backward-compatible alias for `HciPacketUnspecified`.
+    pub const HCI_PACKET_UNSPECIFIED: Self = Self::HciPacketUnspecified;
+    /// Backward-compatible alias for `Command`.
+    pub const COMMAND: Self = Self::Command;
+    /// Backward-compatible alias for `Acl`.
+    pub const ACL: Self = Self::Acl;
+    /// Backward-compatible alias for `Sco`.
+    pub const SCO: Self = Self::Sco;
+    /// Backward-compatible alias for `Event`.
+    pub const EVENT: Self = Self::Event;
+    /// Backward-compatible alias for `Iso`.
+    pub const ISO: Self = Self::Iso;
+
+    /// Returns the integer value of the packet type.
+    pub fn value(&self) -> i32 {
+        *self as i32
+    }
+
+    /// Converts an integer to `PacketType`, returning `None` if invalid.
+    pub fn from_i32(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::HciPacketUnspecified),
+            1 => Some(Self::Command),
+            2 => Some(Self::Acl),
+            3 => Some(Self::Sco),
+            4 => Some(Self::Event),
+            5 => Some(Self::Iso),
+            _ => None,
+        }
+    }
+
+    /// Converts a byte to `PacketType`, returning `None` if invalid.
+    pub fn from_u8(v: u8) -> Option<Self> {
+        Self::from_i32(v as i32)
+    }
+}
+
+impl From<PacketType> for u8 {
+    fn from(packet_type: PacketType) -> Self {
+        packet_type as u8
+    }
+}
+
+impl From<PacketType> for i32 {
+    fn from(packet_type: PacketType) -> Self {
+        packet_type as i32
+    }
+}
+
+impl From<i32> for PacketType {
+    fn from(v: i32) -> Self {
+        Self::from_i32(v).unwrap_or(Self::HciPacketUnspecified)
+    }
+}
+
+impl From<u8> for PacketType {
+    fn from(v: u8) -> Self {
+        Self::from_u8(v).unwrap_or(Self::HciPacketUnspecified)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_packet_type_conversions_and_values() {
+        assert_eq!(PacketType::default(), PacketType::HciPacketUnspecified);
+        assert_eq!(PacketType::HCI_PACKET_UNSPECIFIED.value(), 0);
+        assert_eq!(PacketType::COMMAND.value(), 1);
+        assert_eq!(PacketType::ACL.value(), 2);
+        assert_eq!(PacketType::SCO.value(), 3);
+        assert_eq!(PacketType::EVENT.value(), 4);
+        assert_eq!(PacketType::ISO.value(), 5);
+
+        assert_eq!(u8::from(PacketType::Command), 1u8);
+        assert_eq!(i32::from(PacketType::Acl), 2i32);
+
+        assert_eq!(PacketType::from(1u8), PacketType::Command);
+        assert_eq!(PacketType::from(2i32), PacketType::Acl);
+        assert_eq!(PacketType::from(99i32), PacketType::HciPacketUnspecified);
+
+        assert_eq!(PacketType::from_i32(3), Some(PacketType::Sco));
+        assert_eq!(PacketType::from_i32(100), None);
+        assert_eq!(PacketType::from_u8(4), Some(PacketType::Event));
+        assert_eq!(PacketType::from_u8(255), None);
+    }
+}
