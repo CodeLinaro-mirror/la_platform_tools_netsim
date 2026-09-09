@@ -280,8 +280,8 @@ missing most of the features and complexity of the C++ `sim_service.cpp`.
 - [x] **Implement full PIN/PUK Management (`AT+CPIN`):**
   - [x] Handle all SIM states (ABSENT, NOT_READY, READY, PIN, PUK).
   - [x] Handle all PIN/PUK operations correctly.
-- [ ] **Implement Facility Lock (`AT+CLCK`):**
-  - [ ] Add support for locking, unlocking, and querying all facilities.
+- [x] **Implement Facility Lock (`AT+CLCK`):**
+  - [x] Add support for locking, unlocking, and querying all facilities.
 - [x] **Enhance Logical Channel Support (`AT+CCHO`, `AT+CCHC`, `AT+CGLA`)**: Implemented basic open/close channel lifecycle and transmit APDU mocking.
   - [x] Add support for Application Identifiers (AIDs).
 - [ ] **eSIM & eUICC Support (GSMA SGP.22 & GlobalPlatform Card Spec)**:

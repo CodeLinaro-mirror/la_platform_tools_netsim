@@ -59,6 +59,8 @@ pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 
 pub const DEFAULT_PIN: &str = "1234";
 pub const DEFAULT_PIN2: &str = "5678";
+pub const DEFAULT_PUK2: &str = "12345678";
+pub const DEFAULT_BARRING_PASSWORD: &str = "0000";
 
 pub const DEFAULT_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
 pub const DEFAULT_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
@@ -1974,31 +1976,156 @@ impl std::fmt::Display for CtecTechnology {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Facility locks supported by AT+CLCK and AT+CPWD.
+///
+/// Ref: 3GPP TS 27.007 § 7.4 (Facility lock +CLCK), § 7.5 (Change password
+/// +CPWD), 3GPP TS 22.088 (Call Barring supplementary services),
+/// 3GPP TS 22.030 § 6.5.6.5 (Supplementary service control codes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Facility {
+    /// SIM lock (PIN1) — "SC" (TS 27.007 § 7.4).
     SimPin,
+    /// SIM PIN2 — "P2" (TS 27.007 § 7.5). Note: Used with +CPWD to change PIN2.
+    SimPin2,
+    /// Fixed Dialing Number — "FD" (TS 27.007 § 7.4).
     FixedDial,
-    Other,
+    /// Bar All Outgoing Calls — "AO" (TS 27.007 § 7.4, TS 22.088 BAOC,
+    /// activation code 33).
+    BarAllOutgoing,
+    /// Bar Outgoing International Calls — "OI" (TS 27.007 § 7.4, TS 22.088
+    /// BOIC, activation code 331).
+    BarOutgoingInternational,
+    /// Bar Outgoing International Calls except to Home PLMN — "OX" (TS 27.007 §
+    /// 7.4, TS 22.088 BOIC-exHC, activation code 332).
+    BarOutgoingInternationalExceptHome,
+    /// Bar All Incoming Calls — "AI" (TS 27.007 § 7.4, TS 22.088 BAIC,
+    /// activation code 35).
+    BarAllIncoming,
+    /// Bar Incoming Calls when Roaming outside the home PLMN country — "IR" (TS
+    /// 27.007 § 7.4, TS 22.088 BIC-Roam, activation code 351).
+    BarIncomingRoaming,
+    /// All Barring Services — "AB" (TS 27.007 § 7.4, TS 22.030 § 6.5.6.5,
+    /// activation code 330).
+    BarAll,
+    /// All Outgoing Barring Services — "AG" (TS 27.007 § 7.4, TS 22.030 §
+    /// 6.5.6.5, activation code 333).
+    BarAllOutgoingServices,
+    /// All Incoming Barring Services — "AC" (TS 27.007 § 7.4, TS 22.030 §
+    /// 6.5.6.5, activation code 353).
+    BarAllIncomingServices,
+    /// Any unrecognized facility string.
+    Unsupported,
+}
+
+impl Facility {
+    /// Returns the standard 3GPP 2-character facility code, or "UNSUPPORTED".
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SimPin => "SC",
+            Self::SimPin2 => "P2",
+            Self::FixedDial => "FD",
+            Self::BarAllOutgoing => "AO",
+            Self::BarOutgoingInternational => "OI",
+            Self::BarOutgoingInternationalExceptHome => "OX",
+            Self::BarAllIncoming => "AI",
+            Self::BarIncomingRoaming => "IR",
+            Self::BarAll => "AB",
+            Self::BarAllOutgoingServices => "AG",
+            Self::BarAllIncomingServices => "AC",
+            Self::Unsupported => "UNSUPPORTED",
+        }
+    }
+
+    /// Resolves a facility from its 2-character byte code.
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        match bytes {
+            b"SC" => Self::SimPin,
+            b"P2" => Self::SimPin2,
+            b"FD" => Self::FixedDial,
+            b"AO" => Self::BarAllOutgoing,
+            b"OI" => Self::BarOutgoingInternational,
+            b"OX" => Self::BarOutgoingInternationalExceptHome,
+            b"AI" => Self::BarAllIncoming,
+            b"IR" => Self::BarIncomingRoaming,
+            b"AB" => Self::BarAll,
+            b"AG" => Self::BarAllOutgoingServices,
+            b"AC" => Self::BarAllIncomingServices,
+            _ => Self::Unsupported,
+        }
+    }
+
+    /// Returns true if this facility is a 3GPP TS 22.088 / TS 22.030 call
+    /// barring supplementary service.
+    pub const fn is_call_barring(self) -> bool {
+        matches!(
+            self,
+            Self::BarAll
+                | Self::BarAllOutgoingServices
+                | Self::BarAllIncomingServices
+                | Self::BarAllOutgoing
+                | Self::BarOutgoingInternational
+                | Self::BarOutgoingInternationalExceptHome
+                | Self::BarAllIncoming
+                | Self::BarIncomingRoaming
+        )
+    }
 }
 
 impl<'a> Parsable<'a> for Facility {
     fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
         let (input, quoted) = QuotedString::parse(input)?;
-        match quoted.as_ref() {
-            b"SC" => Ok((input, Self::SimPin)),
-            b"FD" => Ok((input, Self::FixedDial)),
-            _ => Ok((input, Self::Other)),
-        }
+        Ok((input, Self::from_bytes(quoted.as_ref())))
     }
 }
 
 impl std::fmt::Display for Facility {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Query selector for AT+CPINR remaining retry queries (3GPP TS 27.007 § 8.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PinType {
+    SimPin,
+    SimPuk,
+    SimPin2,
+    SimPuk2,
+}
+
+impl PinType {
+    pub const fn as_str(self) -> &'static str {
         match self {
-            Facility::SimPin => write!(f, "SC"),
-            Facility::FixedDial => write!(f, "FD"),
-            Facility::Other => write!(f, "OTHER"),
+            Self::SimPin => "SIM PIN",
+            Self::SimPuk => "SIM PUK",
+            Self::SimPin2 => "SIM PIN2",
+            Self::SimPuk2 => "SIM PUK2",
         }
+    }
+}
+
+impl<'a> Parsable<'a> for PinType {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, quoted) = QuotedString::parse(input)?;
+        let pin_type = match quoted.as_ref() {
+            b"SIM PIN" => Self::SimPin,
+            b"SIM PUK" => Self::SimPuk,
+            b"SIM PIN2" => Self::SimPin2,
+            b"SIM PUK2" => Self::SimPuk2,
+            _ => {
+                return Err(nom::Err::Error(nom::error::Error::new(
+                    input,
+                    nom::error::ErrorKind::Tag,
+                )));
+            }
+        };
+        Ok((input, pin_type))
+    }
+}
+
+impl std::fmt::Display for PinType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
