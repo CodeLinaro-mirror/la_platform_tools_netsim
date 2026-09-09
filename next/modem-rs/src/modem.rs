@@ -20,9 +20,9 @@ use crate::{
     sup_service::SupService,
     time::Clock,
     types::{
-        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HandledCommand, ModemError,
-        ModemId, NumberPresentation, Parsable, PhoneNumber, RadioPowerLevel,
-        RegistrationUnsolicitedMode, Response,
+        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, ModemError, ModemId,
+        NumberPresentation, Parsable, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode,
+        Response,
     },
 };
 
@@ -362,33 +362,13 @@ impl ModemImpl {
 
     /// Receives an AT command from the modem.
     pub fn receive_at_command(&mut self, command_bytes: &[u8]) -> Vec<ModemEffect> {
-        // Check for SMS PDU submission first. This requires special state handling.
-        let sms_pdu_action = if let Some(waiting) = self.sms_service.waiting_for_pdu {
-            if command_bytes.ends_with(b"\x1a") {
-                let pdu = &command_bytes[..command_bytes.len() - 1];
-
-                let sms_res = if waiting.store {
-                    self.sms_service.handle_store_sms(&mut self.sim_service, pdu, waiting.stat)
-                } else {
-                    let sender = self.phone_number();
-                    let sender_str = sender.as_ref().map(|n| n.as_str()).unwrap_or("");
-                    self.sms_service.handle_send_sms(pdu, sender_str)
-                };
-
-                let exec_res: ExecutionResult = sms_res.into();
-
-                // Clear waiting state
-                self.sms_service.waiting_for_pdu = None;
-
-                Some(exec_res)
-            } else if command_bytes.contains(&0x1b) {
-                // ESC
-                // Abort
-                self.sms_service.waiting_for_pdu = None;
-                Some(ExecutionResult::Success(HandledCommand::ok()))
-            } else {
-                None // Return None to wait for more data if the buffer is incomplete.
-            }
+        let sms_pdu_action = if self.sms_service.is_waiting_for_prompt() {
+            let sender = self.phone_number();
+            self.sms_service.handle_prompt_input(
+                &mut self.sim_service,
+                command_bytes,
+                sender.as_ref().map(PhoneNumber::as_str),
+            )
         } else {
             None
         };
@@ -408,20 +388,10 @@ impl ModemImpl {
                         effects.push(ModemEffect::Action(act));
                     }
                 }
-                ExecutionResult::Error { cme, urcs } => {
+                err => {
                     let mut combined = String::new();
-                    for r in &urcs {
-                        write!(combined, "{r}").unwrap();
-                    }
-                    let err_str = match cme {
-                        Some(err) => err.format_response(self.misc_service.cmee_mode()),
-                        None => "ERROR\r\n".to_string(),
-                    };
-                    combined.push_str(&err_str);
+                    err.format_error_into(&mut combined, self.misc_service.cmee_mode());
                     effects.push(ModemEffect::Response(combined.into_bytes()));
-                }
-                ExecutionResult::Unhandled => {
-                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
                 }
             }
             return effects;
@@ -605,19 +575,11 @@ impl ModemImpl {
                                     stop_chain = true;
                                 }
                             }
-                            ExecutionResult::Error { cme, urcs } => {
-                                for r in urcs {
-                                    write!(combined_responses, "{r}").unwrap();
-                                }
-                                let err_str = match cme {
-                                    Some(err) => err.format_response(self.misc_service.cmee_mode()),
-                                    None => "ERROR\r\n".to_string(),
-                                };
-                                combined_responses.push_str(&err_str);
-                                stop_chain = true;
-                            }
-                            ExecutionResult::Unhandled => {
-                                combined_responses.push_str("ERROR\r\n");
+                            err => {
+                                err.format_error_into(
+                                    &mut combined_responses,
+                                    self.misc_service.cmee_mode(),
+                                );
                                 stop_chain = true;
                             }
                         }

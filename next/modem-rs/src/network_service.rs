@@ -365,6 +365,9 @@ impl NetworkService {
     pub fn is_attached(&self) -> bool {
         self.is_attached
     }
+    pub fn is_radio_on(&self) -> bool {
+        self.radio_power == RadioPowerLevel::Full
+    }
     pub fn voice_registration(&self) -> RegistrationStatus {
         self.voice_registration
     }
@@ -595,10 +598,8 @@ impl NetworkService {
                         self.voice_registration = RegistrationStatus::Denied;
                         self.data_registration = RegistrationStatus::Denied;
                         let urcs = self.all_registration_urcs();
-                        Err(ExecutionResult::Error {
-                            cme: Some(CmeError::NoNetworkService),
-                            urcs: vec![Response::Network(NetworkResponse::Urcs(urcs))],
-                        })
+                        Err(ExecutionResult::cme_error(CmeError::NoNetworkService)
+                            .with_urcs(vec![Response::Network(NetworkResponse::Urcs(urcs))]))
                     }
                 } else {
                     Err(ExecutionResult::error())

@@ -54,6 +54,15 @@ impl Parsable<'_> for u32 {
     }
 }
 
+impl Parsable<'_> for usize {
+    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        nom::combinator::map_res(
+            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
+            |s: &str| s.parse::<usize>(),
+        )(input)
+    }
+}
+
 pub const AT_OK: &[u8] = b"OK\r\n";
 pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 
@@ -76,7 +85,7 @@ pub const DEFAULT_IPV6_PREFIX: u32 = 64;
 pub type ModemId = u32;
 
 // Custom error type for the library.
-use std::fmt;
+use std::fmt::{self, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModemError {
@@ -343,6 +352,12 @@ impl PhoneNumber {
         self.0.starts_with("*99")
             && self.0.ends_with('#')
             && self.0.as_bytes().get(3).is_some_and(|&c| c == b'*' || c == b'#')
+    }
+}
+
+impl AsRef<str> for PhoneNumber {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -804,6 +819,14 @@ pub enum CmeError {
     Custom(u32, &'static str),
 }
 
+impl fmt::Display for CmeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.verbose_str())
+    }
+}
+
+impl std::error::Error for CmeError {}
+
 impl CmeError {
     pub fn code(&self) -> u32 {
         match *self {
@@ -868,7 +891,127 @@ impl CmeError {
     }
 }
 
-/// Combined structured response enum across all modem-rs services.
+/// Standard 3GPP TS 27.005 Message Service Failure Error Codes (+CMS ERROR).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CmsError {
+    InvalidPduParameter,
+    SimNotInserted,
+    SimPinRequired,
+    InvalidMemoryIndex,
+    MemoryFull,
+}
+
+impl fmt::Display for CmsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.verbose_str())
+    }
+}
+
+impl std::error::Error for CmsError {}
+
+impl CmsError {
+    pub fn code(&self) -> u32 {
+        match *self {
+            Self::InvalidPduParameter => 304,
+            Self::SimNotInserted => 310,
+            Self::SimPinRequired => 311,
+            Self::InvalidMemoryIndex => 321,
+            Self::MemoryFull => 322,
+        }
+    }
+
+    pub fn verbose_str(&self) -> &'static str {
+        match *self {
+            Self::InvalidPduParameter => "invalid PDU mode parameter",
+            Self::SimNotInserted => "SIM not inserted",
+            Self::SimPinRequired => "SIM PIN required",
+            Self::InvalidMemoryIndex => "invalid memory index",
+            Self::MemoryFull => "memory full",
+        }
+    }
+
+    pub fn format_response(&self, mode: CmeeMode) -> std::borrow::Cow<'static, str> {
+        match mode {
+            CmeeMode::Disable => std::borrow::Cow::Borrowed("ERROR\r\n"),
+            CmeeMode::Numeric => {
+                std::borrow::Cow::Owned(format!("+CMS ERROR: {}\r\n", self.code()))
+            }
+            CmeeMode::Verbose => {
+                std::borrow::Cow::Owned(format!("+CMS ERROR: {}\r\n", self.verbose_str()))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum SmsMessageStatus {
+    #[default]
+    ReceivedUnread = 0,
+    ReceivedRead = 1,
+    StoredUnsent = 2,
+    StoredSent = 3,
+}
+
+impl TryFrom<u8> for SmsMessageStatus {
+    type Error = CmsError;
+    fn try_from(val: u8) -> Result<Self, Self::Error> {
+        match val {
+            0 => Ok(Self::ReceivedUnread),
+            1 => Ok(Self::ReceivedRead),
+            2 => Ok(Self::StoredUnsent),
+            3 => Ok(Self::StoredSent),
+            _ => Err(CmsError::InvalidPduParameter),
+        }
+    }
+}
+
+impl From<SmsMessageStatus> for u8 {
+    fn from(val: SmsMessageStatus) -> Self {
+        val as u8
+    }
+}
+
+impl std::fmt::Display for SmsMessageStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl<'a> Parsable<'a> for SmsMessageStatus {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match Self::try_from(val) {
+            Ok(status) => Ok((input, status)),
+            Err(_) => {
+                Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes)))
+            }
+        }
+    }
+}
+
+pub type MessageStatus = SmsMessageStatus;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SimSmsMessage {
+    pub status: SmsMessageStatus,
+    pub pdu: Vec<u8>,
+}
+
+impl SimSmsMessage {
+    #[cfg(test)]
+    pub fn new(status: SmsMessageStatus, pdu: Vec<u8>) -> Self {
+        Self { status, pdu }
+    }
+
+    /// Marks received unread messages as read (TS 27.005 §3.1 / §3.5.3).
+    pub fn mark_read(&mut self) {
+        if self.status == SmsMessageStatus::ReceivedUnread {
+            self.status = SmsMessageStatus::ReceivedRead;
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
     Sim(SimResponse),
@@ -946,37 +1089,74 @@ impl From<StkResponse> for Response {
     }
 }
 
-/// Contains all the results of a successfully executed command.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct HandledCommand {
-    /// The immediate responses to send back to the client.
     pub responses: Vec<Response>,
-    /// An optional follow-up action for the CellularNetworkSimulator to
-    /// perform.
     pub actions: Vec<CommandAction>,
 }
 
 impl HandledCommand {
-    /// Creates a result with a simple "OK" response and no follow-up action.
     pub fn ok() -> Self {
         Self { responses: vec![Response::Ok], actions: vec![] }
     }
 
-    /// Creates a result with a simple "OK" response AND a follow-up action.
     pub fn ok_with_actions(actions: Vec<CommandAction>) -> Self {
         Self { responses: vec![Response::Ok], actions }
     }
 }
 
-/// Represents the outcome of a command execution from the parser.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CommandError {
+    Cme(CmeError),
+    Cms(CmsError),
+    #[default]
+    Generic,
+}
+
+impl fmt::Display for CommandError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cme(err) => write!(f, "{err}"),
+            Self::Cms(err) => write!(f, "{err}"),
+            Self::Generic => write!(f, "generic error"),
+        }
+    }
+}
+
+impl std::error::Error for CommandError {}
+
+impl CommandError {
+    pub fn format_response(&self, mode: CmeeMode) -> std::borrow::Cow<'static, str> {
+        match self {
+            Self::Cme(err) => match mode {
+                CmeeMode::Disable => std::borrow::Cow::Borrowed("ERROR\r\n"),
+                _ => std::borrow::Cow::Owned(err.format_response(mode)),
+            },
+            Self::Cms(err) => err.format_response(mode),
+            Self::Generic => std::borrow::Cow::Borrowed("ERROR\r\n"),
+        }
+    }
+}
+
+impl From<CmeError> for CommandError {
+    fn from(err: CmeError) -> Self {
+        Self::Cme(err)
+    }
+}
+
+impl From<CmsError> for CommandError {
+    fn from(err: CmsError) -> Self {
+        Self::Cms(err)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionResult {
     /// The command was successfully handled, yielding responses and/or action.
     Success(HandledCommand),
 
-    /// The command failed, optionally with a structured Mobile Equipment error
-    /// and/or URCs emitted prior to failure.
-    Error { cme: Option<CmeError>, urcs: Vec<Response> },
+    /// The command failed with an explicit error reason and optional URCs.
+    Error { error: CommandError, urcs: Vec<Response> },
 
     /// This command has not been refactored yet and should be handled by the
     /// legacy system.
@@ -993,11 +1173,51 @@ impl ExecutionResult {
     }
 
     pub fn error() -> Self {
-        Self::Error { cme: None, urcs: Vec::new() }
+        Self::Error { error: CommandError::Generic, urcs: Vec::new() }
+    }
+
+    pub fn error_with_urcs(error: impl Into<CommandError>, urcs: Vec<Response>) -> Self {
+        Self::Error { error: error.into(), urcs }
     }
 
     pub fn cme_error(cme: CmeError) -> Self {
-        Self::Error { cme: Some(cme), urcs: Vec::new() }
+        Self::Error { error: CommandError::Cme(cme), urcs: Vec::new() }
+    }
+
+    pub fn cms_error(cms: CmsError) -> Self {
+        Self::Error { error: CommandError::Cms(cms), urcs: Vec::new() }
+    }
+
+    /// Formats the error and preceding URCs into the target string buffer.
+    /// Returns `true` if this was an Error or Unhandled result, `false` on
+    /// Success.
+    pub fn format_error_into(&self, out: &mut String, mode: CmeeMode) -> bool {
+        match self {
+            Self::Error { error, urcs } => {
+                for r in urcs {
+                    let _ = write!(out, "{r}");
+                }
+                out.push_str(&error.format_response(mode));
+                true
+            }
+            Self::Unhandled => {
+                out.push_str("ERROR\r\n");
+                true
+            }
+            Self::Success(_) => false,
+        }
+    }
+
+    pub fn with_urcs(mut self, mut urcs: Vec<Response>) -> Self {
+        match self {
+            Self::Error { urcs: ref mut target_urcs, .. } => *target_urcs = urcs,
+            Self::Success(ref mut handled) => {
+                urcs.append(&mut handled.responses);
+                handled.responses = urcs;
+            }
+            Self::Unhandled => {}
+        }
+        self
     }
 }
 
@@ -1032,6 +1252,18 @@ impl<T: Into<ExecutionResult>> From<Result<T, ExecutionResult>> for ExecutionRes
 impl From<CmeError> for ExecutionResult {
     fn from(err: CmeError) -> Self {
         Self::cme_error(err)
+    }
+}
+
+impl From<CmsError> for ExecutionResult {
+    fn from(err: CmsError) -> Self {
+        Self::cms_error(err)
+    }
+}
+
+impl From<CommandError> for ExecutionResult {
+    fn from(err: CommandError) -> Self {
+        Self::Error { error: err, urcs: Vec::new() }
     }
 }
 
@@ -2549,5 +2781,72 @@ mod tests {
 
         let invalid_json = "\"1234\"";
         assert!(serde_json::from_str::<Plmn>(invalid_json).is_err());
+    }
+
+    #[test]
+    fn test_command_error_format_response() {
+        let cme = CommandError::Cme(CmeError::SimPinRequired);
+        assert_eq!(cme.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(cme.format_response(CmeeMode::Numeric), "+CME ERROR: 11\r\n");
+        assert_eq!(cme.format_response(CmeeMode::Verbose), "+CME ERROR: SIM PIN required\r\n");
+
+        let cms = CommandError::Cms(CmsError::SimNotInserted);
+        assert_eq!(cms.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(cms.format_response(CmeeMode::Numeric), "+CMS ERROR: 310\r\n");
+        assert_eq!(cms.format_response(CmeeMode::Verbose), "+CMS ERROR: SIM not inserted\r\n");
+
+        let generic = CommandError::Generic;
+        assert_eq!(generic.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(generic.format_response(CmeeMode::Numeric), "ERROR\r\n");
+        assert_eq!(generic.format_response(CmeeMode::Verbose), "ERROR\r\n");
+        assert_eq!(CommandError::default(), CommandError::Generic);
+
+        let mut out = String::new();
+        let res = ExecutionResult::cme_error(CmeError::SimPinRequired);
+        assert!(res.format_error_into(&mut out, CmeeMode::Numeric));
+        assert_eq!(out, "+CME ERROR: 11\r\n");
+
+        let mut out_success = String::new();
+        assert!(!ExecutionResult::ok().format_error_into(&mut out_success, CmeeMode::Numeric));
+        assert!(out_success.is_empty());
+    }
+
+    #[test]
+    fn test_sim_sms_message_mark_read() {
+        let mut msg = SimSmsMessage::new(SmsMessageStatus::ReceivedUnread, vec![1, 2, 3]);
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedUnread);
+        msg.mark_read();
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedRead);
+        msg.mark_read();
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedRead);
+
+        let mut sent_msg = SimSmsMessage::new(SmsMessageStatus::StoredSent, vec![4, 5]);
+        sent_msg.mark_read();
+        assert_eq!(sent_msg.status, SmsMessageStatus::StoredSent);
+    }
+
+    #[test]
+    fn test_phone_number_as_ref() {
+        let phone = PhoneNumber::new("+1234567890");
+        assert_eq!(phone.as_str(), "+1234567890");
+        assert_eq!(phone.as_ref(), "+1234567890");
+        let opt_phone = Some(phone);
+        assert_eq!(opt_phone.as_ref().map(PhoneNumber::as_str), Some("+1234567890"));
+    }
+
+    #[test]
+    fn test_cms_error_codes_and_messages() {
+        let expected = [
+            (CmsError::InvalidPduParameter, 304, "invalid PDU mode parameter"),
+            (CmsError::SimNotInserted, 310, "SIM not inserted"),
+            (CmsError::SimPinRequired, 311, "SIM PIN required"),
+            (CmsError::InvalidMemoryIndex, 321, "invalid memory index"),
+            (CmsError::MemoryFull, 322, "memory full"),
+        ];
+        for (err, code, verbose) in expected {
+            assert_eq!(err.code(), code);
+            assert_eq!(err.verbose_str(), verbose);
+            assert_eq!(format!("{err}"), verbose);
+        }
     }
 }

@@ -323,8 +323,8 @@ features in the Rust version.
   - [x] Add a PDU parser to handle SMS messages in PDU mode.
 - [x] **Implement SMS Status Reports:**
   - [x] Add the logic for generating and sending SMS status reports.
-- [ ] **Improve Error Handling:**
-  - [ ] Use more specific CMS (Cellular Messaging Service) error codes.
+- [x] **Improve Error Handling:**
+  - [x] Use more specific CMS (Cellular Messaging Service) error codes.
 
 ### STK Service (`src/stk_service.rs`)
 

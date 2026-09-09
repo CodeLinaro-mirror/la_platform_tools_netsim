@@ -9,9 +9,11 @@ use modem_rs::{
 use netsim_model::Quirks;
 
 use crate::steps::{
-    action::{when_at_command_sent, when_time_advances_ms},
+    action::{
+        when_at_command_sent, when_hex_bytes_sent, when_sim_status_set, when_time_advances_ms,
+    },
     check::{
-        then_no_response, then_response_contains, then_response_is,
+        then_no_response, then_prompt, then_prompt_is, then_response_contains, then_response_is,
         then_wait_for_response_containing,
     },
     setup::{
@@ -121,6 +123,16 @@ impl World {
         when_at_command_sent(self, name, command);
     }
 
+    /// Sends raw bytes, specified as a hex string, to the modem.
+    pub fn when_hex_bytes(&mut self, name: &str, hex_bytes: &str) {
+        when_hex_bytes_sent(self, name, hex_bytes);
+    }
+
+    /// Sets the SIM status (inserted or removed) for the modem.
+    pub fn when_sim_status(&mut self, name: &str, present: bool) {
+        when_sim_status_set(self, name, present);
+    }
+
     /// Advances simulated time and ticks the modem network simulator.
     pub fn when_time_advances_ms(&mut self, ms: u64) {
         when_time_advances_ms(self, ms);
@@ -138,6 +150,16 @@ impl World {
     /// expected substring.
     pub fn then_response_contains(&mut self, name: &str, expected: &str) {
         then_response_contains(self, name, expected);
+    }
+
+    /// Asserts that the modem emitted an interactive prompt (such as `> `).
+    pub fn then_prompt_is(&mut self, name: &str, expected: &str) {
+        then_prompt_is(self, name, expected);
+    }
+
+    /// Convenience alias for asserting the standard SMS prompt `> `.
+    pub fn then_prompt(&mut self, name: &str) {
+        then_prompt(self, name);
     }
 
     /// Asserts that the modem has no pending responses in its queue.
@@ -264,5 +286,13 @@ impl World {
     /// (`AT+CLCC` returns only `OK`).
     pub fn assert_idle(&mut self, name: &str) {
         self.assert_clcc(name, &[]);
+    }
+
+    // --- Compound SMS Workflows ---
+
+    /// Configures preferred SMS storage to SIM (`SM`) for reads, writes, and
+    /// receives.
+    pub fn select_sim_storage(&mut self, name: &str) {
+        self.send_and_expect_ok(name, "AT+CPMS=\"SM\",\"SM\",\"SM\"");
     }
 }

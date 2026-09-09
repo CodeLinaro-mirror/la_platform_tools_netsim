@@ -1,7 +1,12 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt::Write, iter::once, ops::RangeInclusive};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Write,
+    iter::once,
+    ops::RangeInclusive,
+};
 
 use modem_rs_derive::CommandParser;
 use tracing::{debug, info};
@@ -11,11 +16,10 @@ use crate::{
     config::{FileSystem, OverwritePolicy, ProfileMetadata, SimFile, SimProfile},
     constants::*,
     parser::{ApduData, PinString, QuotedString, parse_raw_data},
-    sms_service::{MessageStatus, StoredSms},
     types::{
         AdnRecord, CdmaRoamingPreference, CdmaSubscriptionSource, CmeError,
         DEFAULT_BARRING_PASSWORD, DEFAULT_PIN, DEFAULT_PIN2, DEFAULT_PUK2, ExecutionResult,
-        Facility, FacilityLockMode, Parsable, PhoneNumber, PinType, Plmn,
+        Facility, FacilityLockMode, Parsable, PhoneNumber, PinType, Plmn, SimSmsMessage,
     },
 };
 
@@ -546,7 +550,7 @@ pub struct SimService {
     barring_password: PinEntry,
     fdn_enabled: bool,
     fs: FileSystem,
-    sms_messages: HashMap<u8, StoredSms>,
+    sms_messages: BTreeMap<u8, SimSmsMessage>,
     logical_channels: [bool; 4],
     selected_aids: [Option<String>; 4],
     selected_files: [Option<u16>; 4],
@@ -575,7 +579,7 @@ impl Default for SimService {
             barring_password: PinEntry::new(DEFAULT_BARRING_PASSWORD, "", DEFAULT_PIN_RETRIES, 0),
             fdn_enabled: false,
             fs: FileSystem::default(),
-            sms_messages: HashMap::new(),
+            sms_messages: BTreeMap::new(),
             // Channel 0 is the basic channel and is always open by default.
             logical_channels: [true, false, false, false],
             selected_aids: [const { None }; 4],
@@ -606,6 +610,11 @@ impl SimService {
     /// Returns true if a profile is currently provisioned in this SIM slot.
     pub(crate) fn is_provisioned(&self) -> bool {
         self.provisioned
+    }
+
+    /// Returns true if the SIM is in the Ready state.
+    pub(crate) fn is_ready(&self) -> bool {
+        self.state == SimState::Ready
     }
 
     /// Unprovisions and completely wipes the SIM card, restoring to default.
@@ -944,21 +953,35 @@ impl SimService {
         self.sms_messages.len()
     }
 
-    pub(crate) fn store_sms(&mut self, pdu: &[u8], stat: MessageStatus) -> Option<u8> {
+    fn allocate_sms_slot(&self) -> Option<u8> {
+        let mut slot = 1u8;
+        for &occupied in self.sms_messages.keys() {
+            if occupied == slot {
+                slot = slot.checked_add(1)?;
+            } else {
+                break;
+            }
+        }
+        Some(slot)
+    }
+
+    pub(crate) fn store_sms(&mut self, message: SimSmsMessage) -> Option<u8> {
         if !self.is_present() {
             return None;
         }
-        let index = self.sms_messages.len() as u8 + 1;
-        self.sms_messages.insert(index, StoredSms { pdu: pdu.to_vec(), stat });
+        let index = self.allocate_sms_slot()?;
+        self.sms_messages.insert(index, message);
         Some(index)
     }
 
-    pub(crate) fn read_sms(&self, index: u8) -> Result<Option<(Vec<u8>, MessageStatus)>, CmeError> {
+    pub(crate) fn read_sms(&mut self, index: u8) -> Result<Option<SimSmsMessage>, CmeError> {
         if !self.is_present() {
             return Err(CmeError::SimNotInserted);
         }
-        if let Some(sms) = self.sms_messages.get(&index) {
-            Ok(Some((sms.pdu.clone(), sms.stat)))
+        if let Some(msg) = self.sms_messages.get_mut(&index) {
+            let res = msg.clone();
+            msg.mark_read();
+            Ok(Some(res))
         } else {
             Ok(None)
         }
@@ -2057,7 +2080,7 @@ mod tests {
             DedicatedFile, ElementaryFile, FileSystem, PinProfile, SimFile, SimIo, SimProfile,
         },
         parser::QuotedString,
-        types::FacilityLockMode,
+        types::{FacilityLockMode, SmsMessageStatus},
     };
 
     fn create_test_fdn_profile(fdn_data: Vec<u8>) -> SimProfile {
@@ -2379,7 +2402,10 @@ mod tests {
         assert_eq!(meta.home_plmn.as_ref().map(Plmn::as_str), Some("310260"));
 
         // Store an SMS to verify it gets cleared on removal
-        service.store_sms(&[1, 2, 3], MessageStatus::StoredUnsent);
+        service.store_sms(SimSmsMessage {
+            status: SmsMessageStatus::ReceivedUnread,
+            pdu: vec![1, 2, 3],
+        });
         assert_eq!(service.get_sms_count(), 1);
 
         // Test ejection (set_present(false)) vs removal (remove_sim)
@@ -2457,8 +2483,9 @@ mod tests {
         service.load_profile(&default_prof);
 
         // Store an SMS message on the SIM card
-        let dummy_pdu = [0x00, 0x01, 0x02, 0x03];
-        let index = service.store_sms(&dummy_pdu, MessageStatus::StoredUnsent);
+        let dummy_pdu = vec![0x00, 0x01, 0x02, 0x03];
+        let index = service
+            .store_sms(SimSmsMessage { status: SmsMessageStatus::ReceivedUnread, pdu: dummy_pdu });
         assert_eq!(index, Some(1));
         assert_eq!(service.get_sms_count(), 1);
 
@@ -2467,6 +2494,34 @@ mod tests {
             crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_TEL_ALASKA).unwrap();
         service.load_profile(&alaska_prof);
         assert_eq!(service.get_sms_count(), 0);
+    }
+
+    #[test]
+    fn test_sim_sms_slot_recycling() {
+        let default_prof =
+            crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_DEFAULT).unwrap();
+        let mut service = SimService::new();
+        service.load_profile(&default_prof);
+
+        let make_msg =
+            || SimSmsMessage { status: SmsMessageStatus::ReceivedUnread, pdu: vec![0x00, 0x01] };
+
+        // Store 3 messages: slots 1, 2, 3
+        assert_eq!(service.store_sms(make_msg()), Some(1));
+        assert_eq!(service.store_sms(make_msg()), Some(2));
+        assert_eq!(service.store_sms(make_msg()), Some(3));
+        assert_eq!(service.get_sms_count(), 3);
+
+        // Delete slot 2
+        assert!(service.delete_sms(2));
+        assert_eq!(service.get_sms_count(), 2);
+
+        // Next store should reuse slot 2 (lowest available)
+        assert_eq!(service.store_sms(make_msg()), Some(2));
+
+        // Subsequent store should take slot 4
+        assert_eq!(service.store_sms(make_msg()), Some(4));
+        assert_eq!(service.get_sms_count(), 4);
     }
 
     #[test]
