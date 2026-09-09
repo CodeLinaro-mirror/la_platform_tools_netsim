@@ -114,6 +114,22 @@ pub enum RegistrationStatus {
     Denied = 3,
     Unknown = 4,
     Roaming = 5,
+    RegisteredSmsOnlyHome = 6,
+    RegisteredSmsOnlyRoaming = 7,
+    Emergency = 8,
+}
+
+impl RegistrationStatus {
+    /// Returns true if registered for normal voice/data service (Home or
+    /// Roaming).
+    pub fn is_registered(self) -> bool {
+        matches!(self, Self::RegisteredHome | Self::Roaming)
+    }
+
+    /// Returns true if attached for emergency bearer services only.
+    pub fn is_emergency_only(self) -> bool {
+        matches!(self, Self::Emergency)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
