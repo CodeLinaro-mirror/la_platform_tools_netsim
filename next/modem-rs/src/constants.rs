@@ -3,7 +3,7 @@
 
 // src/constants.rs
 
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 use crate::types::CtecTechnology;
 
@@ -38,6 +38,7 @@ pub enum UiccFileId {
     Iccid = 0x2FE2,
     ForbiddenPlmn = 0x6F7B,
     AdministrativeData = 0x6FAD,
+    VoiceMailIndicatorCphs = 0x6F11,
 
     // Elementary Files (Linear Fixed)
     Msisdn = 0x6F40,
@@ -141,6 +142,7 @@ impl TryFrom<u16> for UiccFileId {
             0x6F40 => Ok(Self::Msisdn),
             0x6FC7 => Ok(Self::MailboxDialingNumbers),
             0x6FAD => Ok(Self::AdministrativeData),
+            0x6F11 => Ok(Self::VoiceMailIndicatorCphs),
             0x6F3B => Ok(Self::FixedDialingNumbers),
             0x6F3A => Ok(Self::AbbreviatedDialingNumbers),
             0x4F3A => Ok(Self::AbbreviatedDialingNumbersUsim),
@@ -149,6 +151,24 @@ impl TryFrom<u16> for UiccFileId {
             0x6F3C => Ok(Self::ShortMessages),
             _ => Err(()),
         }
+    }
+}
+
+impl fmt::Display for UiccFileId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_u16())
+    }
+}
+
+impl fmt::UpperHex for UiccFileId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::UpperHex::fmt(&self.as_u16(), f)
+    }
+}
+
+impl fmt::LowerHex for UiccFileId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::LowerHex::fmt(&self.as_u16(), f)
     }
 }
 

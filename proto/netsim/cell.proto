@@ -98,6 +98,9 @@ enum RegistrationStatus {
   DENIED = 3;
   UNKNOWN = 4;
   ROAMING = 5;
+  SMS_ONLY_HOME = 6;
+  SMS_ONLY_ROAMING = 7;
+  EMERGENCY = 8;
 }
 
 message Cell {

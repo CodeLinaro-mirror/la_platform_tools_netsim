@@ -2,11 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     time::{Duration, Instant},
 };
 
-use crate::dns::{DnsProxy, DnsQueryResult};
+use crate::{
+    Config,
+    dns::{
+        DnsProxy, DnsQueryResult, create_dns_search_option, discover_host_dns_servers,
+        encode_dns_search_list, parse_resolv_conf_content,
+    },
+};
 
 fn build_dns_query_bytes(tx_id: u16, name: &str, qtype: u16) -> Vec<u8> {
     let mut buf = vec![0u8; 512];
@@ -114,4 +120,117 @@ fn test_dns_proxy_failover() {
     now += Duration::from_secs(3);
     let res4 = proxy.handle_query(&query, client, now, &servers);
     assert!(matches!(res4, DnsQueryResult::Forward(ip) if ip == servers[0]));
+}
+
+#[test]
+fn test_parse_resolv_conf_standard() {
+    let resolv_conf = r#"
+# Dynamic resolv.conf file for glibc resolver
+nameserver 8.8.8.8
+nameserver 2001:4860:4860::8888
+search corp.google.com google.com
+options edns0 trust-ad
+"#;
+    let servers = parse_resolv_conf_content(resolv_conf);
+    assert_eq!(
+        servers,
+        vec![
+            IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+            IpAddr::V6(Ipv6Addr::new(0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8888)),
+        ]
+    );
+}
+
+#[test]
+fn test_parse_resolv_conf_ipv6_scope_id() {
+    let resolv_conf = r#"
+; Resolv.conf with IPv6 scope ID
+nameserver fe80::1%eth0
+nameserver fe80::2%wlan0
+"#;
+    let servers = parse_resolv_conf_content(resolv_conf);
+    assert_eq!(
+        servers,
+        vec![
+            IpAddr::V6(Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 1)),
+            IpAddr::V6(Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 2)),
+        ]
+    );
+}
+
+#[test]
+fn test_parse_resolv_conf_skips_loopback_and_unspecified() {
+    let resolv_conf = r#"
+# Loopback and unspecified addresses should be filtered
+nameserver 127.0.0.53
+nameserver 127.0.0.1
+nameserver ::1
+nameserver 0.0.0.0
+nameserver ::
+nameserver 1.1.1.1
+"#;
+    let servers = parse_resolv_conf_content(resolv_conf);
+    assert_eq!(servers, vec![IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))]);
+}
+
+#[test]
+fn test_parse_resolv_conf_deduplication() {
+    let resolv_conf = r#"
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+nameserver 8.8.8.8
+"#;
+    let servers = parse_resolv_conf_content(resolv_conf);
+    assert_eq!(
+        servers,
+        vec![IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)), IpAddr::V4(Ipv4Addr::new(8, 8, 4, 4)),]
+    );
+}
+
+#[test]
+fn test_encode_dns_search_list() {
+    let domains = vec!["corp.google.com".to_string(), "google.com".to_string()];
+    let encoded = encode_dns_search_list(&domains);
+
+    let mut expected = Vec::new();
+    // "corp.google.com" -> 4 "corp" 6 "google" 3 "com" 0
+    expected.push(4u8);
+    expected.extend_from_slice(b"corp");
+    expected.push(6u8);
+    expected.extend_from_slice(b"google");
+    expected.push(3u8);
+    expected.extend_from_slice(b"com");
+    expected.push(0u8);
+    // "google.com" -> 6 "google" 3 "com" 0
+    expected.push(6u8);
+    expected.extend_from_slice(b"google");
+    expected.push(3u8);
+    expected.extend_from_slice(b"com");
+    expected.push(0u8);
+
+    assert_eq!(encoded, expected);
+}
+
+#[test]
+fn test_create_dns_search_option() {
+    let no_search_config = Config::default();
+    assert_eq!(create_dns_search_option(&no_search_config), None);
+
+    let search_config =
+        Config { dns_search: Some(vec!["example.com".to_string()]), ..Default::default() };
+    let option = create_dns_search_option(&search_config).expect("Option 119 should be created");
+    assert_eq!(option[0], 119); // Option code
+    let len = option[1] as usize;
+    assert_eq!(option.len(), 2 + len);
+}
+
+#[tokio::test]
+async fn test_discover_host_dns_servers_async() {
+    let servers = discover_host_dns_servers().await;
+    // Host discovery should always return at least one non-empty address (real or
+    // localhost fallback)
+    assert!(!servers.is_empty());
+    for server in &servers {
+        assert!(!server.is_unspecified());
+    }
 }

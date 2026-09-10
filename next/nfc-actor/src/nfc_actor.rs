@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64},
+        atomic::{AtomicBool, AtomicU8, AtomicU64},
     },
 };
 
@@ -13,6 +13,10 @@ use device_actor::DeviceClient;
 use netsim_model::ChipId;
 use tokio::io::{DuplexStream, WriteHalf};
 use tracing::info;
+
+pub const NFC_MODE_IDLE: u8 = 0;
+pub const NFC_MODE_POLL: u8 = 1;
+pub const NFC_MODE_LISTEN: u8 = 2;
 
 pub struct ChipState {
     pub id: ChipId,
@@ -22,6 +26,7 @@ pub struct ChipState {
     pub nfc_writer: WriteHalf<DuplexStream>,
     pub tx_count: Arc<AtomicU64>,
     pub rx_count: Arc<AtomicU64>,
+    pub mode: Arc<AtomicU8>,
 }
 
 use crate::stats::NfcStats;

@@ -24,6 +24,9 @@ fn map_registration_status(opt: RegistrationStatusOption) -> RegistrationStatus 
         RegistrationStatusOption::Denied => RegistrationStatus::DENIED,
         RegistrationStatusOption::Unknown => RegistrationStatus::UNKNOWN,
         RegistrationStatusOption::Roaming => RegistrationStatus::ROAMING,
+        RegistrationStatusOption::SmsOnlyHome => RegistrationStatus::SMS_ONLY_HOME,
+        RegistrationStatusOption::SmsOnlyRoaming => RegistrationStatus::SMS_ONLY_ROAMING,
+        RegistrationStatusOption::Emergency => RegistrationStatus::EMERGENCY,
     }
 }
 
@@ -247,6 +250,18 @@ mod tests {
         assert_eq!(
             map_registration_status(RegistrationStatusOption::Roaming),
             RegistrationStatus::ROAMING
+        );
+        assert_eq!(
+            map_registration_status(RegistrationStatusOption::SmsOnlyHome),
+            RegistrationStatus::SMS_ONLY_HOME
+        );
+        assert_eq!(
+            map_registration_status(RegistrationStatusOption::SmsOnlyRoaming),
+            RegistrationStatus::SMS_ONLY_ROAMING
+        );
+        assert_eq!(
+            map_registration_status(RegistrationStatusOption::Emergency),
+            RegistrationStatus::EMERGENCY
         );
     }
 

@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{common::constants::*, steps::*, world::World};
+use crate::{common::constants::*, world::World};
 
 // Scenario: Read ICCID from SIM Filesystem
 //   Given a modem "A"
@@ -11,10 +11,12 @@ use crate::{common::constants::*, steps::*, world::World};
 #[test]
 fn test_read_iccid() {
     let mut world = World::new();
-    given_modem_with_sim_profile(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CRSM=176,12258,0,0,10");
-    then_response_is(&mut world, "A", &format!("+CRSM: 144,0,{}", TEST_ICCID_SWAPPED));
-    then_response_is(&mut world, "A", "OK");
+    world.given_modem_with_sim_profile("A");
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=176,12258,0,0,10",
+        &[&format!("+CRSM: 144,0,{}", TEST_ICCID_SWAPPED), "OK"],
+    );
 }
 
 // Scenario: Select Master File
@@ -25,20 +27,16 @@ fn test_read_iccid() {
 #[test]
 fn test_select_mf() {
     let mut world = World::new();
-    given_modem_with_sim_profile(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CRSM=164,16128,0,0,0");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,6210");
-    then_response_is(&mut world, "A", "OK");
+    world.given_modem_with_sim_profile("A");
+    world.send_and_expect("A", "AT+CRSM=164,16128,0,0,0", &["+CRSM: 144,0,6210", "OK"]);
 }
 
 #[test]
 fn test_sim_io_file_not_found() {
     let mut world = World::new();
-    given_modem_with_sim_profile(&mut world, "A");
+    world.given_modem_with_sim_profile("A");
     // Query a dummy file ID 9999 (0x270F) which doesn't exist
-    when_at_command_sent(&mut world, "A", "AT+CRSM=176,9999,0,0,10");
-    then_response_is(&mut world, "A", "+CRSM: 106,130");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect("A", "AT+CRSM=176,9999,0,0,10", &["+CRSM: 106,130", "OK"]);
 }
 
 #[test]
@@ -52,8 +50,10 @@ fn test_read_iccid_from_xml() {
         </EF>
     </MF>
 </IccProfile>"#;
-    given_modem_with_xml_profile(&mut world, "A", xml);
-    when_at_command_sent(&mut world, "A", "AT+CRSM=176,12258,0,0,10");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,98683081462002318379");
-    then_response_is(&mut world, "A", "OK");
+    world.given_modem_with_xml_profile("A", xml);
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=176,12258,0,0,10",
+        &["+CRSM: 144,0,98683081462002318379", "OK"],
+    );
 }

@@ -123,13 +123,13 @@ impl SubmitPdu {
 
     /// Converts this SMS-SUBMIT PDU (outgoing) to an SMS-STATUS-REPORT PDU.
     /// Returns the hex-encoded PDU string.
-    pub fn to_status_report_pdu_hex(&self, mr: u8) -> Result<String, EncodeError> {
+    pub fn to_status_report_pdu_hex(&self, message_reference: u8) -> Result<String, EncodeError> {
         let scts = get_current_timestamp_bcd();
         let dt = scts.clone(); // Use same timestamp for discharge time
 
         let bytes: Vec<u8> = once(PDU_SCA_DEFAULT) // 1. SCA
             .chain(once(SMS_STATUS_REPORT_PDU_TYPE)) // 2. PDU-Type (SMS-STATUS-REPORT)
-            .chain(once(mr)) // 3. MR (assigned by modem)
+            .chain(once(message_reference)) // 3. MR (assigned by modem)
             .chain(self.address.iter().copied()) // 4. RA (Recipient Address)
             .chain(scts) // 5. SCTS
             .chain(dt) // 6. DT (Discharge Time)
@@ -149,10 +149,9 @@ impl SubmitPdu {
         };
         let scts = get_current_timestamp_bcd();
 
-        let oa_bytes = if let Some(sender_num) = sender {
-            encode_address(sender_num)
-        } else {
-            self.address.clone()
+        let oa_bytes = match sender.filter(|s| !s.is_empty()) {
+            Some(sender_num) => std::borrow::Cow::Owned(encode_address(sender_num)),
+            None => std::borrow::Cow::Borrowed(self.address.as_slice()),
         };
 
         let bytes: Vec<u8> = once(PDU_SCA_DEFAULT) // 1. SCA
@@ -327,8 +326,24 @@ pub fn create_deliver_pdu_ucs2(sender: &str, text: &str) -> String {
     hex::encode_upper(bytes)
 }
 
-fn try_decode_hex(pdu: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn try_decode_hex(pdu: &[u8]) -> Option<Vec<u8>> {
     std::str::from_utf8(pdu).ok().and_then(|s| hex::decode(s.trim()).ok())
+}
+
+/// Decodes a PDU from a hexadecimal string representation into raw bytes.
+///
+/// In 3GPP TS 27.005 PDU mode, PDUs are entered as ASCII hexadecimal strings.
+/// For compatibility with binary test inputs, non-UTF8 bytes are accepted
+/// directly. Returns `CmsError::InvalidPduParameter` if hex decoding fails or
+/// if the payload is empty.
+pub fn decode_hex_pdu(pdu: &[u8]) -> Result<Vec<u8>, crate::types::CmsError> {
+    match std::str::from_utf8(pdu) {
+        Ok(s) => match hex::decode(s.trim()) {
+            Ok(bytes) if !bytes.is_empty() => Ok(bytes),
+            _ => Err(crate::types::CmsError::InvalidPduParameter),
+        },
+        Err(_) => Ok(pdu.to_vec()),
+    }
 }
 
 pub struct ProcessedSms {
@@ -340,7 +355,11 @@ pub struct ProcessedSms {
 /// Processes an outgoing SMS PDU (which might be hex-encoded or raw bytes).
 /// If it is a valid SMS-SUBMIT PDU, it extracts the destination and converts it
 /// to SMS-DELIVER. Otherwise, it returns the original bytes as-is.
-pub fn process_outgoing_sms(pdu: &[u8], sender: Option<&str>, mr: u8) -> ProcessedSms {
+pub fn process_outgoing_sms(
+    pdu: &[u8],
+    sender: Option<&str>,
+    message_reference: u8,
+) -> ProcessedSms {
     let decoded = try_decode_hex(pdu);
     let bytes_to_parse = decoded.as_deref().unwrap_or(pdu);
 
@@ -348,7 +367,7 @@ pub fn process_outgoing_sms(pdu: &[u8], sender: Option<&str>, mr: u8) -> Process
         Ok(parsed_pdu) => {
             let to = parsed_pdu.phone_number();
             let status_report = if parsed_pdu.status_report_requested() {
-                match parsed_pdu.to_status_report_pdu_hex(mr) {
+                match parsed_pdu.to_status_report_pdu_hex(message_reference) {
                     Ok(hex_str) => Some(hex_str.into_bytes()),
                     Err(e) => {
                         warn!("Failed to encode status report: {:?}", e);
@@ -498,7 +517,7 @@ mod tests {
         assert_eq!(rx_bytes[1], 0x24); // PDU-Type (DELIVER, SRI=1, MMS=1)
 
         // Expected OA BCD for "+12345": length=5, type=0x91, digits=21 43 F5
-        let expected_oa = vec![5, 0x91, 0x21, 0x43, 0xF5];
+        let expected_oa = [5, 0x91, 0x21, 0x43, 0xF5];
         assert_eq!(rx_bytes[2..7], expected_oa[..]);
     }
 

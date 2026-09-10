@@ -10,6 +10,13 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "slirp_actor",
     edition = "2024",
+    select_deps = select({
+        "@platforms//os:windows": [],
+        "//conditions:default": [
+            "@etherparse",
+            "@socket2",
+        ],
+    }),
     test_deps = [],
     deps = [
         "//next/actor-framework",

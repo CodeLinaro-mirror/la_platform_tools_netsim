@@ -35,7 +35,7 @@ pub enum CallCommand<'a> {
     SendDtmf(#[parser(parse_raw_data)] &'a [u8]),
     /// VENDOR: Set emergency mode
     #[command(tag = "AT+WSOS=")]
-    SetEmergencyMode(u8),
+    SetEmergencyMode(bool),
     /// VENDOR: Query emergency mode
     #[command(tag = "AT+WSOS?")]
     QueryEmergencyMode,
@@ -252,17 +252,14 @@ impl CallService {
         Ok(Some(CallResponse::Ring))
     }
 
-    pub fn receive_hold(&mut self, peer_id: ModemId) {
-        debug!("[CallService] Receiving hold from {:?}", peer_id);
+    pub fn receive_peer_hold(&mut self, peer_id: ModemId, on_hold: bool) {
+        debug!(
+            "[CallService] Receiving {} from {:?}",
+            if on_hold { "hold" } else { "resume" },
+            peer_id
+        );
         if let Some(call) = self.calls.iter_mut().find(|c| c.peer_id == Some(peer_id)) {
-            call.state = CallState::Held;
-        }
-    }
-
-    pub fn receive_resume(&mut self, peer_id: ModemId) {
-        debug!("[CallService] Receiving resume from {:?}", peer_id);
-        if let Some(call) = self.calls.iter_mut().find(|c| c.peer_id == Some(peer_id)) {
-            call.state = CallState::Active;
+            call.state = if on_hold { CallState::Held } else { CallState::Active };
         }
     }
 
@@ -688,8 +685,8 @@ impl CallService {
         }
     }
 
-    fn handle_set_emergency_mode(&mut self, mode: u8) -> CallResult {
-        self.emergency_mode = mode == 1;
+    fn handle_set_emergency_mode(&mut self, mode: bool) -> CallResult {
+        self.emergency_mode = mode;
         Ok(None)
     }
 

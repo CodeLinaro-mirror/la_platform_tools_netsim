@@ -385,14 +385,50 @@ fn test_set_ctec_invalid() {
     when_at_command_sent(&mut world, "A", "AT+CTEC=99,\"21\"");
     then_response_is(&mut world, "A", "ERROR");
 
-    // Invalid preferred mask (0x200 is not supported, only 0x63 is supported)
-    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"200\"");
+    // Invalid preferred mask (0x80 has bit 7 set which is unsupported in any tier)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"80\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Invalid preferred mask (0x4 is CDMA, which is not in SUPPORTED_CTEC_TECHS)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"4\"");
     then_response_is(&mut world, "A", "ERROR");
 
     // Invalid current tech (5 is index, but we expect mask. 5 as mask is 0b101
     // which is invalid)
     when_at_command_sent(&mut world, "A", "AT+CTEC=5,\"21\"");
     then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_set_ctec_multi_byte_priority() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Multi-byte priority masks (e.g. 0x201 = 1st priority GSM (1), 2nd priority
+    // WCDMA (2))
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"201\"");
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "OK");
+
+    // Multi-byte priority mask with LTE (0x20 in byte 2 -> 0x200000)
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"200000\"");
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_set_ctec_preferred_mask_zero() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Setting preferred_mask = 0 represents "automatic" or "no preference"
+    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"0\"");
+    then_response_is(&mut world, "A", "+CTEC: DONE");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CTEC?");
+    then_response_is(&mut world, "A", "+CTEC: 1,0");
+    then_response_is(&mut world, "A", "OK");
 }
 
 #[test]
@@ -573,139 +609,44 @@ fn test_network_registration_radio_cycle_cfun_4() {
 }
 
 #[test]
-fn test_creg_registration_queries() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
+fn test_network_registration_queries() {
+    for cmd in ["CREG", "CGREG", "CEREG"] {
+        let mut world = World::new();
+        world.given_modem("A");
 
-    // 1. Query initial status (default unsol mode 0, not registered 0)
-    when_at_command_sent(&mut world, "A", "AT+CREG?");
-    then_response_is(&mut world, "A", "+CREG: 0,0");
-    then_response_is(&mut world, "A", "OK");
+        // 1. Query initial status (default unsol mode 0, not registered 0)
+        world.send_and_expect("A", &format!("AT+{cmd}?"), &[&format!("+{cmd}: 0,0"), "OK"]);
 
-    // 2. Set unsol mode to 1
-    when_at_command_sent(&mut world, "A", "AT+CREG=1");
-    then_response_is(&mut world, "A", "OK");
+        // 2. Set unsol mode to 1
+        world.send_and_expect_ok("A", &format!("AT+{cmd}=1"));
+        world.send_and_expect("A", &format!("AT+{cmd}?"), &[&format!("+{cmd}: 1,0"), "OK"]);
 
-    // Query status (should show mode 1)
-    when_at_command_sent(&mut world, "A", "AT+CREG?");
-    then_response_is(&mut world, "A", "+CREG: 1,0");
-    then_response_is(&mut world, "A", "OK");
+        // 3. Turn radio ON (attaches and registers)
+        world.send_and_expect_ok("A", "AT+CFUN=1");
+        world.when_time_advances_ms(10);
 
-    // 3. Turn radio ON (attaches and registers)
-    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
-    then_response_is(&mut world, "A", "OK");
-    when_time_advances_ms(&mut world, 10);
+        // Consume URC (others are disabled by default)
+        world.then_response_is("A", &format!("+{cmd}: 1"));
+        world.then_response_is("A", RESP_CSQ_LTE_DEFAULT);
 
-    // Consume CREG URC (others are disabled by default)
-    then_response_is(&mut world, "A", "+CREG: 1");
-    let csq_response = RESP_CSQ_LTE_DEFAULT;
-    then_response_is(&mut world, "A", csq_response);
+        // Query status (should show registered 1,1)
+        world.send_and_expect("A", &format!("AT+{cmd}?"), &[&format!("+{cmd}: 1,1"), "OK"]);
 
-    // Query status (should show registered 1,1)
-    when_at_command_sent(&mut world, "A", "AT+CREG?");
-    then_response_is(&mut world, "A", "+CREG: 1,1");
-    then_response_is(&mut world, "A", "OK");
+        // 4. Set unsol mode to 2 (should return immediate location info URC)
+        world.send_and_expect(
+            "A",
+            &format!("AT+{cmd}=2"),
+            &[&format!("+{cmd}: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"), "OK"],
+        );
 
-    // 4. Set unsol mode to 2 (should return immediate location info URC)
-    when_at_command_sent(&mut world, "A", "AT+CREG=2");
-    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
-    then_response_is(&mut world, "A", "OK");
-
-    // Query status (should show mode 2, status 1, LAC "2142", CID "0000B804", act 7
-    // (LTE))
-    when_at_command_sent(&mut world, "A", "AT+CREG?");
-    then_response_is(&mut world, "A", &format!("+CREG: 2,1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
-    then_response_is(&mut world, "A", "OK");
-}
-
-#[test]
-fn test_cgreg_registration_queries() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-
-    // 1. Query initial status
-    when_at_command_sent(&mut world, "A", "AT+CGREG?");
-    then_response_is(&mut world, "A", "+CGREG: 0,0");
-    then_response_is(&mut world, "A", "OK");
-
-    // 2. Set unsol mode to 1
-    when_at_command_sent(&mut world, "A", "AT+CGREG=1");
-    then_response_is(&mut world, "A", "OK");
-
-    // Query status (should show mode 1)
-    when_at_command_sent(&mut world, "A", "AT+CGREG?");
-    then_response_is(&mut world, "A", "+CGREG: 1,0");
-    then_response_is(&mut world, "A", "OK");
-
-    // 3. Turn radio ON
-    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
-    then_response_is(&mut world, "A", "OK");
-    when_time_advances_ms(&mut world, 10);
-
-    // Consume CGREG URC
-    then_response_is(&mut world, "A", "+CGREG: 1");
-    let csq_response = RESP_CSQ_LTE_DEFAULT;
-    then_response_is(&mut world, "A", csq_response);
-
-    // Query status (should show registered 1,1)
-    when_at_command_sent(&mut world, "A", "AT+CGREG?");
-    then_response_is(&mut world, "A", "+CGREG: 1,1");
-    then_response_is(&mut world, "A", "OK");
-
-    // 4. Set unsol mode to 2
-    when_at_command_sent(&mut world, "A", "AT+CGREG=2");
-    then_response_is(&mut world, "A", &format!("+CGREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
-    then_response_is(&mut world, "A", "OK");
-
-    // Query status
-    when_at_command_sent(&mut world, "A", "AT+CGREG?");
-    then_response_is(&mut world, "A", &format!("+CGREG: 2,1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
-    then_response_is(&mut world, "A", "OK");
-}
-
-#[test]
-fn test_cereg_registration_queries() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-
-    // 1. Query initial status
-    when_at_command_sent(&mut world, "A", "AT+CEREG?");
-    then_response_is(&mut world, "A", "+CEREG: 0,0");
-    then_response_is(&mut world, "A", "OK");
-
-    // 2. Set unsol mode to 1
-    when_at_command_sent(&mut world, "A", "AT+CEREG=1");
-    then_response_is(&mut world, "A", "OK");
-
-    // Query status (should show mode 1)
-    when_at_command_sent(&mut world, "A", "AT+CEREG?");
-    then_response_is(&mut world, "A", "+CEREG: 1,0");
-    then_response_is(&mut world, "A", "OK");
-
-    // 3. Turn radio ON
-    when_at_command_sent(&mut world, "A", "AT+CFUN=1");
-    then_response_is(&mut world, "A", "OK");
-    when_time_advances_ms(&mut world, 10);
-
-    // Consume CEREG URC
-    then_response_is(&mut world, "A", "+CEREG: 1");
-    let csq_response = RESP_CSQ_LTE_DEFAULT;
-    then_response_is(&mut world, "A", csq_response);
-
-    // Query status (should show registered 1,1)
-    when_at_command_sent(&mut world, "A", "AT+CEREG?");
-    then_response_is(&mut world, "A", "+CEREG: 1,1");
-    then_response_is(&mut world, "A", "OK");
-
-    // 4. Set unsol mode to 2
-    when_at_command_sent(&mut world, "A", "AT+CEREG=2");
-    then_response_is(&mut world, "A", &format!("+CEREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
-    then_response_is(&mut world, "A", "OK");
-
-    // Query status
-    when_at_command_sent(&mut world, "A", "AT+CEREG?");
-    then_response_is(&mut world, "A", &format!("+CEREG: 2,1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
-    then_response_is(&mut world, "A", "OK");
+        // Query status (should show mode 2, status 1, LAC "2142", CID "0000B804", act 7
+        // (LTE))
+        world.send_and_expect(
+            "A",
+            &format!("AT+{cmd}?"),
+            &[&format!("+{cmd}: 2,1,\"{TEST_LAC}\",\"{TEST_CID}\",7"), "OK"],
+        );
+    }
 }
 
 #[test]

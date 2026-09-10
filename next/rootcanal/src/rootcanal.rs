@@ -365,7 +365,8 @@ mod tests {
         let bluetooth_weak = Arc::new(Mutex::new(Weak::<Rootcanal>::new()));
         let bluetooth_weak_clone = bluetooth_weak.clone();
         let on_packet = Box::new(move |receiver_id, packet: Bytes, phy, rssi| {
-            if let Some(bluetooth) = bluetooth_weak_clone.lock().upgrade() {
+            let bluetooth = bluetooth_weak_clone.lock().upgrade();
+            if let Some(bluetooth) = bluetooth {
                 bluetooth.deliver_packet(receiver_id, &packet, phy, rssi);
             }
         });
