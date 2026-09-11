@@ -5,6 +5,53 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Ident, Type, parse_macro_input};
 
+#[proc_macro_derive(ParsableEnum)]
+pub fn parsable_enum_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+    let variants = match &input.data {
+        Data::Enum(data) => &data.variants,
+        _ => panic!("#[derive(ParsableEnum)] is only supported for enums"),
+    };
+
+    let mut match_arms = Vec::new();
+    let mut next_discriminant = 0u8;
+
+    for variant in variants {
+        let v_name = &variant.ident;
+        let val =
+            if let Some((_, syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(lit_int), .. }))) =
+                &variant.discriminant
+            {
+                let parsed_val: u8 = lit_int.base10_parse().expect("Discriminant must be u8");
+                next_discriminant = parsed_val.checked_add(1).unwrap_or(0);
+                parsed_val
+            } else {
+                let current = next_discriminant;
+                next_discriminant = next_discriminant.checked_add(1).unwrap_or(0);
+                current
+            };
+
+        match_arms.push(quote! {
+            #val => Ok((input, Self::#v_name)),
+        });
+    }
+
+    let expanded = quote! {
+        impl<'a> crate::types::Parsable<'a> for #name {
+            fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+                let (input, val) = <u8 as crate::types::Parsable>::parse(input)?;
+                match val {
+                    #(#match_arms)*
+                    _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
 #[proc_macro_derive(CommandParser, attributes(command, parser))]
 pub fn command_parser_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

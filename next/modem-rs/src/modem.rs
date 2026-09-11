@@ -21,8 +21,7 @@ use crate::{
     time::Clock,
     types::{
         AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, ModemError, ModemId,
-        NumberPresentation, Parsable, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode,
-        Response,
+        NumberPresentation, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
     },
 };
 
@@ -193,9 +192,8 @@ impl ModemImpl {
         effects
     }
 
-    pub fn set_phone_number(&mut self, number: &str) {
-        let phone = PhoneNumber::parse(number.as_bytes()).map(|(_, p)| p).ok();
-        self.sim_service.set_msisdn(phone.as_ref());
+    pub fn set_phone_number(&mut self, phone: PhoneNumber) {
+        self.sim_service.set_msisdn(Some(&phone));
     }
 
     pub fn phone_number(&self) -> Option<PhoneNumber> {
@@ -472,7 +470,7 @@ impl ModemImpl {
 
     pub fn set_operator(&mut self, operator: &str) -> Vec<ModemEffect> {
         let mode = if operator.is_empty() { CopsMode::Automatic } else { CopsMode::Manual };
-        let oper = if operator.is_empty() { None } else { Some(operator.as_bytes()) };
+        let oper = if operator.is_empty() { None } else { Some(operator) };
         let mut effects = Vec::new();
         if let Ok(Some(crate::network_service::NetworkResponse::Urcs(urcs))) =
             self.network_service.set_operator_manual(mode, oper)
@@ -497,12 +495,22 @@ impl ModemImpl {
     ) -> ExecutionResult {
         let mut result = self.execute(command);
         if let ExecutionResult::Success(ref mut handled) = result {
-            if let Command::Network(NetworkCommand::SetRadioPower(RadioPowerLevel::Full)) = command
-            {
-                effects.push(ModemEffect::Schedule {
-                    delay: std::time::Duration::from_millis(10),
-                    event: ModemEvent::AttachNetwork,
-                });
+            if let Command::Network(NetworkCommand::SetRadioPower(power, reset)) = command {
+                let should_reset = reset.unwrap_or(false);
+                if should_reset || *power != RadioPowerLevel::Full {
+                    for action in self.call_service.hangup_all(self.id) {
+                        effects.push(ModemEffect::Action(action));
+                    }
+                    self.data_service.deactivate_all();
+                }
+                if *power == RadioPowerLevel::Full
+                    && (!self.network_service.is_attached() || should_reset)
+                {
+                    effects.push(ModemEffect::Schedule {
+                        delay: std::time::Duration::from_millis(10),
+                        event: ModemEvent::AttachNetwork,
+                    });
+                }
             }
             let mode_active = match command {
                 Command::Network(
@@ -717,7 +725,7 @@ mod tests {
         // Enable CLIP via AT command
         modem.execute_chained_commands(&[b"AT+CLIP=1".to_vec()]);
 
-        let phone = PhoneNumber::new("123456");
+        let phone = PhoneNumber::new_for_test("123456");
         let effects =
             modem.trigger_incoming_call(Some(&phone), NumberPresentation::NotAvailable, None);
 

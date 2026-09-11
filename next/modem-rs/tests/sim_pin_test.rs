@@ -49,6 +49,9 @@ fn test_pin_validation_errors() {
         CME_ERROR_INCORRECT_PASSWORD,
     );
 
+    // 3. Non-ASCII PIN (multi-byte UTF-8) -> expect CME ERROR 16
+    world.send_and_expect_error("A", "AT+CPIN=\"\u{00E9}\u{00E9}\"", CME_ERROR_INCORRECT_PASSWORD);
+
     // Transition to PukRequired to test PUK validation
     world.send_and_expect_error(
         "A",

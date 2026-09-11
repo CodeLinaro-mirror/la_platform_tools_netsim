@@ -3,7 +3,7 @@
 
 use hex;
 use modem_rs::{
-    DedicatedFile, ElementaryFile, FileSystem, PinState, SimFile, SimIo, SimProfile,
+    DedicatedFile, ElementaryFile, FileSystem, PhoneNumber, PinState, SimFile, SimIo, SimProfile,
     config::PinProfile, constants::UiccFileId, test_utils::MockModemHandler,
 };
 use netsim_model::Quirks;
@@ -94,7 +94,8 @@ pub fn given_modem_with_number(world: &mut World, name: &str, number: &str) {
     given_modem(world, name);
     let (id, _) = world.get_modem(name);
     if let Some(modem) = world.manager.get_modem_mut(id) {
-        modem.set_phone_number(number);
+        let phone = PhoneNumber::new_for_test(number);
+        modem.set_phone_number(phone);
     } else {
         panic!("Failed to retrieve modem '{name}' after creation");
     }

@@ -89,8 +89,8 @@ pub fn parse_xml_profile(xml: &str) -> Result<SimProfile, XmlProfileError> {
     Ok(SimProfile {
         iccid,
         imsi,
-        msisdn: String::new(), /* MSISDN is assigned dynamically by the simulator and
-                                * intentionally ignored from XML */
+        msisdn: None, /* MSISDN is assigned dynamically by the simulator and
+                       * intentionally ignored from XML */
         pin_profile,
         facility_locks,
         stk,
