@@ -831,3 +831,12 @@ fn test_sms_slot_recycling() {
     world.then_response_contains("A", "+CMGW: 4");
     world.then_response_is("A", "OK");
 }
+
+#[test]
+fn test_sms_prompt_with_goldfish_quirk() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+
+    world.when_at_command("A", "AT+CMGS=15");
+    world.then_prompt_is("A", "> \r");
+}

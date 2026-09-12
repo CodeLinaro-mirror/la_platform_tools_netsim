@@ -626,16 +626,23 @@ impl fmt::Display for PhoneNumber {
     }
 }
 
-/// Type of Address (TON/NPI) as defined in 3GPP TS 24.008 / TS 23.040 Table
-/// 9.1.2.5.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
+/// Type of Address (TON/NPI) as defined in 3GPP TS 24.008 Table 10.5.118 and
+/// 3GPP TS 23.040 Table 9.1.2.5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum, Default)]
 #[repr(u8)]
 pub enum TypeOfAddress {
-    /// Unknown / unspecified address type (0).
-    Unknown = 0,
-    /// National / Unknown numbering plan (0x81 = 129).
+    /// Non-standard placeholder (0) transmitted by Android Goldfish RIL in
+    /// `RadioMessaging::setSmscAddress` (`AT+CSCA=...,0`).
+    /// Not a valid 3GPP TOA octet (Bit 8 is 0).
+    GoldfishCompat = 0,
+    /// Default 3GPP Type of Address (0x81 = 129).
+    /// TON = 000 (Unknown), NPI = 0001 (ISDN / telephony E.164).
+    /// Mandated by 3GPP TS 27.005 §3.1 when number lacks '+'.
+    #[default]
     National = 129,
     /// International numbering plan with E.164 (0x91 = 145).
+    /// TON = 001 (International), NPI = 0001 (ISDN / telephony E.164).
+    /// Mandated by 3GPP TS 27.005 §3.1 when number starts with '+'.
     International = 145,
 }
 
@@ -2928,6 +2935,7 @@ mod tests {
         assert_eq!(IcfParity::default(), IcfParity::Space);
         assert_eq!(FlowControlMode::default(), FlowControlMode::Hardware);
         assert_eq!(ServiceClass::default(), ServiceClass::VOICE_DATA_FAX);
+        assert_eq!(TypeOfAddress::default(), TypeOfAddress::National);
 
         let (_, sc) = ServiceClass::parse(b"3").unwrap();
         assert_eq!(sc.as_u8(), 3);

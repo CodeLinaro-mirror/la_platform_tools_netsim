@@ -240,7 +240,7 @@ impl ElementaryFileResponseHeader {
             ElementaryFileStructure::LinearFixed => {
                 &[0x02, self.structure as u8, self.record_len.unwrap_or(0)]
             }
-            ElementaryFileStructure::Transparent => &[0x00, self.structure as u8],
+            ElementaryFileStructure::Transparent => &[0x01, self.structure as u8],
         };
 
         [0x00, 0x00] // Bytes 1-2: RFU
@@ -1242,12 +1242,8 @@ impl SimService {
 
             if let Some(header) = header_opt {
                 let header_bytes = header.to_bytes();
-                let p3_usize = p3 as usize;
-                if p3_usize > header_bytes.len() {
-                    return Ok(Some(RESP_WRONG_LENGTH));
-                }
-                let resp_data =
-                    if p3_usize > 0 { &header_bytes[..p3_usize] } else { &header_bytes[..] };
+                let end = if p3 == 0 { header_bytes.len() } else { p3 as usize };
+                let resp_data = header_bytes.get(..end).unwrap_or(&header_bytes[..]);
                 return Ok(Some(SimResponse::RestrictedSimAccess {
                     sw: SW_SUCCESS,
                     data: Some(hex::encode_upper(resp_data)),
@@ -2216,8 +2212,26 @@ mod tests {
         assert_eq!(bytes[7], 0x00);
         assert_eq!(bytes[8..11], [0x00, 0x00, 0x00]);
         assert_eq!(bytes[11], FileStatus::Valid as u8);
-        assert_eq!(bytes[12], 0x00);
+        assert_eq!(bytes[12], 0x01);
         assert_eq!(bytes[13], ElementaryFileStructure::Transparent as u8);
+    }
+
+    #[test]
+    fn test_handle_sim_io_get_response_transparent_ef_p3_15() {
+        let mut sim_service = SimService::new();
+        sim_service.load_profile(&SimProfile::default());
+        // EF_FPLMN is 0x6F7B (28539), a transparent EF of 12 bytes.
+        let resp =
+            sim_service.handle_sim_io(apdu::Instruction::GetResponse, 0x6F7B, 0, 0, 15, None);
+        let SimResponse::RestrictedSimAccess { sw, data } = resp.unwrap().unwrap() else {
+            panic!("Expected RestrictedSimAccess");
+        };
+        assert_eq!(sw, SW_SUCCESS);
+        let data = data.expect("Expected data");
+        // Transparent EF header is strictly 14 bytes (28 hex characters)
+        assert_eq!(data.len(), 28);
+        assert_eq!(&data[24..26], "01"); // Byte 13: length of following data = 1
+        assert_eq!(&data[26..28], "00"); // Byte 14: structure = Transparent (0)
     }
 
     #[test]

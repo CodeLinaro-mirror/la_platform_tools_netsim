@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, fmt};
 
 use modem_rs_derive::CommandParser;
+use netsim_model::Quirks;
 use nom::IResult;
 
 use crate::{
@@ -65,9 +66,10 @@ pub enum SmsCommand<'a> {
 
 pub use crate::types::MessageStatus;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MessageStorage {
     Sim,
+    #[default]
     Me,
 }
 
@@ -106,8 +108,9 @@ impl<'a> Parsable<'a> for MessageStorage {
         })
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MessageFormat {
+    #[default]
     Pdu,
     Text,
 }
@@ -145,7 +148,9 @@ pub enum SmsResponse {
         address: Option<PhoneNumber>,
         tosca: TypeOfAddress,
     },
-    Prompt,
+    Prompt {
+        goldfish_compat: bool,
+    },
 }
 
 impl std::fmt::Display for SmsResponse {
@@ -173,7 +178,13 @@ impl std::fmt::Display for SmsResponse {
                 let addr_str = address.as_ref().map(|a| a.as_str()).unwrap_or("");
                 write!(f, "+CSCA: \"{addr_str}\",{tosca}\r\n")
             }
-            SmsResponse::Prompt => write!(f, "> "),
+            SmsResponse::Prompt { goldfish_compat } => {
+                if *goldfish_compat {
+                    write!(f, "> \r")
+                } else {
+                    write!(f, "> ")
+                }
+            }
         }
     }
 }
@@ -219,6 +230,7 @@ impl SmsTransactionState {
 const MAX_ME_SMS_CAPACITY: usize = 255;
 
 pub struct SmsService {
+    quirks: Quirks,
     message_reference: u8,
     messages: BTreeMap<usize, SimSmsMessage>,
     storage1: MessageStorage,
@@ -235,20 +247,24 @@ impl Default for SmsService {
     fn default() -> Self {
         Self {
             message_reference: 1,
-            messages: BTreeMap::new(),
-            storage1: MessageStorage::Me,
-            storage2: MessageStorage::Me,
-            storage3: MessageStorage::Me,
-            smsc_address: None,
-            smsc_tosca: TypeOfAddress::National,
-            message_format: MessageFormat::Pdu,
-            transaction_state: SmsTransactionState::Idle,
-            broadcast_config: BroadcastConfig::default(),
+            quirks: Default::default(),
+            messages: Default::default(),
+            storage1: Default::default(),
+            storage2: Default::default(),
+            storage3: Default::default(),
+            smsc_address: Default::default(),
+            smsc_tosca: Default::default(),
+            message_format: Default::default(),
+            transaction_state: Default::default(),
+            broadcast_config: Default::default(),
         }
     }
 }
 
 impl SmsService {
+    pub fn new(quirks: Quirks) -> Self {
+        Self { quirks, ..Default::default() }
+    }
     // --- Pure command handlers ---
 
     pub fn get_sms_count(&self) -> usize {
@@ -469,7 +485,9 @@ impl SmsService {
         let status = stat.unwrap_or(SmsMessageStatus::StoredUnsent);
         self.transaction_state =
             SmsTransactionState::Storing { expected_len: len as usize, status };
-        Ok(SmsSuccess::new(Some(SmsResponse::Prompt)))
+        Ok(SmsSuccess::new(Some(SmsResponse::Prompt {
+            goldfish_compat: self.quirks.goldfish_ril_37_or_earlier,
+        })))
     }
 
     pub fn handle_wait_for_send_sms(&mut self, args: SendSmsArgs) -> SmsResult {
@@ -491,7 +509,9 @@ impl SmsService {
                     SmsTransactionState::Sending { destination: None, expected_len: length };
             }
         }
-        Ok(SmsSuccess::new(Some(SmsResponse::Prompt)))
+        Ok(SmsSuccess::new(Some(SmsResponse::Prompt {
+            goldfish_compat: self.quirks.goldfish_ril_37_or_earlier,
+        })))
     }
 
     pub fn handle_broadcast_config(
@@ -588,7 +608,7 @@ impl From<SmsSuccess> for ExecutionResult {
         let mut responses = Vec::new();
         let mut add_ok = true;
         if let Some(resp) = success.response {
-            if resp == SmsResponse::Prompt {
+            if matches!(resp, SmsResponse::Prompt { .. }) {
                 add_ok = false;
             }
             responses.push(resp.into());
