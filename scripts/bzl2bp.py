@@ -49,6 +49,8 @@ EXACT_DEP_MAPPING = {
     ":ap_actor_cxx": "libnetsim_next_ap_actor_cxx",
     ":hostap_crypto_shim": "libnetsim_next_ap_actor_cxx",
     "@boringssl//:crypto": "libcrypto",
+    "//next/slirp/host:slirp-host": "libnetsim_slirp_host",
+    "//next/slirp/host:slirp-host_testing": "libnetsim_slirp_host_testing",
 }
 
 IGNORED_DEPS = {
@@ -257,6 +259,7 @@ ALLOWED_TESTING_TARGETS = {
     "ap-actor",
     "slirp",
     "slirp-actor",
+    "slirp-host",
 }
 
 
@@ -419,6 +422,9 @@ def netsim_rust_library(
     crate_name=None,
     **kwargs,
 ):
+  prefix = "libnetsim_next_"
+  if name == "slirp-host":
+    prefix = "libnetsim_"
   if name in IGNORED_TARGETS:
     return
   if deps is None:
@@ -481,7 +487,7 @@ def netsim_rust_library(
   # 1. Main Library Target
   main_tgt = {
       "type": "rust_library_host",
-      "name": f"libnetsim_next_{name.replace('-', '_')}",
+      "name": f"{prefix}{name.replace('-', '_')}",
       "crate_name": crate_name,
       "stem": f"lib{crate_name}",
       "crate_root": crate_root_mapped,
@@ -535,7 +541,7 @@ def netsim_rust_library(
   if name in ALLOWED_TESTING_TARGETS:
     testing_tgt = {
         "type": "rust_library_host",
-        "name": f"libnetsim_next_{name.replace('-', '_')}_testing",
+        "name": f"{prefix}{name.replace('-', '_')}_testing",
         "crate_name": crate_name,
         "stem": f"lib{crate_name}_testing",
         "crate_root": crate_root_mapped,
@@ -592,7 +598,7 @@ def netsim_rust_library(
     if is_test_package_allowed(package_name):
       unit_tgt = {
           "type": "rust_test_host",
-          "name": f"libnetsim_next_{name.replace('-', '_')}_tests",
+          "name": f"{prefix}{name.replace('-', '_')}_tests",
           "crate_name": crate_name,
           "crate_root": crate_root_mapped,
           "srcs": srcs_content + data_content,
@@ -658,7 +664,7 @@ def netsim_rust_library(
               set(
                   testing_rustlibs
                   + test_rustlibs
-                  + [f"libnetsim_next_{name.replace('-', '_')}_testing"]
+                  + [f"{prefix}{name.replace('-', '_')}_testing"]
               )
           )
       )
@@ -686,7 +692,7 @@ def netsim_rust_library(
         integ_dict = {
             "type": "rust_test_host",
             "name": (
-                f"libnetsim_next_{name.replace('-', '_')}_integration_tests"
+                f"{prefix}{name.replace('-', '_')}_integration_tests"
             ),
             "crate_name": f"{crate_name}_tests",
             "crate_root": crate_root,
