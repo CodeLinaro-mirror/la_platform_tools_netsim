@@ -355,6 +355,11 @@ pub struct NetsimDaemon {
     args: Args,
     /// The gRPC server instance (kept alive).
     _grpc_server: Option<grpcio::Server>,
+    /// The port the HTTP /v1 API is listening on.
+    http_port: Option<u16>,
+    /// The HTTP listener task, aborted when the daemon is dropped so the HTTP
+    /// port does not outlive it.
+    http_task: tokio::task::JoinHandle<()>,
     /// The DeviceActor task handle.
     device_task: tokio::task::JoinHandle<()>,
     /// The CaptureActor task handle.
@@ -365,6 +370,17 @@ pub struct NetsimDaemon {
 
     slirp_client: SlirpClient,
     chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
+}
+
+impl Drop for NetsimDaemon {
+    fn drop(&mut self) {
+        // The HTTP listener task owns its TCP listener. Aborting it here
+        // releases the port, so restarting the daemon in the same process does
+        // not fail with "Address already in use".
+        self.http_task.abort();
+        self.device_task.abort();
+        self.capture_task.abort();
+    }
 }
 
 impl NetsimDaemon {
@@ -654,6 +670,15 @@ impl NetsimDaemon {
         )
         .await?;
 
+        // HTTP server for the /v1 API
+        let resolved_http_port =
+            resolve_port_with_env(args.http_port, "NETSIM_HTTP_PORT", |name| std::env::var(name))
+                .unwrap_or(0);
+        let http_listener = bind_tcp_loopback(resolved_http_port).map_err(|e| {
+            init_error(format!("Failed to bind requested HTTP port {resolved_http_port}: {e}"))
+        })?;
+        let actual_http_port = http_listener.local_addr().map_err(init_error)?.port();
+
         // HCI TCP socket server
         let instance_num = get_instance(args.instance);
         let is_explicit_hci = args.hci_port.is_some() || std::env::var("NETSIM_HCI_PORT").is_ok();
@@ -763,6 +788,7 @@ impl NetsimDaemon {
         if let Some(ws_port) = actual_ws_port {
             ini_data.insert("ws.port".to_string(), ws_port.to_string());
         }
+        ini_data.insert("http.port".to_string(), actual_http_port.to_string());
         if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
@@ -886,6 +912,14 @@ impl NetsimDaemon {
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();
 
+        let http_task = tokio::spawn(netsim_rest_api::server::run(
+            http_listener,
+            device_client.clone(),
+            Arc::new(link_client.clone()),
+            ap_client.clone(),
+            get_version(),
+        ));
+
         Ok(StartUpMode::Owner(
             NetsimDaemon {
                 device_client,
@@ -896,6 +930,8 @@ impl NetsimDaemon {
                 listener_addresses,
                 args,
                 _grpc_server: Some(grpc_server),
+                http_port: Some(actual_http_port),
+                http_task,
                 device_task,
                 capture_task,
                 artifact_dir,
@@ -914,6 +950,11 @@ impl NetsimDaemon {
             }
             _ => None,
         })
+    }
+
+    /// Gets the HTTP /v1 API port, if the server is running.
+    pub fn http_port(&self) -> Option<u16> {
+        self.http_port
     }
 
     /// Gets the Rootcanal test port, if the server is running.
@@ -1052,6 +1093,11 @@ impl NetsimDaemon {
                 }
                 capture_result = &mut self.capture_task => {
                     if self.handle_secondary_task_completion(Some(capture_result)) {
+                        break;
+                    }
+                }
+                http_result = &mut self.http_task => {
+                    if self.handle_secondary_task_completion(Some(http_result)) {
                         break;
                     }
                 }

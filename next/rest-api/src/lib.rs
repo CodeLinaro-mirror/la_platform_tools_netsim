@@ -7,11 +7,13 @@
 //! dispatcher for managing devices, links, and access points.
 
 pub mod ap_api;
+pub mod client;
 pub mod device_api;
 pub mod link_api;
 pub mod server;
 
 pub use ap_api::*;
+pub use client::*;
 pub use device_api::*;
 pub use link_api::*;
 pub use server::*;
