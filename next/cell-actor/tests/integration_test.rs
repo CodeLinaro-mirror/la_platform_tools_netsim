@@ -410,3 +410,55 @@ async fn test_incoming_call_invalid_number() {
     let err_str = result.unwrap_err().to_string();
     assert!(err_str.contains("Invalid phone number"), "Unexpected error: {err_str}");
 }
+
+#[tokio::test]
+async fn test_network_config_lifecycle_and_update() {
+    use std::net::{IpAddr, Ipv4Addr};
+
+    let harness = setup_test_harness().await;
+    let chip_id = ChipId(1);
+    let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink();
+    let mut params = create_params(chip_id, stream, sink);
+
+    let initial_config = netsim_model::CellNetworkConfig {
+        ip_address: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)),
+        prefixlen: 30,
+        gateway: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 1)),
+        dns: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+    };
+    if let Some(ChipVariant::Cell(cell)) = &mut params.chip.variant {
+        cell.network_configs = vec![initial_config.clone()];
+    }
+
+    harness.client.create(chip_id, params).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let chip = harness.client.read(chip_id).await.unwrap();
+    if let Some(ChipVariant::Cell(cell_chip)) = &chip.variant {
+        assert_eq!(cell_chip.network_configs, vec![initial_config]);
+    } else {
+        panic!("GetChip failed for existing chip");
+    }
+
+    let updated_config = netsim_model::CellNetworkConfig {
+        ip_address: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 6)),
+        prefixlen: 30,
+        gateway: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 5)),
+        dns: IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
+    };
+    let update = netsim_model::ChipUpdate {
+        variant: Some(netsim_model::ChipVariantUpdate::Cell(netsim_model::CellUpdate {
+            network_configs: Some(vec![updated_config.clone()]),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    harness.client.update(chip_id, update).await.unwrap();
+
+    let updated_chip = harness.client.read(chip_id).await.unwrap();
+    if let Some(ChipVariant::Cell(cell_chip)) = &updated_chip.variant {
+        assert_eq!(cell_chip.network_configs, vec![updated_config]);
+    } else {
+        panic!("GetChip failed for updated chip");
+    }
+}

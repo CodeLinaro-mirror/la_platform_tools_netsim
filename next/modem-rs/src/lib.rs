@@ -5,7 +5,6 @@ pub mod apdu;
 mod call_service;
 pub mod config;
 pub mod constants;
-mod cuttlefish;
 mod data_service;
 mod metrics;
 mod misc_service;

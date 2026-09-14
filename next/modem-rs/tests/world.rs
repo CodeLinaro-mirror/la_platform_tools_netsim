@@ -17,8 +17,9 @@ use crate::steps::{
         then_wait_for_response_containing,
     },
     setup::{
-        given_goldfish_37_modem, given_modem, given_modem_with_fdn_sim_profile,
-        given_modem_with_locked_sim, given_modem_with_msisdn_in_fs, given_modem_with_number,
+        given_data_modem, given_goldfish_37_modem, given_modem, given_modem_with_fdn_sim_profile,
+        given_modem_with_locked_sim, given_modem_with_msisdn_in_fs,
+        given_modem_with_network_config, given_modem_with_number,
         given_modem_with_perm_blocked_sim, given_modem_with_sim_profile,
         given_modem_with_xml_profile,
     },
@@ -73,6 +74,18 @@ impl World {
         given_modem(self, name);
     }
 
+    pub fn given_data_modem(&mut self, name: &str) {
+        given_data_modem(self, name);
+    }
+
+    pub fn given_modem_with_network_config(
+        &mut self,
+        name: &str,
+        network_config: netsim_model::CellNetworkConfig,
+    ) {
+        given_modem_with_network_config(self, name, network_config);
+    }
+
     /// Creates a Goldfish 37 (or earlier) modem with the given name.
     pub fn given_goldfish_37_modem(&mut self, name: &str) {
         given_goldfish_37_modem(self, name);
@@ -121,7 +134,7 @@ impl World {
         let id = self.next_modem_id();
         let (handler, sink) = MockModemHandler::new(false);
         self.manager
-            .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default())
+            .new_modem_with_profile(id, sink, Some(profile), None, Quirks::default(), Vec::new())
             .expect("Failed to create modem with profile");
         self.modems.insert(name.to_string(), (id, handler));
     }
