@@ -17,8 +17,9 @@ use crate::steps::{
         then_wait_for_response_containing,
     },
     setup::{
-        given_modem, given_modem_with_fdn_sim_profile, given_modem_with_locked_sim,
-        given_modem_with_number, given_modem_with_perm_blocked_sim, given_modem_with_sim_profile,
+        given_goldfish_37_modem, given_modem, given_modem_with_fdn_sim_profile,
+        given_modem_with_locked_sim, given_modem_with_msisdn_in_fs, given_modem_with_number,
+        given_modem_with_perm_blocked_sim, given_modem_with_sim_profile,
         given_modem_with_xml_profile,
     },
 };
@@ -70,6 +71,16 @@ impl World {
     /// Creates a modem with the given name.
     pub fn given_modem(&mut self, name: &str) {
         given_modem(self, name);
+    }
+
+    /// Creates a Goldfish 37 (or earlier) modem with the given name.
+    pub fn given_goldfish_37_modem(&mut self, name: &str) {
+        given_goldfish_37_modem(self, name);
+    }
+
+    /// Creates a modem with EF_MSISDN configured in the SIM filesystem.
+    pub fn given_modem_with_msisdn_in_fs(&mut self, name: &str) {
+        given_modem_with_msisdn_in_fs(self, name);
     }
 
     /// Creates a modem with the given name and phone number.

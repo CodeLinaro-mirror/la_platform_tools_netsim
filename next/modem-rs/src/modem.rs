@@ -80,7 +80,7 @@ impl ModemImpl {
             enable_unsolicited_urcs: enable_unsol,
             sim_service,
             network_service: NetworkService::new(quirks, home_plmn),
-            sms_service: SmsService::default(),
+            sms_service: SmsService::new(quirks),
             stk_service: StkService::new(profile.stk.clone()),
             sup_service: SupService::default(),
             misc_service,

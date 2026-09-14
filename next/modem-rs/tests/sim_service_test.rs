@@ -1795,37 +1795,58 @@ fn test_response_buffer_cleared_on_channel_close() {
 #[test]
 fn test_crsm_get_response_ef_msisdn() {
     let mut world = World::new();
-    given_modem_with_msisdn_in_fs(&mut world, "A");
+    world.given_modem_with_msisdn_in_fs("A");
 
     // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 15
     // Header format (15 bytes): 00 00 00 1C 6F 40 04 00 00 00 00 00 02 01 1C
-    when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,15");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,0000001C6F4004000000000002011C");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=192,28480,0,0,15",
+        &["+CRSM: 144,0,0000001C6F4004000000000002011C", "OK"],
+    );
 }
 
 #[test]
 fn test_crsm_get_response_df_telecom() {
     let mut world = World::new();
-    given_modem_with_msisdn_in_fs(&mut world, "A");
+    world.given_modem_with_msisdn_in_fs("A");
 
     // GET_RESPONSE for DF_TELECOM (7F10 / 32528) with P3 = 22
     // Header format: File ID at bytes 4-5 is 7F10, File Type at byte 6 is 02 (DF),
     // num_ef_children at byte 15 is 03
-    when_at_command_sent(&mut world, "A", "AT+CRSM=192,32528,0,0,22");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,000000007F1002000000000000000300000000000000");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=192,32528,0,0,22",
+        &["+CRSM: 144,0,000000007F1002000000000000000300000000000000", "OK"],
+    );
 }
 
 #[test]
-fn test_crsm_get_response_wrong_length() {
+fn test_crsm_get_response_p3_larger_than_header() {
     let mut world = World::new();
-    given_modem_with_msisdn_in_fs(&mut world, "A");
+    world.given_modem_with_msisdn_in_fs("A");
 
     // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 50 > 15 byte header
-    when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,50");
-    then_response_is(&mut world, "A", "+CRSM: 103,0");
-    then_response_is(&mut world, "A", "OK");
+    // Per ISO/IEC 7816-4 and 3GPP TS 27.007 §8.18, returns available 15 bytes
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=192,28480,0,0,50",
+        &["+CRSM: 144,0,0000001C6F4004000000000002011C", "OK"],
+    );
+}
+
+#[test]
+fn test_crsm_get_response_transparent_ef_p3_15() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    // GET_RESPONSE for EF_FPLMN (6F7B / 28539) with P3 = 15 returns 14-byte header
+    // Byte 13 is 01 (length of following data), Byte 14 is 00 (transparent)
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=192,28539,0,0,15",
+        &["+CRSM: 144,0,0000001E6F7B0400000000000100", "OK"],
+    );
 }
 
 #[test]
