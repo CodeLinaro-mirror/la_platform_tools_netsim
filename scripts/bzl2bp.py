@@ -382,6 +382,10 @@ def rust_test_suite(*args, **kwargs):
   pass
 
 
+def test_suite(*args, **kwargs):
+  pass
+
+
 def rust_protobuf(*args, **kwargs):
   name = kwargs.get("name")
   srcs = kwargs.get("srcs", [])
@@ -777,7 +781,13 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
     )
 
   soong_name = (
-      "netsimd" if name == "daemon" else ("netsim" if name == "netsim" else f"netsim_next_{name.replace('-', '_')}")
+      "netsimd"
+      if name == "daemon"
+      else (
+          "netsim"
+          if name == "netsim"
+          else f"netsim_next_{name.replace('-', '_')}"
+      )
   )
 
   bin_dict = {
@@ -933,6 +943,7 @@ SANDBOX = {
     "exports_files": exports_files,
     "rust_test": rust_test,
     "rust_test_suite": rust_test_suite,
+    "test_suite": test_suite,
     "rust_protobuf": rust_protobuf,
     "netsim_rust_library": netsim_rust_library,
     "netsim_rust_binary": netsim_rust_binary,

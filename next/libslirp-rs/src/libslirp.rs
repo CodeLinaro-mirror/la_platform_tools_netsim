@@ -696,14 +696,13 @@ fn slirp_poll_thread(
         nfds_t as OsPollFdsLenType, poll, pollfd,
     };
     #[cfg(target_os = "windows")]
-    use winapi::{
-        shared::minwindef::ULONG as OsPollFdsLenType,
-        um::winsock2::{
-            POLLERR as OS_POLL_ERR, POLLHUP as OS_POLL_HUP, POLLNVAL as OS_POLL_NVAL,
-            POLLRDBAND as OS_POLL_PRI, POLLRDNORM as OS_POLL_IN, POLLWRNORM as OS_POLL_OUT,
-            SOCKET as FdType, WSAPOLLFD as pollfd, WSAPoll as poll,
-        },
+    use windows_sys::Win32::Networking::WinSock::{
+        POLLERR as OS_POLL_ERR, POLLHUP as OS_POLL_HUP, POLLNVAL as OS_POLL_NVAL,
+        POLLRDBAND as OS_POLL_PRI, POLLRDNORM as OS_POLL_IN, POLLWRNORM as OS_POLL_OUT,
+        SOCKET as FdType, WSAPOLLFD as pollfd, WSAPoll as poll,
     };
+    #[cfg(target_os = "windows")]
+    type OsPollFdsLenType = u32;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     type FdType = c_int;
 

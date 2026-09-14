@@ -202,19 +202,29 @@ pub fn command_parser_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(impl_block)
 }
 
+fn get_option_inner_type(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else { return None };
+    if type_path.path.segments.len() != 1 {
+        return None;
+    }
+    let seg = &type_path.path.segments[0];
+    if seg.ident != "Option" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else { return None };
+    if args.args.len() != 1 {
+        return None;
+    }
+    match &args.args[0] {
+        syn::GenericArgument::Type(inner_ty) => Some(inner_ty),
+        _ => None,
+    }
+}
+
 fn get_parser_for_type(ty: &Type) -> proc_macro2::TokenStream {
-    if let Type::Path(type_path) = ty {
-        if type_path.path.segments.len() == 1 && type_path.path.segments[0].ident == "Option" {
-            if let syn::PathArguments::AngleBracketed(args) = &type_path.path.segments[0].arguments
-            {
-                if args.args.len() == 1 {
-                    if let syn::GenericArgument::Type(inner_ty) = &args.args[0] {
-                        let inner_parser = get_parser_for_type(inner_ty);
-                        return quote! { nom::combinator::opt(#inner_parser) };
-                    }
-                }
-            }
-        }
+    if let Some(inner_ty) = get_option_inner_type(ty) {
+        let inner_parser = get_parser_for_type(inner_ty);
+        return quote! { nom::combinator::opt(#inner_parser) };
     }
 
     quote! { <#ty as Parsable>::parse }

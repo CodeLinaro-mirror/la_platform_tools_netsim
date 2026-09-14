@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #
+import ast
 import glob
 import json
 import logging
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -25,6 +27,7 @@ else:
 from threading import Thread, currentThread
 
 AOSP_ROOT = Path(__file__).absolute().parents[3]
+NETSIM_ROOT = Path(__file__).absolute().parents[1]
 WINDOWS_TMP_OBJS_PATH = Path("C:\\netsim\\objs")
 TOOLS = Path(AOSP_ROOT, "tools")
 EMULATOR_ARTIFACT_PATH = Path(AOSP_ROOT, "tools", "netsim", "emulator_tmp")
@@ -417,11 +420,68 @@ def get_bazel_build_configs(args, env):
   if not getattr(args, "enable_repo_cache", False):
     build_configs.append("--repo_contents_cache=")
 
-  # Configure Android SDK and update environment
-  sdk_path, _ = configure_android_sdk()
-  env["ANDROID_HOME"] = sdk_path
+  # Configure Android SDK and update environment if available
+  try:
+    sdk_path, _ = configure_android_sdk()
+    env["ANDROID_HOME"] = sdk_path
+  except Exception as e:
+    logging.warning("Android SDK configuration skipped: %s", e)
 
   return build_configs
+
+
+def _has_test_target(pkg_dir: Path) -> bool:
+  """Checks if a package directory defines a :test target."""
+  build_file = (
+      pkg_dir / "BUILD"
+      if (pkg_dir / "BUILD").is_file()
+      else (pkg_dir / "BUILD.bazel")
+  )
+  if not build_file.is_file():
+    return False
+
+  try:
+    tree = ast.parse(build_file.read_text(), filename=str(build_file))
+    for node in ast.walk(tree):
+      if isinstance(node, ast.Call):
+        # netsim_rust_library implicitly creates a :test target.
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "netsim_rust_library"
+        ):
+          return True
+        for kw in node.keywords:
+          if kw.arg == "name":
+            val = getattr(kw.value, "value", getattr(kw.value, "s", None))
+            if val == "test":
+              return True
+  except Exception:
+    # Fallback to regex if AST parsing fails
+    try:
+      for line in build_file.read_text().splitlines():
+        line = line.split("#")[0].strip()
+        if re.search(r"\bnetsim_rust_library\b", line) or re.search(
+            r'\bname\s*=\s*["\']test["\']', line
+        ):
+          return True
+    except Exception:
+      pass
+  return False
+
+
+def _resolve_crate_target(crate_name: str) -> str:
+  """Resolves a crate name to its bazel target, falling back to :all if :test does not exist."""
+  clean_name = crate_name.replace("netsim-", "").replace("netsim_", "")
+  if clean_name == "netsim":
+    clean_name = "cli"
+  for base_dir in ["next", "rust", ""]:
+    for candidate in [clean_name, crate_name]:
+      rel_path = f"{base_dir}/{candidate}" if base_dir else candidate
+      pkg_dir = NETSIM_ROOT / rel_path
+      if pkg_dir.is_dir():
+        suffix = ":test" if _has_test_target(pkg_dir) else ":all"
+        return f"//{rel_path}{suffix}"
+  return f"//next/{clean_name}:all"
 
 
 def get_bazel_targets(args):
@@ -429,17 +489,12 @@ def get_bazel_targets(args):
   if args.bazel_targets:
     return args.bazel_targets
 
-  targets = [
-      "@netsim//:all",
-      "@netsim//rust/...",
-      "@netsim//next/...",
+  if getattr(args, "crate", None):
+    return [_resolve_crate_target(c) for c in args.crate]
+
+  # Legacy //rust/... targets were superseded by //next/... and contain
+  # deprecated crates with external emulator dependencies.
+  return [
+      "//:all",
+      "//next/...",
   ]
-
-  system = platform.system()
-  machine = platform.machine()
-
-  if system == "Linux" or (system == "Darwin" and machine == "arm64"):
-    targets.append("@netsim//next/verify/instrumentation/vbs:vbs")
-    targets.append("@netsim//next/verify/examples/03-guest-steps:example3_apk")
-
-  return targets
