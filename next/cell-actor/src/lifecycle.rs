@@ -60,7 +60,7 @@ impl CellActor {
             HostEvent::SinkError(id) => {
                 let chip_id = netsim_model::ChipId(id);
                 warn!("Sink error for chip {}, deleting.", chip_id);
-                let _ = self.handle_get(chip_id, ctx).await;
+                let _ = self.handle_delete(chip_id, ctx).await;
                 ctx.remove_stream(chip_id);
                 ctx.abort(chip_id);
             }
