@@ -128,19 +128,13 @@ To build with **CMake** (legacy), use the `--cmake` flag:
 scripts/build_tools.py --cmake --task configure compileinstall
 ```
 
-If the build fails with rust errors it may be necessary to issue this command:
-
-```
-rm rust/Cargo.lock
-```
-
-The output can be found in
+The output can be found in:
 
 ```
 /repo/netsim-dev/tools/netsim/objs/distribution/emulator
 ```
 
-You can copy the netsim binaries into `emu-master-dev`
+You can copy the netsim binaries into `emu-master-dev`:
 
 ```
 cp -r /repo/netsim-dev/tools/netsim/objs/distribution/emulator/* /repo/emu-master-dev/external/qemu/objs/distribution/emulator

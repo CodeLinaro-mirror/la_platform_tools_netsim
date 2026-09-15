@@ -10,21 +10,15 @@ import logging
 import os
 from pathlib import Path
 import platform
+from queue import Queue
 import re
 import shutil
 import socket
 import subprocess
 import sys
-from threading import currentThread
+import threading
 
 from time_formatter import TimeFormatter
-
-if sys.version_info[0] == 3:
-  from queue import Queue
-else:
-  from Queue import Queue
-
-from threading import Thread, currentThread
 
 AOSP_ROOT = Path(__file__).absolute().parents[3]
 NETSIM_ROOT = Path(__file__).absolute().parents[1]
@@ -185,7 +179,7 @@ def config_logging():
   logging.root.addHandler(logging_handler_out)
   logging.root.addHandler(logging_handler_err)
 
-  currentThread().setName("inf")
+  threading.current_thread().name = "inf"
 
 
 def log_system_info():
@@ -210,7 +204,7 @@ def log_system_info():
 def run(
     cmd, env, log_prefix, cwd=AOSP_ROOT, throw_on_failure=True, log_output=True
 ):
-  currentThread().setName(log_prefix)
+  threading.current_thread().name = log_prefix
   cmd_env = os.environ.copy()
   cmd_env.update(env)
   is_windows = platform.system() == "Windows"
@@ -274,8 +268,8 @@ def _log_proc(proc, log_prefix):
   """Logs the output of the given process."""
   q = Queue()
   for args in [[proc.stdout, logging.info], [proc.stderr, logging.error]]:
-    t = Thread(target=_reader, args=args)
-    t.setName(log_prefix)
+    t = threading.Thread(target=_reader, args=args)
+    t.name = log_prefix
     t.start()
 
   return q
