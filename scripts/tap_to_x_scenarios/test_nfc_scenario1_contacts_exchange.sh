@@ -11,12 +11,14 @@ if [[ "$(uname)" == "Darwin" ]]; then
 else
     DEFAULT_SDK="${HOME}/Android/Sdk"
 fi
-SDK_DIR="${ANDROID_SDK_ROOT:-${DEFAULT_SDK}}"
+SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${DEFAULT_SDK}}}"
 ADB="${SDK_DIR}/platform-tools/adb"
 NETSIM_BIN="${SDK_DIR}/emulator/netsim"
 
-SENDER="emulator-5554"
-RECEIVER="emulator-5556"
+export LD_LIBRARY_PATH="${SDK_DIR}/emulator/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+SENDER="${1:-emulator-5554}"
+RECEIVER="${2:-emulator-5556}"
 
 echo "=========================================================="
 echo " Starting Tap-to-X Scenario 1: Contacts Exchange"
@@ -26,7 +28,7 @@ echo " Specification: Both devices on Home Screen (Background Reader Mode)"
 echo "=========================================================="
 
 # 1. Reset both devices to Home screen and unlock
-echo "[1/6] Resetting both devices to Home screen & unlocking..."
+echo "[1/5] Resetting both devices to Home screen & unlocking..."
 "${ADB}" -s "${SENDER}" shell input keyevent KEYCODE_WAKEUP || true
 "${ADB}" -s "${SENDER}" shell wm dismiss-keyguard || true
 "${ADB}" -s "${SENDER}" shell input keyevent KEYCODE_HOME || true
@@ -36,7 +38,7 @@ echo "[1/6] Resetting both devices to Home screen & unlocking..."
 "${ADB}" -s "${RECEIVER}" shell input keyevent KEYCODE_HOME || true
 
 # 2. Clear logcat buffers & configure verbose logging
-echo "[2/6] Configuring logging, clearing logcats, and preparing receiver..."
+echo "[2/5] Configuring logging, clearing logcats, and preparing receiver..."
 "${ADB}" -s "${SENDER}" shell setprop log.tag.GestureExchange VERBOSE || true
 "${ADB}" -s "${RECEIVER}" shell setprop log.tag.GestureExchange VERBOSE || true
 "${ADB}" -s "${RECEIVER}" shell "am start -a com.google.android.gms.RECEIVE_NEARBY -n com.google.android.gms/.nearby.sharing.main.MainActivity" || true
@@ -46,8 +48,8 @@ sleep 1
 
 # 3. Position devices out of NFC range (1.0m)
 echo "[3/5] Moving devices apart to 1.0m..."
-DEV_SENDER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "^(P10|Pixel 10|Pixel_10)[[:space:]]*$" | head -n 1 | sed 's/[[:space:]]*$//' || true)
-DEV_RECEIVER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "(P10_2|Pixel 10 \(2\)|Pixel_10_2)" | head -n 1 | sed 's/[[:space:]]*$//' || true)
+DEV_SENDER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "^[[:space:]]*(P10|Pixel 10|Pixel_10)[[:space:]]*$" | head -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
+DEV_RECEIVER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "(P10_2|Pixel 10 \(2\)|Pixel_10_2)" | head -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
 DEV_SENDER="${DEV_SENDER:-Pixel 10}"
 DEV_RECEIVER="${DEV_RECEIVER:-Pixel 10 (2)}"
 echo "Identified Netsim Devices: Sender=${DEV_SENDER}, Receiver=${DEV_RECEIVER}"
@@ -119,8 +121,8 @@ echo "=========================================================="
 echo " Scenario 1 Verification Evaluation:"
 echo "=========================================================="
 # Assert Contact Exchange or Quick Share activity
-SENDER_EVENTS=$("${ADB}" -s "${SENDER}" logcat -d | grep -iE "transceive|SELECT_PRIMARY_AID|A00000047609|NearbySharing|GestureExchange" | wc -l)
-RECEIVER_EVENTS=$("${ADB}" -s "${RECEIVER}" logcat -d | grep -iE "HostApdu|A00000047609|handleSelectAid|ContactExchange|NearbySharing" | wc -l)
+SENDER_EVENTS=$("${ADB}" -s "${SENDER}" logcat -d | grep -iE "transceive|SELECT_PRIMARY_AID|A00000047609|F00000FE2C" | wc -l)
+RECEIVER_EVENTS=$("${ADB}" -s "${RECEIVER}" logcat -d | grep -iE "HostApdu|A00000047609|handleSelectAid|ContactExchange|F00000FE2C" | wc -l)
 
 echo "=========================================================="
 if [ "${SENDER_EVENTS}" -gt 0 ] && [ "${RECEIVER_EVENTS}" -gt 0 ]; then

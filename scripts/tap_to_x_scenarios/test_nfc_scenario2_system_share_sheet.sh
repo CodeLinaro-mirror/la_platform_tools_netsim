@@ -11,23 +11,24 @@ if [[ "$(uname)" == "Darwin" ]]; then
 else
     DEFAULT_SDK="${HOME}/Android/Sdk"
 fi
-SDK_DIR="${ANDROID_SDK_ROOT:-${DEFAULT_SDK}}"
+SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${DEFAULT_SDK}}}"
 ADB="${SDK_DIR}/platform-tools/adb"
 NETSIM_BIN="${SDK_DIR}/emulator/netsim"
 
-export LD_LIBRARY_PATH="${SDK_DIR}/emulator/lib64:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${SDK_DIR}/emulator/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-SENDER="emulator-5554"
-RECEIVER="emulator-5556"
+SENDER="${1:-emulator-5554}"
+RECEIVER="${2:-emulator-5556}"
 
 echo "=========================================================="
 echo " Starting NFC Tap-to-Share (Scenario 2) Verification"
 echo " Sender:   ${SENDER}"
 echo " Receiver: ${RECEIVER}"
+echo " Specification: Native System Share Sheet (ACTION_SEND) Tap-to-Share"
 echo "=========================================================="
 
 # 1. Clear logcats and prepare Receiver on high-power receive surface
-echo "[1/5] Clearing logcats and preparing receiver..."
+echo "[1/6] Clearing logcats and preparing receiver..."
 "${ADB}" -s "${SENDER}" logcat -c || true
 "${ADB}" -s "${RECEIVER}" logcat -c || true
 
@@ -40,9 +41,9 @@ echo "[1/5] Clearing logcats and preparing receiver..."
 sleep 2
 
 # 2. Reset devices to 1.0m (out of NFC range) and wait for FastInitiation warming to end
-echo "[2/5] Moving devices apart to 1.0m and waiting for FastInitiation warmup..."
-DEV_SENDER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "^(P10|Pixel 10|Pixel_10)[[:space:]]*$" | head -n 1 | sed 's/[[:space:]]*$//' || true)
-DEV_RECEIVER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "(P10_2|Pixel 10 \(2\)|Pixel_10_2)" | head -n 1 | sed 's/[[:space:]]*$//' || true)
+echo "[2/6] Moving devices apart to 1.0m and waiting for FastInitiation warmup..."
+DEV_SENDER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "^[[:space:]]*(P10|Pixel 10|Pixel_10)[[:space:]]*$" | head -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
+DEV_RECEIVER=$("${NETSIM_BIN}" devices 2>/dev/null | grep -E "(P10_2|Pixel 10 \(2\)|Pixel_10_2)" | head -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
 DEV_SENDER="${DEV_SENDER:-Pixel 10}"
 DEV_RECEIVER="${DEV_RECEIVER:-Pixel 10 (2)}"
 echo "Identified Netsim Devices: Sender=${DEV_SENDER}, Receiver=${DEV_RECEIVER}"
@@ -51,7 +52,7 @@ echo "Identified Netsim Devices: Sender=${DEV_SENDER}, Receiver=${DEV_RECEIVER}"
 sleep 4
 
 # 3. Launch System Share Sheet on Sender (activates GestureExchange Reader Mode)
-echo "[3/5] Launching System Share Sheet on Sender..."
+echo "[3/6] Launching System Share Sheet on Sender..."
 "${ADB}" -s "${SENDER}" shell "am start -a android.intent.action.SEND -t 'text/plain' --es android.intent.extra.TEXT 'GestureExchange Tap-to-Share Verification'"
 
 echo "Waiting for GMS TapToShare Reader Mode to register (flags: 385)..."
@@ -66,7 +67,7 @@ done
 sleep 1
 
 # 4. Trigger Physical NFC Tap Proximity (0.02m) & Motion Pulse
-echo "[4/5] Moving ${DEV_SENDER} to 0.02m (Physical Tap Contact) & injecting acceleration pulse..."
+echo "[4/6] Moving ${DEV_SENDER} to 0.02m (Physical Tap Contact) & injecting acceleration pulse..."
 "${NETSIM_BIN}" move "${DEV_SENDER}" 0.02 0.0 0.0
 "${ADB}" -s "${SENDER}" emu sensor set acceleration 0 25.0 5.0 2>/dev/null || true
 "${ADB}" -s "${RECEIVER}" emu sensor set acceleration 0 25.0 5.0 2>/dev/null || true
