@@ -3,7 +3,7 @@
 
 use std::{fmt::Write, sync::Arc, time::Duration};
 
-use netsim_model::{Quirks, RadioTechnology, RegistrationStatus};
+use netsim_model::{CellNetworkConfig, Quirks, RadioTechnology, RegistrationStatus};
 use tracing::{debug, error};
 
 use crate::{
@@ -66,6 +66,7 @@ impl ModemImpl {
         profile: SimProfile,
         quirks: Quirks,
         clock: Arc<dyn Clock>,
+        network_configs: Vec<CellNetworkConfig>,
     ) -> Self {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         let home_plmn = profile.home_plmn();
@@ -85,7 +86,7 @@ impl ModemImpl {
             sup_service: SupService::default(),
             misc_service,
             call_service: CallService::default(),
-            data_service: DataService::from_env(),
+            data_service: DataService::new(network_configs),
             quirks,
             _state: State::Idle,
         }
@@ -198,6 +199,19 @@ impl ModemImpl {
 
     pub fn phone_number(&self) -> Option<PhoneNumber> {
         self.sim_service.get_msisdn()
+    }
+
+    /// Updates network configs for future data calls.
+    ///
+    /// Active calls retain their existing addresses until reactivated.
+    /// Do not signal updates via `+CGEV`: the Goldfish/Cuttlefish parser lacks
+    /// `CGEV` support, causing channel teardown (b/562098771).
+    pub fn update_network_configs(&mut self, configs: Vec<CellNetworkConfig>) {
+        self.data_service.update_network_configs(configs);
+    }
+
+    pub fn network_configs(&self) -> &[CellNetworkConfig] {
+        self.data_service.network_configs()
     }
 
     pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) {
@@ -702,8 +716,13 @@ mod tests {
 
     #[test]
     fn test_execute_chained_commands_parse_error() {
-        let mut modem =
-            ModemImpl::new(1, SimProfile::default(), Quirks::default(), Arc::new(SystemClock));
+        let mut modem = ModemImpl::new(
+            1,
+            SimProfile::default(),
+            Quirks::default(),
+            Arc::new(SystemClock),
+            Vec::new(),
+        );
         // We pass a command Y that returns Err on Command::parse(Y).
         // Since Y does not start with AT or RING, and we bypass split_chained_commands,
         // we can pass it directly to execute_chained_commands.
@@ -720,8 +739,13 @@ mod tests {
 
     #[test]
     fn test_trigger_incoming_call_presentation_not_available() {
-        let mut modem =
-            ModemImpl::new(1, SimProfile::default(), Quirks::default(), Arc::new(SystemClock));
+        let mut modem = ModemImpl::new(
+            1,
+            SimProfile::default(),
+            Quirks::default(),
+            Arc::new(SystemClock),
+            Vec::new(),
+        );
         // Enable CLIP via AT command
         modem.execute_chained_commands(&[b"AT+CLIP=1".to_vec()]);
 

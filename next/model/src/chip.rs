@@ -99,7 +99,7 @@ pub enum ChipRequest {
         /// The ID of the chip to patch.
         id: ChipId,
         /// The patch to apply to the chip.
-        patch: ChipUpdate,
+        patch: Box<ChipUpdate>,
         /// The channel to send the updated chip state back on.
         respond_to: Responder<Chip>,
     },
@@ -527,7 +527,7 @@ impl ChipClient for RadioChipClient {
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send(ChipRequest::Update { id, patch, respond_to: tx })
+            .send(ChipRequest::Update { id, patch: Box::new(patch), respond_to: tx })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)

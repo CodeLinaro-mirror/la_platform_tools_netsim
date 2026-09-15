@@ -4,6 +4,7 @@
 use std::{
     collections::HashMap,
     env, io,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
     time::Duration,
@@ -26,8 +27,8 @@ use futures::{FutureExt, SinkExt, StreamExt, pin_mut};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams, PacketSink as ApiPacketSink,
-    PacketStream as ApiPacketStream, Pose, set_if_some,
+    BluetoothMode, CellNetworkConfig, ChipClient, ChipInfo, ChipKind, DeviceParams,
+    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, Pose, set_if_some,
 };
 use packet_stream::{
     StreamAddress, Streams,
@@ -77,6 +78,20 @@ pub enum StartUpMode {
     Client(NetsimConfig),
 }
 
+/// Fixed Goldfish/QEMU user-mode networking (SLIRP) parameters.
+///
+/// Matches emulator SLIRP defaults (`net/slirp.c`). `fec0::15` is synthetic;
+/// SLIRP advertises `fec0::/64` via RA and learns the RIL guest address via
+/// NDP.
+const GOLDFISH_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
+const GOLDFISH_IPV4_PREFIXLEN: u8 = 24;
+const GOLDFISH_IPV4_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
+const GOLDFISH_IPV4_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
+const GOLDFISH_IPV6_ADDR: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15);
+const GOLDFISH_IPV6_PREFIXLEN: u8 = 64;
+const GOLDFISH_IPV6_GATEWAY: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2);
+const GOLDFISH_IPV6_DNS: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3);
+
 async fn handle_new_connection(
     device_client: DeviceClient,
     _capture_client: CaptureClient,
@@ -86,12 +101,10 @@ async fn handle_new_connection(
     chip_info: ChipInfo,
     device_guid: String,
 ) {
-    info!("Handling new connection for {:?}, device {}", chip_info.name, chip_info.device_name());
+    let device_name = chip_info.device_name();
+    info!("Handling new connection for {:?}, device {}", chip_info.name, device_name);
     let device_config = DeviceConfig {
-        name: chip_info
-            .device_info
-            .as_ref()
-            .map_or("Unknown Device".to_string(), |d| d.name.clone()),
+        name: device_name.clone(),
         visible: true,
         pose: Pose { position: Default::default(), orientation: Default::default() },
         builtin: false,
@@ -131,18 +144,44 @@ async fn handle_new_connection(
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
         ChipKind::CELLULAR => {
-            let (goldfish_ril_37_or_earlier, is_cuttlefish, auto_ctzv) = match chip_info
+            let is_cuttlefish =
+                chip_info.device_info.as_ref().is_some_and(|d| d.kind == "CUTTLEFISH");
+            let is_emulator = chip_info.device_info.as_ref().is_some_and(|d| d.kind == "EMULATOR");
+            let sdk_version = chip_info
                 .device_info
                 .as_ref()
-            {
-                Some(d) => {
-                    let is_emulator = d.kind == "EMULATOR";
-                    let is_cuttlefish = d.kind == "CUTTLEFISH";
-                    let sdk_version = d.sdk_version.parse::<i32>().unwrap_or(0);
-                    (is_emulator && sdk_version < 38, is_cuttlefish, is_emulator || is_cuttlefish)
-                }
-                None => (false, false, false),
+                .and_then(|d| d.sdk_version.parse::<i32>().ok())
+                .unwrap_or(0);
+
+            let network_configs = if is_cuttlefish {
+                crate::cuttlefish::resolve_cuttlefish_network_config(&device_name)
+                    .await
+                    .into_iter()
+                    .collect()
+            } else if is_emulator {
+                // TODO(b/557342150): Dynamically allocate cellular IPs for multi-instance
+                // Goldfish once isolated SLIRP/TAP routing is supported.
+                vec![
+                    CellNetworkConfig {
+                        ip_address: IpAddr::V4(GOLDFISH_IPV4_ADDR),
+                        prefixlen: GOLDFISH_IPV4_PREFIXLEN,
+                        gateway: IpAddr::V4(GOLDFISH_IPV4_GATEWAY),
+                        dns: IpAddr::V4(GOLDFISH_IPV4_DNS),
+                    },
+                    CellNetworkConfig {
+                        ip_address: IpAddr::V6(GOLDFISH_IPV6_ADDR),
+                        prefixlen: GOLDFISH_IPV6_PREFIXLEN,
+                        gateway: IpAddr::V6(GOLDFISH_IPV6_GATEWAY),
+                        dns: IpAddr::V6(GOLDFISH_IPV6_DNS),
+                    },
+                ]
+            } else {
+                Vec::new()
             };
+
+            let goldfish_ril_37_or_earlier = is_emulator && sdk_version < 38;
+            let auto_ctzv = is_cuttlefish || is_emulator;
+
             Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
                 sim_type: chip.sim_type,
                 sim_profile: chip.sim_profile.clone(),
@@ -151,13 +190,14 @@ async fn handle_new_connection(
                     is_cuttlefish,
                     auto_ctzv,
                 },
+                network_configs,
                 ..Default::default()
             }))
         }
         ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
-            error!("Unsupported chip kind: {:?}", kind);
+            error!("Unsupported chip kind: {kind:?}");
             return;
         }
     };
@@ -178,7 +218,7 @@ async fn handle_new_connection(
             match item {
                 Ok(bytes) => Some(bytes),
                 Err(e) => {
-                    error!("Error in packet stream: {}", e);
+                    error!("Error in packet stream: {e}");
                     None
                 }
             }
@@ -196,7 +236,7 @@ async fn handle_new_connection(
     };
 
     if let Err(e) = device_client.add_chip(request).await {
-        error!("Failed to register stream for {}: {}", chip_info.name, e);
+        error!("Failed to register stream for {}: {e}", chip_info.name);
     }
 }
 
