@@ -254,8 +254,8 @@ a massive amount of work to reach feature parity with the C++
   - [x] Add support for voice and data network registration.
   - [x] Implement unsolicited registration status updates.
 - [ ] **Implement Signal Strength (`AT+CSQ`):**
-  - [ ] Implement the Cuttlefish-specific `+CSQ` command with a detailed
-        `SignalStrength` struct.
+  - [x] Implement the Cuttlefish-specific `+CSQ` command with a detailed
+        `AidlSignalStrength` struct.
   - [ ] Implement a loop to continuously update the signal strength.
 - [x] **Implement Preferred Network Type (`AT+CTEC`):**
   - [x] Add support for getting and setting the preferred network type.

@@ -1377,11 +1377,14 @@ pub struct ModemInfo {
     pub data_registration: RegistrationStatus,
 }
 
-/// Represents the signal strength parameters for all supported tech layout (22
-/// fields). Default values are initialized to standard "unknown" values (99 for
-/// RSSI, i32::MAX for others).
+/// Multi-technology composite signal strength (22 fields) required by Android's
+/// Radio AIDL (`android.hardware.radio.network.SignalStrength`).
+///
+/// Note: While standard 3GPP TS 27.007 §8.5 `+CSQ` only defines `<rssi>,<ber>`
+/// ([`SignalQuality`]), Android's emulator RIL overloads `+CSQ` to pass this
+/// full AIDL parcel (b/206814247).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SignalStrength {
+pub struct AidlSignalStrength {
     pub gsm_rssi: i32,
     pub gsm_ber: i32,
     pub cdma_dbm: i32,
@@ -1406,7 +1409,7 @@ pub struct SignalStrength {
     pub nr_csi_sinr: i32,
 }
 
-impl Default for SignalStrength {
+impl Default for AidlSignalStrength {
     fn default() -> Self {
         let max = i32::MAX;
         let unknown = crate::constants::CSQ_SIGNAL_UNKNOWN as i32;
@@ -1437,10 +1440,45 @@ impl Default for SignalStrength {
     }
 }
 
-impl SignalStrength {
-    pub fn to_csq_response(&self) -> String {
-        format!(
-            "+CSQ: {},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\r\n",
+impl AidlSignalStrength {
+    pub fn from_quality(quality: SignalQuality, act: AccessTechnology) -> Self {
+        let SignalQuality { rssi, ber } = quality;
+        let mut ss = Self::default();
+        match act {
+            AccessTechnology::Gsm => {
+                ss.gsm_rssi = rssi as i32;
+                ss.gsm_ber = ber as i32;
+            }
+            AccessTechnology::Wcdma => {
+                ss.wcdma_rssi = rssi as i32;
+                ss.wcdma_ber = ber as i32;
+            }
+            AccessTechnology::Lte => {
+                ss.lte_rssi = rssi as i32;
+                ss.lte_rsrp = Self::rssi_to_rsrp(rssi);
+            }
+            AccessTechnology::Nr => {
+                ss.nr_ss_rsrp = Self::rssi_to_rsrp(rssi);
+            }
+        }
+        ss
+    }
+
+    fn rssi_to_rsrp(rssi: u8) -> i32 {
+        if rssi == crate::constants::CSQ_SIGNAL_UNKNOWN {
+            return i32::MAX;
+        }
+        let rsrp_dbm = -140 + (rssi as i32 * 3);
+        let rsrp_csq = -rsrp_dbm;
+        rsrp_csq.clamp(44, 140)
+    }
+}
+
+impl std::fmt::Display for AidlSignalStrength {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.gsm_rssi,
             self.gsm_ber,
             self.cdma_dbm,
@@ -1969,6 +2007,7 @@ impl std::fmt::Display for CdmaRoamingPreference {
     }
 }
 
+/// Radio access technologies modelled by the modem.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum AccessTechnology {
@@ -1977,6 +2016,23 @@ pub enum AccessTechnology {
     #[default]
     Lte = 7,
     Nr = 11,
+}
+
+impl AccessTechnology {
+    pub fn from_wire(wire: u8, quirks: Quirks) -> Result<Self, ExecutionResult> {
+        let is_goldfish = quirks.goldfish_ril_37_or_earlier;
+        match wire {
+            0 | 1 | 8 => Ok(Self::Gsm),
+            2 | 4 | 5 => Ok(Self::Wcdma),
+            3 if is_goldfish => Ok(Self::Lte),
+            3 => Ok(Self::Gsm),
+            6 if is_goldfish => Ok(Self::Nr),
+            6 => Ok(Self::Wcdma),
+            7 | 9 | 10 => Ok(Self::Lte),
+            11 | 12 => Ok(Self::Nr),
+            _ => Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
+        }
+    }
 }
 
 impl std::fmt::Display for AccessTechnology {
@@ -2927,6 +2983,56 @@ mod tests {
             Err(ParsePhoneNumberError::TrailingCharacters(_))
         ));
         assert!(serde_json::from_str::<PhoneNumber>("\"invalid#phone\"").is_err());
+    }
+
+    #[test]
+    fn test_access_technology_from_wire_standard() {
+        let quirks = Quirks::default();
+        let expected = [
+            (0, Ok(AccessTechnology::Gsm)),
+            (1, Ok(AccessTechnology::Gsm)),
+            (2, Ok(AccessTechnology::Wcdma)),
+            (3, Ok(AccessTechnology::Gsm)),
+            (4, Ok(AccessTechnology::Wcdma)),
+            (5, Ok(AccessTechnology::Wcdma)),
+            (6, Ok(AccessTechnology::Wcdma)),
+            (7, Ok(AccessTechnology::Lte)),
+            (8, Ok(AccessTechnology::Gsm)),
+            (9, Ok(AccessTechnology::Lte)),
+            (10, Ok(AccessTechnology::Lte)),
+            (11, Ok(AccessTechnology::Nr)),
+            (12, Ok(AccessTechnology::Nr)),
+            (13, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (99, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+        ];
+        for (raw, want) in expected {
+            assert_eq!(AccessTechnology::from_wire(raw, quirks), want, "<AcT>={raw}");
+        }
+    }
+
+    #[test]
+    fn test_access_technology_from_wire_goldfish_37() {
+        let quirks = Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() };
+        let expected = [
+            (0, Ok(AccessTechnology::Gsm)),
+            (1, Ok(AccessTechnology::Gsm)),
+            (2, Ok(AccessTechnology::Wcdma)),
+            (3, Ok(AccessTechnology::Lte)),
+            (4, Ok(AccessTechnology::Wcdma)),
+            (5, Ok(AccessTechnology::Wcdma)),
+            (6, Ok(AccessTechnology::Nr)),
+            (7, Ok(AccessTechnology::Lte)),
+            (8, Ok(AccessTechnology::Gsm)),
+            (9, Ok(AccessTechnology::Lte)),
+            (10, Ok(AccessTechnology::Lte)),
+            (11, Ok(AccessTechnology::Nr)),
+            (12, Ok(AccessTechnology::Nr)),
+            (13, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (99, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+        ];
+        for (raw, want) in expected {
+            assert_eq!(AccessTechnology::from_wire(raw, quirks), want, "<AcT>={raw}");
+        }
     }
 
     #[test]

@@ -438,8 +438,27 @@ mod tests {
                 mode: CopsMode::SetFormatOnly,
                 format: Some(CopsFormat::Numeric),
                 oper: None,
+                act: None,
             })
         );
+    }
+
+    #[test]
+    fn test_parse_cops_set_with_act() {
+        for raw in [0u8, 3, 6, 7, 11, 99] {
+            let input = format!("AT+COPS=1,2,\"310260\",{raw}");
+            let (rem, cmd) = Command::parse(input.as_bytes()).unwrap();
+            assert!(rem.is_empty(), "unparsed remainder for <AcT>={raw}");
+            assert_eq!(
+                cmd,
+                Command::Network(NetworkCommand::SetOperator {
+                    mode: CopsMode::Manual,
+                    format: Some(CopsFormat::Numeric),
+                    oper: Some(QuotedString("310260")),
+                    act: Some(raw),
+                })
+            );
+        }
     }
 
     #[test]
