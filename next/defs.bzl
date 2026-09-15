@@ -161,16 +161,9 @@ netsim_dep_aspect = aspect(
 
 # Why we use a manual clippy-driver rule instead of rules_rust defaults:
 #
-# 1. rules_rust `rust_clippy` and `rust_clippy_aspect` fail with "nothing to build"
-#    because we use a Bazel module setup where our codebase is remapped to `external/netsim+`.
-#    This is ignored by rules_rust.
-#
-# 2. Changing the workspace layout to resolve this wasn't feasible:
-#    - Using repo-relative paths (`//tools/netsim/...`) forces the repo-root
-#      MODULE.bazel to declare all internal Netsim dependencies.
-#    - Running Bazel inside `tools/netsim` fails because external dependencies
-#      (like @goldfish_crates) hardcode relative paths from the workspace root
-#      where they are evaluated & fail to find `third_party/rust`.
+# rules_rust `rust_clippy` and `rust_clippy_aspect` do not seamlessly integrate
+# with the custom multi-target test reporting and diagnostics formatting required
+# across platform toolchains. We drive clippy directly using the resolved rust toolchain.
 def _netsim_clippy_test_impl(ctx):
     toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
     rustfmt = toolchain.rustfmt
