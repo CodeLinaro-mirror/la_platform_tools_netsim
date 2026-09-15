@@ -20,7 +20,8 @@ use actor_framework::ResourceActor;
 
 pub use crate::{
     ap_actor::{
-        ApActor, ApConfig, ApReq, ApResponse, ApState, ApUpdate, expected_default_ap_bssid,
+        ApActor, ApConfig, ApReq, ApResponse, ApState, ApUpdate, DEFAULT_AP_BSSID,
+        EXPECTED_DEFAULT_AP_BSSID, expected_default_ap_bssid,
     },
     ap_client::ApClient,
     eap_auth::{EapAuthenticator, EapOutput},

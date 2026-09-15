@@ -14,7 +14,7 @@ use std::{env, path::PathBuf};
 pub fn netsimd_temp_dir() -> PathBuf {
     let path = netsimd_temp_dir_pathbuf();
     if !path.is_dir() {
-        std::fs::create_dir_all(&path).unwrap();
+        std::fs::create_dir_all(&path).expect("Failed to create temporary netsimd directory");
     }
     path
 }

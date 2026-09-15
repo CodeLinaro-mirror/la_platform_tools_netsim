@@ -42,6 +42,7 @@ netsim_rust_library(
         "@hex",
         "@jiff",
         "@nom",
+        "@parking_lot",
         "@serde",
         "@serde-xml-rs",
         "@tokio",

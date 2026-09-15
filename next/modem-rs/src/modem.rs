@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Write, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use netsim_model::{CellNetworkConfig, Quirks, RadioTechnology, RegistrationStatus};
 use tracing::{debug, error};
@@ -389,10 +389,8 @@ impl ModemImpl {
             let mut effects = Vec::new();
             match result {
                 ExecutionResult::Success(handled) => {
-                    let mut combined = String::new();
-                    for r in &handled.responses {
-                        write!(combined, "{r}").unwrap();
-                    }
+                    let combined =
+                        handled.responses.iter().map(ToString::to_string).collect::<String>();
                     if !combined.is_empty() {
                         effects.push(ModemEffect::Response(combined.into_bytes()));
                     }
@@ -550,7 +548,7 @@ impl ModemImpl {
     /// Executes a list of chained commands sequentially, halting on error and
     /// merging responses.
     fn execute_chained_commands(&mut self, sub_commands: &[Vec<u8>]) -> Vec<ModemEffect> {
-        let mut combined_responses = String::new();
+        let mut all_responses = Vec::new();
         let mut combined_effects = Vec::new();
         let mut stop_chain = false;
 
@@ -573,13 +571,10 @@ impl ModemImpl {
                             String::from_utf8_lossy(cmd_bytes),
                             String::from_utf8_lossy(rem)
                         );
-                        write!(
-                            combined_responses,
-                            "{}",
+                        all_responses.push(
                             CmeError::IncorrectParameters
-                                .format_response(self.misc_service.cmee_mode())
-                        )
-                        .unwrap();
+                                .format_response(self.misc_service.cmee_mode()),
+                        );
                         stop_chain = true;
                     } else {
                         let exec_res = self.execute_and_schedule(&command, &mut combined_effects);
@@ -591,17 +586,16 @@ impl ModemImpl {
                                     responses.pop();
                                 }
                                 for r in responses {
-                                    write!(combined_responses, "{r}").unwrap();
+                                    all_responses.push(r.to_string());
                                 }
                                 if !success {
                                     stop_chain = true;
                                 }
                             }
                             err => {
-                                err.format_error_into(
-                                    &mut combined_responses,
-                                    self.misc_service.cmee_mode(),
-                                );
+                                let mut err_str = String::new();
+                                err.format_error_into(&mut err_str, self.misc_service.cmee_mode());
+                                all_responses.push(err_str);
                                 stop_chain = true;
                             }
                         }
@@ -613,7 +607,7 @@ impl ModemImpl {
                         String::from_utf8_lossy(cmd_bytes),
                         e
                     );
-                    combined_responses.push_str("ERROR\r\n");
+                    all_responses.push("ERROR\r\n".to_string());
                     stop_chain = true;
                 }
             }
@@ -622,8 +616,9 @@ impl ModemImpl {
             }
         }
 
-        if !combined_responses.is_empty() {
-            combined_effects.insert(0, ModemEffect::Response(combined_responses.into_bytes()));
+        if !all_responses.is_empty() {
+            let combined = all_responses.concat();
+            combined_effects.insert(0, ModemEffect::Response(combined.into_bytes()));
         }
         combined_effects
     }

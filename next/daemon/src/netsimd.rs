@@ -834,7 +834,9 @@ impl NetsimDaemon {
             set_if_some!(ap_config.beacon_interval, args.wifi.wifi_beacon_interval);
             set_if_some!(ap_config.hw_mode, args.wifi.wifi_mode, Into::into);
 
-            ap_client.create_ap(Some(0), ap_config).await.expect("Failed to create default AP");
+            if let Err(e) = ap_client.create_ap(Some(0), ap_config).await {
+                warn!("Failed to create default AP: {e}");
+            }
         }
 
         // Create test beacons if required

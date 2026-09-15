@@ -3,12 +3,13 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock, atomic::AtomicU64},
+    sync::{Arc, atomic::AtomicU64},
     time::Duration,
 };
 
 use device_actor::DeviceClient;
 use netsim_model::{Chip, ChipId};
+use parking_lot::RwLock;
 use pica::{Handle, Pica, PicaCommand, PicaEvent};
 use tokio::sync::{broadcast, mpsc};
 
