@@ -997,6 +997,7 @@ impl CmeError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmsError {
     InvalidPduParameter,
+    InvalidTextModeParameter,
     SimNotInserted,
     SimPinRequired,
     InvalidMemoryIndex,
@@ -1015,6 +1016,7 @@ impl CmsError {
     pub fn code(&self) -> u32 {
         match *self {
             Self::InvalidPduParameter => 304,
+            Self::InvalidTextModeParameter => 305,
             Self::SimNotInserted => 310,
             Self::SimPinRequired => 311,
             Self::InvalidMemoryIndex => 321,
@@ -1025,6 +1027,7 @@ impl CmsError {
     pub fn verbose_str(&self) -> &'static str {
         match *self {
             Self::InvalidPduParameter => "invalid PDU mode parameter",
+            Self::InvalidTextModeParameter => "invalid text mode parameter",
             Self::SimNotInserted => "SIM not inserted",
             Self::SimPinRequired => "SIM PIN required",
             Self::InvalidMemoryIndex => "invalid memory index",
@@ -2428,21 +2431,31 @@ impl<'a> Parsable<'a> for PdpContextActivateArgs {
     }
 }
 
-/// 3GPP TS 27.005 §3.5.1 Send SMS command arguments (+CMGS).
+/// 3GPP TS 27.005 § 3.5.1 Send SMS command arguments (+CMGS).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SendSmsArgs<'a> {
-    Text { da: QuotedString<'a>, toda: Option<TypeOfAddress> },
-    Pdu { length: usize },
+    Text {
+        /// Destination address (<da> in TS 27.005 § 3.5.1).
+        destination_address: QuotedString<'a>,
+        /// Type of destination address (<toda> in TS 27.005 § 3.5.1).
+        type_of_destination_address: Option<TypeOfAddress>,
+    },
+    Pdu {
+        /// TPDU length in octets.
+        length: usize,
+    },
 }
 
 impl<'a> Parsable<'a> for SendSmsArgs<'a> {
     fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        if let Ok((rem, da)) = QuotedString::parse(input) {
-            let (rem, toda) = nom::combinator::opt(nom::sequence::preceded(
-                nom::bytes::complete::tag(b","),
-                TypeOfAddress::parse,
-            ))(rem)?;
-            return Ok((rem, SendSmsArgs::Text { da, toda }));
+        if let Ok((rem, destination_address)) = QuotedString::parse(input) {
+            let (rem, type_of_destination_address) = nom::combinator::opt(
+                nom::sequence::preceded(nom::bytes::complete::tag(b","), TypeOfAddress::parse),
+            )(rem)?;
+            return Ok((
+                rem,
+                SendSmsArgs::Text { destination_address, type_of_destination_address },
+            ));
         }
         let (input, length) = nom::combinator::map_res(
             nom::combinator::map_res(nom::character::complete::digit1, std::str::from_utf8),
@@ -2937,6 +2950,7 @@ mod tests {
     fn test_cms_error_codes_and_messages() {
         let expected = [
             (CmsError::InvalidPduParameter, 304, "invalid PDU mode parameter"),
+            (CmsError::InvalidTextModeParameter, 305, "invalid text mode parameter"),
             (CmsError::SimNotInserted, 310, "SIM not inserted"),
             (CmsError::SimPinRequired, 311, "SIM PIN required"),
             (CmsError::InvalidMemoryIndex, 321, "invalid memory index"),

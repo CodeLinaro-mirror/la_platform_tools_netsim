@@ -691,9 +691,14 @@ fn test_cnma_invalid_val() {
 
 #[test]
 fn test_cms_errors() {
-    for (cmee, invalid_idx_err, invalid_pdu_err) in [
-        (1, "+CMS ERROR: 321", "+CMS ERROR: 304"),
-        (2, "+CMS ERROR: invalid memory index", "+CMS ERROR: invalid PDU mode parameter"),
+    for (cmee, invalid_idx_err, invalid_pdu_err, invalid_txt_err) in [
+        (1, "+CMS ERROR: 321", "+CMS ERROR: 304", "+CMS ERROR: 305"),
+        (
+            2,
+            "+CMS ERROR: invalid memory index",
+            "+CMS ERROR: invalid PDU mode parameter",
+            "+CMS ERROR: invalid text mode parameter",
+        ),
     ] {
         let mut world = World::new();
         world.given_modem("A");
@@ -724,7 +729,7 @@ fn test_cms_errors() {
 
         // Sending invalid text mode destination via AT+CMGS
         world.send_and_expect_ok("A", "AT+CMGF=1");
-        world.send_and_expect_error("A", "AT+CMGS=\"invalid#phone\"", invalid_pdu_err);
+        world.send_and_expect_error("A", "AT+CMGS=\"invalid#phone\"", invalid_txt_err);
     }
 }
 
@@ -839,4 +844,57 @@ fn test_sms_prompt_with_goldfish_quirk() {
 
     world.when_at_command("A", "AT+CMGS=15");
     world.then_prompt_is("A", "> \r");
+}
+
+// TS 27.005 § 3.5.1: the CMS error for a bad AT+CMGS destination depends on the
+// active <mode>, because the quoted form parses identically in both.
+#[test]
+fn test_cmgs_invalid_destination_error_follows_message_format() {
+    let mut world = World::new();
+    world.given_modem("A");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    world.send_and_expect_ok("A", "AT+CMGF=1");
+    world.send_and_expect_error("A", "AT+CMGS=\"invalid#phone\"", "+CMS ERROR: 305");
+    world.send_and_expect_ok("A", "AT+CMGF=0");
+    world.send_and_expect_error("A", "AT+CMGS=\"invalid#phone\"", "+CMS ERROR: 304");
+}
+
+// TS 27.005 § 3.5.1: the argument shape must match the active <mode>.
+#[test]
+fn test_cmgs_syntax_mismatch_rejected() {
+    let mut world = World::new();
+    world.given_modem("A");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // In text mode, PDU syntax (AT+CMGS=<length>) is rejected with CMS 305.
+    world.send_and_expect_ok("A", "AT+CMGF=1");
+    world.send_and_expect_error("A", "AT+CMGS=15", "+CMS ERROR: 305");
+
+    // In PDU mode, text syntax (AT+CMGS="<da>") is rejected with CMS 304.
+    world.send_and_expect_ok("A", "AT+CMGF=0");
+    world.send_and_expect_error("A", "AT+CMGS=\"12345\"", "+CMS ERROR: 304");
+}
+
+// TS 27.005 § 3.5.1 reports <mr> only on success, so a rejected message must
+// not consume one. Exercised in PDU mode because that is the rejection path
+// that exists today; the text mode capacity rejection arrives with GSM 7-bit
+// encoding.
+#[test]
+fn test_rejected_sms_does_not_consume_message_reference() {
+    let mut world = World::new();
+    world.given_modem("A");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    world.when_at_command("A", &format!("AT+CMGS={TEST_SMS_TPDU_LEN}"));
+    world.then_prompt("A");
+    world.when_hex_bytes("A", INVALID_SMS_PDU_HEX);
+    world.then_response_is("A", "+CMS ERROR: 304");
+
+    // The rejected attempt did not burn a reference, so the first accepted
+    // message still reports 1.
+    world.when_at_command("A", &format!("AT+CMGS={TEST_SMS_TPDU_LEN}"));
+    world.then_prompt("A");
+    world.when_hex_bytes("A", TEST_SMS_PDU_WITH_CTRL_Z);
+    world.then_response_contains("A", "+CMGS: 1");
 }
