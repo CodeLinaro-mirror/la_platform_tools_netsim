@@ -755,7 +755,7 @@ mod tests {
             cmd,
             Command::Sms(SmsCommand::SetSmscAddress(
                 QuotedString("12345"),
-                Some(TypeOfAddress::National)
+                Some(TypeOfAddress::Unknown)
             ))
         );
 
