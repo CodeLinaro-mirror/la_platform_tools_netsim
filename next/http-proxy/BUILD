@@ -17,6 +17,7 @@ netsim_rust_library(
         "@base64",
         "@bytes",
         "@etherparse",
+        "@parking_lot",
         "@percent-encoding",
         "@thiserror",
         "@tokio",

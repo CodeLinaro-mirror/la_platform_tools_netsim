@@ -113,18 +113,20 @@ impl ProxyConfig {
 }
 
 /// Convert TcpStream to RawDescriptor (i32)
-pub fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
-    let std_stream = stream.into_std().expect("into_raw_descriptor's into_std() failed");
-
-    std_stream.set_nonblocking(false).expect("non-blocking");
+pub fn into_raw_descriptor(stream: TcpStream) -> Result<RawDescriptor> {
+    let std_stream = stream.into_std()?;
+    std_stream.set_nonblocking(false)?;
 
     // Use into_raw_fd for Unix to pass raw file descriptor to C
     #[cfg(unix)]
-    return std_stream.into_raw_fd();
+    return Ok(std_stream.into_raw_fd());
 
     // Use into_raw_socket for Windows to pass raw socket to C
     #[cfg(windows)]
-    std_stream.into_raw_socket().try_into().expect("Failed to convert Raw Socket value into i32")
+    Ok(std_stream
+        .into_raw_socket()
+        .try_into()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?)
 }
 
 #[cfg(test)]

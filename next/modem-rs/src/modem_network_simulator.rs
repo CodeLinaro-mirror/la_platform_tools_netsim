@@ -825,20 +825,18 @@ impl ModemNetworkSimulator {
         let now = self.clock.now();
         let mut effects = Vec::new();
 
-        while let Some(event) = self.event_queue.peek() {
-            if event.0.when <= now {
-                let event = self.event_queue.pop().unwrap().0;
-
-                if let Some(modem) = self.modems.get_mut(&event.modem_id) {
-                    let new_effects: Vec<_> = modem
-                        .handle_event(event.event)
-                        .into_iter()
-                        .map(|e| (event.modem_id, e))
-                        .collect();
-                    effects.extend(new_effects);
-                }
-            } else {
-                break;
+        while let Some(event) = self.event_queue.peek()
+            && event.0.when <= now
+        {
+            if let Some(std::cmp::Reverse(event)) = self.event_queue.pop()
+                && let Some(modem) = self.modems.get_mut(&event.modem_id)
+            {
+                let new_effects: Vec<_> = modem
+                    .handle_event(event.event)
+                    .into_iter()
+                    .map(|e| (event.modem_id, e))
+                    .collect();
+                effects.extend(new_effects);
             }
         }
         let events = self.process_effects(effects);

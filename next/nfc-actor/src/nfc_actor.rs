@@ -4,13 +4,14 @@
 use std::{
     collections::HashMap,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicU8, AtomicU64},
     },
 };
 
 use device_actor::DeviceClient;
 use netsim_model::ChipId;
+use parking_lot::Mutex;
 use tokio::io::{DuplexStream, WriteHalf};
 use tracing::info;
 

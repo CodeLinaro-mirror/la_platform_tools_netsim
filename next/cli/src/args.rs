@@ -425,7 +425,7 @@ impl TypedValueParser for IntervalParser {
 
     fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
         Some(Box::new(
-            AdvertiseMode::value_variants().iter().map(|v| v.to_possible_value().unwrap()).chain(
+            AdvertiseMode::value_variants().iter().filter_map(ValueEnum::to_possible_value).chain(
                 iter::once(
                     PossibleValue::new("<MS>").help("An exact advertise interval in milliseconds"),
                 ),
@@ -463,7 +463,7 @@ impl TypedValueParser for TxPowerParser {
 
     fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
         Some(Box::new(
-            TxPowerLevel::value_variants().iter().map(|v| v.to_possible_value().unwrap()).chain(
+            TxPowerLevel::value_variants().iter().filter_map(ValueEnum::to_possible_value).chain(
                 iter::once(
                     PossibleValue::new("<DBM>").help("An exact transmit power level in dBm"),
                 ),

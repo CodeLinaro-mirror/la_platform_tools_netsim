@@ -261,13 +261,7 @@ impl NfcWorld {
         assert!(self.aborted_tasks.lock().unwrap().contains(&chip_id), "Task was not aborted");
         assert!(self.removed_streams.lock().unwrap().contains(&chip_id), "Stream was not removed");
         assert!(
-            !self
-                .actor
-                .casimir_to_device
-                .lock()
-                .unwrap()
-                .values()
-                .any(|&dev_id| dev_id.0 == id_val),
+            !self.actor.casimir_to_device.lock().values().any(|&dev_id| dev_id.0 == id_val),
             "Casimir mapping was not cleaned up!"
         );
     }

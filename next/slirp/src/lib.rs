@@ -1,6 +1,8 @@
 // Copyright 2023-2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 pub mod arp;
 pub mod dhcp;
 pub mod dhcpv6;

@@ -27,6 +27,7 @@ netsim_rust_library(
         "//next/slirp",
         "@bytes",
         "@futures",
+        "@parking_lot",
         "@thiserror",
         "@tokio",
         "@tokio-stream",

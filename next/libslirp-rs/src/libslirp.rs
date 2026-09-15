@@ -255,11 +255,15 @@ impl LibSlirp {
         if let Err(e) = self.tx_cmds.send(SlirpCmd::Shutdown) {
             warn!("Failed to send Shutdown cmd: {}", e);
         }
-        if let Some(handle) = self.slirp_thread_handle.take() {
-            handle.join().unwrap();
+        if let Some(handle) = self.slirp_thread_handle.take()
+            && let Err(e) = handle.join()
+        {
+            warn!("Failed to join slirp thread: {e:?}");
         }
-        if let Some(handle) = self.poll_thread_handle.take() {
-            handle.join().unwrap();
+        if let Some(handle) = self.poll_thread_handle.take()
+            && let Err(e) = handle.join()
+        {
+            warn!("Failed to join poll thread: {e:?}");
         }
     }
 
