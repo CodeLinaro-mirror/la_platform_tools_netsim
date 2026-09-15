@@ -568,7 +568,7 @@ mod test_message {
         let bytes: &[u8] = &bytes;
         let answers = parse_answers(bytes)?;
         assert_eq!(
-            *answers.get(0).unwrap(),
+            *answers.first().unwrap(),
             (Ipv6Addr::from_str("2600:1406:5e00:293::3831")?.into(), "ibm.com".to_string())
         );
         assert_eq!(

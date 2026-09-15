@@ -23,6 +23,9 @@ pub struct Quirks {
     pub goldfish_ril_37_or_earlier: bool,
     /// Flag indicating if the guest device is Cuttlefish.
     pub is_cuttlefish: bool,
+    /// Flag indicating whether CTZV (NITZ time zone reporting) should be
+    /// enabled by default.
+    pub auto_ctzv: bool,
 }
 
 /// Cellular technology specific chip information.
@@ -111,6 +114,22 @@ pub enum RegistrationStatus {
     Denied = 3,
     Unknown = 4,
     Roaming = 5,
+    RegisteredSmsOnlyHome = 6,
+    RegisteredSmsOnlyRoaming = 7,
+    Emergency = 8,
+}
+
+impl RegistrationStatus {
+    /// Returns true if registered for normal voice/data service (Home or
+    /// Roaming).
+    pub fn is_registered(self) -> bool {
+        matches!(self, Self::RegisteredHome | Self::Roaming)
+    }
+
+    /// Returns true if attached for emergency bearer services only.
+    pub fn is_emergency_only(self) -> bool {
+        matches!(self, Self::Emergency)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -134,7 +153,7 @@ pub enum ModemAction {
     IncomingSms { id: ChipId, sender: String, text: String },
     IncomingPdu { id: ChipId, pdu: String },
     UpdatePhysicalChannelConfigs { id: ChipId },
-    UpdateNetworkTime { id: ChipId, time: String },
+    UpdateNetworkTime { id: ChipId },
     SetSimStatus { id: ChipId, present: bool },
     SetNetworkTechnology { id: ChipId, tech: RadioTechnology },
     SetOperator { id: ChipId, operator: String },

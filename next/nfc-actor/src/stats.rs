@@ -3,7 +3,10 @@
 
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
-use netsim_proto::stats::{NciCoreStats, NciDataStats, NciRfStats, NfcApiStats, NfcIpcStats};
+use netsim_proto::stats::{
+    CardEmulationStats, NciCoreStats, NciDataStats, NciRfStats, NfcAdapterStats, NfcApiStats,
+    NfcIpcStats, TagStats,
+};
 
 /// Stats for the NFC Actor.
 ///
@@ -70,15 +73,17 @@ pub struct NfcServiceStats {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NfcApi {
-    CoreReset = 0,
-    CoreInit = 1,
-    RfDiscover = 2,
-    RfDiscoverSelect = 3,
-    RfDeactivate = 4,
-    DataSend = 5,
-    DataReceive = 6,
-    RfSetListenModeRouting = 7,
-    Count = 8,
+    AdapterEnable = 0,
+    AdapterDisable = 1,
+    AdapterEnableReaderMode = 2,
+    AdapterDisableReaderMode = 3,
+    AdapterSetListenModeRouting = 4,
+    TagConnect = 5,
+    TagClose = 6,
+    TagTransceive = 7,
+    CardEmulationProcessCommandApdu = 8,
+    CardEmulationSendResponseApdu = 9,
+    Count = 10,
 }
 
 #[derive(Debug)]
@@ -194,26 +199,51 @@ impl NfcStats {
 
     // Export to API proto (Ours)
     pub fn to_api_proto(&self) -> NfcApiStats {
-        let saturate = |val: u32| -> i32 { val.try_into().unwrap_or(i32::MAX) };
-
         let mut nfc = NfcApiStats::new();
 
+        // Android Framework API mappings (aligned with Wi-Fi & UWB)
+        let mut nfc_adapter = NfcAdapterStats::new();
+        nfc_adapter.enable = Some(saturate_i32(self.get(NfcApi::AdapterEnable).into()));
+        nfc_adapter.disable = Some(saturate_i32(self.get(NfcApi::AdapterDisable).into()));
+        nfc_adapter.enable_reader_mode =
+            Some(saturate_i32(self.get(NfcApi::AdapterEnableReaderMode).into()));
+        nfc_adapter.disable_reader_mode =
+            Some(saturate_i32(self.get(NfcApi::AdapterDisableReaderMode).into()));
+        nfc_adapter.set_listen_mode_routing =
+            Some(saturate_i32(self.get(NfcApi::AdapterSetListenModeRouting).into()));
+        nfc.nfc_adapter = netsim_proto::protobuf::MessageField::some(nfc_adapter);
+
+        let mut tag = TagStats::new();
+        tag.connect = Some(saturate_i32(self.get(NfcApi::TagConnect).into()));
+        tag.close = Some(saturate_i32(self.get(NfcApi::TagClose).into()));
+        tag.transceive = Some(saturate_i32(self.get(NfcApi::TagTransceive).into()));
+        nfc.tag = netsim_proto::protobuf::MessageField::some(tag);
+
+        let mut card_emulation = CardEmulationStats::new();
+        card_emulation.process_command_apdu =
+            Some(saturate_i32(self.get(NfcApi::CardEmulationProcessCommandApdu).into()));
+        card_emulation.send_response_apdu =
+            Some(saturate_i32(self.get(NfcApi::CardEmulationSendResponseApdu).into()));
+        nfc.card_emulation = netsim_proto::protobuf::MessageField::some(card_emulation);
+
+        // Legacy protocol-level fields (retained and dual-populated for backwards
+        // compatibility)
         let mut nci_core = NciCoreStats::new();
-        nci_core.reset = Some(saturate(self.get(NfcApi::CoreReset)));
-        nci_core.init = Some(saturate(self.get(NfcApi::CoreInit)));
+        nci_core.reset = Some(saturate_i32(self.get(NfcApi::AdapterDisable).into()));
+        nci_core.init = Some(saturate_i32(self.get(NfcApi::AdapterEnable).into()));
         nfc.nci_core = netsim_proto::protobuf::MessageField::some(nci_core);
 
         let mut nci_rf = NciRfStats::new();
-        nci_rf.discover = Some(saturate(self.get(NfcApi::RfDiscover)));
-        nci_rf.discover_select = Some(saturate(self.get(NfcApi::RfDiscoverSelect)));
-        nci_rf.deactivate = Some(saturate(self.get(NfcApi::RfDeactivate)));
+        nci_rf.discover = Some(saturate_i32(self.get(NfcApi::AdapterEnableReaderMode).into()));
+        nci_rf.discover_select = Some(saturate_i32(self.get(NfcApi::TagConnect).into()));
+        nci_rf.deactivate = Some(saturate_i32(self.get(NfcApi::AdapterDisableReaderMode).into()));
         nci_rf.rf_set_listen_mode_routing =
-            Some(saturate(self.get(NfcApi::RfSetListenModeRouting)));
+            Some(saturate_i32(self.get(NfcApi::AdapterSetListenModeRouting).into()));
         nfc.nci_rf = netsim_proto::protobuf::MessageField::some(nci_rf);
 
         let mut nci_data = NciDataStats::new();
-        nci_data.send = Some(saturate(self.get(NfcApi::DataSend)));
-        nci_data.receive = Some(saturate(self.get(NfcApi::DataReceive)));
+        nci_data.send = Some(0);
+        nci_data.receive = Some(0);
         nfc.nci_data = netsim_proto::protobuf::MessageField::some(nci_data);
 
         nfc
@@ -301,15 +331,202 @@ mod tests {
     #[test]
     fn test_nfc_api_stats_increments() {
         let stats = NfcStats::new();
-        stats.incr(NfcApi::CoreReset);
-        stats.incr(NfcApi::CoreInit);
-        stats.incr(NfcApi::CoreInit);
-        stats.incr(NfcApi::RfDiscover);
+        stats.incr(NfcApi::AdapterDisable);
+        stats.incr(NfcApi::AdapterEnable);
+        stats.incr(NfcApi::AdapterEnable);
+        stats.incr(NfcApi::AdapterEnableReaderMode);
+        stats.incr(NfcApi::AdapterSetListenModeRouting);
+        stats.incr(NfcApi::TagConnect);
+        stats.incr(NfcApi::TagClose);
+        stats.incr(NfcApi::TagTransceive);
+        stats.incr(NfcApi::CardEmulationProcessCommandApdu);
+        stats.incr(NfcApi::CardEmulationSendResponseApdu);
 
         let proto = stats.to_api_proto();
-        assert_eq!(proto.nci_core.reset, Some(1));
-        assert_eq!(proto.nci_core.init, Some(2));
-        assert_eq!(proto.nci_rf.discover, Some(1));
-        assert_eq!(proto.nci_rf.discover_select, Some(0));
+
+        // Android Framework API checks
+        let nfc_adapter = proto.nfc_adapter.as_ref().expect("nfc_adapter missing");
+        assert_eq!(nfc_adapter.disable, Some(1));
+        assert_eq!(nfc_adapter.enable, Some(2));
+        assert_eq!(nfc_adapter.enable_reader_mode, Some(1));
+        assert_eq!(nfc_adapter.disable_reader_mode, Some(0));
+        assert_eq!(nfc_adapter.set_listen_mode_routing, Some(1));
+
+        let tag = proto.tag.as_ref().expect("tag missing");
+        assert_eq!(tag.connect, Some(1));
+        assert_eq!(tag.close, Some(1));
+        assert_eq!(tag.transceive, Some(1));
+
+        let card_emulation = proto.card_emulation.as_ref().expect("card_emulation missing");
+        assert_eq!(card_emulation.process_command_apdu, Some(1));
+        assert_eq!(card_emulation.send_response_apdu, Some(1));
+
+        // Legacy fields backwards compatibility checks
+        let nci_core = proto.nci_core.as_ref().expect("nci_core missing");
+        assert_eq!(nci_core.reset, Some(1));
+        assert_eq!(nci_core.init, Some(2));
+
+        let nci_rf = proto.nci_rf.as_ref().expect("nci_rf missing");
+        assert_eq!(nci_rf.discover, Some(1));
+        assert_eq!(nci_rf.discover_select, Some(1));
+        assert_eq!(nci_rf.deactivate, Some(0));
+        assert_eq!(nci_rf.rf_set_listen_mode_routing, Some(1));
+
+        let nci_data = proto.nci_data.as_ref().expect("nci_data missing");
+        assert_eq!(nci_data.send, Some(0));
+        assert_eq!(nci_data.receive, Some(0));
+    }
+
+    #[test]
+    fn test_to_ipc_proto() {
+        let stats = NfcStats::new();
+        stats.incr(NfcApi::AdapterEnable);
+        let ipc = stats.to_ipc_proto();
+        assert!(ipc.nfc_stats.is_some());
+        assert!(ipc.nfc_api_stats.is_some());
+        let api_stats = ipc.nfc_api_stats.as_ref().unwrap();
+        assert_eq!(api_stats.nfc_adapter.as_ref().unwrap().enable, Some(1));
+    }
+
+    #[test]
+    fn test_nfc_api_get_out_of_bounds() {
+        let stats = NfcStats::new();
+        assert_eq!(stats.get(NfcApi::Count), 0);
+    }
+
+    #[test]
+    fn test_nfc_api_stats_saturation() {
+        let stats = NfcStats::new();
+        stats.nfc_apis.data[NfcApi::AdapterEnable as usize].store(u32::MAX, Ordering::Relaxed);
+        let proto = stats.to_api_proto();
+        assert_eq!(proto.nfc_adapter.as_ref().unwrap().enable, Some(i32::MAX));
+    }
+
+    #[test]
+    fn test_nfc_proto_accessors_and_serialization() {
+        use netsim_proto::protobuf::Message;
+
+        // 1. NfcAdapterStats getters, setters, has, clear
+        let mut adapter = NfcAdapterStats::new();
+        assert_eq!(adapter.enable(), 0);
+        assert!(!adapter.has_enable());
+        adapter.set_enable(10);
+        assert_eq!(adapter.enable(), 10);
+        assert!(adapter.has_enable());
+        adapter.clear_enable();
+        assert_eq!(adapter.enable(), 0);
+        assert!(!adapter.has_enable());
+
+        assert_eq!(adapter.disable(), 0);
+        assert!(!adapter.has_disable());
+        adapter.set_disable(20);
+        assert_eq!(adapter.disable(), 20);
+        assert!(adapter.has_disable());
+        adapter.clear_disable();
+        assert!(!adapter.has_disable());
+
+        assert_eq!(adapter.enable_reader_mode(), 0);
+        assert!(!adapter.has_enable_reader_mode());
+        adapter.set_enable_reader_mode(30);
+        assert_eq!(adapter.enable_reader_mode(), 30);
+        assert!(adapter.has_enable_reader_mode());
+        adapter.clear_enable_reader_mode();
+        assert!(!adapter.has_enable_reader_mode());
+
+        assert_eq!(adapter.disable_reader_mode(), 0);
+        assert!(!adapter.has_disable_reader_mode());
+        adapter.set_disable_reader_mode(40);
+        assert_eq!(adapter.disable_reader_mode(), 40);
+        assert!(adapter.has_disable_reader_mode());
+        adapter.clear_disable_reader_mode();
+        assert!(!adapter.has_disable_reader_mode());
+
+        assert_eq!(adapter.set_listen_mode_routing(), 0);
+        assert!(!adapter.has_set_listen_mode_routing());
+        adapter.set_set_listen_mode_routing(50);
+        assert_eq!(adapter.set_listen_mode_routing(), 50);
+        assert!(adapter.has_set_listen_mode_routing());
+        adapter.clear_set_listen_mode_routing();
+        assert!(!adapter.has_set_listen_mode_routing());
+
+        let default_adapter = NfcAdapterStats::default();
+        assert_eq!(adapter, default_adapter);
+
+        // 2. TagStats getters, setters, has, clear
+        let mut tag = TagStats::new();
+        assert_eq!(tag.connect(), 0);
+        assert!(!tag.has_connect());
+        tag.set_connect(100);
+        assert_eq!(tag.connect(), 100);
+        assert!(tag.has_connect());
+        tag.clear_connect();
+        assert!(!tag.has_connect());
+
+        assert_eq!(tag.close(), 0);
+        assert!(!tag.has_close());
+        tag.set_close(200);
+        assert_eq!(tag.close(), 200);
+        assert!(tag.has_close());
+        tag.clear_close();
+        assert!(!tag.has_close());
+
+        assert_eq!(tag.transceive(), 0);
+        assert!(!tag.has_transceive());
+        tag.set_transceive(300);
+        assert_eq!(tag.transceive(), 300);
+        assert!(tag.has_transceive());
+        tag.clear_transceive();
+        assert!(!tag.has_transceive());
+
+        // 3. CardEmulationStats getters, setters, has, clear
+        let mut ce = CardEmulationStats::new();
+        assert_eq!(ce.process_command_apdu(), 0);
+        assert!(!ce.has_process_command_apdu());
+        ce.set_process_command_apdu(400);
+        assert_eq!(ce.process_command_apdu(), 400);
+        assert!(ce.has_process_command_apdu());
+        ce.clear_process_command_apdu();
+        assert!(!ce.has_process_command_apdu());
+
+        assert_eq!(ce.send_response_apdu(), 0);
+        assert!(!ce.has_send_response_apdu());
+        ce.set_send_response_apdu(500);
+        assert_eq!(ce.send_response_apdu(), 500);
+        assert!(ce.has_send_response_apdu());
+        ce.clear_send_response_apdu();
+        assert!(!ce.has_send_response_apdu());
+
+        // 4. NfcApiStats has, clear, take, and protobuf serialization/deserialization
+        let mut nfc_api = NfcApiStats::new();
+        nfc_api.nfc_adapter = netsim_proto::protobuf::MessageField::some(adapter.clone());
+        assert!(nfc_api.nfc_adapter.is_some());
+        let _ = nfc_api.nfc_adapter.as_ref();
+        let _ = nfc_api.nfc_adapter.as_mut();
+        let _ = nfc_api.nfc_adapter.take();
+        assert!(nfc_api.nfc_adapter.is_none());
+
+        nfc_api.tag = netsim_proto::protobuf::MessageField::some(tag.clone());
+        assert!(nfc_api.tag.is_some());
+        let _ = nfc_api.tag.as_ref();
+        let _ = nfc_api.tag.as_mut();
+        let _ = nfc_api.tag.take();
+        assert!(nfc_api.tag.is_none());
+
+        nfc_api.card_emulation = netsim_proto::protobuf::MessageField::some(ce.clone());
+        assert!(nfc_api.card_emulation.is_some());
+        let _ = nfc_api.card_emulation.as_ref();
+        let _ = nfc_api.card_emulation.as_mut();
+        let _ = nfc_api.card_emulation.take();
+        assert!(nfc_api.card_emulation.is_none());
+
+        // Serialization roundtrip
+        let stats = NfcStats::new();
+        stats.incr(NfcApi::AdapterEnable);
+        stats.incr(NfcApi::TagConnect);
+        stats.incr(NfcApi::CardEmulationProcessCommandApdu);
+        let api_proto = stats.to_api_proto();
+        let bytes = api_proto.write_to_bytes().unwrap();
+        let parsed = NfcApiStats::parse_from_bytes(&bytes).unwrap();
+        assert_eq!(api_proto, parsed);
     }
 }

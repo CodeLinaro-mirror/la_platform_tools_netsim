@@ -110,6 +110,59 @@ pub fn generate_default_name(chip_id: u32) -> String {
     format!("Beacon-{}", chip_id)
 }
 
+// HCI Constants used for testing and packet parsing
+
+/// HCI Packet Type: Event
+pub const HCI_EVENT_PACKET: u8 = 0x04;
+/// HCI Event Code: LE Meta Event
+pub const LE_META_EVENT: u8 = 0x3E;
+/// LE Subevent Code: Advertising Report
+pub const LE_ADVERTISING_REPORT: u8 = 0x02;
+
+// Offsets within LE Advertising Report Event
+// Byte 0: Packet Type
+// Byte 1: Event Code
+// Byte 2: Parameter Total Length
+// Byte 3: Subevent Code
+// Byte 4: Num Reports
+// Byte 5: Event Type
+// Byte 6: Address Type
+// Byte 7-12: Address
+/// Offset of the Number of Reports field in an LE Advertising Report
+pub const REPORT_NUM_REPORTS_OFFSET: usize = 4;
+/// Offset of the Address field in an LE Advertising Report
+pub const REPORT_ADDR_OFFSET: usize = 12;
+
+// HCI Commands
+
+/// Set Standard Event Mask (0x0C01) - Enable all events Mask: FF FF FF FF FF FF
+/// FF FF
+pub const CMD_SET_EVENT_MASK_STD: &[u8] =
+    &[0x01, 0x01, 0x0C, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+
+/// Set LE Event Mask (0x2001) - Enable all LE events Mask: FF 00 00 00 00 00 00
+/// 00
+pub const CMD_LE_SET_EVENT_MASK: &[u8] =
+    &[0x01, 0x01, 0x20, 0x08, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+/// LE Set Scan Parameters (0x200B)
+/// 01 (Cmd) 0B 20 (OpCode) 07 (Len) 00 (Type: Passive) 10 00 (Interval) 10 00
+/// (Window) 00 (OwnAddr) 00 (Filter)
+pub const CMD_LE_SET_SCAN_PARAMS: &[u8] =
+    &[0x01, 0x0B, 0x20, 0x07, 0x00, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
+
+/// LE Set Scan Enable (0x200C)
+/// 01 (Cmd) 0C 20 (OpCode) 02 (Len) 01 (Enable) 00 (FilterDup)
+pub const CMD_LE_SET_SCAN_ENABLE: &[u8] = &[0x01, 0x0C, 0x20, 0x02, 0x01, 0x00];
+
+/// Helper to check if a packet is an LE Advertising Report
+pub const fn is_le_advertising_report(packet: &[u8]) -> bool {
+    let [HCI_EVENT_PACKET, LE_META_EVENT, _, LE_ADVERTISING_REPORT, _, ..] = packet else {
+        return false;
+    };
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,57 +248,4 @@ mod tests {
         // Invalid services should be skipped. Empty data remains.
         assert_eq!(data, Vec::<u8>::new());
     }
-}
-
-// HCI Constants used for testing and packet parsing
-
-/// HCI Packet Type: Event
-pub const HCI_EVENT_PACKET: u8 = 0x04;
-/// HCI Event Code: LE Meta Event
-pub const LE_META_EVENT: u8 = 0x3E;
-/// LE Subevent Code: Advertising Report
-pub const LE_ADVERTISING_REPORT: u8 = 0x02;
-
-// Offsets within LE Advertising Report Event
-// Byte 0: Packet Type
-// Byte 1: Event Code
-// Byte 2: Parameter Total Length
-// Byte 3: Subevent Code
-// Byte 4: Num Reports
-// Byte 5: Event Type
-// Byte 6: Address Type
-// Byte 7-12: Address
-/// Offset of the Number of Reports field in an LE Advertising Report
-pub const REPORT_NUM_REPORTS_OFFSET: usize = 4;
-/// Offset of the Address field in an LE Advertising Report
-pub const REPORT_ADDR_OFFSET: usize = 12;
-
-// HCI Commands
-
-/// Set Standard Event Mask (0x0C01) - Enable all events Mask: FF FF FF FF FF FF
-/// FF FF
-pub const CMD_SET_EVENT_MASK_STD: &[u8] =
-    &[0x01, 0x01, 0x0C, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-
-/// Set LE Event Mask (0x2001) - Enable all LE events Mask: FF 00 00 00 00 00 00
-/// 00
-pub const CMD_LE_SET_EVENT_MASK: &[u8] =
-    &[0x01, 0x01, 0x20, 0x08, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-
-/// LE Set Scan Parameters (0x200B)
-/// 01 (Cmd) 0B 20 (OpCode) 07 (Len) 00 (Type: Passive) 10 00 (Interval) 10 00
-/// (Window) 00 (OwnAddr) 00 (Filter)
-pub const CMD_LE_SET_SCAN_PARAMS: &[u8] =
-    &[0x01, 0x0B, 0x20, 0x07, 0x00, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
-
-/// LE Set Scan Enable (0x200C)
-/// 01 (Cmd) 0C 20 (OpCode) 02 (Len) 01 (Enable) 00 (FilterDup)
-pub const CMD_LE_SET_SCAN_ENABLE: &[u8] = &[0x01, 0x0C, 0x20, 0x02, 0x01, 0x00];
-
-/// Helper to check if a packet is an LE Advertising Report
-pub fn is_le_advertising_report(packet: &[u8]) -> bool {
-    packet.len() > REPORT_NUM_REPORTS_OFFSET
-        && packet[0] == HCI_EVENT_PACKET
-        && packet[1] == LE_META_EVENT
-        && packet[3] == LE_ADVERTISING_REPORT
 }

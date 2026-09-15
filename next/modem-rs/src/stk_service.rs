@@ -19,8 +19,6 @@ const TAG_COMMAND_DETAILS_ALT: u8 = 0x01;
 const TAG_RESULT: u8 = 0x83;
 const TAG_RESULT_ALT: u8 = 0x03;
 
-const CMD_TYPE_SELECT_ITEM: u8 = 0x24;
-
 const RESULT_SUCCESS: u8 = 0x00;
 const RESULT_SESSION_TERMINATED: u8 = 0x10;
 const RESULT_BACKWARD_MOVE: u8 = 0x11;
@@ -38,8 +36,38 @@ const TLV_HEADER_LEN: usize = 2; // 1 byte tag + 1 byte length
 const SIMPLIFIED_ENVELOPE_MIN_LEN: usize = 4;
 const SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX: usize = 3;
 
-const CMD_TYPE_DISPLAY_TEXT: u8 = 0x21;
-const CMD_TYPE_GET_INPUT: u8 = 0x23;
+/// SIM Toolkit (USAT / STK) proactive command type.
+///
+/// Ref: ETSI TS 102 223 § 9.4 ("Type of command and next action indicator") /
+/// 3GPP TS 31.111 § 9.4.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum ProactiveCommandType {
+    DisplayText = 0x21,
+    GetInput = 0x23,
+    SelectItem = 0x24,
+    SetUpMenu = 0x25,
+}
+
+impl TryFrom<u8> for ProactiveCommandType {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x21 => Ok(Self::DisplayText),
+            0x23 => Ok(Self::GetInput),
+            0x24 => Ok(Self::SelectItem),
+            0x25 => Ok(Self::SetUpMenu),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<ProactiveCommandType> for u8 {
+    fn from(cmd: ProactiveCommandType) -> Self {
+        cmd as u8
+    }
+}
 
 /// STK (SIM Toolkit) service AT commands.
 #[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
@@ -82,7 +110,7 @@ impl std::fmt::Display for StkResponse {
                 write!(f, "+CUSATT: {val}\r\n")
             }
             StkResponse::UsatProactiveCommand(val) => {
-                write!(f, "+CUSATP: \"{val}\"\r\n")
+                write!(f, "+CUSATP: {val}\r\n")
             }
             StkResponse::UsatSessionEnd => {
                 write!(f, "+CUSATEND\r\n")
@@ -127,6 +155,12 @@ enum TerminalResponseAction {
     Back,
     EndSession,
     None,
+}
+
+impl Default for StkService {
+    fn default() -> Self {
+        Self::new(Stk::default())
+    }
 }
 
 impl StkService {
@@ -206,7 +240,7 @@ impl StkService {
         let bytes = hex::decode(hex_str).ok()?;
 
         let mut remaining = &bytes[..];
-        let mut is_select_item = false;
+        let mut command_type = None;
         let mut general_result = None;
         let mut additional_info = None;
 
@@ -221,7 +255,7 @@ impl StkService {
             match *tag {
                 TAG_COMMAND_DETAILS | TAG_COMMAND_DETAILS_ALT => {
                     if let [_, cmd_type, ..] = value {
-                        is_select_item |= *cmd_type == CMD_TYPE_SELECT_ITEM;
+                        command_type = ProactiveCommandType::try_from(*cmd_type).ok();
                     }
                 }
                 TAG_RESULT | TAG_RESULT_ALT => match value {
@@ -239,18 +273,14 @@ impl StkService {
             remaining = next;
         }
 
-        if let Some(res) = general_result {
-            match res {
-                RESULT_SUCCESS if is_select_item => {
-                    additional_info.map(TerminalResponseAction::Select)
-                }
-                RESULT_SUCCESS if !is_select_item => Some(TerminalResponseAction::EndSession),
-                RESULT_SESSION_TERMINATED => Some(TerminalResponseAction::Terminate),
-                RESULT_BACKWARD_MOVE => Some(TerminalResponseAction::Back),
-                _ => Some(TerminalResponseAction::None),
+        match (general_result?, command_type) {
+            (RESULT_SUCCESS, Some(ProactiveCommandType::SelectItem)) => {
+                additional_info.map(TerminalResponseAction::Select)
             }
-        } else {
-            None
+            (RESULT_SUCCESS, _) => Some(TerminalResponseAction::EndSession),
+            (RESULT_SESSION_TERMINATED, _) => Some(TerminalResponseAction::Terminate),
+            (RESULT_BACKWARD_MOVE, _) => Some(TerminalResponseAction::Back),
+            _ => Some(TerminalResponseAction::None),
         }
     }
 
@@ -267,10 +297,14 @@ impl StkService {
             let hex_str = std::str::from_utf8(command).map_err(|_err| ExecutionResult::error())?;
             let bytes = hex::decode(hex_str).map_err(|_err| ExecutionResult::error())?;
             if bytes.len() >= SIMPLIFIED_ENVELOPE_MIN_LEN {
-                let cmd_type = bytes[SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX];
-                if cmd_type == CMD_TYPE_DISPLAY_TEXT || cmd_type == CMD_TYPE_GET_INPUT {
+                let cmd_type =
+                    ProactiveCommandType::try_from(bytes[SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX]);
+                if matches!(
+                    cmd_type,
+                    Ok(ProactiveCommandType::DisplayText | ProactiveCommandType::GetInput)
+                ) {
                     return Ok(StkExecutionResult {
-                        response: Some(StkResponse::UsatEnvelopeResponse("9000".to_string())),
+                        response: Some(StkResponse::UsatEnvelopeResponse("0".to_string())),
                         urcs: vec![StkResponse::UsatProactiveCommand("9000".to_string())],
                     });
                 }
@@ -298,7 +332,7 @@ impl StkService {
                 }
 
                 return Ok(StkExecutionResult {
-                    response: Some(StkResponse::UsatEnvelopeResponse("9000".to_string())),
+                    response: Some(StkResponse::UsatEnvelopeResponse("0".to_string())),
                     urcs,
                 });
             }
@@ -308,45 +342,26 @@ impl StkService {
         Err(ExecutionResult::error())
     }
 
-    fn handle_set_stk(&self) -> StkResult {
-        Ok(StkExecutionResult::default())
-    }
-
-    fn handle_set_stk_enabled(&mut self, enabled: bool) -> StkResult {
-        self.stk_enabled = enabled;
+    fn sync_stk_menu_urc(&self) -> StkExecutionResult {
         let mut urcs = Vec::new();
         if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
             urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
         }
-        Ok(StkExecutionResult { response: None, urcs })
-    }
-
-    fn handle_set_stk_unsolicited_result(&mut self, reporting: bool) -> StkResult {
-        self.stk_reporting = reporting;
-        let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
-            urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
-        }
-        Ok(StkExecutionResult { response: None, urcs })
+        StkExecutionResult { response: None, urcs }
     }
 
     fn handle_query_stk_ready(&self) -> StkResult {
+        let mut urcs = Vec::new();
+        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
+            urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
+        }
         Ok(StkExecutionResult {
             response: Some(StkResponse::StkReady {
                 ready: self.stk_enabled as u8,
                 support: self.stk_reporting as u8,
             }),
-            urcs: Vec::new(),
+            urcs,
         })
-    }
-
-    fn handle_set_stk_ready(&mut self, download: u8, _profile: Option<QuotedString>) -> StkResult {
-        self.stk_enabled = download == 1;
-        let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
-            urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
-        }
-        Ok(StkExecutionResult { response: None, urcs })
     }
 
     fn handle_send_stk_terminal_response(&mut self, response: QuotedString) -> StkResult {
@@ -412,8 +427,9 @@ impl StkService {
         }
         let res = match command {
             StkCommand::QueryStkReady => self.handle_query_stk_ready(),
-            StkCommand::SetStkReady(download, profile) => {
-                self.handle_set_stk_ready(*download, *profile)
+            StkCommand::SetStkReady(download, _profile) => {
+                self.stk_enabled = *download == 1;
+                Ok(self.sync_stk_menu_urc())
             }
             StkCommand::SendStkEnvelope(envelope_command) => {
                 self.handle_envelope_command(envelope_command.as_ref())
@@ -421,10 +437,14 @@ impl StkService {
             StkCommand::SendStkTerminalResponse(response) => {
                 self.handle_send_stk_terminal_response(*response)
             }
-            StkCommand::SetStk(_) => self.handle_set_stk(),
-            StkCommand::SetStkEnabled(enabled) => self.handle_set_stk_enabled(*enabled),
+            StkCommand::SetStk(_) => Ok(StkExecutionResult::default()),
+            StkCommand::SetStkEnabled(enabled) => {
+                self.stk_enabled = *enabled;
+                Ok(self.sync_stk_menu_urc())
+            }
             StkCommand::SetStkUnsolicitedResult(reporting) => {
-                self.handle_set_stk_unsolicited_result(*reporting)
+                self.stk_reporting = *reporting;
+                Ok(self.sync_stk_menu_urc())
             }
         };
         res.map_or_else(|e| e, ExecutionResult::from)
@@ -584,7 +604,7 @@ mod tests {
                 .as_bytes(),
             )
             .unwrap();
-        assert_eq!(res.response, Some(StkResponse::UsatEnvelopeResponse("9000".to_string())));
+        assert_eq!(res.response, Some(StkResponse::UsatEnvelopeResponse("0".to_string())));
         assert_eq!(
             res.urcs,
             vec![StkResponse::UsatProactiveCommand("SELECT_ITEM_SIM_HEX".to_string())]
@@ -736,5 +756,18 @@ mod tests {
         assert_eq!(res.response, Some(StkResponse::UsatTerminalResponse(0)));
         assert_eq!(res.urcs, vec![StkResponse::UsatSessionEnd]);
         assert_eq!(service.current_path.len(), 0); // Reset to main menu
+    }
+
+    #[test]
+    fn test_proactive_command_type_conversions() {
+        assert_eq!(ProactiveCommandType::try_from(0x21), Ok(ProactiveCommandType::DisplayText));
+        assert_eq!(ProactiveCommandType::try_from(0x23), Ok(ProactiveCommandType::GetInput));
+        assert_eq!(ProactiveCommandType::try_from(0x24), Ok(ProactiveCommandType::SelectItem));
+        assert_eq!(ProactiveCommandType::try_from(0x25), Ok(ProactiveCommandType::SetUpMenu));
+        assert_eq!(ProactiveCommandType::try_from(0x13), Err(()));
+        assert_eq!(ProactiveCommandType::try_from(0xFF), Err(()));
+
+        assert_eq!(u8::from(ProactiveCommandType::SelectItem), 0x24);
+        assert_eq!(u8::from(ProactiveCommandType::DisplayText), 0x21);
     }
 }

@@ -70,6 +70,14 @@ pub enum DataCommand<'a> {
     ReadDynamicParam(u8),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QosType {
+    Minimum,
+    Requested,
+    MinimumGprs,
+    RequestedGprs,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Qos {
     pub precedence: u8,
@@ -77,6 +85,12 @@ pub struct Qos {
     pub reliability: u8,
     pub peak: u8,
     pub mean: u8,
+}
+
+impl Qos {
+    pub const fn new(precedence: u8, delay: u8, reliability: u8, peak: u8, mean: u8) -> Self {
+        Self { precedence, delay, reliability, peak, mean }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +102,26 @@ pub struct PdpContext {
     pub req_qos: Qos,
     pub gprs_qos: Qos,
     pub gprs_req_qos: Qos,
+}
+
+impl PdpContext {
+    fn qos_mut(&mut self, qos_type: QosType) -> &mut Qos {
+        match qos_type {
+            QosType::Minimum => &mut self.qos,
+            QosType::Requested => &mut self.req_qos,
+            QosType::MinimumGprs => &mut self.gprs_qos,
+            QosType::RequestedGprs => &mut self.gprs_req_qos,
+        }
+    }
+
+    fn qos(&self, qos_type: QosType) -> &Qos {
+        match qos_type {
+            QosType::Minimum => &self.qos,
+            QosType::Requested => &self.req_qos,
+            QosType::MinimumGprs => &self.gprs_qos,
+            QosType::RequestedGprs => &self.gprs_req_qos,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -301,119 +335,31 @@ impl DataService {
         }
     }
 
-    pub fn handle_set_quality_of_service_minimum(
-        &mut self,
-        cid: u8,
-        precedence: u8,
-        delay: u8,
-        reliability: u8,
-        peak: u8,
-        mean: u8,
-    ) -> DataResult {
+    pub fn handle_set_qos(&mut self, qos_type: QosType, cid: u8, qos: Qos) -> DataResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.qos = Qos { precedence, delay, reliability, peak, mean };
+            *context.qos_mut(qos_type) = qos;
             Ok(None)
         } else {
             Err(ExecutionResult::error())
         }
     }
 
-    pub fn handle_query_quality_of_service_minimum(&self) -> DataResult {
+    pub fn handle_query_qos(&self, qos_type: QosType) -> DataResult {
         if self.pdp_contexts.is_empty() {
             Ok(None)
         } else {
-            let mut qos_list = Vec::new();
-            for (cid, context) in &self.pdp_contexts {
-                qos_list.push((*cid, context.qos.clone()));
-            }
-            Ok(Some(DataResponse::QosMinimum(qos_list)))
-        }
-    }
-
-    pub fn handle_set_quality_of_service_requested(
-        &mut self,
-        cid: u8,
-        precedence: u8,
-        delay: u8,
-        reliability: u8,
-        peak: u8,
-        mean: u8,
-    ) -> DataResult {
-        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.req_qos = Qos { precedence, delay, reliability, peak, mean };
-            Ok(None)
-        } else {
-            Err(ExecutionResult::error())
-        }
-    }
-
-    pub fn handle_query_quality_of_service_requested(&self) -> DataResult {
-        if self.pdp_contexts.is_empty() {
-            Ok(None)
-        } else {
-            let mut qos_list = Vec::new();
-            for (cid, context) in &self.pdp_contexts {
-                qos_list.push((*cid, context.req_qos.clone()));
-            }
-            Ok(Some(DataResponse::QosRequested(qos_list)))
-        }
-    }
-
-    pub fn handle_set_quality_of_service_minimum_gprs(
-        &mut self,
-        cid: u8,
-        precedence: u8,
-        delay: u8,
-        reliability: u8,
-        peak: u8,
-        mean: u8,
-    ) -> DataResult {
-        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.gprs_qos = Qos { precedence, delay, reliability, peak, mean };
-            Ok(None)
-        } else {
-            Err(ExecutionResult::error())
-        }
-    }
-
-    pub fn handle_query_quality_of_service_minimum_gprs(&self) -> DataResult {
-        if self.pdp_contexts.is_empty() {
-            Ok(None)
-        } else {
-            let mut qos_list = Vec::new();
-            for (cid, context) in &self.pdp_contexts {
-                qos_list.push((*cid, context.gprs_qos.clone()));
-            }
-            Ok(Some(DataResponse::QosMinimumGprs(qos_list)))
-        }
-    }
-
-    pub fn handle_set_quality_of_service_requested_gprs(
-        &mut self,
-        cid: u8,
-        precedence: u8,
-        delay: u8,
-        reliability: u8,
-        peak: u8,
-        mean: u8,
-    ) -> DataResult {
-        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.gprs_req_qos = Qos { precedence, delay, reliability, peak, mean };
-            Ok(None)
-        } else {
-            Err(ExecutionResult::error())
-        }
-    }
-
-    pub fn handle_query_quality_of_service_requested_gprs(&self) -> DataResult {
-        if self.pdp_contexts.is_empty() {
-            Ok(None)
-        } else {
-            let mut qos_list = Vec::new();
-            for (cid, context) in &self.pdp_contexts {
-                qos_list.push((*cid, context.gprs_req_qos.clone()));
-            }
-            Ok(Some(DataResponse::QosRequestedGprs(qos_list)))
+            let qos_list = self
+                .pdp_contexts
+                .iter()
+                .map(|(cid, context)| (*cid, context.qos(qos_type).clone()))
+                .collect();
+            let response = match qos_type {
+                QosType::Minimum => DataResponse::QosMinimum(qos_list),
+                QosType::Requested => DataResponse::QosRequested(qos_list),
+                QosType::MinimumGprs => DataResponse::QosMinimumGprs(qos_list),
+                QosType::RequestedGprs => DataResponse::QosRequestedGprs(qos_list),
+            };
+            Ok(Some(response))
         }
     }
 
@@ -528,22 +474,26 @@ impl DataService {
         }
     }
 
-    fn get_gateway(&self, resolved_ip: &IpAddr) -> IpAddr {
-        match (resolved_ip, self.gateway) {
-            (IpAddr::V4(_), Some(IpAddr::V4(gw))) => IpAddr::V4(gw),
-            (IpAddr::V6(_), Some(IpAddr::V6(gw))) => IpAddr::V6(gw),
-            (IpAddr::V4(_), _) => IpAddr::V4(DEFAULT_GATEWAY),
-            (IpAddr::V6(_), _) => IpAddr::V6(DEFAULT_IPV6_GATEWAY),
+    fn resolve_ip_endpoint(
+        resolved_ip: &IpAddr,
+        configured: Option<IpAddr>,
+        default_v4: Ipv4Addr,
+        default_v6: Ipv6Addr,
+    ) -> IpAddr {
+        match (resolved_ip, configured) {
+            (IpAddr::V4(_), Some(IpAddr::V4(ip))) => IpAddr::V4(ip),
+            (IpAddr::V6(_), Some(IpAddr::V6(ip))) => IpAddr::V6(ip),
+            (IpAddr::V4(_), _) => IpAddr::V4(default_v4),
+            (IpAddr::V6(_), _) => IpAddr::V6(default_v6),
         }
     }
 
+    fn get_gateway(&self, resolved_ip: &IpAddr) -> IpAddr {
+        Self::resolve_ip_endpoint(resolved_ip, self.gateway, DEFAULT_GATEWAY, DEFAULT_IPV6_GATEWAY)
+    }
+
     fn get_dns(&self, resolved_ip: &IpAddr) -> IpAddr {
-        match (resolved_ip, self.dns) {
-            (IpAddr::V4(_), Some(IpAddr::V4(dns))) => IpAddr::V4(dns),
-            (IpAddr::V6(_), Some(IpAddr::V6(dns))) => IpAddr::V6(dns),
-            (IpAddr::V4(_), _) => IpAddr::V4(DEFAULT_DNS),
-            (IpAddr::V6(_), _) => IpAddr::V6(DEFAULT_IPV6_DNS),
-        }
+        Self::resolve_ip_endpoint(resolved_ip, self.dns, DEFAULT_DNS, DEFAULT_IPV6_DNS)
     }
 
     pub fn handle_show_pdp_address(&self, cid: u8) -> DataResult {
@@ -628,31 +578,26 @@ impl DataService {
                 self.handle_define_pdp_context(*cid, *pdp_type, *apn)
             }
             DataCommand::QueryPdpContext => self.handle_query_pdp_context(),
-            DataCommand::QueryQualityOfServiceMinimum => {
-                self.handle_query_quality_of_service_minimum()
+            DataCommand::QueryQualityOfServiceMinimum => self.handle_query_qos(QosType::Minimum),
+            DataCommand::SetQualityOfServiceMinimum(cid, p, d, r, peak, mean) => {
+                self.handle_set_qos(QosType::Minimum, *cid, Qos::new(*p, *d, *r, *peak, *mean))
             }
-            DataCommand::SetQualityOfServiceMinimum(cid, prec, delay, rel, peak, mean) => {
-                self.handle_set_quality_of_service_minimum(*cid, *prec, *delay, *rel, *peak, *mean)
+            DataCommand::SetQualityOfServiceRequested(cid, p, d, r, peak, mean) => {
+                self.handle_set_qos(QosType::Requested, *cid, Qos::new(*p, *d, *r, *peak, *mean))
             }
-            DataCommand::SetQualityOfServiceRequested(cid, prec, delay, rel, peak, mean) => self
-                .handle_set_quality_of_service_requested(*cid, *prec, *delay, *rel, *peak, *mean),
             DataCommand::QueryQualityOfServiceRequested => {
-                self.handle_query_quality_of_service_requested()
+                self.handle_query_qos(QosType::Requested)
             }
-            DataCommand::SetQualityOfServiceMinimumGprs(cid, prec, delay, rel, peak, mean) => self
-                .handle_set_quality_of_service_minimum_gprs(
-                    *cid, *prec, *delay, *rel, *peak, *mean,
-                ),
+            DataCommand::SetQualityOfServiceMinimumGprs(cid, p, d, r, peak, mean) => {
+                self.handle_set_qos(QosType::MinimumGprs, *cid, Qos::new(*p, *d, *r, *peak, *mean))
+            }
             DataCommand::QueryQualityOfServiceMinimumGprs => {
-                self.handle_query_quality_of_service_minimum_gprs()
+                self.handle_query_qos(QosType::MinimumGprs)
             }
-            DataCommand::SetQualityOfServiceRequestedGprs(cid, prec, delay, rel, peak, mean) => {
-                self.handle_set_quality_of_service_requested_gprs(
-                    *cid, *prec, *delay, *rel, *peak, *mean,
-                )
-            }
+            DataCommand::SetQualityOfServiceRequestedGprs(cid, p, d, r, peak, mean) => self
+                .handle_set_qos(QosType::RequestedGprs, *cid, Qos::new(*p, *d, *r, *peak, *mean)),
             DataCommand::QueryQualityOfServiceRequestedGprs => {
-                self.handle_query_quality_of_service_requested_gprs()
+                self.handle_query_qos(QosType::RequestedGprs)
             }
             DataCommand::SetPdpContextActivate(state, cid) => {
                 // Compatibility hack for legacy Goldfish/Reference RIL.

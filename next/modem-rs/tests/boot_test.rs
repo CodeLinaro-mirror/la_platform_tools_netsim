@@ -1,73 +1,57 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{steps::*, world::World};
+use crate::world::World;
 
 #[test]
 fn test_goldfish_boot_sequence() {
     let mut world = World::new();
-    given_modem_with_sim_profile(&mut world, "A");
+    world.given_modem_with_sim_profile("A");
 
     // The exact initialization sequence from Goldfish HALS main.cpp:
 
     // 1. ATE0Q0V1
-    when_at_command_sent(&mut world, "A", "ATE0Q0V1");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "ATE0Q0V1");
 
     // 2. AT+CMEE=1
-    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
 
     // 3. AT+CREG=2
-    when_at_command_sent(&mut world, "A", "AT+CREG=2");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CREG=2");
 
     // 4. AT+CGREG=2
-    when_at_command_sent(&mut world, "A", "AT+CGREG=2");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CGREG=2");
 
     // 5. AT+CEREG=2
-    when_at_command_sent(&mut world, "A", "AT+CEREG=2");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CEREG=2");
 
     // 6. AT+CCWA=1
-    when_at_command_sent(&mut world, "A", "AT+CCWA=1");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CCWA=1");
 
     // 7. AT+CMOD=0
-    when_at_command_sent(&mut world, "A", "AT+CMOD=0");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CMOD=0");
 
     // 8. AT+CMUT=0
-    when_at_command_sent(&mut world, "A", "AT+CMUT=0");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CMUT=0");
 
     // 9. AT+CSSN=0,1
-    when_at_command_sent(&mut world, "A", "AT+CSSN=0,1");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CSSN=0,1");
 
     // 10. AT+COLP=0
-    when_at_command_sent(&mut world, "A", "AT+COLP=0");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+COLP=0");
 
     // 11. AT+CSCS="HEX"
-    when_at_command_sent(&mut world, "A", "AT+CSCS=\"HEX\"");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CSCS=\"HEX\"");
 
     // 12. AT+CUSD=1
-    when_at_command_sent(&mut world, "A", "AT+CUSD=1");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CUSD=1");
 
     // 13. AT+CGEREP=1,0
-    when_at_command_sent(&mut world, "A", "AT+CGEREP=1,0");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CGEREP=1,0");
 
     // 14. AT+CMGF=0
-    when_at_command_sent(&mut world, "A", "AT+CMGF=0");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CMGF=0");
 
     // 15. AT+CFUN?
-    when_at_command_sent(&mut world, "A", "AT+CFUN?");
-    then_response_is(&mut world, "A", "+CFUN: 1");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect("A", "AT+CFUN?", &["+CFUN: 1", "OK"]);
 }

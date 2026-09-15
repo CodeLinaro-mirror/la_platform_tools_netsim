@@ -118,7 +118,7 @@ fn is_final_result_code(expected: &str) -> bool {
         || expected == "CONNECT"
 }
 
-fn is_unsolicited_response(response: &[u8]) -> bool {
+pub(crate) fn is_unsolicited_response(response: &[u8]) -> bool {
     let s = String::from_utf8_lossy(response);
     s.starts_with("+CMT:")
         || s.starts_with("+CMTI:")
@@ -132,16 +132,39 @@ fn is_unsolicited_response(response: &[u8]) -> bool {
         || s.starts_with("+CGEV:")
         || s.starts_with("+CSQ:")
         || s.starts_with("+CUSATEND")
+        || s.starts_with("%CTZV:")
 }
 
 /// Normalizes the expected response string to bytes.
-/// Adds \r\n (or \r for Goldfish 37) unless it's "OK" or already present.
+/// Adds \r\n (or \r for Goldfish 37) to line-oriented AT responses.
 fn normalize_expected_response(expected: &str, goldfish_37: bool) -> Vec<u8> {
     let suffix: &[u8] = if goldfish_37 { b"\r" } else { b"\r\n" };
     match expected {
         "OK" => [b"OK", suffix].concat(),
         _ => [expected.trim_end_matches(['\r', '\n']).as_bytes(), suffix].concat(),
     }
+}
+
+/// Verifies that the modem emitted an interactive prompt (such as `> `).
+///
+/// Unlike command responses, prompts are not line-delimited and do not end
+/// with `\r\n` or `\r`.
+pub fn then_prompt_is(world: &mut World, name: &str, expected: &str) {
+    let (_, handler) = world.get_modem(name);
+    let response = handler.wait_for_response();
+    assert_eq!(
+        response,
+        expected.as_bytes(),
+        "Modem {} received unexpected prompt.\nExpected: {:?}\nActual: {:?}",
+        name,
+        expected,
+        String::from_utf8_lossy(&response)
+    );
+}
+
+/// Convenience alias for asserting the standard SMS prompt `> `.
+pub fn then_prompt(world: &mut World, name: &str) {
+    then_prompt_is(world, name, "> ");
 }
 
 /// Verifies that the modem has no pending responses in its queue.

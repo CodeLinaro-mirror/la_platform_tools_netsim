@@ -135,14 +135,6 @@ impl SupService {
 
     // --- Pure command handlers ---
 
-    fn handle_set_facility_lock(&self, mode: FacilityLockMode) -> SupResult {
-        if mode == FacilityLockMode::QueryStatus {
-            Ok(Some(SupResponse::FacilityLockStatus(0)))
-        } else {
-            Ok(None)
-        }
-    }
-
     fn handle_call_forwarding(
         &mut self,
         mode: CallForwardingMode,
@@ -163,16 +155,6 @@ impl SupService {
 
     fn handle_query_clir(&self) -> SupResult {
         Ok(Some(SupResponse::Clir { n: self.clir_mode, m: ClirStatus::Active }))
-    }
-
-    fn handle_set_clir(&mut self, clir: ClirMode) -> SupResult {
-        self.clir_mode = clir;
-        Ok(None)
-    }
-
-    fn handle_set_clip(&mut self, enabled: ClipActivation) -> SupResult {
-        self.clip_enabled = enabled;
-        Ok(None)
     }
 
     fn handle_query_clip(&self) -> SupResult {
@@ -248,29 +230,15 @@ impl SupService {
         }
     }
 
-    fn handle_supp_service_notification(&self) -> SupResult {
-        Ok(None)
-    }
-
-    fn handle_set_colp(&self) -> SupResult {
-        Ok(None)
-    }
-
     pub fn execute<'a>(
         &mut self,
         command: &SupCommand<'a>,
         sim_service: &mut SimService,
     ) -> ExecutionResult {
         let sup_result = match command {
-            SupCommand::SetFacilityLock(facility, mode, passwd, _) => match facility {
-                Facility::SimPin => {
-                    return sim_service.handle_set_facility_lock(*mode, *passwd).into();
-                }
-                Facility::FixedDial => {
-                    return sim_service.handle_set_fdn_lock(*mode, *passwd).into();
-                }
-                Facility::Other => self.handle_set_facility_lock(*mode),
-            },
+            SupCommand::SetFacilityLock(facility, mode, passwd, _) => {
+                return sim_service.handle_set_facility_lock(*facility, *mode, *passwd).into();
+            }
             SupCommand::CallForwarding { reason: _, mode, number, r#type, .. } => {
                 self.handle_call_forwarding(*mode, *number, *r#type)
             }
@@ -279,15 +247,18 @@ impl SupService {
             }
             SupCommand::QueryClir => self.handle_query_clir(),
             SupCommand::SetClir(clir) | SupCommand::SetClirGoldfish(clir) => {
-                self.handle_set_clir(*clir)
+                self.clir_mode = *clir;
+                Ok(None)
             }
-            SupCommand::SetClip(enabled) => self.handle_set_clip(*enabled),
+            SupCommand::SetClip(enabled) => {
+                self.clip_enabled = *enabled;
+                Ok(None)
+            }
             SupCommand::QueryClip => self.handle_query_clip(),
-            SupCommand::SetColp(_) => self.handle_set_colp(),
+            SupCommand::SetColp(_) | SupCommand::SuppServiceNotification(_, _) => Ok(None),
             SupCommand::SetCallWaiting(n, mode, class) => {
                 self.handle_set_call_waiting(*n, *mode, *class)
             }
-            SupCommand::SuppServiceNotification(_, _) => self.handle_supp_service_notification(),
             SupCommand::SetUssd { mode, message, dcs } => {
                 self.handle_set_ussd(*mode, *message, *dcs)
             }

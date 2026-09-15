@@ -54,11 +54,22 @@ impl Parsable<'_> for u32 {
     }
 }
 
+impl Parsable<'_> for usize {
+    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        nom::combinator::map_res(
+            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
+            |s: &str| s.parse::<usize>(),
+        )(input)
+    }
+}
+
 pub const AT_OK: &[u8] = b"OK\r\n";
 pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 
 pub const DEFAULT_PIN: &str = "1234";
 pub const DEFAULT_PIN2: &str = "5678";
+pub const DEFAULT_PUK2: &str = "12345678";
+pub const DEFAULT_BARRING_PASSWORD: &str = "0000";
 
 pub const DEFAULT_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
 pub const DEFAULT_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
@@ -74,13 +85,15 @@ pub const DEFAULT_IPV6_PREFIX: u32 = 64;
 pub type ModemId = u32;
 
 // Custom error type for the library.
-use std::fmt;
+use std::fmt::{self, Write};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModemError {
     DuplicateModemId(ModemId),
+    UnknownModemId(ModemId),
     NotFound,
     InvalidConfig(String),
+    InvalidProfile(String),
 }
 
 impl std::error::Error for ModemError {}
@@ -89,9 +102,224 @@ impl fmt::Display for ModemError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ModemError::DuplicateModemId(id) => write!(f, "Duplicate modem ID: {id}"),
+            ModemError::UnknownModemId(id) => write!(f, "Unknown modem ID: {id}"),
             ModemError::NotFound => write!(f, "Modem network not found"),
             ModemError::InvalidConfig(msg) => write!(f, "Invalid configuration: {msg}"),
+            ModemError::InvalidProfile(msg) => write!(f, "Invalid SIM profile: {msg}"),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlmnError {
+    InvalidLength(usize),
+    InvalidDigits(String),
+    InvalidMcc(String),
+    InvalidMnc(String),
+}
+
+impl std::error::Error for PlmnError {}
+
+impl fmt::Display for PlmnError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PlmnError::InvalidLength(len) => {
+                write!(
+                    f,
+                    "PLMN length must be 5 digits (2-digit MNC) or 6 digits (3-digit MNC), got {len}"
+                )
+            }
+            PlmnError::InvalidDigits(s) => {
+                write!(f, "PLMN must contain only ASCII decimal digits, got: {s:?}")
+            }
+            PlmnError::InvalidMcc(s) => {
+                write!(f, "MCC must be exactly 3 ASCII decimal digits, got: {s:?}")
+            }
+            PlmnError::InvalidMnc(s) => {
+                write!(f, "MNC must be 2 or 3 ASCII decimal digits, got: {s:?}")
+            }
+        }
+    }
+}
+
+/// Represents a Public Land Mobile Network (PLMN) identity per 3GPP TS 23.003
+/// §2.2 and ITU-T Recommendation E.212.
+///
+/// Composed of:
+/// - Mobile Country Code (MCC): Exactly 3 decimal digits.
+/// - Mobile Network Code (MNC): Either 2 decimal digits (total 5 digits) or 3
+///   decimal digits (total 6 digits).
+///
+/// The distinction between 2- and 3-digit MNCs is governed by carrier
+/// assignment and signaled on SIM cards via `EF_AD` (Administrative Data) byte
+/// 4 (3GPP TS 31.102 §4.2.18).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(into = "String", try_from = "String")]
+pub enum Plmn {
+    /// 5-digit PLMN with a 2-digit Mobile Network Code (3-digit MCC + 2-digit
+    /// MNC). Standard in European (ITU-T Region 2) and international GSM
+    /// networks (e.g. "20810").
+    TwoDigitMnc([u8; 5]),
+
+    /// 6-digit PLMN with a 3-digit Mobile Network Code (3-digit MCC + 3-digit
+    /// MNC). Standard in North American (ITU-T Region 3) networks (e.g. US
+    /// carriers "310260", "311740").
+    ThreeDigitMnc([u8; 6]),
+}
+
+impl Plmn {
+    /// Validates and constructs a PLMN (must be 5 or 6 ASCII decimal digits).
+    pub fn parse(s: &str) -> Result<Self, PlmnError> {
+        let trimmed = s.trim();
+        let bytes = trimmed.as_bytes();
+        if !bytes.iter().all(u8::is_ascii_digit) {
+            return Err(PlmnError::InvalidDigits(s.to_string()));
+        }
+        match bytes.len() {
+            5 => {
+                let mut b = [0u8; 5];
+                b.copy_from_slice(bytes);
+                Ok(Self::TwoDigitMnc(b))
+            }
+            6 => {
+                let mut b = [0u8; 6];
+                b.copy_from_slice(bytes);
+                Ok(Self::ThreeDigitMnc(b))
+            }
+            len => Err(PlmnError::InvalidLength(len)),
+        }
+    }
+
+    /// Creates a PLMN from string or string-like slice.
+    pub fn new(s: impl AsRef<str>) -> Result<Self, PlmnError> {
+        Self::parse(s.as_ref())
+    }
+
+    /// Constructs a PLMN from separate MCC and MNC strings.
+    pub fn from_mcc_mnc(mcc: &str, mnc: &str) -> Result<Self, PlmnError> {
+        let mcc = mcc.trim();
+        let mnc = mnc.trim();
+        if mcc.len() != 3 || !mcc.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(PlmnError::InvalidMcc(mcc.to_string()));
+        }
+        let mcc_bytes = mcc.as_bytes();
+        let mnc_bytes = mnc.as_bytes();
+        match mnc.len() {
+            2 if mnc.bytes().all(|b| b.is_ascii_digit()) => {
+                let mut bytes = [0u8; 5];
+                bytes[..3].copy_from_slice(mcc_bytes);
+                bytes[3..].copy_from_slice(mnc_bytes);
+                Ok(Self::TwoDigitMnc(bytes))
+            }
+            3 if mnc.bytes().all(|b| b.is_ascii_digit()) => {
+                let mut bytes = [0u8; 6];
+                bytes[..3].copy_from_slice(mcc_bytes);
+                bytes[3..].copy_from_slice(mnc_bytes);
+                Ok(Self::ThreeDigitMnc(bytes))
+            }
+            _ => Err(PlmnError::InvalidMnc(mnc.to_string())),
+        }
+    }
+
+    /// Derives the home PLMN from an IMSI string.
+    ///
+    /// If `mnc_len` is specified (e.g. from EF_AD byte 4 per 3GPP TS 31.102
+    /// §4.2.18), it is honored. Otherwise defaults to a 3-digit MNC if len
+    /// is at least 6, or 2-digit MNC if len is 5. Returns `None` if IMSI is
+    /// shorter than 5 digits or non-numeric.
+    pub fn from_imsi(imsi: &str, mnc_len: Option<usize>) -> Option<Self> {
+        let digits = imsi.trim().as_bytes();
+        if digits.len() < 5 || !digits.iter().all(u8::is_ascii_digit) {
+            return None;
+        }
+        match mnc_len {
+            Some(2) => {
+                let mut b = [0u8; 5];
+                b.copy_from_slice(&digits[..5]);
+                Some(Self::TwoDigitMnc(b))
+            }
+            Some(3) if digits.len() >= 6 => {
+                let mut b = [0u8; 6];
+                b.copy_from_slice(&digits[..6]);
+                Some(Self::ThreeDigitMnc(b))
+            }
+            _ => {
+                if digits.len() >= 6 {
+                    let mut b = [0u8; 6];
+                    b.copy_from_slice(&digits[..6]);
+                    Some(Self::ThreeDigitMnc(b))
+                } else {
+                    let mut b = [0u8; 5];
+                    b.copy_from_slice(&digits[..5]);
+                    Some(Self::TwoDigitMnc(b))
+                }
+            }
+        }
+    }
+
+    /// Returns the raw byte slice of ASCII decimal digits (length 5 or 6).
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::TwoDigitMnc(b) => b,
+            Self::ThreeDigitMnc(b) => b,
+        }
+    }
+
+    /// Returns the PLMN as an ASCII string slice (length 5 or 6).
+    pub fn as_str(&self) -> &str {
+        str::from_utf8(self.as_bytes()).expect("PLMN bytes are validated ASCII digits")
+    }
+
+    /// Returns the 3-digit Mobile Country Code (MCC).
+    pub fn mcc(&self) -> &str {
+        &self.as_str()[..3]
+    }
+
+    /// Returns the 2- or 3-digit Mobile Network Code (MNC).
+    pub fn mnc(&self) -> &str {
+        &self.as_str()[3..]
+    }
+
+    /// Returns the length of the Mobile Network Code (2 or 3).
+    pub fn mnc_length(&self) -> usize {
+        match self {
+            Self::TwoDigitMnc(_) => 2,
+            Self::ThreeDigitMnc(_) => 3,
+        }
+    }
+}
+
+impl fmt::Display for Plmn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl fmt::Debug for Plmn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Plmn(\"{}\")", self.as_str())
+    }
+}
+
+impl From<Plmn> for String {
+    fn from(plmn: Plmn) -> Self {
+        plmn.as_str().to_string()
+    }
+}
+
+impl TryFrom<String> for Plmn {
+    type Error = PlmnError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        Self::parse(&s)
+    }
+}
+
+impl TryFrom<&str> for Plmn {
+    type Error = PlmnError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
     }
 }
 
@@ -124,6 +352,12 @@ impl PhoneNumber {
         self.0.starts_with("*99")
             && self.0.ends_with('#')
             && self.0.as_bytes().get(3).is_some_and(|&c| c == b'*' || c == b'#')
+    }
+}
+
+impl AsRef<str> for PhoneNumber {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -585,6 +819,14 @@ pub enum CmeError {
     Custom(u32, &'static str),
 }
 
+impl fmt::Display for CmeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.verbose_str())
+    }
+}
+
+impl std::error::Error for CmeError {}
+
 impl CmeError {
     pub fn code(&self) -> u32 {
         match *self {
@@ -649,7 +891,127 @@ impl CmeError {
     }
 }
 
-/// Combined structured response enum across all modem-rs services.
+/// Standard 3GPP TS 27.005 Message Service Failure Error Codes (+CMS ERROR).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CmsError {
+    InvalidPduParameter,
+    SimNotInserted,
+    SimPinRequired,
+    InvalidMemoryIndex,
+    MemoryFull,
+}
+
+impl fmt::Display for CmsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.verbose_str())
+    }
+}
+
+impl std::error::Error for CmsError {}
+
+impl CmsError {
+    pub fn code(&self) -> u32 {
+        match *self {
+            Self::InvalidPduParameter => 304,
+            Self::SimNotInserted => 310,
+            Self::SimPinRequired => 311,
+            Self::InvalidMemoryIndex => 321,
+            Self::MemoryFull => 322,
+        }
+    }
+
+    pub fn verbose_str(&self) -> &'static str {
+        match *self {
+            Self::InvalidPduParameter => "invalid PDU mode parameter",
+            Self::SimNotInserted => "SIM not inserted",
+            Self::SimPinRequired => "SIM PIN required",
+            Self::InvalidMemoryIndex => "invalid memory index",
+            Self::MemoryFull => "memory full",
+        }
+    }
+
+    pub fn format_response(&self, mode: CmeeMode) -> std::borrow::Cow<'static, str> {
+        match mode {
+            CmeeMode::Disable => std::borrow::Cow::Borrowed("ERROR\r\n"),
+            CmeeMode::Numeric => {
+                std::borrow::Cow::Owned(format!("+CMS ERROR: {}\r\n", self.code()))
+            }
+            CmeeMode::Verbose => {
+                std::borrow::Cow::Owned(format!("+CMS ERROR: {}\r\n", self.verbose_str()))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum SmsMessageStatus {
+    #[default]
+    ReceivedUnread = 0,
+    ReceivedRead = 1,
+    StoredUnsent = 2,
+    StoredSent = 3,
+}
+
+impl TryFrom<u8> for SmsMessageStatus {
+    type Error = CmsError;
+    fn try_from(val: u8) -> Result<Self, Self::Error> {
+        match val {
+            0 => Ok(Self::ReceivedUnread),
+            1 => Ok(Self::ReceivedRead),
+            2 => Ok(Self::StoredUnsent),
+            3 => Ok(Self::StoredSent),
+            _ => Err(CmsError::InvalidPduParameter),
+        }
+    }
+}
+
+impl From<SmsMessageStatus> for u8 {
+    fn from(val: SmsMessageStatus) -> Self {
+        val as u8
+    }
+}
+
+impl std::fmt::Display for SmsMessageStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl<'a> Parsable<'a> for SmsMessageStatus {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, val) = u8::parse(input)?;
+        match Self::try_from(val) {
+            Ok(status) => Ok((input, status)),
+            Err(_) => {
+                Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes)))
+            }
+        }
+    }
+}
+
+pub type MessageStatus = SmsMessageStatus;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SimSmsMessage {
+    pub status: SmsMessageStatus,
+    pub pdu: Vec<u8>,
+}
+
+impl SimSmsMessage {
+    #[cfg(test)]
+    pub fn new(status: SmsMessageStatus, pdu: Vec<u8>) -> Self {
+        Self { status, pdu }
+    }
+
+    /// Marks received unread messages as read (TS 27.005 §3.1 / §3.5.3).
+    pub fn mark_read(&mut self) {
+        if self.status == SmsMessageStatus::ReceivedUnread {
+            self.status = SmsMessageStatus::ReceivedRead;
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
     Sim(SimResponse),
@@ -727,37 +1089,74 @@ impl From<StkResponse> for Response {
     }
 }
 
-/// Contains all the results of a successfully executed command.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct HandledCommand {
-    /// The immediate responses to send back to the client.
     pub responses: Vec<Response>,
-    /// An optional follow-up action for the CellularNetworkSimulator to
-    /// perform.
     pub actions: Vec<CommandAction>,
 }
 
 impl HandledCommand {
-    /// Creates a result with a simple "OK" response and no follow-up action.
     pub fn ok() -> Self {
         Self { responses: vec![Response::Ok], actions: vec![] }
     }
 
-    /// Creates a result with a simple "OK" response AND a follow-up action.
     pub fn ok_with_actions(actions: Vec<CommandAction>) -> Self {
         Self { responses: vec![Response::Ok], actions }
     }
 }
 
-/// Represents the outcome of a command execution from the parser.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CommandError {
+    Cme(CmeError),
+    Cms(CmsError),
+    #[default]
+    Generic,
+}
+
+impl fmt::Display for CommandError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cme(err) => write!(f, "{err}"),
+            Self::Cms(err) => write!(f, "{err}"),
+            Self::Generic => write!(f, "generic error"),
+        }
+    }
+}
+
+impl std::error::Error for CommandError {}
+
+impl CommandError {
+    pub fn format_response(&self, mode: CmeeMode) -> std::borrow::Cow<'static, str> {
+        match self {
+            Self::Cme(err) => match mode {
+                CmeeMode::Disable => std::borrow::Cow::Borrowed("ERROR\r\n"),
+                _ => std::borrow::Cow::Owned(err.format_response(mode)),
+            },
+            Self::Cms(err) => err.format_response(mode),
+            Self::Generic => std::borrow::Cow::Borrowed("ERROR\r\n"),
+        }
+    }
+}
+
+impl From<CmeError> for CommandError {
+    fn from(err: CmeError) -> Self {
+        Self::Cme(err)
+    }
+}
+
+impl From<CmsError> for CommandError {
+    fn from(err: CmsError) -> Self {
+        Self::Cms(err)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionResult {
     /// The command was successfully handled, yielding responses and/or action.
     Success(HandledCommand),
 
-    /// The command failed, optionally with a structured Mobile Equipment error
-    /// and/or URCs emitted prior to failure.
-    Error { cme: Option<CmeError>, urcs: Vec<Response> },
+    /// The command failed with an explicit error reason and optional URCs.
+    Error { error: CommandError, urcs: Vec<Response> },
 
     /// This command has not been refactored yet and should be handled by the
     /// legacy system.
@@ -774,11 +1173,51 @@ impl ExecutionResult {
     }
 
     pub fn error() -> Self {
-        Self::Error { cme: None, urcs: Vec::new() }
+        Self::Error { error: CommandError::Generic, urcs: Vec::new() }
+    }
+
+    pub fn error_with_urcs(error: impl Into<CommandError>, urcs: Vec<Response>) -> Self {
+        Self::Error { error: error.into(), urcs }
     }
 
     pub fn cme_error(cme: CmeError) -> Self {
-        Self::Error { cme: Some(cme), urcs: Vec::new() }
+        Self::Error { error: CommandError::Cme(cme), urcs: Vec::new() }
+    }
+
+    pub fn cms_error(cms: CmsError) -> Self {
+        Self::Error { error: CommandError::Cms(cms), urcs: Vec::new() }
+    }
+
+    /// Formats the error and preceding URCs into the target string buffer.
+    /// Returns `true` if this was an Error or Unhandled result, `false` on
+    /// Success.
+    pub fn format_error_into(&self, out: &mut String, mode: CmeeMode) -> bool {
+        match self {
+            Self::Error { error, urcs } => {
+                for r in urcs {
+                    let _ = write!(out, "{r}");
+                }
+                out.push_str(&error.format_response(mode));
+                true
+            }
+            Self::Unhandled => {
+                out.push_str("ERROR\r\n");
+                true
+            }
+            Self::Success(_) => false,
+        }
+    }
+
+    pub fn with_urcs(mut self, mut urcs: Vec<Response>) -> Self {
+        match self {
+            Self::Error { urcs: ref mut target_urcs, .. } => *target_urcs = urcs,
+            Self::Success(ref mut handled) => {
+                urcs.append(&mut handled.responses);
+                handled.responses = urcs;
+            }
+            Self::Unhandled => {}
+        }
+        self
     }
 }
 
@@ -813,6 +1252,18 @@ impl<T: Into<ExecutionResult>> From<Result<T, ExecutionResult>> for ExecutionRes
 impl From<CmeError> for ExecutionResult {
     fn from(err: CmeError) -> Self {
         Self::cme_error(err)
+    }
+}
+
+impl From<CmsError> for ExecutionResult {
+    fn from(err: CmsError) -> Self {
+        Self::cms_error(err)
+    }
+}
+
+impl From<CommandError> for ExecutionResult {
+    fn from(err: CommandError) -> Self {
+        Self::Error { error: err, urcs: Vec::new() }
     }
 }
 
@@ -1757,31 +2208,156 @@ impl std::fmt::Display for CtecTechnology {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Facility locks supported by AT+CLCK and AT+CPWD.
+///
+/// Ref: 3GPP TS 27.007 § 7.4 (Facility lock +CLCK), § 7.5 (Change password
+/// +CPWD), 3GPP TS 22.088 (Call Barring supplementary services),
+/// 3GPP TS 22.030 § 6.5.6.5 (Supplementary service control codes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Facility {
+    /// SIM lock (PIN1) — "SC" (TS 27.007 § 7.4).
     SimPin,
+    /// SIM PIN2 — "P2" (TS 27.007 § 7.5). Note: Used with +CPWD to change PIN2.
+    SimPin2,
+    /// Fixed Dialing Number — "FD" (TS 27.007 § 7.4).
     FixedDial,
-    Other,
+    /// Bar All Outgoing Calls — "AO" (TS 27.007 § 7.4, TS 22.088 BAOC,
+    /// activation code 33).
+    BarAllOutgoing,
+    /// Bar Outgoing International Calls — "OI" (TS 27.007 § 7.4, TS 22.088
+    /// BOIC, activation code 331).
+    BarOutgoingInternational,
+    /// Bar Outgoing International Calls except to Home PLMN — "OX" (TS 27.007 §
+    /// 7.4, TS 22.088 BOIC-exHC, activation code 332).
+    BarOutgoingInternationalExceptHome,
+    /// Bar All Incoming Calls — "AI" (TS 27.007 § 7.4, TS 22.088 BAIC,
+    /// activation code 35).
+    BarAllIncoming,
+    /// Bar Incoming Calls when Roaming outside the home PLMN country — "IR" (TS
+    /// 27.007 § 7.4, TS 22.088 BIC-Roam, activation code 351).
+    BarIncomingRoaming,
+    /// All Barring Services — "AB" (TS 27.007 § 7.4, TS 22.030 § 6.5.6.5,
+    /// activation code 330).
+    BarAll,
+    /// All Outgoing Barring Services — "AG" (TS 27.007 § 7.4, TS 22.030 §
+    /// 6.5.6.5, activation code 333).
+    BarAllOutgoingServices,
+    /// All Incoming Barring Services — "AC" (TS 27.007 § 7.4, TS 22.030 §
+    /// 6.5.6.5, activation code 353).
+    BarAllIncomingServices,
+    /// Any unrecognized facility string.
+    Unsupported,
+}
+
+impl Facility {
+    /// Returns the standard 3GPP 2-character facility code, or "UNSUPPORTED".
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SimPin => "SC",
+            Self::SimPin2 => "P2",
+            Self::FixedDial => "FD",
+            Self::BarAllOutgoing => "AO",
+            Self::BarOutgoingInternational => "OI",
+            Self::BarOutgoingInternationalExceptHome => "OX",
+            Self::BarAllIncoming => "AI",
+            Self::BarIncomingRoaming => "IR",
+            Self::BarAll => "AB",
+            Self::BarAllOutgoingServices => "AG",
+            Self::BarAllIncomingServices => "AC",
+            Self::Unsupported => "UNSUPPORTED",
+        }
+    }
+
+    /// Resolves a facility from its 2-character byte code.
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        match bytes {
+            b"SC" => Self::SimPin,
+            b"P2" => Self::SimPin2,
+            b"FD" => Self::FixedDial,
+            b"AO" => Self::BarAllOutgoing,
+            b"OI" => Self::BarOutgoingInternational,
+            b"OX" => Self::BarOutgoingInternationalExceptHome,
+            b"AI" => Self::BarAllIncoming,
+            b"IR" => Self::BarIncomingRoaming,
+            b"AB" => Self::BarAll,
+            b"AG" => Self::BarAllOutgoingServices,
+            b"AC" => Self::BarAllIncomingServices,
+            _ => Self::Unsupported,
+        }
+    }
+
+    /// Returns true if this facility is a 3GPP TS 22.088 / TS 22.030 call
+    /// barring supplementary service.
+    pub const fn is_call_barring(self) -> bool {
+        matches!(
+            self,
+            Self::BarAll
+                | Self::BarAllOutgoingServices
+                | Self::BarAllIncomingServices
+                | Self::BarAllOutgoing
+                | Self::BarOutgoingInternational
+                | Self::BarOutgoingInternationalExceptHome
+                | Self::BarAllIncoming
+                | Self::BarIncomingRoaming
+        )
+    }
 }
 
 impl<'a> Parsable<'a> for Facility {
     fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
         let (input, quoted) = QuotedString::parse(input)?;
-        match quoted.as_ref() {
-            b"SC" => Ok((input, Self::SimPin)),
-            b"FD" => Ok((input, Self::FixedDial)),
-            _ => Ok((input, Self::Other)),
-        }
+        Ok((input, Self::from_bytes(quoted.as_ref())))
     }
 }
 
 impl std::fmt::Display for Facility {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Query selector for AT+CPINR remaining retry queries (3GPP TS 27.007 § 8.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PinType {
+    SimPin,
+    SimPuk,
+    SimPin2,
+    SimPuk2,
+}
+
+impl PinType {
+    pub const fn as_str(self) -> &'static str {
         match self {
-            Facility::SimPin => write!(f, "SC"),
-            Facility::FixedDial => write!(f, "FD"),
-            Facility::Other => write!(f, "OTHER"),
+            Self::SimPin => "SIM PIN",
+            Self::SimPuk => "SIM PUK",
+            Self::SimPin2 => "SIM PIN2",
+            Self::SimPuk2 => "SIM PUK2",
         }
+    }
+}
+
+impl<'a> Parsable<'a> for PinType {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, quoted) = QuotedString::parse(input)?;
+        let pin_type = match quoted.as_ref() {
+            b"SIM PIN" => Self::SimPin,
+            b"SIM PUK" => Self::SimPuk,
+            b"SIM PIN2" => Self::SimPin2,
+            b"SIM PUK2" => Self::SimPuk2,
+            _ => {
+                return Err(nom::Err::Error(nom::error::Error::new(
+                    input,
+                    nom::error::ErrorKind::Tag,
+                )));
+            }
+        };
+        Ok((input, pin_type))
+    }
+}
+
+impl std::fmt::Display for PinType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -2134,5 +2710,143 @@ mod tests {
         let dec = AdnRecord::decode(&enc).unwrap();
         assert_eq!(dec.alpha_tag.as_deref(), Some("Alpha tag in 50-byte record"));
         assert_eq!(dec.number.as_ref().map(|p| p.as_str()), Some("+15550001111"));
+    }
+
+    #[test]
+    fn test_plmn_parse_and_accessors() {
+        // Valid 5-digit PLMN (e.g. UK Vodafone 234-15)
+        let plmn5 = Plmn::parse("23415").unwrap();
+        assert_eq!(plmn5.mcc(), "234");
+        assert_eq!(plmn5.mnc(), "15");
+        assert_eq!(plmn5.mnc_length(), 2);
+        assert_eq!(plmn5.as_str(), "23415");
+        assert_eq!(format!("{plmn5}"), "23415");
+        assert!(matches!(plmn5, Plmn::TwoDigitMnc(_)));
+
+        // Valid 6-digit PLMN (e.g. US T-Mobile 310-260)
+        let plmn6 = Plmn::parse("310260").unwrap();
+        assert_eq!(plmn6.mcc(), "310");
+        assert_eq!(plmn6.mnc(), "260");
+        assert_eq!(plmn6.mnc_length(), 3);
+        assert_eq!(plmn6.as_str(), "310260");
+        assert!(matches!(plmn6, Plmn::ThreeDigitMnc(_)));
+
+        // Construction from separate MCC/MNC
+        let from_parts = Plmn::from_mcc_mnc("311", "740").unwrap();
+        assert_eq!(from_parts.as_str(), "311740");
+        assert_eq!(from_parts.mnc_length(), 3);
+
+        let from_parts_2digit = Plmn::from_mcc_mnc("310", "26").unwrap();
+        assert_eq!(from_parts_2digit.as_str(), "31026");
+        assert_eq!(from_parts_2digit.mnc_length(), 2);
+
+        // Construction with surrounding whitespace
+        let from_trimmed = Plmn::from_mcc_mnc(" 310 \t", "\n260 ").unwrap();
+        assert_eq!(from_trimmed.as_str(), "310260");
+
+        // Derivation from IMSI
+        let derived_default = Plmn::from_imsi("310260000000000", None).unwrap();
+        assert_eq!(derived_default.as_str(), "310260");
+
+        let derived_explicit_2digit = Plmn::from_imsi("310260000000000", Some(2)).unwrap();
+        assert_eq!(derived_explicit_2digit.as_str(), "31026");
+
+        let derived_short_imsi = Plmn::from_imsi("31026", None).unwrap();
+        assert_eq!(derived_short_imsi.as_str(), "31026");
+
+        // Invalid formats must return Err / None
+        assert!(matches!(Plmn::parse("1234"), Err(PlmnError::InvalidLength(4))));
+        assert!(matches!(Plmn::parse("1234567"), Err(PlmnError::InvalidLength(7))));
+        assert!(matches!(Plmn::parse("3102A"), Err(PlmnError::InvalidDigits(_))));
+        assert!(matches!(Plmn::parse(""), Err(PlmnError::InvalidLength(0))));
+        assert_eq!(Plmn::from_mcc_mnc(" 12 ", "345"), Err(PlmnError::InvalidMcc("12".to_string())));
+        assert_eq!(Plmn::from_mcc_mnc("12A", "345"), Err(PlmnError::InvalidMcc("12A".to_string())));
+        assert_eq!(Plmn::from_mcc_mnc("123", " 4 "), Err(PlmnError::InvalidMnc("4".to_string())));
+        assert_eq!(
+            Plmn::from_mcc_mnc("123", "4567"),
+            Err(PlmnError::InvalidMnc("4567".to_string()))
+        );
+        assert_eq!(Plmn::from_mcc_mnc("123", "4B"), Err(PlmnError::InvalidMnc("4B".to_string())));
+        assert!(Plmn::from_imsi("1234", None).is_none());
+        assert!(Plmn::from_imsi("", None).is_none());
+    }
+
+    #[test]
+    fn test_plmn_serde() {
+        let plmn = Plmn::parse("310260").unwrap();
+        let json = serde_json::to_string(&plmn).unwrap();
+        assert_eq!(json, "\"310260\"");
+        let deserialized: Plmn = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, plmn);
+
+        let invalid_json = "\"1234\"";
+        assert!(serde_json::from_str::<Plmn>(invalid_json).is_err());
+    }
+
+    #[test]
+    fn test_command_error_format_response() {
+        let cme = CommandError::Cme(CmeError::SimPinRequired);
+        assert_eq!(cme.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(cme.format_response(CmeeMode::Numeric), "+CME ERROR: 11\r\n");
+        assert_eq!(cme.format_response(CmeeMode::Verbose), "+CME ERROR: SIM PIN required\r\n");
+
+        let cms = CommandError::Cms(CmsError::SimNotInserted);
+        assert_eq!(cms.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(cms.format_response(CmeeMode::Numeric), "+CMS ERROR: 310\r\n");
+        assert_eq!(cms.format_response(CmeeMode::Verbose), "+CMS ERROR: SIM not inserted\r\n");
+
+        let generic = CommandError::Generic;
+        assert_eq!(generic.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(generic.format_response(CmeeMode::Numeric), "ERROR\r\n");
+        assert_eq!(generic.format_response(CmeeMode::Verbose), "ERROR\r\n");
+        assert_eq!(CommandError::default(), CommandError::Generic);
+
+        let mut out = String::new();
+        let res = ExecutionResult::cme_error(CmeError::SimPinRequired);
+        assert!(res.format_error_into(&mut out, CmeeMode::Numeric));
+        assert_eq!(out, "+CME ERROR: 11\r\n");
+
+        let mut out_success = String::new();
+        assert!(!ExecutionResult::ok().format_error_into(&mut out_success, CmeeMode::Numeric));
+        assert!(out_success.is_empty());
+    }
+
+    #[test]
+    fn test_sim_sms_message_mark_read() {
+        let mut msg = SimSmsMessage::new(SmsMessageStatus::ReceivedUnread, vec![1, 2, 3]);
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedUnread);
+        msg.mark_read();
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedRead);
+        msg.mark_read();
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedRead);
+
+        let mut sent_msg = SimSmsMessage::new(SmsMessageStatus::StoredSent, vec![4, 5]);
+        sent_msg.mark_read();
+        assert_eq!(sent_msg.status, SmsMessageStatus::StoredSent);
+    }
+
+    #[test]
+    fn test_phone_number_as_ref() {
+        let phone = PhoneNumber::new("+1234567890");
+        assert_eq!(phone.as_str(), "+1234567890");
+        assert_eq!(phone.as_ref(), "+1234567890");
+        let opt_phone = Some(phone);
+        assert_eq!(opt_phone.as_ref().map(PhoneNumber::as_str), Some("+1234567890"));
+    }
+
+    #[test]
+    fn test_cms_error_codes_and_messages() {
+        let expected = [
+            (CmsError::InvalidPduParameter, 304, "invalid PDU mode parameter"),
+            (CmsError::SimNotInserted, 310, "SIM not inserted"),
+            (CmsError::SimPinRequired, 311, "SIM PIN required"),
+            (CmsError::InvalidMemoryIndex, 321, "invalid memory index"),
+            (CmsError::MemoryFull, 322, "memory full"),
+        ];
+        for (err, code, verbose) in expected {
+            assert_eq!(err.code(), code);
+            assert_eq!(err.verbose_str(), verbose);
+            assert_eq!(format!("{err}"), verbose);
+        }
     }
 }

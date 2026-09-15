@@ -322,7 +322,7 @@ pub mod link_layer {
                 destination_address: dest,
                 packet_boundary_flag: 0,
                 broadcast_flag: 0,
-                data: vec![].into(),
+                data: vec![],
             };
             let mut acl_empty_bytes = Vec::new();
             acl_empty.encode(&mut acl_empty_bytes).unwrap();
@@ -334,25 +334,21 @@ pub mod link_layer {
                 destination_address: dest,
                 packet_boundary_flag: 0,
                 broadcast_flag: 0,
-                data: vec![1, 2, 3].into(),
+                data: vec![1, 2, 3],
             };
             let mut acl_payload_bytes = Vec::new();
             acl_payload.encode(&mut acl_payload_bytes).unwrap();
             assert!(fast_inspect_p2p_payload(&acl_payload_bytes));
 
             // SCO empty PDU -> false
-            let sco_empty =
-                Sco { source_address: src, destination_address: dest, payload: vec![].into() };
+            let sco_empty = Sco { source_address: src, destination_address: dest, payload: vec![] };
             let mut sco_empty_bytes = Vec::new();
             sco_empty.encode(&mut sco_empty_bytes).unwrap();
             assert!(!fast_inspect_p2p_payload(&sco_empty_bytes));
 
             // SCO payload -> true
-            let sco_payload = Sco {
-                source_address: src,
-                destination_address: dest,
-                payload: vec![1, 2, 3].into(),
-            };
+            let sco_payload =
+                Sco { source_address: src, destination_address: dest, payload: vec![1, 2, 3] };
             let mut sco_payload_bytes = Vec::new();
             sco_payload.encode(&mut sco_payload_bytes).unwrap();
             assert!(fast_inspect_p2p_payload(&sco_payload_bytes));
@@ -375,7 +371,7 @@ pub mod link_layer {
                 advertising_address_type: AddressType::Public,
                 target_address_type: AddressType::Public,
                 advertising_type: LegacyAdvertisingType::AdvInd,
-                advertising_data: vec![].into(),
+                advertising_data: vec![],
             };
             let mut adv_empty_bytes = Vec::new();
             adv_empty.encode(&mut adv_empty_bytes).unwrap();
@@ -388,7 +384,7 @@ pub mod link_layer {
                 advertising_address_type: AddressType::Public,
                 target_address_type: AddressType::Public,
                 advertising_type: LegacyAdvertisingType::AdvInd,
-                advertising_data: vec![1, 2, 3].into(),
+                advertising_data: vec![1, 2, 3],
             };
             let mut adv_payload_bytes = Vec::new();
             adv_payload.encode(&mut adv_payload_bytes).unwrap();
@@ -401,7 +397,7 @@ pub mod link_layer {
                 cig_id: 0,
                 cis_id: 0,
                 sequence_number: 0,
-                data: vec![].into(),
+                data: vec![],
             };
             let mut iso_empty_bytes = Vec::new();
             iso_empty.encode(&mut iso_empty_bytes).unwrap();
@@ -414,7 +410,7 @@ pub mod link_layer {
                 cig_id: 0,
                 cis_id: 0,
                 sequence_number: 0,
-                data: vec![1, 2, 3].into(),
+                data: vec![1, 2, 3],
             };
             let mut iso_payload_bytes = Vec::new();
             iso_payload.encode(&mut iso_payload_bytes).unwrap();
@@ -425,7 +421,7 @@ pub mod link_layer {
                 source_address: src,
                 destination_address: dest,
                 advertising_address_type: AddressType::Public,
-                scan_response_data: vec![].into(),
+                scan_response_data: vec![],
             };
             let mut scan_rsp_empty_bytes = Vec::new();
             scan_rsp_empty.encode(&mut scan_rsp_empty_bytes).unwrap();
@@ -436,7 +432,7 @@ pub mod link_layer {
                 source_address: src,
                 destination_address: dest,
                 advertising_address_type: AddressType::Public,
-                scan_response_data: vec![1, 2, 3].into(),
+                scan_response_data: vec![1, 2, 3],
             };
             let mut scan_rsp_payload_bytes = Vec::new();
             scan_rsp_payload.encode(&mut scan_rsp_payload_bytes).unwrap();
@@ -456,7 +452,7 @@ pub mod link_layer {
                 primary_phy: PhyType::Le1m,
                 secondary_phy: PhyType::Le1m,
                 periodic_advertising_interval: 0,
-                advertising_data: vec![].into(),
+                advertising_data: vec![],
             };
             let mut ext_adv_empty_bytes = Vec::new();
             ext_adv_empty.encode(&mut ext_adv_empty_bytes).unwrap();
@@ -476,7 +472,7 @@ pub mod link_layer {
                 primary_phy: PhyType::Le1m,
                 secondary_phy: PhyType::Le1m,
                 periodic_advertising_interval: 0,
-                advertising_data: vec![1, 2, 3].into(),
+                advertising_data: vec![1, 2, 3],
             };
             let mut ext_adv_payload_bytes = Vec::new();
             ext_adv_payload.encode(&mut ext_adv_payload_bytes).unwrap();
@@ -489,7 +485,7 @@ pub mod link_layer {
                 big_id: 0,
                 bis_id: 0,
                 sequence_number: 0,
-                data: vec![].into(),
+                data: vec![],
             };
             let mut bis_empty_bytes = Vec::new();
             bis_empty.encode(&mut bis_empty_bytes).unwrap();
@@ -501,7 +497,7 @@ pub mod link_layer {
                 big_id: 0,
                 bis_id: 0,
                 sequence_number: 0,
-                data: vec![1, 2, 3].into(),
+                data: vec![1, 2, 3],
             };
             let mut bis_payload_bytes = Vec::new();
             bis_payload.encode(&mut bis_payload_bytes).unwrap();

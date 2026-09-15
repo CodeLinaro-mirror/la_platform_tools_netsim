@@ -126,6 +126,9 @@ pub enum RegistrationStatusOption {
     Denied,
     Unknown,
     Roaming,
+    SmsOnlyHome,
+    SmsOnlyRoaming,
+    Emergency,
 }
 
 #[derive(Debug, Args, PartialEq)]

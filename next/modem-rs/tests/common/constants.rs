@@ -39,6 +39,8 @@ pub const CME_ERROR_SIM_NOT_INSERTED_VERBOSE: &str = "+CME ERROR: SIM not insert
 pub const CME_ERROR_INCORRECT_PASSWORD: &str = "+CME ERROR: 16";
 pub const CME_ERROR_INCORRECT_PARAMETERS: &str = "+CME ERROR: 50";
 pub const CME_ERROR_SIM_PUK_REQUIRED: &str = "+CME ERROR: 12";
+pub const CME_ERROR_SIM_FAILURE: &str = "+CME ERROR: 13";
+pub const CME_ERROR_OPERATION_NOT_ALLOWED: &str = "+CME ERROR: 3";
 pub const CME_ERROR_OPERATION_NOT_SUPPORTED: &str = "+CME ERROR: 4";
 
 // Test vectors for validation

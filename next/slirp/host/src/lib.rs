@@ -24,8 +24,6 @@ use tokio::{
 };
 use tokio_tun::Tun;
 
-const DEFAULT_DNS_SERVER: IpAddr = IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
-
 struct TcpConnection {
     writer: mpsc::Sender<Bytes>,
     reader_handle: JoinHandle<()>,
@@ -68,18 +66,19 @@ pub struct TokioHost {
 
 impl TokioHost {
     pub async fn new(tun: Tun, mut config: Config, fast_path_enabled: bool) -> Self {
-        let socks5_proxy = config.socks5_proxy;
-        // If `dns_servers` matches the default configuration [8.8.8.8], automatically
-        // discover host DNS servers so guest queries are not routed to
-        // hardcoded public servers. Explicitly configured DNS server lists are
-        // preserved and never overridden.
-        if config.dns_servers == [DEFAULT_DNS_SERVER] {
-            let discovered = discover_host_dns_servers();
+        // If `dns_servers` is empty or matches the default configuration [8.8.8.8],
+        // automatically discover host DNS servers so guest queries are not
+        // routed to hardcoded public servers. Explicitly configured DNS server
+        // lists are preserved and never overridden.
+        if config.dns_servers.is_empty() || config.dns_servers == [slirp::DEFAULT_DNS_SERVER] {
+            let discovered = slirp::discover_host_dns_servers().await;
             if !discovered.is_empty() {
                 config.dns_servers = discovered;
+            } else if config.dns_servers.is_empty() {
+                config.dns_servers = vec![slirp::DEFAULT_DNS_SERVER];
             }
         }
-
+        let socks5_proxy = config.socks5_proxy;
         let (slirp_request_sender, mut slirp_request_receiver) = mpsc::channel(10000);
         let (slirp_response_sender, slirp_response_receiver) = mpsc::channel(10000);
         let (guest_packet_sender, mut guest_packet_receiver) = mpsc::channel::<Bytes>(10000);
@@ -604,49 +603,6 @@ async fn start_tcp_hostfwd_listener(
             }
         }
     }
-}
-
-#[cfg(unix)]
-fn discover_host_dns_servers() -> Vec<IpAddr> {
-    let mut servers = Vec::new();
-    let file = match std::fs::File::open("/etc/resolv.conf") {
-        Ok(f) => f,
-        Err(_) => {
-            warn!("Failed to open /etc/resolv.conf, using default DNS");
-            return servers;
-        }
-    };
-
-    use std::io::{BufRead, BufReader};
-    let reader = BufReader::new(file);
-    for line in reader.lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("nameserver") {
-            let parts: Vec<&str> = rest.split_whitespace().collect();
-            if let Some(first) = parts.first() {
-                if let Ok(ip) = first.parse::<IpAddr>() {
-                    servers.push(ip);
-                }
-            }
-        }
-    }
-
-    if servers.is_empty() {
-        info!("No DNS servers found in /etc/resolv.conf");
-    } else {
-        info!("Discovered host DNS servers: {servers:?}");
-    }
-    servers
-}
-
-#[cfg(not(unix))]
-fn discover_host_dns_servers() -> Vec<IpAddr> {
-    info!("Host DNS discovery is currently only supported on Unix platforms");
-    Vec::new()
 }
 
 async fn forward_fast_path(

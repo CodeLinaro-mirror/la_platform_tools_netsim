@@ -6346,17 +6346,26 @@ impl ::protobuf::reflect::ProtobufValue for RangingSessionStats {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
-///  NFC API Counters
+///  NFC API Counters (aligned with Android Framework APIs)
 // @@protoc_insertion_point(message:netsim.stats.NfcApiStats)
 #[derive(PartialEq,Clone,Default,Debug)]
 pub struct NfcApiStats {
     // message fields
+    ///  Legacy protocol-level fields (retained for pipeline backwards
+    ///  compatibility)
     // @@protoc_insertion_point(field:netsim.stats.NfcApiStats.nci_core)
     pub nci_core: ::protobuf::MessageField<NciCoreStats>,
     // @@protoc_insertion_point(field:netsim.stats.NfcApiStats.nci_rf)
     pub nci_rf: ::protobuf::MessageField<NciRfStats>,
     // @@protoc_insertion_point(field:netsim.stats.NfcApiStats.nci_data)
     pub nci_data: ::protobuf::MessageField<NciDataStats>,
+    ///  High-level Android Framework API mappings (aligned with Wi-Fi & UWB)
+    // @@protoc_insertion_point(field:netsim.stats.NfcApiStats.nfc_adapter)
+    pub nfc_adapter: ::protobuf::MessageField<NfcAdapterStats>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcApiStats.tag)
+    pub tag: ::protobuf::MessageField<TagStats>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcApiStats.card_emulation)
+    pub card_emulation: ::protobuf::MessageField<CardEmulationStats>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.NfcApiStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -6374,7 +6383,7 @@ impl NfcApiStats {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(3);
+        let mut fields = ::std::vec::Vec::with_capacity(6);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, NciCoreStats>(
             "nci_core",
@@ -6390,6 +6399,21 @@ impl NfcApiStats {
             "nci_data",
             |m: &NfcApiStats| { &m.nci_data },
             |m: &mut NfcApiStats| { &mut m.nci_data },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, NfcAdapterStats>(
+            "nfc_adapter",
+            |m: &NfcApiStats| { &m.nfc_adapter },
+            |m: &mut NfcApiStats| { &mut m.nfc_adapter },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, TagStats>(
+            "tag",
+            |m: &NfcApiStats| { &m.tag },
+            |m: &mut NfcApiStats| { &mut m.tag },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, CardEmulationStats>(
+            "card_emulation",
+            |m: &NfcApiStats| { &m.card_emulation },
+            |m: &mut NfcApiStats| { &mut m.card_emulation },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NfcApiStats>(
             "NfcApiStats",
@@ -6418,6 +6442,15 @@ impl ::protobuf::Message for NfcApiStats {
                 26 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.nci_data)?;
                 },
+                34 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.nfc_adapter)?;
+                },
+                42 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.tag)?;
+                },
+                50 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.card_emulation)?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -6442,6 +6475,18 @@ impl ::protobuf::Message for NfcApiStats {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
+        if let Some(v) = self.nfc_adapter.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        if let Some(v) = self.tag.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        if let Some(v) = self.card_emulation.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -6456,6 +6501,15 @@ impl ::protobuf::Message for NfcApiStats {
         }
         if let Some(v) = self.nci_data.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
+        }
+        if let Some(v) = self.nfc_adapter.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
+        }
+        if let Some(v) = self.tag.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(5, v, os)?;
+        }
+        if let Some(v) = self.card_emulation.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(6, v, os)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -6477,6 +6531,9 @@ impl ::protobuf::Message for NfcApiStats {
         self.nci_core.clear();
         self.nci_rf.clear();
         self.nci_data.clear();
+        self.nfc_adapter.clear();
+        self.tag.clear();
+        self.card_emulation.clear();
         self.special_fields.clear();
     }
 
@@ -6485,6 +6542,9 @@ impl ::protobuf::Message for NfcApiStats {
             nci_core: ::protobuf::MessageField::none(),
             nci_rf: ::protobuf::MessageField::none(),
             nci_data: ::protobuf::MessageField::none(),
+            nfc_adapter: ::protobuf::MessageField::none(),
+            tag: ::protobuf::MessageField::none(),
+            card_emulation: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -6505,6 +6565,691 @@ impl ::std::fmt::Display for NfcApiStats {
 }
 
 impl ::protobuf::reflect::ProtobufValue for NfcApiStats {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+///  Android android.nfc.NfcAdapter API calls
+// @@protoc_insertion_point(message:netsim.stats.NfcAdapterStats)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct NfcAdapterStats {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.stats.NfcAdapterStats.enable)
+    pub enable: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcAdapterStats.disable)
+    pub disable: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcAdapterStats.enable_reader_mode)
+    pub enable_reader_mode: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcAdapterStats.disable_reader_mode)
+    pub disable_reader_mode: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.NfcAdapterStats.set_listen_mode_routing)
+    pub set_listen_mode_routing: ::std::option::Option<i32>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.stats.NfcAdapterStats.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a NfcAdapterStats {
+    fn default() -> &'a NfcAdapterStats {
+        <NfcAdapterStats as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl NfcAdapterStats {
+    pub fn new() -> NfcAdapterStats {
+        ::std::default::Default::default()
+    }
+
+    // optional int32 enable = 1;
+
+    pub fn enable(&self) -> i32 {
+        self.enable.unwrap_or(0)
+    }
+
+    pub fn clear_enable(&mut self) {
+        self.enable = ::std::option::Option::None;
+    }
+
+    pub fn has_enable(&self) -> bool {
+        self.enable.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_enable(&mut self, v: i32) {
+        self.enable = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 disable = 2;
+
+    pub fn disable(&self) -> i32 {
+        self.disable.unwrap_or(0)
+    }
+
+    pub fn clear_disable(&mut self) {
+        self.disable = ::std::option::Option::None;
+    }
+
+    pub fn has_disable(&self) -> bool {
+        self.disable.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_disable(&mut self, v: i32) {
+        self.disable = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 enable_reader_mode = 3;
+
+    pub fn enable_reader_mode(&self) -> i32 {
+        self.enable_reader_mode.unwrap_or(0)
+    }
+
+    pub fn clear_enable_reader_mode(&mut self) {
+        self.enable_reader_mode = ::std::option::Option::None;
+    }
+
+    pub fn has_enable_reader_mode(&self) -> bool {
+        self.enable_reader_mode.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_enable_reader_mode(&mut self, v: i32) {
+        self.enable_reader_mode = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 disable_reader_mode = 4;
+
+    pub fn disable_reader_mode(&self) -> i32 {
+        self.disable_reader_mode.unwrap_or(0)
+    }
+
+    pub fn clear_disable_reader_mode(&mut self) {
+        self.disable_reader_mode = ::std::option::Option::None;
+    }
+
+    pub fn has_disable_reader_mode(&self) -> bool {
+        self.disable_reader_mode.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_disable_reader_mode(&mut self, v: i32) {
+        self.disable_reader_mode = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 set_listen_mode_routing = 5;
+
+    pub fn set_listen_mode_routing(&self) -> i32 {
+        self.set_listen_mode_routing.unwrap_or(0)
+    }
+
+    pub fn clear_set_listen_mode_routing(&mut self) {
+        self.set_listen_mode_routing = ::std::option::Option::None;
+    }
+
+    pub fn has_set_listen_mode_routing(&self) -> bool {
+        self.set_listen_mode_routing.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_set_listen_mode_routing(&mut self, v: i32) {
+        self.set_listen_mode_routing = ::std::option::Option::Some(v);
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(5);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "enable",
+            |m: &NfcAdapterStats| { &m.enable },
+            |m: &mut NfcAdapterStats| { &mut m.enable },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "disable",
+            |m: &NfcAdapterStats| { &m.disable },
+            |m: &mut NfcAdapterStats| { &mut m.disable },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "enable_reader_mode",
+            |m: &NfcAdapterStats| { &m.enable_reader_mode },
+            |m: &mut NfcAdapterStats| { &mut m.enable_reader_mode },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "disable_reader_mode",
+            |m: &NfcAdapterStats| { &m.disable_reader_mode },
+            |m: &mut NfcAdapterStats| { &mut m.disable_reader_mode },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "set_listen_mode_routing",
+            |m: &NfcAdapterStats| { &m.set_listen_mode_routing },
+            |m: &mut NfcAdapterStats| { &mut m.set_listen_mode_routing },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NfcAdapterStats>(
+            "NfcAdapterStats",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for NfcAdapterStats {
+    const NAME: &'static str = "NfcAdapterStats";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.enable = ::std::option::Option::Some(is.read_int32()?);
+                },
+                16 => {
+                    self.disable = ::std::option::Option::Some(is.read_int32()?);
+                },
+                24 => {
+                    self.enable_reader_mode = ::std::option::Option::Some(is.read_int32()?);
+                },
+                32 => {
+                    self.disable_reader_mode = ::std::option::Option::Some(is.read_int32()?);
+                },
+                40 => {
+                    self.set_listen_mode_routing = ::std::option::Option::Some(is.read_int32()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.enable {
+            my_size += ::protobuf::rt::int32_size(1, v);
+        }
+        if let Some(v) = self.disable {
+            my_size += ::protobuf::rt::int32_size(2, v);
+        }
+        if let Some(v) = self.enable_reader_mode {
+            my_size += ::protobuf::rt::int32_size(3, v);
+        }
+        if let Some(v) = self.disable_reader_mode {
+            my_size += ::protobuf::rt::int32_size(4, v);
+        }
+        if let Some(v) = self.set_listen_mode_routing {
+            my_size += ::protobuf::rt::int32_size(5, v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.enable {
+            os.write_int32(1, v)?;
+        }
+        if let Some(v) = self.disable {
+            os.write_int32(2, v)?;
+        }
+        if let Some(v) = self.enable_reader_mode {
+            os.write_int32(3, v)?;
+        }
+        if let Some(v) = self.disable_reader_mode {
+            os.write_int32(4, v)?;
+        }
+        if let Some(v) = self.set_listen_mode_routing {
+            os.write_int32(5, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> NfcAdapterStats {
+        NfcAdapterStats::new()
+    }
+
+    fn clear(&mut self) {
+        self.enable = ::std::option::Option::None;
+        self.disable = ::std::option::Option::None;
+        self.enable_reader_mode = ::std::option::Option::None;
+        self.disable_reader_mode = ::std::option::Option::None;
+        self.set_listen_mode_routing = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static NfcAdapterStats {
+        static instance: NfcAdapterStats = NfcAdapterStats {
+            enable: ::std::option::Option::None,
+            disable: ::std::option::Option::None,
+            enable_reader_mode: ::std::option::Option::None,
+            disable_reader_mode: ::std::option::Option::None,
+            set_listen_mode_routing: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for NfcAdapterStats {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("NfcAdapterStats").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for NfcAdapterStats {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for NfcAdapterStats {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+///  Android android.nfc.Tag & TagTechnology (IsoDep, Ndef, etc.) API calls
+// @@protoc_insertion_point(message:netsim.stats.TagStats)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct TagStats {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.stats.TagStats.connect)
+    pub connect: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.TagStats.close)
+    pub close: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.TagStats.transceive)
+    pub transceive: ::std::option::Option<i32>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.stats.TagStats.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a TagStats {
+    fn default() -> &'a TagStats {
+        <TagStats as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl TagStats {
+    pub fn new() -> TagStats {
+        ::std::default::Default::default()
+    }
+
+    // optional int32 connect = 1;
+
+    pub fn connect(&self) -> i32 {
+        self.connect.unwrap_or(0)
+    }
+
+    pub fn clear_connect(&mut self) {
+        self.connect = ::std::option::Option::None;
+    }
+
+    pub fn has_connect(&self) -> bool {
+        self.connect.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_connect(&mut self, v: i32) {
+        self.connect = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 close = 2;
+
+    pub fn close(&self) -> i32 {
+        self.close.unwrap_or(0)
+    }
+
+    pub fn clear_close(&mut self) {
+        self.close = ::std::option::Option::None;
+    }
+
+    pub fn has_close(&self) -> bool {
+        self.close.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_close(&mut self, v: i32) {
+        self.close = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 transceive = 3;
+
+    pub fn transceive(&self) -> i32 {
+        self.transceive.unwrap_or(0)
+    }
+
+    pub fn clear_transceive(&mut self) {
+        self.transceive = ::std::option::Option::None;
+    }
+
+    pub fn has_transceive(&self) -> bool {
+        self.transceive.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_transceive(&mut self, v: i32) {
+        self.transceive = ::std::option::Option::Some(v);
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(3);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "connect",
+            |m: &TagStats| { &m.connect },
+            |m: &mut TagStats| { &mut m.connect },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "close",
+            |m: &TagStats| { &m.close },
+            |m: &mut TagStats| { &mut m.close },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "transceive",
+            |m: &TagStats| { &m.transceive },
+            |m: &mut TagStats| { &mut m.transceive },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<TagStats>(
+            "TagStats",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for TagStats {
+    const NAME: &'static str = "TagStats";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.connect = ::std::option::Option::Some(is.read_int32()?);
+                },
+                16 => {
+                    self.close = ::std::option::Option::Some(is.read_int32()?);
+                },
+                24 => {
+                    self.transceive = ::std::option::Option::Some(is.read_int32()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.connect {
+            my_size += ::protobuf::rt::int32_size(1, v);
+        }
+        if let Some(v) = self.close {
+            my_size += ::protobuf::rt::int32_size(2, v);
+        }
+        if let Some(v) = self.transceive {
+            my_size += ::protobuf::rt::int32_size(3, v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.connect {
+            os.write_int32(1, v)?;
+        }
+        if let Some(v) = self.close {
+            os.write_int32(2, v)?;
+        }
+        if let Some(v) = self.transceive {
+            os.write_int32(3, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> TagStats {
+        TagStats::new()
+    }
+
+    fn clear(&mut self) {
+        self.connect = ::std::option::Option::None;
+        self.close = ::std::option::Option::None;
+        self.transceive = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static TagStats {
+        static instance: TagStats = TagStats {
+            connect: ::std::option::Option::None,
+            close: ::std::option::Option::None,
+            transceive: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for TagStats {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("TagStats").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for TagStats {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for TagStats {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+///  Android android.nfc.cardemulation (HostApduService) API calls
+// @@protoc_insertion_point(message:netsim.stats.CardEmulationStats)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct CardEmulationStats {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.stats.CardEmulationStats.process_command_apdu)
+    pub process_command_apdu: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.CardEmulationStats.send_response_apdu)
+    pub send_response_apdu: ::std::option::Option<i32>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.stats.CardEmulationStats.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a CardEmulationStats {
+    fn default() -> &'a CardEmulationStats {
+        <CardEmulationStats as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl CardEmulationStats {
+    pub fn new() -> CardEmulationStats {
+        ::std::default::Default::default()
+    }
+
+    // optional int32 process_command_apdu = 1;
+
+    pub fn process_command_apdu(&self) -> i32 {
+        self.process_command_apdu.unwrap_or(0)
+    }
+
+    pub fn clear_process_command_apdu(&mut self) {
+        self.process_command_apdu = ::std::option::Option::None;
+    }
+
+    pub fn has_process_command_apdu(&self) -> bool {
+        self.process_command_apdu.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_process_command_apdu(&mut self, v: i32) {
+        self.process_command_apdu = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 send_response_apdu = 2;
+
+    pub fn send_response_apdu(&self) -> i32 {
+        self.send_response_apdu.unwrap_or(0)
+    }
+
+    pub fn clear_send_response_apdu(&mut self) {
+        self.send_response_apdu = ::std::option::Option::None;
+    }
+
+    pub fn has_send_response_apdu(&self) -> bool {
+        self.send_response_apdu.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_send_response_apdu(&mut self, v: i32) {
+        self.send_response_apdu = ::std::option::Option::Some(v);
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(2);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "process_command_apdu",
+            |m: &CardEmulationStats| { &m.process_command_apdu },
+            |m: &mut CardEmulationStats| { &mut m.process_command_apdu },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "send_response_apdu",
+            |m: &CardEmulationStats| { &m.send_response_apdu },
+            |m: &mut CardEmulationStats| { &mut m.send_response_apdu },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<CardEmulationStats>(
+            "CardEmulationStats",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for CardEmulationStats {
+    const NAME: &'static str = "CardEmulationStats";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.process_command_apdu = ::std::option::Option::Some(is.read_int32()?);
+                },
+                16 => {
+                    self.send_response_apdu = ::std::option::Option::Some(is.read_int32()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.process_command_apdu {
+            my_size += ::protobuf::rt::int32_size(1, v);
+        }
+        if let Some(v) = self.send_response_apdu {
+            my_size += ::protobuf::rt::int32_size(2, v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.process_command_apdu {
+            os.write_int32(1, v)?;
+        }
+        if let Some(v) = self.send_response_apdu {
+            os.write_int32(2, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> CardEmulationStats {
+        CardEmulationStats::new()
+    }
+
+    fn clear(&mut self) {
+        self.process_command_apdu = ::std::option::Option::None;
+        self.send_response_apdu = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static CardEmulationStats {
+        static instance: CardEmulationStats = CardEmulationStats {
+            process_command_apdu: ::std::option::Option::None,
+            send_response_apdu: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for CardEmulationStats {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("CardEmulationStats").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for CardEmulationStats {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for CardEmulationStats {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
@@ -7649,20 +8394,34 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x18\x06\x20\x01(\x05R\x08sendData\x12(\n\x10on_data_received\x18\x07\
     \x20\x01(\x05R\x0eonDataReceived\x12#\n\radd_controlee\x18\x08\x20\x01(\
     \x05R\x0caddControlee\x12)\n\x10remove_controlee\x18\t\x20\x01(\x05R\x0f\
-    removeControlee\"\xac\x01\n\x0bNfcApiStats\x125\n\x08nci_core\x18\x01\
-    \x20\x01(\x0b2\x1a.netsim.stats.NciCoreStatsR\x07nciCore\x12/\n\x06nci_r\
-    f\x18\x02\x20\x01(\x0b2\x18.netsim.stats.NciRfStatsR\x05nciRf\x125\n\x08\
-    nci_data\x18\x03\x20\x01(\x0b2\x1a.netsim.stats.NciDataStatsR\x07nciData\
-    \"8\n\x0cNciCoreStats\x12\x14\n\x05reset\x18\x01\x20\x01(\x05R\x05reset\
-    \x12\x12\n\x04init\x18\x02\x20\x01(\x05R\x04init\"\xad\x01\n\nNciRfStats\
-    \x12\x1a\n\x08discover\x18\x01\x20\x01(\x05R\x08discover\x12'\n\x0fdisco\
-    ver_select\x18\x02\x20\x01(\x05R\x0ediscoverSelect\x12\x1e\n\ndeactivate\
-    \x18\x03\x20\x01(\x05R\ndeactivate\x12:\n\x1arf_set_listen_mode_routing\
-    \x18\x04\x20\x01(\x05R\x16rfSetListenModeRouting\"<\n\x0cNciDataStats\
-    \x12\x12\n\x04send\x18\x01\x20\x01(\x05R\x04send\x12\x18\n\x07receive\
-    \x18\x02\x20\x01(\x05R\x07receive\"\xe9\x04\n\x0bNetsimStats\x12#\n\rdur\
-    ation_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_count\
-    \x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurrent_devices\
+    removeControlee\"\xeb\x02\n\x0bNfcApiStats\x129\n\x08nci_core\x18\x01\
+    \x20\x01(\x0b2\x1a.netsim.stats.NciCoreStatsR\x07nciCoreB\x02\x18\x01\
+    \x123\n\x06nci_rf\x18\x02\x20\x01(\x0b2\x18.netsim.stats.NciRfStatsR\x05\
+    nciRfB\x02\x18\x01\x129\n\x08nci_data\x18\x03\x20\x01(\x0b2\x1a.netsim.s\
+    tats.NciDataStatsR\x07nciDataB\x02\x18\x01\x12>\n\x0bnfc_adapter\x18\x04\
+    \x20\x01(\x0b2\x1d.netsim.stats.NfcAdapterStatsR\nnfcAdapter\x12(\n\x03t\
+    ag\x18\x05\x20\x01(\x0b2\x16.netsim.stats.TagStatsR\x03tag\x12G\n\x0ecar\
+    d_emulation\x18\x06\x20\x01(\x0b2\x20.netsim.stats.CardEmulationStatsR\r\
+    cardEmulation\"\xd8\x01\n\x0fNfcAdapterStats\x12\x16\n\x06enable\x18\x01\
+    \x20\x01(\x05R\x06enable\x12\x18\n\x07disable\x18\x02\x20\x01(\x05R\x07d\
+    isable\x12,\n\x12enable_reader_mode\x18\x03\x20\x01(\x05R\x10enableReade\
+    rMode\x12.\n\x13disable_reader_mode\x18\x04\x20\x01(\x05R\x11disableRead\
+    erMode\x125\n\x17set_listen_mode_routing\x18\x05\x20\x01(\x05R\x14setLis\
+    tenModeRouting\"Z\n\x08TagStats\x12\x18\n\x07connect\x18\x01\x20\x01(\
+    \x05R\x07connect\x12\x14\n\x05close\x18\x02\x20\x01(\x05R\x05close\x12\
+    \x1e\n\ntransceive\x18\x03\x20\x01(\x05R\ntransceive\"t\n\x12CardEmulati\
+    onStats\x120\n\x14process_command_apdu\x18\x01\x20\x01(\x05R\x12processC\
+    ommandApdu\x12,\n\x12send_response_apdu\x18\x02\x20\x01(\x05R\x10sendRes\
+    ponseApdu\"8\n\x0cNciCoreStats\x12\x14\n\x05reset\x18\x01\x20\x01(\x05R\
+    \x05reset\x12\x12\n\x04init\x18\x02\x20\x01(\x05R\x04init\"\xad\x01\n\nN\
+    ciRfStats\x12\x1a\n\x08discover\x18\x01\x20\x01(\x05R\x08discover\x12'\n\
+    \x0fdiscover_select\x18\x02\x20\x01(\x05R\x0ediscoverSelect\x12\x1e\n\nd\
+    eactivate\x18\x03\x20\x01(\x05R\ndeactivate\x12:\n\x1arf_set_listen_mode\
+    _routing\x18\x04\x20\x01(\x05R\x16rfSetListenModeRouting\"<\n\x0cNciData\
+    Stats\x12\x12\n\x04send\x18\x01\x20\x01(\x05R\x04send\x12\x18\n\x07recei\
+    ve\x18\x02\x20\x01(\x05R\x07receive\"\xe9\x04\n\x0bNetsimStats\x12#\n\rd\
+    uration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_coun\
+    t\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurrent_devices\
     \x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\x12?\n\x0bradio_stats\
     \x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradioStats\
     \x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07version\x12H\n\x0efrontend_\
@@ -7673,55 +8432,55 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x0b2\x16.netsim.stats.NfcStatsR\x08nfcStats\x12I\n\x11nfc_service_stats\
     \x18\n\x20\x01(\x0b2\x1d.netsim.stats.NfcServiceStatsR\x0fnfcServiceStat\
     s\x123\n\tapi_stats\x18\x0c\x20\x01(\x0b2\x16.netsim.stats.ApiStatsR\x08\
-    apiStatsJ\x04\x08\x0b\x10\x0cJ\xf3u\n\x07\x12\x05\x03\0\xc3\x02\x01\n_\n\
-    \x01\x0c\x12\x03\x03\0\x122U\x20Copyright\x202022\x20The\x20Android\x20O\
-    pen\x20Source\x20Project\n\x20SPDX-License-Identifier:\x20Apache-2.0\n\n\
-    \x08\n\x01\x02\x12\x03\x05\0\x15\n(\n\x02\x04\0\x12\x04\x08\0\x13\x01\
-    \x1a\x1c\x20Message\x20for\x20Invalid\x20Packet\n\n\n\n\x03\x04\0\x01\
-    \x12\x03\x08\x08\x15\n\x0c\n\x04\x04\0\x04\0\x12\x04\t\x02\x0f\x03\n\x0c\
-    \n\x05\x04\0\x04\0\x01\x12\x03\t\x07\r\n\r\n\x06\x04\0\x04\0\x02\0\x12\
-    \x03\n\x04\x10\n\x0e\n\x07\x04\0\x04\0\x02\0\x01\x12\x03\n\x04\x0b\n\x0e\
-    \n\x07\x04\0\x04\0\x02\0\x02\x12\x03\n\x0e\x0f\n\r\n\x06\x04\0\x04\0\x02\
-    \x01\x12\x03\x0b\x04\x14\n\x0e\n\x07\x04\0\x04\0\x02\x01\x01\x12\x03\x0b\
-    \x04\x0f\n\x0e\n\x07\x04\0\x04\0\x02\x01\x02\x12\x03\x0b\x12\x13\n\r\n\
-    \x06\x04\0\x04\0\x02\x02\x12\x03\x0c\x04\x14\n\x0e\n\x07\x04\0\x04\0\x02\
-    \x02\x01\x12\x03\x0c\x04\x0f\n\x0e\n\x07\x04\0\x04\0\x02\x02\x02\x12\x03\
-    \x0c\x12\x13\n\r\n\x06\x04\0\x04\0\x02\x03\x12\x03\r\x04\x0f\n\x0e\n\x07\
-    \x04\0\x04\0\x02\x03\x01\x12\x03\r\x04\n\n\x0e\n\x07\x04\0\x04\0\x02\x03\
-    \x02\x12\x03\r\r\x0e\n\r\n\x06\x04\0\x04\0\x02\x04\x12\x03\x0e\x04\x10\n\
-    \x0e\n\x07\x04\0\x04\0\x02\x04\x01\x12\x03\x0e\x04\x0b\n\x0e\n\x07\x04\0\
-    \x04\0\x02\x04\x02\x12\x03\x0e\x0e\x0f\n\x0b\n\x04\x04\0\x02\0\x12\x03\
-    \x10\x02\x1d\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\x10\x02\n\n\x0c\n\x05\
-    \x04\0\x02\0\x06\x12\x03\x10\x0b\x11\n\x0c\n\x05\x04\0\x02\0\x01\x12\x03\
-    \x10\x12\x18\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\x10\x1b\x1c\n\x0b\n\x04\
-    \x04\0\x02\x01\x12\x03\x11\x02\"\n\x0c\n\x05\x04\0\x02\x01\x04\x12\x03\
-    \x11\x02\n\n\x0c\n\x05\x04\0\x02\x01\x05\x12\x03\x11\x0b\x11\n\x0c\n\x05\
-    \x04\0\x02\x01\x01\x12\x03\x11\x12\x1d\n\x0c\n\x05\x04\0\x02\x01\x03\x12\
-    \x03\x11\x20!\n\x0b\n\x04\x04\0\x02\x02\x12\x03\x12\x02\x1c\n\x0c\n\x05\
-    \x04\0\x02\x02\x04\x12\x03\x12\x02\n\n\x0c\n\x05\x04\0\x02\x02\x05\x12\
-    \x03\x12\x0b\x10\n\x0c\n\x05\x04\0\x02\x02\x01\x12\x03\x12\x11\x17\n\x0c\
-    \n\x05\x04\0\x02\x02\x03\x12\x03\x12\x1a\x1b\n4\n\x02\x04\x01\x12\x04\
-    \x16\01\x01\x1a(\x20Radio\x20statistics\x20for\x20a\x20netsim\x20session\
-    .\n\n\n\n\x03\x04\x01\x01\x12\x03\x16\x08\x18\n!\n\x04\x04\x01\x04\0\x12\
-    \x04\x18\x02\x20\x03\x1a\x13\x20The\x20kind\x20of\x20radio\n\n\x0c\n\x05\
-    \x04\x01\x04\0\x01\x12\x03\x18\x07\x0b\n\r\n\x06\x04\x01\x04\0\x02\0\x12\
-    \x03\x19\x04\x14\n\x0e\n\x07\x04\x01\x04\0\x02\0\x01\x12\x03\x19\x04\x0f\
-    \n\x0e\n\x07\x04\x01\x04\0\x02\0\x02\x12\x03\x19\x12\x13\n\r\n\x06\x04\
-    \x01\x04\0\x02\x01\x12\x03\x1a\x04\x1d\n\x0e\n\x07\x04\x01\x04\0\x02\x01\
-    \x01\x12\x03\x1a\x04\x18\n\x0e\n\x07\x04\x01\x04\0\x02\x01\x02\x12\x03\
-    \x1a\x1b\x1c\n\r\n\x06\x04\x01\x04\0\x02\x02\x12\x03\x1b\x04\x1a\n\x0e\n\
-    \x07\x04\x01\x04\0\x02\x02\x01\x12\x03\x1b\x04\x15\n\x0e\n\x07\x04\x01\
-    \x04\0\x02\x02\x02\x12\x03\x1b\x18\x19\n\r\n\x06\x04\x01\x04\0\x02\x03\
-    \x12\x03\x1c\x04'\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x01\x12\x03\x1c\x04\
-    \x0e\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x02\x12\x03\x1c\x11\x12\n\x0e\n\
-    \x07\x04\x01\x04\0\x02\x03\x03\x12\x03\x1c\x13&\n\x0f\n\x08\x04\x01\x04\
-    \0\x02\x03\x03\x01\x12\x03\x1c\x14%\n\r\n\x06\x04\x01\x04\0\x02\x04\x12\
-    \x03\x1d\x04\r\n\x0e\n\x07\x04\x01\x04\0\x02\x04\x01\x12\x03\x1d\x04\x08\
-    \n\x0e\n\x07\x04\x01\x04\0\x02\x04\x02\x12\x03\x1d\x0b\x0c\n\r\n\x06\x04\
-    \x01\x04\0\x02\x05\x12\x03\x1e\x04\x0c\n\x0e\n\x07\x04\x01\x04\0\x02\x05\
-    \x01\x12\x03\x1e\x04\x07\n\x0e\n\x07\x04\x01\x04\0\x02\x05\x02\x12\x03\
-    \x1e\n\x0b\n\r\n\x06\x04\x01\x04\0\x02\x06\x12\x03\x1f\x04\x0c\n\x0e\n\
-    \x07\x04\x01\x04\0\x02\x06\x01\x12\x03\x1f\x04\x07\n\x0e\n\x07\x04\x01\
+    apiStatsJ\x04\x08\x0b\x10\x0cJ\xd9\x81\x01\n\x07\x12\x05\x03\0\xe0\x02\
+    \x01\n_\n\x01\x0c\x12\x03\x03\0\x122U\x20Copyright\x202022\x20The\x20And\
+    roid\x20Open\x20Source\x20Project\n\x20SPDX-License-Identifier:\x20Apach\
+    e-2.0\n\n\x08\n\x01\x02\x12\x03\x05\0\x15\n(\n\x02\x04\0\x12\x04\x08\0\
+    \x13\x01\x1a\x1c\x20Message\x20for\x20Invalid\x20Packet\n\n\n\n\x03\x04\
+    \0\x01\x12\x03\x08\x08\x15\n\x0c\n\x04\x04\0\x04\0\x12\x04\t\x02\x0f\x03\
+    \n\x0c\n\x05\x04\0\x04\0\x01\x12\x03\t\x07\r\n\r\n\x06\x04\0\x04\0\x02\0\
+    \x12\x03\n\x04\x10\n\x0e\n\x07\x04\0\x04\0\x02\0\x01\x12\x03\n\x04\x0b\n\
+    \x0e\n\x07\x04\0\x04\0\x02\0\x02\x12\x03\n\x0e\x0f\n\r\n\x06\x04\0\x04\0\
+    \x02\x01\x12\x03\x0b\x04\x14\n\x0e\n\x07\x04\0\x04\0\x02\x01\x01\x12\x03\
+    \x0b\x04\x0f\n\x0e\n\x07\x04\0\x04\0\x02\x01\x02\x12\x03\x0b\x12\x13\n\r\
+    \n\x06\x04\0\x04\0\x02\x02\x12\x03\x0c\x04\x14\n\x0e\n\x07\x04\0\x04\0\
+    \x02\x02\x01\x12\x03\x0c\x04\x0f\n\x0e\n\x07\x04\0\x04\0\x02\x02\x02\x12\
+    \x03\x0c\x12\x13\n\r\n\x06\x04\0\x04\0\x02\x03\x12\x03\r\x04\x0f\n\x0e\n\
+    \x07\x04\0\x04\0\x02\x03\x01\x12\x03\r\x04\n\n\x0e\n\x07\x04\0\x04\0\x02\
+    \x03\x02\x12\x03\r\r\x0e\n\r\n\x06\x04\0\x04\0\x02\x04\x12\x03\x0e\x04\
+    \x10\n\x0e\n\x07\x04\0\x04\0\x02\x04\x01\x12\x03\x0e\x04\x0b\n\x0e\n\x07\
+    \x04\0\x04\0\x02\x04\x02\x12\x03\x0e\x0e\x0f\n\x0b\n\x04\x04\0\x02\0\x12\
+    \x03\x10\x02\x1d\n\x0c\n\x05\x04\0\x02\0\x04\x12\x03\x10\x02\n\n\x0c\n\
+    \x05\x04\0\x02\0\x06\x12\x03\x10\x0b\x11\n\x0c\n\x05\x04\0\x02\0\x01\x12\
+    \x03\x10\x12\x18\n\x0c\n\x05\x04\0\x02\0\x03\x12\x03\x10\x1b\x1c\n\x0b\n\
+    \x04\x04\0\x02\x01\x12\x03\x11\x02\"\n\x0c\n\x05\x04\0\x02\x01\x04\x12\
+    \x03\x11\x02\n\n\x0c\n\x05\x04\0\x02\x01\x05\x12\x03\x11\x0b\x11\n\x0c\n\
+    \x05\x04\0\x02\x01\x01\x12\x03\x11\x12\x1d\n\x0c\n\x05\x04\0\x02\x01\x03\
+    \x12\x03\x11\x20!\n\x0b\n\x04\x04\0\x02\x02\x12\x03\x12\x02\x1c\n\x0c\n\
+    \x05\x04\0\x02\x02\x04\x12\x03\x12\x02\n\n\x0c\n\x05\x04\0\x02\x02\x05\
+    \x12\x03\x12\x0b\x10\n\x0c\n\x05\x04\0\x02\x02\x01\x12\x03\x12\x11\x17\n\
+    \x0c\n\x05\x04\0\x02\x02\x03\x12\x03\x12\x1a\x1b\n4\n\x02\x04\x01\x12\
+    \x04\x16\01\x01\x1a(\x20Radio\x20statistics\x20for\x20a\x20netsim\x20ses\
+    sion.\n\n\n\n\x03\x04\x01\x01\x12\x03\x16\x08\x18\n!\n\x04\x04\x01\x04\0\
+    \x12\x04\x18\x02\x20\x03\x1a\x13\x20The\x20kind\x20of\x20radio\n\n\x0c\n\
+    \x05\x04\x01\x04\0\x01\x12\x03\x18\x07\x0b\n\r\n\x06\x04\x01\x04\0\x02\0\
+    \x12\x03\x19\x04\x14\n\x0e\n\x07\x04\x01\x04\0\x02\0\x01\x12\x03\x19\x04\
+    \x0f\n\x0e\n\x07\x04\x01\x04\0\x02\0\x02\x12\x03\x19\x12\x13\n\r\n\x06\
+    \x04\x01\x04\0\x02\x01\x12\x03\x1a\x04\x1d\n\x0e\n\x07\x04\x01\x04\0\x02\
+    \x01\x01\x12\x03\x1a\x04\x18\n\x0e\n\x07\x04\x01\x04\0\x02\x01\x02\x12\
+    \x03\x1a\x1b\x1c\n\r\n\x06\x04\x01\x04\0\x02\x02\x12\x03\x1b\x04\x1a\n\
+    \x0e\n\x07\x04\x01\x04\0\x02\x02\x01\x12\x03\x1b\x04\x15\n\x0e\n\x07\x04\
+    \x01\x04\0\x02\x02\x02\x12\x03\x1b\x18\x19\n\r\n\x06\x04\x01\x04\0\x02\
+    \x03\x12\x03\x1c\x04'\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x01\x12\x03\x1c\
+    \x04\x0e\n\x0e\n\x07\x04\x01\x04\0\x02\x03\x02\x12\x03\x1c\x11\x12\n\x0e\
+    \n\x07\x04\x01\x04\0\x02\x03\x03\x12\x03\x1c\x13&\n\x0f\n\x08\x04\x01\
+    \x04\0\x02\x03\x03\x01\x12\x03\x1c\x14%\n\r\n\x06\x04\x01\x04\0\x02\x04\
+    \x12\x03\x1d\x04\r\n\x0e\n\x07\x04\x01\x04\0\x02\x04\x01\x12\x03\x1d\x04\
+    \x08\n\x0e\n\x07\x04\x01\x04\0\x02\x04\x02\x12\x03\x1d\x0b\x0c\n\r\n\x06\
+    \x04\x01\x04\0\x02\x05\x12\x03\x1e\x04\x0c\n\x0e\n\x07\x04\x01\x04\0\x02\
+    \x05\x01\x12\x03\x1e\x04\x07\n\x0e\n\x07\x04\x01\x04\0\x02\x05\x02\x12\
+    \x03\x1e\n\x0b\n\r\n\x06\x04\x01\x04\0\x02\x06\x12\x03\x1f\x04\x0c\n\x0e\
+    \n\x07\x04\x01\x04\0\x02\x06\x01\x12\x03\x1f\x04\x07\n\x0e\n\x07\x04\x01\
     \x04\0\x02\x06\x02\x12\x03\x1f\n\x0b\n\x0b\n\x04\x04\x01\x02\0\x12\x03!\
     \x02\x20\n\x0c\n\x05\x04\x01\x02\0\x04\x12\x03!\x02\n\n\x0c\n\x05\x04\
     \x01\x02\0\x05\x12\x03!\x0b\x11\n\x0c\n\x05\x04\x01\x02\0\x01\x12\x03!\
@@ -8192,104 +8951,167 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x12\x04\x8e\x02\x02&\n\r\n\x05\x04\x13\x02\x08\x04\x12\x04\x8e\x02\x02\
     \n\n\r\n\x05\x04\x13\x02\x08\x05\x12\x04\x8e\x02\x0b\x10\n\r\n\x05\x04\
     \x13\x02\x08\x01\x12\x04\x8e\x02\x11!\n\r\n\x05\x04\x13\x02\x08\x03\x12\
-    \x04\x8e\x02$%\n\x20\n\x02\x04\x14\x12\x06\x92\x02\0\x96\x02\x01\x1a\x12\
-    \x20NFC\x20API\x20Counters\n\n\x0b\n\x03\x04\x14\x01\x12\x04\x92\x02\x08\
-    \x13\n\x0c\n\x04\x04\x14\x02\0\x12\x04\x93\x02\x02%\n\r\n\x05\x04\x14\
-    \x02\0\x04\x12\x04\x93\x02\x02\n\n\r\n\x05\x04\x14\x02\0\x06\x12\x04\x93\
-    \x02\x0b\x17\n\r\n\x05\x04\x14\x02\0\x01\x12\x04\x93\x02\x18\x20\n\r\n\
-    \x05\x04\x14\x02\0\x03\x12\x04\x93\x02#$\n\x0c\n\x04\x04\x14\x02\x01\x12\
-    \x04\x94\x02\x02!\n\r\n\x05\x04\x14\x02\x01\x04\x12\x04\x94\x02\x02\n\n\
-    \r\n\x05\x04\x14\x02\x01\x06\x12\x04\x94\x02\x0b\x15\n\r\n\x05\x04\x14\
-    \x02\x01\x01\x12\x04\x94\x02\x16\x1c\n\r\n\x05\x04\x14\x02\x01\x03\x12\
-    \x04\x94\x02\x1f\x20\n\x0c\n\x04\x04\x14\x02\x02\x12\x04\x95\x02\x02%\n\
-    \r\n\x05\x04\x14\x02\x02\x04\x12\x04\x95\x02\x02\n\n\r\n\x05\x04\x14\x02\
-    \x02\x06\x12\x04\x95\x02\x0b\x17\n\r\n\x05\x04\x14\x02\x02\x01\x12\x04\
-    \x95\x02\x18\x20\n\r\n\x05\x04\x14\x02\x02\x03\x12\x04\x95\x02#$\n\x0c\n\
-    \x02\x04\x15\x12\x06\x98\x02\0\x9b\x02\x01\n\x0b\n\x03\x04\x15\x01\x12\
-    \x04\x98\x02\x08\x14\n\x0c\n\x04\x04\x15\x02\0\x12\x04\x99\x02\x02\x1b\n\
-    \r\n\x05\x04\x15\x02\0\x04\x12\x04\x99\x02\x02\n\n\r\n\x05\x04\x15\x02\0\
-    \x05\x12\x04\x99\x02\x0b\x10\n\r\n\x05\x04\x15\x02\0\x01\x12\x04\x99\x02\
-    \x11\x16\n\r\n\x05\x04\x15\x02\0\x03\x12\x04\x99\x02\x19\x1a\n\x0c\n\x04\
-    \x04\x15\x02\x01\x12\x04\x9a\x02\x02\x1a\n\r\n\x05\x04\x15\x02\x01\x04\
-    \x12\x04\x9a\x02\x02\n\n\r\n\x05\x04\x15\x02\x01\x05\x12\x04\x9a\x02\x0b\
-    \x10\n\r\n\x05\x04\x15\x02\x01\x01\x12\x04\x9a\x02\x11\x15\n\r\n\x05\x04\
-    \x15\x02\x01\x03\x12\x04\x9a\x02\x18\x19\n\x0c\n\x02\x04\x16\x12\x06\x9d\
-    \x02\0\xa2\x02\x01\n\x0b\n\x03\x04\x16\x01\x12\x04\x9d\x02\x08\x12\n\x0c\
-    \n\x04\x04\x16\x02\0\x12\x04\x9e\x02\x02\x1e\n\r\n\x05\x04\x16\x02\0\x04\
-    \x12\x04\x9e\x02\x02\n\n\r\n\x05\x04\x16\x02\0\x05\x12\x04\x9e\x02\x0b\
-    \x10\n\r\n\x05\x04\x16\x02\0\x01\x12\x04\x9e\x02\x11\x19\n\r\n\x05\x04\
-    \x16\x02\0\x03\x12\x04\x9e\x02\x1c\x1d\n\x0c\n\x04\x04\x16\x02\x01\x12\
-    \x04\x9f\x02\x02%\n\r\n\x05\x04\x16\x02\x01\x04\x12\x04\x9f\x02\x02\n\n\
-    \r\n\x05\x04\x16\x02\x01\x05\x12\x04\x9f\x02\x0b\x10\n\r\n\x05\x04\x16\
-    \x02\x01\x01\x12\x04\x9f\x02\x11\x20\n\r\n\x05\x04\x16\x02\x01\x03\x12\
-    \x04\x9f\x02#$\n\x0c\n\x04\x04\x16\x02\x02\x12\x04\xa0\x02\x02\x20\n\r\n\
-    \x05\x04\x16\x02\x02\x04\x12\x04\xa0\x02\x02\n\n\r\n\x05\x04\x16\x02\x02\
-    \x05\x12\x04\xa0\x02\x0b\x10\n\r\n\x05\x04\x16\x02\x02\x01\x12\x04\xa0\
-    \x02\x11\x1b\n\r\n\x05\x04\x16\x02\x02\x03\x12\x04\xa0\x02\x1e\x1f\n\x0c\
-    \n\x04\x04\x16\x02\x03\x12\x04\xa1\x02\x020\n\r\n\x05\x04\x16\x02\x03\
-    \x04\x12\x04\xa1\x02\x02\n\n\r\n\x05\x04\x16\x02\x03\x05\x12\x04\xa1\x02\
-    \x0b\x10\n\r\n\x05\x04\x16\x02\x03\x01\x12\x04\xa1\x02\x11+\n\r\n\x05\
-    \x04\x16\x02\x03\x03\x12\x04\xa1\x02./\n\x0c\n\x02\x04\x17\x12\x06\xa4\
-    \x02\0\xa7\x02\x01\n\x0b\n\x03\x04\x17\x01\x12\x04\xa4\x02\x08\x14\n\x0c\
-    \n\x04\x04\x17\x02\0\x12\x04\xa5\x02\x02\x1a\n\r\n\x05\x04\x17\x02\0\x04\
-    \x12\x04\xa5\x02\x02\n\n\r\n\x05\x04\x17\x02\0\x05\x12\x04\xa5\x02\x0b\
-    \x10\n\r\n\x05\x04\x17\x02\0\x01\x12\x04\xa5\x02\x11\x15\n\r\n\x05\x04\
-    \x17\x02\0\x03\x12\x04\xa5\x02\x18\x19\n\x0c\n\x04\x04\x17\x02\x01\x12\
-    \x04\xa6\x02\x02\x1d\n\r\n\x05\x04\x17\x02\x01\x04\x12\x04\xa6\x02\x02\n\
-    \n\r\n\x05\x04\x17\x02\x01\x05\x12\x04\xa6\x02\x0b\x10\n\r\n\x05\x04\x17\
-    \x02\x01\x01\x12\x04\xa6\x02\x11\x18\n\r\n\x05\x04\x17\x02\x01\x03\x12\
-    \x04\xa6\x02\x1b\x1c\n0\n\x02\x04\x18\x12\x06\xaa\x02\0\xc3\x02\x01\x1a\
-    \"\x20Statistics\x20for\x20a\x20netsim\x20session.\n\n\x0b\n\x03\x04\x18\
-    \x01\x12\x04\xaa\x02\x08\x13\n4\n\x04\x04\x18\x02\0\x12\x04\xac\x02\x02$\
-    \x1a&\x20The\x20length\x20of\x20the\x20session\x20in\x20seconds\n\n\r\n\
-    \x05\x04\x18\x02\0\x04\x12\x04\xac\x02\x02\n\n\r\n\x05\x04\x18\x02\0\x05\
-    \x12\x04\xac\x02\x0b\x11\n\r\n\x05\x04\x18\x02\0\x01\x12\x04\xac\x02\x12\
-    \x1f\n\r\n\x05\x04\x18\x02\0\x03\x12\x04\xac\x02\"#\n:\n\x04\x04\x18\x02\
-    \x01\x12\x04\xae\x02\x02\"\x1a,\x20The\x20total\x20number\x20of\x20devic\
-    es\x20that\x20connected\n\n\r\n\x05\x04\x18\x02\x01\x04\x12\x04\xae\x02\
-    \x02\n\n\r\n\x05\x04\x18\x02\x01\x05\x12\x04\xae\x02\x0b\x10\n\r\n\x05\
-    \x04\x18\x02\x01\x01\x12\x04\xae\x02\x11\x1d\n\r\n\x05\x04\x18\x02\x01\
-    \x03\x12\x04\xae\x02\x20!\n?\n\x04\x04\x18\x02\x02\x12\x04\xb0\x02\x02-\
-    \x1a1\x20The\x20peak\x20number\x20of\x20concurrent\x20devices\x20connect\
-    ed\n\n\r\n\x05\x04\x18\x02\x02\x04\x12\x04\xb0\x02\x02\n\n\r\n\x05\x04\
-    \x18\x02\x02\x05\x12\x04\xb0\x02\x0b\x10\n\r\n\x05\x04\x18\x02\x02\x01\
-    \x12\x04\xb0\x02\x11(\n\r\n\x05\x04\x18\x02\x02\x03\x12\x04\xb0\x02+,\n*\
-    \n\x04\x04\x18\x02\x03\x12\x04\xb2\x02\x02,\x1a\x1c\x20Individual\x20chi\
-    p\x20statistics\n\n\r\n\x05\x04\x18\x02\x03\x04\x12\x04\xb2\x02\x02\n\n\
-    \r\n\x05\x04\x18\x02\x03\x06\x12\x04\xb2\x02\x0b\x1b\n\r\n\x05\x04\x18\
-    \x02\x03\x01\x12\x04\xb2\x02\x1c'\n\r\n\x05\x04\x18\x02\x03\x03\x12\x04\
-    \xb2\x02*+\n,\n\x04\x04\x18\x02\x04\x12\x04\xb4\x02\x02\x1e\x1a\x1e\x20T\
-    he\x20version\x20of\x20netsim\x20daemon\n\n\r\n\x05\x04\x18\x02\x04\x04\
-    \x12\x04\xb4\x02\x02\n\n\r\n\x05\x04\x18\x02\x04\x05\x12\x04\xb4\x02\x0b\
-    \x11\n\r\n\x05\x04\x18\x02\x04\x01\x12\x04\xb4\x02\x12\x19\n\r\n\x05\x04\
-    \x18\x02\x04\x03\x12\x04\xb4\x02\x1c\x1d\n'\n\x04\x04\x18\x02\x05\x12\
-    \x04\xb6\x02\x022\x1a\x19\x20Frontend\x20API\x20statistics\n\n\r\n\x05\
-    \x04\x18\x02\x05\x04\x12\x04\xb6\x02\x02\n\n\r\n\x05\x04\x18\x02\x05\x06\
-    \x12\x04\xb6\x02\x0b\x1e\n\r\n\x05\x04\x18\x02\x05\x01\x12\x04\xb6\x02\
-    \x1f-\n\r\n\x05\x04\x18\x02\x05\x03\x12\x04\xb6\x0201\n!\n\x04\x04\x18\
-    \x02\x06\x12\x04\xb8\x02\x02.\x1a\x13\x20Device\x20statistics\n\n\r\n\
-    \x05\x04\x18\x02\x06\x04\x12\x04\xb8\x02\x02\n\n\r\n\x05\x04\x18\x02\x06\
-    \x06\x12\x04\xb8\x02\x0b\x1c\n\r\n\x05\x04\x18\x02\x06\x01\x12\x04\xb8\
-    \x02\x1d)\n\r\n\x05\x04\x18\x02\x06\x03\x12\x04\xb8\x02,-\n\x20\n\x04\
-    \x04\x18\x02\x07\x12\x04\xba\x02\x02$\x1a\x12\x20Wi-Fi\x20statistics\n\n\
-    \r\n\x05\x04\x18\x02\x07\x04\x12\x04\xba\x02\x02\n\n\r\n\x05\x04\x18\x02\
-    \x07\x06\x12\x04\xba\x02\x0b\x14\n\r\n\x05\x04\x18\x02\x07\x01\x12\x04\
-    \xba\x02\x15\x1f\n\r\n\x05\x04\x18\x02\x07\x03\x12\x04\xba\x02\"#\n\x1e\
-    \n\x04\x04\x18\x02\x08\x12\x04\xbc\x02\x02\"\x1a\x10\x20NFC\x20statistic\
-    s\n\n\r\n\x05\x04\x18\x02\x08\x04\x12\x04\xbc\x02\x02\n\n\r\n\x05\x04\
-    \x18\x02\x08\x06\x12\x04\xbc\x02\x0b\x13\n\r\n\x05\x04\x18\x02\x08\x01\
-    \x12\x04\xbc\x02\x14\x1d\n\r\n\x05\x04\x18\x02\x08\x03\x12\x04\xbc\x02\
-    \x20!\n*\n\x04\x04\x18\x02\t\x12\x04\xbe\x02\x022\x1a\x1c\x20NFC\x20Serv\
-    ice\x20API\x20statistics\n\n\r\n\x05\x04\x18\x02\t\x04\x12\x04\xbe\x02\
-    \x02\n\n\r\n\x05\x04\x18\x02\t\x06\x12\x04\xbe\x02\x0b\x1a\n\r\n\x05\x04\
-    \x18\x02\t\x01\x12\x04\xbe\x02\x1b,\n\r\n\x05\x04\x18\x02\t\x03\x12\x04\
-    \xbe\x02/1\n'\n\x04\x04\x18\x02\n\x12\x04\xc0\x02\x02#\x1a\x19\x20Combin\
-    ed\x20API\x20statistics\n\n\r\n\x05\x04\x18\x02\n\x04\x12\x04\xc0\x02\
-    \x02\n\n\r\n\x05\x04\x18\x02\n\x06\x12\x04\xc0\x02\x0b\x13\n\r\n\x05\x04\
-    \x18\x02\n\x01\x12\x04\xc0\x02\x14\x1d\n\r\n\x05\x04\x18\x02\n\x03\x12\
-    \x04\xc0\x02\x20\"\n\x0b\n\x03\x04\x18\t\x12\x04\xc2\x02\x02\x0e\n\x0c\n\
-    \x04\x04\x18\t\0\x12\x04\xc2\x02\x0b\r\n\r\n\x05\x04\x18\t\0\x01\x12\x04\
-    \xc2\x02\x0b\r\n\r\n\x05\x04\x18\t\0\x02\x12\x04\xc2\x02\x0b\r\
+    \x04\x8e\x02$%\nF\n\x02\x04\x14\x12\x06\x92\x02\0\x9d\x02\x01\x1a8\x20NF\
+    C\x20API\x20Counters\x20(aligned\x20with\x20Android\x20Framework\x20APIs\
+    )\n\n\x0b\n\x03\x04\x14\x01\x12\x04\x92\x02\x08\x13\n]\n\x04\x04\x14\x02\
+    \0\x12\x04\x95\x02\x029\x1aO\x20Legacy\x20protocol-level\x20fields\x20(r\
+    etained\x20for\x20pipeline\x20backwards\n\x20compatibility)\n\n\r\n\x05\
+    \x04\x14\x02\0\x04\x12\x04\x95\x02\x02\n\n\r\n\x05\x04\x14\x02\0\x06\x12\
+    \x04\x95\x02\x0b\x17\n\r\n\x05\x04\x14\x02\0\x01\x12\x04\x95\x02\x18\x20\
+    \n\r\n\x05\x04\x14\x02\0\x03\x12\x04\x95\x02#$\n\r\n\x05\x04\x14\x02\0\
+    \x08\x12\x04\x95\x02%8\n\x0e\n\x06\x04\x14\x02\0\x08\x03\x12\x04\x95\x02\
+    &7\n\x0c\n\x04\x04\x14\x02\x01\x12\x04\x96\x02\x025\n\r\n\x05\x04\x14\
+    \x02\x01\x04\x12\x04\x96\x02\x02\n\n\r\n\x05\x04\x14\x02\x01\x06\x12\x04\
+    \x96\x02\x0b\x15\n\r\n\x05\x04\x14\x02\x01\x01\x12\x04\x96\x02\x16\x1c\n\
+    \r\n\x05\x04\x14\x02\x01\x03\x12\x04\x96\x02\x1f\x20\n\r\n\x05\x04\x14\
+    \x02\x01\x08\x12\x04\x96\x02!4\n\x0e\n\x06\x04\x14\x02\x01\x08\x03\x12\
+    \x04\x96\x02\"3\n\x0c\n\x04\x04\x14\x02\x02\x12\x04\x97\x02\x029\n\r\n\
+    \x05\x04\x14\x02\x02\x04\x12\x04\x97\x02\x02\n\n\r\n\x05\x04\x14\x02\x02\
+    \x06\x12\x04\x97\x02\x0b\x17\n\r\n\x05\x04\x14\x02\x02\x01\x12\x04\x97\
+    \x02\x18\x20\n\r\n\x05\x04\x14\x02\x02\x03\x12\x04\x97\x02#$\n\r\n\x05\
+    \x04\x14\x02\x02\x08\x12\x04\x97\x02%8\n\x0e\n\x06\x04\x14\x02\x02\x08\
+    \x03\x12\x04\x97\x02&7\nT\n\x04\x04\x14\x02\x03\x12\x04\x9a\x02\x02+\x1a\
+    F\x20High-level\x20Android\x20Framework\x20API\x20mappings\x20(aligned\
+    \x20with\x20Wi-Fi\x20&\x20UWB)\n\n\r\n\x05\x04\x14\x02\x03\x04\x12\x04\
+    \x9a\x02\x02\n\n\r\n\x05\x04\x14\x02\x03\x06\x12\x04\x9a\x02\x0b\x1a\n\r\
+    \n\x05\x04\x14\x02\x03\x01\x12\x04\x9a\x02\x1b&\n\r\n\x05\x04\x14\x02\
+    \x03\x03\x12\x04\x9a\x02)*\n\x0c\n\x04\x04\x14\x02\x04\x12\x04\x9b\x02\
+    \x02\x1c\n\r\n\x05\x04\x14\x02\x04\x04\x12\x04\x9b\x02\x02\n\n\r\n\x05\
+    \x04\x14\x02\x04\x06\x12\x04\x9b\x02\x0b\x13\n\r\n\x05\x04\x14\x02\x04\
+    \x01\x12\x04\x9b\x02\x14\x17\n\r\n\x05\x04\x14\x02\x04\x03\x12\x04\x9b\
+    \x02\x1a\x1b\n\x0c\n\x04\x04\x14\x02\x05\x12\x04\x9c\x02\x021\n\r\n\x05\
+    \x04\x14\x02\x05\x04\x12\x04\x9c\x02\x02\n\n\r\n\x05\x04\x14\x02\x05\x06\
+    \x12\x04\x9c\x02\x0b\x1d\n\r\n\x05\x04\x14\x02\x05\x01\x12\x04\x9c\x02\
+    \x1e,\n\r\n\x05\x04\x14\x02\x05\x03\x12\x04\x9c\x02/0\n8\n\x02\x04\x15\
+    \x12\x06\xa0\x02\0\xa6\x02\x01\x1a*\x20Android\x20android.nfc.NfcAdapter\
+    \x20API\x20calls\n\n\x0b\n\x03\x04\x15\x01\x12\x04\xa0\x02\x08\x17\n\x0c\
+    \n\x04\x04\x15\x02\0\x12\x04\xa1\x02\x02\x1c\n\r\n\x05\x04\x15\x02\0\x04\
+    \x12\x04\xa1\x02\x02\n\n\r\n\x05\x04\x15\x02\0\x05\x12\x04\xa1\x02\x0b\
+    \x10\n\r\n\x05\x04\x15\x02\0\x01\x12\x04\xa1\x02\x11\x17\n\r\n\x05\x04\
+    \x15\x02\0\x03\x12\x04\xa1\x02\x1a\x1b\n\x0c\n\x04\x04\x15\x02\x01\x12\
+    \x04\xa2\x02\x02\x1d\n\r\n\x05\x04\x15\x02\x01\x04\x12\x04\xa2\x02\x02\n\
+    \n\r\n\x05\x04\x15\x02\x01\x05\x12\x04\xa2\x02\x0b\x10\n\r\n\x05\x04\x15\
+    \x02\x01\x01\x12\x04\xa2\x02\x11\x18\n\r\n\x05\x04\x15\x02\x01\x03\x12\
+    \x04\xa2\x02\x1b\x1c\n\x0c\n\x04\x04\x15\x02\x02\x12\x04\xa3\x02\x02(\n\
+    \r\n\x05\x04\x15\x02\x02\x04\x12\x04\xa3\x02\x02\n\n\r\n\x05\x04\x15\x02\
+    \x02\x05\x12\x04\xa3\x02\x0b\x10\n\r\n\x05\x04\x15\x02\x02\x01\x12\x04\
+    \xa3\x02\x11#\n\r\n\x05\x04\x15\x02\x02\x03\x12\x04\xa3\x02&'\n\x0c\n\
+    \x04\x04\x15\x02\x03\x12\x04\xa4\x02\x02)\n\r\n\x05\x04\x15\x02\x03\x04\
+    \x12\x04\xa4\x02\x02\n\n\r\n\x05\x04\x15\x02\x03\x05\x12\x04\xa4\x02\x0b\
+    \x10\n\r\n\x05\x04\x15\x02\x03\x01\x12\x04\xa4\x02\x11$\n\r\n\x05\x04\
+    \x15\x02\x03\x03\x12\x04\xa4\x02'(\n\x0c\n\x04\x04\x15\x02\x04\x12\x04\
+    \xa5\x02\x02-\n\r\n\x05\x04\x15\x02\x04\x04\x12\x04\xa5\x02\x02\n\n\r\n\
+    \x05\x04\x15\x02\x04\x05\x12\x04\xa5\x02\x0b\x10\n\r\n\x05\x04\x15\x02\
+    \x04\x01\x12\x04\xa5\x02\x11(\n\r\n\x05\x04\x15\x02\x04\x03\x12\x04\xa5\
+    \x02+,\nV\n\x02\x04\x16\x12\x06\xa9\x02\0\xad\x02\x01\x1aH\x20Android\
+    \x20android.nfc.Tag\x20&\x20TagTechnology\x20(IsoDep,\x20Ndef,\x20etc.)\
+    \x20API\x20calls\n\n\x0b\n\x03\x04\x16\x01\x12\x04\xa9\x02\x08\x10\n\x0c\
+    \n\x04\x04\x16\x02\0\x12\x04\xaa\x02\x02\x1d\n\r\n\x05\x04\x16\x02\0\x04\
+    \x12\x04\xaa\x02\x02\n\n\r\n\x05\x04\x16\x02\0\x05\x12\x04\xaa\x02\x0b\
+    \x10\n\r\n\x05\x04\x16\x02\0\x01\x12\x04\xaa\x02\x11\x18\n\r\n\x05\x04\
+    \x16\x02\0\x03\x12\x04\xaa\x02\x1b\x1c\n\x0c\n\x04\x04\x16\x02\x01\x12\
+    \x04\xab\x02\x02\x1b\n\r\n\x05\x04\x16\x02\x01\x04\x12\x04\xab\x02\x02\n\
+    \n\r\n\x05\x04\x16\x02\x01\x05\x12\x04\xab\x02\x0b\x10\n\r\n\x05\x04\x16\
+    \x02\x01\x01\x12\x04\xab\x02\x11\x16\n\r\n\x05\x04\x16\x02\x01\x03\x12\
+    \x04\xab\x02\x19\x1a\n\x0c\n\x04\x04\x16\x02\x02\x12\x04\xac\x02\x02\x20\
+    \n\r\n\x05\x04\x16\x02\x02\x04\x12\x04\xac\x02\x02\n\n\r\n\x05\x04\x16\
+    \x02\x02\x05\x12\x04\xac\x02\x0b\x10\n\r\n\x05\x04\x16\x02\x02\x01\x12\
+    \x04\xac\x02\x11\x1b\n\r\n\x05\x04\x16\x02\x02\x03\x12\x04\xac\x02\x1e\
+    \x1f\nM\n\x02\x04\x17\x12\x06\xb0\x02\0\xb3\x02\x01\x1a?\x20Android\x20a\
+    ndroid.nfc.cardemulation\x20(HostApduService)\x20API\x20calls\n\n\x0b\n\
+    \x03\x04\x17\x01\x12\x04\xb0\x02\x08\x1a\n\x0c\n\x04\x04\x17\x02\0\x12\
+    \x04\xb1\x02\x02*\n\r\n\x05\x04\x17\x02\0\x04\x12\x04\xb1\x02\x02\n\n\r\
+    \n\x05\x04\x17\x02\0\x05\x12\x04\xb1\x02\x0b\x10\n\r\n\x05\x04\x17\x02\0\
+    \x01\x12\x04\xb1\x02\x11%\n\r\n\x05\x04\x17\x02\0\x03\x12\x04\xb1\x02()\
+    \n\x0c\n\x04\x04\x17\x02\x01\x12\x04\xb2\x02\x02(\n\r\n\x05\x04\x17\x02\
+    \x01\x04\x12\x04\xb2\x02\x02\n\n\r\n\x05\x04\x17\x02\x01\x05\x12\x04\xb2\
+    \x02\x0b\x10\n\r\n\x05\x04\x17\x02\x01\x01\x12\x04\xb2\x02\x11#\n\r\n\
+    \x05\x04\x17\x02\x01\x03\x12\x04\xb2\x02&'\n\x0c\n\x02\x04\x18\x12\x06\
+    \xb5\x02\0\xb8\x02\x01\n\x0b\n\x03\x04\x18\x01\x12\x04\xb5\x02\x08\x14\n\
+    \x0c\n\x04\x04\x18\x02\0\x12\x04\xb6\x02\x02\x1b\n\r\n\x05\x04\x18\x02\0\
+    \x04\x12\x04\xb6\x02\x02\n\n\r\n\x05\x04\x18\x02\0\x05\x12\x04\xb6\x02\
+    \x0b\x10\n\r\n\x05\x04\x18\x02\0\x01\x12\x04\xb6\x02\x11\x16\n\r\n\x05\
+    \x04\x18\x02\0\x03\x12\x04\xb6\x02\x19\x1a\n\x0c\n\x04\x04\x18\x02\x01\
+    \x12\x04\xb7\x02\x02\x1a\n\r\n\x05\x04\x18\x02\x01\x04\x12\x04\xb7\x02\
+    \x02\n\n\r\n\x05\x04\x18\x02\x01\x05\x12\x04\xb7\x02\x0b\x10\n\r\n\x05\
+    \x04\x18\x02\x01\x01\x12\x04\xb7\x02\x11\x15\n\r\n\x05\x04\x18\x02\x01\
+    \x03\x12\x04\xb7\x02\x18\x19\n\x0c\n\x02\x04\x19\x12\x06\xba\x02\0\xbf\
+    \x02\x01\n\x0b\n\x03\x04\x19\x01\x12\x04\xba\x02\x08\x12\n\x0c\n\x04\x04\
+    \x19\x02\0\x12\x04\xbb\x02\x02\x1e\n\r\n\x05\x04\x19\x02\0\x04\x12\x04\
+    \xbb\x02\x02\n\n\r\n\x05\x04\x19\x02\0\x05\x12\x04\xbb\x02\x0b\x10\n\r\n\
+    \x05\x04\x19\x02\0\x01\x12\x04\xbb\x02\x11\x19\n\r\n\x05\x04\x19\x02\0\
+    \x03\x12\x04\xbb\x02\x1c\x1d\n\x0c\n\x04\x04\x19\x02\x01\x12\x04\xbc\x02\
+    \x02%\n\r\n\x05\x04\x19\x02\x01\x04\x12\x04\xbc\x02\x02\n\n\r\n\x05\x04\
+    \x19\x02\x01\x05\x12\x04\xbc\x02\x0b\x10\n\r\n\x05\x04\x19\x02\x01\x01\
+    \x12\x04\xbc\x02\x11\x20\n\r\n\x05\x04\x19\x02\x01\x03\x12\x04\xbc\x02#$\
+    \n\x0c\n\x04\x04\x19\x02\x02\x12\x04\xbd\x02\x02\x20\n\r\n\x05\x04\x19\
+    \x02\x02\x04\x12\x04\xbd\x02\x02\n\n\r\n\x05\x04\x19\x02\x02\x05\x12\x04\
+    \xbd\x02\x0b\x10\n\r\n\x05\x04\x19\x02\x02\x01\x12\x04\xbd\x02\x11\x1b\n\
+    \r\n\x05\x04\x19\x02\x02\x03\x12\x04\xbd\x02\x1e\x1f\n\x0c\n\x04\x04\x19\
+    \x02\x03\x12\x04\xbe\x02\x020\n\r\n\x05\x04\x19\x02\x03\x04\x12\x04\xbe\
+    \x02\x02\n\n\r\n\x05\x04\x19\x02\x03\x05\x12\x04\xbe\x02\x0b\x10\n\r\n\
+    \x05\x04\x19\x02\x03\x01\x12\x04\xbe\x02\x11+\n\r\n\x05\x04\x19\x02\x03\
+    \x03\x12\x04\xbe\x02./\n\x0c\n\x02\x04\x1a\x12\x06\xc1\x02\0\xc4\x02\x01\
+    \n\x0b\n\x03\x04\x1a\x01\x12\x04\xc1\x02\x08\x14\n\x0c\n\x04\x04\x1a\x02\
+    \0\x12\x04\xc2\x02\x02\x1a\n\r\n\x05\x04\x1a\x02\0\x04\x12\x04\xc2\x02\
+    \x02\n\n\r\n\x05\x04\x1a\x02\0\x05\x12\x04\xc2\x02\x0b\x10\n\r\n\x05\x04\
+    \x1a\x02\0\x01\x12\x04\xc2\x02\x11\x15\n\r\n\x05\x04\x1a\x02\0\x03\x12\
+    \x04\xc2\x02\x18\x19\n\x0c\n\x04\x04\x1a\x02\x01\x12\x04\xc3\x02\x02\x1d\
+    \n\r\n\x05\x04\x1a\x02\x01\x04\x12\x04\xc3\x02\x02\n\n\r\n\x05\x04\x1a\
+    \x02\x01\x05\x12\x04\xc3\x02\x0b\x10\n\r\n\x05\x04\x1a\x02\x01\x01\x12\
+    \x04\xc3\x02\x11\x18\n\r\n\x05\x04\x1a\x02\x01\x03\x12\x04\xc3\x02\x1b\
+    \x1c\n0\n\x02\x04\x1b\x12\x06\xc7\x02\0\xe0\x02\x01\x1a\"\x20Statistics\
+    \x20for\x20a\x20netsim\x20session.\n\n\x0b\n\x03\x04\x1b\x01\x12\x04\xc7\
+    \x02\x08\x13\n4\n\x04\x04\x1b\x02\0\x12\x04\xc9\x02\x02$\x1a&\x20The\x20\
+    length\x20of\x20the\x20session\x20in\x20seconds\n\n\r\n\x05\x04\x1b\x02\
+    \0\x04\x12\x04\xc9\x02\x02\n\n\r\n\x05\x04\x1b\x02\0\x05\x12\x04\xc9\x02\
+    \x0b\x11\n\r\n\x05\x04\x1b\x02\0\x01\x12\x04\xc9\x02\x12\x1f\n\r\n\x05\
+    \x04\x1b\x02\0\x03\x12\x04\xc9\x02\"#\n:\n\x04\x04\x1b\x02\x01\x12\x04\
+    \xcb\x02\x02\"\x1a,\x20The\x20total\x20number\x20of\x20devices\x20that\
+    \x20connected\n\n\r\n\x05\x04\x1b\x02\x01\x04\x12\x04\xcb\x02\x02\n\n\r\
+    \n\x05\x04\x1b\x02\x01\x05\x12\x04\xcb\x02\x0b\x10\n\r\n\x05\x04\x1b\x02\
+    \x01\x01\x12\x04\xcb\x02\x11\x1d\n\r\n\x05\x04\x1b\x02\x01\x03\x12\x04\
+    \xcb\x02\x20!\n?\n\x04\x04\x1b\x02\x02\x12\x04\xcd\x02\x02-\x1a1\x20The\
+    \x20peak\x20number\x20of\x20concurrent\x20devices\x20connected\n\n\r\n\
+    \x05\x04\x1b\x02\x02\x04\x12\x04\xcd\x02\x02\n\n\r\n\x05\x04\x1b\x02\x02\
+    \x05\x12\x04\xcd\x02\x0b\x10\n\r\n\x05\x04\x1b\x02\x02\x01\x12\x04\xcd\
+    \x02\x11(\n\r\n\x05\x04\x1b\x02\x02\x03\x12\x04\xcd\x02+,\n*\n\x04\x04\
+    \x1b\x02\x03\x12\x04\xcf\x02\x02,\x1a\x1c\x20Individual\x20chip\x20stati\
+    stics\n\n\r\n\x05\x04\x1b\x02\x03\x04\x12\x04\xcf\x02\x02\n\n\r\n\x05\
+    \x04\x1b\x02\x03\x06\x12\x04\xcf\x02\x0b\x1b\n\r\n\x05\x04\x1b\x02\x03\
+    \x01\x12\x04\xcf\x02\x1c'\n\r\n\x05\x04\x1b\x02\x03\x03\x12\x04\xcf\x02*\
+    +\n,\n\x04\x04\x1b\x02\x04\x12\x04\xd1\x02\x02\x1e\x1a\x1e\x20The\x20ver\
+    sion\x20of\x20netsim\x20daemon\n\n\r\n\x05\x04\x1b\x02\x04\x04\x12\x04\
+    \xd1\x02\x02\n\n\r\n\x05\x04\x1b\x02\x04\x05\x12\x04\xd1\x02\x0b\x11\n\r\
+    \n\x05\x04\x1b\x02\x04\x01\x12\x04\xd1\x02\x12\x19\n\r\n\x05\x04\x1b\x02\
+    \x04\x03\x12\x04\xd1\x02\x1c\x1d\n'\n\x04\x04\x1b\x02\x05\x12\x04\xd3\
+    \x02\x022\x1a\x19\x20Frontend\x20API\x20statistics\n\n\r\n\x05\x04\x1b\
+    \x02\x05\x04\x12\x04\xd3\x02\x02\n\n\r\n\x05\x04\x1b\x02\x05\x06\x12\x04\
+    \xd3\x02\x0b\x1e\n\r\n\x05\x04\x1b\x02\x05\x01\x12\x04\xd3\x02\x1f-\n\r\
+    \n\x05\x04\x1b\x02\x05\x03\x12\x04\xd3\x0201\n!\n\x04\x04\x1b\x02\x06\
+    \x12\x04\xd5\x02\x02.\x1a\x13\x20Device\x20statistics\n\n\r\n\x05\x04\
+    \x1b\x02\x06\x04\x12\x04\xd5\x02\x02\n\n\r\n\x05\x04\x1b\x02\x06\x06\x12\
+    \x04\xd5\x02\x0b\x1c\n\r\n\x05\x04\x1b\x02\x06\x01\x12\x04\xd5\x02\x1d)\
+    \n\r\n\x05\x04\x1b\x02\x06\x03\x12\x04\xd5\x02,-\n\x20\n\x04\x04\x1b\x02\
+    \x07\x12\x04\xd7\x02\x02$\x1a\x12\x20Wi-Fi\x20statistics\n\n\r\n\x05\x04\
+    \x1b\x02\x07\x04\x12\x04\xd7\x02\x02\n\n\r\n\x05\x04\x1b\x02\x07\x06\x12\
+    \x04\xd7\x02\x0b\x14\n\r\n\x05\x04\x1b\x02\x07\x01\x12\x04\xd7\x02\x15\
+    \x1f\n\r\n\x05\x04\x1b\x02\x07\x03\x12\x04\xd7\x02\"#\n\x1e\n\x04\x04\
+    \x1b\x02\x08\x12\x04\xd9\x02\x02\"\x1a\x10\x20NFC\x20statistics\n\n\r\n\
+    \x05\x04\x1b\x02\x08\x04\x12\x04\xd9\x02\x02\n\n\r\n\x05\x04\x1b\x02\x08\
+    \x06\x12\x04\xd9\x02\x0b\x13\n\r\n\x05\x04\x1b\x02\x08\x01\x12\x04\xd9\
+    \x02\x14\x1d\n\r\n\x05\x04\x1b\x02\x08\x03\x12\x04\xd9\x02\x20!\n*\n\x04\
+    \x04\x1b\x02\t\x12\x04\xdb\x02\x022\x1a\x1c\x20NFC\x20Service\x20API\x20\
+    statistics\n\n\r\n\x05\x04\x1b\x02\t\x04\x12\x04\xdb\x02\x02\n\n\r\n\x05\
+    \x04\x1b\x02\t\x06\x12\x04\xdb\x02\x0b\x1a\n\r\n\x05\x04\x1b\x02\t\x01\
+    \x12\x04\xdb\x02\x1b,\n\r\n\x05\x04\x1b\x02\t\x03\x12\x04\xdb\x02/1\n'\n\
+    \x04\x04\x1b\x02\n\x12\x04\xdd\x02\x02#\x1a\x19\x20Combined\x20API\x20st\
+    atistics\n\n\r\n\x05\x04\x1b\x02\n\x04\x12\x04\xdd\x02\x02\n\n\r\n\x05\
+    \x04\x1b\x02\n\x06\x12\x04\xdd\x02\x0b\x13\n\r\n\x05\x04\x1b\x02\n\x01\
+    \x12\x04\xdd\x02\x14\x1d\n\r\n\x05\x04\x1b\x02\n\x03\x12\x04\xdd\x02\x20\
+    \"\n\x0b\n\x03\x04\x1b\t\x12\x04\xdf\x02\x02\x0e\n\x0c\n\x04\x04\x1b\t\0\
+    \x12\x04\xdf\x02\x0b\r\n\r\n\x05\x04\x1b\t\0\x01\x12\x04\xdf\x02\x0b\r\n\
+    \r\n\x05\x04\x1b\t\0\x02\x12\x04\xdf\x02\x0b\r\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -8307,7 +9129,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
     file_descriptor.get(|| {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(0);
-            let mut messages = ::std::vec::Vec::with_capacity(25);
+            let mut messages = ::std::vec::Vec::with_capacity(28);
             messages.push(InvalidPacket::generated_message_descriptor_data());
             messages.push(NetsimRadioStats::generated_message_descriptor_data());
             messages.push(NetsimFrontendStats::generated_message_descriptor_data());
@@ -8329,6 +9151,9 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(UwbManagerStats::generated_message_descriptor_data());
             messages.push(RangingSessionStats::generated_message_descriptor_data());
             messages.push(NfcApiStats::generated_message_descriptor_data());
+            messages.push(NfcAdapterStats::generated_message_descriptor_data());
+            messages.push(TagStats::generated_message_descriptor_data());
+            messages.push(CardEmulationStats::generated_message_descriptor_data());
             messages.push(NciCoreStats::generated_message_descriptor_data());
             messages.push(NciRfStats::generated_message_descriptor_data());
             messages.push(NciDataStats::generated_message_descriptor_data());

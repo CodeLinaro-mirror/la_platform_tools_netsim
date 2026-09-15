@@ -1,10 +1,19 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    fmt::{Display, Formatter},
+    str::FromStr,
+    sync::Arc,
+};
+
+use jiff::{Zoned, civil::DateTime, tz::TimeZone};
 use modem_rs_derive::CommandParser;
+use nom::IResult;
 
 use crate::{
     parser::QuotedString,
+    time::{Clock, SystemClock},
     types::{
         CallMode, CmeeMode, ExecutionResult, FlowControlMode, IcfFormat, IcfParity, Parsable,
         ProductSerialNumberType, SpeakerMuteMode,
@@ -84,9 +93,13 @@ pub enum MiscCommand<'a> {
     #[command(tag = "AT+IPR=")]
     SetTeTaFixedLocalRate(u32),
     #[command(tag = "AT+CCLK=")]
-    SetTime(QuotedString<'a>),
+    SetTime(CclkTime),
     #[command(tag = "AT+CCLK?")]
     QueryTime,
+    #[command(tag = "AT%CTZV=")]
+    SetCtzv(bool),
+    #[command(tag = "AT%CTZV?")]
+    QueryCtzv,
     #[command(tag = "AT+CMOD=")]
     SetCallMode(CallMode),
     #[command(tag = "AT+CSCS=")]
@@ -95,9 +108,113 @@ pub enum MiscCommand<'a> {
     Test,
 }
 
+/// Network Identity and Time Zone (NITZ) unsolicited result (%CTZV, 3GPP TS
+/// 22.042 / TS 24.008).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NitzTime(pub Zoned);
+
+impl Display for NitzTime {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let utc = self.0.with_time_zone(TimeZone::UTC);
+        let offset = self.0.offset().seconds() / 900;
+        let sign = if offset >= 0 { '+' } else { '-' };
+        let is_dst = if self.0.time_zone().to_offset_info(self.0.timestamp()).dst().is_dst() {
+            1
+        } else {
+            0
+        };
+        write!(
+            f,
+            "{}{sign}{:02}:{is_dst}",
+            utc.strftime("%y/%m/%d:%H:%M:%S"),
+            offset.unsigned_abs(),
+        )?;
+        if let Some(tz_name) = self.0.time_zone().iana_name() {
+            write!(f, ":{}", tz_name.replace('/', "!"))?;
+        }
+        Ok(())
+    }
+}
+
+impl From<Zoned> for NitzTime {
+    fn from(now: Zoned) -> Self {
+        Self(now)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CclkTime {
+    pub datetime: DateTime,
+    pub offset_quarter_hours: Option<i8>,
+}
+
+impl Display for CclkTime {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.datetime.strftime("%y/%m/%d,%H:%M:%S"))?;
+        if let Some(offset) = self.offset_quarter_hours {
+            let sign = if offset >= 0 { '+' } else { '-' };
+            write!(f, "{sign}{:02}", offset.unsigned_abs())?;
+        }
+        Ok(())
+    }
+}
+
+impl From<Zoned> for CclkTime {
+    fn from(now: Zoned) -> Self {
+        let offset_quarter_hours = (now.offset().seconds() / 900) as i8;
+        let utc = now.with_time_zone(TimeZone::UTC).datetime();
+        Self { datetime: utc, offset_quarter_hours: Some(offset_quarter_hours) }
+    }
+}
+
+impl From<NitzTime> for CclkTime {
+    fn from(nitz: NitzTime) -> Self {
+        Self::from(nitz.0)
+    }
+}
+
+impl FromStr for CclkTime {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // 3GPP TS 27.007 §8.15: "yy/MM/dd,hh:mm:ss[+/-zz]"
+        let dt_str = s.get(..17).ok_or("timestamp too short")?;
+        let datetime = DateTime::strptime("%y/%m/%d,%H:%M:%S", dt_str)
+            .map_err(|_e| "invalid datetime format")?;
+        let offset_quarter_hours = match s.get(17..) {
+            None | Some("") => None,
+            Some(tz) => {
+                let offset = tz.parse::<i8>().map_err(|_e| "invalid timezone offset")?;
+                // 3GPP TS 27.007 §8.15: Time zone offset in 15-minute intervals (-96..=96, max
+                // ±24h)
+                if !(-96..=96).contains(&offset) {
+                    return Err("timezone offset out of range");
+                }
+                Some(offset)
+            }
+        };
+        Ok(Self { datetime, offset_quarter_hours })
+    }
+}
+
+impl<'a> Parsable<'a> for CclkTime {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (rem, quoted) = QuotedString::parse(input)?;
+        let s = std::str::from_utf8(quoted.0).map_err(|_e| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+        })?;
+        let cclk = s.parse::<Self>().map_err(|_e| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+        })?;
+        Ok((rem, cclk))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MiscResponse {
-    Clock(String),
+    Clock(CclkTime),
+    CtzvMode(bool),
+    TimeUpdate(NitzTime),
     ModelId(String),
     Revision(String),
     SerialNumber(String),
@@ -118,10 +235,12 @@ pub enum MiscResponse {
     Capabilities,
 }
 
-impl std::fmt::Display for MiscResponse {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for MiscResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             MiscResponse::Clock(clock) => write!(f, "+CCLK: \"{clock}\"\r\n"),
+            MiscResponse::CtzvMode(mode) => write!(f, "%CTZV: {}\r\n", if *mode { 1 } else { 0 }),
+            MiscResponse::TimeUpdate(nitz) => write!(f, "%CTZV: {nitz}\r\n"),
             MiscResponse::ModelId(model_id) => write!(f, "{model_id}\r\n"),
             MiscResponse::Revision(revision) => write!(f, "{revision}\r\n"),
             MiscResponse::SerialNumber(serial_number) => write!(f, "{serial_number}\r\n"),
@@ -165,8 +284,10 @@ impl std::fmt::Display for MiscResponse {
 type MiscResult = Result<Option<MiscResponse>, ExecutionResult>;
 
 pub struct MiscService {
+    clock: Arc<dyn Clock>,
+    ctzv_mode: bool,
+    cclk: Option<CclkTime>,
     cmee_mode: CmeeMode,
-    clock: String,
     speaker_volume: u8,
     speaker_mute: SpeakerMuteMode,
     quiet_mode: bool,
@@ -179,9 +300,17 @@ pub struct MiscService {
 
 impl Default for MiscService {
     fn default() -> Self {
+        Self::new(Arc::new(SystemClock))
+    }
+}
+
+impl MiscService {
+    pub fn new(clock: Arc<dyn Clock>) -> Self {
         Self {
+            clock,
+            ctzv_mode: false,
+            cclk: None,
             cmee_mode: CmeeMode::default(),
-            clock: "".to_string(),
             speaker_volume: 1,
             speaker_mute: SpeakerMuteMode::OnAndOffOnCarrier,
             quiet_mode: false,
@@ -192,26 +321,49 @@ impl Default for MiscService {
             ifc_dte: FlowControlMode::Hardware,
         }
     }
-}
 
-impl MiscService {
     pub fn cmee_mode(&self) -> CmeeMode {
         self.cmee_mode
     }
 
-    // --- Pure command handlers ---
+    pub fn set_ctzv_mode(&mut self, enabled: bool) {
+        self.ctzv_mode = enabled;
+    }
 
-    fn handle_set_time(&mut self, time: QuotedString) -> MiscResult {
-        self.clock = String::from_utf8(time.to_vec()).unwrap_or_default();
+    pub fn ctzv_enabled(&self) -> bool {
+        self.ctzv_mode
+    }
+
+    pub fn current_time_update(&self) -> MiscResponse {
+        MiscResponse::TimeUpdate(NitzTime::from(self.clock.now_zoned()))
+    }
+
+    fn handle_set_ctzv(&mut self, mode: bool) -> MiscResult {
+        self.ctzv_mode = mode;
         Ok(None)
     }
 
-    pub fn set_time(&mut self, time: String) {
-        self.clock = time;
+    fn handle_query_ctzv(&self) -> MiscResult {
+        Ok(Some(MiscResponse::CtzvMode(self.ctzv_mode)))
+    }
+
+    // --- Pure command handlers ---
+
+    fn handle_set_time(&mut self, time: CclkTime) -> MiscResult {
+        self.cclk = Some(time);
+        Ok(None)
+    }
+
+    pub fn set_time(&mut self, time: CclkTime) {
+        self.cclk = Some(time);
     }
 
     fn handle_query_time(&self) -> MiscResult {
-        Ok(Some(MiscResponse::Clock(self.clock.clone())))
+        let cclk = match self.cclk {
+            Some(time) => time,
+            None => CclkTime::from(self.clock.now_zoned()),
+        };
+        Ok(Some(MiscResponse::Clock(cclk)))
     }
 
     fn handle_get_model_id(&self) -> MiscResult {
@@ -253,10 +405,6 @@ impl MiscService {
         Ok(None)
     }
 
-    fn handle_set_ipr(&self) -> MiscResult {
-        Ok(None)
-    }
-
     fn handle_set_report_mobile_equipment_error(&mut self, mode: CmeeMode) -> MiscResult {
         self.cmee_mode = mode;
         Ok(None)
@@ -273,30 +421,6 @@ impl MiscService {
     fn handle_goldfish_init_sequence(&mut self) -> MiscResult {
         self.quiet_mode = false;
         self.verbose_mode = true;
-        Ok(None)
-    }
-
-    fn handle_set_echo(&self, _echo: bool) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_speaker_volume(&mut self, vol: u8) -> MiscResult {
-        self.speaker_volume = vol;
-        Ok(None)
-    }
-
-    fn handle_set_speaker_mute(&mut self, mute: SpeakerMuteMode) -> MiscResult {
-        self.speaker_mute = mute;
-        Ok(None)
-    }
-
-    fn handle_set_quiet_mode(&mut self, quiet: bool) -> MiscResult {
-        self.quiet_mode = quiet;
-        Ok(None)
-    }
-
-    fn handle_set_verbose_mode(&mut self, verbose: bool) -> MiscResult {
-        self.verbose_mode = verbose;
         Ok(None)
     }
 
@@ -326,58 +450,6 @@ impl MiscService {
         }))
     }
 
-    fn handle_write_active_configuration(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_reset(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_get_identification_information(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_auto_answer(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_command_termination_character(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_response_formatting_character(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_command_line_editing_character(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_pause_before_blind_dialing(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_connection_completion_timeout(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_comma_dial_modifier_time(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_automatic_disconnect_delay(&self) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_call_mode(&self, _mode: CallMode) -> MiscResult {
-        Ok(None)
-    }
-
-    fn handle_set_character_set(&self) -> MiscResult {
-        Ok(None)
-    }
-
     fn handle_get_manufacturer_identification(&self) -> MiscResult {
         Ok(Some(MiscResponse::ManufacturerIdentification("Android".to_string())))
     }
@@ -401,9 +473,11 @@ impl MiscService {
             }
             MiscCommand::SetTeTaControlCharacterFraming(f, p) => self.handle_set_icf(*f, *p),
             MiscCommand::SetTeTaLocalDataFlowControl(d1, d2) => self.handle_set_ifc(*d1, *d2),
-            MiscCommand::SetTeTaFixedLocalRate(_) => self.handle_set_ipr(),
+            MiscCommand::SetTeTaFixedLocalRate(_) => Ok(None),
             MiscCommand::SetTime(time) => self.handle_set_time(*time),
             MiscCommand::QueryTime => self.handle_query_time(),
+            MiscCommand::SetCtzv(mode) => self.handle_set_ctzv(*mode),
+            MiscCommand::QueryCtzv => self.handle_query_ctzv(),
             MiscCommand::SetReportMobileEquipmentError(mode) => {
                 self.handle_set_report_mobile_equipment_error(*mode)
             }
@@ -414,43 +488,196 @@ impl MiscService {
                 self.handle_query_supported_report_mobile_equipment_error()
             }
             MiscCommand::GoldfishInitSequence => self.handle_goldfish_init_sequence(),
-            MiscCommand::SetEcho(echo) => self.handle_set_echo(*echo),
-            MiscCommand::SetSpeakerVolume(vol) => self.handle_set_speaker_volume(*vol),
-            MiscCommand::SetSpeakerMute(mute) => self.handle_set_speaker_mute(*mute),
-            MiscCommand::SetQuietMode(quiet) => self.handle_set_quiet_mode(*quiet),
-            MiscCommand::SetVerboseMode(verbose) => self.handle_set_verbose_mode(*verbose),
+            MiscCommand::SetSpeakerVolume(vol) => {
+                self.speaker_volume = *vol;
+                Ok(None)
+            }
+            MiscCommand::SetSpeakerMute(mute) => {
+                self.speaker_mute = *mute;
+                Ok(None)
+            }
+            MiscCommand::SetQuietMode(quiet) => {
+                self.quiet_mode = *quiet;
+                Ok(None)
+            }
+            MiscCommand::SetVerboseMode(verbose) => {
+                self.verbose_mode = *verbose;
+                Ok(None)
+            }
             MiscCommand::ResetToFactoryDefaults => self.handle_reset_to_factory_defaults(),
             MiscCommand::ViewActiveConfiguration => self.handle_view_active_configuration(),
-            MiscCommand::WriteActiveConfiguration => self.handle_write_active_configuration(),
-            MiscCommand::Reset => self.handle_reset(),
-            MiscCommand::GetIdentificationInformation => {
-                self.handle_get_identification_information()
-            }
-            MiscCommand::SetAutoAnswer(_) => self.handle_set_auto_answer(),
-            MiscCommand::SetCommandTerminationCharacter(_) => {
-                self.handle_set_command_termination_character()
-            }
-            MiscCommand::SetResponseFormattingCharacter(_) => {
-                self.handle_set_response_formatting_character()
-            }
-            MiscCommand::SetCommandLineEditingCharacter(_) => {
-                self.handle_set_command_line_editing_character()
-            }
-            MiscCommand::SetPauseBeforeBlindDialing(_) => {
-                self.handle_set_pause_before_blind_dialing()
-            }
-            MiscCommand::SetConnectionCompletionTimeout(_) => {
-                self.handle_set_connection_completion_timeout()
-            }
-            MiscCommand::SetCommaDialModifierTime(_) => self.handle_set_comma_dial_modifier_time(),
-            MiscCommand::SetAutomaticDisconnectDelay(_) => {
-                self.handle_set_automatic_disconnect_delay()
-            }
-            MiscCommand::SetCallMode(mode) => self.handle_set_call_mode(*mode),
-            MiscCommand::SetCharacterSet(_) => self.handle_set_character_set(),
-            MiscCommand::Test => Ok(None),
+            MiscCommand::WriteActiveConfiguration
+            | MiscCommand::Reset
+            | MiscCommand::GetIdentificationInformation
+            | MiscCommand::SetAutoAnswer(_)
+            | MiscCommand::SetCommandTerminationCharacter(_)
+            | MiscCommand::SetResponseFormattingCharacter(_)
+            | MiscCommand::SetCommandLineEditingCharacter(_)
+            | MiscCommand::SetPauseBeforeBlindDialing(_)
+            | MiscCommand::SetConnectionCompletionTimeout(_)
+            | MiscCommand::SetCommaDialModifierTime(_)
+            | MiscCommand::SetAutomaticDisconnectDelay(_)
+            | MiscCommand::SetCallMode(_)
+            | MiscCommand::SetCharacterSet(_)
+            | MiscCommand::SetEcho(_)
+            | MiscCommand::Test => Ok(None),
         };
 
         misc_result.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::time::MockClock;
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn test_nitz_time_formatting() {
+        let zoned: Zoned = "2026-06-15T12:30:45-07:00[America/Los_Angeles]".parse().unwrap();
+        let nitz = NitzTime::from(zoned);
+        assert_eq!(nitz.to_string(), "26/06/15:19:30:45-28:1:America!Los_Angeles");
+        assert_eq!(
+            MiscResponse::TimeUpdate(nitz).to_string(),
+            "%CTZV: 26/06/15:19:30:45-28:1:America!Los_Angeles\r\n"
+        );
+
+        let offset = jiff::tz::Offset::from_hours(-7).unwrap();
+        let zoned_no_iana = DateTime::new(2026, 6, 15, 12, 30, 45, 0)
+            .unwrap()
+            .to_zoned(offset.to_time_zone())
+            .unwrap();
+        let nitz_no_iana = NitzTime::from(zoned_no_iana);
+        assert_eq!(nitz_no_iana.to_string(), "26/06/15:19:30:45-28:0");
+        assert_eq!(
+            MiscResponse::TimeUpdate(nitz_no_iana).to_string(),
+            "%CTZV: 26/06/15:19:30:45-28:0\r\n"
+        );
+    }
+
+    #[test]
+    fn test_ctzv_at_commands() {
+        let clock = Arc::new(MockClock::default());
+        let mut service = MiscService::new(clock.clone());
+
+        assert!(!service.ctzv_enabled());
+
+        // AT%CTZV?
+        let res = service.execute(&MiscCommand::QueryCtzv);
+        if let ExecutionResult::Success(handled) = res {
+            assert_eq!(
+                handled.responses,
+                vec![
+                    crate::types::Response::Misc(MiscResponse::CtzvMode(false)),
+                    crate::types::Response::Ok,
+                ]
+            );
+        } else {
+            panic!("Expected Success for QueryCtzv");
+        }
+
+        // AT%CTZV=1
+        let res = service.execute(&MiscCommand::SetCtzv(true));
+        assert!(matches!(res, ExecutionResult::Success(_)));
+        assert!(service.ctzv_enabled());
+
+        // AT%CTZV?
+        let res = service.execute(&MiscCommand::QueryCtzv);
+        if let ExecutionResult::Success(handled) = res {
+            assert_eq!(
+                handled.responses,
+                vec![
+                    crate::types::Response::Misc(MiscResponse::CtzvMode(true)),
+                    crate::types::Response::Ok,
+                ]
+            );
+        } else {
+            panic!("Expected Success for QueryCtzv");
+        }
+
+        // AT%CTZV=0
+        let res = service.execute(&MiscCommand::SetCtzv(false));
+        assert!(matches!(res, ExecutionResult::Success(_)));
+        assert!(!service.ctzv_enabled());
+    }
+
+    #[test]
+    fn test_cclk_time_parsing_and_display() {
+        let (rem, cclk) = CclkTime::parse(b"\"25/08/02,12:30:00+00\"").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(cclk.to_string(), "25/08/02,12:30:00+00");
+
+        let (_, cclk_no_tz) = CclkTime::parse(b"\"25/08/02,12:30:00\"").unwrap();
+        assert_eq!(cclk_no_tz.to_string(), "25/08/02,12:30:00");
+
+        // Verify out-of-range offsets are rejected (e.g. -128 i8::MIN, +100, -97)
+        assert!(CclkTime::parse(b"\"25/08/02,12:30:00-128\"").is_err());
+        assert!(CclkTime::parse(b"\"25/08/02,12:30:00+100\"").is_err());
+        assert!(CclkTime::parse(b"\"25/08/02,12:30:00-97\"").is_err());
+
+        // Verify that formatting i8::MIN does not panic and uses unsigned_abs()
+        let min_cclk = CclkTime {
+            datetime: DateTime::new(2025, 8, 2, 12, 30, 0, 0).unwrap(),
+            offset_quarter_hours: Some(i8::MIN),
+        };
+        assert_eq!(min_cclk.to_string(), "25/08/02,12:30:00-128");
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn test_cclk_at_commands() {
+        let clock = Arc::new(MockClock::default());
+        let zoned: Zoned = "2026-06-15T12:30:45-07:00[America/Los_Angeles]".parse().unwrap();
+        clock.set_zoned(zoned);
+        let mut service = MiscService::new(clock.clone());
+
+        // Default AT+CCLK? queries clock
+        let res = service.execute(&MiscCommand::QueryTime);
+        if let ExecutionResult::Success(handled) = res {
+            assert_eq!(
+                handled.responses,
+                vec![
+                    crate::types::Response::Misc(MiscResponse::Clock(CclkTime {
+                        datetime: DateTime::new(2026, 6, 15, 19, 30, 45, 0).unwrap(),
+                        offset_quarter_hours: Some(-28),
+                    })),
+                    crate::types::Response::Ok,
+                ]
+            );
+        } else {
+            panic!("Expected Success for QueryTime");
+        }
+
+        // AT+CCLK="25/08/02,12:30:00+00"
+        let manual_time = CclkTime {
+            datetime: DateTime::new(2025, 8, 2, 12, 30, 0, 0).unwrap(),
+            offset_quarter_hours: Some(0),
+        };
+        let res = service.execute(&MiscCommand::SetTime(manual_time));
+        assert!(matches!(res, ExecutionResult::Success(_)));
+
+        // AT+CCLK? returns manually set time
+        let res = service.execute(&MiscCommand::QueryTime);
+        if let ExecutionResult::Success(handled) = res {
+            assert_eq!(
+                handled.responses,
+                vec![
+                    crate::types::Response::Misc(MiscResponse::Clock(manual_time)),
+                    crate::types::Response::Ok,
+                ]
+            );
+        } else {
+            panic!("Expected Success for QueryTime after SetTime");
+        }
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn test_from_nitz_to_cclk() {
+        let zoned: Zoned = "2026-06-15T12:30:45-07:00[America/Los_Angeles]".parse().unwrap();
+        let nitz = NitzTime::from(zoned);
+        let cclk = CclkTime::from(nitz);
+        assert_eq!(cclk.to_string(), "26/06/15,19:30:45-28");
     }
 }
