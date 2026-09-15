@@ -8,6 +8,9 @@ This module provides the netsim_rust_library macro which wraps rust_library
 to provide standard targets for testing, linting, and formatting.
 """
 
+load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
+load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
@@ -158,16 +161,9 @@ netsim_dep_aspect = aspect(
 
 # Why we use a manual clippy-driver rule instead of rules_rust defaults:
 #
-# 1. rules_rust `rust_clippy` and `rust_clippy_aspect` fail with "nothing to build"
-#    because we use a Bazel module setup where our codebase is remapped to `external/netsim+`.
-#    This is ignored by rules_rust.
-#
-# 2. Changing the workspace layout to resolve this wasn't feasible:
-#    - Using repo-relative paths (`//tools/netsim/...`) forces the repo-root
-#      MODULE.bazel to declare all internal Netsim dependencies.
-#    - Running Bazel inside `tools/netsim` fails because external dependencies
-#      (like @goldfish_crates) hardcode relative paths from the workspace root
-#      where they are evaluated & fail to find `third_party/rust`.
+# rules_rust `rust_clippy` and `rust_clippy_aspect` do not seamlessly integrate
+# with the custom multi-target test reporting and diagnostics formatting required
+# across platform toolchains. We drive clippy directly using the resolved rust toolchain.
 def _netsim_clippy_test_impl(ctx):
     toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
     rustfmt = toolchain.rustfmt
@@ -597,3 +593,76 @@ def netsim_rust_binary(
         enable_rustfmt,
         targets = [":" + name],
     )
+
+def _stripped_binaries_impl(ctx):
+    out_files = []
+    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
+    cc_toolchain = find_cpp_toolchain(ctx)
+
+    # `cc_toolchain.strip_executable` is the legacy `tool_path` entry, which
+    # modern toolchains (including the hermetic goldfish one) leave as a
+    # non-existent placeholder next to the toolchain's BUILD file. The real
+    # binary has to be resolved through the action config instead.
+    #
+    # Only resolve it where a strip action actually exists. The clang-cl
+    # toolchain used for Windows configures no strip action at all, and
+    # get_tool_for_action() fails at analysis time rather than returning None,
+    # so this must stay inside the guard even though the Windows branch below
+    # never uses the tool.
+    strip_executable = None
+    if not is_windows:
+        feature_configuration = cc_common.configure_features(
+            ctx = ctx,
+            cc_toolchain = cc_toolchain,
+            requested_features = ctx.features,
+            unsupported_features = ctx.disabled_features,
+        )
+        strip_executable = cc_common.get_tool_for_action(
+            feature_configuration = feature_configuration,
+            action_name = ACTION_NAMES.strip,
+        )
+
+    for src in ctx.files.srcs:
+        out = ctx.actions.declare_file("_stripped/" + src.basename)
+        if is_windows:
+            # Windows binaries (PE/COFF) carry no strippable ELF symbol table and
+            # the MSVC toolchain exposes no `strip` tool, so pass the binary
+            # through unmodified. `ctx.actions.symlink` is the portable way to
+            # re-materialize a file under a new path; Bazel degrades to a real
+            # copy on filesystems that cannot create symlinks.
+            ctx.actions.symlink(
+                output = out,
+                target_file = src,
+                progress_message = "Copying %s (strip unsupported on Windows)" % src.short_path,
+            )
+        else:
+            # `all_files` rather than `strip_files`: the tool resolved above may
+            # live in a different filegroup than the one the legacy
+            # `strip_files` attribute points at, and it must be staged in the
+            # sandbox for the action to find it.
+            ctx.actions.run_shell(
+                outputs = [out],
+                inputs = depset([src], transitive = [cc_toolchain.all_files]),
+                command = "cp \"$1\" \"$2\" && chmod u+w \"$2\" && \"$3\" \"$2\"",
+                arguments = [src.path, out.path, strip_executable],
+                mnemonic = "NetsimStrip",
+                progress_message = "Stripping %s with %s" % (src.short_path, strip_executable),
+            )
+        out_files.append(out)
+    return [DefaultInfo(files = depset(out_files))]
+
+stripped_binaries = rule(
+    doc = """Strip binaries and place them into the _stripped directory using the C++ toolchain.""",
+    implementation = _stripped_binaries_impl,
+    attrs = {
+        "srcs": attr.label_list(
+            doc = "The executable binaries to strip.",
+            mandatory = True,
+            allow_files = True,
+        ),
+        "_cc_toolchain": attr.label(default = "@bazel_tools//tools/cpp:current_cc_toolchain"),
+        "_windows_constraint": attr.label(default = "@platforms//os:windows"),
+    },
+    fragments = ["cpp"],
+    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
+)

@@ -307,10 +307,14 @@ impl ModemNetworkSimulator {
         }
         self.modem_chip_count += 1;
         let profile = profile.unwrap_or_default();
-        let target_msisdn = if profile.msisdn.is_empty() {
-            format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count)
-        } else {
-            profile.msisdn.clone()
+        let target_msisdn = match profile.msisdn.clone() {
+            Some(msisdn) => msisdn,
+            None => {
+                let s = format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count);
+                s.parse::<PhoneNumber>().map_err(|e| {
+                    ModemError::InvalidProfile(format!("Invalid generated phone number '{s}': {e}"))
+                })?
+            }
         };
         let mut modem = ModemImpl::new(id, profile, quirks, self.clock.clone());
         // Override the default dummy number with a unique generated one to prevent
@@ -322,7 +326,7 @@ impl ModemNetworkSimulator {
                 .as_ref()
                 .is_some_and(|n| n.normalized() == DEFAULT_FALLBACK_MSISDN)
         {
-            modem.set_phone_number(&target_msisdn);
+            modem.set_phone_number(target_msisdn);
         }
         if let Some(t) = sim_type {
             modem.set_sim_status(t > 0);
@@ -712,7 +716,7 @@ impl ModemNetworkSimulator {
         target_id: ModemId,
         number: &str,
     ) -> Vec<NetworkEvent> {
-        let Some(dial_str) = DialString::parse(number.as_bytes()) else {
+        let Some(dial_str) = DialString::parse(number) else {
             warn!("Invalid incoming call number: {}", number);
             return Vec::new();
         };

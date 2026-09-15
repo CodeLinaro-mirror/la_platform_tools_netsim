@@ -271,11 +271,40 @@ message RangingSessionStats {
   optional int32 remove_controlee = 9;
 }
 
-// NFC API Counters
+// NFC API Counters (aligned with Android Framework APIs)
 message NfcApiStats {
-  optional NciCoreStats nci_core = 1;
-  optional NciRfStats nci_rf = 2;
-  optional NciDataStats nci_data = 3;
+  // Legacy protocol-level fields (retained for pipeline backwards
+  // compatibility)
+  optional NciCoreStats nci_core = 1 [deprecated = true];
+  optional NciRfStats nci_rf = 2 [deprecated = true];
+  optional NciDataStats nci_data = 3 [deprecated = true];
+
+  // High-level Android Framework API mappings (aligned with Wi-Fi & UWB)
+  optional NfcAdapterStats nfc_adapter = 4;
+  optional TagStats tag = 5;
+  optional CardEmulationStats card_emulation = 6;
+}
+
+// Android android.nfc.NfcAdapter API calls
+message NfcAdapterStats {
+  optional int32 enable = 1;
+  optional int32 disable = 2;
+  optional int32 enable_reader_mode = 3;
+  optional int32 disable_reader_mode = 4;
+  optional int32 set_listen_mode_routing = 5;
+}
+
+// Android android.nfc.Tag & TagTechnology (IsoDep, Ndef, etc.) API calls
+message TagStats {
+  optional int32 connect = 1;
+  optional int32 close = 2;
+  optional int32 transceive = 3;
+}
+
+// Android android.nfc.cardemulation (HostApduService) API calls
+message CardEmulationStats {
+  optional int32 process_command_apdu = 1;
+  optional int32 send_response_apdu = 2;
 }
 
 message NciCoreStats {

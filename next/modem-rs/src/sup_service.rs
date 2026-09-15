@@ -6,38 +6,34 @@ use std::collections::BTreeMap;
 use modem_rs_derive::CommandParser;
 
 use crate::{
-    parser::{QuotedString, parse_raw_data},
+    parser::QuotedString,
     sim_service::SimService,
     types::{
-        CallForwardingMode, CallForwardingReason, CallWaitingMode, CallWaitingPresentation,
-        CallWaitingStatus, ClipActivation, ClipProvisionStatus, ClirMode, ClirStatus, CmeError,
-        ExecutionResult, Facility, FacilityLockMode, Parsable, UssdMode, UssdStatus,
+        CallForwardUtilityArgs, CallForwardingMode, CallForwardingReason, CallWaitingMode,
+        CallWaitingStatus, ClipProvisionStatus, ClirMode, ClirStatus, CmeError, ExecutionResult,
+        Facility, FacilityLockMode, Parsable, PhoneNumber, ServiceClass, TypeOfAddress, UssdMode,
+        UssdStatus,
     },
 };
 
-const SERVICE_CLASS_VOICE: u8 = 1;
-const SERVICE_CLASS_DATA: u8 = 2;
-const SERVICE_CLASS_FAX: u8 = 4;
-const SERVICE_CLASS_VOICE_DATA_FAX: u8 = 7;
-
 /// Supplementary service AT commands.
-#[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
+#[derive(Debug, PartialEq, Clone, CommandParser)]
 pub enum SupCommand<'a> {
     #[command(tag = "AT+CLCK=")]
-    SetFacilityLock(Facility, FacilityLockMode, Option<QuotedString<'a>>, Option<u8>),
+    SetFacilityLock(Facility, FacilityLockMode, Option<QuotedString<'a>>, Option<ServiceClass>),
     #[command(tag = "AT+CCFC=")]
     CallForwarding {
         reason: CallForwardingReason,
         mode: CallForwardingMode,
-        number: Option<QuotedString<'a>>,
-        r#type: Option<u8>,
-        class: Option<u8>,
+        number: Option<PhoneNumber>,
+        toa: Option<TypeOfAddress>,
+        class: Option<ServiceClass>,
         subaddr: Option<QuotedString<'a>>,
         satype: Option<u8>,
         time: Option<u8>,
     },
     #[command(tag = "AT+CCFCU=")]
-    CallForwardUtility(#[parser(parse_raw_data)] &'a [u8]),
+    CallForwardUtility(CallForwardUtilityArgs<'a>),
     #[command(tag = "AT+CLIR?")]
     QueryClir,
     /// Non-standard Goldfish CLIR syntax
@@ -46,15 +42,15 @@ pub enum SupCommand<'a> {
     #[command(tag = "AT+CLIR=")]
     SetClir(ClirMode),
     #[command(tag = "AT+CLIP=")]
-    SetClip(ClipActivation),
+    SetClip(bool),
     #[command(tag = "AT+CLIP?")]
     QueryClip,
     #[command(tag = "AT+COLP=")]
-    SetColp(u8),
+    SetColp(bool),
     #[command(tag = "AT+CCWA=")]
-    SetCallWaiting(CallWaitingPresentation, Option<CallWaitingMode>, Option<u8>),
+    SetCallWaiting(bool, Option<CallWaitingMode>, Option<ServiceClass>),
     #[command(tag = "AT+CSSN=")]
-    SuppServiceNotification(u8, u8),
+    SuppServiceNotification(bool, Option<bool>),
     #[command(tag = "AT+CUSD=")]
     SetUssd { mode: UssdMode, message: Option<QuotedString<'a>>, dcs: Option<u8> },
 }
@@ -63,7 +59,7 @@ pub enum SupCommand<'a> {
 pub enum SupResponse {
     FacilityLockStatus(u8),
     Clir { n: ClirMode, m: ClirStatus },
-    Clip { activation: ClipActivation, provision: ClipProvisionStatus },
+    Clip { activation: bool, provision: ClipProvisionStatus },
     CallWaiting(Vec<(CallWaitingStatus, u8)>),
     Ussd { status: UssdStatus, message: String, dcs: u8 },
 }
@@ -74,7 +70,7 @@ impl std::fmt::Display for SupResponse {
             SupResponse::FacilityLockStatus(status) => write!(f, "+CLCK: {status}\r\n"),
             SupResponse::Clir { n, m } => write!(f, "+CLIR: {n},{m}\r\n"),
             SupResponse::Clip { activation, provision } => {
-                write!(f, "+CLIP: {activation},{provision}\r\n")
+                write!(f, "+CLIP: {},{provision}\r\n", *activation as u8)
             }
             SupResponse::CallWaiting(infos) => {
                 for (status, class) in infos {
@@ -94,31 +90,31 @@ type SupResult = Result<Option<SupResponse>, ExecutionResult>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallForwardingInfo {
     pub mode: CallForwardingMode,
-    pub number: String,
-    pub type_: u8,
+    pub number: Option<PhoneNumber>,
+    pub toa: TypeOfAddress,
 }
 
 #[derive(Debug)]
 pub struct SupService {
     call_forwarding_info: Option<CallForwardingInfo>,
-    clip_enabled: ClipActivation,
+    clip_enabled: bool,
     clir_mode: ClirMode,
-    ccwa_presentation: CallWaitingPresentation,
-    ccwa_status: BTreeMap<u8, CallWaitingStatus>,
+    ccwa_presentation: bool,
+    ccwa_status: BTreeMap<ServiceClass, CallWaitingStatus>,
 }
 
 impl Default for SupService {
     fn default() -> Self {
         let ccwa_status = BTreeMap::from([
-            (SERVICE_CLASS_VOICE, CallWaitingStatus::NotActive),
-            (SERVICE_CLASS_DATA, CallWaitingStatus::NotActive),
-            (SERVICE_CLASS_FAX, CallWaitingStatus::NotActive),
+            (ServiceClass::VOICE, CallWaitingStatus::NotActive),
+            (ServiceClass::DATA, CallWaitingStatus::NotActive),
+            (ServiceClass::FAX, CallWaitingStatus::NotActive),
         ]);
         Self {
             call_forwarding_info: None,
-            clip_enabled: ClipActivation::default(),
+            clip_enabled: false,
             clir_mode: ClirMode::default(),
-            ccwa_presentation: CallWaitingPresentation::Disable,
+            ccwa_presentation: false,
             ccwa_status,
         }
     }
@@ -126,7 +122,7 @@ impl Default for SupService {
 
 impl SupService {
     pub fn clip_enabled(&self) -> bool {
-        self.clip_enabled == ClipActivation::Enable
+        self.clip_enabled
     }
 
     pub fn clir_mode(&self) -> ClirMode {
@@ -135,27 +131,15 @@ impl SupService {
 
     // --- Pure command handlers ---
 
-    fn handle_set_facility_lock(&self, mode: FacilityLockMode) -> SupResult {
-        if mode == FacilityLockMode::QueryStatus {
-            Ok(Some(SupResponse::FacilityLockStatus(0)))
-        } else {
-            Ok(None)
-        }
-    }
-
     fn handle_call_forwarding(
         &mut self,
         mode: CallForwardingMode,
-        number: Option<QuotedString>,
-        type_: Option<u8>,
+        number: Option<PhoneNumber>,
+        toa: Option<TypeOfAddress>,
     ) -> SupResult {
-        let number = number.map(|s| s.to_vec()).unwrap_or_default();
-        let type_ = type_.unwrap_or_default();
-        let info = CallForwardingInfo {
-            mode,
-            number: String::from_utf8(number).unwrap_or_default(),
-            type_,
-        };
+        let toa = toa
+            .unwrap_or_else(|| number.as_ref().map(|n| n.toa()).unwrap_or(TypeOfAddress::National));
+        let info = CallForwardingInfo { mode, number, toa };
 
         self.call_forwarding_info = Some(info);
         Ok(None)
@@ -174,12 +158,12 @@ impl SupService {
 
     fn handle_set_call_waiting(
         &mut self,
-        n: CallWaitingPresentation,
+        presentation: bool,
         mode: Option<CallWaitingMode>,
-        class: Option<u8>,
+        class: Option<ServiceClass>,
     ) -> SupResult {
-        self.ccwa_presentation = n;
-        let class = class.unwrap_or(SERVICE_CLASS_VOICE_DATA_FAX);
+        self.ccwa_presentation = presentation;
+        let class = class.unwrap_or_default();
         match mode {
             Some(CallWaitingMode::Disable) => {
                 self.set_ccwa_status(class, CallWaitingStatus::NotActive);
@@ -193,13 +177,16 @@ impl SupService {
                 // Find all active basic classes that are subset of the queried class.
                 let mut active_classes = Vec::new();
                 for (&bc, &status) in &self.ccwa_status {
-                    if (class & bc) == bc && status == CallWaitingStatus::Active {
-                        active_classes.push(bc);
+                    if class.contains(bc) && status == CallWaitingStatus::Active {
+                        active_classes.push(bc.as_u8());
                     }
                 }
                 if active_classes.is_empty() {
                     // None are active, return single line indicating disabled for the queried class
-                    Ok(Some(SupResponse::CallWaiting(vec![(CallWaitingStatus::NotActive, class)])))
+                    Ok(Some(SupResponse::CallWaiting(vec![(
+                        CallWaitingStatus::NotActive,
+                        class.as_u8(),
+                    )])))
                 } else {
                     // Return active classes
                     let infos = active_classes
@@ -213,9 +200,9 @@ impl SupService {
         }
     }
 
-    fn set_ccwa_status(&mut self, class: u8, status: CallWaitingStatus) {
+    fn set_ccwa_status(&mut self, class: ServiceClass, status: CallWaitingStatus) {
         for (&bc, val) in &mut self.ccwa_status {
-            if (class & bc) == bc {
+            if class.contains(bc) {
                 *val = status;
             }
         }
@@ -244,17 +231,11 @@ impl SupService {
         sim_service: &mut SimService,
     ) -> ExecutionResult {
         let sup_result = match command {
-            SupCommand::SetFacilityLock(facility, mode, passwd, _) => match facility {
-                Facility::SimPin => {
-                    return sim_service.handle_set_facility_lock(*mode, *passwd).into();
-                }
-                Facility::FixedDial => {
-                    return sim_service.handle_set_fdn_lock(*mode, *passwd).into();
-                }
-                Facility::Other => self.handle_set_facility_lock(*mode),
-            },
-            SupCommand::CallForwarding { reason: _, mode, number, r#type, .. } => {
-                self.handle_call_forwarding(*mode, *number, *r#type)
+            SupCommand::SetFacilityLock(facility, mode, passwd, _) => {
+                return sim_service.handle_set_facility_lock(*facility, *mode, *passwd).into();
+            }
+            SupCommand::CallForwarding { reason: _, mode, number, toa, .. } => {
+                self.handle_call_forwarding(*mode, number.clone(), *toa)
             }
             SupCommand::CallForwardUtility(_) => {
                 Err(ExecutionResult::cme_error(CmeError::OperationNotSupported))
@@ -270,8 +251,8 @@ impl SupService {
             }
             SupCommand::QueryClip => self.handle_query_clip(),
             SupCommand::SetColp(_) | SupCommand::SuppServiceNotification(_, _) => Ok(None),
-            SupCommand::SetCallWaiting(n, mode, class) => {
-                self.handle_set_call_waiting(*n, *mode, *class)
+            SupCommand::SetCallWaiting(presentation, mode, class) => {
+                self.handle_set_call_waiting(*presentation, *mode, *class)
             }
             SupCommand::SetUssd { mode, message, dcs } => {
                 self.handle_set_ussd(*mode, *message, *dcs)

@@ -13,6 +13,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 else
     DEFAULT_SDK="${HOME}/Android/Sdk"
     GPU_OPT="-gpu swiftshader_indirect"
+    export DISPLAY="${DISPLAY:-:1}"
 fi
 SDK_DIR="${ANDROID_SDK_ROOT:-${DEFAULT_SDK}}"
 EMULATOR_BIN="${SDK_DIR}/emulator/emulator"
@@ -23,6 +24,7 @@ ADB_BIN="${SDK_DIR}/platform-tools/adb"
 echo "=========================================================="
 echo " Starting Netsim Daemon & Dual Pixel 10 Emulators (GUI Mode)"
 echo " Features: Nfc, netsimx"
+echo " Display:  ${DISPLAY:-none}"
 echo "=========================================================="
 
 # 1. Clean up existing processes
@@ -35,13 +37,14 @@ sleep 2
 
 # 2. Start Netsim Daemon with Host DNS routing
 echo "[2/4] Starting Netsim Daemon (${NETSIMD_BIN}) with --host-dns 8.8.8.8,8.8.4.4..."
-"${NETSIMD_BIN}" --host-dns 8.8.8.8,8.8.4.4 > /tmp/netsimd_runtime.log 2>&1 &
+nohup setsid "${NETSIMD_BIN}" --host-dns 8.8.8.8,8.8.4.4 > /tmp/netsimd_runtime.log 2>&1 &
 sleep 2
 
 # 3. Launch Dual Emulators WITH GUI & Feature Flags (-feature Nfc -feature netsimx)
 echo "[3/4] Launching Pixel_10 (5554) and Pixel_10_2 (5556) with GUI & Features..."
-"${EMULATOR_BIN}" -avd Pixel_10 -port 5554 -no-snapshot-load -dns-server 8.8.8.8,8.8.4.4 -feature Nfc -feature netsimx ${GPU_OPT} > /tmp/emu_5554.log 2>&1 &
-"${EMULATOR_BIN}" -avd Pixel_10_2 -port 5556 -no-snapshot-load -dns-server 8.8.8.8,8.8.4.4 -feature Nfc -feature netsimx ${GPU_OPT} > /tmp/emu_5556.log 2>&1 &
+nohup setsid "${EMULATOR_BIN}" -avd Pixel_10 -port 5554 -no-snapshot-load -dns-server 8.8.8.8,8.8.4.4 -feature Nfc -feature netsimx ${GPU_OPT} > /tmp/emu_5554.log 2>&1 &
+nohup setsid "${EMULATOR_BIN}" -avd Pixel_10_2 -port 5556 -no-snapshot-load -dns-server 8.8.8.8,8.8.4.4 -feature Nfc -feature netsimx ${GPU_OPT} > /tmp/emu_5556.log 2>&1 &
+disown -a 2>/dev/null || true
 
 # 4. Wait for boot completion
 echo "[4/4] Waiting for boot completion..."

@@ -1,115 +1,14 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use nom::{IResult, bytes::complete::tag};
+use nom::IResult;
 
+pub use crate::types::QuotedString;
 use crate::{
     call_service::CallCommand, data_service::DataCommand, misc_service::MiscCommand,
     network_service::NetworkCommand, sim_service::SimCommand, sms_service::SmsCommand,
-    stk_service::StkCommand, sup_service::SupCommand, types::Parsable,
+    stk_service::StkCommand, sup_service::SupCommand,
 };
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct QuotedString<'a>(pub &'a [u8]);
-
-impl<'a> QuotedString<'a> {
-    pub fn to_vec(self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-}
-
-impl<'a> AsRef<[u8]> for QuotedString<'a> {
-    fn as_ref(&self) -> &[u8] {
-        self.0
-    }
-}
-
-impl<'a> std::ops::Deref for QuotedString<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.0
-    }
-}
-
-impl<'a> Parsable<'a> for QuotedString<'a> {
-    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
-        use nom::{bytes::complete::take_while, sequence::delimited};
-        let (input, content) =
-            delimited(tag(br#"""#), take_while(|c| c != b'"'), tag(br#"""#))(input)?;
-        Ok((input, QuotedString(content)))
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct PinString<'a>(pub &'a [u8]);
-
-impl<'a> PinString<'a> {
-    pub fn to_vec(self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-}
-
-impl<'a> AsRef<[u8]> for PinString<'a> {
-    fn as_ref(&self) -> &[u8] {
-        self.0
-    }
-}
-
-impl<'a> std::ops::Deref for PinString<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.0
-    }
-}
-
-impl<'a> Parsable<'a> for PinString<'a> {
-    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
-        if let Ok((rem, quoted)) = QuotedString::parse(input) {
-            return Ok((rem, PinString(quoted.0)));
-        }
-        use nom::bytes::complete::take_while1;
-        let (input, content) =
-            take_while1(|c: u8| c != b',' && c != b';' && c != b'\r' && c != b'\n')(input)?;
-        Ok((input, PinString(content)))
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct ApduData<'a>(pub &'a [u8]);
-
-impl<'a> ApduData<'a> {
-    pub fn to_vec(self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-}
-
-impl<'a> AsRef<[u8]> for ApduData<'a> {
-    fn as_ref(&self) -> &[u8] {
-        self.0
-    }
-}
-
-impl<'a> Parsable<'a> for ApduData<'a> {
-    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
-        use nom::{
-            branch::alt,
-            bytes::complete::{take_while, take_while1},
-            sequence::delimited,
-        };
-        let parse_quoted = delimited(tag(br#"""#), take_while(|c| c != b'"'), tag(br#"""#));
-        let parse_unquoted = take_while1(|c: u8| c.is_ascii_hexdigit());
-        let (input, content) = alt((parse_quoted, parse_unquoted))(input)?;
-        Ok((input, ApduData(content)))
-    }
-}
-
-pub fn parse_raw_data(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    use nom::bytes::complete::take_while;
-    let (input, content) = take_while(|c: u8| c != b'\r' && c != b'\n')(input)?;
-    Ok((input, content))
-}
 
 pub fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
     use nom::{
@@ -125,11 +24,11 @@ pub fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Command<'a> {
     Sim(SimCommand<'a>),
-    Call(CallCommand<'a>),
+    Call(CallCommand),
     Sms(SmsCommand<'a>),
     Network(NetworkCommand<'a>),
     Data(DataCommand<'a>),
-    Misc(MiscCommand<'a>),
+    Misc(MiscCommand),
     Sup(SupCommand<'a>),
     Stk(StkCommand<'a>),
 }
@@ -155,9 +54,14 @@ mod tests {
     use super::*;
     use crate::{
         apdu::Instruction,
+        data_service::Qos,
+        sms_service::{MessageStatus, MessageStorage},
         types::{
-            CallMode, CallWaitingMode, CallWaitingPresentation, ClirMode, CopsFormat, CopsMode,
-            DialArgs, PdpType, PhoneNumber, ProductSerialNumberType,
+            CallForwardingMode, CallForwardingReason, CallMode, CallWaitingMode, CharacterSet,
+            ClirMode, CopsFormat, CopsMode, CtecPreferredMask, CtecTechnology, DialArgs, DtmfArgs,
+            DtmfTone, PacketEventReportingMode, Parsable, PdpContextActivateArgs, PdpType,
+            PhoneNumber, ProductSerialNumberType, RadioPowerLevel, SendSmsArgs, ServiceClass,
+            TypeOfAddress,
         },
     };
 
@@ -204,7 +108,7 @@ mod tests {
             Command::Data(DataCommand::DefinePdpContext(
                 1,
                 PdpType::Ip,
-                QuotedString(b"apn"),
+                QuotedString("apn"),
                 None,
                 None,
                 None
@@ -222,7 +126,7 @@ mod tests {
             Command::Data(DataCommand::DefinePdpContext(
                 1,
                 PdpType::Ipv6,
-                QuotedString(b"fast.t-mobile.com"),
+                QuotedString("fast.t-mobile.com"),
                 None,
                 Some(0),
                 Some(0)
@@ -234,14 +138,20 @@ mod tests {
     fn test_parse_cgeqmin() {
         let (rem, cmd) = Command::parse(b"AT+CGEQMIN=1,2,3,4,5,6").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Data(DataCommand::SetQualityOfServiceMinimum(1, 2, 3, 4, 5, 6)));
+        assert_eq!(
+            cmd,
+            Command::Data(DataCommand::SetQualityOfServiceMinimum(1, Qos::new(2, 3, 4, 5, 6)))
+        );
     }
 
     #[test]
     fn test_parse_cgeqreq() {
         let (rem, cmd) = Command::parse(b"AT+CGEQREQ=1,2,3,4,5,6").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Data(DataCommand::SetQualityOfServiceRequested(1, 2, 3, 4, 5, 6)));
+        assert_eq!(
+            cmd,
+            Command::Data(DataCommand::SetQualityOfServiceRequested(1, Qos::new(2, 3, 4, 5, 6)))
+        );
     }
 
     #[test]
@@ -250,7 +160,7 @@ mod tests {
         assert!(rem.is_empty());
         assert_eq!(
             cmd,
-            Command::Data(DataCommand::SetQualityOfServiceMinimumGprs(1, 2, 3, 4, 5, 6))
+            Command::Data(DataCommand::SetQualityOfServiceMinimumGprs(1, Qos::new(2, 3, 4, 5, 6)))
         );
     }
 
@@ -260,7 +170,10 @@ mod tests {
         assert!(rem.is_empty());
         assert_eq!(
             cmd,
-            Command::Data(DataCommand::SetQualityOfServiceRequestedGprs(1, 2, 3, 4, 5, 6))
+            Command::Data(DataCommand::SetQualityOfServiceRequestedGprs(
+                1,
+                Qos::new(2, 3, 4, 5, 6)
+            ))
         );
     }
 
@@ -268,14 +181,20 @@ mod tests {
     fn test_parse_cgact() {
         let (rem, cmd) = Command::parse(b"AT+CGACT=1,1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Data(DataCommand::SetPdpContextActivate(1, 1)));
+        assert_eq!(
+            cmd,
+            Command::Data(DataCommand::SetPdpContextActivate(PdpContextActivateArgs {
+                cid: 1,
+                state: true,
+            }))
+        );
     }
 
     #[test]
     fn test_parse_cgatt() {
         let (rem, cmd) = Command::parse(b"AT+CGATT=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Data(DataCommand::SetPsAttach(1)));
+        assert_eq!(cmd, Command::Data(DataCommand::SetPsAttach(true)));
     }
 
     #[test]
@@ -289,14 +208,31 @@ mod tests {
     fn test_parse_cgdata() {
         let (rem, cmd) = Command::parse(b"AT+CGDATA=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(1)));
+        assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(None, Some(1))));
+
+        let (rem, cmd) = Command::parse(b"AT+CGDATA=\"PPP\",1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Data(DataCommand::EnterDataState(Some(QuotedString("PPP")), Some(1)))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CGDATA=").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(None, None)));
     }
 
     #[test]
     fn test_parse_cgerep() {
         let (rem, cmd) = Command::parse(b"AT+CGEREP=1,1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Data(DataCommand::SetPacketEventReporting(1, 1)));
+        assert_eq!(
+            cmd,
+            Command::Data(DataCommand::SetPacketEventReporting(
+                PacketEventReportingMode::Discard,
+                Some(true)
+            ))
+        );
     }
 
     #[test]
@@ -375,7 +311,7 @@ mod tests {
         let (rem, cmd) = Command::parse(b"ATD*99***1#\r\n").unwrap();
         assert_eq!(rem, b"\r\n");
         let expected_dial_args = DialArgs {
-            number: PhoneNumber::new("*99***1#"),
+            number: PhoneNumber::new_for_test("*99***1#"),
             clir: ClirMode::SubscriptionDefault,
             is_emergency: false,
         };
@@ -386,10 +322,7 @@ mod tests {
     fn test_parse_ccwa_set_single_arg() {
         let (rem, cmd) = Command::parse(b"AT+CCWA=1").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(
-            cmd,
-            Command::Sup(SupCommand::SetCallWaiting(CallWaitingPresentation::Enable, None, None))
-        );
+        assert_eq!(cmd, Command::Sup(SupCommand::SetCallWaiting(true, None, None)));
     }
 
     #[test]
@@ -399,10 +332,45 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Sup(SupCommand::SetCallWaiting(
-                CallWaitingPresentation::Enable,
+                true,
                 Some(CallWaitingMode::Query),
-                Some(7)
+                Some(ServiceClass::VOICE_DATA_FAX)
             ))
+        );
+    }
+
+    #[test]
+    fn test_parse_ccfc() {
+        let (rem, cmd) = Command::parse(br#"AT+CCFC=0,1,"+1234567890",145,7"#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sup(SupCommand::CallForwarding {
+                reason: CallForwardingReason::Unconditional,
+                mode: CallForwardingMode::Enable,
+                number: Some(PhoneNumber::new_for_test("+1234567890")),
+                toa: Some(TypeOfAddress::International),
+                class: Some(ServiceClass::VOICE_DATA_FAX),
+                subaddr: None,
+                satype: None,
+                time: None,
+            })
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CCFC=0,0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sup(SupCommand::CallForwarding {
+                reason: CallForwardingReason::Unconditional,
+                mode: CallForwardingMode::Disable,
+                number: None,
+                toa: None,
+                class: None,
+                subaddr: None,
+                satype: None,
+                time: None,
+            })
         );
     }
 
@@ -417,14 +385,14 @@ mod tests {
     fn test_parse_colp_set() {
         let (rem, cmd) = Command::parse(b"AT+COLP=0").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Sup(SupCommand::SetColp(0)));
+        assert_eq!(cmd, Command::Sup(SupCommand::SetColp(false)));
     }
 
     #[test]
     fn test_parse_cscs_set() {
         let (rem, cmd) = Command::parse(br#"AT+CSCS="HEX""#).unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Misc(MiscCommand::SetCharacterSet(QuotedString(b"HEX"))));
+        assert_eq!(cmd, Command::Misc(MiscCommand::SetCharacterSet(CharacterSet::Hex)));
     }
 
     #[test]
@@ -470,8 +438,27 @@ mod tests {
                 mode: CopsMode::SetFormatOnly,
                 format: Some(CopsFormat::Numeric),
                 oper: None,
+                act: None,
             })
         );
+    }
+
+    #[test]
+    fn test_parse_cops_set_with_act() {
+        for raw in [0u8, 3, 6, 7, 11, 99] {
+            let input = format!("AT+COPS=1,2,\"310260\",{raw}");
+            let (rem, cmd) = Command::parse(input.as_bytes()).unwrap();
+            assert!(rem.is_empty(), "unparsed remainder for <AcT>={raw}");
+            assert_eq!(
+                cmd,
+                Command::Network(NetworkCommand::SetOperator {
+                    mode: CopsMode::Manual,
+                    format: Some(CopsFormat::Numeric),
+                    oper: Some(QuotedString("310260")),
+                    act: Some(raw),
+                })
+            );
+        }
     }
 
     #[test]
@@ -486,5 +473,309 @@ mod tests {
         let (rem, cmd) = Command::parse(b"AT+INVALID").unwrap();
         assert!(!rem.is_empty());
         assert_eq!(cmd, Command::Misc(MiscCommand::Test));
+    }
+
+    #[test]
+    fn test_parse_at_and_v() {
+        let (rem, cmd) = Command::parse(b"AT&V").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Misc(MiscCommand::ViewActiveConfiguration));
+    }
+
+    #[test]
+    fn test_parse_cmgw() {
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::ReceivedUnread)))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::ReceivedRead))));
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,2").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::StoredUnsent))));
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,3").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::StoredSent))));
+
+        // Out-of-range stat values fail to parse into MessageStatus, leaving trailing
+        // unparsed bytes
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,4").unwrap();
+        assert!(!rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
+
+        let (rem, cmd) = Command::parse(b"AT+CMGW=16,99").unwrap();
+        assert!(!rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
+    }
+
+    #[test]
+    fn test_parse_wsos() {
+        let (rem, cmd) = Command::parse(b"AT+WSOS=0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Call(CallCommand::SetEmergencyMode(false)));
+
+        let (rem, cmd) = Command::parse(b"AT+WSOS=1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Call(CallCommand::SetEmergencyMode(true)));
+
+        // AT+WSOS=2 should fail parsing (bool only accepts 0 and 1)
+        assert!(CallCommand::parse(b"AT+WSOS=2").is_err());
+    }
+
+    #[test]
+    fn test_parse_cpms() {
+        let (rem, cmd) = Command::parse(b"AT+CPMS=\"SM\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetPreferredMessageStorage(MessageStorage::Sim, None, None))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CPMS=\"SM\",\"ME\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetPreferredMessageStorage(
+                MessageStorage::Sim,
+                Some(MessageStorage::Me),
+                None
+            ))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CPMS=\"SM\",\"ME\",\"SM\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetPreferredMessageStorage(
+                MessageStorage::Sim,
+                Some(MessageStorage::Me),
+                Some(MessageStorage::Sim)
+            ))
+        );
+
+        // Invalid storage string fails parsing
+        assert!(SmsCommand::parse(b"AT+CPMS=\"INVALID\"").is_err());
+    }
+
+    #[test]
+    fn test_parse_cmut_bool() {
+        let (rem, cmd) = Command::parse(b"AT+CMUT=0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Call(CallCommand::SetMute(false)));
+
+        let (rem, cmd) = Command::parse(b"AT+CMUT=1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Call(CallCommand::SetMute(true)));
+
+        assert!(CallCommand::parse(b"AT+CMUT=2").is_err());
+    }
+
+    #[test]
+    fn test_parse_dtmf_args_valid_and_invalid() {
+        // Valid single DTMF digit without duration
+        let (rem, cmd) = Command::parse(b"AT+VTS=1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Call(CallCommand::SendDtmf(DtmfArgs { tone: DtmfTone(b'1'), duration: None }))
+        );
+
+        // Valid DTMF digit with duration
+        let (rem, cmd) = Command::parse(b"AT+VTS=\"A\",250").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Call(CallCommand::SendDtmf(DtmfArgs {
+                tone: DtmfTone(b'A'),
+                duration: Some(250),
+            }))
+        );
+
+        // Case preservation
+        let (_, cmd_lower) = Command::parse(b"AT+VTS=d").unwrap();
+        assert_eq!(
+            cmd_lower,
+            Command::Call(CallCommand::SendDtmf(DtmfArgs { tone: DtmfTone(b'd'), duration: None }))
+        );
+
+        // Multi-digit rejection upfront
+        assert!(CallCommand::parse(b"AT+VTS=12").is_err());
+
+        // Invalid tone character rejection
+        assert!(CallCommand::parse(b"AT+VTS=X").is_err());
+
+        // Non-ASCII character whose lower 8 bits match valid DTMF (e.g. \u{0130} is
+        // 304, 304 % 256 = 48 = b'0')
+        assert!(CallCommand::parse("AT+VTS=\"\u{0130}\"".as_bytes()).is_err());
+
+        // Malformed duration rejection
+        assert!(CallCommand::parse(b"AT+VTS=1,abc").is_err());
+    }
+
+    #[test]
+    fn test_parse_ctec_preferred_mask() {
+        // Valid CTEC with hex mask (with 0x prefix)
+        let (rem, cmd) = Command::parse(b"AT+CTEC=32,0x63").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Network(NetworkCommand::SetNetworkTechnology(
+                CtecTechnology::Lte,
+                Some(CtecPreferredMask(0x63))
+            ))
+        );
+
+        // Valid CTEC with hex mask (without prefix)
+        let (rem, cmd) = Command::parse(b"AT+CTEC=32,63").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Network(NetworkCommand::SetNetworkTechnology(
+                CtecTechnology::Lte,
+                Some(CtecPreferredMask(0x63))
+            ))
+        );
+
+        // Invalid unsupported technology bit rejection upfront
+        assert!(CtecPreferredMask::parse(b"0x04").is_err());
+    }
+
+    #[test]
+    fn test_parse_cscs_character_sets() {
+        assert_eq!(
+            Command::parse(br#"AT+CSCS="GSM""#).unwrap().1,
+            Command::Misc(MiscCommand::SetCharacterSet(CharacterSet::Gsm))
+        );
+        assert_eq!(
+            Command::parse(br#"AT+CSCS="HEX""#).unwrap().1,
+            Command::Misc(MiscCommand::SetCharacterSet(CharacterSet::Hex))
+        );
+        assert_eq!(
+            Command::parse(br#"AT+CSCS="UCS2""#).unwrap().1,
+            Command::Misc(MiscCommand::SetCharacterSet(CharacterSet::Ucs2))
+        );
+        assert_eq!(
+            Command::parse(br#"AT+CSCS="IRA""#).unwrap().1,
+            Command::Misc(MiscCommand::SetCharacterSet(CharacterSet::Ira))
+        );
+        assert_eq!(
+            Command::parse(br#"AT+CSCS="PCCP437""#).unwrap().1,
+            Command::Misc(MiscCommand::SetCharacterSet(CharacterSet::Pccp437))
+        );
+        assert_eq!(
+            Command::parse(br#"AT+CSCS="8859-1""#).unwrap().1,
+            Command::Misc(MiscCommand::SetCharacterSet(CharacterSet::Iso8859_1))
+        );
+        assert_eq!(
+            Command::parse(br#"AT+CSCS="UTF-8""#).unwrap().1,
+            Command::Misc(MiscCommand::SetCharacterSet(CharacterSet::Utf8))
+        );
+        assert!(CharacterSet::parse(br#""INVALID""#).is_err());
+    }
+
+    #[test]
+    fn test_parse_cmgs_args() {
+        // PDU mode (length only)
+        let (rem, cmd) = Command::parse(b"AT+CMGS=24").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Sms(SmsCommand::SendSms(SendSmsArgs::Pdu { length: 24 })));
+
+        // Text mode (destination address in quotes)
+        let (rem, cmd) = Command::parse(br#"AT+CMGS="+1234567890""#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SendSms(SendSmsArgs::Text {
+                da: QuotedString("+1234567890"),
+                toda: None,
+            }))
+        );
+
+        // Text mode with toda
+        let (rem, cmd) = Command::parse(br#"AT+CMGS="+1234567890",145"#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SendSms(SendSmsArgs::Text {
+                da: QuotedString("+1234567890"),
+                toda: Some(TypeOfAddress::International),
+            }))
+        );
+    }
+
+    #[test]
+    fn test_parse_cfun() {
+        let (rem, cmd) = Command::parse(b"AT+CFUN=1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Network(NetworkCommand::SetRadioPower(RadioPowerLevel::Full, None))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CFUN=1,1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Network(NetworkCommand::SetRadioPower(RadioPowerLevel::Full, Some(true)))
+        );
+
+        let (rem, cmd) = Command::parse(b"AT+CFUN=0,0").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Network(NetworkCommand::SetRadioPower(RadioPowerLevel::Minimum, Some(false)))
+        );
+    }
+
+    #[test]
+    fn test_parse_csca() {
+        let (rem, cmd) = Command::parse(br#"AT+CSCA="+1234567890",145"#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetSmscAddress(
+                QuotedString("+1234567890"),
+                Some(TypeOfAddress::International)
+            ))
+        );
+
+        let (rem, cmd) = Command::parse(br#"AT+CSCA="12345",129"#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetSmscAddress(
+                QuotedString("12345"),
+                Some(TypeOfAddress::National)
+            ))
+        );
+
+        let (rem, cmd) = Command::parse(br#"AT+CSCA="+1234567890""#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sms(SmsCommand::SetSmscAddress(QuotedString("+1234567890"), None))
+        );
+    }
+
+    #[test]
+    fn test_parse_quoted_string_utf8_validation() {
+        // Valid UTF-8 quoted string
+        let (rem, s) = QuotedString::parse(b"\"Hello World\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(s.as_str(), "Hello World");
+
+        // Invalid UTF-8 bytes rejected upfront at nom parse time
+        let invalid_utf8 = [b'"', 0xFF, 0xFE, 0xFD, b'"'];
+        assert!(QuotedString::parse(&invalid_utf8).is_err());
     }
 }

@@ -43,4 +43,6 @@ pub use profiles::{
     SIM_TYPE_CTS, SIM_TYPE_DEFAULT, SIM_TYPE_TEL_ALASKA, XmlProfileError, get_builtin_profile,
     parse_xml_profile,
 };
-pub use types::{AT_ERROR, AT_OK, HostEvent, ModemError, ModemId, ModemSink, Plmn, PlmnError};
+pub use types::{
+    AT_ERROR, AT_OK, HostEvent, ModemError, ModemId, ModemSink, PhoneNumber, Plmn, PlmnError,
+};

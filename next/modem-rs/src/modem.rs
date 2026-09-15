@@ -20,9 +20,8 @@ use crate::{
     sup_service::SupService,
     time::Clock,
     types::{
-        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HandledCommand, ModemError,
-        ModemId, NumberPresentation, Parsable, PhoneNumber, RadioPowerLevel,
-        RegistrationUnsolicitedMode, Response,
+        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, ModemError, ModemId,
+        NumberPresentation, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
     },
 };
 
@@ -81,7 +80,7 @@ impl ModemImpl {
             enable_unsolicited_urcs: enable_unsol,
             sim_service,
             network_service: NetworkService::new(quirks, home_plmn),
-            sms_service: SmsService::default(),
+            sms_service: SmsService::new(quirks),
             stk_service: StkService::new(profile.stk.clone()),
             sup_service: SupService::default(),
             misc_service,
@@ -193,9 +192,8 @@ impl ModemImpl {
         effects
     }
 
-    pub fn set_phone_number(&mut self, number: &str) {
-        let phone = PhoneNumber::parse(number.as_bytes()).map(|(_, p)| p).ok();
-        self.sim_service.set_msisdn(phone.as_ref());
+    pub fn set_phone_number(&mut self, phone: PhoneNumber) {
+        self.sim_service.set_msisdn(Some(&phone));
     }
 
     pub fn phone_number(&self) -> Option<PhoneNumber> {
@@ -362,36 +360,13 @@ impl ModemImpl {
 
     /// Receives an AT command from the modem.
     pub fn receive_at_command(&mut self, command_bytes: &[u8]) -> Vec<ModemEffect> {
-        // Check for SMS PDU submission first. This requires special state handling.
-        let sms_pdu_action = if self.sms_service.waiting_for_pdu_len.is_some() {
-            if command_bytes.ends_with(b"\x1a") {
-                let pdu = &command_bytes[..command_bytes.len() - 1];
-                let store = self.sms_service.waiting_for_pdu_store;
-
-                let sms_res = if store {
-                    self.sms_service.handle_store_sms(&mut self.sim_service, pdu)
-                } else {
-                    let sender = self.phone_number();
-                    let sender_str = sender.as_ref().map(|n| n.as_str()).unwrap_or("");
-                    self.sms_service.handle_sms_body(pdu, sender_str)
-                };
-
-                let exec_res: ExecutionResult = sms_res.into();
-
-                // Clear waiting state
-                self.sms_service.waiting_for_pdu_len = None;
-                self.sms_service.waiting_for_pdu_store = false;
-
-                Some(exec_res)
-            } else if command_bytes.contains(&0x1b) {
-                // ESC
-                // Abort
-                self.sms_service.waiting_for_pdu_len = None;
-                self.sms_service.waiting_for_pdu_store = false;
-                Some(ExecutionResult::Success(HandledCommand::ok()))
-            } else {
-                None // Return None to wait for more data if the buffer is incomplete.
-            }
+        let sms_pdu_action = if self.sms_service.is_waiting_for_prompt() {
+            let sender = self.phone_number();
+            self.sms_service.handle_prompt_input(
+                &mut self.sim_service,
+                command_bytes,
+                sender.as_ref().map(PhoneNumber::as_str),
+            )
         } else {
             None
         };
@@ -411,20 +386,10 @@ impl ModemImpl {
                         effects.push(ModemEffect::Action(act));
                     }
                 }
-                ExecutionResult::Error { cme, urcs } => {
+                err => {
                     let mut combined = String::new();
-                    for r in &urcs {
-                        write!(combined, "{r}").unwrap();
-                    }
-                    let err_str = match cme {
-                        Some(err) => err.format_response(self.misc_service.cmee_mode()),
-                        None => "ERROR\r\n".to_string(),
-                    };
-                    combined.push_str(&err_str);
+                    err.format_error_into(&mut combined, self.misc_service.cmee_mode());
                     effects.push(ModemEffect::Response(combined.into_bytes()));
-                }
-                ExecutionResult::Unhandled => {
-                    effects.push(ModemEffect::Response(b"ERROR\r\n".to_vec()));
                 }
             }
             return effects;
@@ -505,7 +470,7 @@ impl ModemImpl {
 
     pub fn set_operator(&mut self, operator: &str) -> Vec<ModemEffect> {
         let mode = if operator.is_empty() { CopsMode::Automatic } else { CopsMode::Manual };
-        let oper = if operator.is_empty() { None } else { Some(operator.as_bytes()) };
+        let oper = if operator.is_empty() { None } else { Some(operator) };
         let mut effects = Vec::new();
         if let Ok(Some(crate::network_service::NetworkResponse::Urcs(urcs))) =
             self.network_service.set_operator_manual(mode, oper)
@@ -530,12 +495,22 @@ impl ModemImpl {
     ) -> ExecutionResult {
         let mut result = self.execute(command);
         if let ExecutionResult::Success(ref mut handled) = result {
-            if let Command::Network(NetworkCommand::SetRadioPower(RadioPowerLevel::Full)) = command
-            {
-                effects.push(ModemEffect::Schedule {
-                    delay: std::time::Duration::from_millis(10),
-                    event: ModemEvent::AttachNetwork,
-                });
+            if let Command::Network(NetworkCommand::SetRadioPower(power, reset)) = command {
+                let should_reset = reset.unwrap_or(false);
+                if should_reset || *power != RadioPowerLevel::Full {
+                    for action in self.call_service.hangup_all(self.id) {
+                        effects.push(ModemEffect::Action(action));
+                    }
+                    self.data_service.deactivate_all();
+                }
+                if *power == RadioPowerLevel::Full
+                    && (!self.network_service.is_attached() || should_reset)
+                {
+                    effects.push(ModemEffect::Schedule {
+                        delay: std::time::Duration::from_millis(10),
+                        event: ModemEvent::AttachNetwork,
+                    });
+                }
             }
             let mode_active = match command {
                 Command::Network(
@@ -608,19 +583,11 @@ impl ModemImpl {
                                     stop_chain = true;
                                 }
                             }
-                            ExecutionResult::Error { cme, urcs } => {
-                                for r in urcs {
-                                    write!(combined_responses, "{r}").unwrap();
-                                }
-                                let err_str = match cme {
-                                    Some(err) => err.format_response(self.misc_service.cmee_mode()),
-                                    None => "ERROR\r\n".to_string(),
-                                };
-                                combined_responses.push_str(&err_str);
-                                stop_chain = true;
-                            }
-                            ExecutionResult::Unhandled => {
-                                combined_responses.push_str("ERROR\r\n");
+                            err => {
+                                err.format_error_into(
+                                    &mut combined_responses,
+                                    self.misc_service.cmee_mode(),
+                                );
                                 stop_chain = true;
                             }
                         }
@@ -758,7 +725,7 @@ mod tests {
         // Enable CLIP via AT command
         modem.execute_chained_commands(&[b"AT+CLIP=1".to_vec()]);
 
-        let phone = PhoneNumber::new("123456");
+        let phone = PhoneNumber::new_for_test("123456");
         let effects =
             modem.trigger_incoming_call(Some(&phone), NumberPresentation::NotAvailable, None);
 

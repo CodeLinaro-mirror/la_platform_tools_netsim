@@ -34,6 +34,7 @@ struct TestHarness {
     client: CellClient,
     device_server_rx: mpsc::Receiver<ResourceRequest<DeviceActor>>,
     server_handle: tokio::task::JoinHandle<()>,
+    event_tx: mpsc::UnboundedSender<modem_rs::HostEvent>,
 }
 
 async fn setup_test_harness() -> TestHarness {
@@ -42,11 +43,18 @@ async fn setup_test_harness() -> TestHarness {
     let resource_client = ResourceClient::new(device_server_tx);
     let device_client = DeviceClient::new(Box::new(resource_client));
 
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel::<modem_rs::HostEvent>();
+    let controller = Box::new(modem_rs::ModemNetworkSimulator::new(event_tx.clone()));
     let (actor, client) = cell_actor::new();
-    let service = cell_actor::CellActor::new(device_client);
+    let service = cell_actor::CellActor {
+        device_client,
+        controller,
+        active_chips: std::collections::HashMap::new(),
+        event_receiver: Some(event_rx),
+    };
     let server_handle = tokio::spawn(actor.run(service));
 
-    TestHarness { client, device_server_rx, server_handle }
+    TestHarness { client, device_server_rx, server_handle, event_tx }
 }
 
 impl Drop for TestHarness {
@@ -120,7 +128,7 @@ async fn test_delete_chip() {
     }
 }
 
-// T013: Test for stream/sink error triggering chip deletion
+// T013: Test for stream error triggering chip deletion
 #[tokio::test]
 async fn test_stream_error_triggers_delete() {
     let mut harness = setup_test_harness().await;
@@ -147,6 +155,48 @@ async fn test_stream_error_triggers_delete() {
         Ok(None) => panic!("Stream closed"),
         Err(_) => panic!("Timed out waiting for NotifyChipRemoved message on stream error"),
     }
+}
+
+// Test for host event SinkError triggering chip deletion
+#[tokio::test]
+async fn test_sink_error_triggers_delete() {
+    let mut harness = setup_test_harness().await;
+    let chip_id = ChipId(4);
+    let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink();
+    let params = create_params(chip_id, stream, sink);
+    harness.client.create(chip_id, params).await.unwrap();
+
+    // Verify chip was created and is active
+    let chip = harness.client.read(chip_id).await.unwrap();
+    assert_eq!(chip.id, chip_id.0);
+
+    // Send HostEvent::SinkError to simulate a broken client sink
+    harness.event_tx.send(modem_rs::HostEvent::SinkError(chip_id.0)).unwrap();
+
+    // Verify NotifyChipRemoved is sent to DeviceActor
+    match tokio::time::timeout(std::time::Duration::from_secs(2), harness.device_server_rx.recv())
+        .await
+    {
+        Ok(Some(ResourceRequest::Action {
+            action: DeviceAction::NotifyChipRemoved(_device_id, id),
+            respond_to,
+            ..
+        })) => {
+            assert_eq!(id, chip_id);
+            let _ = respond_to.send(Ok(DeviceActionResult::Success));
+        }
+        Ok(Some(msg)) => panic!("Received unexpected message: {:?}", msg),
+        Ok(None) => panic!("Stream closed"),
+        Err(_) => panic!("Timed out waiting for NotifyChipRemoved message on sink error"),
+    }
+
+    // Verify chip is deleted from CellActor
+    let read_result = harness.client.read(chip_id).await;
+    assert!(
+        read_result.is_err(),
+        "Expected chip to be deleted after SinkError, got: {:?}",
+        read_result
+    );
 }
 
 // T020: Test stream to controller passthrough and ECHO response

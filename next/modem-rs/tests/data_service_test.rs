@@ -3,36 +3,24 @@
 
 use crate::{common::constants::*, steps::*, world::World};
 
-// Scenario: Set and Query QoS Minimum
-//   Given a modem "A"
-//   When AT command 'AT+CGDCONT=1,"IP","test"' is sent to "A"
-//   And AT command "AT+CGEQMIN=1,2,3,4,5,6" is sent to "A"
-//   And AT command "AT+CGEQMIN?" is sent to "A"
-//   Then response from "A" is "+CGEQMIN: 1,2,3,4,5,6"
-//   And response from "A" is "OK"
 #[test]
-fn test_set_and_query_quality_of_service_minimum() {
+fn test_set_and_query_quality_of_service() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    world.given_modem("A");
 
-    // Setup context
-    when_at_command_sent(
-        &mut world,
+    world.send_and_expect_ok(
         "A",
         &format!("AT+CGDCONT={TEST_PDP_CID},\"{TEST_PDP_TYPE}\",\"{TEST_APN}\""),
     );
-    then_wait_for_response_containing(&mut world, "A", "OK");
 
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+CGEQMIN={TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"),
-    );
-    then_wait_for_response_containing(&mut world, "A", "OK");
-
-    when_at_command_sent(&mut world, "A", "AT+CGEQMIN?");
-    then_response_is(&mut world, "A", &format!("+CGEQMIN: {TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"));
-    then_response_is(&mut world, "A", "OK");
+    for cmd in ["CGEQMIN", "CGEQREQ", "CGQMIN", "CGQREQ"] {
+        world.send_and_expect_ok("A", &format!("AT+{cmd}={TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"));
+        world.send_and_expect(
+            "A",
+            &format!("AT+{cmd}?"),
+            &[&format!("+{cmd}: {TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"), "OK"],
+        );
+    }
 }
 
 // Scenario: Activate PDP Context
@@ -119,95 +107,6 @@ fn test_query_pdp_context() {
 // Scenario: Set and Query QoS Requested
 //   Given a modem "A"
 //   When AT command 'AT+CGDCONT=1,"IP","test"' is sent to "A"
-//   And AT command "AT+CGEQREQ=1,2,3,4,5,6" is sent to "A"
-//   And AT command "AT+CGEQREQ?" is sent to "A"
-//   Then response from "A" is "+CGEQREQ: 1,2,3,4,5,6"
-//   And response from "A" is "OK"
-#[test]
-fn test_set_and_query_quality_of_service_requested() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+CGDCONT={TEST_PDP_CID},\"{TEST_PDP_TYPE}\",\"{TEST_APN}\""),
-    );
-    then_wait_for_response_containing(&mut world, "A", "OK");
-
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+CGEQREQ={TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"),
-    );
-    then_wait_for_response_containing(&mut world, "A", "OK");
-
-    when_at_command_sent(&mut world, "A", "AT+CGEQREQ?");
-    then_response_is(&mut world, "A", &format!("+CGEQREQ: {TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"));
-    then_response_is(&mut world, "A", "OK");
-}
-
-// Scenario: Set and Query QoS Minimum GPRS
-//   Given a modem "A"
-//   When AT command 'AT+CGDCONT=1,"IP","test"' is sent to "A"
-//   And AT command "AT+CGQMIN=1,2,3,4,5,6" is sent to "A"
-//   And AT command "AT+CGQMIN?" is sent to "A"
-//   Then response from "A" is "+CGQMIN: 1,2,3,4,5,6"
-//   And response from "A" is "OK"
-#[test]
-fn test_set_and_query_quality_of_service_minimum_gprs() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+CGDCONT={TEST_PDP_CID},\"{TEST_PDP_TYPE}\",\"{TEST_APN}\""),
-    );
-    then_wait_for_response_containing(&mut world, "A", "OK");
-
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+CGQMIN={TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"),
-    );
-    then_wait_for_response_containing(&mut world, "A", "OK");
-
-    when_at_command_sent(&mut world, "A", "AT+CGQMIN?");
-    then_response_is(&mut world, "A", &format!("+CGQMIN: {TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"));
-    then_response_is(&mut world, "A", "OK");
-}
-
-// Scenario: Set and Query QoS Requested GPRS
-//   Given a modem "A"
-//   When AT command 'AT+CGDCONT=1,"IP","test"' is sent to "A"
-//   And AT command "AT+CGQREQ=1,2,3,4,5,6" is sent to "A"
-//   And AT command "AT+CGQREQ?" is sent to "A"
-//   Then response from "A" is "+CGQREQ: 1,2,3,4,5,6"
-//   And response from "A" is "OK"
-#[test]
-fn test_set_and_query_quality_of_service_requested_gprs() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+CGDCONT={TEST_PDP_CID},\"{TEST_PDP_TYPE}\",\"{TEST_APN}\""),
-    );
-    then_wait_for_response_containing(&mut world, "A", "OK");
-
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+CGQREQ={TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"),
-    );
-    then_wait_for_response_containing(&mut world, "A", "OK");
-
-    when_at_command_sent(&mut world, "A", "AT+CGQREQ?");
-    then_response_is(&mut world, "A", &format!("+CGQREQ: {TEST_PDP_CID},{TEST_QOS_PARAMS_3G}"));
-    then_response_is(&mut world, "A", "OK");
-}
 
 // Scenario: Set PS Attach
 //   Given a modem "A"
@@ -260,8 +159,21 @@ fn test_enter_data_state() {
     );
     then_wait_for_response_containing(&mut world, "A", "OK");
 
+    // Omitted L2P defaults to PPP
     when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={TEST_PDP_CID}"));
     then_response_is(&mut world, "A", "CONNECT");
+
+    // Explicit valid L2P "PPP"
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"PPP\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Explicit valid L2P "IP"
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"IP\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Unsupported L2P returns error
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"INVALID\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "ERROR");
 }
 
 // Scenario: Set Packet Event Reporting

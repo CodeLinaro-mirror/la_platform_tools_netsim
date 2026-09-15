@@ -174,6 +174,8 @@ impl ActorService for NfcActor {
         let rx_count = Arc::new(AtomicU64::new(0));
         let tx_count_clone = tx_count.clone();
         let rx_count_clone = rx_count.clone();
+        let mode = Arc::new(std::sync::atomic::AtomicU8::new(crate::nfc_actor::NFC_MODE_IDLE));
+        let mode_clone = mode.clone();
 
         let task_1 = Box::pin(async move {
             while let Some(item) = stream.next().await {
@@ -186,7 +188,12 @@ impl ActorService for NfcActor {
                             match (bytes[0] >> 5) & 0x07 {
                                 NCI_MT_DATA => {
                                     nfc_stats_clone.incr_nci_data_tx();
-                                    nfc_stats_clone.incr(NfcApi::DataReceive);
+                                    if mode_clone.load(Ordering::Relaxed)
+                                        == crate::nfc_actor::NFC_MODE_LISTEN
+                                    {
+                                        nfc_stats_clone
+                                            .incr(NfcApi::CardEmulationProcessCommandApdu);
+                                    }
                                     rx_count_clone.fetch_add(1, Ordering::Relaxed);
                                 }
                                 NCI_MT_RSP => {
@@ -224,7 +231,6 @@ impl ActorService for NfcActor {
                 match (bytes[0] >> 5) & 0x07 {
                     NCI_MT_DATA => {
                         nfc_stats_rx.incr_nci_data_rx();
-                        nfc_stats_rx.incr(NfcApi::DataSend);
                         tx_count_clone.fetch_add(1, Ordering::Relaxed);
                     }
                     NCI_MT_CMD => {
@@ -247,6 +253,7 @@ impl ActorService for NfcActor {
                 nfc_writer,
                 tx_count,
                 rx_count,
+                mode,
             },
         );
 
@@ -262,6 +269,7 @@ impl ActorService for NfcActor {
     ) -> Result<(), Self::Error> {
         if let Some(state) = self.active_chips.remove(&id) {
             info!("Deleting NFC chip {}", id);
+            self.nfc_stats.incr(NfcApi::AdapterDisable);
             // Notify DeviceClient asynchronously
             let dc = self.device_client.clone();
             let device_id = state.device_id;
@@ -309,13 +317,19 @@ impl ActorService for NfcActor {
             .ok_or_else(|| NfcError::Chip(ChipError::ChipNotFound(id)))?;
 
         if let Some(enabled) = update.enabled {
-            state.enabled.store(enabled, Ordering::Release);
+            let prev = state.enabled.swap(enabled, Ordering::AcqRel);
+            if prev && !enabled {
+                self.nfc_stats.incr(NfcApi::AdapterDisable);
+            }
         }
         if let Some(netsim_model::ChipVariantUpdate::Nfc(netsim_model::NfcUpdate {
             radio: netsim_model::RadioUpdate { state: Some(enabled), .. },
         })) = &update.variant
         {
-            state.enabled.store(*enabled, Ordering::Release);
+            let prev = state.enabled.swap(*enabled, Ordering::AcqRel);
+            if prev && !*enabled {
+                self.nfc_stats.incr(NfcApi::AdapterDisable);
+            }
         }
 
         self.handle_get(id, ctx).await?.ok_or_else(|| NfcError::Chip(ChipError::ChipNotFound(id)))
@@ -476,5 +490,54 @@ mod tests {
         assert_eq!(bytes.as_ref(), packet);
         assert!(stream.next().await.is_none());
         Ok(())
+    }
+
+    struct DummyContext;
+    impl actor_framework::Context<NfcActor> for DummyContext {
+        fn set_interval(&mut self, _duration: std::time::Duration) {}
+        fn add_stream(&mut self, _id: ChipId, _stream: actor_framework::BoxStream) {}
+        fn remove_stream(&mut self, _id: ChipId) {}
+        fn add_typed_stream(&mut self, _id: usize, _stream: actor_framework::BoxTypedStream<()>) {}
+        fn remove_typed_stream(&mut self, _id: usize) {}
+        fn spawn(&mut self, _id: ChipId, _task: futures::future::BoxFuture<'static, ChipId>) {}
+        fn abort(&mut self, _id: ChipId) {}
+        fn shutdown(&mut self) {}
+        fn run_later(
+            &mut self,
+            _duration: std::time::Duration,
+            _f: actor_framework::TimerCallback<NfcActor>,
+        ) -> actor_framework::TimerKey {
+            unimplemented!()
+        }
+        fn cancel_timer(&mut self, _key: actor_framework::TimerKey) {}
+    }
+
+    #[tokio::test]
+    async fn test_nfc_actor_service_operations() {
+        use actor_framework::ActorService;
+        let (_runner, device_client) = device_actor::new();
+        let stats = Arc::new(crate::stats::NfcStats::new());
+        let mut actor = NfcActor::new(device_client, stats.clone());
+        let mut ctx = DummyContext;
+
+        // handle_list on empty
+        let list = actor.handle_list(&mut ctx).await.unwrap();
+        assert!(list.is_empty());
+
+        // handle_get non-existent chip
+        let get_res = actor.handle_get(ChipId(999), &mut ctx).await.unwrap();
+        assert!(get_res.is_none());
+
+        // handle_action GetStatistics
+        let action_res =
+            actor.handle_action(None, NfcAction::GetStatistics, &mut ctx).await.unwrap();
+        match action_res {
+            crate::nfc_actor::NfcActionResult::Statistics(s) => assert!(s.is_empty()),
+            _ => panic!("Expected Statistics result"),
+        }
+
+        // handle_delete non-existent chip
+        let del_res = actor.handle_delete(ChipId(999), &mut ctx).await;
+        assert!(del_res.is_ok());
     }
 }

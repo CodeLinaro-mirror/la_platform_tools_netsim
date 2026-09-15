@@ -1,0 +1,33 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
+module(
+    name = "rootcanal",
+    version = "0.0.1",
+)
+
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "rules_license", version = "1.0.0")
+bazel_dep(name = "rules_rust", version = "0.69.0")
+bazel_dep(name = "rules_proto", version = "7.1.0")
+bazel_dep(name = "protobuf", version = "33.5")
+bazel_dep(name = "boringssl", version = "0.20251124.0")
+bazel_dep(name = "fmt", version = "11.1.0")
+bazel_dep(name = "netsim", version = "0.0.1")
+
+lrc = use_extension("@netsim//cargo:local_rust_crates.bzl", "lrc")
+use_repo(
+    lrc,
+    "bytes",
+    "num-bigint",
+    "num-derive",
+    "num-integer",
+    "num-traits",
+    "pdl-compiler",
+    "pdl-runtime",
+    "pin-utils",
+    "rand",
+    "thiserror",
+)
