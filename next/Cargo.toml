@@ -29,6 +29,8 @@ members = [
 
   "slirp",
   "slirp/host",
+  "libslirp-rs",
+  "http-proxy",
 
   "rootcanal",
   "rootcanal-server",

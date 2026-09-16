@@ -513,7 +513,9 @@ pub use pcap::{
     ng::InterfaceDescriptionBlock, radiotap::create_radiotap_packet,
 };
 // Additional types needed by tests or external consumers
-pub use transport::tcp::TcpHeader;
+pub use transport::tcp::{
+    TcpHeader, TcpOptionMss, TcpOptionSackPermitted, TcpOptionWindowScale, option_kind,
+};
 pub use transport::{
     udp::UdpHeader,
     udp_json::{JsonUdpHeader, to_json},

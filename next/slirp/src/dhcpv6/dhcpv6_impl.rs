@@ -54,7 +54,8 @@ impl Dhcpv6Manager {
                 }
             }
 
-            // Client ID is required in stateless DHCPv6 Information-Request to send a Reply
+            // Client ID is required in stateless DHCPv6 Information-Request to
+            // send a Reply
             if let Some(client_id_val) = client_id {
                 let guest_mac = match packet.ethernet {
                     EthernetPacket::Untagged { frame, .. } => frame.src_addr,

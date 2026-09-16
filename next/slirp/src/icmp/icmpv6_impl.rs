@@ -76,7 +76,8 @@ impl Icmpv6Manager {
                     icmpv6_payload,
                 );
             } else {
-                // External IPv6 ping! Forward to host driver via Icmp connection flow.
+                // External IPv6 ping! Forward to host driver via Icmp
+                // connection flow.
                 if let Some((guest_id, _seq)) = icmpv6_header.echo_fields() {
                     let flow_key = (guest_ip, dest_ip, guest_id);
                     let (conn_id, _) = self.flows.entry(flow_key).or_insert_with(|| {
@@ -294,7 +295,8 @@ impl Icmpv6Manager {
         let (eth_slice, eth_payload) = buffer.split_at_mut(eth_header_len);
         let eth_frame = EthernetFrame::mut_from_bytes(eth_slice).unwrap();
         eth_frame.dst_addr = config.guest_mac;
-        // Use a generic QEMU/Slirp gateway MAC for error messages to match ICMPv4
+        // Use a generic QEMU/Slirp gateway MAC for error messages to match
+        // ICMPv4
         eth_frame.src_addr = MacAddr { bytes: [0x52, 0x54, 0x00, 0x12, 0x34, 0x56] };
         eth_frame.ethertype = 0x86DD.into(); // IPv6
 

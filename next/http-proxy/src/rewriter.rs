@@ -130,8 +130,8 @@ pub async fn connect_with_header_rewrite(
     proxy_addr: SocketAddr,
     auth_header: Option<String>,
 ) -> Result<TcpStream> {
-    // If a proxy is specified, connect there. Otherwise, connect to the original
-    // destination.
+    // If a proxy is specified, connect there. Otherwise, connect to the
+    // original destination.
     let connect_addr = proxy_addr;
 
     // 1. Connect to the next hop (either proxy or final destination).
@@ -147,7 +147,8 @@ pub async fn connect_with_header_rewrite(
             let (pipe_server_stream, _client_addr) = listener.accept().await?;
             let mut reader = BufReader::new(pipe_server_stream);
 
-            // Peek at the buffer to see if there's data to read without consuming it.
+            // Peek at the buffer to see if there's data to read without
+            // consuming it.
             let buffer = reader.fill_buf().await?;
             if buffer.is_empty() {
                 return Ok::<_, Error>(());
