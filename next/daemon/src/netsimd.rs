@@ -394,8 +394,9 @@ impl NetsimDaemon {
     /// Creates a new `NetsimDaemon` instance with custom directories.
     pub async fn new_with_dirs(
         discovery_dir: PathBuf,
-        args: Args,
+        mut args: Args,
     ) -> Result<StartUpMode, RunResult> {
+        args.sanitize();
         if args.version {
             println!("Netsim version: {}", get_version());
             return Err(RunResult::ExitedNormally);
