@@ -123,10 +123,7 @@ pub fn into_raw_descriptor(stream: TcpStream) -> Result<RawDescriptor> {
 
     // Use into_raw_socket for Windows to pass raw socket to C
     #[cfg(windows)]
-    Ok(std_stream
-        .into_raw_socket()
-        .try_into()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?)
+    Ok(std_stream.into_raw_socket().try_into().map_err(std::io::Error::other)?)
 }
 
 #[cfg(test)]
