@@ -625,7 +625,7 @@ pub enum TypeOfAddress {
     /// TON = 000 (Unknown), NPI = 0001 (ISDN / telephony E.164).
     /// Mandated by 3GPP TS 27.005 §3.1 when number lacks '+'.
     #[default]
-    National = 129,
+    Unknown = 129,
     /// International numbering plan with E.164 (0x91 = 145).
     /// TON = 001 (International), NPI = 0001 (ISDN / telephony E.164).
     /// Mandated by 3GPP TS 27.005 §3.1 when number starts with '+'.
@@ -634,7 +634,7 @@ pub enum TypeOfAddress {
 
 impl TypeOfAddress {
     pub fn from_number(number: &str) -> Self {
-        if number.starts_with('+') { Self::International } else { Self::National }
+        if number.starts_with('+') { Self::International } else { Self::Unknown }
     }
 
     pub const fn is_international(self) -> bool {
@@ -1713,13 +1713,13 @@ impl NumberPresentation {
     pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
         match self {
             Self::Restricted | Self::NotAvailable => {
-                FormattedNumber { number: "", toa: TypeOfAddress::National }
+                FormattedNumber { number: "", toa: TypeOfAddress::Unknown }
             }
             Self::Allowed => {
                 if let Some(num) = number {
                     FormattedNumber { number: num.as_str(), toa: num.toa() }
                 } else {
-                    FormattedNumber { number: "", toa: TypeOfAddress::National }
+                    FormattedNumber { number: "", toa: TypeOfAddress::Unknown }
                 }
             }
         }
@@ -2576,8 +2576,8 @@ mod tests {
     #[test]
     fn test_phone_number_toa() {
         assert_eq!(PhoneNumber::new_for_test("+16505550100").toa(), TypeOfAddress::International);
-        assert_eq!(PhoneNumber::new_for_test("16505550100").toa(), TypeOfAddress::National);
-        assert_eq!(PhoneNumber::new_for_test("12345").toa(), TypeOfAddress::National);
+        assert_eq!(PhoneNumber::new_for_test("16505550100").toa(), TypeOfAddress::Unknown);
+        assert_eq!(PhoneNumber::new_for_test("12345").toa(), TypeOfAddress::Unknown);
     }
 
     #[test]
@@ -2587,7 +2587,7 @@ mod tests {
         // Allowed
         let formatted = NumberPresentation::Allowed.format_number(Some(&phone));
         assert_eq!(formatted.number, "12345");
-        assert_eq!(formatted.toa, TypeOfAddress::National);
+        assert_eq!(formatted.toa, TypeOfAddress::Unknown);
 
         let int_phone = PhoneNumber::new_for_test("+12345");
         let formatted = NumberPresentation::Allowed.format_number(Some(&int_phone));
@@ -2596,17 +2596,17 @@ mod tests {
 
         let formatted = NumberPresentation::Allowed.format_number(None);
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, TypeOfAddress::National);
+        assert_eq!(formatted.toa, TypeOfAddress::Unknown);
 
         // Restricted
         let formatted = NumberPresentation::Restricted.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, TypeOfAddress::National);
+        assert_eq!(formatted.toa, TypeOfAddress::Unknown);
 
         // Not Available
         let formatted = NumberPresentation::NotAvailable.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, TypeOfAddress::National);
+        assert_eq!(formatted.toa, TypeOfAddress::Unknown);
     }
 
     #[test]
@@ -3028,7 +3028,7 @@ mod tests {
         assert_eq!(IcfParity::default(), IcfParity::Space);
         assert_eq!(FlowControlMode::default(), FlowControlMode::Hardware);
         assert_eq!(ServiceClass::default(), ServiceClass::VOICE_DATA_FAX);
-        assert_eq!(TypeOfAddress::default(), TypeOfAddress::National);
+        assert_eq!(TypeOfAddress::default(), TypeOfAddress::Unknown);
 
         let (_, sc) = ServiceClass::parse(b"3").unwrap();
         assert_eq!(sc.as_u8(), 3);

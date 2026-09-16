@@ -2089,7 +2089,7 @@ mod tests {
     fn test_is_fdn_allowed_disabled_by_default() {
         let mut fdn_record = vec![0xFF; 28];
         fdn_record[14] = 4; // len: 3 BCD + 1 TON
-        fdn_record[15] = 0x81; // National
+        fdn_record[15] = 0x81; // TON = Unknown, NPI = E.164
         fdn_record[16] = 0x21; // '1','2'
         fdn_record[17] = 0x43; // '3','4'
         fdn_record[18] = 0xF5; // '5', filler
