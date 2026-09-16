@@ -19,6 +19,7 @@ use common::{
             get_discovery_directory, get_hci_port, get_instance, get_instance_name,
             redirect_std_stream,
         },
+        zip_artifact::{remove_old_artifacts_in_dir, zip_artifacts_in_dir},
     },
 };
 use device_actor::DeviceClient;
@@ -361,6 +362,10 @@ pub struct NetsimDaemon {
     _grpc_server: Option<grpcio::Server>,
     /// The DeviceActor task handle.
     device_task: tokio::task::JoinHandle<()>,
+    /// The CaptureActor task handle.
+    capture_task: tokio::task::JoinHandle<()>,
+    /// Directory for session artifacts (pcaps, stats, zip archives).
+    artifact_dir: PathBuf,
     link_client: Box<dyn link_api::LinkClient>,
 
     slirp_client: SlirpClient,
@@ -496,6 +501,15 @@ impl NetsimDaemon {
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
         info!("INI file path: {}", ini_guard.path().display());
+
+        let artifact_dir = if cfg!(feature = "testing") {
+            ini_guard.path().parent().map(|p| p.to_path_buf()).unwrap_or_else(netsimd_temp_dir)
+        } else {
+            netsimd_temp_dir()
+        };
+
+        // Gets rid of old artifacts (pcap and zip files)
+        remove_old_artifacts_in_dir(&artifact_dir);
 
         // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
@@ -788,7 +802,7 @@ impl NetsimDaemon {
         };
 
         let stats_path = if cfg!(feature = "testing") {
-            initialized_guard.path().parent().map(|p| p.join("netsim_session_stats.json"))
+            Some(artifact_dir.join("netsim_session_stats.json"))
         } else {
             None
         };
@@ -815,9 +829,15 @@ impl NetsimDaemon {
         join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
-        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap, None)));
         join_set.spawn(uwb_runner.run(uwb_actor));
         join_set.spawn(nfc_runner.run(nfc_actor_state));
+
+        // Spawn CaptureActor separately so shutdown can deterministically await flush
+        let capture_dir =
+            if cfg!(feature = "testing") { Some(artifact_dir.join("pcaps")) } else { None };
+        let capture_task = tokio::spawn(
+            capture_runner.run(capture_actor::CaptureActor::new(args.pcap, capture_dir)),
+        );
 
         // Spawn DeviceActor separately
         device_actor_state.set_self_client(device_client.clone());
@@ -865,6 +885,8 @@ impl NetsimDaemon {
                 args,
                 _grpc_server: Some(grpc_server),
                 device_task,
+                capture_task,
+                artifact_dir,
                 link_client: Box::new(link_client),
                 slirp_client,
                 chip_clients: daemon_chip_clients,
@@ -913,14 +935,22 @@ impl NetsimDaemon {
                 warn!("ChipActor shutdown error: {}", e);
             }
         }
+        // Shut down CaptureActor after packet producers have stopped, and await
+        // task completion so all buffered PCAP data is flushed and file handles
+        // are closed before zipping.
+        if !self.capture_task.is_finished() {
+            if let Err(e) = self.capture_client.shutdown().await {
+                warn!("CaptureActor shutdown error: {}", e);
+            }
+            let _ = (&mut self.capture_task).await;
+        }
     }
 
-    async fn handle_device_actor_completion(&mut self, result: Result<(), tokio::task::JoinError>) {
+    fn handle_device_actor_completion(&self, result: Result<(), tokio::task::JoinError>) {
         info!("DeviceActor exited. Shutting down daemon.");
         if let Err(e) = result {
             error!("DeviceActor panicked: {}", e);
         }
-        self.shutdown_actors().await;
     }
 
     fn handle_secondary_task_completion(
@@ -998,29 +1028,40 @@ impl NetsimDaemon {
 
                 // Branch 2: Wait for DeviceActor to complete (primary shutdown signal)
                 device_result = &mut self.device_task => {
-                    self.handle_device_actor_completion(device_result).await;
+                    self.handle_device_actor_completion(device_result);
                     break;
                 }
 
-                // Branch 3: Wait for a task in the JoinSet to complete (abnormal shutdown)
+                // Branch 3: Wait for a task in the JoinSet or CaptureActor to complete (abnormal shutdown)
                 join_result = self.join_set.join_next() => {
                     if self.handle_secondary_task_completion(join_result) {
                         break;
                     }
                 }
+                capture_result = &mut self.capture_task => {
+                    if self.handle_secondary_task_completion(Some(capture_result)) {
+                        break;
+                    }
+                }
+
                 // Branch 4: Graceful shutdown
                 () = &mut shutdown_signal => {
                     info!("Shutting down gracefully...");
-                    self.shutdown_actors().await;
-                    if !self.device_task.is_finished() {
-                        let _ = self.device_client.shutdown().await;
-                        let _ = (&mut self.device_task).await;
-                    }
                     break;
                 }
             }
         }
+        if !self.device_task.is_finished() {
+            let _ = self.device_client.shutdown().await;
+            let _ = (&mut self.device_task).await;
+        }
+        self.shutdown_actors().await;
+        self.join_set.shutdown().await;
         info!("NetsimDaemon main loop exited.");
+        // Zip all artifacts
+        if let Err(err) = zip_artifacts_in_dir(&self.artifact_dir) {
+            error!("Failed to zip artifacts: {err:?}");
+        }
         RunResult::ExitedNormally
     }
 }
