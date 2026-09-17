@@ -2011,14 +2011,62 @@ impl std::fmt::Display for AccessTechnology {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum CtecTechnology {
     Gsm = 1,
     Wcdma = 2,
+    Cdma = 4,
+    Evdo = 8,
+    Tdscdma = 16,
     #[default]
     Lte = 32,
     Nr = 64,
+}
+
+impl CtecTechnology {
+    pub const ALL: &'static [CtecTechnology] =
+        &[Self::Gsm, Self::Wcdma, Self::Cdma, Self::Evdo, Self::Tdscdma, Self::Lte, Self::Nr];
+
+    pub const fn all_mask() -> u8 {
+        let mut mask = 0u8;
+        let mut i = 0;
+        while i < Self::ALL.len() {
+            mask |= Self::ALL[i] as u8;
+            i += 1;
+        }
+        mask
+    }
+
+    /// Converts an `AT+CTEC` wire value to a single active `CtecTechnology`.
+    ///
+    /// Under legacy Goldfish RIL, wire values represent direct technology
+    /// indices (e.g. 5 for LTE) rather than standard bitmasks.
+    pub fn from_wire(wire: u8, quirks: Quirks) -> Result<Self, ExecutionResult> {
+        if quirks.goldfish_ril_37_or_earlier {
+            match wire {
+                0 => Ok(Self::Gsm),
+                1 => Ok(Self::Wcdma),
+                2 => Ok(Self::Cdma),
+                3 => Ok(Self::Evdo),
+                4 => Ok(Self::Tdscdma),
+                5 => Ok(Self::Lte),
+                6 => Ok(Self::Nr),
+                _ => Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
+            }
+        } else {
+            match wire {
+                1 => Ok(Self::Gsm),
+                2 => Ok(Self::Wcdma),
+                4 => Ok(Self::Cdma),
+                8 => Ok(Self::Evdo),
+                16 => Ok(Self::Tdscdma),
+                32 => Ok(Self::Lte),
+                64 => Ok(Self::Nr),
+                _ => Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for CtecTechnology {
@@ -2332,8 +2380,12 @@ impl<'a> Parsable<'a> for DtmfArgs {
 }
 
 /// Cuttlefish / Android vendor CTEC 4-byte priority tier bitmask.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CtecPreferredMask(pub u32);
+
+impl CtecPreferredMask {
+    pub const VALID_RAT_MASK: u8 = CtecTechnology::all_mask();
+}
 
 impl<'a> Parsable<'a> for CtecPreferredMask {
     fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
@@ -2344,11 +2396,7 @@ impl<'a> Parsable<'a> for CtecPreferredMask {
             nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))
         })?;
 
-        let tier_mask = crate::constants::SUPPORTED_CTEC_TECHS
-            .iter()
-            .fold(0u8, |acc, &tech| acc | (tech as u8));
-
-        if val.to_le_bytes().iter().any(|&tier| (tier & !tier_mask) != 0) {
+        if val.to_le_bytes().iter().any(|&tier| (tier & !Self::VALID_RAT_MASK) != 0) {
             return Err(nom::Err::Error(nom::error::Error::new(
                 input,
                 nom::error::ErrorKind::Verify,
@@ -3115,5 +3163,78 @@ mod tests {
         assert!(sc.contains(ServiceClass::VOICE));
         assert!(sc.contains(ServiceClass::DATA));
         assert!(!sc.contains(ServiceClass::FAX));
+    }
+
+    #[test]
+    fn test_ctec_technology_from_wire_standard() {
+        let quirks = Quirks::default();
+        let expected = [
+            (1, Ok(CtecTechnology::Gsm)),
+            (2, Ok(CtecTechnology::Wcdma)),
+            (4, Ok(CtecTechnology::Cdma)),
+            (8, Ok(CtecTechnology::Evdo)),
+            (16, Ok(CtecTechnology::Tdscdma)),
+            (32, Ok(CtecTechnology::Lte)),
+            (64, Ok(CtecTechnology::Nr)),
+            (0, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (3, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (5, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (6, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (99, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+        ];
+        for (raw, want) in expected {
+            assert_eq!(CtecTechnology::from_wire(raw, quirks), want, "wire={raw}");
+        }
+    }
+
+    #[test]
+    fn test_ctec_technology_from_wire_goldfish_37() {
+        let quirks = Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() };
+        let expected = [
+            (0, Ok(CtecTechnology::Gsm)),
+            (1, Ok(CtecTechnology::Wcdma)),
+            (2, Ok(CtecTechnology::Cdma)),
+            (3, Ok(CtecTechnology::Evdo)),
+            (4, Ok(CtecTechnology::Tdscdma)),
+            (5, Ok(CtecTechnology::Lte)),
+            (6, Ok(CtecTechnology::Nr)),
+            (7, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (8, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (16, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (32, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (64, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (99, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+        ];
+        for (raw, want) in expected {
+            assert_eq!(CtecTechnology::from_wire(raw, quirks), want, "wire={raw}");
+        }
+    }
+
+    #[test]
+    fn test_ctec_preferred_mask_parsing() {
+        assert_eq!(CtecPreferredMask::parse(b"0x04").unwrap().1, CtecPreferredMask(0x04));
+        assert_eq!(CtecPreferredMask::parse(b"4").unwrap().1, CtecPreferredMask(0x04));
+        assert_eq!(CtecPreferredMask::parse(b"\"201\"").unwrap().1, CtecPreferredMask(0x0201));
+        assert_eq!(CtecPreferredMask::parse(b"\"7F\"").unwrap().1, CtecPreferredMask(0x7F));
+        assert!(CtecPreferredMask::parse(b"0x80").is_err());
+        assert!(CtecPreferredMask::parse(b"\"8000\"").is_err());
+    }
+
+    #[test]
+    fn test_ctec_technology_all_variants_exhaustive() {
+        assert_eq!(CtecTechnology::ALL.len(), 7);
+        for tech in CtecTechnology::ALL {
+            let mask = match *tech {
+                CtecTechnology::Gsm => 0x01,
+                CtecTechnology::Wcdma => 0x02,
+                CtecTechnology::Cdma => 0x04,
+                CtecTechnology::Evdo => 0x08,
+                CtecTechnology::Tdscdma => 0x10,
+                CtecTechnology::Lte => 0x20,
+                CtecTechnology::Nr => 0x40,
+            };
+            assert_eq!(*tech as u8, mask);
+        }
+        assert_eq!(CtecTechnology::all_mask(), 0x7F);
     }
 }

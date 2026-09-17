@@ -58,10 +58,9 @@ mod tests {
         sms_service::{MessageStatus, MessageStorage},
         types::{
             CallForwardingMode, CallForwardingReason, CallMode, CallWaitingMode, CharacterSet,
-            ClirMode, CopsFormat, CopsMode, CtecPreferredMask, CtecTechnology, DialArgs, DtmfArgs,
-            DtmfTone, PacketEventReportingMode, Parsable, PdpContextActivateArgs, PdpType,
-            PhoneNumber, ProductSerialNumberType, RadioPowerLevel, SendSmsArgs, ServiceClass,
-            TypeOfAddress,
+            ClirMode, CopsFormat, CopsMode, CtecPreferredMask, DialArgs, DtmfArgs, DtmfTone,
+            PacketEventReportingMode, Parsable, PdpContextActivateArgs, PdpType, PhoneNumber,
+            ProductSerialNumberType, RadioPowerLevel, SendSmsArgs, ServiceClass, TypeOfAddress,
         },
     };
 
@@ -630,7 +629,7 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Network(NetworkCommand::SetNetworkTechnology(
-                CtecTechnology::Lte,
+                32,
                 Some(CtecPreferredMask(0x63))
             ))
         );
@@ -641,13 +640,13 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Network(NetworkCommand::SetNetworkTechnology(
-                CtecTechnology::Lte,
+                32,
                 Some(CtecPreferredMask(0x63))
             ))
         );
 
-        // Invalid unsupported technology bit rejection upfront
-        assert!(CtecPreferredMask::parse(b"0x04").is_err());
+        assert_eq!(CtecPreferredMask::parse(b"0x04").unwrap().1, CtecPreferredMask(0x04));
+        assert!(CtecPreferredMask::parse(b"0x80").is_err());
     }
 
     #[test]
