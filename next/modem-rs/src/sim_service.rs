@@ -59,9 +59,6 @@ pub enum SimCommand<'a> {
     TransmitLogicalChannel(u8, u8, ApduData<'a>),
     #[command(tag = "AT+CPWD=")]
     ChangePassword(Facility, QuotedString<'a>, QuotedString<'a>),
-    /// VENDOR: Query PIN retries
-    #[command(tag = "AT+SPIC")]
-    QueryPinRetriesSpic,
     /// 3GPP2 C.S0023: Set CDMA subscription source
     #[command(tag = "AT+CCSS=")]
     SetCdmaSubscriptionSource(CdmaSubscriptionSource),
@@ -82,9 +79,6 @@ pub enum SimCommand<'a> {
     /// SIM authentication (Vendor caret version)
     #[command(tag = "AT^MBAU=")]
     SimAuthenticationVendor(ApduData<'a>),
-    /// VENDOR: Update phone number
-    #[command(tag = "AT+REMOTEUPADATEPHONENUMBER=")]
-    UpdatePhoneNumber(PhoneNumber),
     #[command(tag = "AT+CEID")]
     GetEid,
     #[command(tag = "AT+CATR")]
@@ -373,7 +367,6 @@ pub enum SimResponse {
     CdmaRoamingPreference(CdmaRoamingPreference),
     SimAuthentication(String),
     FacilityLockStatus(u8),
-    PinRetriesSpic(u32),
     PinRemainingAttempts { pin_type: PinType, retries: u32, default_retries: u32 },
     Eid(String),
     Atr(String),
@@ -413,7 +406,6 @@ impl std::fmt::Display for SimResponse {
             SimResponse::CdmaRoamingPreference(pref) => write!(f, "+WRMP: {pref}\r\n"),
             SimResponse::SimAuthentication(resp) => write!(f, "{resp}"),
             SimResponse::FacilityLockStatus(status) => write!(f, "+CLCK: {status}\r\n"),
-            SimResponse::PinRetriesSpic(retries) => write!(f, "+SPIC: {retries}\r\n"),
             SimResponse::PinRemainingAttempts { pin_type, retries, default_retries } => {
                 write!(f, "+CPINR: \"{}\",{retries},{default_retries}\r\n", pin_type.as_str())
             }
@@ -1758,11 +1750,6 @@ impl SimService {
         Ok(Some(SimResponse::SimAuthentication(response.to_string())))
     }
 
-    fn handle_update_phone_number(&mut self, phone: PhoneNumber) -> SimResult {
-        self.set_msisdn(Some(&phone));
-        Ok(None)
-    }
-
     pub(crate) fn handle_set_facility_lock(
         &mut self,
         facility: Facility,
@@ -1869,11 +1856,6 @@ impl SimService {
         false
     }
 
-    fn handle_query_pin_retries_spic(&self) -> SimResult {
-        let retries = self.pin1.pin_retries;
-        Ok(Some(SimResponse::PinRetriesSpic(retries)))
-    }
-
     fn handle_query_pin_retries_cpinr(&self, pin_type: PinType) -> SimResult {
         let (retries, default_retries) = match pin_type {
             PinType::SimPin => self.pin1.pin_attempts(),
@@ -1909,7 +1891,6 @@ impl SimService {
                 self.handle_change_password(*facility, *old_password, *new_password)
             }
             SimCommand::QueryPinRetries(pin_type) => self.handle_query_pin_retries_cpinr(*pin_type),
-            SimCommand::QueryPinRetriesSpic => self.handle_query_pin_retries_spic(),
             SimCommand::SetCdmaSubscriptionSource(source) => {
                 self.cdma_subscription_source = *source;
                 Ok(None)
@@ -1926,9 +1907,6 @@ impl SimService {
             }
             SimCommand::SimAuthentication(data) => self.handle_sim_authentication(*data),
             SimCommand::SimAuthenticationVendor(data) => self.handle_sim_authentication(*data),
-            SimCommand::UpdatePhoneNumber(phone_number) => {
-                self.handle_update_phone_number(phone_number.clone())
-            }
             SimCommand::GetEid => Self::get_optional_field(self.eid.clone(), SimResponse::Eid),
             SimCommand::GetAtr => Self::get_optional_field(self.atr.clone(), SimResponse::Atr),
         };

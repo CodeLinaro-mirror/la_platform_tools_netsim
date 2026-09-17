@@ -800,7 +800,6 @@ impl<'a> Parsable<'a> for SmsAck {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandAction {
     InitiateCall(DialArgs),
-    InitiateRemoteCall(PhoneNumber),
     AnswerCall(ModemId),
     HangupCall { initiator: ModemId, target_peer: ModemId },
     HoldCall { holder: ModemId, target: ModemId },

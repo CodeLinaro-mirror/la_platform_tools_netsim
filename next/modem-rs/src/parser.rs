@@ -258,24 +258,39 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_stk() {
-        let (rem, cmd) = Command::parse(b"AT+STK=1").unwrap();
+    fn test_parse_cusatd_query() {
+        let (rem, cmd) = Command::parse(b"AT+CUSATD?").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStk(true)));
+        assert_eq!(cmd, Command::Stk(StkCommand::QueryStkReady));
     }
 
     #[test]
-    fn test_parse_stken() {
-        let (rem, cmd) = Command::parse(b"AT+STKEN=1").unwrap();
+    fn test_parse_cusatd_set() {
+        let (rem, cmd) = Command::parse(b"AT+CUSATD=1,\"010203\"").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStkEnabled(true)));
+        assert_eq!(cmd, Command::Stk(StkCommand::SetStkReady(true, Some(QuotedString("010203")))));
     }
 
     #[test]
-    fn test_parse_stkur() {
-        let (rem, cmd) = Command::parse(b"AT+STKUR=1").unwrap();
+    fn test_parse_cusate() {
+        let (rem, cmd) = Command::parse(b"AT+CUSATE=\"D30782028281100150\"").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStkUnsolicitedResult(true)));
+        assert_eq!(
+            cmd,
+            Command::Stk(StkCommand::SendStkEnvelope(QuotedString("D30782028281100150")))
+        );
+    }
+
+    #[test]
+    fn test_parse_cusatt() {
+        let (rem, cmd) = Command::parse(b"AT+CUSATT=\"81030124008202828183020001\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Stk(StkCommand::SendStkTerminalResponse(QuotedString(
+                "81030124008202828183020001"
+            )))
+        );
     }
 
     #[test]

@@ -31,7 +31,6 @@ use crate::{
 #[derive(Debug)]
 pub enum NetworkEvent {
     Response { id: ModemId, packet: Vec<u8> },
-    NewConnection { id: ModemId, destination: String },
     ModemHungUp { id: ModemId },
     SinkError { id: ModemId },
 }
@@ -517,18 +516,6 @@ impl ModemNetworkSimulator {
             CommandAction::InitiateCall(args) => {
                 self.metrics.calls_initiated.fetch_add(1, AtomicOrdering::Relaxed);
                 effects.extend(self.initiate_call(id, &args.number, args.clir, args.is_emergency));
-            }
-            CommandAction::InitiateRemoteCall(phone_number) => {
-                events.push(NetworkEvent::NewConnection {
-                    id,
-                    destination: phone_number.as_str().to_string(),
-                });
-                effects.extend(self.initiate_call(
-                    id,
-                    &phone_number,
-                    ClirMode::SubscriptionDefault,
-                    false,
-                ));
             }
             CommandAction::AnswerCall(answered_modem_id) => {
                 self.metrics.calls_answered.fetch_add(1, AtomicOrdering::Relaxed);

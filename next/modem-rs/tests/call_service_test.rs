@@ -39,23 +39,6 @@ fn test_standard_call() {
     world.then_no_response("A");
 }
 
-// Scenario: Receive Ring
-//   Given a modem "A"
-//   When AT command "RING" is sent to "A"
-//   Then response from "A" is "RING"
-//   When AT command "AT+CLCC" is sent to "A"
-//   Then response from "A" contains "+CLCC: 1,1,4,0,0,\"\",129"
-//   And response from "A" contains "OK"
-#[test]
-fn test_ring() {
-    let mut world = World::new();
-    world.given_modem("A");
-    world.send_and_expect("A", "RING", &["RING"]);
-
-    // Verify call state (Incoming)
-    world.send_and_expect("A", "AT+CLCC", &[&format!("+CLCC: 1,1,4,0,0,,{TOA_NATIONAL}"), "OK"]);
-}
-
 // Scenario: Query Current Calls
 //   Given a modem "A"
 //   And a modem "B" with number "111"
@@ -550,19 +533,6 @@ fn test_standard_call_with_leading_plus_routing() {
 
     // A dials B's number with leading '+'
     world.dial_number("A", &format!("+{TEST_PHONE_NUMBER_LONG_B}"), "B");
-}
-
-#[test]
-fn test_remote_call_initiation() {
-    let mut world = World::new();
-    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
-    world.given_modem_with_number("B", TEST_PHONE_NUMBER_LONG_B);
-
-    // A calls B via remote call
-    world.send_and_expect_ok("A", &format!("AT+REMOTECALL={TEST_PHONE_NUMBER_LONG_B}"));
-
-    // B should receive RING
-    world.then_response_is("B", "RING");
 }
 
 #[test]

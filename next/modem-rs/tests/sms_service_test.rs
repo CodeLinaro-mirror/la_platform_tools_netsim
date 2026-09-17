@@ -317,18 +317,6 @@ fn test_smsc_address_with_tosca() {
     then_response_is(&mut world, "A", "OK");
 }
 
-// Scenario: Remote SMS
-//   Given a modem "A"
-//   When AT command 'AT+REMOTESMS="0011000B915155255155F40000AA01F0"' is sent
-// to "A"   Then response from "A" is "OK"
-#[test]
-fn test_remote_sms() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{TEST_SMS_PDU}\""));
-    then_response_is(&mut world, "A", "OK");
-}
-
 // Scenario: Set Preferred Message Storage
 //   Given a modem "A"
 //   When AT command 'AT+CPMS="SM","SM","SM"' is sent to "A"

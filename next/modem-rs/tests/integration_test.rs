@@ -143,38 +143,6 @@ fn test_sms_routing_failure_dropped() {
 }
 
 #[test]
-fn test_remote_sms_injection() {
-    let mut world = World::new();
-    given_modem_with_number(&mut world, "A", "18810189440");
-    given_modem_with_number(&mut world, "B", "12345");
-
-    // Case A: Inject SMS-SUBMIT targeting B. It should be converted and routed to
-    // B.
-    let pdu_submit = "00010005812143F5000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
-    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{pdu_submit}\""));
-    then_response_is(&mut world, "A", "OK");
-
-    // Verify B receives the SMS-DELIVER PDU with OA copied from DA
-    then_wait_for_response_containing(&mut world, "B", "+CMT: ,37");
-    let response_b = then_wait_for_response_containing(
-        &mut world,
-        "B",
-        "17AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701",
-    );
-    assert!(response_b.contains("002405812143F50000"));
-
-    // Case B: Inject SMS-DELIVER. It fails to parse (SMS-SUBMIT only), falling back
-    // to loopback to A.
-    let pdu_deliver =
-        "002405812143F500002660901230000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
-    when_at_command_sent(&mut world, "A", &format!("AT+REMOTESMS=\"{pdu_deliver}\""));
-    then_response_is(&mut world, "A", "OK");
-
-    then_wait_for_response_containing(&mut world, "A", "+CMT: ,37");
-    then_wait_for_response_containing(&mut world, "A", pdu_deliver);
-}
-
-#[test]
 fn test_read_sms_zero_index_does_not_panic() {
     let mut world = World::new();
     given_modem_with_number(&mut world, "A", "12345");

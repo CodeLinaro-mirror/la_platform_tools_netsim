@@ -1,7 +1,10 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use modem_rs::profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML};
+use modem_rs::{
+    PhoneNumber,
+    profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML},
+};
 
 use crate::{common::constants::*, steps::*, world::World};
 
@@ -33,28 +36,28 @@ fn test_cpin_set() {
 
 // Scenario: CPIN in READY State
 //   Given a modem "A"
-//   When AT command "AT+SPIC" is sent to "A"
-//   Then response from "A" is "+SPIC: 3"
+//   When AT command 'AT+CPINR="SIM PIN"' is sent to "A"
+//   Then response from "A" is "+CPINR: \"SIM PIN\",3,3"
 //   And response from "A" is "OK"
 //   When AT command 'AT+CPIN="0000"' is sent to "A"
 //   Then response from "A" is "OK"
-//   When AT command "AT+SPIC" is sent to "A"
-//   Then response from "A" is "+SPIC: 3"
+//   When AT command 'AT+CPINR="SIM PIN"' is sent to "A"
+//   Then response from "A" is "+CPINR: \"SIM PIN\",3,3"
 //   And response from "A" is "OK"
 #[test]
 fn test_cpin_in_ready_state_does_not_consume_retry() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", "+SPIC: 3");
+    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
+    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",3,3");
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{INVALID_PIN}\""));
     then_response_is(&mut world, "A", "OK");
 
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", "+SPIC: 3");
+    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
+    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",3,3");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -110,8 +113,8 @@ fn test_cicc() {
 //   Then response from "A" is "ERROR"
 //   When AT command 'AT+CPIN="0000"' is sent to "A"
 //   Then response from "A" is "ERROR"
-//   When AT command "AT+SPIC" is sent to "A"
-//   Then response from "A" is "+SPIC: 1"
+//   When AT command 'AT+CPINR="SIM PIN"' is sent to "A"
+//   Then response from "A" is "+CPINR: \"SIM PIN\",1,3"
 //   And response from "A" is "OK"
 #[test]
 fn test_pin_retry_counter() {
@@ -121,8 +124,12 @@ fn test_pin_retry_counter() {
     then_response_is(&mut world, "A", "ERROR");
     when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{INVALID_PIN}\""));
     then_response_is(&mut world, "A", "ERROR");
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", &format!("+SPIC: {}", DEFAULT_PIN_RETRIES - 2));
+    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
+    then_response_is(
+        &mut world,
+        "A",
+        &format!("+CPINR: \"SIM PIN\",{},{}", DEFAULT_PIN_RETRIES - 2, DEFAULT_PIN_RETRIES),
+    );
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -298,22 +305,6 @@ fn test_sim_authentication() {
     then_response_is(&mut world, "A", "OK");
 }
 
-// Scenario: Update Phone Number
-//   Given a modem "A"
-//   When AT command 'AT+REMOTEUPADATEPHONENUMBER="1234567890"' is sent to "A"
-//   Then response from "A" is "OK"
-#[test]
-fn test_update_phone_number() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+REMOTEUPADATEPHONENUMBER=\"{TEST_PHONE_NUMBER}\""),
-    );
-    then_response_is(&mut world, "A", "OK");
-}
-
 #[test]
 fn test_cmee_error_formatting_across_modes() {
     let mut world = World::new();
@@ -402,13 +393,12 @@ fn test_update_phone_number_and_read_msisdn() {
     let mut world = World::new();
     given_modem_with_sim_profile(&mut world, "A");
 
-    // Set phone number via VENDOR command
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+REMOTEUPADATEPHONENUMBER=\"{}\"", TEST_MSISDN),
-    );
-    then_response_is(&mut world, "A", "OK");
+    let (id, _) = world.get_modem("A");
+    world
+        .manager
+        .get_modem_mut(id)
+        .unwrap()
+        .set_phone_number(PhoneNumber::new_for_test(TEST_MSISDN));
 
     // Read EF_MSISDN (6F40) via AT+CRSM
     when_at_command_sent(
@@ -533,25 +523,24 @@ fn test_puk_unlocking() {
     then_response_is(&mut world, "A", "+CPIN: SIM PIN");
     then_response_is(&mut world, "A", "OK");
 
-    // SPIC initially shows 3 retries
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", "+SPIC: 3");
+    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
+    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",3,3");
     then_response_is(&mut world, "A", "OK");
 
     // Enter wrong PIN 1
     when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
     then_response_is(&mut world, "A", "+CME ERROR: 16"); // Incorrect password
 
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", "+SPIC: 2");
+    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
+    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",2,3");
     then_response_is(&mut world, "A", "OK");
 
     // Enter wrong PIN 2
     when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
     then_response_is(&mut world, "A", "+CME ERROR: 16");
 
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", "+SPIC: 1");
+    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
+    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",1,3");
     then_response_is(&mut world, "A", "OK");
 
     // Enter wrong PIN 3 -> Locks SIM, PUK required
@@ -563,9 +552,8 @@ fn test_puk_unlocking() {
     then_response_is(&mut world, "A", "+CPIN: SIM PUK");
     then_response_is(&mut world, "A", "OK");
 
-    // SPIC PIN retries should be 0
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", "+SPIC: 0");
+    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
+    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",0,3");
     then_response_is(&mut world, "A", "OK");
 
     // CPINR should show PUK retries (default 10)
@@ -591,8 +579,8 @@ fn test_puk_unlocking() {
     then_response_is(&mut world, "A", "OK");
 
     // PIN retries should be reset to 3
-    when_at_command_sent(&mut world, "A", "AT+SPIC");
-    then_response_is(&mut world, "A", "+SPIC: 3");
+    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
+    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",3,3");
     then_response_is(&mut world, "A", "OK");
 }
 

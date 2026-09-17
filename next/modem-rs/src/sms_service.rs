@@ -59,9 +59,6 @@ pub enum SmsCommand<'a> {
     /// 3GPP TS 27.005: Get SMSC address
     #[command(tag = "AT+CSCA?")]
     GetSmscAddress,
-    /// VENDOR: Remote SMS
-    #[command(tag = "AT+REMOTESMS=")]
-    RemoteSms(QuotedString<'a>),
 }
 
 pub use crate::types::MessageStatus;
@@ -564,17 +561,6 @@ impl SmsService {
         })))
     }
 
-    pub fn handle_remote_sms(&self, pdu: QuotedString) -> SmsResult {
-        let pdu_bytes = pdu.as_str().as_bytes();
-        let processed = crate::pdu::process_outgoing_sms(pdu_bytes, None, 0);
-        let actions = vec![CommandAction::ReceiveSms {
-            to: processed.to,
-            pdu: processed.pdu,
-            status_report: processed.status_report,
-        }];
-        Ok(SmsSuccess::with_actions(None, actions))
-    }
-
     // Explicit execute method instead of Trait
     pub fn execute<'a>(
         &mut self,
@@ -603,7 +589,6 @@ impl SmsService {
                 self.handle_set_smsc_address(*address, *tosca)
             }
             SmsCommand::GetSmscAddress => self.handle_get_smsc_address(),
-            SmsCommand::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
         };
         sms_result.into()
     }

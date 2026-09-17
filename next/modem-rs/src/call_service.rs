@@ -36,12 +36,6 @@ pub enum CallCommand {
     SetEmergencyMode(bool),
     #[command(tag = "AT+WSOS?")]
     QueryEmergencyMode,
-    /// VENDOR: Remote call
-    #[command(tag = "AT+REMOTECALL=")]
-    RemoteCall(PhoneNumber),
-    /// VENDOR: Ring indication
-    #[command(tag = "RING")]
-    Ring,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -701,22 +695,6 @@ impl CallService {
         }
     }
 
-    fn handle_remote_call(&mut self, number: PhoneNumber) -> CallResult {
-        if self
-            .add_call(
-                CallState::Dialing,
-                CallDirection::Outgoing,
-                Some(number.clone()),
-                NumberPresentation::Allowed,
-                None,
-            )
-            .is_none()
-        {
-            return Err(ExecutionResult::error());
-        }
-        Ok(Some(CallResponse::WithActions(vec![CommandAction::InitiateRemoteCall(number)])))
-    }
-
     fn handle_set_mute(&mut self, mute: bool) -> CallResult {
         self.mute = mute;
         Ok(None)
@@ -756,8 +734,6 @@ impl CallService {
             CallCommand::Hangup => self.handle_hangup(id),
             CallCommand::CallHold(op) => self.handle_call_hold(*op, id),
             CallCommand::QueryCurrentCalls => self.handle_query_current_calls(),
-            CallCommand::Ring => self.ring(None, NumberPresentation::Allowed, None),
-            CallCommand::RemoteCall(number) => self.handle_remote_call(number.clone()),
             CallCommand::SetMute(mute) => self.handle_set_mute(*mute),
             CallCommand::QueryMute => self.handle_query_mute(),
             CallCommand::SendDtmf(dtmf) => self.handle_send_dtmf(dtmf),
