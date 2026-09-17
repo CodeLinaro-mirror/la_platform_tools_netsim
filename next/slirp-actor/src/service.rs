@@ -94,9 +94,9 @@ impl SlirpActor {
 
     fn init_native_backend(&mut self, ctx: &mut DynContext<Self>) -> Result<(), SlirpError> {
         #[cfg(feature = "cuttlefish")]
-        let native_config = self.config.clone();
+        let mut native_config = self.config.clone();
         #[cfg(not(feature = "cuttlefish"))]
-        let native_config = to_native_config(&self.config);
+        let mut native_config = to_native_config(&self.config);
 
         if self.http_proxy.is_some() {
             tracing::warn!("Native Slirp backend does not support HTTP proxy yet");
@@ -123,6 +123,20 @@ impl SlirpActor {
         ctx.spawn(
             task_id,
             Box::pin(async move {
+                // If `dns_servers` is empty or matches default configuration [8.8.8.8],
+                // automatically discover host DNS servers so guest queries are not
+                // routed to hardcoded public servers. Explicitly configured DNS server
+                // lists are preserved and never overridden.
+                if native_config.dns_servers.is_empty()
+                    || native_config.dns_servers == [slirp::DEFAULT_DNS_SERVER]
+                {
+                    let discovered = slirp::discover_host_dns_servers().await;
+                    if !discovered.is_empty() {
+                        native_config.dns_servers = discovered;
+                    } else if native_config.dns_servers.is_empty() {
+                        native_config.dns_servers = vec![slirp::DEFAULT_DNS_SERVER];
+                    }
+                }
                 crate::native::run_native_slirp_loop(native_config, downlink_tx, uplink_rx).await;
                 task_id
             }),

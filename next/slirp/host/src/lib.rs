@@ -3,28 +3,23 @@
 
 use std::{
     collections::HashMap,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
 };
 
 use bytes::Bytes;
 use log::{debug, error, info, trace, warn};
-use slirp::{
-    Config, ConnectionArgs, HostFwdRule, Proto, Slirp, SlirpRequest, SlirpResponse,
-    packet::{IpPacket, NetworkPacket, ParsedPacket, TransportPacket},
-};
+use parking_lot::Mutex;
+use slirp::{Config, ConnectionArgs, HostFwdRule, Proto, SlirpRequest, SlirpResponse};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, split},
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::mpsc,
     task::JoinHandle,
 };
-use tokio_tun::Tun;
-
-const DEFAULT_DNS_SERVER: IpAddr = IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
 
 struct TcpConnection {
     writer: mpsc::Sender<Bytes>,
@@ -63,143 +58,9 @@ pub struct TokioHost {
     hostfwd_tasks: Vec<JoinHandle<()>>,
     socks5_proxy: Option<SocketAddr>,
     slirp_task: Option<JoinHandle<()>>,
-    tun_reader_task: Option<JoinHandle<()>>,
 }
 
 impl TokioHost {
-    pub async fn new(tun: Tun, mut config: Config, fast_path_enabled: bool) -> Self {
-        let socks5_proxy = config.socks5_proxy;
-        // If `dns_servers` matches the default configuration [8.8.8.8], automatically
-        // discover host DNS servers so guest queries are not routed to
-        // hardcoded public servers. Explicitly configured DNS server lists are
-        // preserved and never overridden.
-        if config.dns_servers == [DEFAULT_DNS_SERVER] {
-            let discovered = discover_host_dns_servers();
-            if !discovered.is_empty() {
-                config.dns_servers = discovered;
-            }
-        }
-
-        let (slirp_request_sender, mut slirp_request_receiver) = mpsc::channel(10000);
-        let (slirp_response_sender, slirp_response_receiver) = mpsc::channel(10000);
-        let (guest_packet_sender, mut guest_packet_receiver) = mpsc::channel::<Bytes>(10000);
-
-        let mut slirp = Slirp::new(config.clone());
-
-        // Slirp task
-        let slirp_task = tokio::spawn(async move {
-            info!("slirp task started");
-            while let Some(request) = slirp_request_receiver.recv().await {
-                trace!("slirp task received request: {request:?}");
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    slirp.handle_request(request)
-                }));
-
-                if let Ok(responses) = result {
-                    trace!("slirp task sending responses: {responses:?}");
-                    for response in responses {
-                        if slirp_response_sender.send(response).await.is_err() {
-                            break;
-                        }
-                    }
-                } else {
-                    error!("PANIC in slirp task");
-                }
-            }
-            info!("slirp task finished");
-        });
-
-        let (mut tun_reader, mut tun_writer) = split(tun);
-        let fast_path_connections: Arc<Mutex<HashMap<SocketAddr, mpsc::Sender<Bytes>>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        let fast_path_connections_clone = fast_path_connections.clone();
-
-        tokio::spawn(async move {
-            while let Some(packet) = guest_packet_receiver.recv().await {
-                if tun_writer.write_all(&packet).await.is_err() {
-                    break;
-                }
-            }
-        });
-
-        let slirp_task_sender_clone = slirp_request_sender.clone();
-        let tun_reader_task = tokio::spawn(async move {
-            let mut buf = [0u8; 65536];
-            loop {
-                match tun_reader.read(&mut buf).await {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        let packet_buf = &buf[..n];
-                        if fast_path_enabled {
-                            if let Some(packet) = ParsedPacket::parse(packet_buf) {
-                                if let (
-                                    Some(network),
-                                    Some(TransportPacket::Tcp(tcp_header, tcp_payload)),
-                                ) = (packet.network, packet.transport)
-                                {
-                                    let src_addr = match network {
-                                        NetworkPacket::Ip(IpPacket::V4(ip_header, _)) => {
-                                            Some(SocketAddr::new(
-                                                IpAddr::V4(Ipv4Addr::from(ip_header.source_addr)),
-                                                tcp_header.source_port.get(),
-                                            ))
-                                        }
-                                        NetworkPacket::Ip(IpPacket::V6(ip_header, _)) => {
-                                            Some(SocketAddr::new(
-                                                IpAddr::V6(ip_header.source_addr.into()),
-                                                tcp_header.source_port.get(),
-                                            ))
-                                        }
-                                        _ => None,
-                                    };
-                                    if let Some(src_addr) = src_addr {
-                                        if forward_fast_path(
-                                            src_addr,
-                                            tcp_header.fin(),
-                                            tcp_header.rst(),
-                                            tcp_payload,
-                                            &fast_path_connections_clone,
-                                        )
-                                        .await
-                                        {
-                                            continue;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        debug!("slow path packet");
-                        slirp_task_sender_clone
-                            .send(SlirpRequest::Packet(Bytes::copy_from_slice(packet_buf)))
-                            .await
-                            .ok();
-                    }
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-        });
-        let connections = Arc::new(Mutex::new(HashMap::new()));
-        let hostfwd_tasks =
-            Self::setup_hostfwd(&config.hostfwd, slirp_request_sender.clone(), connections.clone());
-
-        Self {
-            slirp_request_sender,
-            slirp_response_receiver,
-            guest_packet_sender,
-            timer_task: None,
-            test_slirp_response_sender: None,
-            fast_path_enabled,
-            fast_path_connections,
-            connections,
-            hostfwd_tasks,
-            socks5_proxy,
-            slirp_task: Some(slirp_task),
-            tun_reader_task: Some(tun_reader_task),
-        }
-    }
-
     fn setup_hostfwd(
         rules: &[HostFwdRule],
         slirp_request_sender: mpsc::Sender<SlirpRequest>,
@@ -252,7 +113,6 @@ impl TokioHost {
             hostfwd_tasks,
             socks5_proxy,
             slirp_task: None,
-            tun_reader_task: None,
         }
     }
 
@@ -275,10 +135,7 @@ impl TokioHost {
                         let slirp_request_sender = self.slirp_request_sender.clone();
                         let connections = self.connections.clone();
                         let socks5_proxy = self.socks5_proxy;
-                        self.connections
-                            .lock()
-                            .unwrap()
-                            .insert(conn_id, Connection::Connecting(None));
+                        self.connections.lock().insert(conn_id, Connection::Connecting(None));
                         let handle = tokio::spawn(async move {
                             let stream =
                                 match connect_tcp(conn_info.destination, socks5_proxy).await {
@@ -289,7 +146,7 @@ impl TokioHost {
                                             conn_info.destination
                                         );
                                         let was_connecting = matches!(
-                                            connections.lock().unwrap().remove(&conn_id),
+                                            connections.lock().remove(&conn_id),
                                             Some(Connection::Connecting(_))
                                         );
                                         if was_connecting {
@@ -301,7 +158,7 @@ impl TokioHost {
                                         return;
                                     }
                                 };
-                            let mut conns = connections.lock().unwrap();
+                            let mut conns = connections.lock();
                             if let Some(Connection::Connecting(_)) = conns.get(&conn_id) {
                                 register_tcp_connection_locked(
                                     stream,
@@ -313,7 +170,7 @@ impl TokioHost {
                                 debug!("TCP connection {conn_id} was closed while connecting");
                             }
                         });
-                        let mut conns = self.connections.lock().unwrap();
+                        let mut conns = self.connections.lock();
                         if let Some(Connection::Connecting(h)) = conns.get_mut(&conn_id) {
                             *h = Some(handle);
                         } else {
@@ -351,7 +208,7 @@ impl TokioHost {
                 },
                 SlirpResponse::WriteToConnection(conn_id, data) => {
                     let sender = {
-                        let conns = self.connections.lock().unwrap();
+                        let conns = self.connections.lock();
                         match conns.get(&conn_id) {
                             Some(Connection::Tcp(c)) => Some(c.writer.clone()),
                             Some(Connection::Udp(c)) => Some(c.writer.clone()),
@@ -366,19 +223,17 @@ impl TokioHost {
                 SlirpResponse::ActivateFastPath { conn_id, guest_addr, .. } => {
                     trace!("activating fast path for {guest_addr}");
                     if self.fast_path_enabled {
-                        if let Some(Connection::Tcp(tcp_conn)) =
-                            self.connections.lock().unwrap().get(&conn_id)
-                        {
-                            self.fast_path_connections
-                                .lock()
-                                .unwrap()
-                                .insert(guest_addr, tcp_conn.writer.clone());
+                        let writer = self.connections.lock().get(&conn_id).and_then(|c| {
+                            if let Connection::Tcp(c) = c { Some(c.writer.clone()) } else { None }
+                        });
+                        if let Some(writer) = writer {
+                            self.fast_path_connections.lock().insert(guest_addr, writer);
                         }
                     }
                 }
                 SlirpResponse::CloseConnection { conn_id, guest_addr } => {
                     info!("Closing connection {conn_id}");
-                    let removed = self.connections.lock().unwrap().remove(&conn_id);
+                    let removed = self.connections.lock().remove(&conn_id);
                     if let Some(conn) = removed {
                         match conn {
                             Connection::Connecting(Some(handle)) => {
@@ -415,7 +270,7 @@ impl TokioHost {
                     }
                     if self.fast_path_enabled {
                         trace!("deactivating fast path for {guest_addr}");
-                        self.fast_path_connections.lock().unwrap().remove(&guest_addr);
+                        self.fast_path_connections.lock().remove(&guest_addr);
                     }
                     info!("Connection {conn_id} closed");
                 }
@@ -433,7 +288,7 @@ impl TokioHost {
                     info!(
                         "Received Reset response from Slirp core. Tearing down all active connections."
                     );
-                    let mut conns = self.connections.lock().unwrap();
+                    let mut conns = self.connections.lock();
                     for (conn_id, conn) in conns.drain() {
                         info!("Aborting active connection {conn_id} due to Reset");
                         match conn {
@@ -455,7 +310,7 @@ impl TokioHost {
                             }
                         }
                     }
-                    self.fast_path_connections.lock().unwrap().clear();
+                    self.fast_path_connections.lock().clear();
                 }
                 _ => {}
             }
@@ -463,7 +318,7 @@ impl TokioHost {
     }
 
     pub fn connection_count(&self) -> usize {
-        self.connections.lock().unwrap().len()
+        self.connections.lock().len()
     }
 }
 
@@ -481,13 +336,13 @@ impl TokioHostHandle {
         self.sender
             .send(SlirpRequest::SaveState(tx))
             .await
-            .map_err(|_| "Failed to send SaveState request to Slirp task")?;
+            .map_err(|_e| "Failed to send SaveState request to Slirp task")?;
 
         let state_bytes = tokio::task::spawn_blocking(move || {
-            rx.recv().map_err(|_| "Failed to receive state from Slirp task")
+            rx.recv().map_err(|_e| "Failed to receive state from Slirp task")
         })
         .await
-        .map_err(|_| "Spawn blocking failed")??;
+        .map_err(|_e| "Spawn blocking failed")??;
 
         Ok(state_bytes)
     }
@@ -496,7 +351,7 @@ impl TokioHostHandle {
         self.sender
             .send(SlirpRequest::RestoreState(Bytes::copy_from_slice(state_bytes)))
             .await
-            .map_err(|_| "Failed to send RestoreState request to Slirp task")?;
+            .map_err(|_e| "Failed to send RestoreState request to Slirp task")?;
 
         Ok(())
     }
@@ -508,16 +363,14 @@ impl Drop for TokioHost {
         if let Some(task) = self.slirp_task.take() {
             task.abort();
         }
-        if let Some(task) = self.tun_reader_task.take() {
-            task.abort();
-        }
+
         if let Some(timer_task) = self.timer_task.take() {
             timer_task.abort();
         }
         for task in self.hostfwd_tasks.drain(..) {
             task.abort();
         }
-        let mut conns = self.connections.lock().unwrap();
+        let mut conns = self.connections.lock();
         for (conn_id, conn) in conns.drain() {
             match conn {
                 Connection::Connecting(Some(handle)) => {
@@ -568,7 +421,7 @@ async fn start_tcp_hostfwd_listener(
                 let task_connections = connections.clone();
                 let guest_addr = rule.guest_addr;
 
-                connections.lock().unwrap().insert(conn_id, Connection::Connecting(None));
+                connections.lock().insert(conn_id, Connection::Connecting(None));
                 let handle = tokio::spawn(async move {
                     // Notify Slirp core to accept the incoming connection and start handshake
                     slirp_request_sender
@@ -580,7 +433,7 @@ async fn start_tcp_hostfwd_listener(
                         .await
                         .ok();
 
-                    let mut conns = task_connections.lock().unwrap();
+                    let mut conns = task_connections.lock();
                     if let Some(Connection::Connecting(_)) = conns.get(&conn_id) {
                         register_tcp_connection_locked(
                             stream,
@@ -592,7 +445,7 @@ async fn start_tcp_hostfwd_listener(
                         debug!("TCP connection {conn_id} was closed while connecting");
                     }
                 });
-                let mut conns = connections.lock().unwrap();
+                let mut conns = connections.lock();
                 if let Some(Connection::Connecting(h)) = conns.get_mut(&conn_id) {
                     *h = Some(handle);
                 } else {
@@ -606,70 +459,6 @@ async fn start_tcp_hostfwd_listener(
     }
 }
 
-#[cfg(unix)]
-fn discover_host_dns_servers() -> Vec<IpAddr> {
-    let mut servers = Vec::new();
-    let file = match std::fs::File::open("/etc/resolv.conf") {
-        Ok(f) => f,
-        Err(_) => {
-            warn!("Failed to open /etc/resolv.conf, using default DNS");
-            return servers;
-        }
-    };
-
-    use std::io::{BufRead, BufReader};
-    let reader = BufReader::new(file);
-    for line in reader.lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("nameserver") {
-            let parts: Vec<&str> = rest.split_whitespace().collect();
-            if let Some(first) = parts.first() {
-                if let Ok(ip) = first.parse::<IpAddr>() {
-                    servers.push(ip);
-                }
-            }
-        }
-    }
-
-    if servers.is_empty() {
-        info!("No DNS servers found in /etc/resolv.conf");
-    } else {
-        info!("Discovered host DNS servers: {servers:?}");
-    }
-    servers
-}
-
-#[cfg(not(unix))]
-fn discover_host_dns_servers() -> Vec<IpAddr> {
-    info!("Host DNS discovery is currently only supported on Unix platforms");
-    Vec::new()
-}
-
-async fn forward_fast_path(
-    src_addr: SocketAddr,
-    fin: bool,
-    rst: bool,
-    tcp_payload: &[u8],
-    fast_path_connections: &Mutex<HashMap<SocketAddr, mpsc::Sender<Bytes>>>,
-) -> bool {
-    let sender = {
-        let conns = fast_path_connections.lock().unwrap();
-        conns.get(&src_addr).cloned()
-    };
-    if let Some(sender) = sender {
-        trace!("fast path packet from {src_addr}");
-        if !fin && !rst && !tcp_payload.is_empty() {
-            sender.send(Bytes::copy_from_slice(tcp_payload)).await.ok();
-            return true;
-        }
-    }
-    false
-}
-
 #[allow(dead_code)]
 fn register_tcp_connection(
     stream: TcpStream,
@@ -677,7 +466,7 @@ fn register_tcp_connection(
     slirp_request_sender: mpsc::Sender<SlirpRequest>,
     connections: Arc<Mutex<HashMap<u64, Connection>>>,
 ) -> mpsc::Sender<Bytes> {
-    let mut conns = connections.lock().unwrap();
+    let mut conns = connections.lock();
     register_tcp_connection_locked(stream, conn_id, slirp_request_sender, &mut conns)
 }
 
@@ -749,7 +538,7 @@ async fn connect_tcp(
             perform_socks5_handshake(&mut stream, destination),
         )
         .await
-        .map_err(|_| std::io::Error::other("SOCKS5 handshake timed out"))??;
+        .map_err(|_e| std::io::Error::other("SOCKS5 handshake timed out"))??;
         Ok(stream)
     } else {
         debug!("Connecting directly to {destination}");
@@ -831,8 +620,8 @@ fn register_udp_connection(
     connections: Arc<Mutex<HashMap<u64, Connection>>>,
 ) -> std::io::Result<mpsc::Sender<Bytes>> {
     let bind_addr = match conn_info.destination {
-        SocketAddr::V4(_) => "0.0.0.0:0".parse::<SocketAddr>().unwrap(),
-        SocketAddr::V6(_) => "[::]:0".parse::<SocketAddr>().unwrap(),
+        SocketAddr::V4(_) => SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)),
+        SocketAddr::V6(_) => SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0)),
     };
     let std_socket = std::net::UdpSocket::bind(bind_addr)?;
     std_socket.connect(conn_info.destination)?;
@@ -854,7 +643,7 @@ fn register_udp_connection(
     let reader_socket = socket.clone();
     let slirp_sender = slirp_request_sender.clone();
     let reader_handle = tokio::spawn(async move {
-        let mut buf = [0u8; 65536];
+        let mut buf = vec![0u8; 65536];
         loop {
             match reader_socket.recv(&mut buf).await {
                 Ok(n) => {
@@ -871,7 +660,7 @@ fn register_udp_connection(
         }
     });
 
-    connections.lock().unwrap().insert(
+    connections.lock().insert(
         conn_id,
         Connection::Udp(UdpConnection { writer: tx.clone(), reader_handle, writer_handle }),
     );
@@ -891,8 +680,8 @@ fn register_icmp_connection(
 
     // 1. Open ICMP socket
     let (domain, bind_addr) = match conn_info.destination {
-        IpAddr::V4(_) => (Domain::IPV4, "0.0.0.0:0".parse::<SocketAddr>().unwrap()),
-        IpAddr::V6(_) => (Domain::IPV6, "[::]:0".parse::<SocketAddr>().unwrap()),
+        IpAddr::V4(_) => (Domain::IPV4, SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))),
+        IpAddr::V6(_) => (Domain::IPV6, SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0))),
     };
     let proto = match conn_info.destination {
         IpAddr::V4(_) => Protocol::from(1),  // IPPROTO_ICMP
@@ -931,7 +720,7 @@ fn register_icmp_connection(
     let guest_ip = conn_info.guest_ip;
     let is_ipv6 = conn_info.destination.is_ipv6();
     let reader_handle = tokio::spawn(async move {
-        let mut buf = [0u8; 65536];
+        let mut buf = vec![0u8; 65536];
         loop {
             match reader_socket.recv_from(&mut buf).await {
                 Ok((n, src_addr)) => {
@@ -975,7 +764,7 @@ fn register_icmp_connection(
         }
     });
 
-    connections.lock().unwrap().insert(
+    connections.lock().insert(
         conn_id,
         Connection::Icmp(IcmpConnection { writer: tx.clone(), reader_handle, writer_handle }),
     );

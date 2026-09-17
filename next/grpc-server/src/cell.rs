@@ -39,6 +39,15 @@ fn map_proto_reg_status(
         netsim_proto::cell::RegistrationStatus::ROAMING => {
             netsim_model::RegistrationStatus::Roaming
         }
+        netsim_proto::cell::RegistrationStatus::SMS_ONLY_HOME => {
+            netsim_model::RegistrationStatus::RegisteredSmsOnlyHome
+        }
+        netsim_proto::cell::RegistrationStatus::SMS_ONLY_ROAMING => {
+            netsim_model::RegistrationStatus::RegisteredSmsOnlyRoaming
+        }
+        netsim_proto::cell::RegistrationStatus::EMERGENCY => {
+            netsim_model::RegistrationStatus::Emergency
+        }
         _ => netsim_model::RegistrationStatus::Unknown,
     }
 }
@@ -61,6 +70,15 @@ fn map_model_reg_status(
         }
         netsim_model::RegistrationStatus::Roaming => {
             protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::ROAMING)
+        }
+        netsim_model::RegistrationStatus::RegisteredSmsOnlyHome => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::SMS_ONLY_HOME)
+        }
+        netsim_model::RegistrationStatus::RegisteredSmsOnlyRoaming => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::SMS_ONLY_ROAMING)
+        }
+        netsim_model::RegistrationStatus::Emergency => {
+            protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::EMERGENCY)
         }
         netsim_model::RegistrationStatus::Unknown => {
             protobuf::EnumOrUnknown::new(netsim_proto::cell::RegistrationStatus::UNKNOWN)

@@ -77,7 +77,9 @@ impl TryFrom<XmlApplicationDedicatedFile> for ParsedAdf {
                     nested_adfs.extend(sub_adfs);
                 }
                 XmlApplicationDedicatedFileMember::ElementaryFile(xml_ef) => {
-                    fs_members.push(SimFile::ElementaryFile(ElementaryFile::try_from(xml_ef)?));
+                    if !xml_ef.is_file_not_found() {
+                        fs_members.push(SimFile::ElementaryFile(ElementaryFile::try_from(xml_ef)?));
+                    }
                 }
             }
         }
@@ -110,7 +112,9 @@ pub fn convert_xml_dedicated_file(
                 adfs.extend(nested_adfs);
             }
             XmlDedicatedFileMember::Elementary(ef) => {
-                sub_files.push(SimFile::ElementaryFile(ElementaryFile::try_from(ef)?));
+                if !ef.is_file_not_found() {
+                    sub_files.push(SimFile::ElementaryFile(ElementaryFile::try_from(ef)?));
+                }
             }
             XmlDedicatedFileMember::ApplicationDedicated(xml_adf) => {
                 let file_id = xml_adf.path.unwrap_or(UiccFileId::AdfDefault.as_u16());
@@ -355,6 +359,31 @@ fn parse_fcp_response(response: &str) -> Option<FcpDescriptor> {
     Some(FcpDescriptor { is_linear_fixed, record_len, num_records, file_size })
 }
 
+impl XmlSimIo {
+    /// Extracts the APDU status word (SW1, SW2) from the response string.
+    ///
+    /// Status words in Android modem XML profiles are formatted as
+    /// comma-separated decimal integers (e.g. "106,130" for 0x6A82).
+    pub fn status_word(&self) -> Option<u16> {
+        let mut parts = self.response.split(',');
+        let sw1 = parts.next()?.trim().parse::<u8>().ok()?;
+        let sw2 = parts.next()?.trim().parse::<u8>().ok()?;
+        Some(u16::from_be_bytes([sw1, sw2]))
+    }
+}
+
+impl XmlElementaryFile {
+    /// Returns true if this EF indicates the file is not found on the SIM card.
+    pub fn is_file_not_found(&self) -> bool {
+        self.members.iter().any(|m| match m {
+            XmlElementaryFileMember::Simio(s) => {
+                s.status_word() == Some(crate::constants::SW_FILE_NOT_FOUND)
+            }
+            _ => false,
+        })
+    }
+}
+
 impl TryFrom<XmlElementaryFile> for ElementaryFile {
     type Error = XmlProfileError;
     fn try_from(xml_ef: XmlElementaryFile) -> Result<Self, Self::Error> {
@@ -366,7 +395,7 @@ impl TryFrom<XmlElementaryFile> for ElementaryFile {
             match member {
                 XmlElementaryFileMember::Simio(m) => {
                     simio_mappings.push(SimIoMapping {
-                        cmd: apdu::Instruction::from(m.command),
+                        cmd: m.command,
                         p1: m.p1,
                         p2: m.p2,
                         p3: m.p3,

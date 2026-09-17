@@ -1,4 +1,4 @@
-# Copyright 2023-2025 The Android Open Source Project
+# Copyright 2023-2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 #
 # Common Bazel commands for this package:
@@ -12,11 +12,11 @@
 # Run the tests:
 #   bazel test //next/daemon:tests
 
-load("@goldfish_build//rules/native:native_binaries.bzl", "stripped_binaries")
 load(
     "//next:defs.bzl",
     "netsim_rust_binary",
     "netsim_rust_library",
+    "stripped_binaries",
 )
 
 package(default_visibility = ["//visibility:public"])
@@ -24,39 +24,13 @@ package(default_visibility = ["//visibility:public"])
 DAEMON_SRCS = [
     "src/args.rs",
     "src/avd_config.rs",
+    "src/cuttlefish.rs",
     "src/ini_file.rs",
     "src/lib.rs",
     "src/logger.rs",
     "src/netsimd.rs",
     "src/test_beacons.rs",
     "src/version.rs",
-]
-
-DAEMON_DEPS = [
-    "//next/ap-actor",
-    "//next/bluetooth-actor",
-    "//next/capture-actor",
-    "//next/cell-actor",
-    "//next/common",
-    "//next/device-actor",
-    "//next/device-api",
-    "//next/grpc-server",
-    "//next/hci-server",
-    "//next/link-actor",
-    "//next/link-api",
-    "//next/model",
-    "//next/nfc-actor",
-    "//next/packet-stream",
-    "//next/slirp-actor",
-    "//next/ethernet-actor",
-    "//next/uwb-actor",
-    "//next/websocket-server",
-    "//next/wifi-actor",
-    "@clap",
-    "@futures",
-    "@grpcio",
-    "@tracing",
-    "@tokio",
 ]
 
 netsim_rust_library(
@@ -70,10 +44,36 @@ netsim_rust_library(
         "@bytes",
         "@rand",
         "@regex",
-        "@serde_json",
         "@tempfile",
     ],
-    deps = DAEMON_DEPS,
+    deps = [
+        "//next/ap-actor",
+        "//next/bluetooth-actor",
+        "//next/capture-actor",
+        "//next/cell-actor",
+        "//next/common",
+        "//next/device-actor",
+        "//next/device-api",
+        "//next/ethernet-actor",
+        "//next/grpc-server",
+        "//next/hci-server",
+        "//next/link-actor",
+        "//next/link-api",
+        "//next/model",
+        "//next/nfc-actor",
+        "//next/packet-stream",
+        "//next/slirp-actor",
+        "//next/uwb-actor",
+        "//next/websocket-server",
+        "//next/wifi-actor",
+        "@clap",
+        "@futures",
+        "@grpcio",
+        "@serde",
+        "@serde_json",
+        "@tokio",
+        "@tracing",
+    ],
 )
 
 netsim_rust_binary(

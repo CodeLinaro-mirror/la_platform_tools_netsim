@@ -361,3 +361,183 @@ fn synthesize_dns_reply(
 
     reply
 }
+
+/// Parses resolv.conf format text into a list of valid non-loopback,
+/// non-unspecified IP addresses.
+pub fn parse_resolv_conf_content(content: &str) -> Vec<IpAddr> {
+    let mut servers = Vec::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+        let mut words = line.split_whitespace();
+        if let (Some("nameserver"), Some(ip_token)) = (words.next(), words.next()) {
+            // Strip any IPv6 scope ID suffix (e.g. fe80::1%eth0 -> fe80::1)
+            let clean_ip = ip_token.split('%').next().unwrap();
+            if let Ok(ip) = clean_ip.parse::<IpAddr>()
+                && !ip.is_unspecified()
+                && !ip.is_loopback()
+                && !servers.contains(&ip)
+            {
+                servers.push(ip);
+            }
+        }
+    }
+    servers
+}
+
+/// Discovers host DNS servers from host OS configuration.
+/// - Linux: Parses `/run/systemd/resolve/resolv.conf` (if present) or
+///   `/etc/resolv.conf`.
+/// - macOS: Parses `/etc/resolv.conf`.
+/// - Windows: Queries active network adapter DNS servers via
+///   `GetAdaptersAddresses`.
+#[cfg(unix)]
+pub async fn discover_host_dns_servers() -> Vec<IpAddr> {
+    let paths = ["/run/systemd/resolve/resolv.conf", "/etc/resolv.conf"];
+    let mut servers = Vec::new();
+
+    for path in paths {
+        if let Ok(content) = tokio::fs::read_to_string(path).await {
+            servers = parse_resolv_conf_content(&content);
+            if !servers.is_empty() {
+                break;
+            }
+        }
+    }
+
+    if servers.is_empty() {
+        log::info!("No non-loopback DNS servers found in resolv.conf; falling back to localhost");
+        servers.push(IpAddr::V4(Ipv4Addr::LOCALHOST));
+    } else {
+        log::info!("Discovered host DNS servers: {servers:?}");
+    }
+    servers
+}
+
+#[cfg(windows)]
+pub async fn discover_host_dns_servers() -> Vec<IpAddr> {
+    tokio::task::spawn_blocking(discover_host_dns_servers_windows).await.unwrap_or_default()
+}
+
+#[cfg(windows)]
+#[allow(clippy::cast_ptr_alignment, clippy::ptr_as_ptr)]
+fn discover_host_dns_servers_windows() -> Vec<IpAddr> {
+    use std::net::Ipv6Addr;
+
+    use windows_sys::Win32::{
+        Foundation::{ERROR_BUFFER_OVERFLOW, ERROR_SUCCESS},
+        NetworkManagement::{
+            IpHelper::{
+                GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_MULTICAST, GetAdaptersAddresses,
+                IP_ADAPTER_ADDRESSES_LH,
+            },
+            Ndis::IfOperStatusUp,
+        },
+        Networking::WinSock::{AF_INET, AF_INET6, AF_UNSPEC, SOCKADDR_IN, SOCKADDR_IN6},
+    };
+
+    let mut servers = Vec::new();
+    let mut buf_len: u32 = 15000;
+    let mut buf = vec![0u8; buf_len as usize];
+
+    // First call to determine buffer size needed.
+    // SAFETY: `buf` is a valid, contiguous byte allocation of `buf_len` bytes.
+    // `GetAdaptersAddresses` writes up to `buf_len` bytes and updates `buf_len` on
+    // overflow.
+    let mut ret = unsafe {
+        GetAdaptersAddresses(
+            AF_UNSPEC as u32,
+            GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST,
+            core::ptr::null_mut(),
+            buf.as_mut_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>(),
+            &mut buf_len,
+        )
+    };
+
+    if ret == ERROR_BUFFER_OVERFLOW {
+        buf.resize(buf_len as usize, 0);
+        // SAFETY: `buf` is resized to the exact capacity requested by the previous
+        // call.
+        ret = unsafe {
+            GetAdaptersAddresses(
+                AF_UNSPEC as u32,
+                GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST,
+                core::ptr::null_mut(),
+                buf.as_mut_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>(),
+                &mut buf_len,
+            )
+        };
+    }
+
+    if ret != ERROR_SUCCESS {
+        log::warn!("GetAdaptersAddresses failed with error code {ret}");
+        return servers;
+    }
+
+    let mut adapter = buf.as_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>();
+    while !adapter.is_null() {
+        // SAFETY: `ret == ERROR_SUCCESS` guarantees that `buf` contains a valid,
+        // properly aligned linked list of `IP_ADAPTER_ADDRESSES_LH` terminated
+        // by a null pointer. `adapter` is checked non-null before
+        // dereferencing.
+        let (oper_status, mut dns_server, next_adapter) =
+            unsafe { ((*adapter).OperStatus, (*adapter).FirstDnsServerAddress, (*adapter).Next) };
+
+        if oper_status == IfOperStatusUp {
+            while !dns_server.is_null() {
+                // SAFETY: `dns_server` points to a valid `IP_ADAPTER_DNS_SERVER_ADDRESS_XP`
+                // within the OS-populated adapter structure and is checked non-null.
+                let (sockaddr, next_dns) =
+                    unsafe { ((*dns_server).Address.lpSockaddr, (*dns_server).Next) };
+
+                if !sockaddr.is_null() {
+                    // SAFETY: `sockaddr` is checked non-null and points to a valid OS-initialized
+                    // `SOCKADDR`.
+                    let family = unsafe { (*sockaddr).sa_family as u32 };
+
+                    let ip = if family == AF_INET as u32 {
+                        let sin = sockaddr.cast::<SOCKADDR_IN>();
+                        // SAFETY: `family == AF_INET` guarantees `sockaddr` is a valid
+                        // `SOCKADDR_IN`.
+                        let ip_bytes = unsafe { (*sin).sin_addr.S_un.S_addr.to_ne_bytes() };
+                        Some(IpAddr::V4(Ipv4Addr::from(ip_bytes)))
+                    } else if family == AF_INET6 as u32 {
+                        let sin6 = sockaddr.cast::<SOCKADDR_IN6>();
+                        // SAFETY: `family == AF_INET6` guarantees `sockaddr` is a valid
+                        // `SOCKADDR_IN6`.
+                        let ip_bytes = unsafe { (*sin6).sin6_addr.u.Byte };
+                        Some(IpAddr::V6(Ipv6Addr::from(ip_bytes)))
+                    } else {
+                        None
+                    };
+
+                    if let Some(ip) = ip
+                        && !ip.is_unspecified()
+                        && !ip.is_loopback()
+                        && !servers.contains(&ip)
+                    {
+                        servers.push(ip);
+                    }
+                }
+                dns_server = next_dns;
+            }
+        }
+        adapter = next_adapter;
+    }
+
+    if servers.is_empty() {
+        log::info!(
+            "No DNS servers discovered on Windows via GetAdaptersAddresses; using default fallback"
+        );
+    } else {
+        log::info!("Discovered Windows host DNS servers: {servers:?}");
+    }
+    servers
+}
+
+#[cfg(not(any(unix, windows)))]
+pub async fn discover_host_dns_servers() -> Vec<IpAddr> {
+    Vec::new()
+}

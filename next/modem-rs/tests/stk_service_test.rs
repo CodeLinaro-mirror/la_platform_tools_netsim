@@ -3,10 +3,33 @@
 
 use crate::{steps::*, world::World};
 
+const SETUP_MENU_URC: &str = concat!(
+    "+CUSATP: ",
+    "D0",
+    "48", // Proactive Command: Tag D0, Len 72 (0x48)
+    "81",
+    "03",
+    "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
+    "82",
+    "02",
+    "8182", // Device IDs: UICC (81) to ME (82)
+    "85",
+    "0D",
+    "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
+    "8F",
+    "18",
+    "50",
+    "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
+    "8F",
+    "14",
+    "4E",
+    "80005500530049004D00200043006100720064" // Item 2: ID 0x4E, "USIM Card"
+);
+
 // Scenario: STK Display Text
 //   Given a modem "A"
 //   When AT command 'AT+CUSATE="D1150121810D050448656C6C6F20576F726C64"' is
-// sent to "A"   Then response from "A" is '+CUSATE: 9000'
+// sent to "A"   Then response from "A" is '+CUSATE: 0'
 //   And response from "A" is 'OK'
 //   And response from "A" is '+CUSATP: "9000"'
 #[test]
@@ -30,15 +53,15 @@ fn test_stk_display_text() {
         ),
     );
 
-    then_response_is(&mut world, "A", "+CUSATE: 9000");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
     then_response_is(&mut world, "A", "OK");
-    then_response_is(&mut world, "A", "+CUSATP: \"9000\"");
+    then_response_is(&mut world, "A", "+CUSATP: 9000");
 }
 
 // Scenario: Send STK Envelope Command
 //   Given a modem "A"
 //   When AT command 'AT+CUSATE="D30782028281100150"' is sent to "A"
-//   Then response from "A" is '+CUSATE: 9000'
+//   Then response from "A" is '+CUSATE: 0'
 //   And response from "A" is 'OK'
 //   And response from "A" is '+CUSATP:
 // "D02D8103012400820281828F0A018053E34EE48BBE7F6E8F0A02804E1A52A14ECB7ECD8F0A0380724867434FE1606F"
@@ -66,13 +89,13 @@ fn test_send_stk_envelope_command() {
         ),
     );
 
-    then_response_is(&mut world, "A", "+CUSATE: 9000");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
     then_response_is(&mut world, "A", "OK");
     then_response_is(
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "2D", // Proactive Command: Tag D0, Len 45 (0x2D)
             "81",
@@ -92,8 +115,7 @@ fn test_send_stk_envelope_command() {
             "8F",
             "0A",
             "03",
-            "8000480065006C0070", // Item 3: ID 03, "Help"
-            "\""
+            "8000480065006C0070" // Item 3: ID 03, "Help"
         ),
     );
 }
@@ -101,7 +123,7 @@ fn test_send_stk_envelope_command() {
 // Scenario: STK Get Input
 //   Given a modem "A"
 //   When AT command 'AT+CUSATE="D1150123810D0504456E7465722054657874"' is sent
-// to "A"   Then response from "A" is '+CUSATE: 9000'
+// to "A"   Then response from "A" is '+CUSATE: 0'
 //   And response from "A" is 'OK'
 //   And response from "A" is '+CUSATP: "9000"'
 #[test]
@@ -125,9 +147,9 @@ fn test_stk_get_input() {
         ),
     );
 
-    then_response_is(&mut world, "A", "+CUSATE: 9000");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
     then_response_is(&mut world, "A", "OK");
-    then_response_is(&mut world, "A", "+CUSATP: \"9000\"");
+    then_response_is(&mut world, "A", "+CUSATP: 9000");
 }
 
 // Scenario: Query STK Ready
@@ -144,6 +166,32 @@ fn test_query_stk_ready() {
 
     then_response_is(&mut world, "A", "+CUSATD: 1, 1");
     then_response_is(&mut world, "A", "OK");
+    then_response_is(
+        &mut world,
+        "A",
+        concat!(
+            "+CUSATP: ",
+            "D0",
+            "48", // Proactive Command: Tag D0, Len 72 (0x48)
+            "81",
+            "03",
+            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
+            "82",
+            "02",
+            "8182", // Device IDs: UICC (81) to ME (82)
+            "85",
+            "0D",
+            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
+            "8F",
+            "18",
+            "50",
+            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
+            "8F",
+            "14",
+            "4E",
+            "80005500530049004D00200043006100720064" // Item 2: ID 0x4E, "USIM Card"
+        ),
+    );
 }
 
 // Scenario: Set STK Mode
@@ -192,33 +240,7 @@ fn test_set_stk_ready() {
 
     then_response_is(&mut world, "A", "OK");
     // Expect SET UP MENU URC from the default profile
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: \"",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
-            "\""
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 }
 
 #[test]
@@ -260,33 +282,7 @@ fn test_stk_submenu_navigation() {
     when_at_command_sent(&mut world, "A", "AT+CUSATD=1,\"010203\"");
     then_response_is(&mut world, "A", "OK");
     // Setup Menu URC
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: \"",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
-            "\""
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 
     // 2. Select "SIM" (Item 0x50) from main menu via Envelope (Source ME: 82)
     when_at_command_sent(
@@ -305,14 +301,14 @@ fn test_stk_submenu_navigation() {
             "\""
         ),
     );
-    then_response_is(&mut world, "A", "+CUSATE: 9000");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
     then_response_is(&mut world, "A", "OK");
     // Expect SELECT ITEM URC for submenu
     then_response_is(
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "2D", // Proactive Command: Tag D0, Len 45 (0x2D)
             "81",
@@ -332,8 +328,7 @@ fn test_stk_submenu_navigation() {
             "8F",
             "0A",
             "03",
-            "8000480065006C0070", // Item 3: ID 03, "Help"
-            "\""
+            "8000480065006C0070" // Item 3: ID 03, "Help"
         ),
     );
 
@@ -364,7 +359,7 @@ fn test_stk_submenu_navigation() {
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "31", // Proactive Command: Tag D0, Len 49 (0x31)
             "81",
@@ -380,8 +375,7 @@ fn test_stk_submenu_navigation() {
             "8F",
             "12",
             "02",
-            "8000440065006C0020006D0065006E0075", // Item 2: ID 02, "Del menu"
-            "\""
+            "8000440065006C0020006D0065006E0075" // Item 2: ID 02, "Del menu"
         ),
     );
 
@@ -410,7 +404,7 @@ fn test_stk_submenu_navigation() {
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "2A", // Proactive Command: Tag D0, Len 42 (0x2A)
             "81",
@@ -422,9 +416,8 @@ fn test_stk_submenu_navigation() {
             "8D",
             "1F", // Text String: Tag 8D, Len 31
             "08", // DCS: 08 (UCS2)
-            "004E006F007400200069006D0070006C0065006D0065006E007400650064", /* Text: "Not
+            "004E006F007400200069006D0070006C0065006D0065006E007400650064"  /* Text: "Not
                    * implemented" */
-            "\""
         ),
     );
 
@@ -462,33 +455,7 @@ fn test_stk_session_terminated_by_user() {
     // 1. Enable STK
     when_at_command_sent(&mut world, "A", "AT+CUSATD=1,\"010203\"");
     then_response_is(&mut world, "A", "OK");
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: \"",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
-            "\""
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 
     // 2. Select "SIM" (Item 0x50) to go to submenu
     when_at_command_sent(
@@ -507,13 +474,13 @@ fn test_stk_session_terminated_by_user() {
             "\""
         ),
     );
-    then_response_is(&mut world, "A", "+CUSATE: 9000");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
     then_response_is(&mut world, "A", "OK");
     then_response_is(
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "2D", // Proactive Command: Tag D0, Len 45 (0x2D)
             "81",
@@ -533,8 +500,7 @@ fn test_stk_session_terminated_by_user() {
             "8F",
             "0A",
             "03",
-            "8000480065006C0070", // Item 3: ID 03, "Help"
-            "\""
+            "8000480065006C0070" // Item 3: ID 03, "Help"
         ),
     );
 
@@ -580,7 +546,7 @@ fn test_stk_session_terminated_by_user() {
             "\""
         ),
     );
-    then_response_is(&mut world, "A", "+CUSATE: 9000");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -592,33 +558,7 @@ fn test_stk_backward_move() {
     // 1. Enable STK
     when_at_command_sent(&mut world, "A", "AT+CUSATD=1,\"010203\"");
     then_response_is(&mut world, "A", "OK");
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: \"",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
-            "\""
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 
     // 2. Select "SIM" (Item 0x50) to go to submenu
     when_at_command_sent(
@@ -637,13 +577,13 @@ fn test_stk_backward_move() {
             "\""
         ),
     );
-    then_response_is(&mut world, "A", "+CUSATE: 9000");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
     then_response_is(&mut world, "A", "OK");
     then_response_is(
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "2D", // Proactive Command: Tag D0, Len 45 (0x2D)
             "81",
@@ -663,8 +603,7 @@ fn test_stk_backward_move() {
             "8F",
             "0A",
             "03",
-            "8000480065006C0070", // Item 3: ID 03, "Help"
-            "\""
+            "8000480065006C0070" // Item 3: ID 03, "Help"
         ),
     );
 
@@ -692,7 +631,7 @@ fn test_stk_backward_move() {
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "31", // Proactive Command: Tag D0, Len 49 (0x31)
             "81",
@@ -708,8 +647,7 @@ fn test_stk_backward_move() {
             "8F",
             "12",
             "02",
-            "8000440065006C0020006D0065006E0075", // Item 2: ID 0x02, "Del menu"
-            "\""
+            "8000440065006C0020006D0065006E0075" // Item 2: ID 0x02, "Del menu"
         ),
     );
 
@@ -739,7 +677,7 @@ fn test_stk_backward_move() {
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "2D", // Proactive Command: Tag D0, Len 45 (0x2D)
             "81",
@@ -747,7 +685,7 @@ fn test_stk_backward_move() {
             "012400", // Command Details: Tag 81, Len 03, Num 01, Type 24 (SELECT ITEM), Qual 00
             "82",
             "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
+            "8182", // Device IDs: Tag 82, Len 02, UICC (81) to ME (82)
             "8F",
             "0A",
             "01",
@@ -759,8 +697,7 @@ fn test_stk_backward_move() {
             "8F",
             "0A",
             "03",
-            "8000480065006C0070", // Item 3: ID 03, "Help"
-            "\""
+            "8000480065006C0070" // Item 3: ID 03, "Help"
         ),
     );
 
@@ -789,7 +726,7 @@ fn test_stk_backward_move() {
         &mut world,
         "A",
         concat!(
-            "+CUSATP: \"",
+            "+CUSATP: ",
             "D0",
             "31", // Proactive Command: Tag D0, Len 49 (0x31)
             "81",
@@ -805,8 +742,7 @@ fn test_stk_backward_move() {
             "8F",
             "12",
             "02",
-            "8000440065006C0020006D0065006E0075", // Item 2: ID 0x02, "Del menu"
-            "\""
+            "8000440065006C0020006D0065006E0075" // Item 2: ID 0x02, "Del menu"
         ),
     );
 }
@@ -835,33 +771,7 @@ fn test_stk_reporting_disabled() {
     then_response_is(&mut world, "A", "OK");
     // Setup Menu URC is sent because AT+CUSATD enables reporting by default, we
     // consume it.
-    then_response_is(
-        &mut world,
-        "A",
-        concat!(
-            "+CUSATP: \"",
-            "D0",
-            "48", // Proactive Command: Tag D0, Len 72 (0x48)
-            "81",
-            "03",
-            "012500", // Command Details: Tag 81, Len 03, Type 25 (SETUP MENU)
-            "82",
-            "02",
-            "8182", // Device IDs: UICC (81) to ME (82)
-            "85",
-            "0D",
-            "800054004D006F0062006C0065", // Alpha ID: "TMoble" (upstream profile typo)
-            "8F",
-            "18",
-            "50",
-            "8000530049004D00200054006F006F006C006B00690074", // Item 1: ID 0x50, "SIM Toolkit"
-            "8F",
-            "14",
-            "4E",
-            "80005500530049004D00200043006100720064", // Item 2: ID 0x4E, "USIM Card"
-            "\""
-        ),
-    );
+    then_response_is(&mut world, "A", SETUP_MENU_URC);
 
     // Disable reporting via AT+STKUR=0
     when_at_command_sent(&mut world, "A", "AT+STKUR=0");
@@ -884,7 +794,7 @@ fn test_stk_reporting_disabled() {
             "\""
         ),
     );
-    then_response_is(&mut world, "A", "+CUSATE: 9000");
+    then_response_is(&mut world, "A", "+CUSATE: 0");
     then_response_is(&mut world, "A", "OK");
     // NO URC (+CUSATP:) should be sent since reporting is disabled.
     // then_response_is will assert no trailing responses (since OK is a final

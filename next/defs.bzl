@@ -8,14 +8,19 @@ This module provides the netsim_rust_library macro which wraps rust_library
 to provide standard targets for testing, linting, and formatting.
 """
 
+load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
+load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
 NETSIM_CLIPPY_FLAGS = [
     "-Dwarnings",
     # Async / Concurrency
+    "-Dclippy::await_holding_lock",
     "-Dclippy::future_not_send",
     "-Dclippy::large_futures",
+    "-Dclippy::let_underscore_future",
     "-Dclippy::mutex_atomic",
     "-Dclippy::rc_mutex",
     "-Dclippy::significant_drop_in_scrutinee",
@@ -33,6 +38,7 @@ NETSIM_CLIPPY_FLAGS = [
     "-Dclippy::map_err_ignore",
     "-Dclippy::match_wild_err_arm",
     "-Dclippy::unwrap_in_result",
+    "-Dclippy::unwrap_used",
 ]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.
@@ -40,11 +46,15 @@ def _netsim_rustfmt_test_impl(ctx):
     toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
     rustfmt, config = toolchain.rustfmt, ctx.file.config
 
+    seen = {}
     srcs = []
     for t in ctx.attr.targets:
         info = t[rust_common.crate_info] if rust_common.crate_info in t else getattr(t, "crate_info", None)
         if info:
-            srcs.extend([s for s in info.srcs.to_list() if s.is_source])
+            for s in info.srcs.to_list():
+                if s.is_source and s.short_path not in seen:
+                    seen[s.short_path] = True
+                    srcs.append(s)
 
     if not srcs:
         fail("No sources to format")
@@ -152,16 +162,9 @@ netsim_dep_aspect = aspect(
 
 # Why we use a manual clippy-driver rule instead of rules_rust defaults:
 #
-# 1. rules_rust `rust_clippy` and `rust_clippy_aspect` fail with "nothing to build"
-#    because we use a Bazel module setup where our codebase is remapped to `external/netsim+`.
-#    This is ignored by rules_rust.
-#
-# 2. Changing the workspace layout to resolve this wasn't feasible:
-#    - Using repo-relative paths (`//tools/netsim/...`) forces the repo-root
-#      MODULE.bazel to declare all internal Netsim dependencies.
-#    - Running Bazel inside `tools/netsim` fails because external dependencies
-#      (like @goldfish_crates) hardcode relative paths from the workspace root
-#      where they are evaluated & fail to find `third_party/rust`.
+# rules_rust `rust_clippy` and `rust_clippy_aspect` do not seamlessly integrate
+# with the custom multi-target test reporting and diagnostics formatting required
+# across platform toolchains. We drive clippy directly using the resolved rust toolchain.
 def _netsim_clippy_test_impl(ctx):
     toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
     rustfmt = toolchain.rustfmt
@@ -256,10 +259,21 @@ def _netsim_clippy_test_impl(ctx):
             t_args.add("-L", "dependency=%s" % lib_dir)
         t_args.add("--sysroot=%s" % sysroot)
         t_args.add("-L", "%s/lib/rustlib/%s/lib" % (sysroot, target_triple))
+        t_args.add_all(ctx.attr.clippy_flags)
         if info.type == "bin" and not "test" in t.label.name:
             t_args.add("--crate-type=bin")
         elif info.type == "test" or "test" in t.label.name:
             t_args.add("--test")
+
+            # In test targets, allow idiomatic test patterns:
+            # - unwrap_in_result: tests returning Result often assert via .unwrap()
+            # - unwrap_used: tests and test fixtures commonly use .unwrap()
+            # - field_reassign_with_default: initializing mock structs in tests
+            # - module_inception: tests/tests.rs having mod tests
+            t_args.add("-Aclippy::unwrap_in_result")
+            t_args.add("-Aclippy::unwrap_used")
+            t_args.add("-Aclippy::field_reassign_with_default")
+            t_args.add("-Aclippy::module_inception")
         else:
             t_args.add("--crate-type=rlib")
         t_args.add("--crate-name=%s" % info.name)
@@ -268,7 +282,6 @@ def _netsim_clippy_test_impl(ctx):
         t_args.add("-Cembed-bitcode=no")
         if not is_windows:
             t_args.add("--remap-path-prefix=$(pwd)=.")
-        t_args.add_all(ctx.attr.clippy_flags)
         t_args.add(root_file.path)
 
         # We run clippy-driver via a wrapper that always exits 0, even if clippy fails.
@@ -507,6 +520,8 @@ def netsim_rust_library(
 
     # 5. Common Targets (Clippy, Rustfmt)
     tgs = [":" + name]
+    if enable_unit_test:
+        tgs.append(":test")
     if has_integration_test:
         tgs.append(":integration-test")
 
@@ -581,3 +596,76 @@ def netsim_rust_binary(
         enable_rustfmt,
         targets = [":" + name],
     )
+
+def _stripped_binaries_impl(ctx):
+    out_files = []
+    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
+    cc_toolchain = find_cpp_toolchain(ctx)
+
+    # `cc_toolchain.strip_executable` is the legacy `tool_path` entry, which
+    # modern toolchains (including the hermetic goldfish one) leave as a
+    # non-existent placeholder next to the toolchain's BUILD file. The real
+    # binary has to be resolved through the action config instead.
+    #
+    # Only resolve it where a strip action actually exists. The clang-cl
+    # toolchain used for Windows configures no strip action at all, and
+    # get_tool_for_action() fails at analysis time rather than returning None,
+    # so this must stay inside the guard even though the Windows branch below
+    # never uses the tool.
+    strip_executable = None
+    if not is_windows:
+        feature_configuration = cc_common.configure_features(
+            ctx = ctx,
+            cc_toolchain = cc_toolchain,
+            requested_features = ctx.features,
+            unsupported_features = ctx.disabled_features,
+        )
+        strip_executable = cc_common.get_tool_for_action(
+            feature_configuration = feature_configuration,
+            action_name = ACTION_NAMES.strip,
+        )
+
+    for src in ctx.files.srcs:
+        out = ctx.actions.declare_file("_stripped/" + src.basename)
+        if is_windows:
+            # Windows binaries (PE/COFF) carry no strippable ELF symbol table and
+            # the MSVC toolchain exposes no `strip` tool, so pass the binary
+            # through unmodified. `ctx.actions.symlink` is the portable way to
+            # re-materialize a file under a new path; Bazel degrades to a real
+            # copy on filesystems that cannot create symlinks.
+            ctx.actions.symlink(
+                output = out,
+                target_file = src,
+                progress_message = "Copying %s (strip unsupported on Windows)" % src.short_path,
+            )
+        else:
+            # `all_files` rather than `strip_files`: the tool resolved above may
+            # live in a different filegroup than the one the legacy
+            # `strip_files` attribute points at, and it must be staged in the
+            # sandbox for the action to find it.
+            ctx.actions.run_shell(
+                outputs = [out],
+                inputs = depset([src], transitive = [cc_toolchain.all_files]),
+                command = "cp \"$1\" \"$2\" && chmod u+w \"$2\" && \"$3\" \"$2\"",
+                arguments = [src.path, out.path, strip_executable],
+                mnemonic = "NetsimStrip",
+                progress_message = "Stripping %s with %s" % (src.short_path, strip_executable),
+            )
+        out_files.append(out)
+    return [DefaultInfo(files = depset(out_files))]
+
+stripped_binaries = rule(
+    doc = """Strip binaries and place them into the _stripped directory using the C++ toolchain.""",
+    implementation = _stripped_binaries_impl,
+    attrs = {
+        "srcs": attr.label_list(
+            doc = "The executable binaries to strip.",
+            mandatory = True,
+            allow_files = True,
+        ),
+        "_cc_toolchain": attr.label(default = "@bazel_tools//tools/cpp:current_cc_toolchain"),
+        "_windows_constraint": attr.label(default = "@platforms//os:windows"),
+    },
+    fragments = ["cpp"],
+    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
+)

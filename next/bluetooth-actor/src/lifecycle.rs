@@ -15,7 +15,7 @@ impl ActorLifecycle for BluetoothActor {
         runtime.set_interval(Duration::from_millis(10));
 
         // Register internal event stream
-        let rx = self.event_rx.lock().unwrap().take();
+        let rx = self.event_rx.lock().take();
         if let Some(rx) = rx {
             runtime.add_typed_stream(0, Box::pin(UnboundedReceiverStream::new(rx)));
         }

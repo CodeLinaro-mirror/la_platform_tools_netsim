@@ -9,15 +9,17 @@ use std::{
 };
 
 use bytes::Bytes;
-use netsim_model::{ModemAction, Quirks, RadioTechnology, RegistrationStatus};
+use netsim_model::{CellNetworkConfig, ModemAction, Quirks, RadioTechnology, RegistrationStatus};
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
 use crate::{
-    config::SimProfile,
+    config::{ProfileMetadata, SimProfile},
     constants::{DEFAULT_FALLBACK_MSISDN, DEFAULT_MSISDN_PREFIX},
     metrics::{Metrics, MetricsSnapshot},
     modem::{ModemEffect, ModemEvent, ModemImpl},
+    network_service::RegistrationType,
+    profiles::get_builtin_profile,
     time::{Clock, SystemClock},
     types::{
         ClirMode, CommandAction, DialString, HostEvent, ModemError, ModemId, ModemSink,
@@ -204,10 +206,10 @@ impl ModemNetworkSimulator {
                 self.set_signal_strength(id.0, rssi, ber)
             }
             ModemAction::SetVoiceRegistration { id, status } => {
-                self.set_voice_registration(id.0, status)
+                self.set_registration(id.0, RegistrationType::Voice, status)
             }
             ModemAction::SetDataRegistration { id, status } => {
-                self.set_data_registration(id.0, status)
+                self.set_registration(id.0, RegistrationType::Data, status)
             }
             ModemAction::IncomingCall { target_id, number } => {
                 self.initiate_external_incoming_call(target_id.0, &number)
@@ -219,11 +221,17 @@ impl ModemNetworkSimulator {
                 self.send_incoming_sms(id.0, &sender, &text)
             }
             ModemAction::IncomingPdu { id, pdu } => self.send_incoming_pdu(id.0, &pdu),
-            ModemAction::UpdateNetworkTime { id, time } => self.update_network_time(id.0, &time),
+            ModemAction::UpdateNetworkTime { id } => self.update_network_time(id.0),
             ModemAction::UpdatePhysicalChannelConfigs { id } => {
                 self.update_physical_channel_configs(id.0)
             }
-            ModemAction::SetSimStatus { id, present } => self.set_sim_status(id.0, present),
+            ModemAction::SetSimStatus { id, present } => {
+                if present {
+                    self.reinsert_sim(id.0).unwrap_or_default()
+                } else {
+                    self.eject_sim(id.0).unwrap_or_default()
+                }
+            }
             ModemAction::SetNetworkTechnology { id, tech } => {
                 self.set_network_technology(id.0, tech)
             }
@@ -232,7 +240,11 @@ impl ModemNetworkSimulator {
     }
 
     pub fn set_sim_status(&mut self, id: ModemId, present: bool) -> Vec<NetworkEvent> {
-        self.apply_to_modem(id, |modem| modem.set_sim_status(present))
+        if present {
+            self.reinsert_sim(id).unwrap_or_default()
+        } else {
+            self.eject_sim(id).unwrap_or_default()
+        }
     }
 
     pub fn set_network_technology(
@@ -255,32 +267,31 @@ impl ModemNetworkSimulator {
         sim_type: Option<i32>,
         sim_profile: Option<String>,
         quirks: Quirks,
+        network_configs: Vec<CellNetworkConfig>,
     ) -> Result<(), ModemError> {
-        let xml_content = match &sim_profile {
-            Some(xml) => xml.as_str(),
-            None => match sim_type {
-                Some(2) => crate::profiles::PROFILE_CTS_XML,
-                _ => {
-                    if quirks.is_cuttlefish {
-                        crate::profiles::PROFILE_TEL_ALASKA_XML
-                    } else {
-                        crate::profiles::PROFILE_DEFAULT_XML
+        let profile = match sim_profile {
+            Some(xml) => crate::xml_profile::parse_xml_profile(&xml).map_err(|e| {
+                ModemError::InvalidConfig(format!("Failed to parse SIM profile XML: {e}"))
+            })?,
+            None => {
+                let numeric_type = match sim_type {
+                    Some(0) => crate::profiles::SIM_TYPE_DEFAULT,
+                    Some(t) => t,
+                    None => {
+                        if quirks.is_cuttlefish {
+                            crate::profiles::SIM_TYPE_TEL_ALASKA
+                        } else {
+                            crate::profiles::SIM_TYPE_DEFAULT
+                        }
                     }
-                }
-            },
-        };
-
-        let profile = match crate::xml_profile::parse_xml_profile(xml_content) {
-            Ok(p) => p,
-            Err(e) => {
-                return Err(ModemError::InvalidConfig(format!(
-                    "Failed to parse SIM profile XML: {}",
-                    e
-                )));
+                };
+                get_builtin_profile(numeric_type).ok_or_else(|| {
+                    ModemError::InvalidProfile(format!("Unknown sim_type: {numeric_type}"))
+                })?
             }
         };
 
-        self.new_modem_with_profile(id, sink, Some(profile), sim_type, quirks)
+        self.new_modem_with_profile(id, sink, Some(profile), sim_type, quirks, network_configs)
     }
 
     /// Creates a new modem instance with a specific SIM profile.
@@ -291,18 +302,23 @@ impl ModemNetworkSimulator {
         profile: Option<SimProfile>,
         sim_type: Option<i32>,
         quirks: Quirks,
+        network_configs: Vec<CellNetworkConfig>,
     ) -> Result<(), ModemError> {
         if self.modems.contains_key(&id) {
             return Err(ModemError::DuplicateModemId(id));
         }
         self.modem_chip_count += 1;
         let profile = profile.unwrap_or_default();
-        let target_msisdn = if profile.msisdn.is_empty() {
-            format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count)
-        } else {
-            profile.msisdn.clone()
+        let target_msisdn = match profile.msisdn.clone() {
+            Some(msisdn) => msisdn,
+            None => {
+                let s = format!("{}{:03}", DEFAULT_MSISDN_PREFIX, self.modem_chip_count);
+                s.parse::<PhoneNumber>().map_err(|e| {
+                    ModemError::InvalidProfile(format!("Invalid generated phone number '{s}': {e}"))
+                })?
+            }
         };
-        let mut modem = ModemImpl::new(id, profile, quirks);
+        let mut modem = ModemImpl::new(id, profile, quirks, self.clock.clone(), network_configs);
         // Override the default dummy number with a unique generated one to prevent
         // conflicts when launching multiple default emulators. Custom profiles are
         // preserved.
@@ -312,7 +328,7 @@ impl ModemNetworkSimulator {
                 .as_ref()
                 .is_some_and(|n| n.normalized() == DEFAULT_FALLBACK_MSISDN)
         {
-            modem.set_phone_number(&target_msisdn);
+            modem.set_phone_number(target_msisdn);
         }
         if let Some(t) = sim_type {
             modem.set_sim_status(t > 0);
@@ -330,6 +346,86 @@ impl ModemNetworkSimulator {
         for queue in self.incoming_sms.values_mut() {
             queue.remove_sender(id);
         }
+    }
+
+    /// Switches the active SIM profile of a modem instance.
+    pub fn switch_sim_profile(
+        &mut self,
+        id: ModemId,
+        profile: SimProfile,
+    ) -> Result<Vec<NetworkEvent>, ModemError> {
+        let modem = self.modems.get_mut(&id).ok_or(ModemError::UnknownModemId(id))?;
+        self.incoming_sms.remove(&id);
+        let modem_effects = modem.switch_sim_profile(profile);
+        let effects = modem_effects.into_iter().map(|e| (id, e)).collect();
+        Ok(self.process_effects(effects))
+    }
+
+    /// Switches the active SIM profile of a modem instance by numeric
+    /// `sim_type`.
+    pub fn switch_sim_profile_by_type(
+        &mut self,
+        id: ModemId,
+        sim_type: i32,
+    ) -> Result<Vec<NetworkEvent>, ModemError> {
+        let profile = get_builtin_profile(sim_type)
+            .ok_or_else(|| ModemError::InvalidProfile(format!("Unknown sim_type: {sim_type}")))?;
+        self.switch_sim_profile(id, profile)
+    }
+
+    /// Inserts a SIM card into a modem instance. Fails if a SIM card is already
+    /// provisioned.
+    pub fn insert_sim(
+        &mut self,
+        id: ModemId,
+        profile: SimProfile,
+    ) -> Result<Vec<NetworkEvent>, ModemError> {
+        let modem = self.modems.get_mut(&id).ok_or(ModemError::UnknownModemId(id))?;
+        let modem_effects = modem.insert_sim(profile)?;
+        let effects = modem_effects.into_iter().map(|e| (id, e)).collect();
+        Ok(self.process_effects(effects))
+    }
+
+    /// Ejects the SIM tray of a modem instance, cutting power while retaining
+    /// card credentials.
+    pub fn eject_sim(&mut self, id: ModemId) -> Result<Vec<NetworkEvent>, ModemError> {
+        let modem = self.modems.get_mut(&id).ok_or(ModemError::UnknownModemId(id))?;
+        let modem_effects = modem.eject_sim();
+        let effects = modem_effects.into_iter().map(|e| (id, e)).collect();
+        Ok(self.process_effects(effects))
+    }
+
+    /// Re-inserts the SIM tray with the existing provisioned card.
+    pub fn reinsert_sim(&mut self, id: ModemId) -> Result<Vec<NetworkEvent>, ModemError> {
+        let modem = self.modems.get_mut(&id).ok_or(ModemError::UnknownModemId(id))?;
+        let modem_effects = modem.reinsert_sim()?;
+        let effects = modem_effects.into_iter().map(|e| (id, e)).collect();
+        Ok(self.process_effects(effects))
+    }
+
+    /// Removes and unprovisions the SIM card completely from a modem instance.
+    pub fn remove_sim(&mut self, id: ModemId) -> Result<Vec<NetworkEvent>, ModemError> {
+        let modem = self.modems.get_mut(&id).ok_or(ModemError::UnknownModemId(id))?;
+        self.incoming_sms.remove(&id);
+        let modem_effects = modem.remove_sim();
+        let effects = modem_effects.into_iter().map(|e| (id, e)).collect();
+        Ok(self.process_effects(effects))
+    }
+
+    /// Returns summary metadata for the active SIM profile of a modem instance,
+    /// or `None` if the modem does not exist or has no active SIM inserted.
+    pub fn get_sim_metadata(&self, id: ModemId) -> Option<ProfileMetadata> {
+        self.modems.get(&id).and_then(|m| m.sim_service.get_profile_metadata())
+    }
+
+    pub fn update_network_configs(
+        &mut self,
+        id: ModemId,
+        configs: Vec<CellNetworkConfig>,
+    ) -> Result<(), ModemError> {
+        let modem = self.modems.get_mut(&id).ok_or(ModemError::UnknownModemId(id))?;
+        modem.update_network_configs(configs);
+        Ok(())
     }
 
     /// Sends an AT command to a modem instance.
@@ -479,13 +575,13 @@ impl ModemNetworkSimulator {
             }
             CommandAction::HoldCall { holder, target } => {
                 if let Some(hold_modem) = self.modems.get_mut(&target) {
-                    hold_modem.call_service.receive_hold(holder);
+                    hold_modem.call_service.receive_peer_hold(holder, true);
                     effects.push((target, ModemEffect::Response(b"RING\r\n".to_vec())));
                 }
             }
             CommandAction::ResumeCall { resumer, target } => {
                 if let Some(resume_modem) = self.modems.get_mut(&target) {
-                    resume_modem.call_service.receive_resume(resumer);
+                    resume_modem.call_service.receive_peer_hold(resumer, false);
                     effects.push((target, ModemEffect::Response(b"RING\r\n".to_vec())));
                 }
             }
@@ -602,12 +698,21 @@ impl ModemNetworkSimulator {
         })
     }
 
+    pub fn set_registration(
+        &mut self,
+        id: ModemId,
+        reg_type: RegistrationType,
+        status: RegistrationStatus,
+    ) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.set_registration(reg_type, status))
+    }
+
     pub fn set_voice_registration(
         &mut self,
         id: ModemId,
         status: RegistrationStatus,
     ) -> Vec<NetworkEvent> {
-        self.apply_to_modem(id, |modem| modem.set_voice_registration(status))
+        self.set_registration(id, RegistrationType::Voice, status)
     }
 
     pub fn set_data_registration(
@@ -615,7 +720,7 @@ impl ModemNetworkSimulator {
         id: ModemId,
         status: RegistrationStatus,
     ) -> Vec<NetworkEvent> {
-        self.apply_to_modem(id, |modem| modem.set_data_registration(status))
+        self.set_registration(id, RegistrationType::Data, status)
     }
 
     pub fn initiate_external_incoming_call(
@@ -623,7 +728,7 @@ impl ModemNetworkSimulator {
         target_id: ModemId,
         number: &str,
     ) -> Vec<NetworkEvent> {
-        let Some(dial_str) = DialString::parse(number.as_bytes()) else {
+        let Some(dial_str) = DialString::parse(number) else {
             warn!("Invalid incoming call number: {}", number);
             return Vec::new();
         };
@@ -661,8 +766,8 @@ impl ModemNetworkSimulator {
         self.apply_to_modem(id, |modem| modem.trigger_incoming_pdu(pdu))
     }
 
-    pub fn update_network_time(&mut self, id: ModemId, time: &str) -> Vec<NetworkEvent> {
-        self.apply_to_modem(id, |modem| modem.trigger_network_time_update(time))
+    pub fn update_network_time(&mut self, id: ModemId) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.trigger_network_time_update())
     }
 
     pub fn update_physical_channel_configs(&mut self, id: ModemId) -> Vec<NetworkEvent> {
@@ -732,20 +837,18 @@ impl ModemNetworkSimulator {
         let now = self.clock.now();
         let mut effects = Vec::new();
 
-        while let Some(event) = self.event_queue.peek() {
-            if event.0.when <= now {
-                let event = self.event_queue.pop().unwrap().0;
-
-                if let Some(modem) = self.modems.get_mut(&event.modem_id) {
-                    let new_effects: Vec<_> = modem
-                        .handle_event(event.event)
-                        .into_iter()
-                        .map(|e| (event.modem_id, e))
-                        .collect();
-                    effects.extend(new_effects);
-                }
-            } else {
-                break;
+        while let Some(event) = self.event_queue.peek()
+            && event.0.when <= now
+        {
+            if let Some(std::cmp::Reverse(event)) = self.event_queue.pop()
+                && let Some(modem) = self.modems.get_mut(&event.modem_id)
+            {
+                let new_effects: Vec<_> = modem
+                    .handle_event(event.event)
+                    .into_iter()
+                    .map(|e| (event.modem_id, e))
+                    .collect();
+                effects.extend(new_effects);
             }
         }
         let events = self.process_effects(effects);
@@ -826,7 +929,7 @@ mod tests {
 
         let modem_id: ModemId = 1;
         let (mut modem_handler, sink) = MockModemHandler::new(false);
-        simulator.new_modem(modem_id, sink, None, None, Quirks::default()).unwrap();
+        simulator.new_modem(modem_id, sink, None, None, Quirks::default(), Vec::new()).unwrap();
 
         // 1. Schedule an event 100ms in the future.
         let event_duration = Duration::from_millis(100);
@@ -865,8 +968,8 @@ mod tests {
         let (_, sink1) = MockModemHandler::new(false);
         let (_, sink2) = MockModemHandler::new(false);
 
-        simulator.new_modem(id, sink1, None, None, Quirks::default()).unwrap();
-        let res = simulator.new_modem(id, sink2, None, None, Quirks::default());
+        simulator.new_modem(id, sink1, None, None, Quirks::default(), Vec::new()).unwrap();
+        let res = simulator.new_modem(id, sink2, None, None, Quirks::default(), Vec::new());
         assert!(res.is_err());
         let err = res.unwrap_err();
         assert!(matches!(err, ModemError::DuplicateModemId(1)));
@@ -879,7 +982,7 @@ mod tests {
         let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
         let id = 1;
         let (_, sink) = MockModemHandler::new(false);
-        simulator.new_modem(id, sink, None, None, Quirks::default()).unwrap();
+        simulator.new_modem(id, sink, None, None, Quirks::default(), Vec::new()).unwrap();
 
         // Schedule an event
         simulator.schedule_event(id, Duration::from_millis(10), ModemEvent::TestEvent);
@@ -901,8 +1004,8 @@ mod tests {
         let mut simulator = ModemNetworkSimulator::new(tx);
         let (_, sink1) = MockModemHandler::new(false);
         let (_, sink2) = MockModemHandler::new(false);
-        simulator.new_modem(1, sink1, None, None, Quirks::default()).unwrap();
-        simulator.new_modem(2, sink2, None, None, Quirks::default()).unwrap();
+        simulator.new_modem(1, sink1, None, None, Quirks::default(), Vec::new()).unwrap();
+        simulator.new_modem(2, sink2, None, None, Quirks::default(), Vec::new()).unwrap();
 
         let ids = simulator.get_modem_ids();
         assert_eq!(ids.len(), 2);
@@ -919,7 +1022,7 @@ mod tests {
         // 1. Add modem
         let chip_id = 99;
         let (mut handler, sink) = MockModemHandler::new(false);
-        let res = interface.add_modem(chip_id, sink, None, None, Quirks::default());
+        let res = interface.add_modem(chip_id, sink, None, None, Quirks::default(), Vec::new());
         assert!(res.is_ok());
 
         // 2. Get modem info
@@ -966,7 +1069,7 @@ mod tests {
 
         let chip_id = 1;
         let (mut handler, sink) = MockModemHandler::new(false);
-        interface.add_modem(chip_id, sink, None, None, Quirks::default()).unwrap();
+        interface.add_modem(chip_id, sink, None, None, Quirks::default(), Vec::new()).unwrap();
 
         interface.send_data(chip_id, b"ATD12345;\r\n").unwrap();
         let response = handler.wait_for_response();
@@ -983,8 +1086,10 @@ mod tests {
         let recipient_id = 2;
         let (_handler1, sink1) = MockModemHandler::new(false);
         let (_handler2, sink2) = MockModemHandler::new(false);
-        simulator.new_modem(sender_id, sink1, None, None, Quirks::default()).unwrap();
-        simulator.new_modem(recipient_id, sink2, None, None, Quirks::default()).unwrap();
+        simulator.new_modem(sender_id, sink1, None, None, Quirks::default(), Vec::new()).unwrap();
+        simulator
+            .new_modem(recipient_id, sink2, None, None, Quirks::default(), Vec::new())
+            .unwrap();
 
         let queue = simulator.incoming_sms.entry(recipient_id).or_default();
         assert!(queue.is_empty());
@@ -1021,5 +1126,118 @@ mod tests {
         assert!(ack_sms.status_report.is_none());
         assert_eq!(ack_sms.next_cmt_response, None);
         assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn test_simulator_sim_profile_management() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let clock = Arc::new(crate::time::MockClock::default());
+        let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
+
+        let chip_id = 1;
+        let (mut handler, sink) = MockModemHandler::new(false);
+        simulator.new_modem(chip_id, sink, None, None, Quirks::default(), Vec::new()).unwrap();
+
+        // Check initial default profile
+        let meta = simulator.get_sim_metadata(chip_id).expect("metadata should exist");
+        assert_eq!(meta.imsi, "310260000000000");
+        assert_eq!(meta.home_plmn.as_ref().map(crate::types::Plmn::as_str), Some("310260"));
+
+        // Switch to Tel Alaska by numeric sim_type
+        let _events = simulator
+            .switch_sim_profile_by_type(chip_id, crate::profiles::SIM_TYPE_TEL_ALASKA)
+            .unwrap();
+        let resp = handler.wait_for_response();
+        assert!(String::from_utf8_lossy(&resp).contains("+CPIN: READY"));
+
+        // Advance clock and trigger timer to execute AttachNetwork
+        clock.advance(Duration::from_millis(20));
+        let _ = simulator.on_timer(chip_id);
+        let _attach_urcs = handler.wait_for_response();
+
+        let meta = simulator.get_sim_metadata(chip_id).unwrap();
+        assert_eq!(meta.imsi, "311740123456789");
+        assert_eq!(meta.home_plmn.as_ref().map(crate::types::Plmn::as_str), Some("311740"));
+
+        // Attempting to insert a SIM when one is already present should fail
+        let alaska_prof =
+            crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_TEL_ALASKA).unwrap();
+        let insert_err = simulator.insert_sim(chip_id, alaska_prof).unwrap_err();
+        assert!(matches!(insert_err, ModemError::InvalidConfig(_)));
+
+        // Query operator via AT command: AT+COPS?
+        let _ = simulator.send_at_command(chip_id, b"AT+COPS?\r\n");
+        let mut cops_resp = String::new();
+        cops_resp.push_str(&String::from_utf8_lossy(&handler.wait_for_response()));
+        while let Some(line) = handler.try_get_response() {
+            cops_resp.push_str(&String::from_utf8_lossy(&line));
+        }
+        assert!(cops_resp.contains("311740"));
+
+        // Test eject_sim and reinsert_sim
+        simulator.eject_sim(chip_id).unwrap();
+        assert_eq!(simulator.get_sim_metadata(chip_id), None);
+        let mut eject_resp = String::new();
+        eject_resp.push_str(&String::from_utf8_lossy(&handler.wait_for_response()));
+        while let Some(line) = handler.try_get_response() {
+            eject_resp.push_str(&String::from_utf8_lossy(&line));
+        }
+        assert!(eject_resp.contains("+CPIN: ABSENT"));
+
+        // Re-inserting the ejected card brings it back to ready
+        simulator.reinsert_sim(chip_id).unwrap();
+        let mut reinsert_resp = String::new();
+        reinsert_resp.push_str(&String::from_utf8_lossy(&handler.wait_for_response()));
+        while let Some(line) = handler.try_get_response() {
+            reinsert_resp.push_str(&String::from_utf8_lossy(&line));
+        }
+        assert!(reinsert_resp.contains("+CPIN: READY"));
+        assert_eq!(
+            simulator
+                .get_sim_metadata(chip_id)
+                .unwrap()
+                .home_plmn
+                .as_ref()
+                .map(crate::types::Plmn::as_str),
+            Some("311740")
+        );
+
+        // Remove SIM (trashes the card)
+        simulator.remove_sim(chip_id).unwrap();
+        // Metadata must be None when SIM is absent
+        assert_eq!(simulator.get_sim_metadata(chip_id), None);
+
+        let mut remove_resp = String::new();
+        remove_resp.push_str(&String::from_utf8_lossy(&handler.wait_for_response()));
+        while let Some(line) = handler.try_get_response() {
+            remove_resp.push_str(&String::from_utf8_lossy(&line));
+        }
+        assert!(remove_resp.contains("+CPIN: ABSENT"));
+
+        // Re-inserting into an empty slot must fail
+        let reinsert_err = simulator.reinsert_sim(chip_id).unwrap_err();
+        assert!(matches!(reinsert_err, ModemError::InvalidConfig(_)));
+
+        // Query SIM status: AT+CPIN? (returns error when SIM is absent)
+        let _ = simulator.send_at_command(chip_id, b"AT+CPIN?\r\n");
+        let mut query_resp = String::new();
+        query_resp.push_str(&String::from_utf8_lossy(&handler.wait_for_response()));
+        while let Some(line) = handler.try_get_response() {
+            query_resp.push_str(&String::from_utf8_lossy(&line));
+        }
+        assert!(query_resp.contains("+CME ERROR") || query_resp.contains("ERROR"));
+
+        // Insert CTS profile into empty slot
+        let cts_prof = crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_CTS).unwrap();
+        simulator.insert_sim(chip_id, cts_prof).unwrap();
+        let mut insert_resp = String::new();
+        insert_resp.push_str(&String::from_utf8_lossy(&handler.wait_for_response()));
+        while let Some(line) = handler.try_get_response() {
+            insert_resp.push_str(&String::from_utf8_lossy(&line));
+        }
+        assert!(insert_resp.contains("+CPIN: READY"));
+
+        let meta = simulator.get_sim_metadata(chip_id).unwrap();
+        assert_eq!(meta.home_plmn.as_ref().map(crate::types::Plmn::as_str), Some("310260"));
     }
 }

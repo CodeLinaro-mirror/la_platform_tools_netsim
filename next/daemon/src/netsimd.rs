@@ -4,6 +4,7 @@
 use std::{
     collections::HashMap,
     env, io,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
     time::Duration,
@@ -18,6 +19,7 @@ use common::{
             get_discovery_directory, get_hci_port, get_instance, get_instance_name,
             redirect_std_stream,
         },
+        zip_artifact::{remove_old_artifacts_in_dir, zip_artifacts_in_dir},
     },
 };
 use device_actor::DeviceClient;
@@ -26,8 +28,8 @@ use futures::{FutureExt, SinkExt, StreamExt, pin_mut};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams, PacketSink as ApiPacketSink,
-    PacketStream as ApiPacketStream, Pose, set_if_some,
+    BluetoothMode, CellNetworkConfig, ChipClient, ChipInfo, ChipKind, DeviceParams,
+    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, Pose, set_if_some,
 };
 use packet_stream::{
     StreamAddress, Streams,
@@ -77,6 +79,20 @@ pub enum StartUpMode {
     Client(NetsimConfig),
 }
 
+/// Fixed Goldfish/QEMU user-mode networking (SLIRP) parameters.
+///
+/// Matches emulator SLIRP defaults (`net/slirp.c`). `fec0::15` is synthetic;
+/// SLIRP advertises `fec0::/64` via RA and learns the RIL guest address via
+/// NDP.
+const GOLDFISH_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
+const GOLDFISH_IPV4_PREFIXLEN: u8 = 24;
+const GOLDFISH_IPV4_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
+const GOLDFISH_IPV4_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
+const GOLDFISH_IPV6_ADDR: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15);
+const GOLDFISH_IPV6_PREFIXLEN: u8 = 64;
+const GOLDFISH_IPV6_GATEWAY: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2);
+const GOLDFISH_IPV6_DNS: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3);
+
 async fn handle_new_connection(
     device_client: DeviceClient,
     _capture_client: CaptureClient,
@@ -86,12 +102,10 @@ async fn handle_new_connection(
     chip_info: ChipInfo,
     device_guid: String,
 ) {
-    info!("Handling new connection for {:?}, device {}", chip_info.name, chip_info.device_name());
+    let device_name = chip_info.device_name();
+    info!("Handling new connection for {:?}, device {}", chip_info.name, device_name);
     let device_config = DeviceConfig {
-        name: chip_info
-            .device_info
-            .as_ref()
-            .map_or("Unknown Device".to_string(), |d| d.name.clone()),
+        name: device_name.clone(),
         visible: true,
         pose: Pose { position: Default::default(), orientation: Default::default() },
         builtin: false,
@@ -131,26 +145,60 @@ async fn handle_new_connection(
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
         ChipKind::CELLULAR => {
-            let (goldfish_ril_37_or_earlier, is_cuttlefish) = match chip_info.device_info.as_ref() {
-                Some(d) => {
-                    let is_emulator = d.kind == "EMULATOR";
-                    let is_cuttlefish = d.kind == "CUTTLEFISH";
-                    let sdk_version = d.sdk_version.parse::<i32>().unwrap_or(0);
-                    (is_emulator && sdk_version < 38, is_cuttlefish)
-                }
-                None => (false, false),
+            let is_cuttlefish =
+                chip_info.device_info.as_ref().is_some_and(|d| d.kind == "CUTTLEFISH");
+            let is_emulator = chip_info.device_info.as_ref().is_some_and(|d| d.kind == "EMULATOR");
+            let sdk_version = chip_info
+                .device_info
+                .as_ref()
+                .and_then(|d| d.sdk_version.parse::<i32>().ok())
+                .unwrap_or(0);
+
+            let network_configs = if is_cuttlefish {
+                crate::cuttlefish::resolve_cuttlefish_network_config(&device_name)
+                    .await
+                    .into_iter()
+                    .collect()
+            } else if is_emulator {
+                // TODO(b/557342150): Dynamically allocate cellular IPs for multi-instance
+                // Goldfish once isolated SLIRP/TAP routing is supported.
+                vec![
+                    CellNetworkConfig {
+                        ip_address: IpAddr::V4(GOLDFISH_IPV4_ADDR),
+                        prefixlen: GOLDFISH_IPV4_PREFIXLEN,
+                        gateway: IpAddr::V4(GOLDFISH_IPV4_GATEWAY),
+                        dns: IpAddr::V4(GOLDFISH_IPV4_DNS),
+                    },
+                    CellNetworkConfig {
+                        ip_address: IpAddr::V6(GOLDFISH_IPV6_ADDR),
+                        prefixlen: GOLDFISH_IPV6_PREFIXLEN,
+                        gateway: IpAddr::V6(GOLDFISH_IPV6_GATEWAY),
+                        dns: IpAddr::V6(GOLDFISH_IPV6_DNS),
+                    },
+                ]
+            } else {
+                Vec::new()
             };
+
+            let goldfish_ril_37_or_earlier = is_emulator && sdk_version < 38;
+            let auto_ctzv = is_cuttlefish || is_emulator;
+
             Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
                 sim_type: chip.sim_type,
                 sim_profile: chip.sim_profile.clone(),
-                quirks: netsim_model::Quirks { goldfish_ril_37_or_earlier, is_cuttlefish },
+                quirks: netsim_model::Quirks {
+                    goldfish_ril_37_or_earlier,
+                    is_cuttlefish,
+                    auto_ctzv,
+                },
+                network_configs,
                 ..Default::default()
             }))
         }
         ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
-            error!("Unsupported chip kind: {:?}", kind);
+            error!("Unsupported chip kind: {kind:?}");
             return;
         }
     };
@@ -171,7 +219,7 @@ async fn handle_new_connection(
             match item {
                 Ok(bytes) => Some(bytes),
                 Err(e) => {
-                    error!("Error in packet stream: {}", e);
+                    error!("Error in packet stream: {e}");
                     None
                 }
             }
@@ -189,7 +237,7 @@ async fn handle_new_connection(
     };
 
     if let Err(e) = device_client.add_chip(request).await {
-        error!("Failed to register stream for {}: {}", chip_info.name, e);
+        error!("Failed to register stream for {}: {e}", chip_info.name);
     }
 }
 
@@ -314,6 +362,10 @@ pub struct NetsimDaemon {
     _grpc_server: Option<grpcio::Server>,
     /// The DeviceActor task handle.
     device_task: tokio::task::JoinHandle<()>,
+    /// The CaptureActor task handle.
+    capture_task: tokio::task::JoinHandle<()>,
+    /// Directory for session artifacts (pcaps, stats, zip archives).
+    artifact_dir: PathBuf,
     link_client: Box<dyn link_api::LinkClient>,
 
     slirp_client: SlirpClient,
@@ -449,6 +501,15 @@ impl NetsimDaemon {
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
         info!("INI file path: {}", ini_guard.path().display());
+
+        let artifact_dir = if cfg!(feature = "testing") {
+            ini_guard.path().parent().map(|p| p.to_path_buf()).unwrap_or_else(netsimd_temp_dir)
+        } else {
+            netsimd_temp_dir()
+        };
+
+        // Gets rid of old artifacts (pcap and zip files)
+        remove_old_artifacts_in_dir(&artifact_dir);
 
         // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
@@ -741,7 +802,7 @@ impl NetsimDaemon {
         };
 
         let stats_path = if cfg!(feature = "testing") {
-            initialized_guard.path().parent().map(|p| p.join("netsim_session_stats.json"))
+            Some(artifact_dir.join("netsim_session_stats.json"))
         } else {
             None
         };
@@ -768,9 +829,15 @@ impl NetsimDaemon {
         join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
-        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap, None)));
         join_set.spawn(uwb_runner.run(uwb_actor));
         join_set.spawn(nfc_runner.run(nfc_actor_state));
+
+        // Spawn CaptureActor separately so shutdown can deterministically await flush
+        let capture_dir =
+            if cfg!(feature = "testing") { Some(artifact_dir.join("pcaps")) } else { None };
+        let capture_task = tokio::spawn(
+            capture_runner.run(capture_actor::CaptureActor::new(args.pcap, capture_dir)),
+        );
 
         // Spawn DeviceActor separately
         device_actor_state.set_self_client(device_client.clone());
@@ -787,7 +854,9 @@ impl NetsimDaemon {
             set_if_some!(ap_config.beacon_interval, args.wifi.wifi_beacon_interval);
             set_if_some!(ap_config.hw_mode, args.wifi.wifi_mode, Into::into);
 
-            ap_client.create_ap(Some(0), ap_config).await.expect("Failed to create default AP");
+            if let Err(e) = ap_client.create_ap(Some(0), ap_config).await {
+                warn!("Failed to create default AP: {e}");
+            }
         }
 
         // Create test beacons if required
@@ -816,6 +885,8 @@ impl NetsimDaemon {
                 args,
                 _grpc_server: Some(grpc_server),
                 device_task,
+                capture_task,
+                artifact_dir,
                 link_client: Box::new(link_client),
                 slirp_client,
                 chip_clients: daemon_chip_clients,
@@ -864,14 +935,22 @@ impl NetsimDaemon {
                 warn!("ChipActor shutdown error: {}", e);
             }
         }
+        // Shut down CaptureActor after packet producers have stopped, and await
+        // task completion so all buffered PCAP data is flushed and file handles
+        // are closed before zipping.
+        if !self.capture_task.is_finished() {
+            if let Err(e) = self.capture_client.shutdown().await {
+                warn!("CaptureActor shutdown error: {}", e);
+            }
+            let _ = (&mut self.capture_task).await;
+        }
     }
 
-    async fn handle_device_actor_completion(&mut self, result: Result<(), tokio::task::JoinError>) {
+    fn handle_device_actor_completion(&self, result: Result<(), tokio::task::JoinError>) {
         info!("DeviceActor exited. Shutting down daemon.");
         if let Err(e) = result {
             error!("DeviceActor panicked: {}", e);
         }
-        self.shutdown_actors().await;
     }
 
     fn handle_secondary_task_completion(
@@ -949,29 +1028,40 @@ impl NetsimDaemon {
 
                 // Branch 2: Wait for DeviceActor to complete (primary shutdown signal)
                 device_result = &mut self.device_task => {
-                    self.handle_device_actor_completion(device_result).await;
+                    self.handle_device_actor_completion(device_result);
                     break;
                 }
 
-                // Branch 3: Wait for a task in the JoinSet to complete (abnormal shutdown)
+                // Branch 3: Wait for a task in the JoinSet or CaptureActor to complete (abnormal shutdown)
                 join_result = self.join_set.join_next() => {
                     if self.handle_secondary_task_completion(join_result) {
                         break;
                     }
                 }
+                capture_result = &mut self.capture_task => {
+                    if self.handle_secondary_task_completion(Some(capture_result)) {
+                        break;
+                    }
+                }
+
                 // Branch 4: Graceful shutdown
                 () = &mut shutdown_signal => {
                     info!("Shutting down gracefully...");
-                    self.shutdown_actors().await;
-                    if !self.device_task.is_finished() {
-                        let _ = self.device_client.shutdown().await;
-                        let _ = (&mut self.device_task).await;
-                    }
                     break;
                 }
             }
         }
+        if !self.device_task.is_finished() {
+            let _ = self.device_client.shutdown().await;
+            let _ = (&mut self.device_task).await;
+        }
+        self.shutdown_actors().await;
+        self.join_set.shutdown().await;
         info!("NetsimDaemon main loop exited.");
+        // Zip all artifacts
+        if let Err(err) = zip_artifacts_in_dir(&self.artifact_dir) {
+            error!("Failed to zip artifacts: {err:?}");
+        }
         RunResult::ExitedNormally
     }
 }

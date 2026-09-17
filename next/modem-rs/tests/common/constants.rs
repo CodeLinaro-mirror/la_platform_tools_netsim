@@ -3,6 +3,8 @@
 
 // tests/common/constants.rs
 
+use std::net::Ipv4Addr;
+
 // PIN/PUK Constants
 pub const TEST_PIN: &str = "1234";
 pub const LOCKED_PIN: &str = "1111";
@@ -39,6 +41,8 @@ pub const CME_ERROR_SIM_NOT_INSERTED_VERBOSE: &str = "+CME ERROR: SIM not insert
 pub const CME_ERROR_INCORRECT_PASSWORD: &str = "+CME ERROR: 16";
 pub const CME_ERROR_INCORRECT_PARAMETERS: &str = "+CME ERROR: 50";
 pub const CME_ERROR_SIM_PUK_REQUIRED: &str = "+CME ERROR: 12";
+pub const CME_ERROR_SIM_FAILURE: &str = "+CME ERROR: 13";
+pub const CME_ERROR_OPERATION_NOT_ALLOWED: &str = "+CME ERROR: 3";
 pub const CME_ERROR_OPERATION_NOT_SUPPORTED: &str = "+CME ERROR: 4";
 
 // Test vectors for validation
@@ -138,8 +142,10 @@ pub const TEST_QOS_PARAMS_GPRS: &str = "1,2,3,4,5";
 pub const GPRS_DIAL_STRING_PREFIX: &str = "*99***";
 pub const TEST_IP_ADDR: &str = "10.0.2.15/24";
 pub const TEST_IP_ADDR_ONLY: &str = "10.0.2.15";
-pub const TEST_IP_ADDR_ALT: &str = "10.0.2.100/24";
-pub const TEST_IP_ADDR_ALT_ONLY: &str = "10.0.2.100";
 pub const TEST_GATEWAY: &str = "10.0.2.2";
 pub const TEST_DNS: &str = "10.0.2.3";
+
+pub const TEST_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
+pub const TEST_GATEWAY_IPV4: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
+pub const TEST_DNS_IPV4: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
 pub const DEFAULT_BEARER_ID: u32 = 5;

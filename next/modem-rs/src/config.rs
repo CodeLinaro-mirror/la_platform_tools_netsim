@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer};
 use crate::{
     apdu,
     constants::{SW_INCORRECT_PARAMS, SW_REFERENCED_DATA_NOT_FOUND, SW_WRONG_LENGTH, UiccFileId},
+    types::{PhoneNumber, Plmn},
 };
 
 fn deserialize_hex_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
@@ -16,12 +17,28 @@ where
     u16::from_str_radix(&s, 16).map_err(serde::de::Error::custom)
 }
 
+fn deserialize_optional_phone_number<'de, D>(
+    deserializer: D,
+) -> Result<Option<PhoneNumber>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(s) if !s.trim().is_empty() => {
+            s.parse::<PhoneNumber>().map(Some).map_err(serde::de::Error::custom)
+        }
+        _ => Ok(None),
+    }
+}
+
 /// Represents the SIM profile configuration.
 #[derive(Debug, Deserialize, Default, Clone, PartialEq)]
 pub struct SimProfile {
     pub iccid: String,
     pub imsi: String,
-    pub msisdn: String,
+    #[serde(default, deserialize_with = "deserialize_optional_phone_number")]
+    pub msisdn: Option<PhoneNumber>,
     pub pin_profile: PinProfile,
     pub facility_locks: FacilityLocks,
     pub stk: Stk,
@@ -36,20 +53,75 @@ pub struct SimProfile {
 impl SimProfile {
     /// Returns the home PLMN (MCC + MNC) derived from the SIM's IMSI.
     ///
-    /// Extracts the 6-digit PLMN prefix (assuming a 3-digit MNC, as used by all
-    /// standard emulator test profiles).
-    /// Note: Supporting 2-digit MNCs for arbitrary 15-digit IMSIs requires
-    /// reading the MNC length from EF_AD (0x6FAD).
-    /// Falls back to `DEFAULT_PLMN` if `imsi` is missing or unpopulated.
-    pub fn home_plmn(&self) -> &str {
-        if self.imsi.len() >= 6 { &self.imsi[..6] } else { crate::constants::DEFAULT_PLMN }
+    /// Returns `None` if `imsi` is missing or contains fewer than 5 digits.
+    pub fn home_plmn(&self) -> Option<Plmn> {
+        Plmn::from_imsi(&self.imsi, None)
     }
+
+    /// Returns summary metadata for this SIM profile.
+    pub fn metadata(&self) -> ProfileMetadata {
+        ProfileMetadata {
+            iccid: self.iccid.clone(),
+            imsi: self.imsi.clone(),
+            msisdn: self.msisdn.clone(),
+            home_plmn: self.home_plmn(),
+            eid: self.eid.clone(),
+        }
+    }
+}
+
+/// Summary metadata for a SIM profile.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ProfileMetadata {
+    pub iccid: String,
+    pub imsi: String,
+    #[serde(default, deserialize_with = "deserialize_optional_phone_number")]
+    pub msisdn: Option<PhoneNumber>,
+    pub home_plmn: Option<Plmn>,
+    pub eid: Option<String>,
+}
+
+/// Represents the PIN state from an ICC profile or Android RIL definition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum PinState {
+    #[default]
+    #[serde(rename = "PINSTATE_UNKNOWN", alias = "Unknown", alias = "UNKNOWN")]
+    Unknown,
+    #[serde(
+        rename = "PINSTATE_ENABLED_NOT_VERIFIED",
+        alias = "EnabledNotVerified",
+        alias = "ENABLED_NOT_VERIFIED"
+    )]
+    EnabledNotVerified,
+    #[serde(
+        rename = "PINSTATE_ENABLED_VERIFIED",
+        alias = "EnabledVerified",
+        alias = "ENABLED_VERIFIED"
+    )]
+    EnabledVerified,
+    #[serde(rename = "PINSTATE_DISABLED", alias = "Disabled", alias = "DISABLED")]
+    Disabled,
+    #[serde(
+        rename = "PINSTATE_ENABLED_BLOCKED",
+        alias = "Blocked",
+        alias = "PINSTATE_BLOCKED",
+        alias = "BLOCKED"
+    )]
+    Blocked,
+    #[serde(
+        rename = "PINSTATE_ENABLED_PERM_BLOCKED",
+        alias = "PermBlocked",
+        alias = "PINSTATE_PERM_BLOCKED",
+        alias = "PERM_BLOCKED"
+    )]
+    PermBlocked,
 }
 
 /// Represents the PIN profile configuration.
 #[derive(Debug, Deserialize, Default, Clone, PartialEq)]
 pub struct PinProfile {
-    pub state: String,
+    #[serde(default)]
+    pub state: PinState,
     pub pin1: String,
     pub puk1: String,
     pub pin2: String,
@@ -387,10 +459,7 @@ impl ElementaryFile {
         }
     }
 
-    /// Returns a 1-based record slice, or `None` if `record_number == 0`,
-    /// `record_len` is not set, or the record index exceeds the current
-    /// file buffer.
-    pub fn record(&self, record_number: usize) -> Option<&[u8]> {
+    fn record_range(&self, record_number: usize) -> Option<std::ops::Range<usize>> {
         if record_number == 0 {
             return None;
         }
@@ -400,23 +469,21 @@ impl ElementaryFile {
         }
         let start = (record_number - 1) * rec_len;
         let end = start + rec_len;
-        if end <= self.data.len() { Some(&self.data[start..end]) } else { None }
+        if end <= self.data.len() { Some(start..end) } else { None }
+    }
+
+    /// Returns a 1-based record slice, or `None` if `record_number == 0`,
+    /// `record_len` is not set, or the record index exceeds the current
+    /// file buffer.
+    pub fn record(&self, record_number: usize) -> Option<&[u8]> {
+        self.record_range(record_number).map(|r| &self.data[r])
     }
 
     /// Returns a mutable 1-based record slice, or `None` if `record_number ==
     /// 0`, `record_len` is not set, or the record index exceeds the current
     /// file buffer.
     pub fn record_mut(&mut self, record_number: usize) -> Option<&mut [u8]> {
-        if record_number == 0 {
-            return None;
-        }
-        let rec_len = self.record_len()?;
-        if rec_len == 0 {
-            return None;
-        }
-        let start = (record_number - 1) * rec_len;
-        let end = start + rec_len;
-        if end <= self.data.len() { Some(&mut self.data[start..end]) } else { None }
+        self.record_range(record_number).map(|r| &mut self.data[r])
     }
 
     /// Returns an iterator yielding each record in this linear-fixed file.
@@ -770,5 +837,75 @@ mod tests {
         }
         let ef = fs.find_ef_in_telecom_or_usim(crate::constants::UiccFileId::Msisdn).unwrap();
         assert_eq!(ef.data, vec![2; 28]);
+    }
+
+    #[test]
+    fn test_sim_profile_home_plmn() {
+        let mut profile = SimProfile::default();
+        assert_eq!(profile.home_plmn(), None);
+
+        profile.imsi = "31026".to_string();
+        assert_eq!(profile.home_plmn().as_ref().map(Plmn::as_str), Some("31026"));
+
+        profile.imsi = "310260123456789".to_string();
+        assert_eq!(profile.home_plmn().as_ref().map(Plmn::as_str), Some("310260"));
+
+        profile.imsi = "311740".to_string();
+        assert_eq!(profile.home_plmn().as_ref().map(Plmn::as_str), Some("311740"));
+
+        // No fallback for invalid/short IMSI
+        profile.imsi = "123".to_string();
+        assert_eq!(profile.home_plmn(), None);
+    }
+
+    #[test]
+    fn test_pin_state_serde() {
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            state: PinState,
+        }
+
+        let json1 = r#"{"state": "PINSTATE_ENABLED_NOT_VERIFIED"}"#;
+        let w1: Wrapper = serde_json::from_str(json1).unwrap();
+        assert_eq!(w1.state, PinState::EnabledNotVerified);
+
+        let json2 = r#"{"state": "EnabledNotVerified"}"#;
+        let w2: Wrapper = serde_json::from_str(json2).unwrap();
+        assert_eq!(w2.state, PinState::EnabledNotVerified);
+
+        let json3 = r#"{"state": "PINSTATE_UNKNOWN"}"#;
+        let w3: Wrapper = serde_json::from_str(json3).unwrap();
+        assert_eq!(w3.state, PinState::Unknown);
+
+        let json4 = r#"{"state": "Blocked"}"#;
+        let w4: Wrapper = serde_json::from_str(json4).unwrap();
+        assert_eq!(w4.state, PinState::Blocked);
+    }
+
+    #[test]
+    fn test_sim_profile_msisdn_serde() {
+        let mut profile = SimProfile::default();
+        profile.iccid = "123".to_string();
+        profile.imsi = "456".to_string();
+        profile.msisdn = Some(PhoneNumber::new_for_test("+16505550100"));
+
+        let meta = profile.metadata();
+        assert_eq!(meta.msisdn, Some(PhoneNumber::new_for_test("+16505550100")));
+
+        let json_meta_with_num = r#"{"iccid":"123","imsi":"456","msisdn":"+16505550100"}"#;
+        let m1: ProfileMetadata = serde_json::from_str(json_meta_with_num).unwrap();
+        assert_eq!(m1.msisdn, Some(PhoneNumber::new_for_test("+16505550100")));
+
+        let json_meta_empty = r#"{"iccid":"123","imsi":"456","msisdn":""}"#;
+        let m2: ProfileMetadata = serde_json::from_str(json_meta_empty).unwrap();
+        assert_eq!(m2.msisdn, None);
+
+        let json_meta_null = r#"{"iccid":"123","imsi":"456","msisdn":null}"#;
+        let m3: ProfileMetadata = serde_json::from_str(json_meta_null).unwrap();
+        assert_eq!(m3.msisdn, None);
+
+        let json_meta_omitted = r#"{"iccid":"123","imsi":"456"}"#;
+        let m4: ProfileMetadata = serde_json::from_str(json_meta_omitted).unwrap();
+        assert_eq!(m4.msisdn, None);
     }
 }

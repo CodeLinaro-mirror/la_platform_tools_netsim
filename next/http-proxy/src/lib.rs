@@ -52,3 +52,4 @@ pub use connector::*;
 pub use dns_manager::*;
 pub use error::{Error, Result};
 pub use manager::*;
+pub use util::ProxyConfig;

@@ -15,6 +15,7 @@
 
 pub(crate) mod args;
 pub(crate) mod avd_config;
+pub(crate) mod cuttlefish;
 pub(crate) mod ini_file;
 pub(crate) mod logger;
 pub(crate) mod netsimd;

@@ -75,7 +75,7 @@ fn test_two_modem_end_to_end_scenario() {
     then_response_is(&mut world, "B", "OK");
 
     when_at_command_sent(&mut world, "B", "AT+CMGS=\"54321\"");
-    then_response_is(&mut world, "B", "> ");
+    then_prompt_is(&mut world, "B", "> ");
 
     let hello_hex = "68656C6C6F1A";
     when_hex_bytes_sent(&mut world, "B", hello_hex);
@@ -99,7 +99,7 @@ fn test_pdu_mode_end_to_end_scenario() {
     then_response_is(&mut world, "B", "OK");
 
     when_at_command_sent(&mut world, "B", "AT+CMGS=35");
-    then_response_is(&mut world, "B", "> ");
+    then_prompt_is(&mut world, "B", "> ");
 
     // Send PDU targeting "18810189440" containing 23 chars of 7-bit text.
     let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE97011A";
@@ -129,7 +129,7 @@ fn test_sms_routing_failure_dropped() {
     then_response_is(&mut world, "B", "OK");
 
     when_at_command_sent(&mut world, "B", "AT+CMGS=\"99999\"");
-    then_response_is(&mut world, "B", "> ");
+    then_prompt_is(&mut world, "B", "> ");
 
     let hello_hex = "68656C6C6F1A";
     when_hex_bytes_sent(&mut world, "B", hello_hex);
@@ -193,7 +193,7 @@ fn test_text_mode_loopback() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+CMGS=\"12345\"");
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     let hello_hex = "68656C6C6F1A";
     when_hex_bytes_sent(&mut world, "A", hello_hex);
@@ -211,7 +211,7 @@ fn test_pdu_mode_loopback() {
     given_modem_with_number(&mut world, "A", "18810189440");
 
     when_at_command_sent(&mut world, "A", "AT+CMGS=35");
-    then_response_is(&mut world, "A", "> ");
+    then_prompt_is(&mut world, "A", "> ");
 
     let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE97011A";
     when_hex_bytes_sent(&mut world, "A", pdu_hex);

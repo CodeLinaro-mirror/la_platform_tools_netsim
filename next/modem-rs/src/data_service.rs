@@ -3,20 +3,18 @@
 
 // src/data_service.rs
 
-use std::{
-    collections::BTreeMap,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-};
+use std::{collections::BTreeMap, net::IpAddr};
 
 use modem_rs_derive::CommandParser;
+use netsim_model::CellNetworkConfig;
+use nom::IResult;
 
 use crate::{
-    cuttlefish::read_cuttlefish_config,
     modem::ModemImpl,
     parser::QuotedString,
     types::{
-        DEFAULT_DNS, DEFAULT_GATEWAY, DEFAULT_IPV4_ADDR, DEFAULT_IPV6_ADDR, DEFAULT_IPV6_DNS,
-        DEFAULT_IPV6_GATEWAY, DEFAULT_IPV6_PREFIX, ExecutionResult, Parsable, PdpType,
+        CmeError, ExecutionResult, Layer2Protocol, PacketEventReportingMode, Parsable,
+        PdpContextActivateArgs, PdpType,
     },
 };
 
@@ -35,48 +33,78 @@ pub enum DataCommand<'a> {
     #[command(tag = "AT+CGDCONT?")]
     QueryPdpContext,
     #[command(tag = "AT+CGEQMIN=")]
-    SetQualityOfServiceMinimum(u8, u8, u8, u8, u8, u8),
+    SetQualityOfServiceMinimum(u8, Qos),
     #[command(tag = "AT+CGEQMIN?")]
     QueryQualityOfServiceMinimum,
     #[command(tag = "AT+CGEQREQ=")]
-    SetQualityOfServiceRequested(u8, u8, u8, u8, u8, u8),
+    SetQualityOfServiceRequested(u8, Qos),
     #[command(tag = "AT+CGEQREQ?")]
     QueryQualityOfServiceRequested,
     #[command(tag = "AT+CGQMIN=")]
-    SetQualityOfServiceMinimumGprs(u8, u8, u8, u8, u8, u8),
+    SetQualityOfServiceMinimumGprs(u8, Qos),
     #[command(tag = "AT+CGQMIN?")]
     QueryQualityOfServiceMinimumGprs,
     #[command(tag = "AT+CGQREQ=")]
-    SetQualityOfServiceRequestedGprs(u8, u8, u8, u8, u8, u8),
+    SetQualityOfServiceRequestedGprs(u8, Qos),
     #[command(tag = "AT+CGQREQ?")]
     QueryQualityOfServiceRequestedGprs,
     #[command(tag = "AT+CGACT=")]
-    SetPdpContextActivate(u8, u8),
+    SetPdpContextActivate(PdpContextActivateArgs),
     #[command(tag = "AT+CGACT?")]
     QueryPdpContextActivate,
     #[command(tag = "AT+CGATT=")]
-    SetPsAttach(u8),
+    SetPsAttach(bool),
     #[command(tag = "AT+CGATT?")]
     QueryPsAttach,
     #[command(tag = "AT+CGCMOD=")]
     SetPdpContextModify(u8),
     #[command(tag = "AT+CGDATA=")]
-    EnterDataState(u8),
+    EnterDataState(Option<QuotedString<'a>>, Option<u8>),
     #[command(tag = "AT+CGEREP=")]
-    SetPacketEventReporting(u8, u8),
+    SetPacketEventReporting(PacketEventReportingMode, Option<bool>),
     #[command(tag = "AT+CGPADDR=")]
     ShowPdpAddress(u8),
     #[command(tag = "AT+CGCONTRDP=")]
     ReadDynamicParam(u8),
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QosType {
+    Minimum,
+    Requested,
+    MinimumGprs,
+    RequestedGprs,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Qos {
     pub precedence: u8,
     pub delay: u8,
     pub reliability: u8,
     pub peak: u8,
     pub mean: u8,
+}
+
+impl Qos {
+    pub const fn new(precedence: u8, delay: u8, reliability: u8, peak: u8, mean: u8) -> Self {
+        Self { precedence, delay, reliability, peak, mean }
+    }
+}
+
+impl<'a> Parsable<'a> for Qos {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        use nom::bytes::complete::tag;
+        let (input, precedence) = u8::parse(input)?;
+        let (input, _) = tag(b",")(input)?;
+        let (input, delay) = u8::parse(input)?;
+        let (input, _) = tag(b",")(input)?;
+        let (input, reliability) = u8::parse(input)?;
+        let (input, _) = tag(b",")(input)?;
+        let (input, peak) = u8::parse(input)?;
+        let (input, _) = tag(b",")(input)?;
+        let (input, mean) = u8::parse(input)?;
+        Ok((input, Qos::new(precedence, delay, reliability, peak, mean)))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +116,26 @@ pub struct PdpContext {
     pub req_qos: Qos,
     pub gprs_qos: Qos,
     pub gprs_req_qos: Qos,
+}
+
+impl PdpContext {
+    fn qos_mut(&mut self, qos_type: QosType) -> &mut Qos {
+        match qos_type {
+            QosType::Minimum => &mut self.qos,
+            QosType::Requested => &mut self.req_qos,
+            QosType::MinimumGprs => &mut self.gprs_qos,
+            QosType::RequestedGprs => &mut self.gprs_req_qos,
+        }
+    }
+
+    fn qos(&self, qos_type: QosType) -> &Qos {
+        match qos_type {
+            QosType::Minimum => &self.qos,
+            QosType::Requested => &self.req_qos,
+            QosType::MinimumGprs => &self.gprs_qos,
+            QosType::RequestedGprs => &self.gprs_req_qos,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,15 +150,15 @@ pub enum DataResponse {
     Connect,
     PdpAddress {
         cid: u8,
-        ip_address: String,
+        ip_address: IpAddr,
     },
     DynamicParam {
         cid: u8,
         apn: String,
-        ip_address: String,
-        prefix: u32,
-        gateway: String,
-        dns: String,
+        ip_address: IpAddr,
+        prefix: u8,
+        gateway: IpAddr,
+        dns: IpAddr,
     },
 }
 
@@ -185,7 +233,10 @@ impl std::fmt::Display for DataResponse {
                 write!(f, "+CGPADDR: {cid},\"{ip_address}\"\r\n")
             }
             DataResponse::DynamicParam { cid, apn, ip_address, prefix, gateway, dns } => {
-                write!(f, "+CGCONTRDP: {cid},5,\"{apn}\",{ip_address}/{prefix},{gateway},{dns}\r\n")
+                write!(
+                    f,
+                    "+CGCONTRDP: {cid},5,\"{apn}\",\"{ip_address}/{prefix}\",\"{gateway}\",\"{dns}\"\r\n"
+                )
             }
         }
     }
@@ -195,64 +246,48 @@ type DataResult = Result<Option<DataResponse>, ExecutionResult>;
 
 pub struct DataService {
     pdp_contexts: BTreeMap<u8, PdpContext>,
-    ip_address: Option<IpAddr>,
-    prefixlen: Option<u32>,
-    gateway: Option<IpAddr>,
-    dns: Option<IpAddr>,
+    network_configs: Vec<CellNetworkConfig>,
     ps_attached: bool,
 }
 
 impl DataService {
-    pub fn new(
-        ip_address: Option<IpAddr>,
-        prefixlen: Option<u32>,
-        gateway: Option<IpAddr>,
-        dns: Option<IpAddr>,
-    ) -> Self {
-        Self {
-            pdp_contexts: BTreeMap::new(),
-            ip_address,
-            prefixlen,
-            gateway,
-            dns,
-            ps_attached: true,
+    pub fn new(network_configs: Vec<CellNetworkConfig>) -> Self {
+        Self { pdp_contexts: BTreeMap::new(), network_configs, ps_attached: true }
+    }
+
+    /// Selects the configuration to use for a PDP type.
+    ///
+    /// Preference-ordered: `IPV4V6` selects the first matching entry.
+    pub fn find_network_config(&self, pdp_type: &PdpType) -> Option<&CellNetworkConfig> {
+        match pdp_type {
+            PdpType::Ip => self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv4()),
+            PdpType::Ipv6 => self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv6()),
+            PdpType::Ipv4v6 => {
+                // TODO(b/542980136): Radio HAL only accepts a single IP in +CGCONTRDP;
+                // return the first config to respect the configurator's preference order.
+                self.network_configs.first()
+            }
+            PdpType::Ppp | PdpType::NonIp | PdpType::Cell => None,
         }
     }
 
-    pub fn from_env() -> Self {
-        if let Some(config) = read_cuttlefish_config() {
-            let ip_address = config
-                .ip_address
-                .parse::<IpAddr>()
-                .map_err(|_err| {
-                    tracing::warn!("Configured IP ({}) is invalid.", config.ip_address);
-                })
-                .ok();
-            let gateway = config
-                .gateway
-                .parse::<IpAddr>()
-                .map_err(|_err| {
-                    tracing::warn!("Configured gateway ({}) is invalid.", config.gateway);
-                })
-                .ok();
-            let dns = config
-                .dns
-                .parse::<IpAddr>()
-                .map_err(|_err| {
-                    tracing::warn!("Configured DNS ({}) is invalid.", config.dns);
-                })
-                .ok();
+    /// Updates network configs for future data calls.
+    ///
+    /// Active calls retain their existing addresses until reactivated.
+    /// Do not signal updates via `+CGEV`: the Goldfish/Cuttlefish parser lacks
+    /// `CGEV` support, causing channel teardown (b/562098771).
+    pub fn update_network_configs(&mut self, configs: Vec<CellNetworkConfig>) {
+        self.network_configs = configs;
+    }
 
-            Self::new(ip_address, Some(config.prefixlen), gateway, dns)
-        } else {
-            Self::default()
-        }
+    pub fn network_configs(&self) -> &[CellNetworkConfig] {
+        &self.network_configs
     }
 }
 
 impl Default for DataService {
     fn default() -> Self {
-        Self::new(None, None, None, None)
+        Self::new(Vec::new())
     }
 }
 
@@ -278,7 +313,7 @@ impl DataService {
             cid,
             PdpContext {
                 pdp_type,
-                apn: String::from_utf8(apn.to_vec()).unwrap_or_default(),
+                apn: apn.as_str().to_string(),
                 active: self.ps_attached, // Goldfish expects data to be auto-activated
                 qos: Qos::default(),
                 req_qos: Qos::default(),
@@ -301,137 +336,53 @@ impl DataService {
         }
     }
 
-    pub fn handle_set_quality_of_service_minimum(
-        &mut self,
-        cid: u8,
-        precedence: u8,
-        delay: u8,
-        reliability: u8,
-        peak: u8,
-        mean: u8,
-    ) -> DataResult {
+    pub fn handle_set_qos(&mut self, qos_type: QosType, cid: u8, qos: Qos) -> DataResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.qos = Qos { precedence, delay, reliability, peak, mean };
+            *context.qos_mut(qos_type) = qos;
             Ok(None)
         } else {
             Err(ExecutionResult::error())
         }
     }
 
-    pub fn handle_query_quality_of_service_minimum(&self) -> DataResult {
+    pub fn handle_query_qos(&self, qos_type: QosType) -> DataResult {
         if self.pdp_contexts.is_empty() {
             Ok(None)
         } else {
-            let mut qos_list = Vec::new();
-            for (cid, context) in &self.pdp_contexts {
-                qos_list.push((*cid, context.qos.clone()));
-            }
-            Ok(Some(DataResponse::QosMinimum(qos_list)))
+            let qos_list = self
+                .pdp_contexts
+                .iter()
+                .map(|(cid, context)| (*cid, *context.qos(qos_type)))
+                .collect();
+            let response = match qos_type {
+                QosType::Minimum => DataResponse::QosMinimum(qos_list),
+                QosType::Requested => DataResponse::QosRequested(qos_list),
+                QosType::MinimumGprs => DataResponse::QosMinimumGprs(qos_list),
+                QosType::RequestedGprs => DataResponse::QosRequestedGprs(qos_list),
+            };
+            Ok(Some(response))
         }
     }
 
-    pub fn handle_set_quality_of_service_requested(
-        &mut self,
-        cid: u8,
-        precedence: u8,
-        delay: u8,
-        reliability: u8,
-        peak: u8,
-        mean: u8,
-    ) -> DataResult {
+    pub fn handle_set_pdp_context_activate(&mut self, cid: u8, state: bool) -> DataResult {
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.req_qos = Qos { precedence, delay, reliability, peak, mean };
+            context.active = state;
             Ok(None)
         } else {
             Err(ExecutionResult::error())
         }
     }
 
-    pub fn handle_query_quality_of_service_requested(&self) -> DataResult {
-        if self.pdp_contexts.is_empty() {
-            Ok(None)
-        } else {
-            let mut qos_list = Vec::new();
-            for (cid, context) in &self.pdp_contexts {
-                qos_list.push((*cid, context.req_qos.clone()));
-            }
-            Ok(Some(DataResponse::QosRequested(qos_list)))
+    pub fn deactivate_all(&mut self) {
+        for context in self.pdp_contexts.values_mut() {
+            context.active = false;
         }
     }
 
-    pub fn handle_set_quality_of_service_minimum_gprs(
-        &mut self,
-        cid: u8,
-        precedence: u8,
-        delay: u8,
-        reliability: u8,
-        peak: u8,
-        mean: u8,
-    ) -> DataResult {
-        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.gprs_qos = Qos { precedence, delay, reliability, peak, mean };
-            Ok(None)
-        } else {
-            Err(ExecutionResult::error())
-        }
-    }
-
-    pub fn handle_query_quality_of_service_minimum_gprs(&self) -> DataResult {
-        if self.pdp_contexts.is_empty() {
-            Ok(None)
-        } else {
-            let mut qos_list = Vec::new();
-            for (cid, context) in &self.pdp_contexts {
-                qos_list.push((*cid, context.gprs_qos.clone()));
-            }
-            Ok(Some(DataResponse::QosMinimumGprs(qos_list)))
-        }
-    }
-
-    pub fn handle_set_quality_of_service_requested_gprs(
-        &mut self,
-        cid: u8,
-        precedence: u8,
-        delay: u8,
-        reliability: u8,
-        peak: u8,
-        mean: u8,
-    ) -> DataResult {
-        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.gprs_req_qos = Qos { precedence, delay, reliability, peak, mean };
-            Ok(None)
-        } else {
-            Err(ExecutionResult::error())
-        }
-    }
-
-    pub fn handle_query_quality_of_service_requested_gprs(&self) -> DataResult {
-        if self.pdp_contexts.is_empty() {
-            Ok(None)
-        } else {
-            let mut qos_list = Vec::new();
-            for (cid, context) in &self.pdp_contexts {
-                qos_list.push((*cid, context.gprs_req_qos.clone()));
-            }
-            Ok(Some(DataResponse::QosRequestedGprs(qos_list)))
-        }
-    }
-
-    pub fn handle_set_pdp_context_activate(&mut self, cid: u8, state: u8) -> DataResult {
-        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-            context.active = state == 1;
-            Ok(None)
-        } else {
-            Err(ExecutionResult::error())
-        }
-    }
-
-    pub fn handle_set_ps_attach(&mut self, state: u8) -> DataResult {
-        self.ps_attached = state == 1;
+    pub fn handle_set_ps_attach(&mut self, state: bool) -> DataResult {
+        self.ps_attached = state;
         if !self.ps_attached {
-            for context in self.pdp_contexts.values_mut() {
-                context.active = false;
-            }
+            self.deactivate_all();
         }
         Ok(None)
     }
@@ -456,7 +407,15 @@ impl DataService {
         if self.pdp_contexts.contains_key(&cid) { Ok(None) } else { Err(ExecutionResult::error()) }
     }
 
-    pub fn handle_enter_data_state(&self, cid: u8) -> DataResult {
+    pub fn handle_enter_data_state(
+        &self,
+        l2p: Option<QuotedString<'_>>,
+        cid: Option<u8>,
+    ) -> DataResult {
+        if l2p.is_some_and(|l| l.as_str().parse::<Layer2Protocol>().is_err()) {
+            return Err(ExecutionResult::error());
+        }
+        let cid = cid.unwrap_or(1);
         match self.pdp_contexts.get(&cid) {
             Some(context) if context.active => Ok(Some(DataResponse::Connect)),
             _ => Err(ExecutionResult::error()),
@@ -467,83 +426,14 @@ impl DataService {
         Ok(None)
     }
 
-    fn get_ipv4_address(&self, cid: u8, base_ip: Ipv4Addr) -> Ipv4Addr {
-        let octets = base_ip.octets();
-        if cid <= 1 {
-            base_ip
-        } else {
-            let raw_last_octet = (octets[3] as u32) + (cid.saturating_sub(1) as u32);
-            if raw_last_octet > 254 {
-                tracing::warn!(
-                    "IP address last octet saturated to 254 for cid {cid}. Base IP: {base_ip}, calculated octet: {raw_last_octet}"
-                );
-            }
-            let last_octet = std::cmp::min(raw_last_octet, 254) as u8;
-            Ipv4Addr::new(octets[0], octets[1], octets[2], last_octet)
-        }
-    }
-
-    fn get_ipv6_address(&self, cid: u8, base_ip: Ipv6Addr) -> Ipv6Addr {
-        let mut segments = base_ip.segments();
-        let offset = cid.saturating_sub(1) as u16;
-        segments[7] = segments[7].saturating_add(offset);
-        Ipv6Addr::from(segments)
-    }
-
-    fn get_ip_address(&self, cid: u8, pdp_type: &PdpType) -> IpAddr {
-        match self.ip_address {
-            Some(IpAddr::V4(ipv4)) => {
-                if *pdp_type == PdpType::Ipv6 {
-                    tracing::warn!(
-                        "Configured IP ({}) is IPv4, but IPv6 was requested. Using IPv4 anyway.",
-                        ipv4
-                    );
-                }
-                IpAddr::V4(self.get_ipv4_address(cid, ipv4))
-            }
-            Some(IpAddr::V6(ipv6)) => {
-                if *pdp_type != PdpType::Ipv6 {
-                    tracing::warn!(
-                        "Configured IP ({}) is IPv6, but IPv4 was requested. Using IPv6 anyway.",
-                        ipv6
-                    );
-                }
-                IpAddr::V6(self.get_ipv6_address(cid, ipv6))
-            }
-            None => self.get_default_ip(cid, pdp_type),
-        }
-    }
-
-    fn get_default_ip(&self, cid: u8, pdp_type: &PdpType) -> IpAddr {
-        if *pdp_type == PdpType::Ipv6 {
-            IpAddr::V6(self.get_ipv6_address(cid, DEFAULT_IPV6_ADDR))
-        } else {
-            if cid <= 1 {
-                IpAddr::V4(DEFAULT_IPV4_ADDR)
-            } else {
-                let octets = DEFAULT_IPV4_ADDR.octets();
-                let last_octet = std::cmp::min(98u8.saturating_add(cid), 254);
-                IpAddr::V4(Ipv4Addr::new(octets[0], octets[1], octets[2], last_octet))
-            }
-        }
-    }
-
-    fn get_gateway(&self, resolved_ip: &IpAddr) -> IpAddr {
-        match (resolved_ip, self.gateway) {
-            (IpAddr::V4(_), Some(IpAddr::V4(gw))) => IpAddr::V4(gw),
-            (IpAddr::V6(_), Some(IpAddr::V6(gw))) => IpAddr::V6(gw),
-            (IpAddr::V4(_), _) => IpAddr::V4(DEFAULT_GATEWAY),
-            (IpAddr::V6(_), _) => IpAddr::V6(DEFAULT_IPV6_GATEWAY),
-        }
-    }
-
-    fn get_dns(&self, resolved_ip: &IpAddr) -> IpAddr {
-        match (resolved_ip, self.dns) {
-            (IpAddr::V4(_), Some(IpAddr::V4(dns))) => IpAddr::V4(dns),
-            (IpAddr::V6(_), Some(IpAddr::V6(dns))) => IpAddr::V6(dns),
-            (IpAddr::V4(_), _) => IpAddr::V4(DEFAULT_DNS),
-            (IpAddr::V6(_), _) => IpAddr::V6(DEFAULT_IPV6_DNS),
-        }
+    /// Returns the assigned IP address for a PDP context.
+    ///
+    /// Contexts share the single provisioned IP: the host topology allocates a
+    /// /30 subnet per device where CID offsets would hit broadcast or
+    /// neighbor subnets. Supporting distinct IPs per APN requires
+    /// multi-config host provisioning (TODO: b/562163940).
+    pub fn get_ip_address(&self, pdp_type: &PdpType) -> Option<IpAddr> {
+        self.find_network_config(pdp_type).map(|cfg| cfg.ip_address)
     }
 
     pub fn handle_show_pdp_address(&self, cid: u8) -> DataResult {
@@ -551,13 +441,15 @@ impl DataService {
             if context.active {
                 let requested_type =
                     if context.pdp_type == PdpType::Ipv6 { PdpType::Ipv6 } else { PdpType::Ip };
-                let ip_address = self.get_ip_address(cid, &requested_type).to_string();
+                let ip_address = self
+                    .get_ip_address(&requested_type)
+                    .ok_or_else(|| ExecutionResult::cme_error(CmeError::NoNetworkService))?;
                 Ok(Some(DataResponse::PdpAddress { cid, ip_address }))
             } else {
-                Err(ExecutionResult::error())
+                Err(ExecutionResult::cme_error(CmeError::InvalidIndex))
             }
         } else {
-            Err(ExecutionResult::error())
+            Err(ExecutionResult::cme_error(CmeError::InvalidIndex))
         }
     }
 
@@ -571,55 +463,33 @@ impl DataService {
                 let is_ipv6 = context.pdp_type == PdpType::Ipv6;
                 let requested_type = if is_ipv6 { PdpType::Ipv6 } else { PdpType::Ip };
 
-                let ip_address = self.get_ip_address(cid, &requested_type);
-                let gateway = self.get_gateway(&ip_address);
-                let dns = self.get_dns(&ip_address);
-
-                let (ip_str, gw_str, dns_str, prefix) = if ip_address.is_ipv6() {
-                    (
-                        ip_address.to_string(),
-                        gateway.to_string(),
-                        dns.to_string(),
-                        self.prefixlen
-                            .filter(|&p| (Ipv4Addr::BITS + 1..=Ipv6Addr::BITS).contains(&p))
-                            .unwrap_or(DEFAULT_IPV6_PREFIX),
-                    )
-                } else {
-                    (
-                        ip_address.to_string(),
-                        gateway.to_string(),
-                        dns.to_string(),
-                        self.prefixlen.unwrap_or(24),
-                    )
-                };
+                let cfg = self
+                    .find_network_config(&requested_type)
+                    .ok_or_else(|| ExecutionResult::cme_error(CmeError::NoNetworkService))?;
                 Ok(Some(DataResponse::DynamicParam {
                     cid,
                     apn,
-                    ip_address: ip_str,
-                    prefix,
-                    gateway: gw_str,
-                    dns: dns_str,
+                    ip_address: cfg.ip_address,
+                    prefix: cfg.prefixlen,
+                    gateway: cfg.gateway,
+                    dns: cfg.dns,
                 }))
             } else {
-                Err(ExecutionResult::error())
+                Err(ExecutionResult::cme_error(CmeError::InvalidIndex))
             }
         } else {
-            Err(ExecutionResult::error())
+            Err(ExecutionResult::cme_error(CmeError::InvalidIndex))
         }
     }
 
-    pub fn handle_gprs_dial(&mut self, number: &[u8]) -> DataResult {
-        match parse_cid_from_gprs_dial(number) {
-            Ok(cid) => {
-                if let Some(context) = self.pdp_contexts.get_mut(&cid) {
-                    context.active = true;
-                    Ok(Some(DataResponse::Connect))
-                } else {
-                    Err(ExecutionResult::error())
-                }
-            }
-            Err(_) => Err(ExecutionResult::error()),
+    pub fn handle_gprs_dial(&mut self, number: &str) -> DataResult {
+        if let Some(context) =
+            parse_cid_from_gprs_dial(number).and_then(|cid| self.pdp_contexts.get_mut(&cid))
+        {
+            context.active = true;
+            return Ok(Some(DataResponse::Connect));
         }
+        Err(ExecutionResult::error())
     }
 
     pub fn execute<'a>(&mut self, command: &DataCommand<'a>) -> ExecutionResult {
@@ -628,46 +498,36 @@ impl DataService {
                 self.handle_define_pdp_context(*cid, *pdp_type, *apn)
             }
             DataCommand::QueryPdpContext => self.handle_query_pdp_context(),
-            DataCommand::QueryQualityOfServiceMinimum => {
-                self.handle_query_quality_of_service_minimum()
+            DataCommand::QueryQualityOfServiceMinimum => self.handle_query_qos(QosType::Minimum),
+            DataCommand::SetQualityOfServiceMinimum(cid, qos) => {
+                self.handle_set_qos(QosType::Minimum, *cid, *qos)
             }
-            DataCommand::SetQualityOfServiceMinimum(cid, prec, delay, rel, peak, mean) => {
-                self.handle_set_quality_of_service_minimum(*cid, *prec, *delay, *rel, *peak, *mean)
+            DataCommand::SetQualityOfServiceRequested(cid, qos) => {
+                self.handle_set_qos(QosType::Requested, *cid, *qos)
             }
-            DataCommand::SetQualityOfServiceRequested(cid, prec, delay, rel, peak, mean) => self
-                .handle_set_quality_of_service_requested(*cid, *prec, *delay, *rel, *peak, *mean),
             DataCommand::QueryQualityOfServiceRequested => {
-                self.handle_query_quality_of_service_requested()
+                self.handle_query_qos(QosType::Requested)
             }
-            DataCommand::SetQualityOfServiceMinimumGprs(cid, prec, delay, rel, peak, mean) => self
-                .handle_set_quality_of_service_minimum_gprs(
-                    *cid, *prec, *delay, *rel, *peak, *mean,
-                ),
+            DataCommand::SetQualityOfServiceMinimumGprs(cid, qos) => {
+                self.handle_set_qos(QosType::MinimumGprs, *cid, *qos)
+            }
             DataCommand::QueryQualityOfServiceMinimumGprs => {
-                self.handle_query_quality_of_service_minimum_gprs()
+                self.handle_query_qos(QosType::MinimumGprs)
             }
-            DataCommand::SetQualityOfServiceRequestedGprs(cid, prec, delay, rel, peak, mean) => {
-                self.handle_set_quality_of_service_requested_gprs(
-                    *cid, *prec, *delay, *rel, *peak, *mean,
-                )
+            DataCommand::SetQualityOfServiceRequestedGprs(cid, qos) => {
+                self.handle_set_qos(QosType::RequestedGprs, *cid, *qos)
             }
             DataCommand::QueryQualityOfServiceRequestedGprs => {
-                self.handle_query_quality_of_service_requested_gprs()
+                self.handle_query_qos(QosType::RequestedGprs)
             }
-            DataCommand::SetPdpContextActivate(state, cid) => {
-                // Compatibility hack for legacy Goldfish/Reference RIL.
-                // It sends AT+CGACT using non-standard <cid>,<state> format.
-                // We detect this by checking if the parsed state is > 1 (which means it's
-                // actually the CID) or if the parsed CID is 0 (which means it's the state 0).
-                let (real_cid, real_state) =
-                    if *state > 1 || *cid == 0 { (*state, *cid) } else { (*cid, *state) };
-                self.handle_set_pdp_context_activate(real_cid, real_state)
+            DataCommand::SetPdpContextActivate(args) => {
+                self.handle_set_pdp_context_activate(args.cid, args.state)
             }
             DataCommand::QueryPdpContextActivate => self.handle_query_pdp_context_activate(),
             DataCommand::SetPsAttach(state) => self.handle_set_ps_attach(*state),
             DataCommand::QueryPsAttach => self.handle_query_ps_attach(),
             DataCommand::SetPdpContextModify(cid) => self.handle_set_pdp_context_modify(*cid),
-            DataCommand::EnterDataState(cid) => self.handle_enter_data_state(*cid),
+            DataCommand::EnterDataState(l2p, cid) => self.handle_enter_data_state(*l2p, *cid),
             DataCommand::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
             DataCommand::ShowPdpAddress(cid) => self.handle_show_pdp_address(*cid),
             DataCommand::ReadDynamicParam(cid) => self.handle_read_dynamic_param(*cid),
@@ -676,43 +536,43 @@ impl DataService {
     }
 }
 
-fn parse_cid_from_gprs_dial(number: &[u8]) -> Result<u8, ()> {
-    let trimmed = number.strip_suffix(b"#").ok_or(())?;
-    let parts: Vec<&[u8]> = trimmed.split(|&b| b == b'*').collect();
+fn parse_cid_from_gprs_dial(number: &str) -> Option<u8> {
+    let trimmed = number.strip_suffix('#')?;
+    let parts: Vec<&str> = trimmed.split('*').collect();
 
     // Expecting a format like *99, *99*<cid>, or *99***<cid> (at most 5 segments)
-    if parts.len() < 2 || parts.len() > 5 || !parts[0].is_empty() || parts[1] != b"99" {
-        return Err(());
+    if parts.len() < 2 || parts.len() > 5 || !parts[0].is_empty() || parts[1] != "99" {
+        return None;
     }
 
     // Case 1: *99# (parts are ["", "99"])
     if parts.len() == 2 {
-        return Ok(1);
+        return Some(1);
     }
 
     // Case 2: *99*<cid># or *99***<cid># (parts.len() > 2)
-    let last_part = parts.last().ok_or(())?;
+    let last_part = parts.last()?;
     if last_part.is_empty() {
-        return Err(());
+        return None;
     }
-    let cid_str = std::str::from_utf8(last_part).map_err(|_err| ())?;
-    let cid = cid_str.parse::<u8>().map_err(|_err| ())?;
-    Ok(cid)
+    last_part.parse::<u8>().ok()
 }
 
 #[cfg(test)]
 mod tests {
+    use std::net::{Ipv4Addr, Ipv6Addr};
+
     use super::*;
     use crate::{parser::QuotedString, types::Response};
 
     #[test]
     fn test_data_service_dial_direct() {
         let mut service = DataService::default();
-        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b"test"));
+        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString("test"));
         assert!(res.is_ok());
 
         // Dial
-        let res: ExecutionResult = service.handle_gprs_dial(b"*99***1#").into();
+        let res: ExecutionResult = service.handle_gprs_dial("*99***1#").into();
         if let ExecutionResult::Success(handled) = res {
             assert_eq!(handled.responses, vec![Response::Data(DataResponse::Connect)]);
         } else {
@@ -723,111 +583,100 @@ mod tests {
     #[test]
     fn test_data_service_dial_malformed() {
         let mut service = DataService::default();
-        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b"test"));
+        let res = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString("test"));
         assert!(res.is_ok());
 
         // Dial malformed alphanumeric CID
-        let res: ExecutionResult = service.handle_gprs_dial(b"*99*abc#").into();
+        let res: ExecutionResult = service.handle_gprs_dial("*99*abc#").into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
 
         // Dial empty trailing CID
-        let res: ExecutionResult = service.handle_gprs_dial(b"*99*#").into();
+        let res: ExecutionResult = service.handle_gprs_dial("*99*#").into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
     }
 
     #[test]
     fn test_pdp_context_auto_activation() {
         let mut service = DataService::default();
-        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b""));
+        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(""));
         assert!(service.pdp_contexts.get(&1).unwrap().active);
     }
 
     #[test]
     fn test_pdp_context_no_auto_activation_when_detached() {
         let mut service = DataService::default();
-        let _ = service.handle_set_ps_attach(0);
-        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(b""));
+        let _ = service.handle_set_ps_attach(false);
+        let _ = service.handle_define_pdp_context(1, PdpType::Ip, QuotedString(""));
         assert!(!service.pdp_contexts.get(&1).unwrap().active);
     }
 
     #[test]
-    fn test_cuttlefish_config_parsing() {
-        use std::io::Write;
-        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
-        let config_json = r#"{
-            "instances": {
-                "1": {
-                    "ril_ipaddr": "192.168.97.2",
-                    "ril_prefixlen": 30,
-                    "ril_gateway": "192.168.97.1",
-                    "ril_dns": "8.8.8.8"
-                }
-            }
-        }"#;
-        temp_file.write_all(config_json.as_bytes()).unwrap();
+    fn test_network_configs() {
+        let network_config = CellNetworkConfig {
+            ip_address: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)),
+            prefixlen: 30,
+            gateway: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 1)),
+            dns: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+        };
 
-        let config_path_str = temp_file.path().to_str().unwrap();
-        let config =
-            crate::cuttlefish::read_cuttlefish_config_with_params(config_path_str, "1").unwrap();
+        let service = DataService::new(vec![network_config.clone()]);
 
-        let service = DataService::new(
-            config.ip_address.parse::<IpAddr>().ok(),
-            Some(config.prefixlen),
-            config.gateway.parse::<IpAddr>().ok(),
-            config.dns.parse::<IpAddr>().ok(),
-        );
-        assert_eq!(service.ip_address, Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2))));
-        assert_eq!(service.prefixlen, Some(30));
-        assert_eq!(service.gateway, Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 1))));
-        assert_eq!(service.dns, Some(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
-
-        // Test fallback IP generation
         assert_eq!(
-            service.get_ip_address(1, &PdpType::Ip),
-            IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2))
-        );
-        assert_eq!(
-            service.get_ip_address(2, &PdpType::Ip),
-            IpAddr::V4(Ipv4Addr::new(192, 168, 97, 3))
-        );
-        assert_eq!(
-            service.get_ip_address(255, &PdpType::Ip),
-            IpAddr::V4(Ipv4Addr::new(192, 168, 97, 254))
+            service.get_ip_address(&PdpType::Ip),
+            Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)))
         );
 
-        // Test IPv6 request on Cuttlefish (warns and returns the configured IPv4
-        // address anyway)
+        assert_eq!(service.get_ip_address(&PdpType::Ipv6), None);
         assert_eq!(
-            service.get_ip_address(1, &PdpType::Ipv6),
-            IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2))
+            service.get_ip_address(&PdpType::Ipv4v6),
+            Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)))
+        );
+        assert_eq!(service.get_ip_address(&PdpType::Ppp), None);
+
+        let v6_config = CellNetworkConfig {
+            ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
+            prefixlen: 64,
+            gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
+            dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
+        };
+        let dual_stack_service = DataService::new(vec![network_config.clone(), v6_config.clone()]);
+        assert_eq!(
+            dual_stack_service.get_ip_address(&PdpType::Ip),
+            Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)))
+        );
+        assert_eq!(
+            dual_stack_service.get_ip_address(&PdpType::Ipv6),
+            Some(IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)))
         );
 
-        // Test Goldfish path (no config IP)
-        let goldfish_service = DataService::new(None, None, None, None);
+        let mut unconfigured_service = DataService::default();
+        assert_eq!(unconfigured_service.get_ip_address(&PdpType::Ip), None);
+        assert_eq!(unconfigured_service.get_ip_address(&PdpType::Ipv6), None);
+        assert_eq!(unconfigured_service.get_ip_address(&PdpType::Ipv4v6), None);
+        let _ =
+            unconfigured_service.handle_define_pdp_context(1, PdpType::Ip, QuotedString("test"));
+        assert!(unconfigured_service.handle_show_pdp_address(1).is_err());
+        assert!(unconfigured_service.handle_read_dynamic_param(1).is_err());
+
+        unconfigured_service.update_network_configs(vec![network_config.clone()]);
         assert_eq!(
-            goldfish_service.get_ip_address(1, &PdpType::Ipv6),
-            IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15))
+            unconfigured_service.get_ip_address(&PdpType::Ip),
+            Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)))
         );
-        assert_eq!(
-            goldfish_service.get_ip_address(2, &PdpType::Ipv6),
-            IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x16))
-        );
-        assert_eq!(
-            goldfish_service.get_ip_address(1, &PdpType::Ip),
-            IpAddr::V4(Ipv4Addr::new(10, 0, 2, 15))
-        );
-        assert_eq!(
-            goldfish_service.get_ip_address(2, &PdpType::Ip),
-            IpAddr::V4(Ipv4Addr::new(10, 0, 2, 100))
-        ); // Goldfish jump
+        assert_eq!(unconfigured_service.network_configs(), &[network_config]);
+        assert!(unconfigured_service.handle_show_pdp_address(1).is_ok());
+        assert!(unconfigured_service.handle_read_dynamic_param(1).is_ok());
     }
 
     #[test]
-    fn test_dynamic_param_prefix_filtering() {
-        // Test IPv6 context ignores small IPv4 prefixlen (e.g. 30) and defaults to
-        // DEFAULT_IPV6_PREFIX (64)
-        let mut service = DataService::new(None, Some(30), None, None);
-        service.pdp_contexts.insert(
+    fn test_dynamic_param_prefix_passthrough() {
+        let mut service_v6 = DataService::new(vec![CellNetworkConfig {
+            ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
+            prefixlen: 64,
+            gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
+            dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
+        }]);
+        service_v6.pdp_contexts.insert(
             1,
             PdpContext {
                 pdp_type: PdpType::Ipv6,
@@ -840,22 +689,22 @@ mod tests {
             },
         );
 
-        let res = service.handle_read_dynamic_param(1).unwrap();
+        let res = service_v6.handle_read_dynamic_param(1).unwrap();
         match res {
             Some(DataResponse::DynamicParam { prefix, .. }) => {
-                assert_eq!(prefix, DEFAULT_IPV6_PREFIX);
+                assert_eq!(prefix, 64);
             }
             _ => panic!("Expected DynamicParam response"),
         }
 
-        // Test with valid IPv6 prefixlen (e.g. 48)
-        let mut service_v6_prefix = DataService::new(
-            Some(IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15))),
-            Some(48),
-            Some(IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2))),
-            Some(IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3))),
-        );
-        service_v6_prefix.pdp_contexts.insert(
+        // Prefix is passed through verbatim without validation.
+        let mut service_zero = DataService::new(vec![CellNetworkConfig {
+            ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
+            prefixlen: 0,
+            gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
+            dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
+        }]);
+        service_zero.pdp_contexts.insert(
             1,
             PdpContext {
                 pdp_type: PdpType::Ipv6,
@@ -867,11 +716,8 @@ mod tests {
                 gprs_req_qos: Qos::default(),
             },
         );
-        let res_v6 = service_v6_prefix.handle_read_dynamic_param(1).unwrap();
-        match res_v6 {
-            Some(DataResponse::DynamicParam { prefix, .. }) => {
-                assert_eq!(prefix, 48);
-            }
+        match service_zero.handle_read_dynamic_param(1).unwrap() {
+            Some(DataResponse::DynamicParam { prefix, .. }) => assert_eq!(prefix, 0),
             _ => panic!("Expected DynamicParam response"),
         }
     }

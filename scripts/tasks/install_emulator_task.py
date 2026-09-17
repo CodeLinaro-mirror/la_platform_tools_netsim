@@ -18,13 +18,18 @@ from tasks.task import Task
 from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
+    NETSIM_ROOT,
     binary_extension,
     get_netsim_binaries,
     run,
 )
 
 OBJS_DIR = AOSP_ROOT / "tools" / "netsim" / "objs"
-BAZEL_OUT_DIR = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
+BAZEL_OUT_DIR = (
+    NETSIM_ROOT / "bazel-bin"
+    if (NETSIM_ROOT / "bazel-bin").is_dir()
+    else AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
+)
 PLATFORM_SYSTEM = platform.system()
 PLATFORM_MACHINE = platform.machine()
 

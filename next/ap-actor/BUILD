@@ -10,7 +10,7 @@ package(default_visibility = ["//visibility:public"])
 genrule(
     name = "cxx-bridge-header",
     outs = ["cxx.h"],
-    cmd = "$(location @cxx.rs//:codegen) --header >> $(OUTS)",
+    cmd = "$(execpath @cxx.rs//:codegen) --header > $(OUTS)",
     tools = ["@cxx.rs//:codegen"],
     visibility = ["//visibility:public"],
 )
@@ -29,6 +29,11 @@ cc_library(
         ".",
         "src",
     ],
+    # netsimd is installed as a standalone binary next to the emulator, where no
+    # netsim .so files are shipped. Without linkstatic the cc_library is linked
+    # dynamically and the daemon aborts at startup with
+    # "error while loading shared libraries: libhostap_crypto_shim.so".
+    linkstatic = True,
     deps = [
         "@boringssl//:crypto",
         "@cxx.rs//:core",
@@ -53,6 +58,7 @@ netsim_rust_library(
         "@bytes",
         "@cxx.rs//:cxx",
         "@futures",
+        "@parking_lot",
         "@serde",
         "@thiserror",
         "@tokio",
@@ -79,8 +85,19 @@ rust_cxx_bridge(
 cc_library(
     name = "ap_actor_cxx",
     srcs = [":ap_actor_bridge"],
+    # Linked statically for the same reason as :hostap_crypto_shim above.
+    linkstatic = True,
     deps = [
         ":hostap_crypto_shim",
         "@cxx.rs//:core",
     ],
+    # Deliberately not alwayslink. The generated bridge shims are called from
+    # ap-actor's Rust code, so the linker already has references that pull the
+    # objects out of the archive. Forcing them in instead drags them into every
+    # downstream binary, including test binaries that never touch the bridge.
+    # Those objects reference the cxx runtime, and its Rust half is only linked
+    # when some crate in the Rust graph actually uses it, which for an unrelated
+    # test it does not: //next/rootcanal-server:test then failed on Windows with
+    # 20 undefined cxxbridge1$string$*, cxxbridge1$str$* and cxxbridge1$slice$*
+    # symbols. Unix linkers tolerated it; lld-link does not.
 )

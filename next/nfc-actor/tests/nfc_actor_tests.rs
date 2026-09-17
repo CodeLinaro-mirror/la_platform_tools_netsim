@@ -261,13 +261,7 @@ impl NfcWorld {
         assert!(self.aborted_tasks.lock().unwrap().contains(&chip_id), "Task was not aborted");
         assert!(self.removed_streams.lock().unwrap().contains(&chip_id), "Stream was not removed");
         assert!(
-            !self
-                .actor
-                .casimir_to_device
-                .lock()
-                .unwrap()
-                .values()
-                .any(|&dev_id| dev_id.0 == id_val),
+            !self.actor.casimir_to_device.lock().values().any(|&dev_id| dev_id.0 == id_val),
             "Casimir mapping was not cleaned up!"
         );
     }
@@ -423,15 +417,11 @@ async fn test_nfc_stats_counters() {
     let update_res = world.actor.handle_update(chip_id, update_enable, &mut world.ctx).await;
     assert!(update_res.is_ok());
 
-    use casimir::packets::{
-        nci::{
-            ConnId, ControlPacket, ControlPacketChild, CoreInitCommand, CoreResetCommand,
-            DataPacket, DeactivationType, DiscoverConfiguration, FeatureEnable, MessageType,
-            ResetType, RfDeactivateCommand, RfDiscoverCommand, RfDiscoverSelectCommand,
-            RfDiscoveryId, RfInterfaceType, RfIntfActivatedNotification, RfPacketChild,
-            RfProtocolType, RfTechnologyAndMode,
-        },
-        rf,
+    use casimir::packets::nci::{
+        ControlPacket, ControlPacketChild, CoreInitCommand, CoreResetCommand, DeactivationType,
+        DiscoverConfiguration, FeatureEnable, ResetType, RfDeactivateCommand, RfDiscoverCommand,
+        RfDiscoverSelectCommand, RfDiscoveryId, RfInterfaceType, RfPacketChild, RfProtocolType,
+        RfSetListenModeRoutingCommand, RfTechnologyAndMode,
     };
     use nfc_actor::{NfcAction, NfcApi};
     use pdl_runtime::Packet;
@@ -451,27 +441,26 @@ async fn test_nfc_stats_counters() {
         actor.on_stream(chip_id, msg, ctx).await;
         assert_eq!(actor.nfc_stats.get(api), expected_count, "Assertion failed for {:?}", api);
     }
-
-    // 1. CoreReset
+    // 1. CoreReset -> does NOT increment AdapterDisable
     let cmd = CoreResetCommand { reset_type: ResetType::KeepConfig };
     send_and_verify(
         &mut world.actor,
         &mut world.ctx,
         chip_id,
         cmd.encode_to_vec().unwrap(),
-        NfcApi::CoreReset,
-        1,
+        NfcApi::AdapterDisable,
+        0,
     )
     .await;
 
-    // 2. CoreInit
+    // 2. CoreInit -> AdapterEnable
     let cmd = CoreInitCommand { feature_enable: FeatureEnable {} };
     send_and_verify(
         &mut world.actor,
         &mut world.ctx,
         chip_id,
         cmd.encode_to_vec().unwrap(),
-        NfcApi::CoreInit,
+        NfcApi::AdapterEnable,
         1,
     )
     .await;
@@ -555,7 +544,7 @@ async fn test_nfc_stats_counters() {
         }
     });
 
-    // 3. RfDiscover
+    // 3. RfDiscover -> AdapterEnableReaderMode
     let cmd = RfDiscoverCommand {
         configurations: vec![DiscoverConfiguration {
             technology_and_mode: RfTechnologyAndMode::NfcAPassivePollMode,
@@ -567,7 +556,7 @@ async fn test_nfc_stats_counters() {
         &mut world.ctx,
         chip_id,
         cmd.encode_to_vec().unwrap(),
-        NfcApi::RfDiscover,
+        NfcApi::AdapterEnableReaderMode,
         1,
     )
     .await;
@@ -585,7 +574,7 @@ async fn test_nfc_stats_counters() {
         }
     }
 
-    // 4. RfDiscoverSelect
+    // 4. RfDiscoverSelect -> TagConnect
     let cmd = RfDiscoverSelectCommand {
         rf_discovery_id: RfDiscoveryId::try_from(1).unwrap(),
         rf_protocol: RfProtocolType::IsoDep,
@@ -596,48 +585,101 @@ async fn test_nfc_stats_counters() {
         &mut world.ctx,
         chip_id,
         cmd.encode_to_vec().unwrap(),
-        NfcApi::RfDiscoverSelect,
+        NfcApi::TagConnect,
         1,
     )
     .await;
 
-    // 5. DataSend
-    let pkt = DataPacket {
-        conn_id: ConnId::StaticRf,
-        mt: MessageType::Data,
-        cr: 0,
-        payload: vec![1, 2, 3],
-    };
+    // 5. DataPacket (Guest -> Casimir in Poll Mode) -> TagTransceive
+    let packet_bytes = vec![0, 0, 3, 1, 2, 3]; // NCI Data Packet: MT=0, ConnID=0, RFU=0, Len=3, Payload=[1,2,3]
+    world
+        .packet_senders
+        .get(&chip_id)
+        .unwrap()
+        .send(Bytes::from(packet_bytes.clone()))
+        .await
+        .unwrap();
     send_and_verify(
         &mut world.actor,
         &mut world.ctx,
         chip_id,
-        pkt.encode_to_vec().unwrap(),
-        NfcApi::DataSend,
+        packet_bytes,
+        NfcApi::TagTransceive,
+        1,
+    )
+    .await;
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert_eq!(world.actor.nfc_stats.to_proto().nci_data_rx(), 1);
+
+    // 6. DataPacket (Casimir -> Guest while in Listen Mode via mock peer) ->
+    //    CardEmulationProcessCommandApdu
+    world
+        .actor
+        .active_chips
+        .get(&chip_id)
+        .unwrap()
+        .mode
+        .store(nfc_actor::NFC_MODE_LISTEN, std::sync::atomic::Ordering::Relaxed);
+    let nci_data_pkt = vec![0, 0, 3, 1, 2, 3]; // NCI Data Packet
+    mock_peer_cmd_tx.send(nci_data_pkt).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert_eq!(world.actor.nfc_stats.get(NfcApi::CardEmulationProcessCommandApdu), 1);
+    assert_eq!(world.actor.nfc_stats.to_proto().nci_data_tx(), 1);
+
+    // 7. RfDeactivate(SleepMode) -> TagClose
+    let cmd = RfDeactivateCommand { deactivation_type: DeactivationType::SleepMode };
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        cmd.encode_to_vec().unwrap(),
+        NfcApi::TagClose,
         1,
     )
     .await;
 
-    // 6. DataReceive (via mock peer)
-    let nci_data_pkt = vec![0, 0, 3, 1, 2, 3]; // NCI Data Packet: MT=0, ConnID=0, RFU=0, Len=3, Payload=[1,2,3]
-    mock_peer_cmd_tx.send(nci_data_pkt).await.unwrap();
+    // 8. RfSetListenModeRouting -> AdapterSetListenModeRouting (switches mode to
+    //    LISTEN)
+    let cmd = RfSetListenModeRoutingCommand { more_to_follow: 0, routing_entries: vec![] };
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        cmd.encode_to_vec().unwrap(),
+        NfcApi::AdapterSetListenModeRouting,
+        1,
+    )
+    .await;
 
-    // Wait for the packet to be processed by Casimir and forwarded to actor
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    // 9. DataPacket (Guest -> Casimir in Listen Mode) ->
+    //    CardEmulationSendResponseApdu
+    send_and_verify(
+        &mut world.actor,
+        &mut world.ctx,
+        chip_id,
+        vec![0, 0, 2, 0x90, 0x00],
+        NfcApi::CardEmulationSendResponseApdu,
+        1,
+    )
+    .await;
 
-    assert_eq!(world.actor.nfc_stats.get(NfcApi::DataReceive), 1);
-
-    // 7. RfDeactivate
+    // 10. RfDeactivate(IdleMode) -> AdapterDisableReaderMode
     let cmd = RfDeactivateCommand { deactivation_type: DeactivationType::IdleMode };
     send_and_verify(
         &mut world.actor,
         &mut world.ctx,
         chip_id,
         cmd.encode_to_vec().unwrap(),
-        NfcApi::RfDeactivate,
+        NfcApi::AdapterDisableReaderMode,
         1,
     )
     .await;
+
+    // 11. Chip disable -> AdapterDisable
+    let update_disable = netsim_model::ChipUpdate { enabled: Some(false), ..Default::default() };
+    let update_res = world.actor.handle_update(chip_id, update_disable, &mut world.ctx).await;
+    assert!(update_res.is_ok());
+    assert_eq!(world.actor.nfc_stats.get(NfcApi::AdapterDisable), 1);
 
     mock_peer_handle.abort();
 }
