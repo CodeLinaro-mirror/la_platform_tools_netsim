@@ -38,6 +38,7 @@ NETSIM_CLIPPY_FLAGS = [
     "-Dclippy::map_err_ignore",
     "-Dclippy::match_wild_err_arm",
     "-Dclippy::unwrap_in_result",
+    "-Dclippy::unwrap_used",
 ]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.
@@ -266,9 +267,11 @@ def _netsim_clippy_test_impl(ctx):
 
             # In test targets, allow idiomatic test patterns:
             # - unwrap_in_result: tests returning Result often assert via .unwrap()
+            # - unwrap_used: tests and test fixtures commonly use .unwrap()
             # - field_reassign_with_default: initializing mock structs in tests
             # - module_inception: tests/tests.rs having mod tests
             t_args.add("-Aclippy::unwrap_in_result")
+            t_args.add("-Aclippy::unwrap_used")
             t_args.add("-Aclippy::field_reassign_with_default")
             t_args.add("-Aclippy::module_inception")
         else:

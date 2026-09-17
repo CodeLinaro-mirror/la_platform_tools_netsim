@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use netsim_model::{ModemAction, Quirks};
+use netsim_model::{CellNetworkConfig, ModemAction, Quirks};
 
 // ...
 use crate::modem_network_simulator::NetworkEvent;
@@ -16,6 +16,12 @@ pub trait ModemNetworkInterface: Send + Sync {
         sim_type: Option<i32>,
         sim_profile: Option<String>,
         quirks: Quirks,
+        network_configs: Vec<CellNetworkConfig>,
+    ) -> Result<(), ModemError>;
+    fn update_network_configs(
+        &mut self,
+        chip_id: ModemId,
+        network_configs: Vec<CellNetworkConfig>,
     ) -> Result<(), ModemError>;
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError>;
     fn send_data(&mut self, chip_id: ModemId, data: &[u8]) -> Result<(), ModemError>;
@@ -34,9 +40,19 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
         sim_type: Option<i32>,
         sim_profile: Option<String>,
         quirks: Quirks,
+        network_configs: Vec<CellNetworkConfig>,
     ) -> Result<(), ModemError> {
-        self.new_modem(chip_id, sink, sim_type, sim_profile, quirks)
+        self.new_modem(chip_id, sink, sim_type, sim_profile, quirks, network_configs)
     }
+
+    fn update_network_configs(
+        &mut self,
+        chip_id: ModemId,
+        network_configs: Vec<CellNetworkConfig>,
+    ) -> Result<(), ModemError> {
+        self.update_network_configs(chip_id, network_configs)
+    }
+
     fn remove_modem(&mut self, chip_id: ModemId) -> Result<(), ModemError> {
         self.remove_modem(chip_id);
         Ok(())
@@ -92,6 +108,7 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
                 ber: signal.ber as u32,
                 voice_registration: modem.network_service.voice_registration(),
                 data_registration: modem.network_service.data_registration(),
+                network_configs: modem.network_configs().to_vec(),
             })
         } else {
             Err(ModemError::NotFound)

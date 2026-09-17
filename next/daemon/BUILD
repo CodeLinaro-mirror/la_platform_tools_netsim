@@ -24,6 +24,7 @@ package(default_visibility = ["//visibility:public"])
 DAEMON_SRCS = [
     "src/args.rs",
     "src/avd_config.rs",
+    "src/cuttlefish.rs",
     "src/ini_file.rs",
     "src/lib.rs",
     "src/logger.rs",
@@ -43,7 +44,6 @@ netsim_rust_library(
         "@bytes",
         "@rand",
         "@regex",
-        "@serde_json",
         "@tempfile",
     ],
     deps = [
@@ -69,6 +69,8 @@ netsim_rust_library(
         "@clap",
         "@futures",
         "@grpcio",
+        "@serde",
+        "@serde_json",
         "@tokio",
         "@tracing",
     ],

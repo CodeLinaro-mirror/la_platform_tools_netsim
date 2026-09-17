@@ -197,11 +197,14 @@ impl GatewayTrait for TapGateway {
             packet.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN),
         );
 
-        let dest_mac_bytes: [u8; 6] = packet[0..6].try_into().unwrap_or([0; 6]);
-        let dest_mac = netsim_packets::MacAddress::new(dest_mac_bytes);
+        let Some(dest_mac_bytes) = packet.first_chunk::<6>() else {
+            tracing::warn!("TAP_PKT: packet too short ({} bytes)", packet.len());
+            return;
+        };
+        let dest_mac = netsim_packets::MacAddress::new(*dest_mac_bytes);
 
         if dest_mac.is_broadcast() || dest_mac.is_multicast() {
-            let bssids = shared_keys.bssids.read().unwrap().clone();
+            let bssids = shared_keys.bssids.read().clone();
             for bssid in bssids {
                 let seq = self.seq.fetch_add(1, Ordering::Relaxed);
                 if let Some(bytes) = convert_8023_to_80211(packet.clone(), Some(bssid), seq) {

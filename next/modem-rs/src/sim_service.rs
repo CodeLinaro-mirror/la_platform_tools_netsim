@@ -3,7 +3,6 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
-    fmt::Write,
     iter::once,
     ops::RangeInclusive,
 };
@@ -102,7 +101,17 @@ const DEFAULT_PUK: &str = "12345678";
 const DEFAULT_FALLBACK_IMSI: &str = "310260123456789";
 const DEFAULT_FALLBACK_ICCID: &str = "89012608640220133897";
 const EF_FPLMN_DATA_FALLBACK: &[u8] = &[0xFF; 12];
+/// Standard FCP template payload for STATUS / SIM state responses in hex string
+/// format.
 const STATUS_FCP_HEX: &str = "62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF";
+/// Pre-decoded byte representation of `STATUS_FCP_HEX` for compile-time safety
+/// in `generate_df_fcp`.
+const STATUS_FCP_BYTES: &[u8] = &[
+    0x62, 0x33, 0x82, 0x02, 0x78, 0x21, 0x83, 0x02, 0x3F, 0x00, 0xA5, 0x0C, 0x80, 0x01, 0x61, 0x87,
+    0x01, 0x01, 0x83, 0x04, 0x00, 0x07, 0xDB, 0xF0, 0x8A, 0x01, 0x05, 0x8B, 0x06, 0x2F, 0x06, 0x01,
+    0x02, 0x00, 0x02, 0xC6, 0x0C, 0x90, 0x01, 0x60, 0x83, 0x01, 0x01, 0x83, 0x01, 0x0A, 0x83, 0x01,
+    0x0D, 0x81, 0x02, 0xFF, 0xFF,
+];
 
 /// 3GPP TS 51.011 §9.3 Access Condition Levels.
 #[allow(dead_code)]
@@ -1946,7 +1955,7 @@ impl SimService {
 }
 
 fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
-    let mut fcp_bytes = hex::decode(STATUS_FCP_HEX).unwrap();
+    let mut fcp_bytes = STATUS_FCP_BYTES.to_vec();
     // Overwrite File ID in FCP template (Tag '83' at index 6: 83 02 3F 00)
     fcp_bytes[8] = ((df_id >> 8) & 0xFF) as u8;
     fcp_bytes[9] = (df_id & 0xFF) as u8;
@@ -1966,24 +1975,20 @@ fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
 }
 
 fn decode_imsi(bytes: &[u8]) -> Option<String> {
-    if bytes.is_empty() {
+    let (&len_byte, rest) = bytes.split_first()?;
+    let len = len_byte as usize;
+    if len == 0 || rest.len() < len {
         return None;
     }
-    if bytes.len() < 2 {
-        return None;
-    }
-    let len = bytes[0] as usize;
-    if len == 0 || bytes.len() < 1 + len {
-        return None;
-    }
+    let (&first_byte, content) = rest[..len].split_first()?;
 
     let mut imsi = String::new();
-    let digit_1 = bytes[1] >> 4;
+    let digit_1 = first_byte >> 4;
     if digit_1 <= 9 {
         imsi.push((b'0' + digit_1) as char);
     }
 
-    for &b in &bytes[2..1 + len] {
+    for &b in content {
         let low = b & 0x0F;
         let high = b >> 4;
         if low <= 9 {
@@ -2007,9 +2012,7 @@ fn map_sw_to_response(sw: u16) -> SimResponse {
 
 fn format_sim_payload_data(data_hex: &str, status_word: u16) -> String {
     let combined_len = data_hex.len() + 4;
-    let mut result = String::with_capacity(combined_len + 6); // 6 for len and comma
-    write!(&mut result, "{},{}{:04X}", combined_len, data_hex, status_word).unwrap();
-    result
+    format!("{combined_len},{data_hex}{status_word:04X}")
 }
 
 fn format_sim_payload_status(status_word: u16) -> String {
@@ -2086,7 +2089,7 @@ mod tests {
     fn test_is_fdn_allowed_disabled_by_default() {
         let mut fdn_record = vec![0xFF; 28];
         fdn_record[14] = 4; // len: 3 BCD + 1 TON
-        fdn_record[15] = 0x81; // National
+        fdn_record[15] = 0x81; // TON = Unknown, NPI = E.164
         fdn_record[16] = 0x21; // '1','2'
         fdn_record[17] = 0x43; // '3','4'
         fdn_record[18] = 0xF5; // '5', filler

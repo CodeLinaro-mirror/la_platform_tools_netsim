@@ -58,6 +58,7 @@ netsim_rust_library(
         "@bytes",
         "@cxx.rs//:cxx",
         "@futures",
+        "@parking_lot",
         "@serde",
         "@thiserror",
         "@tokio",

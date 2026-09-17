@@ -6,9 +6,41 @@ use modem_rs::{
     DedicatedFile, ElementaryFile, FileSystem, PhoneNumber, PinState, SimFile, SimIo, SimProfile,
     config::PinProfile, constants::UiccFileId, test_utils::MockModemHandler,
 };
-use netsim_model::Quirks;
+use netsim_model::{CellNetworkConfig, Quirks};
 
 use crate::{common::constants::*, world::World};
+
+pub fn create_default_test_network_config() -> CellNetworkConfig {
+    CellNetworkConfig {
+        ip_address: TEST_IPV4_ADDR.into(),
+        prefixlen: 24,
+        gateway: TEST_GATEWAY_IPV4.into(),
+        dns: TEST_DNS_IPV4.into(),
+    }
+}
+
+pub fn given_modem_with_network_config(
+    world: &mut World,
+    name: &str,
+    network_config: CellNetworkConfig,
+) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(false);
+
+    world
+        .manager
+        .new_modem(id, sink, None, None, Quirks::default(), vec![network_config])
+        .expect("Failed to create new modem with network config");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+pub fn given_data_modem(world: &mut World, name: &str) {
+    given_modem_with_network_config(world, name, create_default_test_network_config());
+}
 
 /// Creates a modem with the given name.
 ///
@@ -25,7 +57,7 @@ pub fn given_modem(world: &mut World, name: &str) {
 
     world
         .manager
-        .new_modem(id, sink, None, None, Quirks::default())
+        .new_modem(id, sink, None, None, Quirks::default(), Vec::new())
         .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
@@ -39,7 +71,10 @@ pub fn given_modem_with_quirks(world: &mut World, name: &str, quirks: Quirks) {
     let id = world.next_modem_id();
     let (handler, sink) = MockModemHandler::new(quirks.goldfish_ril_37_or_earlier);
 
-    world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
+    world
+        .manager
+        .new_modem(id, sink, None, None, quirks, Vec::new())
+        .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -53,7 +88,10 @@ pub fn given_goldfish_37_modem(world: &mut World, name: &str) {
     let (handler, sink) = MockModemHandler::new(true);
 
     let quirks = Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() };
-    world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
+    world
+        .manager
+        .new_modem(id, sink, None, None, quirks, Vec::new())
+        .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -68,7 +106,7 @@ pub fn given_modem_with_sim_type(world: &mut World, name: &str, sim_type: i32) {
 
     world
         .manager
-        .new_modem(id, sink, Some(sim_type), None, Quirks::default())
+        .new_modem(id, sink, Some(sim_type), None, Quirks::default(), Vec::new())
         .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
@@ -83,7 +121,10 @@ pub fn given_cuttlefish_modem(world: &mut World, name: &str) {
     let (handler, sink) = MockModemHandler::new(false);
 
     let quirks = Quirks { is_cuttlefish: true, ..Default::default() };
-    world.manager.new_modem(id, sink, None, None, quirks).expect("Failed to create new modem");
+    world
+        .manager
+        .new_modem(id, sink, None, None, quirks, Vec::new())
+        .expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -120,7 +161,7 @@ pub fn given_modem_with_xml_profile(world: &mut World, name: &str, xml: &str) {
 
     world
         .manager
-        .new_modem(id, sink, None, Some(xml.to_string()), Quirks::default())
+        .new_modem(id, sink, None, Some(xml.to_string()), Quirks::default(), Vec::new())
         .expect("Failed to create new modem with XML profile");
     world.modems.insert(name.to_string(), (id, handler));
 }

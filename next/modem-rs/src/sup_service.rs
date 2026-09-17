@@ -138,7 +138,7 @@ impl SupService {
         toa: Option<TypeOfAddress>,
     ) -> SupResult {
         let toa = toa
-            .unwrap_or_else(|| number.as_ref().map(|n| n.toa()).unwrap_or(TypeOfAddress::National));
+            .unwrap_or_else(|| number.as_ref().map(|n| n.toa()).unwrap_or(TypeOfAddress::Unknown));
         let info = CallForwardingInfo { mode, number, toa };
 
         self.call_forwarding_info = Some(info);

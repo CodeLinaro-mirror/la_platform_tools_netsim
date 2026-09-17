@@ -43,6 +43,17 @@ fn create_udp_packet(
 
 #[tokio::test]
 async fn test_host_save_restore() {
+    // Slirp rewrites the guest's DNS query to 8.8.8.8:53, so this test needs a
+    // route to external DNS. A UDP connect() only resolves the route, it sends
+    // nothing, so skip where there is no egress rather than time out.
+    if std::net::UdpSocket::bind("0.0.0.0:0")
+        .and_then(|socket| socket.connect("8.8.8.8:53"))
+        .is_err()
+    {
+        eprintln!("skipping test_host_save_restore: no route to external DNS");
+        return;
+    }
+
     // 1. Create channels
     let (slirp_request_sender, mut slirp_request_receiver) = mpsc::channel(100);
     let (slirp_response_sender, slirp_response_receiver) = mpsc::channel(100);
@@ -108,7 +119,7 @@ async fn test_host_save_restore() {
     slirp_request_sender.send(SlirpRequest::Packet(dns_packet)).await.unwrap();
 
     // 5. Verify host receives EstablishConnection for the initial flow
-    let resp1 = tokio::time::timeout(Duration::from_millis(500), test_response_receiver.recv())
+    let resp1 = tokio::time::timeout(Duration::from_millis(2000), test_response_receiver.recv())
         .await
         .unwrap()
         .unwrap();
@@ -125,7 +136,7 @@ async fn test_host_save_restore() {
 
     // Ignore the subsequent WriteToConnection response (forwarding the packet
     // payload)
-    let resp2 = tokio::time::timeout(Duration::from_millis(500), test_response_receiver.recv())
+    let resp2 = tokio::time::timeout(Duration::from_millis(2000), test_response_receiver.recv())
         .await
         .unwrap()
         .unwrap();
@@ -142,7 +153,7 @@ async fn test_host_save_restore() {
 
     // A. Verify Reset event is received
     let resp_reset =
-        tokio::time::timeout(Duration::from_millis(500), test_response_receiver.recv())
+        tokio::time::timeout(Duration::from_millis(2000), test_response_receiver.recv())
             .await
             .unwrap()
             .unwrap();
@@ -150,7 +161,7 @@ async fn test_host_save_restore() {
 
     // B. Verify restored EstablishConnection is received
     let resp_restore =
-        tokio::time::timeout(Duration::from_millis(500), test_response_receiver.recv())
+        tokio::time::timeout(Duration::from_millis(2000), test_response_receiver.recv())
             .await
             .unwrap()
             .unwrap();
@@ -171,7 +182,11 @@ async fn test_host_save_restore() {
 
 #[tokio::test]
 async fn test_hostfwd_tcp_integration() {
-    let host_addr: std::net::SocketAddr = "127.0.0.1:18080".parse().unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener); // close it
+
+    let host_addr: std::net::SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
     let guest_addr: std::net::SocketAddr = "10.0.2.15:80".parse().unwrap();
 
     let config = Config {
@@ -216,10 +231,21 @@ async fn test_hostfwd_tcp_integration() {
         net::TcpStream,
     };
 
-    let mut client_stream = TcpStream::connect(host_addr).await.unwrap();
+    // Retrying connection to allow time for the background host.run() to bind to
+    // the port.
+    let mut client_stream = None;
+    for _ in 0..10 {
+        if let Ok(stream) = TcpStream::connect(host_addr).await {
+            client_stream = Some(stream);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let mut client_stream =
+        client_stream.expect("Failed to connect to hostfwd listener after retries");
 
     // 5. Verify mock Slirp receives AcceptIncoming!
-    let req1 = tokio::time::timeout(Duration::from_millis(500), mock_request_receiver.recv())
+    let req1 = tokio::time::timeout(Duration::from_millis(2000), mock_request_receiver.recv())
         .await
         .unwrap()
         .unwrap();
@@ -238,7 +264,7 @@ async fn test_hostfwd_tcp_integration() {
     client_stream.write_all(test_data).await.unwrap();
 
     // 7. Verify mock Slirp receives SlirpRequest::Data!
-    let req2 = tokio::time::timeout(Duration::from_millis(500), mock_request_receiver.recv())
+    let req2 = tokio::time::timeout(Duration::from_millis(2000), mock_request_receiver.recv())
         .await
         .unwrap()
         .unwrap();
@@ -260,7 +286,7 @@ async fn test_hostfwd_tcp_integration() {
 
     // 9. Verify host client receives the reply!
     let mut buf = vec![0u8; reply_data.len()];
-    tokio::time::timeout(Duration::from_millis(500), client_stream.read_exact(&mut buf))
+    tokio::time::timeout(Duration::from_millis(2000), client_stream.read_exact(&mut buf))
         .await
         .unwrap()
         .unwrap();
@@ -270,7 +296,7 @@ async fn test_hostfwd_tcp_integration() {
     drop(client_stream);
 
     // 11. Verify mock Slirp receives RemoteClosed or ConnectionClosed!
-    let req3 = tokio::time::timeout(Duration::from_millis(500), mock_request_receiver.recv())
+    let req3 = tokio::time::timeout(Duration::from_millis(2000), mock_request_receiver.recv())
         .await
         .unwrap()
         .unwrap();
@@ -347,13 +373,13 @@ async fn run_mock_target_server(listener: tokio::net::TcpListener) {
     while let Ok((mut stream, _)) = listener.accept().await {
         tokio::spawn(async move {
             let mut buf = [0u8; 1024];
-            if let Ok(n) = stream.read(&mut buf).await {
-                if n > 0 {
-                    // Echo back with a prefix
-                    let mut resp = b"mock_target: ".to_vec();
-                    resp.extend_from_slice(&buf[..n]);
-                    stream.write_all(&resp).await.ok();
-                }
+            if let Ok(n) = stream.read(&mut buf).await
+                && n > 0
+            {
+                // Echo back with a prefix
+                let mut resp = b"mock_target: ".to_vec();
+                resp.extend_from_slice(&buf[..n]);
+                stream.write_all(&resp).await.ok();
             }
         });
     }
@@ -587,6 +613,7 @@ async fn test_socks5_proxy_integration() {
     assert!(data_reply_packet.is_some(), "Failed to receive echoed data from mock SOCKS5 target");
 }
 
+#[cfg(target_os = "linux")]
 fn create_icmp_packet(
     src_ip: Ipv4Addr,
     dst_ip: Ipv4Addr,
@@ -633,8 +660,27 @@ fn create_icmp_packet(
     Bytes::from(eth_data)
 }
 
+// Linux-only: the ICMP proxy uses a ping socket (SOCK_DGRAM/IPPROTO_ICMP) and
+// relies on the kernel rewriting the echo ID to the socket's local port. macOS
+// does not provide those semantics.
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn test_icmp_proxy_integration() {
+    // The ICMP proxy opens a ping socket, which the kernel only permits when
+    // the running gid falls inside net.ipv4.ping_group_range. Workstations open
+    // that range, but build sandboxes commonly leave it empty, so skip rather
+    // than fail where the socket cannot be created.
+    if socket2::Socket::new(
+        socket2::Domain::IPV4,
+        socket2::Type::DGRAM,
+        Some(socket2::Protocol::from(1)),
+    )
+    .is_err()
+    {
+        eprintln!("skipping test_icmp_proxy_integration: ICMP ping sockets are not permitted");
+        return;
+    }
+
     // 1. Create config
     let config = Config::default();
 

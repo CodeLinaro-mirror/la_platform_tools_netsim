@@ -540,7 +540,7 @@ impl SmsService {
         let addr_str = address.as_str();
         if addr_str.is_empty() {
             self.smsc_address = None;
-            self.smsc_tosca = tosca.unwrap_or(TypeOfAddress::National);
+            self.smsc_tosca = tosca.unwrap_or(TypeOfAddress::Unknown);
         } else {
             let phone = addr_str
                 .parse::<PhoneNumber>()

@@ -54,21 +54,24 @@ pub fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
     }
 }
 
-// Convert Bytes to PacketResponse
+/// Converts incoming bytes into a `PacketResponse` protobuf message.
 pub fn bytes_to_packet_response(bytes: Bytes, is_bt: bool) -> Result<PacketResponse> {
-    if bytes.is_empty() {
-        return Err(PacketStreamError::InvalidConfig("Empty bytes".to_string()));
-    }
+    let (&type_byte, packet) = bytes
+        .split_first()
+        .ok_or_else(|| PacketStreamError::InvalidConfig("Empty bytes".to_string()))?;
     let mut res = PacketResponse::new();
     if is_bt {
+        let packet_type = PacketType::from_i32(type_byte.into()).ok_or_else(|| {
+            PacketStreamError::InvalidConfig(format!("Invalid HCI packet type: {type_byte}"))
+        })?;
         let hci_packet = HCIPacket {
-            packet_type: PacketType::from_i32(bytes[0].into()).unwrap().into(),
-            packet: bytes.slice(1..).to_vec(),
+            packet_type: packet_type.into(),
+            packet: packet.to_vec(),
             ..Default::default()
         };
         res.set_hci_packet(hci_packet);
     } else {
-        // Assume raw packet if type byte doesn't match
+        // Non-Bluetooth radios (Wi-Fi, UWB) encapsulate raw packet payloads
         res.set_packet(bytes.to_vec());
     }
     Ok(res)

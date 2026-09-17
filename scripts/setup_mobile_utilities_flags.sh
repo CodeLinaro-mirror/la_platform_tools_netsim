@@ -11,7 +11,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 else
     DEFAULT_SDK="${HOME}/Android/Sdk"
 fi
-SDK_DIR="${ANDROID_SDK_ROOT:-${DEFAULT_SDK}}"
+SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${DEFAULT_SDK}}}"
 ADB_BIN="${SDK_DIR}/platform-tools/adb"
 MOBUTILS_APK="${HOME}/Downloads/mobileutilities_binary.apk"
 
@@ -37,19 +37,19 @@ for DEV in "${DEVICES[@]}"; do
     "${ADB_BIN}" -s "$DEV" shell input keyevent KEYCODE_WAKEUP 2>/dev/null || true
     "${ADB_BIN}" -s "$DEV" shell wm dismiss-keyguard 2>/dev/null || true
 
-    # 2. Fix Wi-Fi & Private DNS for SLIRP NAT
-    echo "  [1/2] Enabling Wi-Fi and setting private DNS off..."
+    # 3. Fix Wi-Fi & Private DNS for SLIRP NAT
+    echo "  [1/5] Enabling Wi-Fi and setting private DNS off..."
     "${ADB_BIN}" -s "$DEV" shell svc wifi enable 2>/dev/null || true
     "${ADB_BIN}" -s "$DEV" shell settings put global private_dns_mode off 2>/dev/null || true
 
     # 3. Install Mobile Utilities APK if available
     if [ -f "$MOBUTILS_APK" ]; then
-        echo "  [2/3] Installing Mobile Utilities from $MOBUTILS_APK..."
+        echo "  [2/5] Installing Mobile Utilities from $MOBUTILS_APK..."
         "${ADB_BIN}" -s "$DEV" install -r -g "$MOBUTILS_APK" 2>/dev/null || true
     fi
 
     # 4. Override Phenotype flags for Nearby Sharing & Gesture Exchange
-    echo "  [3/3] Overriding Phenotype flags for Tap-to-Share & Gesture Exchange..."
+    echo "  [3/5] Overriding Phenotype flags for Tap-to-Share & Gesture Exchange..."
 
     # Gesture Exchange flags
     for PKG in "com.google.android.gms.gestureexchange#com.google.android.gms" "com.google.android.gms.gestureexchange"; do
