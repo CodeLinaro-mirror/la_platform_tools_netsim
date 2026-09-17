@@ -271,7 +271,7 @@ impl SmsService {
         self.messages.len()
     }
 
-    pub fn next_message_reference(&mut self) -> u8 {
+    fn next_message_reference(&mut self) -> u8 {
         let mr = self.message_reference;
         self.message_reference = self.message_reference.wrapping_add(1);
         mr
@@ -301,14 +301,14 @@ impl SmsService {
         sender: Option<&str>,
         destination: Option<PhoneNumber>,
     ) -> ExecutionResult {
-        let message_reference = self.next_message_reference();
-        let actions = if self.message_format == MessageFormat::Text {
+        let (message_reference, actions) = if self.message_format == MessageFormat::Text {
             let to = destination.map(String::from).unwrap_or_default();
             let text = String::from_utf8_lossy(pdu).into_owned();
-            vec![CommandAction::ReceiveTextSms { to, text }]
+            let mr = self.next_message_reference();
+            (mr, vec![CommandAction::ReceiveTextSms { to, text }])
         } else {
-            match self.handle_sms_body(pdu, sender, message_reference) {
-                Ok(actions) => actions,
+            match self.handle_sms_pdu(pdu, sender) {
+                Ok(result) => result,
                 Err(err) => return err,
             }
         };
@@ -316,6 +316,28 @@ impl SmsService {
         let responses =
             vec![Response::Sms(SmsResponse::SendSms { message_reference }), Response::Ok];
         ExecutionResult::Success(HandledCommand { responses, actions })
+    }
+
+    fn handle_sms_pdu(
+        &mut self,
+        pdu: &[u8],
+        sender: Option<&str>,
+    ) -> Result<(u8, Vec<CommandAction>), ExecutionResult> {
+        let raw_pdu = crate::pdu::decode_hex_pdu(pdu)?;
+        let _parsed = SubmitPdu::parse(&raw_pdu)
+            .map_err(|_err| crate::types::CmsError::InvalidPduParameter)?;
+        // TS 27.005 § 3.5.1 reports <mr> only on success; allocate reference once
+        // accepted.
+        let mr = self.next_message_reference();
+        let processed = crate::pdu::process_outgoing_sms(&raw_pdu, sender, mr);
+        Ok((
+            mr,
+            vec![CommandAction::ReceiveSms {
+                to: processed.to,
+                pdu: processed.pdu,
+                status_report: processed.status_report,
+            }],
+        ))
     }
 
     pub fn handle_prompt_input(
@@ -348,28 +370,6 @@ impl SmsService {
         };
 
         Some(exec_res)
-    }
-
-    pub fn handle_sms_body(
-        &self,
-        pdu: &[u8],
-        sender: Option<&str>,
-        message_reference: u8,
-    ) -> Result<Vec<CommandAction>, ExecutionResult> {
-        if self.message_format == MessageFormat::Text {
-            let text = std::str::from_utf8(pdu).unwrap_or_default().to_string();
-            Ok(vec![CommandAction::ReceiveTextSms { to: String::new(), text }])
-        } else {
-            let raw_pdu = crate::pdu::decode_hex_pdu(pdu)?;
-            let _parsed = SubmitPdu::parse(&raw_pdu)
-                .map_err(|_err| crate::types::CmsError::InvalidPduParameter)?;
-            let processed = crate::pdu::process_outgoing_sms(&raw_pdu, sender, message_reference);
-            Ok(vec![CommandAction::ReceiveSms {
-                to: processed.to,
-                pdu: processed.pdu,
-                status_report: processed.status_report,
-            }])
-        }
     }
 
     fn allocate_me_slot(&self) -> Option<usize> {
@@ -491,12 +491,12 @@ impl SmsService {
     }
 
     pub fn handle_wait_for_send_sms(&mut self, args: SendSmsArgs) -> SmsResult {
-        match args {
-            SendSmsArgs::Text { da, .. } => {
-                let destination = da
-                    .as_str()
-                    .parse::<PhoneNumber>()
-                    .map_err(|_err| ExecutionResult::cms_error(CmsError::InvalidPduParameter))?;
+        match (self.message_format, args) {
+            (MessageFormat::Text, SendSmsArgs::Text { destination_address, .. }) => {
+                let destination =
+                    destination_address.as_str().parse::<PhoneNumber>().map_err(|_err| {
+                        ExecutionResult::cms_error(CmsError::InvalidTextModeParameter)
+                    })?;
                 self.transaction_state = SmsTransactionState::Sending {
                     destination: Some(destination),
                     // TODO(b/558794976): Calculate the actual GSM 7-bit packing limit rather
@@ -504,9 +504,16 @@ impl SmsService {
                     expected_len: 160,
                 };
             }
-            SendSmsArgs::Pdu { length } => {
+            (MessageFormat::Pdu, SendSmsArgs::Pdu { length }) => {
                 self.transaction_state =
                     SmsTransactionState::Sending { destination: None, expected_len: length };
+            }
+            // TS 27.005 § 3.5.1: the argument shape must match the active <mode>.
+            (MessageFormat::Text, SendSmsArgs::Pdu { .. }) => {
+                return Err(CmsError::InvalidTextModeParameter.into());
+            }
+            (MessageFormat::Pdu, SendSmsArgs::Text { .. }) => {
+                return Err(CmsError::InvalidPduParameter.into());
             }
         }
         Ok(SmsSuccess::new(Some(SmsResponse::Prompt {

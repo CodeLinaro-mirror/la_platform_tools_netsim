@@ -696,8 +696,8 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Sms(SmsCommand::SendSms(SendSmsArgs::Text {
-                da: QuotedString("+1234567890"),
-                toda: None,
+                destination_address: QuotedString("+1234567890"),
+                type_of_destination_address: None,
             }))
         );
 
@@ -707,8 +707,8 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Sms(SmsCommand::SendSms(SendSmsArgs::Text {
-                da: QuotedString("+1234567890"),
-                toda: Some(TypeOfAddress::International),
+                destination_address: QuotedString("+1234567890"),
+                type_of_destination_address: Some(TypeOfAddress::International),
             }))
         );
     }
