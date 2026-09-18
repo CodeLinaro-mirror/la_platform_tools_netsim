@@ -159,12 +159,12 @@ fn test_enter_data_state() {
     );
     then_wait_for_response_containing(&mut world, "A", "OK");
 
-    // Omitted L2P defaults to PPP
-    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={TEST_PDP_CID}"));
-    then_response_is(&mut world, "A", "CONNECT");
-
     // Explicit valid L2P "PPP"
     when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"PPP\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Omitted L2P defaults to PPP
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=,{TEST_PDP_CID}"));
     then_response_is(&mut world, "A", "CONNECT");
 
     // Explicit valid L2P "IP"
@@ -173,6 +173,10 @@ fn test_enter_data_state() {
 
     // Unsupported L2P returns error
     when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"INVALID\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Bare CID without L2P slot is rejected
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={TEST_PDP_CID}"));
     then_response_is(&mut world, "A", "ERROR");
 }
 

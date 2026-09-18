@@ -321,3 +321,24 @@ fn test_set_clir() {
     then_response_is(&mut world, "A", "+CLIR: 1,1");
     then_response_is(&mut world, "A", "OK");
 }
+
+#[test]
+fn test_facility_lock_unquoted_password_rejected() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
+    then_response_is(&mut world, "A", "OK");
+
+    // Unquoted password must be rejected as a syntax error
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"SC\",1,1");
+    then_response_is(&mut world, "A", "+CME ERROR: 50");
+
+    // Explicitly empty password slot is accepted by parser (fails in execution)
+    when_at_command_sent(&mut world, "A", "AT+CLCK=\"SC\",1,,1");
+    then_response_is(&mut world, "A", "+CME ERROR: 16");
+
+    // Valid quoted password succeeds
+    when_at_command_sent(&mut world, "A", &format!("AT+CLCK=\"SC\",1,\"{TEST_PIN}\",1"));
+    then_response_is(&mut world, "A", "OK");
+}
