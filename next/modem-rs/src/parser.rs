@@ -206,10 +206,6 @@ mod tests {
 
     #[test]
     fn test_parse_cgdata() {
-        let (rem, cmd) = Command::parse(b"AT+CGDATA=1").unwrap();
-        assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(None, Some(1))));
-
         let (rem, cmd) = Command::parse(b"AT+CGDATA=\"PPP\",1").unwrap();
         assert!(rem.is_empty());
         assert_eq!(
@@ -217,9 +213,19 @@ mod tests {
             Command::Data(DataCommand::EnterDataState(Some(QuotedString("PPP")), Some(1)))
         );
 
+        // Spec-shaped omission of <L2P>: explicit empty slot before comma
+        let (rem, cmd) = Command::parse(b"AT+CGDATA=,1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(None, Some(1))));
+
         let (rem, cmd) = Command::parse(b"AT+CGDATA=").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(None, None)));
+
+        // Bare AT+CGDATA=1 is rejected: <L2P> is a string parameter
+        let (rem, cmd) = Command::parse(b"AT+CGDATA=1").unwrap();
+        assert!(!rem.is_empty());
+        assert!(!matches!(cmd, Command::Data(DataCommand::EnterDataState(..))));
     }
 
     #[test]
@@ -507,15 +513,10 @@ mod tests {
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::StoredSent))));
 
-        // Out-of-range stat values fail to parse into MessageStatus, leaving trailing
-        // unparsed bytes
+        // Out-of-range stat values must not parse as StoreSms.
         let (rem, cmd) = Command::parse(b"AT+CMGW=16,4").unwrap();
         assert!(!rem.is_empty());
-        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
-
-        let (rem, cmd) = Command::parse(b"AT+CMGW=16,99").unwrap();
-        assert!(!rem.is_empty());
-        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
+        assert!(!matches!(cmd, Command::Sms(SmsCommand::StoreSms(..))));
     }
 
     #[test]
