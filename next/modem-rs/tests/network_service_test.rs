@@ -490,24 +490,28 @@ fn test_set_ctec() {
 #[test]
 fn test_set_ctec_invalid() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    world.given_modem("A");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
 
-    // Invalid current tech (99 is not supported)
-    when_at_command_sent(&mut world, "A", "AT+CTEC=99,\"21\"");
-    then_response_is(&mut world, "A", "ERROR");
+    world.send_and_expect("A", "AT+CTEC=32,\"21\"", &["+CTEC: DONE", "OK"]);
+    world.send_and_expect("A", "AT+CTEC?", &["+CTEC: 32,21", "OK"]);
+    world.send_and_expect_error("A", "AT+CTEC=5,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect_error("A", "AT+CTEC=99,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect_error("A", "AT+CTEC=1,\"80\"", "+CME ERROR: 50");
+    world.send_and_expect_error("A", "AT+CTEC=4,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect_error("A", "AT+CTEC=8,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect_error("A", "AT+CTEC=16,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect("A", "AT+CTEC=1,\"4\"", &["+CTEC: DONE", "OK"]);
 
-    // Invalid preferred mask (0x80 has bit 7 set which is unsupported in any tier)
-    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"80\"");
-    then_response_is(&mut world, "A", "ERROR");
-
-    // Invalid preferred mask (0x4 is CDMA, which is not in SUPPORTED_CTEC_TECHS)
-    when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"4\"");
-    then_response_is(&mut world, "A", "ERROR");
-
-    // Invalid current tech (5 is index, but we expect mask. 5 as mask is 0b101
-    // which is invalid)
-    when_at_command_sent(&mut world, "A", "AT+CTEC=5,\"21\"");
-    then_response_is(&mut world, "A", "ERROR");
+    world.given_goldfish_37_modem("GF");
+    world.send_and_expect_ok("GF", "AT+CMEE=1");
+    world.send_and_expect("GF", "AT+CTEC=1,\"21\"", &["+CTEC: DONE", "OK"]);
+    world.send_and_expect("GF", "AT+CTEC?", &["+CTEC: 2,21", "OK"]);
+    world.send_and_expect_error("GF", "AT+CTEC=2,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect_error("GF", "AT+CTEC=3,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect_error("GF", "AT+CTEC=4,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect("GF", "AT+CTEC=5,\"21\"", &["+CTEC: DONE", "OK"]);
+    world.send_and_expect("GF", "AT+CTEC?", &["+CTEC: 32,21", "OK"]);
 }
 
 #[test]

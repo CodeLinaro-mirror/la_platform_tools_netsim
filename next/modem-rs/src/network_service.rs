@@ -58,7 +58,7 @@ pub enum NetworkCommand<'a> {
     #[command(tag = "AT+CTEC=?")]
     QuerySupportedNetworkTechnology,
     #[command(tag = "AT+CTEC=")]
-    SetNetworkTechnology(CtecTechnology, Option<CtecPreferredMask>),
+    SetNetworkTechnology(u8, Option<CtecPreferredMask>),
 }
 
 const DUMMY_LAC: &str = "2142";
@@ -215,6 +215,8 @@ impl std::fmt::Display for NetworkResponse {
             NetworkResponse::Ctec { current, preferred } => {
                 write!(f, "+CTEC: {current},{preferred:X}\r\n")
             }
+            // Goldfish RIL (`radio-service.ranchu`) expects AT+CTEC=? to advertise technology bit
+            // indices (indexing into kTechsBitmask) rather than bitmasks.
             NetworkResponse::CtecSupported(techs) => {
                 let tech_strs: Vec<String> =
                     techs.iter().map(|t| (*t as u8).trailing_zeros().to_string()).collect();
@@ -735,14 +737,20 @@ impl NetworkService {
     ) -> NetworkResult {
         let preferred_mask = preferred.unwrap_or(CtecPreferredMask(0));
         info!("handle_set_ctec: current={current}, preferred_mask={:#X}", preferred_mask.0);
-        self.current_network_mode = current;
-        self.preferred_network_mode = preferred_mask;
-        self.act = match current {
+
+        let new_act = match current {
             CtecTechnology::Gsm => AccessTechnology::Gsm,
             CtecTechnology::Wcdma => AccessTechnology::Wcdma,
             CtecTechnology::Lte => AccessTechnology::Lte,
             CtecTechnology::Nr => AccessTechnology::Nr,
+            CtecTechnology::Cdma | CtecTechnology::Evdo | CtecTechnology::Tdscdma => {
+                return Err(ExecutionResult::cme_error(CmeError::IncorrectParameters));
+            }
         };
+
+        self.current_network_mode = current;
+        self.preferred_network_mode = preferred_mask;
+        self.act = new_act;
         info!("handle_set_ctec: updated self.act to {}", self.act);
 
         let urcs = if self.is_attached { self.tech_change_urcs() } else { Vec::new() };
@@ -865,8 +873,9 @@ impl NetworkService {
             }
             NetworkCommand::QueryCurrentNetworkTechnology => self.handle_query_current_ctec(),
             NetworkCommand::QuerySupportedNetworkTechnology => self.handle_query_supported_ctec(),
-            NetworkCommand::SetNetworkTechnology(current, preferred) => {
-                self.handle_set_ctec(*current, *preferred)
+            NetworkCommand::SetNetworkTechnology(raw_current, preferred) => {
+                CtecTechnology::from_wire(*raw_current, self.quirks)
+                    .and_then(|current| self.handle_set_ctec(current, *preferred))
             }
         };
         res.into()
