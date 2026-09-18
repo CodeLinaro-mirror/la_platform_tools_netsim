@@ -942,3 +942,19 @@ fn test_cts_network_selection_mode_flow_standard() {
 
     world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,\"{TEST_PLMN}\""), "OK"]);
 }
+
+#[test]
+fn test_cops_auto_register_without_sim_remains_unregistered() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.when_sim_status("A", false);
+    world.then_response_contains("A", "+CPIN: ABSENT");
+    world.send_and_expect_ok("A", "AT+CREG=1");
+    world.send_and_expect_ok("A", "AT+CGREG=1");
+    world.send_and_expect_ok("A", "AT+CFUN=1");
+
+    world.send_and_expect_ok("A", "AT+COPS=0");
+    world.send_and_expect("A", "AT+CREG?", &["+CREG: 1,0", "OK"]);
+    world.send_and_expect("A", "AT+CGREG?", &["+CGREG: 1,0", "OK"]);
+}

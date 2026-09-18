@@ -10,7 +10,7 @@ use netsim_model::{CellNetworkConfig, Quirks};
 use nom::IResult;
 
 use crate::{
-    modem::ModemImpl,
+    RadioAdmission,
     parser::QuotedString,
     types::{
         CmeError, ExecutionResult, Layer2Protocol, PacketEventReportingMode, Parsable,
@@ -317,10 +317,7 @@ impl Default for DataService {
 impl DataService {
     // --- Helper methods for external services ---
 
-    pub fn on_update_physical_channel_configs(
-        &self,
-        _context: &ModemImpl,
-    ) -> Vec<crate::modem::ModemEffect> {
+    pub fn on_update_physical_channel_configs(&self) -> Vec<crate::modem::ModemEffect> {
         vec![crate::modem::ModemEffect::Response(b"+CGEV: NW PDN DEACT 1\r\n".to_vec())]
     }
 
@@ -387,7 +384,23 @@ impl DataService {
         }
     }
 
-    pub fn handle_set_pdp_context_activate(&mut self, cid: u8, state: bool) -> DataResult {
+    fn check_data_admission(&self, radio: &impl RadioAdmission) -> Result<(), CmeError> {
+        radio.can_originate_data()?;
+        if !self.ps_attached {
+            return Err(CmeError::NetworkNotAttachedDueToMTFunctionalRestrictions);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn handle_set_pdp_context_activate(
+        &mut self,
+        cid: u8,
+        state: bool,
+        radio: &impl RadioAdmission,
+    ) -> DataResult {
+        if state {
+            self.check_data_admission(radio)?;
+        }
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.active = state;
             Ok(None)
@@ -430,11 +443,13 @@ impl DataService {
         if self.pdp_contexts.contains_key(&cid) { Ok(None) } else { Err(ExecutionResult::error()) }
     }
 
-    pub fn handle_enter_data_state(
+    pub(crate) fn handle_enter_data_state(
         &self,
         l2p: Option<QuotedString<'_>>,
         cid: Option<u8>,
+        radio: &impl RadioAdmission,
     ) -> DataResult {
+        self.check_data_admission(radio)?;
         if l2p.is_some_and(|l| l.as_str().parse::<Layer2Protocol>().is_err()) {
             return Err(ExecutionResult::error());
         }
@@ -507,7 +522,12 @@ impl DataService {
         }
     }
 
-    pub fn handle_gprs_dial(&mut self, number: &str) -> DataResult {
+    pub(crate) fn handle_gprs_dial(
+        &mut self,
+        number: &str,
+        radio: &impl RadioAdmission,
+    ) -> DataResult {
+        self.check_data_admission(radio)?;
         if let Some(context) =
             parse_cid_from_gprs_dial(number).and_then(|cid| self.pdp_contexts.get_mut(&cid))
         {
@@ -517,7 +537,11 @@ impl DataService {
         Err(ExecutionResult::error())
     }
 
-    pub fn execute<'a>(&mut self, command: &DataCommand<'a>) -> ExecutionResult {
+    pub(crate) fn execute<'a>(
+        &mut self,
+        command: &DataCommand<'a>,
+        radio_service: &impl RadioAdmission,
+    ) -> ExecutionResult {
         let result: DataResult = match command {
             DataCommand::DefinePdpContext(cid, pdp_type, apn, ..) => {
                 self.handle_define_pdp_context(*cid, *pdp_type, *apn)
@@ -546,13 +570,15 @@ impl DataService {
                 self.handle_query_qos(QosType::RequestedGprs)
             }
             DataCommand::SetPdpContextActivate(args) => {
-                self.handle_set_pdp_context_activate(args.cid, args.state)
+                self.handle_set_pdp_context_activate(args.cid, args.state, radio_service)
             }
             DataCommand::QueryPdpContextActivate => self.handle_query_pdp_context_activate(),
             DataCommand::SetPsAttach(state) => self.handle_set_ps_attach(*state),
             DataCommand::QueryPsAttach => self.handle_query_ps_attach(),
             DataCommand::SetPdpContextModify(cid) => self.handle_set_pdp_context_modify(*cid),
-            DataCommand::EnterDataState(l2p, cid) => self.handle_enter_data_state(*l2p, *cid),
+            DataCommand::EnterDataState(l2p, cid) => {
+                self.handle_enter_data_state(*l2p, *cid, radio_service)
+            }
             DataCommand::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
             DataCommand::ShowPdpAddress(cid) => self.handle_show_pdp_address(*cid),
             DataCommand::ReadDynamicParam(cid) => self.handle_read_dynamic_param(*cid),
@@ -589,7 +615,7 @@ mod tests {
     use std::net::{Ipv4Addr, Ipv6Addr};
 
     use super::*;
-    use crate::{parser::QuotedString, types::Response};
+    use crate::{parser::QuotedString, tests::test_utils::MockRadioAdmission, types::Response};
 
     #[test]
     fn test_data_service_dial_direct() {
@@ -598,7 +624,8 @@ mod tests {
         assert!(res.is_ok());
 
         // Dial
-        let res: ExecutionResult = service.handle_gprs_dial("*99***1#").into();
+        let res: ExecutionResult =
+            service.handle_gprs_dial("*99***1#", &MockRadioAdmission::default()).into();
         if let ExecutionResult::Success(handled) = res {
             assert_eq!(handled.responses, vec![Response::Data(DataResponse::Connect)]);
         } else {
@@ -613,11 +640,13 @@ mod tests {
         assert!(res.is_ok());
 
         // Dial malformed alphanumeric CID
-        let res: ExecutionResult = service.handle_gprs_dial("*99*abc#").into();
+        let res: ExecutionResult =
+            service.handle_gprs_dial("*99*abc#", &MockRadioAdmission::default()).into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
 
         // Dial empty trailing CID
-        let res: ExecutionResult = service.handle_gprs_dial("*99*#").into();
+        let res: ExecutionResult =
+            service.handle_gprs_dial("*99*#", &MockRadioAdmission::default()).into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
     }
 
