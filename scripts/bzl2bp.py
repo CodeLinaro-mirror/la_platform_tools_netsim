@@ -691,9 +691,7 @@ def netsim_rust_library(
       if is_test_package_allowed(package_name):
         integ_dict = {
             "type": "rust_test_host",
-            "name": (
-                f"{prefix}{name.replace('-', '_')}_integration_tests"
-            ),
+            "name": f"{prefix}{name.replace('-', '_')}_integration_tests",
             "crate_name": f"{crate_name}_tests",
             "crate_root": crate_root,
             "srcs": sorted(list(set(integration_test_srcs))),
