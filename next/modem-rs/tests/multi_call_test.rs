@@ -796,3 +796,140 @@ fn test_active_conference_with_waiting_call_release_and_accept() {
     // Verify: Only Call 3 (D) is Active with mpty=0, Calls 1 & 2 are gone
     world.assert_clcc("A", &["+CLCC: 3,1,0,0,0,444"]);
 }
+
+#[test]
+fn test_ath_rejects_waiting_preserves_active_e2e() {
+    let mut world = World::new();
+    world.given_modem_with_number("A", "333");
+    world.given_modem_with_number("B", "111");
+    world.given_modem_with_number("C", "222");
+
+    // A calls B, B answers (Active)
+    world.connect_call("A", "B");
+
+    // C calls A, A gets CCWA (Waiting)
+    world.dial("C", "A");
+
+    // ATH: User Determined User Busy (rejects waiting call C, preserves active call
+    // B)
+    world.send_and_expect_ok("A", "ATH");
+
+    // C gets hangup URC
+    then_wait_for_response_containing(&mut world, "C", "RING");
+
+    // Verify B is still Active on A
+    world.assert_clcc("A", &["+CLCC: 1,0,0,0,0,111"]);
+}
+
+#[test]
+fn test_ath_drops_active_preserves_held_e2e() {
+    let mut world = World::new();
+    world.given_modem_with_number("A", "333");
+    world.given_modem_with_number("B", "111");
+    world.given_modem_with_number("C", "222");
+
+    // A connects to B
+    world.connect_call("A", "B");
+
+    // A holds B and calls C
+    world.send_and_expect_ok("A", "ATD222;");
+    then_wait_for_response_containing(&mut world, "B", "RING");
+    then_wait_for_response_containing(&mut world, "C", "RING");
+    world.answer("C", "A");
+
+    // Now A has B (Held) and C (Active)
+    world.assert_clcc("A", &["+CLCC: 1,0,1,0,0,111", "+CLCC: 2,0,0,0,0,222"]);
+
+    // ATH: Terminate foreground call (C), preserving held call (B)
+    world.send_and_expect_ok("A", "ATH");
+
+    // C gets hangup URC
+    then_wait_for_response_containing(&mut world, "C", "RING");
+
+    // B remains Held on A
+    world.assert_clcc("A", &["+CLCC: 1,0,1,0,0,111"]);
+}
+
+#[test]
+fn test_ata_auto_holds_active_call_e2e() {
+    let mut world = World::new();
+    world.given_modem_with_number("A", "333");
+    world.given_modem_with_number("B", "111");
+    world.given_modem_with_number("C", "222");
+
+    // A calls B, B answers (Active)
+    world.connect_call("A", "B");
+
+    // C calls A, A gets CCWA (Waiting)
+    world.dial("C", "A");
+
+    // ATA: Answering waiting call C automatically puts active call B on hold
+    world.send_and_expect_ok("A", "ATA");
+
+    // B gets hold URC
+    then_wait_for_response_containing(&mut world, "B", "RING");
+    // C gets connect URC
+    then_wait_for_response_containing(&mut world, "C", "RING");
+
+    // Verify on A: Call 1 (B) is Held (state 1), Call 2 (C) is Active (state 0)
+    world.assert_clcc("A", &["+CLCC: 1,0,1,0,0,111", "+CLCC: 2,1,0,0,0,222"]);
+}
+
+#[test]
+fn test_chld_0_rejects_waiting_preserves_held_e2e() {
+    let mut world = World::new();
+    world.given_modem_with_number("A", "333");
+    world.given_modem_with_number("B", "111");
+    world.given_modem_with_number("C", "222");
+
+    // A calls B, B answers (Active)
+    world.connect_call("A", "B");
+
+    // A puts B on hold
+    world.send_and_expect_ok("A", "AT+CHLD=2");
+    then_wait_for_response_containing(&mut world, "B", "RING");
+
+    // C calls A (Inbound/Waiting)
+    world.dial("C", "A");
+
+    // Under 3GPP TS 27.007 § 7.13 / TS 22.030 § 4.5.5.1:
+    // AT+CHLD=0 sets UDUB on waiting call C, preserving held call B
+    world.send_and_expect_ok("A", "AT+CHLD=0");
+
+    // Only waiting caller C receives hangup URC
+    then_wait_for_response_containing(&mut world, "C", "RING");
+
+    // B remains Held on A
+    world.assert_clcc("A", &["+CLCC: 1,0,1,0,0,111"]);
+}
+
+#[test]
+fn test_ath_teardown_multiparty_conference_e2e() {
+    let mut world = World::new();
+    world.given_modem_with_number("A", "333");
+    world.given_modem_with_number("B", "111");
+    world.given_modem_with_number("C", "222");
+
+    // A connects to B
+    world.connect_call("A", "B");
+
+    // A holds B and calls C
+    world.send_and_expect_ok("A", "ATD222;");
+    then_wait_for_response_containing(&mut world, "B", "RING");
+    then_wait_for_response_containing(&mut world, "C", "RING");
+    world.answer("C", "A");
+
+    // A joins B and C into 3-way conference
+    world.send_and_expect_ok("A", "AT+CHLD=3");
+    world.assert_clcc("A", &["+CLCC: 1,0,0,0,1,111", "+CLCC: 2,0,0,0,1,222"]);
+
+    // ATH: Drops all active foreground conference legs
+    world.send_and_expect_ok("A", "ATH");
+
+    // Both B and C receive hangup URC
+    then_wait_for_response_containing(&mut world, "B", "RING");
+    then_wait_for_response_containing(&mut world, "C", "RING");
+
+    // Call list on A is completely empty
+    world.assert_clcc("A", &[]);
+}

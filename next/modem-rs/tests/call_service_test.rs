@@ -828,6 +828,6 @@ fn test_empty_call_list_teardown_idempotency() {
     // Conference on empty call list should return ERROR
     world.send_and_expect_error("A", "AT+CHLD=3", "ERROR");
 
-    // ATH on idle modem returns ERROR
-    world.send_and_expect_error("A", "ATH", "ERROR");
+    // ATH on idle modem succeeds idempotently with OK (3GPP TS 22.030 §4.5.5.1)
+    world.send_and_expect_ok("A", "ATH");
 }
