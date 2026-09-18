@@ -10,10 +10,23 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "netsim_rest_api",
     edition = "2024",
-    enable_integration_test = False,
-    enable_unit_test = False,
+    proc_macro_test_deps = [
+        "@async-trait",
+    ],
+    test_deps = [
+        "//next/actor-framework",
+    ],
     deps = [
+        "//next/ap-actor",
+        "//next/device-actor",
+        "//next/link-api",
         "//next/model",
+        "@http-body-util",
+        "@hyper",
+        "@hyper-util",
         "@serde",
+        "@serde_json",
+        "@tokio",
+        "@tracing",
     ],
 )

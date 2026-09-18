@@ -228,6 +228,7 @@ IGNORED_TARGETS = {
     "http-proxy",
 }
 ALLOWED_TESTING_TARGETS = {
+    "rest-api",
     "nfc-actor",
     "device-actor",
     "actor-framework",
