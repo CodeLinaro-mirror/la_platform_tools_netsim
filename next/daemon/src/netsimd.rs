@@ -103,7 +103,7 @@ async fn handle_new_connection(
     device_guid: String,
 ) {
     let device_name = chip_info.device_name();
-    info!("Handling new connection for {:?}, device {}", chip_info.name, device_name);
+    info!("Handling new connection for {chip_info}");
     let device_config = DeviceConfig {
         name: device_name.clone(),
         visible: true,
@@ -198,7 +198,7 @@ async fn handle_new_connection(
         ChipKind::NFC => Some(netsim_model::ChipVariant::Nfc(netsim_model::Nfc::default())),
         ChipKind::ETHERNET | ChipKind::CELLULAR_DATA => None,
         kind => {
-            error!("Unsupported chip kind: {kind:?}");
+            error!("Unsupported chip kind: {kind}");
             return;
         }
     };
@@ -1361,5 +1361,71 @@ mod tests {
 
         // Case 4: CLI arg is None, environment variable is not present
         assert_eq!(resolve_port_with_env(None, "NOT_PRESENT", mock_env), None);
+    }
+
+    #[tokio::test]
+    async fn test_handle_new_connection_missing_chip() {
+        let (_runner, device_client) = device_actor::new();
+        let (_capture_runner, capture_client) = capture_actor::new();
+        let stream: PacketStream = Box::pin(futures::stream::empty());
+        let sink: PacketSink =
+            Box::pin(futures::sink::drain().sink_map_err(|never| match never {}));
+        let chip_info = ChipInfo { name: "test-device".to_string(), chip: None, device_info: None };
+        handle_new_connection(
+            device_client,
+            capture_client,
+            Arc::new(AtomicU32::new(1)),
+            stream,
+            sink,
+            chip_info,
+            "guid-1".to_string(),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_handle_new_connection_unsupported_kind() {
+        let (_runner, device_client) = device_actor::new();
+        let (_capture_runner, capture_client) = capture_actor::new();
+        let stream: PacketStream = Box::pin(futures::stream::empty());
+        let sink: PacketSink =
+            Box::pin(futures::sink::drain().sink_map_err(|never| match never {}));
+        let chip_info = ChipInfo {
+            name: "test-device".to_string(),
+            chip: Some(packet_stream::Chip::new(ChipKind::UNSPECIFIED, "unsupported")),
+            device_info: None,
+        };
+        handle_new_connection(
+            device_client,
+            capture_client,
+            Arc::new(AtomicU32::new(1)),
+            stream,
+            sink,
+            chip_info,
+            "guid-2".to_string(),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_handle_new_connection_add_chip_error() {
+        let (runner, device_client) = device_actor::new();
+        let (_capture_runner, capture_client) = capture_actor::new();
+        // Dropping runner ensures device_client.add_chip fails with Send error
+        drop(runner);
+        let stream: PacketStream = Box::pin(futures::stream::empty());
+        let sink: PacketSink =
+            Box::pin(futures::sink::drain().sink_map_err(|never| match never {}));
+        let chip_info = ChipInfo::new("Pixel 9", ChipKind::BLUETOOTH);
+        handle_new_connection(
+            device_client,
+            capture_client,
+            Arc::new(AtomicU32::new(1)),
+            stream,
+            sink,
+            chip_info,
+            "guid-3".to_string(),
+        )
+        .await;
     }
 }
