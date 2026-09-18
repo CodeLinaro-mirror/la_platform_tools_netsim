@@ -83,7 +83,7 @@ impl ModemImpl {
             network_service: NetworkService::new(quirks, home_plmn),
             sms_service: SmsService::new(quirks),
             stk_service: StkService::new(profile.stk.clone()),
-            sup_service: SupService::default(),
+            sup_service: SupService::new(quirks),
             misc_service,
             call_service: CallService::default(),
             data_service: DataService::new(network_configs),

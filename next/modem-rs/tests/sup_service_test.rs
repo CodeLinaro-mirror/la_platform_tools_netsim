@@ -92,13 +92,8 @@ fn test_cancel_ussd() {
 #[test]
 fn test_call_forwarding() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(
-        &mut world,
-        "A",
-        &format!("AT+CCFC=1,1,\"{TEST_SMSC}\",{},20", TOA_INTERNATIONAL),
-    );
-    then_response_is(&mut world, "A", "OK");
+    world.given_modem("A");
+    world.send_and_expect_ok("A", &format!("AT+CCFC=1,1,\"{TEST_SMSC}\",{TOA_INTERNATIONAL},20"));
 }
 
 // Scenario: Query CLIR
@@ -149,31 +144,161 @@ fn test_query_facility_lock() {
 }
 
 #[test]
-fn test_call_forward_utility() {
+fn test_call_forward_utility_registration_and_query() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CMEE=1");
-    then_response_is(&mut world, "A", "OK");
-    when_at_command_sent(
-        &mut world,
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", &format!("AT+CCFCU=0,3,2,2,\"{CALL_PEER_ALT}\",1,\"\",\"\",,1"));
+    world.send_and_expect(
         "A",
-        &format!("AT+CCFCU=0,3,2,{},\"{CALL_PEER_ALT}\",1,\"\",\"\",,1", TOA_NATIONAL),
+        "AT+CCFCU=0,2,2,2,\"\",1",
+        &[&format!("+CCFCU: 1,1,2,2,\"{CALL_PEER_ALT}\""), "OK"],
     );
-    then_response_is(&mut world, "A", CME_ERROR_OPERATION_NOT_SUPPORTED);
 }
 
 #[test]
-fn test_call_forward_utility_cmee_disabled() {
+fn test_call_forward_utility_cfnr_time() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+CMEE=0");
-    then_response_is(&mut world, "A", "OK");
-    when_at_command_sent(
-        &mut world,
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", &format!("AT+CCFCU=2,3,2,1,\"{CALL_PEER_ALT}\",1,\"\",\"\",,20"));
+    world.send_and_expect(
         "A",
-        &format!("AT+CCFCU=0,3,2,{},\"{CALL_PEER_ALT}\",1,\"\",\"\",,1", TOA_NATIONAL),
+        "AT+CCFCU=2,2,2,1,\"\",1",
+        &[&format!("+CCFCU: 1,1,2,1,\"{CALL_PEER_ALT}\",,,20"), "OK"],
     );
-    then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_call_forward_utility_enable_disable_erasure() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", &format!("AT+CCFCU=1,3,2,2,\"{CALL_PEER_ALT}\",1"));
+    world.send_and_expect_ok("A", "AT+CCFCU=1,0");
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=1,2,2,2,\"\",1",
+        &[&format!("+CCFCU: 0,1,2,2,\"{CALL_PEER_ALT}\""), "OK"],
+    );
+    world.send_and_expect_ok("A", "AT+CCFCU=1,1");
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=1,2,2,2,\"\",1",
+        &[&format!("+CCFCU: 1,1,2,2,\"{CALL_PEER_ALT}\""), "OK"],
+    );
+    world.send_and_expect_ok("A", "AT+CCFCU=1,4");
+    world.send_and_expect("A", "AT+CCFCU=1,2,2,2,\"\",1", &["+CCFCU: 0,1,2,129,\"\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_all_and_conditional_queries() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", &format!("AT+CCFCU=5,3,2,1,\"{CALL_PEER_ALT}\",1,\"\",\"\",,15"));
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=5,2,2,1,\"\",1",
+        &[
+            &format!("+CCFCU: 1,1,2,1,\"{CALL_PEER_ALT}\""),
+            &format!("+CCFCU: 1,1,2,1,\"{CALL_PEER_ALT}\",,,15"),
+            &format!("+CCFCU: 1,1,2,1,\"{CALL_PEER_ALT}\""),
+            "OK",
+        ],
+    );
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=4,2,2,2,\"\",1",
+        &[
+            "+CCFCU: 0,1,2,129,\"\"",
+            &format!("+CCFCU: 1,1,2,1,\"{CALL_PEER_ALT}\""),
+            &format!("+CCFCU: 1,1,2,1,\"{CALL_PEER_ALT}\",,,15"),
+            &format!("+CCFCU: 1,1,2,1,\"{CALL_PEER_ALT}\""),
+            "OK",
+        ],
+    );
+}
+
+#[test]
+fn test_call_forwarding_registration_query_toa_inference() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFC=0,3,\"+15551234\"");
+    world.send_and_expect("A", "AT+CCFC=0,2", &["+CCFC: 1,1,\"+15551234\",145", "OK"]);
+}
+
+#[test]
+fn test_call_forwarding_cfnr_time() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect("A", "AT+CCFC=2,2", &["+CCFC: 0,1,\"\",129,,,20", "OK"]);
+    world.send_and_expect_ok("A", "AT+CCFC=2,3,\"12345\",129,1,,,20");
+    world.send_and_expect("A", "AT+CCFC=2,2", &["+CCFC: 1,1,\"12345\",129,,,20", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_untouched_query() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 0,1,2,129,\"\"", "OK"]);
+    world.send_and_expect("A", "AT+CCFCU=2,2", &["+CCFCU: 0,1,2,129,\"\",,,20", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_class_echo() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect("A", "AT+CCFCU=0,2,2,2,\"\",2", &["+CCFCU: 0,2,2,129,\"\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_erasure_all_conditional() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", &format!("AT+CCFCU=5,3,2,1,\"{CALL_PEER_ALT}\",1,\"\",\"\",,15"));
+    world.send_and_expect_ok("A", "AT+CCFCU=5,4");
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=5,2",
+        &["+CCFCU: 0,1,2,129,\"\"", "+CCFCU: 0,1,2,129,\"\",,,20", "+CCFCU: 0,1,2,129,\"\"", "OK"],
+    );
+}
+
+#[test]
+fn test_call_forward_utility_ims_tel_uri_unknown_toa() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    let uri = "tel:1234;phone-context=ims.mnc001.mcc001.3gppnetwork.org";
+    world.send_and_expect_ok("A", &format!("AT+CCFCU=0,3,1,0,\"{uri}\",1"));
+    world.send_and_expect("A", "AT+CCFCU=0,2", &[&format!("+CCFCU: 1,1,1,0,\"{uri}\""), "OK"]);
+}
+
+#[test]
+fn test_call_forwarding_empty_number_registration_keeps_address() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFC=0,3,\"+15551234\",145");
+    world.send_and_expect_ok("A", "AT+CCFC=0,3");
+    world.send_and_expect("A", "AT+CCFC=0,2", &["+CCFC: 1,1,\"+15551234\",145", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_empty_number_registration_keeps_address() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    let uri = "tel:1234;phone-context=ims.mnc001.mcc001.3gppnetwork.org";
+    world.send_and_expect_ok("A", &format!("AT+CCFCU=0,3,1,0,\"{uri}\",1"));
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &[&format!("+CCFCU: 1,1,1,0,\"{uri}\""), "OK"]);
 }
 
 #[test]
@@ -341,4 +466,300 @@ fn test_facility_lock_unquoted_password_rejected() {
     // Valid quoted password succeeds
     when_at_command_sent(&mut world, "A", &format!("AT+CLCK=\"SC\",1,\"{TEST_PIN}\",1"));
     then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_call_forwarding_time_range_validation() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_error("A", "AT+CCFC=2,3,\"1234\",129,1,,,0", "+CME ERROR: 50");
+    world.send_and_expect_error("A", "AT+CCFC=2,3,\"1234\",129,1,,,31", "+CME ERROR: 50");
+    world.send_and_expect_error("A", "AT+CCFC=2,3,\"1234\",129,1,,,300", "+CME ERROR: 50");
+
+    world.send_and_expect_ok("A", "AT+CCFC=2,3,\"1234\",129,1,,,1");
+    world.send_and_expect("A", "AT+CCFC=2,2", &["+CCFC: 1,1,\"1234\",129,,,1", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+CCFC=2,3,\"1234\",129,1,,,30");
+    world.send_and_expect("A", "AT+CCFC=2,2", &["+CCFC: 1,1,\"1234\",129,,,30", "OK"]);
+}
+
+#[test]
+fn test_call_forwarding_registration_without_number_requires_prior_registration() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_error("A", "AT+CCFC=0,3", "+CME ERROR: 50");
+    world.send_and_expect_ok("A", "AT+CCFC=0,3,\"12345\"");
+    world.send_and_expect_ok("A", "AT+CCFC=0,3");
+    world.send_and_expect("A", "AT+CCFC=0,2", &["+CCFC: 1,1,\"12345\",129", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_fanout_registration_without_number_atomic() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,1,\"12345\"");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,0");
+    world.send_and_expect_ok("A", "AT+CCFCU=2,3,2,1,\"67890\",1,\"\",\"\",,20");
+    world.send_and_expect_ok("A", "AT+CCFCU=2,0");
+    world.send_and_expect_error("A", "AT+CCFCU=4,3", "+CME ERROR: 50");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 0,1,2,1,\"12345\"", "OK"]);
+    world.send_and_expect("A", "AT+CCFCU=2,2", &["+CCFCU: 0,1,2,1,\"67890\",,,20", "OK"]);
+    world.send_and_expect("A", "AT+CCFCU=1,2", &["+CCFCU: 0,1,2,129,\"\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_uri_ton_conversion_to_ccfc() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,1,0,\"tel:+123456789\",1");
+    world.send_and_expect("A", "AT+CCFC=0,2", &["+CCFC: 1,1,\"tel:+123456789\",129", "OK"]);
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,1,0,\"tel:+123456789\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_ton_echo() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,1,\"12345\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,1,\"12345\"", "OK"]);
+    world.send_and_expect("A", "AT+CCFC=0,2", &["+CCFC: 1,1,\"12345\",145", "OK"]);
+
+    world.send_and_expect_error("A", "AT+CCFCU=0,3,2,145,\"+12345\"", "+CME ERROR: 50");
+
+    let mut goldfish_world = World::new();
+    goldfish_world.given_goldfish_37_modem("A");
+    goldfish_world.send_and_expect_ok("A", "AT+CMEE=1");
+    goldfish_world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,145,\"+12345\"");
+    goldfish_world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,145,\"+12345\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_enable_disable_updates_number_when_supplied() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,1,\"11111\"");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,1,2,2,\"22222\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,2,\"22222\"", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,0,2,1,\"33333\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 0,1,2,1,\"33333\"", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,1");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,1,\"33333\"", "OK"]);
+}
+
+#[test]
+fn test_call_forwarding_trailing_garbage_rejected() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_error("A", "AT+CCFC=0,3,\"+15551234\"JUNK", "+CME ERROR: 50");
+    world.send_and_expect("A", "AT+CCFC=0,2", &["+CCFC: 0,1,\"\",129", "OK"]);
+}
+
+#[test]
+fn test_call_forward_enable_does_not_update_time() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=2,3,2,1,\"12345\",1,\"\",\"\",,20");
+    world.send_and_expect_ok("A", "AT+CCFCU=2,1,2,1,\"12345\",1,\"\",\"\",,30");
+    world.send_and_expect("A", "AT+CCFCU=2,2", &["+CCFCU: 1,1,2,1,\"12345\",,,20", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+CCFC=2,3,\"67890\",129,1,,,20");
+    world.send_and_expect_ok("A", "AT+CCFC=2,1,\"67890\",129,1,,,30");
+    world.send_and_expect("A", "AT+CCFC=2,2", &["+CCFC: 1,1,\"67890\",129,,,20", "OK"]);
+}
+
+#[test]
+fn test_call_forward_enable_empty_number_without_registration_fails() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_error("A", "AT+CCFC=0,1", "+CME ERROR: 50");
+    world.send_and_expect_ok("A", "AT+CCFC=0,3,\"12345\"");
+    world.send_and_expect_ok("A", "AT+CCFC=0,0");
+    world.send_and_expect_ok("A", "AT+CCFC=0,1");
+    world.send_and_expect("A", "AT+CCFC=0,2", &["+CCFC: 1,1,\"12345\",129", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_enable_empty_number_without_registration_fails() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_error("A", "AT+CCFCU=0,1", "+CME ERROR: 50");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,1,\"12345\"");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,0");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,1");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,1,\"12345\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_enable_with_inline_number_succeeds() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,1,2,1,\"12345\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,1,\"12345\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_erasure_resets_timer_to_default_20() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=2,3,2,1,\"12345\",1,\"\",\"\",,15");
+    world.send_and_expect("A", "AT+CCFCU=2,2", &["+CCFCU: 1,1,2,1,\"12345\",,,15", "OK"]);
+    world.send_and_expect_ok("A", "AT+CCFCU=2,4");
+    world.send_and_expect("A", "AT+CCFCU=2,2", &["+CCFCU: 0,1,2,129,\"\",,,20", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_novalidinfo_with_number_rejected() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_error("A", "AT+CCFCU=0,3,0,1,\"12345\"", "+CME ERROR: 50");
+}
+
+#[test]
+fn test_call_forward_utility_novalidinfo_without_number_allowed() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,1,\"12345\"");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,0,1,\"\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,1,\"12345\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_uri_with_nonzero_ton_rejected() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_error(
+        "A",
+        "AT+CCFCU=0,3,1,145,\"sip:alice@example.com\"",
+        "+CME ERROR: 50",
+    );
+}
+
+#[test]
+fn test_call_forward_utility_uri_with_zero_ton_accepted() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,1,0,\"sip:alice@example.com\"");
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=0,2",
+        &["+CCFCU: 1,1,1,0,\"sip:alice@example.com\"", "OK"],
+    );
+}
+
+#[test]
+fn test_call_forward_utility_uri_with_default_octet_129_accepted() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,1,129,\"sip:bob@example.com\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,1,0,\"sip:bob@example.com\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_type_toggle_preserves_digits() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,1,\"12345\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,1,\"12345\"", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,1,0,\"\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,1,0,\"12345\"", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,1,\"\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 1,1,2,1,\"12345\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_compound_enable_atomicity() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,1,\"12345\"");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,0");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 0,1,2,1,\"12345\"", "OK"]);
+
+    world.send_and_expect_error("A", "AT+CCFCU=4,1", "+CME ERROR: 50");
+    world.send_and_expect("A", "AT+CCFCU=0,2", &["+CCFCU: 0,1,2,1,\"12345\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_goldfish_enable_wire_format() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,129,\"12345\",1,\"\"");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,1,2,129,\"12345\",1,\"\"");
+    world.send_and_expect("A", "AT+CCFCU=0,2,2,129,\"\",1", &["+CCFCU: 1,1,2,129,\"12345\"", "OK"]);
+}
+
+#[test]
+fn test_call_forward_utility_goldfish_registration_with_time_wire_format() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=2,3,2,129,\"12345\",1,\"\",\"\",,25");
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=2,2,2,129,\"\",1",
+        &["+CCFCU: 1,1,2,129,\"12345\",,,25", "OK"],
+    );
+}
+
+#[test]
+fn test_call_forward_utility_goldfish_international_toa_wire_format() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,2,145,\"+12345\",1,\"\"");
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=0,2,2,145,\"\",1",
+        &["+CCFCU: 1,1,2,145,\"+12345\"", "OK"],
+    );
+}
+
+#[test]
+fn test_call_forward_utility_novalidinfo_does_not_relabel_uri() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,1,0,\"sip:alice@example.com\"");
+    world.send_and_expect_ok("A", "AT+CCFCU=0,3,0,129,\"\"");
+    world.send_and_expect(
+        "A",
+        "AT+CCFCU=0,2",
+        &["+CCFCU: 1,1,1,0,\"sip:alice@example.com\"", "OK"],
+    );
 }
