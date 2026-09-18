@@ -26,7 +26,7 @@ fn test_cops_query() {
 
     // 1. Default should be format 2 (numeric)
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", &format!("+COPS: 0,2,{TEST_PLMN}"));
+    then_response_is(&mut world, "A", &format!("+COPS: 0,2,\"{TEST_PLMN}\""));
     then_response_is(&mut world, "A", "OK");
 
     // 2. Set format to 0 (long alphanumeric)
@@ -71,7 +71,7 @@ fn test_cops_modes() {
 
     // Query should show mode 2
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 2,2,0");
+    then_response_is(&mut world, "A", "+COPS: 2");
     then_response_is(&mut world, "A", "OK");
 
     // 2. Test Auto Register (AT+COPS=0)
@@ -81,7 +81,7 @@ fn test_cops_modes() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", &format!("+COPS: 0,2,{TEST_PLMN}"));
+    then_response_is(&mut world, "A", &format!("+COPS: 0,2,\"{TEST_PLMN}\""));
     then_response_is(&mut world, "A", "OK");
 
     // 3. Test Manual Register to wrong operator (AT+COPS=1,2,"123456")
@@ -92,7 +92,7 @@ fn test_cops_modes() {
 
     // Query should show mode 1 (retains Manual mode per 3GPP TS 27.007 § 7.3)
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 1,2,0");
+    then_response_is(&mut world, "A", "+COPS: 1");
     then_response_is(&mut world, "A", "OK");
 
     // 4. Test Manual Register to correct operator (AT+COPS=1,0,"Android Virtual
@@ -158,7 +158,7 @@ fn test_cops_manual_with_act() {
 
     world.send_and_expect_error("A", &format!("AT+COPS=1,2,\"{INVALID_PLMN}\",7"), "ERROR");
     world.send_and_expect("A", "AT+CTEC?", &["+CTEC: 2,40", "OK"]);
-    world.send_and_expect("A", "AT+COPS?", &["+COPS: 1,2,0", "OK"]);
+    world.send_and_expect("A", "AT+COPS?", &["+COPS: 1", "OK"]);
 
     world.send_and_expect_error("A", &format!("AT+COPS=1,2,\"{TEST_PLMN}\",99"), "ERROR");
     world.send_and_expect("A", "AT+CTEC?", &["+CTEC: 2,40", "OK"]);
@@ -436,7 +436,7 @@ fn test_query_operator_all_formats() {
     when_at_command_sent(&mut world, "A", "AT+COPS=3,0;+COPS?;+COPS=3,1;+COPS?;+COPS=3,2;+COPS?");
     then_response_is(&mut world, "A", &format!("+COPS: 0,0,\"{TEST_OPERATOR_LONG}\""));
     then_response_is(&mut world, "A", &format!("+COPS: 0,1,\"{TEST_OPERATOR_SHORT}\""));
-    then_response_is(&mut world, "A", &format!("+COPS: 0,2,{TEST_PLMN}"));
+    then_response_is(&mut world, "A", &format!("+COPS: 0,2,\"{TEST_PLMN}\""));
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -457,14 +457,14 @@ fn test_query_current_ctec() {
 // Scenario: Query Supported Network Technology Modes (AT+CTEC=?)
 //   Given a modem "A"
 //   When AT command "AT+CTEC=?" is sent to "A"
-//   Then response from "A" is "+CTEC: 0,1,5,6"
+//   Then response from "A" is "+CTEC: 0,1,5"
 //   And response from "A" is "OK"
 #[test]
 fn test_query_supported_ctec() {
     let mut world = World::new();
     given_modem(&mut world, "A");
     when_at_command_sent(&mut world, "A", "AT+CTEC=?");
-    then_response_is(&mut world, "A", "+CTEC: 0,1,5,6");
+    then_response_is(&mut world, "A", "+CTEC: 0,1,5");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -506,11 +506,9 @@ fn test_set_ctec_invalid() {
     world.given_goldfish_37_modem("GF");
     world.send_and_expect_ok("GF", "AT+CMEE=1");
     world.send_and_expect("GF", "AT+CTEC=1,\"21\"", &["+CTEC: DONE", "OK"]);
-    world.send_and_expect("GF", "AT+CTEC?", &["+CTEC: 2,21", "OK"]);
-    world.send_and_expect_error("GF", "AT+CTEC=2,\"21\"", "+CME ERROR: 50");
-    world.send_and_expect_error("GF", "AT+CTEC=3,\"21\"", "+CME ERROR: 50");
-    world.send_and_expect_error("GF", "AT+CTEC=4,\"21\"", "+CME ERROR: 50");
-    world.send_and_expect("GF", "AT+CTEC=5,\"21\"", &["+CTEC: DONE", "OK"]);
+    world.send_and_expect("GF", "AT+CTEC?", &["+CTEC: 1,21", "OK"]);
+    world.send_and_expect_error("GF", "AT+CTEC=5,\"21\"", "+CME ERROR: 50");
+    world.send_and_expect("GF", "AT+CTEC=32,\"21\"", &["+CTEC: DONE", "OK"]);
     world.send_and_expect("GF", "AT+CTEC?", &["+CTEC: 32,21", "OK"]);
 }
 
@@ -519,8 +517,8 @@ fn test_set_ctec_multi_byte_priority() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    // Multi-byte priority masks (e.g. 0x201 = 1st priority GSM (1), 2nd priority
-    // WCDMA (2))
+    // Multi-byte priority masks (e.g. 0x201 = 1st priority GSM (1), 2nd
+    // priority WCDMA (2))
     when_at_command_sent(&mut world, "A", "AT+CTEC=1,\"201\"");
     then_response_is(&mut world, "A", "+CTEC: DONE");
     then_response_is(&mut world, "A", "OK");
@@ -573,8 +571,8 @@ fn test_set_ctec_wcdma_and_urc() {
     // 2. Switch technology to WCDMA (current mode = 2, preferred mask = 0x21)
     when_at_command_sent(&mut world, "A", "AT+CTEC=2,\"21\"");
 
-    // Verify CTEC response and the IMMEDIATE unsolicited URCs showing WCDMA act =
-    // 2!
+    // Verify CTEC response and the IMMEDIATE unsolicited URCs showing WCDMA act
+    // = 2!
     then_response_is(&mut world, "A", "+CTEC: DONE");
     then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",2"));
     then_response_is(&mut world, "A", &format!("+CGREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",2"));
@@ -643,14 +641,14 @@ fn test_csq_nr_technology() {
     when_at_command_sent(&mut world, "A", "AT+CTEC=64,\"21\"");
     then_response_is(&mut world, "A", "+CTEC: DONE");
 
-    // Verify it triggers URC with CREG = 1 and new technology NR (11)
-    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",11"));
-    then_response_is(&mut world, "A", RESP_CSQ_NR_DEFAULT);
+    // Verify it triggers URC with CREG = 1 and technology clamped to LTE (7)
+    then_response_is(&mut world, "A", &format!("+CREG: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"));
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
     then_response_is(&mut world, "A", "OK");
 
-    // 3. Query CSQ, verify LTE fields are max and NR field (16) is 20!
+    // 3. Query CSQ, verify LTE fields are reported
     when_at_command_sent(&mut world, "A", "AT+CSQ");
-    then_response_is(&mut world, "A", RESP_CSQ_NR_DEFAULT);
+    then_response_is(&mut world, "A", RESP_CSQ_LTE_DEFAULT);
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -747,8 +745,8 @@ fn test_network_registration_queries() {
             &[&format!("+{cmd}: 1,\"{TEST_LAC}\",\"{TEST_CID}\",7"), "OK"],
         );
 
-        // Query status (should show mode 2, status 1, LAC "2142", CID "0000B804", act 7
-        // (LTE))
+        // Query status (should show mode 2, status 1, LAC "2142", CID
+        // "0000B804", act 7 (LTE))
         world.send_and_expect(
             "A",
             &format!("AT+{cmd}?"),
@@ -809,8 +807,7 @@ fn test_legacy_creg_format() {
 
     // 1. Query CREG with default unsol_mode (0)
     when_at_command_sent(&mut world, "A", "AT+CREG?");
-    // Should return full format even with unsol_mode=0
-    then_response_is(&mut world, "A", "+CREG: 0,0,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "+CREG: 0,0");
     then_response_is(&mut world, "A", "OK");
 
     // 2. Enable unsolicited reports (mode 1)
@@ -839,6 +836,31 @@ fn test_legacy_creg_format() {
     // Should return full format with unsol_mode=1
     then_response_is(&mut world, "A", "+CREG: 1,1,\"2142\",\"0000B804\",7");
     then_response_is(&mut world, "A", "OK");
+
+    world.send_and_expect_ok("A", "AT+CREG=0");
+    world.send_and_expect("A", "AT+CREG?", &["+CREG: 0,1,\"2142\",\"0000B804\",7", "OK"]);
+
+    world.send_and_expect("A", "AT+CFUN=0", &["+CGREG: 0", "+CEREG: 0", "OK"]);
+    world.send_and_expect("A", "AT+CREG?", &["+CREG: 0,0", "OK"]);
+}
+
+#[test]
+fn test_unregistered_suppresses_location_tokens() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CREG=2");
+    world.send_and_expect("A", "AT+CREG?", &["+CREG: 2,0", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+CFUN=1");
+    world.when_time_advances_ms(10);
+    world.then_response_is("A", "+CREG: 1,\"2142\",\"0000B804\",7");
+    world.then_response_is("A", RESP_CSQ_LTE_DEFAULT);
+
+    world.send_and_expect("A", "AT+CREG?", &["+CREG: 2,1,\"2142\",\"0000B804\",7", "OK"]);
+
+    world.send_and_expect("A", "AT+CFUN=0", &["+CREG: 0", "OK"]);
+    world.send_and_expect("A", "AT+CREG?", &["+CREG: 2,0", "OK"]);
 }
 
 #[test]
@@ -858,20 +880,15 @@ fn test_cts_network_selection_mode_flow_goldfish_37() {
     world.then_response_is("A", "+CEREG: 1,\"2142\",\"0000B804\",7");
     world.then_response_is("A", RESP_CSQ_LTE_DEFAULT);
 
-    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,{TEST_PLMN}"), "OK"]);
+    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,\"{TEST_PLMN}\""), "OK"]);
 
     world.send_and_expect(
         "A",
         &format!("AT+COPS=1,2,\"{INVALID_PLMN}\""),
-        &[
-            "+CREG: 3,\"2142\",\"0000B804\",7",
-            "+CGREG: 3,\"2142\",\"0000B804\",7",
-            "+CEREG: 3,\"2142\",\"0000B804\",7",
-            "OK",
-        ],
+        &["+CREG: 3", "+CGREG: 3", "+CEREG: 3", "OK"],
     );
 
-    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 1,2,\"{TEST_PLMN}\""), "OK"]);
+    world.send_and_expect("A", "AT+COPS?", &["+COPS: 1,2,\"\"", "OK"]);
 
     world.send_and_expect(
         "A",
@@ -885,7 +902,7 @@ fn test_cts_network_selection_mode_flow_goldfish_37() {
         ],
     );
 
-    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,{TEST_PLMN}"), "OK"]);
+    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,\"{TEST_PLMN}\""), "OK"]);
 }
 
 #[test]
@@ -906,7 +923,7 @@ fn test_cts_network_selection_mode_flow_standard() {
     world.then_response_is("A", "+CEREG: 1");
     world.then_response_is("A", RESP_CSQ_LTE_DEFAULT);
 
-    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,{TEST_PLMN}"), "OK"]);
+    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,\"{TEST_PLMN}\""), "OK"]);
 
     world.send_and_expect(
         "A",
@@ -914,7 +931,7 @@ fn test_cts_network_selection_mode_flow_standard() {
         &["+CREG: 3", "+CGREG: 3", "+CEREG: 3", "+CME ERROR: 30"],
     );
 
-    world.send_and_expect("A", "AT+COPS?", &["+COPS: 1,2,0", "OK"]);
+    world.send_and_expect("A", "AT+COPS?", &["+COPS: 1", "OK"]);
 
     world.send_and_expect(
         "A",
@@ -922,5 +939,5 @@ fn test_cts_network_selection_mode_flow_standard() {
         &["+CREG: 1", "+CGREG: 1", "+CEREG: 1", RESP_CSQ_LTE_DEFAULT, "OK"],
     );
 
-    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,{TEST_PLMN}"), "OK"]);
+    world.send_and_expect("A", "AT+COPS?", &[&format!("+COPS: 0,2,\"{TEST_PLMN}\""), "OK"]);
 }

@@ -10,7 +10,7 @@ use netsim_model::{Quirks, RegistrationStatus};
 use tracing::{info, warn};
 
 use crate::{
-    constants::{DEFAULT_OPERATOR_NAME_LONG, DEFAULT_OPERATOR_NAME_SHORT, DEFAULT_PLMN},
+    constants::{DEFAULT_OPERATOR_NAME_LONG, DEFAULT_OPERATOR_NAME_SHORT},
     parser::QuotedString,
     types::{
         AccessTechnology, AidlSignalStrength, CmeError, CopsFormat, CopsMode, CtecPreferredMask,
@@ -83,6 +83,19 @@ impl std::fmt::Display for OperatorInfo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistrationLocation {
+    pub lac: String,
+    pub cid: String,
+    pub act: AccessTechnology,
+}
+
+impl std::fmt::Display for RegistrationLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\",\"{}\",{}", self.lac, self.cid, self.act)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistrationType {
     Voice,
@@ -90,14 +103,28 @@ pub enum RegistrationType {
     Lte,
 }
 
+impl RegistrationType {
+    pub const fn as_prefix(&self) -> &'static str {
+        match self {
+            RegistrationType::Voice => "+CREG",
+            RegistrationType::Data => "+CGREG",
+            RegistrationType::Lte => "+CEREG",
+        }
+    }
+}
+
+impl std::fmt::Display for RegistrationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_prefix())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkUrc {
     Registration {
         reg_type: RegistrationType,
         status: RegistrationStatus,
-        lac: Option<String>,
-        cid: Option<String>,
-        act: Option<AccessTechnology>,
+        location: Option<RegistrationLocation>,
     },
     SignalQuality(AidlSignalStrength),
 }
@@ -105,17 +132,12 @@ pub enum NetworkUrc {
 impl std::fmt::Display for NetworkUrc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NetworkUrc::Registration { reg_type, status, lac, cid, act } => {
-                let prefix = match reg_type {
-                    RegistrationType::Voice => "+CREG",
-                    RegistrationType::Data => "+CGREG",
-                    RegistrationType::Lte => "+CEREG",
-                };
+            NetworkUrc::Registration { reg_type, status, location } => {
                 let stat = *status as u8;
-                if let (Some(lac), Some(cid), Some(act)) = (lac, cid, act) {
-                    write!(f, "{prefix}: {stat},\"{lac}\",\"{cid}\",{act}\r\n")
+                if let Some(loc) = location {
+                    write!(f, "{reg_type}: {stat},{loc}\r\n")
                 } else {
-                    write!(f, "{prefix}: {stat}\r\n")
+                    write!(f, "{reg_type}: {stat}\r\n")
                 }
             }
             NetworkUrc::SignalQuality(ss) => write!(f, "+CSQ: {ss}\r\n"),
@@ -137,10 +159,7 @@ pub enum NetworkResponse {
         reg_type: RegistrationType,
         unsol_mode: RegistrationUnsolicitedMode,
         status: RegistrationStatus,
-        lac: Option<String>,
-        cid: Option<String>,
-        act: Option<AccessTechnology>,
-        quirks: Quirks,
+        location: Option<RegistrationLocation>,
     },
     Ctec {
         current: CtecTechnology,
@@ -167,49 +186,28 @@ impl std::fmt::Display for NetworkResponse {
                         CopsFormat::ShortAlphanumeric => {
                             write!(f, "+COPS: {mode},1,\"{DEFAULT_OPERATOR_NAME_SHORT}\"\r\n")
                         }
-                        CopsFormat::Numeric => write!(f, "+COPS: {mode},2,{plmn}\r\n"),
+                        CopsFormat::Numeric => write!(f, "+COPS: {mode},2,\"{plmn}\"\r\n"),
                     }
-                } else if quirks.goldfish_ril_37_or_earlier && *format == CopsFormat::Numeric {
-                    // Legacy Goldfish RIL (SDK 37 and earlier) parses numeric format 2 as
-                    // operatorNumeric. Returning "+COPS: <mode>,2,0" sets
-                    // operatorNumeric to "0" (length 1), causing legacy RIL
-                    // to crash with std::out_of_range in operatorNumeric.substr(0, 3). Returning
-                    // DEFAULT_PLMN ("310260") ensures operatorNumeric has at
-                    // least 3 characters and avoids the RIL crash.
-                    write!(f, "+COPS: {mode},2,\"{DEFAULT_PLMN}\"\r\n")
+                } else if quirks.goldfish_ril_37_or_earlier {
+                    // Legacy Goldfish RIL (SDK <= 37) AtResponse::COPS::parse
+                    // expects 3 fields across compound
+                    // queries (AT+COPS=3,0;+COPS?;+COPS=3,
+                    // 1;+COPS?;+COPS=3,2;+COPS?)
+                    // and fails on standard single-field "+COPS: <mode>".
+                    // Emitting empty quotes strips to empty
+                    // operator strings with RadioError::NONE.
+                    write!(f, "+COPS: {mode},{format},\"\"\r\n")
                 } else {
-                    write!(f, "+COPS: {mode},{format},0\r\n")
+                    write!(f, "+COPS: {mode}\r\n")
                 }
             }
             NetworkResponse::SignalQuality(ss) => write!(f, "+CSQ: {ss}\r\n"),
-            NetworkResponse::RegistrationQuery {
-                reg_type,
-                unsol_mode,
-                status,
-                lac,
-                cid,
-                act,
-                quirks,
-            } => {
-                let prefix = match reg_type {
-                    RegistrationType::Voice => "+CREG",
-                    RegistrationType::Data => "+CGREG",
-                    RegistrationType::Lte => "+CEREG",
-                };
+            NetworkResponse::RegistrationQuery { reg_type, unsol_mode, status, location } => {
                 let stat = *status as u8;
-                let force_location_info = quirks.goldfish_ril_37_or_earlier;
-                if *unsol_mode == RegistrationUnsolicitedMode::EnableWithLocation
-                    || force_location_info
-                {
-                    let lac_str = lac.as_deref().unwrap_or(DUMMY_LAC);
-                    let cid_str = cid.as_deref().unwrap_or(DUMMY_CID);
-                    let act_val = act.unwrap_or(AccessTechnology::Lte);
-                    write!(
-                        f,
-                        "{prefix}: {unsol_mode},{stat},\"{lac_str}\",\"{cid_str}\",{act_val}\r\n",
-                    )
+                if let Some(loc) = location {
+                    write!(f, "{reg_type}: {unsol_mode},{stat},{loc}\r\n")
                 } else {
-                    write!(f, "{prefix}: {unsol_mode},{stat}\r\n")
+                    write!(f, "{reg_type}: {unsol_mode},{stat}\r\n")
                 }
             }
             NetworkResponse::Ctec { current, preferred } => {
@@ -577,7 +575,8 @@ impl NetworkService {
                     self.data_registration = RegistrationStatus::Denied;
                     urcs = self.all_registration_urcs();
 
-                    // Legacy Goldfish RIL treats CME 30 as an invalid argument (b/495634151).
+                    // Legacy Goldfish RIL treats CME 30 as an invalid argument
+                    // (b/495634151).
                     if self.quirks.goldfish_ril_37_or_earlier {
                         if urcs.is_empty() {
                             Ok(None)
@@ -686,16 +685,33 @@ impl NetworkService {
         }
     }
 
+    fn should_include_location(
+        &self,
+        unsol_mode: RegistrationUnsolicitedMode,
+        status: RegistrationStatus,
+    ) -> bool {
+        (unsol_mode == RegistrationUnsolicitedMode::EnableWithLocation
+            || self.quirks.goldfish_ril_37_or_earlier)
+            && status.is_registered()
+    }
+
+    fn registration_location(
+        &self,
+        unsol_mode: RegistrationUnsolicitedMode,
+        status: RegistrationStatus,
+    ) -> Option<RegistrationLocation> {
+        self.should_include_location(unsol_mode, status).then(|| RegistrationLocation {
+            lac: DUMMY_LAC.to_string(),
+            cid: DUMMY_CID.to_string(),
+            act: self.act,
+        })
+    }
+
     fn handle_query_registration(&self, reg_type: RegistrationType) -> NetworkResult {
-        Ok(Some(NetworkResponse::RegistrationQuery {
-            reg_type,
-            unsol_mode: self.unsol_mode(reg_type),
-            status: self.registration_status(reg_type),
-            lac: Some(DUMMY_LAC.to_string()),
-            cid: Some(DUMMY_CID.to_string()),
-            act: Some(self.act),
-            quirks: self.quirks,
-        }))
+        let unsol_mode = self.unsol_mode(reg_type);
+        let status = self.registration_status(reg_type);
+        let location = self.registration_location(unsol_mode, status);
+        Ok(Some(NetworkResponse::RegistrationQuery { reg_type, unsol_mode, status, location }))
     }
 
     fn handle_set_registration(
@@ -742,7 +758,9 @@ impl NetworkService {
             CtecTechnology::Gsm => AccessTechnology::Gsm,
             CtecTechnology::Wcdma => AccessTechnology::Wcdma,
             CtecTechnology::Lte => AccessTechnology::Lte,
-            CtecTechnology::Nr => AccessTechnology::Nr,
+            // TODO(b/564626830): Clamp to LTE until %CGFPCCFG physical channel configs are
+            // supported.
+            CtecTechnology::Nr => AccessTechnology::Lte,
             CtecTechnology::Cdma | CtecTechnology::Evdo | CtecTechnology::Tdscdma => {
                 return Err(ExecutionResult::cme_error(CmeError::IncorrectParameters));
             }
@@ -795,22 +813,12 @@ impl NetworkService {
         reg_type: RegistrationType,
         status: RegistrationStatus,
     ) -> Option<NetworkUrc> {
-        let force_location_info = self.quirks.goldfish_ril_37_or_earlier;
         let unsol_mode = self.unsol_mode(reg_type);
         if unsol_mode == RegistrationUnsolicitedMode::Disable {
             None
-        } else if unsol_mode == RegistrationUnsolicitedMode::EnableWithLocation
-            || force_location_info
-        {
-            Some(NetworkUrc::Registration {
-                reg_type,
-                status,
-                lac: Some(DUMMY_LAC.to_string()),
-                cid: Some(DUMMY_CID.to_string()),
-                act: Some(self.act),
-            })
         } else {
-            Some(NetworkUrc::Registration { reg_type, status, lac: None, cid: None, act: None })
+            let location = self.registration_location(unsol_mode, status);
+            Some(NetworkUrc::Registration { reg_type, status, location })
         }
     }
 
@@ -874,10 +882,59 @@ impl NetworkService {
             NetworkCommand::QueryCurrentNetworkTechnology => self.handle_query_current_ctec(),
             NetworkCommand::QuerySupportedNetworkTechnology => self.handle_query_supported_ctec(),
             NetworkCommand::SetNetworkTechnology(raw_current, preferred) => {
-                CtecTechnology::from_wire(*raw_current, self.quirks)
+                CtecTechnology::from_wire(*raw_current)
                     .and_then(|current| self.handle_set_ctec(current, *preferred))
             }
         };
         res.into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cops_query_registered_numeric() {
+        let response = NetworkResponse::OperatorQuery {
+            is_registered: true,
+            mode: CopsMode::Automatic,
+            format: CopsFormat::Numeric,
+            plmn: "310260".to_string(),
+            quirks: Quirks::default(),
+        };
+        assert_eq!(format!("{response}"), "+COPS: 0,2,\"310260\"\r\n");
+    }
+
+    #[test]
+    fn test_cops_query_unregistered_standard() {
+        let quirks = Quirks { goldfish_ril_37_or_earlier: false, ..Default::default() };
+        let response = NetworkResponse::OperatorQuery {
+            is_registered: false,
+            mode: CopsMode::Automatic,
+            format: CopsFormat::Numeric,
+            plmn: "310260".to_string(),
+            quirks,
+        };
+        assert_eq!(format!("{response}"), "+COPS: 0\r\n");
+    }
+
+    #[test]
+    fn test_cops_query_unregistered_goldfish_37_compound_queries() {
+        let quirks = Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() };
+        for (fmt, expected_fmt_code) in [
+            (CopsFormat::LongAlphanumeric, "0"),
+            (CopsFormat::ShortAlphanumeric, "1"),
+            (CopsFormat::Numeric, "2"),
+        ] {
+            let response = NetworkResponse::OperatorQuery {
+                is_registered: false,
+                mode: CopsMode::Automatic,
+                format: fmt,
+                plmn: "310260".to_string(),
+                quirks,
+            };
+            assert_eq!(format!("{response}"), format!("+COPS: 0,{expected_fmt_code},\"\"\r\n"));
+        }
     }
 }

@@ -47,18 +47,36 @@ fn test_cpin_set() {
 #[test]
 fn test_cpin_in_ready_state_does_not_consume_retry() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    world.given_modem("A");
 
-    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
-    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",3,3");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
 
-    when_at_command_sent(&mut world, "A", &format!("AT+CPIN=\"{INVALID_PIN}\""));
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect("A", "AT+CPINR=\"SIM PIN\"", &["+CPINR: \"SIM PIN\",3,3", "OK"]);
+    world.send_and_expect("A", "AT+CPINR=\"SIM PIN2\"", &["+CPINR: \"SIM PIN2\",3,3", "OK"]);
 
-    when_at_command_sent(&mut world, "A", "AT+CPINR=\"SIM PIN\"");
-    then_response_is(&mut world, "A", "+CPINR: \"SIM PIN\",3,3");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect_error("A", &format!("AT+CPIN=\"{INVALID_PIN}\""), "+CME ERROR: 16");
+
+    world.send_and_expect("A", "AT+CPINR=\"SIM PIN\"", &["+CPINR: \"SIM PIN\",3,3", "OK"]);
+    world.send_and_expect("A", "AT+CPINR=\"SIM PIN2\"", &["+CPINR: \"SIM PIN2\",2,3", "OK"]);
+
+    world.send_and_expect_ok("A", &format!("AT+CPIN=\"{TEST_PIN}\""));
+
+    world.send_and_expect("A", "AT+CPINR=\"SIM PIN2\"", &["+CPINR: \"SIM PIN2\",3,3", "OK"]);
+
+    world.send_and_expect_error("A", &format!("AT+CPIN=\"{INVALID_PIN}\""), "+CME ERROR: 16");
+    world.send_and_expect_error("A", &format!("AT+CPIN=\"{INVALID_PIN}\""), "+CME ERROR: 16");
+    world.send_and_expect_error("A", &format!("AT+CPIN=\"{INVALID_PIN}\""), "+CME ERROR: 18");
+
+    world.send_and_expect("A", "AT+CPINR=\"SIM PIN2\"", &["+CPINR: \"SIM PIN2\",0,3", "OK"]);
+
+    world.send_and_expect_error("A", &format!("AT+CPIN=\"{TEST_PIN}\""), "+CME ERROR: 18");
+    world.send_and_expect_error("A", &format!("AT+CPIN=\"{INVALID_PIN}\""), "+CME ERROR: 18");
+
+    world.send_and_expect_ok("A", &format!("AT+CPIN=\"{TEST_PUK}\",\"{TEST_PIN}\""));
+
+    world.send_and_expect("A", "AT+CPINR=\"SIM PIN2\"", &["+CPINR: \"SIM PIN2\",3,3", "OK"]);
+
+    world.send_and_expect_ok("A", &format!("AT+CPIN=\"{TEST_PIN}\""));
 }
 
 #[test]
@@ -462,7 +480,8 @@ fn test_cpin_empty() {
 fn test_close_basic_logical_channel() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    // Closing channel 0 via MANAGE CHANNEL should return +CSIM status word (6A86)
+    // Closing channel 0 via MANAGE CHANNEL should return +CSIM status word
+    // (6A86)
     when_at_command_sent(
         &mut world,
         "A",
@@ -782,8 +801,8 @@ fn test_apdu_update_record_non_record_file() {
     let mut world = World::new();
     given_modem_with_fplmn_and_mbdn_in_fs(&mut world, "A");
 
-    // FPLMN (28539) is transparent. Try UPDATE RECORD (220) on it - must fail with
-    // SW_INCORRECT_PARAMS.
+    // FPLMN (28539) is transparent. Try UPDATE RECORD (220) on it - must fail
+    // with SW_INCORRECT_PARAMS.
     when_at_command_sent(&mut world, "A", "AT+CRSM=220,28539,1,4,6,\"AABBCCDDEEFF\"");
     then_response_is(&mut world, "A", "+CRSM: 106,134");
     then_response_is(&mut world, "A", "OK");
@@ -804,8 +823,8 @@ fn test_apdu_update_missing_data() {
     // If parser rejects it, it should return ERROR.
     // Let's test what it returns.
     when_at_command_sent(&mut world, "A", "AT+CRSM=214,28539,0,0,6");
-    // We will assert +CRSM: 106,134 first. If it fails with parse error, we will
-    // know.
+    // We will assert +CRSM: 106,134 first. If it fails with parse error, we
+    // will know.
     then_response_is(&mut world, "A", "+CRSM: 106,134");
     then_response_is(&mut world, "A", "OK");
 }
@@ -1041,7 +1060,8 @@ fn test_default_sim_profile_reads() {
 #[test]
 fn test_cuttlefish_default_tel_alaska_sim_profile_reads() {
     let mut world = World::new();
-    // Cuttlefish modems default to the TelAlaska profile (PROFILE_TEL_ALASKA_XML)
+    // Cuttlefish modems default to the TelAlaska profile
+    // (PROFILE_TEL_ALASKA_XML)
     given_cuttlefish_modem(&mut world, "A");
 
     // Verify CPIN status is READY
@@ -1076,7 +1096,7 @@ fn test_cuttlefish_default_tel_alaska_sim_profile_reads() {
 
     // Query COPS -> returns TelAlaska PLMN (311740) derived from SIM profile
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,2,311740");
+    then_response_is(&mut world, "A", "+COPS: 0,2,\"311740\"");
     then_response_is(&mut world, "A", "OK");
 }
 
@@ -1087,8 +1107,8 @@ fn test_cts_profile_csim_and_status_reads() {
     given_modem_with_sim_type(&mut world, "A", 2);
 
     // 1. Verify AT+CSIM STATUS command query (80f2000000)
-    // This command is explicitly mapped in the CSIM block of the CTS XML profile.
-    // It returns the long Master File FCP template.
+    // This command is explicitly mapped in the CSIM block of the CTS XML
+    // profile. It returns the long Master File FCP template.
     when_at_command_sent(&mut world, "A", "AT+CSIM=10,\"80f2000000\"");
     then_response_is(
         &mut world,
@@ -1098,14 +1118,15 @@ fn test_cts_profile_csim_and_status_reads() {
     then_response_is(&mut world, "A", "OK");
 
     // 2. Verify AT+CSIM wrong length STATUS command query (80F20000)
-    // This maps to the wrong length error response (6C35) configured in the XML.
+    // This maps to the wrong length error response (6C35) configured in the
+    // XML.
     when_at_command_sent(&mut world, "A", "AT+CSIM=8,\"80F20000\"");
     then_response_is(&mut world, "A", "+CSIM: 4,6C35");
     then_response_is(&mut world, "A", "OK");
 
     // 3. Verify AT+CRSM STATUS command query (command 242 / 0xF2)
-    // The simulator has a hardcoded override for APDU_STATUS (0xF2) to return the
-    // MF FCP template:
+    // The simulator has a hardcoded override for APDU_STATUS (0xF2) to return
+    // the MF FCP template:
     // "62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF"
     when_at_command_sent(&mut world, "A", "AT+CRSM=242,0,0,0,0");
     then_response_is(
@@ -1129,8 +1150,8 @@ fn test_cgla_apdu_parsing_cases() {
     then_response_is(&mut world, "A", "OK");
 
     // 2. Select EF_ICCID with FCP request (Case 4 APDU: Lc=02, Data=2FE2, Le=0C)
-    // Send standard select to EF_ICCID: CLA=00 INS=A4 P1=00 P2=04 Lc=02 Data=2FE2
-    // Le=0C
+    // Send standard select to EF_ICCID: CLA=00 INS=A4 P1=00 P2=04 Lc=02
+    // Data=2FE2 Le=0C
     when_at_command_sent(&mut world, "A", "AT+CGLA=1,16,\"00A40004022FE20C\"");
     then_response_is(&mut world, "A", "+CGLA: 4,9000");
     then_response_is(&mut world, "A", "OK");
@@ -1607,8 +1628,8 @@ fn test_select_invalid_p2() {
     let mut world = World::new();
     given_modem_with_sim_type(&mut world, "A", 1);
 
-    // P2 = 08 (ReturnProprietary) is unsupported, should return SW_INCORRECT_PARAMS
-    // (6A86)
+    // P2 = 08 (ReturnProprietary) is unsupported, should return
+    // SW_INCORRECT_PARAMS (6A86)
     when_at_command_sent(&mut world, "A", "AT+CGLA=0,14,\"00A40008027F10\"");
     then_response_is(&mut world, "A", "+CGLA: 4,6A86");
     then_response_is(&mut world, "A", "OK");
@@ -1800,8 +1821,8 @@ fn test_crsm_get_response_df_telecom() {
     world.given_modem_with_msisdn_in_fs("A");
 
     // GET_RESPONSE for DF_TELECOM (7F10 / 32528) with P3 = 22
-    // Header format: File ID at bytes 4-5 is 7F10, File Type at byte 6 is 02 (DF),
-    // num_ef_children at byte 15 is 03
+    // Header format: File ID at bytes 4-5 is 7F10, File Type at byte 6 is 02
+    // (DF), num_ef_children at byte 15 is 03
     world.send_and_expect(
         "A",
         "AT+CRSM=192,32528,0,0,22",
@@ -1828,8 +1849,9 @@ fn test_crsm_get_response_transparent_ef_p3_15() {
     let mut world = World::new();
     world.given_modem("A");
 
-    // GET_RESPONSE for EF_FPLMN (6F7B / 28539) with P3 = 15 returns 14-byte header
-    // Byte 13 is 01 (length of following data), Byte 14 is 00 (transparent)
+    // GET_RESPONSE for EF_FPLMN (6F7B / 28539) with P3 = 15 returns 14-byte
+    // header Byte 13 is 01 (length of following data), Byte 14 is 00
+    // (transparent)
     world.send_and_expect(
         "A",
         "AT+CRSM=192,28539,0,0,15",
@@ -1853,7 +1875,8 @@ fn test_crsm_read_record_p3_truncation() {
     let mut world = World::new();
     given_modem_with_msisdn_in_fs(&mut world, "A");
 
-    // READ_RECORD for EF_MSISDN (6F40 / 28480) with P3 = 14 (alpha identifier only)
+    // READ_RECORD for EF_MSISDN (6F40 / 28480) with P3 = 14 (alpha identifier
+    // only)
     when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,14");
     then_response_is(&mut world, "A", "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF");
     then_response_is(&mut world, "A", "OK");
@@ -1864,7 +1887,8 @@ fn test_crsm_update_binary_wrong_length() {
     let mut world = World::new();
     given_modem_with_msisdn_in_fs(&mut world, "A");
 
-    // UPDATE_BINARY with mismatched P3 (data is 6 bytes = 12 hex chars, P3 is 10)
+    // UPDATE_BINARY with mismatched P3 (data is 6 bytes = 12 hex chars, P3 is
+    // 10)
     when_at_command_sent(&mut world, "A", "AT+CRSM=214,28539,0,0,10,\"40F21040F220\"");
     then_response_is(&mut world, "A", "+CRSM: 103,0");
     then_response_is(&mut world, "A", "OK");
@@ -2049,7 +2073,8 @@ fn test_custom_record_len_msisdn_update() {
     when_phone_number_set(&mut world, "A", "15554444444");
 
     // Read record 1 via AT+CRSM (length 34 bytes)
-    // 20 bytes of 0xFF alpha tag (40 hex chars) + 14 bytes footer (28 hex chars)
+    // 20 bytes of 0xFF alpha tag (40 hex chars) + 14 bytes footer (28 hex
+    // chars)
     when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,34");
     then_response_is(
         &mut world,
@@ -2087,7 +2112,8 @@ fn test_cphs_mwi_not_found_in_default_sim0_profile() {
 
     use modem_rs::{apdu::Instruction, constants::UiccFileId};
 
-    // ReadBinary on EF_VOICE_MAIL_INDICATOR_CPHS should return SW_FILE_NOT_FOUND
+    // ReadBinary on EF_VOICE_MAIL_INDICATOR_CPHS should return
+    // SW_FILE_NOT_FOUND
     when_at_command_sent(
         &mut world,
         "A",
@@ -2175,7 +2201,8 @@ fn test_pin1_pin2_isolation_and_facility_locks() {
     // New password succeeds
     world.send_and_expect_ok("A", "AT+CLCK=\"AO\",0,\"4321\"");
 
-    // P2 is only valid in AT+CPWD, not AT+CLCK; AT+CLCK="P2",1 returns CME ERROR: 4
+    // P2 is only valid in AT+CPWD, not AT+CLCK; AT+CLCK="P2",1 returns CME
+    // ERROR: 4
     world.send_and_expect_error("A", "AT+CLCK=\"P2\",1", "+CME ERROR: 4");
 
     // Unsupported facility returns CME ERROR: 4
@@ -2209,6 +2236,27 @@ fn test_pin2_exhaustion_and_puk2_unlock() {
 
     // PIN2 retries restored to 3
     assert_pin_retries(&mut world, "A", "SIM PIN2", 3, 3);
+}
+
+#[test]
+fn test_pin1_exhaustion_in_cpwd_and_puk_unlock() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    for _ in 0..2 {
+        world.send_and_expect_error("A", "AT+CPWD=\"SC\",\"0000\",\"1111\"", "+CME ERROR: 16");
+    }
+
+    world.send_and_expect_error("A", "AT+CPWD=\"SC\",\"0000\",\"1111\"", "+CME ERROR: 12");
+    world.send_and_expect_error("A", "AT+CPWD=\"SC\",\"1234\",\"1111\"", "+CME ERROR: 12");
+
+    assert_pin_retries(&mut world, "A", "SIM PIN", 0, 3);
+
+    world.send_and_expect_ok("A", "AT+CPIN=\"12345678\",\"5678\"");
+
+    assert_pin_retries(&mut world, "A", "SIM PIN", 3, 3);
 }
 
 #[test]

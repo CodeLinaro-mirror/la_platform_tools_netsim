@@ -39,7 +39,30 @@ pub fn given_modem_with_network_config(
 }
 
 pub fn given_data_modem(world: &mut World, name: &str) {
-    given_modem_with_network_config(world, name, create_default_test_network_config());
+    given_data_modem_with_quirks(world, name, Quirks::default());
+}
+
+pub fn given_data_modem_with_quirks(world: &mut World, name: &str, quirks: Quirks) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(quirks.goldfish_ril_37_or_earlier);
+
+    world
+        .manager
+        .new_modem(id, sink, None, None, quirks, vec![create_default_test_network_config()])
+        .expect("Failed to create new modem with network config");
+    world.modems.insert(name.to_string(), (id, handler));
+}
+
+pub fn given_goldfish_37_data_modem(world: &mut World, name: &str) {
+    given_data_modem_with_quirks(
+        world,
+        name,
+        Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() },
+    );
 }
 
 /// Creates a modem with the given name.

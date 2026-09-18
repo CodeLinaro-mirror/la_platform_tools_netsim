@@ -86,7 +86,7 @@ impl ModemImpl {
             sup_service: SupService::default(),
             misc_service,
             call_service: CallService::default(),
-            data_service: DataService::new(network_configs),
+            data_service: DataService::new(quirks, network_configs),
             quirks,
             _state: State::Idle,
         }
@@ -145,8 +145,8 @@ impl ModemImpl {
     pub fn trigger_remote_hangup(&mut self) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
         self.call_service.receive_hangup();
-        // Goldfish RIL uses RING as universal URC to trigger callRing/callStateChanged
-        // for remote call teardown
+        // Goldfish RIL uses RING as universal URC to trigger
+        // callRing/callStateChanged for remote call teardown
         effects.push(ModemEffect::Response(CallResponse::Ring.to_string().into_bytes()));
         effects
     }
@@ -325,7 +325,8 @@ impl ModemImpl {
         self.stk_service = StkService::new(profile.stk.clone());
         self.network_service.set_home_plmn(home_plmn);
 
-        // Reset network registration to trigger fresh attachment to new home PLMN
+        // Reset network registration to trigger fresh attachment to new home
+        // PLMN
         effects.extend(
             self.set_registration(RegistrationType::Voice, RegistrationStatus::NotRegistered),
         );
@@ -728,8 +729,9 @@ mod tests {
             Vec::new(),
         );
         // We pass a command Y that returns Err on Command::parse(Y).
-        // Since Y does not start with AT or RING, and we bypass split_chained_commands,
-        // we can pass it directly to execute_chained_commands.
+        // Since Y does not start with AT or RING, and we bypass
+        // split_chained_commands, we can pass it directly to
+        // execute_chained_commands.
         let sub_commands = vec![b"INVALID".to_vec()];
         let effects = modem.execute_chained_commands(&sub_commands);
 

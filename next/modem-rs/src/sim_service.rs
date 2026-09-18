@@ -417,6 +417,21 @@ impl std::fmt::Display for SimResponse {
 
 type SimResult = Result<Option<SimResponse>, ExecutionResult>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PinVerifyError {
+    IncorrectPassword,
+    Blocked,
+}
+
+impl PinVerifyError {
+    pub const fn into_cme_error(self, blocked_error: CmeError) -> CmeError {
+        match self {
+            Self::Blocked => blocked_error,
+            Self::IncorrectPassword => CmeError::IncorrectPassword,
+        }
+    }
+}
+
 /// Encapsulates credentials (PIN and PUK), remaining attempts, and maximum
 /// attempts.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -493,23 +508,37 @@ impl PinEntry {
 
     /// Verifies candidate PIN. On match resets retries; on mismatch decrements
     /// retries.
-    pub fn verify_pin(&mut self, candidate: &str) -> Result<(), CmeError> {
+    pub fn verify_pin(&mut self, candidate: &str) -> Result<(), PinVerifyError> {
+        if self.is_blocked() {
+            return Err(PinVerifyError::Blocked);
+        }
         if !candidate.is_ascii() || !VALID_PIN_LEN.contains(&candidate.len()) {
-            return Err(CmeError::IncorrectPassword);
+            return Err(PinVerifyError::IncorrectPassword);
         }
         if candidate == self.pin {
             self.reset_pin_retries();
             Ok(())
         } else {
             self.decrement_pin_retries();
-            Err(CmeError::IncorrectPassword)
+            if self.is_blocked() {
+                Err(PinVerifyError::Blocked)
+            } else {
+                Err(PinVerifyError::IncorrectPassword)
+            }
         }
     }
 
     /// Changes the PIN after verifying the old PIN.
-    pub fn change_pin(&mut self, old_password: &str, new_password: &str) -> Result<(), CmeError> {
+    pub fn change_pin(
+        &mut self,
+        old_password: &str,
+        new_password: &str,
+    ) -> Result<(), PinVerifyError> {
+        if self.is_blocked() {
+            return Err(PinVerifyError::Blocked);
+        }
         if !new_password.is_ascii() || !VALID_PIN_LEN.contains(&new_password.len()) {
-            return Err(CmeError::IncorrectPassword);
+            return Err(PinVerifyError::IncorrectPassword);
         }
         self.verify_pin(old_password)?;
         self.pin = new_password.to_string();
@@ -1042,7 +1071,7 @@ impl SimService {
                 } else {
                     self.pin1.change_pin(input, new_pin).map_err(|err| {
                         self.sync_pin1_state();
-                        ExecutionResult::cme_error(err)
+                        ExecutionResult::cme_error(err.into_cme_error(CmeError::SimPukRequired))
                     })?;
                     Ok(None)
                 }
@@ -1051,15 +1080,15 @@ impl SimService {
                 if pin_or_puk_len == 0 {
                     return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
                 }
-                if input == self.pin2.pin {
-                    self.pin2.reset_pin_retries();
-                }
+                self.pin2.verify_pin(input).map_err(|err| {
+                    ExecutionResult::cme_error(err.into_cme_error(CmeError::SimPuk2Required))
+                })?;
                 Ok(None)
             }
             (SimState::PinRequired, _) => {
-                self.pin1.verify_pin(input).map_err(|err| {
+                self.pin1.verify_pin(input).map_err(|_err| {
                     self.sync_pin1_state();
-                    ExecutionResult::cme_error(err)
+                    ExecutionResult::cme_error(CmeError::IncorrectPassword)
                 })?;
                 self.state = SimState::Ready;
                 Ok(None)
@@ -1299,8 +1328,8 @@ impl SimService {
         self.selected_aids[idx] = None;
         self.selected_files[idx] = None;
 
-        // Non-standard: AOSP Goldfish RIL requires "+CCHC" response on channel close to
-        // prevent serialization locks.
+        // Non-standard: AOSP Goldfish RIL requires "+CCHC" response on channel
+        // close to prevent serialization locks.
         // TODO: Extract goldfish-specific quirks into flags.
         Ok(Some(SimResponse::CloseLogicalChannel))
     }
@@ -1668,21 +1697,14 @@ impl SimService {
         match facility {
             Facility::SimPin | Facility::SimPin2 | Facility::FixedDial => {
                 let is_pin1 = facility == Facility::SimPin;
-
-                if !is_pin1 && self.pin2.is_blocked() {
-                    return Err(ExecutionResult::cme_error(CmeError::SimPuk2Required));
-                }
-
+                let blocked_err =
+                    if is_pin1 { CmeError::SimPukRequired } else { CmeError::SimPuk2Required };
                 let target = if is_pin1 { &mut self.pin1 } else { &mut self.pin2 };
                 target.change_pin(old, new).map_err(|err| {
                     if is_pin1 {
                         self.sync_pin1_state();
-                        ExecutionResult::cme_error(CmeError::IncorrectPassword)
-                    } else if self.pin2.is_blocked() {
-                        ExecutionResult::cme_error(CmeError::SimPuk2Required)
-                    } else {
-                        ExecutionResult::cme_error(err)
                     }
+                    ExecutionResult::cme_error(err.into_cme_error(blocked_err))
                 })?;
                 Ok(None)
             }
@@ -1690,7 +1712,9 @@ impl SimService {
                 if self.barring_password.is_blocked() {
                     return Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed));
                 }
-                self.barring_password.change_pin(old, new).map_err(ExecutionResult::cme_error)?;
+                self.barring_password.change_pin(old, new).map_err(|err| {
+                    ExecutionResult::cme_error(err.into_cme_error(CmeError::IncorrectPassword))
+                })?;
                 Ok(None)
             }
             _ => Err(ExecutionResult::cme_error(CmeError::OperationNotSupported)),
@@ -1723,7 +1747,9 @@ impl SimService {
                         }
                         None
                     })
-                    .map_err(ExecutionResult::cme_error)
+                    .map_err(|err| {
+                        ExecutionResult::cme_error(err.into_cme_error(CmeError::IncorrectPassword))
+                    })
             }
             FacilityLockMode::QueryStatus => {
                 let is_locked = self.call_barring_locks.contains_key(&facility);
@@ -1790,7 +1816,7 @@ impl SimService {
                     })
                     .map_err(|err| {
                         self.sync_pin1_state();
-                        ExecutionResult::cme_error(err)
+                        ExecutionResult::cme_error(err.into_cme_error(CmeError::SimPukRequired))
                     })
             }
             FacilityLockMode::QueryStatus => {
@@ -1820,7 +1846,9 @@ impl SimService {
                         self.fdn_enabled = mode == FacilityLockMode::Lock;
                         None
                     })
-                    .map_err(ExecutionResult::cme_error)
+                    .map_err(|err| {
+                        ExecutionResult::cme_error(err.into_cme_error(CmeError::SimPuk2Required))
+                    })
             }
             FacilityLockMode::QueryStatus => {
                 Ok(Some(SimResponse::FacilityLockStatus(if self.fdn_enabled { 1 } else { 0 })))
@@ -2141,7 +2169,8 @@ mod tests {
         let mut service = SimService::new();
         service.load_profile(&profile);
 
-        // Try invalid length PIN2 -> fails immediately, does NOT decrement retries
+        // Try invalid length PIN2 -> fails immediately, does NOT decrement
+        // retries
         let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString("123")));
         assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::IncorrectPassword)));
         assert_eq!(service.pin2.pin_retries, 3);
@@ -2533,15 +2562,15 @@ mod tests {
         assert_eq!(entry.puk_attempts(), (8, 8));
 
         // Invalid length PIN
-        assert_eq!(entry.verify_pin("12"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.verify_pin("12"), Err(PinVerifyError::IncorrectPassword));
         assert_eq!(entry.pin_retries, 5); // Length error does not decrement
 
         // Non-ASCII PIN rejected without retry decrement
-        assert_eq!(entry.verify_pin("123\u{1F980}"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.verify_pin("123\u{1F980}"), Err(PinVerifyError::IncorrectPassword));
         assert_eq!(entry.pin_retries, 5);
 
         // Mismatched PIN decrements
-        assert_eq!(entry.verify_pin("0000"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.verify_pin("0000"), Err(PinVerifyError::IncorrectPassword));
         assert_eq!(entry.pin_retries, 4);
 
         // Matching PIN resets to max_pin_retries (5, not default 3)
@@ -2549,11 +2578,14 @@ mod tests {
         assert_eq!(entry.pin_retries, 5);
 
         // Invalid length candidate rejected without state corruption
-        assert_eq!(entry.change_pin("4321", "12"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.change_pin("4321", "12"), Err(PinVerifyError::IncorrectPassword));
         assert_eq!(entry.pin, "4321");
 
         // Non-ASCII candidate rejected without state corruption
-        assert_eq!(entry.change_pin("4321", "123\u{1F980}"), Err(CmeError::IncorrectPassword));
+        assert_eq!(
+            entry.change_pin("4321", "123\u{1F980}"),
+            Err(PinVerifyError::IncorrectPassword)
+        );
         assert_eq!(entry.pin, "4321");
 
         // Change PIN
@@ -2564,6 +2596,7 @@ mod tests {
         // Unblock with PUK
         entry.pin_retries = 0;
         assert!(entry.is_blocked());
+        assert_eq!(entry.verify_pin("4321"), Err(PinVerifyError::Blocked));
         assert_eq!(entry.unblock_with_puk("87654321", "12"), Err(CmeError::IncorrectPassword));
         assert_eq!(
             entry.unblock_with_puk("8765432\u{1F980}", "1111"),

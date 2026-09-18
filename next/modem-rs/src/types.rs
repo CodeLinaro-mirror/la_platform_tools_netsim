@@ -2038,32 +2038,16 @@ impl CtecTechnology {
     }
 
     /// Converts an `AT+CTEC` wire value to a single active `CtecTechnology`.
-    ///
-    /// Under legacy Goldfish RIL, wire values represent direct technology
-    /// indices (e.g. 5 for LTE) rather than standard bitmasks.
-    pub fn from_wire(wire: u8, quirks: Quirks) -> Result<Self, ExecutionResult> {
-        if quirks.goldfish_ril_37_or_earlier {
-            match wire {
-                0 => Ok(Self::Gsm),
-                1 => Ok(Self::Wcdma),
-                2 => Ok(Self::Cdma),
-                3 => Ok(Self::Evdo),
-                4 => Ok(Self::Tdscdma),
-                5 => Ok(Self::Lte),
-                6 => Ok(Self::Nr),
-                _ => Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
-            }
-        } else {
-            match wire {
-                1 => Ok(Self::Gsm),
-                2 => Ok(Self::Wcdma),
-                4 => Ok(Self::Cdma),
-                8 => Ok(Self::Evdo),
-                16 => Ok(Self::Tdscdma),
-                32 => Ok(Self::Lte),
-                64 => Ok(Self::Nr),
-                _ => Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
-            }
+    pub fn from_wire(wire: u8) -> Result<Self, ExecutionResult> {
+        match wire {
+            1 => Ok(Self::Gsm),
+            2 => Ok(Self::Wcdma),
+            4 => Ok(Self::Cdma),
+            8 => Ok(Self::Evdo),
+            16 => Ok(Self::Tdscdma),
+            32 => Ok(Self::Lte),
+            64 => Ok(Self::Nr),
+            _ => Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
         }
     }
 }
@@ -3165,8 +3149,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ctec_technology_from_wire_standard() {
-        let quirks = Quirks::default();
+    fn test_ctec_technology_from_wire() {
         let expected = [
             (1, Ok(CtecTechnology::Gsm)),
             (2, Ok(CtecTechnology::Wcdma)),
@@ -3179,33 +3162,11 @@ mod tests {
             (3, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
             (5, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
             (6, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
-            (99, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
-        ];
-        for (raw, want) in expected {
-            assert_eq!(CtecTechnology::from_wire(raw, quirks), want, "wire={raw}");
-        }
-    }
-
-    #[test]
-    fn test_ctec_technology_from_wire_goldfish_37() {
-        let quirks = Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() };
-        let expected = [
-            (0, Ok(CtecTechnology::Gsm)),
-            (1, Ok(CtecTechnology::Wcdma)),
-            (2, Ok(CtecTechnology::Cdma)),
-            (3, Ok(CtecTechnology::Evdo)),
-            (4, Ok(CtecTechnology::Tdscdma)),
-            (5, Ok(CtecTechnology::Lte)),
-            (6, Ok(CtecTechnology::Nr)),
             (7, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
-            (8, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
-            (16, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
-            (32, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
-            (64, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
             (99, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
         ];
         for (raw, want) in expected {
-            assert_eq!(CtecTechnology::from_wire(raw, quirks), want, "wire={raw}");
+            assert_eq!(CtecTechnology::from_wire(raw), want, "wire={raw}");
         }
     }
 
