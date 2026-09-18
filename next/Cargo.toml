@@ -5,6 +5,7 @@
 resolver = "3"
 members = [
   "actor-framework",
+  "rest-api",
   "ap-actor",
   "slirp-actor",
   "capture-actor",
