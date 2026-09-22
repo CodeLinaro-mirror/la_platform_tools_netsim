@@ -38,6 +38,9 @@ pub struct Quirks {
     /// Flag indicating whether CTZV (NITZ time zone reporting) should be
     /// enabled by default.
     pub auto_ctzv: bool,
+    /// Flag indicating whether IPv6 PDP contexts should fall back to IPv4
+    /// when only IPv4 network configurations are available.
+    pub allow_ipv4_for_ipv6: bool,
 }
 
 /// Cellular technology specific chip information.

@@ -6,7 +6,7 @@
 use std::{collections::BTreeMap, net::IpAddr};
 
 use modem_rs_derive::CommandParser;
-use netsim_model::CellNetworkConfig;
+use netsim_model::{CellNetworkConfig, Quirks};
 use nom::IResult;
 
 use crate::{
@@ -248,11 +248,12 @@ pub struct DataService {
     pdp_contexts: BTreeMap<u8, PdpContext>,
     network_configs: Vec<CellNetworkConfig>,
     ps_attached: bool,
+    quirks: Quirks,
 }
 
 impl DataService {
-    pub fn new(network_configs: Vec<CellNetworkConfig>) -> Self {
-        Self { pdp_contexts: BTreeMap::new(), network_configs, ps_attached: true }
+    pub fn new(quirks: Quirks, network_configs: Vec<CellNetworkConfig>) -> Self {
+        Self { pdp_contexts: BTreeMap::new(), network_configs, ps_attached: true, quirks }
     }
 
     /// Selects the configuration to use for a PDP type.
@@ -261,7 +262,15 @@ impl DataService {
     pub fn find_network_config(&self, pdp_type: &PdpType) -> Option<&CellNetworkConfig> {
         match pdp_type {
             PdpType::Ip => self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv4()),
-            PdpType::Ipv6 => self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv6()),
+            PdpType::Ipv6 => {
+                self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv6()).or_else(|| {
+                    if self.quirks.allow_ipv4_for_ipv6 {
+                        self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv4())
+                    } else {
+                        None
+                    }
+                })
+            }
             PdpType::Ipv4v6 => {
                 // TODO(b/542980136): Radio HAL only accepts a single IP in +CGCONTRDP;
                 // return the first config to respect the configurator's preference order.
@@ -287,7 +296,7 @@ impl DataService {
 
 impl Default for DataService {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new(Quirks::default(), Vec::new())
     }
 }
 
@@ -619,7 +628,7 @@ mod tests {
             dns: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
         };
 
-        let service = DataService::new(vec![network_config.clone()]);
+        let service = DataService::new(Quirks::default(), vec![network_config.clone()]);
 
         assert_eq!(
             service.get_ip_address(&PdpType::Ip),
@@ -639,7 +648,8 @@ mod tests {
             gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
             dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
         };
-        let dual_stack_service = DataService::new(vec![network_config.clone(), v6_config.clone()]);
+        let dual_stack_service =
+            DataService::new(Quirks::default(), vec![network_config.clone(), v6_config.clone()]);
         assert_eq!(
             dual_stack_service.get_ip_address(&PdpType::Ip),
             Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)))
@@ -669,13 +679,34 @@ mod tests {
     }
 
     #[test]
+    fn test_ipv6_fallback_to_ipv4() {
+        let v4_cfg = CellNetworkConfig {
+            ip_address: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)),
+            prefixlen: 30,
+            gateway: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 1)),
+            dns: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+        };
+        let fallback_service = DataService::new(
+            Quirks { allow_ipv4_for_ipv6: true, ..Default::default() },
+            vec![v4_cfg.clone()],
+        );
+        assert_eq!(fallback_service.find_network_config(&PdpType::Ipv6), Some(&v4_cfg));
+
+        let default_service = DataService::new(Quirks::default(), vec![v4_cfg]);
+        assert_eq!(default_service.find_network_config(&PdpType::Ipv6), None);
+    }
+
+    #[test]
     fn test_dynamic_param_prefix_passthrough() {
-        let mut service_v6 = DataService::new(vec![CellNetworkConfig {
-            ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
-            prefixlen: 64,
-            gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
-            dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
-        }]);
+        let mut service_v6 = DataService::new(
+            Quirks::default(),
+            vec![CellNetworkConfig {
+                ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
+                prefixlen: 64,
+                gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
+                dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
+            }],
+        );
         service_v6.pdp_contexts.insert(
             1,
             PdpContext {
@@ -698,12 +729,15 @@ mod tests {
         }
 
         // Prefix is passed through verbatim without validation.
-        let mut service_zero = DataService::new(vec![CellNetworkConfig {
-            ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
-            prefixlen: 0,
-            gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
-            dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
-        }]);
+        let mut service_zero = DataService::new(
+            Quirks::default(),
+            vec![CellNetworkConfig {
+                ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
+                prefixlen: 0,
+                gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
+                dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
+            }],
+        );
         service_zero.pdp_contexts.insert(
             1,
             PdpContext {

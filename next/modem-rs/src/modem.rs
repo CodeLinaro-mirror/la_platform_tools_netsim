@@ -86,7 +86,7 @@ impl ModemImpl {
             sup_service: SupService::default(),
             misc_service,
             call_service: CallService::default(),
-            data_service: DataService::new(network_configs),
+            data_service: DataService::new(quirks, network_configs),
             quirks,
             _state: State::Idle,
         }
