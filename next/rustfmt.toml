@@ -15,5 +15,6 @@ imports_granularity = "Crate"
 group_imports = "StdExternalCrate"
 
 # Comment formatting
-wrap_comments = true
+# TODO(b/564593681): Re-enable when rustfmt comment wrapping is ready and stable across toolchains.
+# wrap_comments = true
 format_code_in_doc_comments = true
