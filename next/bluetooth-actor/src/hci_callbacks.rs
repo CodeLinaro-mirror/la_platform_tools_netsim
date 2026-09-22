@@ -44,9 +44,10 @@ impl ControllerCallbacks for HciCallbacks {
         }
     }
 
-    fn invalid_packet_received(&self, _source_id: Id, reason: c_int, message: &str, _data: &[u8]) {
+    fn invalid_packet_received(&self, _source_id: Id, reason: c_int, message: &str, data: &[u8]) {
+        let packet_hex = hex::encode(data);
         error!(
-            "[chip-{}] Invalid packet received by device: reason={reason}, message={message}",
+            "[chip-{}] Invalid packet received by device: reason={reason}, message={message}, packet={packet_hex}",
             self.id
         );
     }
@@ -113,5 +114,11 @@ mod tests {
             Err(TryRecvError::Empty) => {}
             _ => panic!("Expected empty channel!"),
         }
+    }
+
+    #[test]
+    fn test_invalid_packet_received() {
+        let callbacks = HciCallbacks { id: ChipId::from(1), hci_tx: None, ll_tx: None };
+        callbacks.invalid_packet_received(0, 1, "test error message", &[0xde, 0xad, 0xbe, 0xef]);
     }
 }

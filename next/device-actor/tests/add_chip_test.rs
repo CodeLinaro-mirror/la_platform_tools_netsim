@@ -42,8 +42,8 @@ async fn test_add_chip_creates_new_device() {
 //   Then the device contains both chips
 #[tokio::test]
 async fn test_add_chip_to_existing_device() {
-    // Given a running Device Actor with expectation for multiple Create calls on
-    // ChipClient
+    // Given a running Device Actor with expectation for multiple Create calls
+    // on ChipClient
     let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(2).returning(|_, _| Ok(()));
     mock_chip_client.expect_read_statistics().returning(|| Ok(Box::from(Vec::new())));
@@ -94,8 +94,9 @@ async fn test_add_chip_to_existing_device() {
 //   And duplicate devices are prevented
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_concurrent_add_chip_race_condition() {
-    // Given a running Device Actor with expectation for multiple Create calls on
-    // ChipClient We expect 2 chips to be created (one for each add_chip call)
+    // Given a running Device Actor with expectation for multiple Create calls
+    // on ChipClient We expect 2 chips to be created (one for each add_chip
+    // call)
     let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(2).returning(|_, _| Ok(()));
     mock_chip_client.expect_read_statistics().returning(|| Ok(Box::from(Vec::new())));
@@ -177,4 +178,38 @@ async fn test_add_chip_propagates_position() {
     world
         .when_add_chip_with_position("guid-with-pos", "beacon", expected_pos, expected_orient)
         .await;
+}
+
+// Scenario: Add chip with name matching device name
+//   Given a running Device Actor
+//   When I add a chip whose name matches the device name
+//   Then the chip is added and device contains the chip
+#[tokio::test]
+async fn test_add_chip_with_matching_device_name() {
+    let world = World::new().await;
+
+    // device_config default name is "test-dev", so let chip_name also be
+    // "test-dev"
+    let device_guid = "guid-matching-name";
+    let device_id = world.when_add_chip(device_guid, "test-dev").await;
+
+    let device = world.client.get(device_id).await.unwrap().unwrap();
+    assert_eq!(device.chips.len(), 1);
+    assert_eq!(device.chips[0].name, "test-dev");
+}
+
+// Scenario: Add chip with empty name
+//   Given a running Device Actor
+//   When I add a chip with an empty name
+//   Then the chip is added successfully
+#[tokio::test]
+async fn test_add_chip_with_empty_name() {
+    let world = World::new().await;
+
+    let device_guid = "guid-empty-name";
+    let device_id = world.when_add_chip(device_guid, "").await;
+
+    let device = world.client.get(device_id).await.unwrap().unwrap();
+    assert_eq!(device.chips.len(), 1);
+    assert_eq!(device.chips[0].name, "test-dev");
 }
