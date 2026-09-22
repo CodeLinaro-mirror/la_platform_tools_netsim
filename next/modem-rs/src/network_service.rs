@@ -466,8 +466,13 @@ impl NetworkService {
     }
 
     /// Sets the signal strength and bit error rate.
-    pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) {
+    pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) -> Option<String> {
         self.signal_quality = SignalQuality::new(rssi, ber);
+        if self.radio_power == RadioPowerLevel::Full {
+            Some(NetworkUrc::SignalQuality(self.current_signal_strength()).to_string())
+        } else {
+            None
+        }
     }
 
     /// Applies `<AcT>`, returning whether the active technology changed.

@@ -364,6 +364,7 @@ fn test_set_signal_strength() {
     let rssi = 25;
     let ber = 0;
     when_signal_strength_set(&mut world, "A", rssi, ber);
+    then_response_is(&mut world, "A", &format!("+CSQ: {rssi},{ber},{CSQ_MAX_20}"));
 
     // Check new value
     when_at_command_sent(&mut world, "A", "AT+CSQ");

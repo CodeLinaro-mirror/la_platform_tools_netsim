@@ -223,8 +223,12 @@ impl ModemImpl {
         self.data_service.network_configs()
     }
 
-    pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) {
-        self.network_service.set_signal_strength(rssi, ber);
+    pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) -> Vec<ModemEffect> {
+        self.network_service
+            .set_signal_strength(rssi, ber)
+            .into_iter()
+            .map(|r| ModemEffect::Response(r.into_bytes()))
+            .collect()
     }
 
     pub fn set_registration(
