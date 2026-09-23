@@ -680,10 +680,7 @@ impl ModemNetworkSimulator {
     }
 
     pub fn set_signal_strength(&mut self, id: ModemId, rssi: u8, ber: u8) -> Vec<NetworkEvent> {
-        self.apply_to_modem(id, |modem| {
-            modem.set_signal_strength(rssi, ber);
-            Vec::new()
-        })
+        self.apply_to_modem(id, |modem| modem.set_signal_strength(rssi, ber))
     }
 
     pub fn set_registration(
