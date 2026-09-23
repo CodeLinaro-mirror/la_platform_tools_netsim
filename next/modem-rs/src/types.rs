@@ -1744,7 +1744,16 @@ pub enum ClirMode {
     Suppression = 2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
+pub enum CallForwardCondition {
+    Unconditional = 0,
+    Busy = 1,
+    NoReply = 2,
+    NotReachable = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ParsableEnum)]
 #[repr(u8)]
 pub enum CallForwardingReason {
     Unconditional = 0,
@@ -1755,6 +1764,37 @@ pub enum CallForwardingReason {
     AllConditional = 5,
 }
 
+impl CallForwardingReason {
+    pub const UNCONDITIONAL: &'static [CallForwardCondition] =
+        &[CallForwardCondition::Unconditional];
+    pub const MOBILE_BUSY: &'static [CallForwardCondition] = &[CallForwardCondition::Busy];
+    pub const NO_REPLY: &'static [CallForwardCondition] = &[CallForwardCondition::NoReply];
+    pub const NOT_REACHABLE: &'static [CallForwardCondition] =
+        &[CallForwardCondition::NotReachable];
+    pub const ALL: &'static [CallForwardCondition] = &[
+        CallForwardCondition::Unconditional,
+        CallForwardCondition::Busy,
+        CallForwardCondition::NoReply,
+        CallForwardCondition::NotReachable,
+    ];
+    pub const ALL_CONDITIONAL: &'static [CallForwardCondition] = &[
+        CallForwardCondition::Busy,
+        CallForwardCondition::NoReply,
+        CallForwardCondition::NotReachable,
+    ];
+
+    pub fn conditions(self) -> &'static [CallForwardCondition] {
+        match self {
+            Self::Unconditional => Self::UNCONDITIONAL,
+            Self::Busy => Self::MOBILE_BUSY,
+            Self::NoReply => Self::NO_REPLY,
+            Self::NotReachable => Self::NOT_REACHABLE,
+            Self::All => Self::ALL,
+            Self::AllConditional => Self::ALL_CONDITIONAL,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
 pub enum CallForwardingMode {
@@ -1763,6 +1803,117 @@ pub enum CallForwardingMode {
     Query = 2,
     Registration = 3,
     Erasure = 4,
+}
+
+/// Call Forwarding no-reply wait time in seconds (1..=30) per 3GPP TS 27.007
+/// §7.11.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallForwardTime(pub u8);
+
+impl<'a> Parsable<'a> for CallForwardTime {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = <u8 as Parsable>::parse(input)?;
+        if (1..=30).contains(&val) {
+            Ok((input, Self(val)))
+        } else {
+            Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify)))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
+#[repr(u8)]
+pub enum CallForwardNumberType {
+    NoValidInfo = 0,
+    Uri = 1,
+    #[default]
+    Number = 2,
+}
+
+impl CallForwardNumberType {
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Call forwarding destination per 3GPP TS 27.007 §7.35.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CallForwardDestination {
+    // Prevent Android PhoneNumberUtils from prepending '+' to URI destinations.
+    Uri(String),
+    Number { digits: String, ton: CallForwardTon },
+}
+
+impl CallForwardDestination {
+    pub fn number_type(&self) -> CallForwardNumberType {
+        match self {
+            Self::Uri(_) => CallForwardNumberType::Uri,
+            Self::Number { .. } => CallForwardNumberType::Number,
+        }
+    }
+
+    pub fn ton(&self) -> CallForwardTon {
+        match self {
+            Self::Uri(_) => CallForwardTon(0),
+            Self::Number { ton, .. } => *ton,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Uri(uri) => uri.as_str(),
+            Self::Number { digits, .. } => digits.as_str(),
+        }
+    }
+}
+
+// Accept TS 24.008 address octets (128..=255) passed by Goldfish RIL in the TON slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallForwardTon(pub u8);
+
+impl CallForwardTon {
+    pub const fn as_u8(self) -> u8 {
+        self.0
+    }
+
+    pub const fn ton(self) -> u8 {
+        if self.0 >= 128 { (self.0 >> 4) & 0x07 } else { self.0 }
+    }
+
+    pub const fn as_address_octet(self) -> u8 {
+        if self.0 >= 128 { self.0 } else { 0x80 | (self.ton() << 4) | 0x01 }
+    }
+
+    pub fn from_wire(raw: u8, quirks: Quirks) -> Result<Self, ExecutionResult> {
+        match raw {
+            0..=7 => Ok(Self(raw)),
+            128..=255 if quirks.goldfish_ril_37_or_earlier => Ok(Self(raw)),
+            _ => Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
+        }
+    }
+}
+
+impl<'a> Parsable<'a> for CallForwardTon {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (rem, val) = <u8 as Parsable>::parse(input)?;
+        if val <= 7 || val >= 128 {
+            Ok((rem, Self(val)))
+        } else {
+            Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify)))
+        }
+    }
+}
+
+impl Default for CallForwardTon {
+    fn default() -> Self {
+        Self(129)
+    }
+}
+
+impl From<TypeOfAddress> for CallForwardTon {
+    fn from(toa: TypeOfAddress) -> Self {
+        Self(toa.as_u8())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
@@ -1937,6 +2088,12 @@ impl std::fmt::Display for CdmaSubscriptionSource {
 impl std::fmt::Display for CallWaitingStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", *self as u8)
+    }
+}
+
+impl std::fmt::Display for CallForwardTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -2476,25 +2633,40 @@ impl<'a> Parsable<'a> for SendSmsArgs<'a> {
     }
 }
 
-/// 3GPP TS 27.007 §7.11 Call forwarding utility arguments (+CCFCU).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CallForwardUtilityArgs<'a>(pub &'a str);
-
-impl<'a> Parsable<'a> for CallForwardUtilityArgs<'a> {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, content) =
-            nom::bytes::complete::take_while(|c: u8| c != b'\r' && c != b'\n')(input)?;
-        let s = std::str::from_utf8(content).map_err(|_err| {
-            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
-        })?;
-        Ok((input, CallForwardUtilityArgs(s)))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::constants::UiccFileId;
+
+    #[test]
+    fn test_call_forward_ton_parse() {
+        let (rem, ton) = <CallForwardTon as Parsable>::parse(b"0").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(ton, CallForwardTon(0));
+
+        let (rem, ton) = <CallForwardTon as Parsable>::parse(b"7").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(ton, CallForwardTon(7));
+
+        let (rem, ton) = <CallForwardTon as Parsable>::parse(b"128").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(ton, CallForwardTon(128));
+
+        let (rem, ton) = <CallForwardTon as Parsable>::parse(b"129").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(ton, CallForwardTon(129));
+
+        let (rem, ton) = <CallForwardTon as Parsable>::parse(b"145").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(ton, CallForwardTon(145));
+
+        let (rem, ton) = <CallForwardTon as Parsable>::parse(b"255").unwrap();
+        assert_eq!(rem, b"");
+        assert_eq!(ton, CallForwardTon(255));
+
+        assert!(<CallForwardTon as Parsable>::parse(b"8").is_err());
+        assert!(<CallForwardTon as Parsable>::parse(b"127").is_err());
+    }
 
     #[test]
     fn test_phone_number_parse() {

@@ -57,10 +57,11 @@ mod tests {
         data_service::Qos,
         sms_service::{MessageStatus, MessageStorage},
         types::{
-            CallForwardingMode, CallForwardingReason, CallMode, CallWaitingMode, CharacterSet,
-            ClirMode, CopsFormat, CopsMode, CtecPreferredMask, DialArgs, DtmfArgs, DtmfTone,
-            PacketEventReportingMode, Parsable, PdpContextActivateArgs, PdpType, PhoneNumber,
-            ProductSerialNumberType, RadioPowerLevel, SendSmsArgs, ServiceClass, TypeOfAddress,
+            CallForwardNumberType, CallForwardTime, CallForwardTon, CallForwardingMode,
+            CallForwardingReason, CallMode, CallWaitingMode, CharacterSet, ClirMode, CopsFormat,
+            CopsMode, CtecPreferredMask, DialArgs, DtmfArgs, DtmfTone, PacketEventReportingMode,
+            Parsable, PdpContextActivateArgs, PdpType, PhoneNumber, ProductSerialNumberType,
+            RadioPowerLevel, SendSmsArgs, ServiceClass, TypeOfAddress,
         },
     };
 
@@ -387,6 +388,46 @@ mod tests {
                 number: None,
                 toa: None,
                 class: None,
+                subaddr: None,
+                satype: None,
+                time: None,
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_ccfcu() {
+        let (rem, cmd) =
+            Command::parse(br#"AT+CCFCU=0,3,2,145,"+1234567890",1,"","",,20"#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sup(SupCommand::CallForwardUtility {
+                reason: CallForwardingReason::Unconditional,
+                mode: CallForwardingMode::Registration,
+                number_type: Some(CallForwardNumberType::Number),
+                ton: Some(CallForwardTon(145)),
+                number: Some(QuotedString("+1234567890")),
+                class: Some(ServiceClass::VOICE),
+                ruleset: Some(QuotedString("")),
+                subaddr: Some(QuotedString("")),
+                satype: None,
+                time: Some(CallForwardTime(20)),
+            })
+        );
+
+        let (rem, cmd) = Command::parse(br#"AT+CCFCU=0,2,2,129,"",1"#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sup(SupCommand::CallForwardUtility {
+                reason: CallForwardingReason::Unconditional,
+                mode: CallForwardingMode::Query,
+                number_type: Some(CallForwardNumberType::Number),
+                ton: Some(CallForwardTon(129)),
+                number: Some(QuotedString("")),
+                class: Some(ServiceClass::VOICE),
+                ruleset: None,
                 subaddr: None,
                 satype: None,
                 time: None,
