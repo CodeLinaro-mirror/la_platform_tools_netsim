@@ -4,7 +4,7 @@
 use std::{
     collections::HashMap,
     env, io,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    net::{IpAddr, Ipv4Addr},
     path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
     time::Duration,
@@ -81,17 +81,11 @@ pub enum StartUpMode {
 
 /// Fixed Goldfish/QEMU user-mode networking (SLIRP) parameters.
 ///
-/// Matches emulator SLIRP defaults (`net/slirp.c`). `fec0::15` is synthetic;
-/// SLIRP advertises `fec0::/64` via RA and learns the RIL guest address via
-/// NDP.
+/// Matches emulator SLIRP defaults (`net/slirp.c`).
 const GOLDFISH_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
 const GOLDFISH_IPV4_PREFIXLEN: u8 = 24;
 const GOLDFISH_IPV4_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
 const GOLDFISH_IPV4_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
-const GOLDFISH_IPV6_ADDR: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15);
-const GOLDFISH_IPV6_PREFIXLEN: u8 = 64;
-const GOLDFISH_IPV6_GATEWAY: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2);
-const GOLDFISH_IPV6_DNS: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3);
 
 async fn handle_new_connection(
     device_client: DeviceClient,
@@ -162,26 +156,23 @@ async fn handle_new_connection(
             } else if is_emulator {
                 // TODO(b/557342150): Dynamically allocate cellular IPs for multi-instance
                 // Goldfish once isolated SLIRP/TAP routing is supported.
-                vec![
-                    CellNetworkConfig {
-                        ip_address: IpAddr::V4(GOLDFISH_IPV4_ADDR),
-                        prefixlen: GOLDFISH_IPV4_PREFIXLEN,
-                        gateway: IpAddr::V4(GOLDFISH_IPV4_GATEWAY),
-                        dns: IpAddr::V4(GOLDFISH_IPV4_DNS),
-                    },
-                    CellNetworkConfig {
-                        ip_address: IpAddr::V6(GOLDFISH_IPV6_ADDR),
-                        prefixlen: GOLDFISH_IPV6_PREFIXLEN,
-                        gateway: IpAddr::V6(GOLDFISH_IPV6_GATEWAY),
-                        dns: IpAddr::V6(GOLDFISH_IPV6_DNS),
-                    },
-                ]
+                vec![CellNetworkConfig {
+                    ip_address: IpAddr::V4(GOLDFISH_IPV4_ADDR),
+                    prefixlen: GOLDFISH_IPV4_PREFIXLEN,
+                    gateway: IpAddr::V4(GOLDFISH_IPV4_GATEWAY),
+                    dns: IpAddr::V4(GOLDFISH_IPV4_DNS),
+                }]
             } else {
                 Vec::new()
             };
 
             let goldfish_ril_37_or_earlier = is_emulator && sdk_version < 38;
+            // Emulators rely on automatic NITZ time zone reporting from the modem
+            // without requiring explicit AT+CTZV activation.
             let auto_ctzv = is_cuttlefish || is_emulator;
+            // Cuttlefish host TAP and Goldfish SLIRP only provision IPv4 cellular routing;
+            // fall back to IPv4 when an IPv6 PDP context is requested on emulators.
+            let allow_ipv4_for_ipv6 = is_cuttlefish || is_emulator;
 
             Some(netsim_model::ChipVariant::Cell(netsim_model::Cell {
                 sim_type: chip.sim_type,
@@ -190,6 +181,7 @@ async fn handle_new_connection(
                     goldfish_ril_37_or_earlier,
                     is_cuttlefish,
                     auto_ctzv,
+                    allow_ipv4_for_ipv6,
                 },
                 network_configs,
                 ..Default::default()

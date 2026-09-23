@@ -275,7 +275,15 @@ impl DataService {
     pub fn find_network_config(&self, pdp_type: &PdpType) -> Option<&CellNetworkConfig> {
         match pdp_type {
             PdpType::Ip => self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv4()),
-            PdpType::Ipv6 => self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv6()),
+            PdpType::Ipv6 => {
+                self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv6()).or_else(|| {
+                    if self.quirks.allow_ipv4_for_ipv6 {
+                        self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv4())
+                    } else {
+                        None
+                    }
+                })
+            }
             PdpType::Ipv4v6 => {
                 // TODO(b/542980136): Radio HAL only accepts a single IP in
                 // +CGCONTRDP; return the first config to
@@ -685,6 +693,24 @@ mod tests {
         assert_eq!(unconfigured_service.network_configs(), &[network_config]);
         assert!(unconfigured_service.handle_show_pdp_address(1).is_ok());
         assert!(unconfigured_service.handle_read_dynamic_param(1).is_ok());
+    }
+
+    #[test]
+    fn test_ipv6_fallback_to_ipv4() {
+        let v4_cfg = CellNetworkConfig {
+            ip_address: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)),
+            prefixlen: 30,
+            gateway: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 1)),
+            dns: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+        };
+        let fallback_service = DataService::new(
+            Quirks { allow_ipv4_for_ipv6: true, ..Default::default() },
+            vec![v4_cfg.clone()],
+        );
+        assert_eq!(fallback_service.find_network_config(&PdpType::Ipv6), Some(&v4_cfg));
+
+        let default_service = DataService::new(Quirks::default(), vec![v4_cfg]);
+        assert_eq!(default_service.find_network_config(&PdpType::Ipv6), None);
     }
 
     #[test]
