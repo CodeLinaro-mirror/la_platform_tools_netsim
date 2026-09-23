@@ -4,7 +4,6 @@
 use std::{
     collections::HashMap,
     env, io,
-    net::{IpAddr, Ipv4Addr},
     path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
     time::Duration,
@@ -28,8 +27,8 @@ use futures::{FutureExt, SinkExt, StreamExt, pin_mut};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    BluetoothMode, CellNetworkConfig, ChipClient, ChipInfo, ChipKind, DeviceParams,
-    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, Pose, set_if_some,
+    BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams, PacketSink as ApiPacketSink,
+    PacketStream as ApiPacketStream, Pose, set_if_some,
 };
 use packet_stream::{
     StreamAddress, Streams,
@@ -78,14 +77,6 @@ pub enum StartUpMode {
     Owner(NetsimDaemon, IniFileInitialized),
     Client(NetsimConfig),
 }
-
-/// Fixed Goldfish/QEMU user-mode networking (SLIRP) parameters.
-///
-/// Matches emulator SLIRP defaults (`net/slirp.c`).
-const GOLDFISH_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
-const GOLDFISH_IPV4_PREFIXLEN: u8 = 24;
-const GOLDFISH_IPV4_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
-const GOLDFISH_IPV4_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
 
 async fn handle_new_connection(
     device_client: DeviceClient,
@@ -155,16 +146,6 @@ async fn handle_new_connection(
                     .await
                     .into_iter()
                     .collect()
-            } else if is_emulator {
-                // TODO(b/557342150): Dynamically allocate cellular IPs for
-                // multi-instance Goldfish once isolated
-                // SLIRP/TAP routing is supported.
-                vec![CellNetworkConfig {
-                    ip_address: IpAddr::V4(GOLDFISH_IPV4_ADDR),
-                    prefixlen: GOLDFISH_IPV4_PREFIXLEN,
-                    gateway: IpAddr::V4(GOLDFISH_IPV4_GATEWAY),
-                    dns: IpAddr::V4(GOLDFISH_IPV4_DNS),
-                }]
             } else {
                 Vec::new()
             };
@@ -185,6 +166,7 @@ async fn handle_new_connection(
                     is_cuttlefish,
                     auto_ctzv,
                     allow_ipv4_for_ipv6,
+                    dynamic_slirp_lease: is_emulator,
                 },
                 network_configs,
                 ..Default::default()
@@ -527,9 +509,27 @@ impl NetsimDaemon {
         // Setup Device Server Channel
         let (device_runner, device_client) = device_actor::new();
 
+        // Setup Slirp Actor
+        let slirp_backend = if args.no_slirp_native {
+            slirp_actor::SlirpBackend::CFfi
+        } else if args.slirp_native {
+            slirp_actor::SlirpBackend::Native
+        } else {
+            Default::default()
+        };
+        let (slirp_runner, slirp_client) = slirp_actor::new();
+        let slirp_actor_state = slirp_actor::SlirpActor::new_with_backend(
+            Default::default(),
+            args.http_proxy.clone(),
+            args.host_dns.clone(),
+            slirp_backend,
+        )
+        .await;
+
         // Setup Cell Server
         let (cell_runner, cell_client) = cell_actor::new();
-        let cell_actor_state = cell_actor::CellActor::new(device_client.clone());
+        let cell_actor_state =
+            cell_actor::CellActor::new(device_client.clone(), slirp_client.clone());
 
         // Setup Capture Server
         let (capture_runner, capture_client) = capture_actor::new();
@@ -543,34 +543,7 @@ impl NetsimDaemon {
         let (ap_runner, ap_client) = ap_actor::new();
         let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 
-        let (
-            slirp_runner,
-            slirp_client,
-            slirp_actor_state,
-            wifi_runner,
-            wifi_client,
-            wifi_actor_state,
-            eth_runner,
-            eth_client,
-            eth_actor_state,
-        ) = {
-            // Setup Slirp Actor
-            let slirp_backend = if args.no_slirp_native {
-                slirp_actor::SlirpBackend::CFfi
-            } else if args.slirp_native {
-                slirp_actor::SlirpBackend::Native
-            } else {
-                Default::default()
-            };
-            let (slirp_runner, slirp_client) = slirp_actor::new();
-            let slirp_actor_state = slirp_actor::SlirpActor::new_with_backend(
-                Default::default(),
-                args.http_proxy.clone(),
-                args.host_dns.clone(),
-                slirp_backend,
-            )
-            .await;
-
+        let (wifi_runner, wifi_client, wifi_actor_state, eth_runner, eth_client, eth_actor_state) = {
             // Setup Wifi Actor
             let (wifi_runner, wifi_client) = wifi_actor::new();
             // Initialize wifi_tap configuration.
@@ -612,17 +585,7 @@ impl NetsimDaemon {
             let eth_actor_state =
                 ethernet_actor::EthernetActor::new(slirp_client.clone(), device_client.clone());
 
-            (
-                slirp_runner,
-                slirp_client,
-                slirp_actor_state,
-                wifi_runner,
-                wifi_client,
-                wifi_actor_state,
-                eth_runner,
-                eth_client,
-                eth_actor_state,
-            )
+            (wifi_runner, wifi_client, wifi_actor_state, eth_runner, eth_client, eth_actor_state)
         };
 
         // Setup NFC Server

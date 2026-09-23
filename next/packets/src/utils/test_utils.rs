@@ -11,10 +11,13 @@ use zerocopy::{IntoBytes, U16, U32};
 use crate::{
     ethernet::{
         ArpPacket, EthernetFrame, MacAddr,
-        frame::{arp_hardware, ether_type},
+        frame::{arp_hardware, arp_op, ether_type},
     },
-    icmp::v6::Icmpv6Header,
-    ip::frame::{Ipv4Header, Ipv6Header},
+    icmp::{
+        NDP_HOP_LIMIT,
+        v6::{Icmpv6Header, Icmpv6Type},
+    },
+    ip::frame::{IP_P_ICMPV6, Ipv4Header, Ipv6Header},
     packet,
     packet::json::to_json,
     transport::{tcp::TcpHeader, udp::UdpHeader},
@@ -469,6 +472,32 @@ impl PacketBuilder {
     pub fn build(self) -> Vec<u8> {
         self.payload(&[])
     }
+}
+
+pub fn build_arp_frame(
+    src_mac: [u8; 6],
+    sip: std::net::Ipv4Addr,
+    tip: std::net::Ipv4Addr,
+) -> bytes::Bytes {
+    let frame = PacketBuilder::new([0xff; 6], src_mac, ether_type::ARP)
+        .arp(arp_op::REQUEST, src_mac, sip.octets(), [0; 6], tip.octets())
+        .build();
+    bytes::Bytes::from(frame)
+}
+
+pub fn build_icmpv6_ns_frame(
+    src_mac: [u8; 6],
+    dst_mac: [u8; 6],
+    src_ip: std::net::Ipv6Addr,
+    dst_ip: std::net::Ipv6Addr,
+    target_ip: std::net::Ipv6Addr,
+) -> bytes::Bytes {
+    let frame = PacketBuilder::new(dst_mac, src_mac, ether_type::IPV6)
+        .ipv6(src_ip.octets(), dst_ip.octets(), IP_P_ICMPV6)
+        .hop_limit(NDP_HOP_LIMIT)
+        .icmpv6(Icmpv6Type::NeighborSolicitation as u8, 0, [0, 0, 0, 0])
+        .payload(&target_ip.octets());
+    bytes::Bytes::from(frame)
 }
 
 #[cfg(test)]

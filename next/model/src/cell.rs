@@ -41,6 +41,10 @@ pub struct Quirks {
     /// Flag indicating whether IPv6 PDP contexts should fall back to IPv4
     /// when only IPv4 network configurations are available.
     pub allow_ipv4_for_ipv6: bool,
+    /// Flag indicating whether to dynamically allocate a SLIRP IP lease
+    /// when network configuration is not pre-provisioned by the host.
+    #[serde(default)]
+    pub dynamic_slirp_lease: bool,
 }
 
 /// Cellular technology specific chip information.
