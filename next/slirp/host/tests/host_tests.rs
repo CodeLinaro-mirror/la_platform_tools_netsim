@@ -624,6 +624,7 @@ fn create_icmp_packet(
     payload: &[u8],
 ) -> Bytes {
     use netsim_packets::{IP_P_ICMP, IcmpHeader};
+    use zerocopy::FromBytes;
 
     let icmp_header_len = std::mem::size_of::<IcmpHeader>();
     let total_icmp_len = icmp_header_len + payload.len();

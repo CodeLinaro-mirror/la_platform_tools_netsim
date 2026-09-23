@@ -5,23 +5,35 @@
 name = "slirp-actor"
 version = "0.1.0"
 edition = "2024"
+# The files in tests/ are modules of tests/integration_test.rs, not standalone
+# test binaries. Cargo would otherwise auto-discover each tests/*.rs as its own
+# crate root, where their `use super::test_driver::...` imports are invalid.
+# This mirrors the Bazel build, which uses integration_test.rs as the single
+# entry point (see next/defs.bzl).
+autotests = false
+
+[[test]]
+name = "integration_test"
+path = "tests/integration_test.rs"
 
 [dependencies]
 actor-framework = { path = "../actor-framework" }
 bytes = "1.4"
-etherparse = { version = "0.16" }
 futures = "0.3"
 http-proxy = { path = "../http-proxy", optional = true }
 libslirp-rs = { path = "../libslirp-rs", optional = true }
 netsim-model = { path = "../model" }
 netsim-packets = { path = "../packets" }
 slirp = { path = "../slirp", optional = true }
-socket2 = { version = "0.5", features = ["all"] }
+slirp-host = { path = "../slirp/host", optional = true }
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 tracing = "0.1"
 
+[dev-dependencies]
+zerocopy = "0.8"
+
 [features]
-default = ["libslirp-rs", "http-proxy", "slirp"]
-cuttlefish = ["slirp"]
+default = ["libslirp-rs", "http-proxy", "slirp", "slirp-host"]
+cuttlefish = ["slirp", "slirp-host"]

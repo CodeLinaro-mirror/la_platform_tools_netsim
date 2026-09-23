@@ -1,10 +1,50 @@
-// Copyright 2025 The Android Open Source Project
+// Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
+
+pub mod test_driver;
+
+#[cfg(test)]
+mod arp_icmp_test;
+#[cfg(test)]
+mod backend_perf_test;
+#[cfg(test)]
+mod backend_test;
+#[cfg(test)]
+mod deficiencies_test;
+#[cfg(test)]
+mod dhcp_dns_test;
+#[cfg(test)]
+mod http_proxy_test;
+#[cfg(test)]
+mod ip_frag_multicast_test;
+#[cfg(test)]
+mod ipv6_advanced_test;
+#[cfg(test)]
+mod mac_routing_test;
+#[cfg(test)]
+mod napt_test;
+#[cfg(test)]
+mod ndp_ipv6_test;
+#[cfg(test)]
+mod port_forwarding_test;
+#[cfg(test)]
+mod recent_fixes_test;
+#[cfg(test)]
+mod risk_areas_test;
+#[cfg(test)]
+mod snapshot_test;
+#[cfg(test)]
+mod tcp_options_test;
+#[cfg(test)]
+mod tcp_state_test;
+#[cfg(test)]
+mod tftp_test;
 
 use actor_framework::{ActorLifecycle, ActorService, BoxStream, Context};
 use futures::future::BoxFuture;
 use slirp_actor::{SlirpActor, SlirpReq};
 use tokio::sync::mpsc;
+use zerocopy::FromBytes;
 
 struct MockContext;
 
@@ -152,16 +192,9 @@ async fn test_slirp_mac_learning_and_switching() {
     assert!(rx_out2.try_recv().is_ok());
 }
 
-#[tokio::test]
-async fn test_slirp_native_backend() {
+async fn run_slirp_backend_lifecycle_test(backend: slirp_actor::SlirpBackend) {
     let (tx_out, _rx_out) = mpsc::unbounded_channel::<bytes::Bytes>();
-    let mut actor = SlirpActor::new_with_backend(
-        Default::default(),
-        None,
-        None,
-        slirp_actor::SlirpBackend::Native,
-    )
-    .await;
+    let mut actor = SlirpActor::new_with_backend(Default::default(), None, None, backend).await;
     let mut ctx = MockContext;
 
     let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
@@ -193,6 +226,13 @@ async fn test_slirp_native_backend() {
 }
 
 #[tokio::test]
+async fn test_slirp_backend_lifecycle() {
+    for backend in [slirp_actor::SlirpBackend::CFfi, slirp_actor::SlirpBackend::Native] {
+        run_slirp_backend_lifecycle_test(backend).await;
+    }
+}
+
+#[tokio::test]
 async fn test_switch_backend() {
     let mut actor = SlirpActor::new(Default::default(), None, None).await;
     let mut ctx = MockContext;
@@ -204,17 +244,9 @@ async fn test_switch_backend() {
     assert_eq!(actor.backend(), slirp_actor::SlirpBackend::Native);
 }
 
-#[cfg(not(target_os = "windows"))]
-#[tokio::test]
-async fn test_slirp_native_backend_icmp_ping() {
+async fn run_slirp_backend_icmp_ping_test(backend: slirp_actor::SlirpBackend) {
     let (tx_out, _rx_out) = mpsc::unbounded_channel::<bytes::Bytes>();
-    let mut actor = SlirpActor::new_with_backend(
-        Default::default(),
-        None,
-        None,
-        slirp_actor::SlirpBackend::Native,
-    )
-    .await;
+    let mut actor = SlirpActor::new_with_backend(Default::default(), None, None, backend).await;
     let mut ctx = MockContext;
 
     let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
@@ -235,17 +267,54 @@ async fn test_slirp_native_backend_icmp_ping() {
 
     actor.on_start(&mut ctx).await;
 
-    let builder = etherparse::PacketBuilder::ethernet2(
-        [0x02, 0x15, 0xb2, 0x00, 0x00, 0x00],
-        [0x52, 0x54, 0x00, 0x12, 0x34, 0x56],
-    )
-    .ipv4([10, 0, 2, 15], [8, 8, 8, 8], 64)
-    .icmpv4_echo_request(0x1234, 1);
+    let icmp_header_len = std::mem::size_of::<netsim_packets::IcmpHeader>();
+    let payload = b"netsim icmp ping payload";
+    let total_icmp_len = icmp_header_len + payload.len();
 
-    let mut icmp_packet = Vec::new();
-    builder.write(&mut icmp_packet, b"netsim icmp ping payload").unwrap();
+    let mut icmp_data = vec![0u8; total_icmp_len];
+    let (icmp_hdr_slice, echo_payload_slice) = icmp_data.split_at_mut(icmp_header_len);
+    let icmp_header = netsim_packets::IcmpHeader::mut_from_bytes(icmp_hdr_slice).unwrap();
+    icmp_header.icmp_type = 8;
+    icmp_header.icmp_code = 0;
+    icmp_header.icmp_checksum.set(0);
+    icmp_header.rest[..2].copy_from_slice(&0x1234u16.to_be_bytes());
+    icmp_header.rest[2..].copy_from_slice(&1u16.to_be_bytes());
+    echo_payload_slice.copy_from_slice(payload);
+
+    let checksum = netsim_packets::ipv4_checksum(&icmp_data);
+    let icmp_header_mut =
+        netsim_packets::IcmpHeader::mut_from_bytes(&mut icmp_data[..icmp_header_len]).unwrap();
+    icmp_header_mut.icmp_checksum.set(checksum);
+
+    let mut ip_data = vec![0u8; 20 + total_icmp_len];
+    let mut ipv4_builder = netsim_packets::Ipv4Builder::new(
+        &mut ip_data,
+        netsim_packets::IP_P_ICMP,
+        std::net::Ipv4Addr::new(10, 0, 2, 15),
+        std::net::Ipv4Addr::new(8, 8, 8, 8),
+    )
+    .unwrap();
+    ipv4_builder.payload(&icmp_data).unwrap();
+    ipv4_builder.build().unwrap();
+
+    let mut eth_data = vec![0u8; 14 + ip_data.len()];
+    let (eth_header_slice, eth_payload_slice) = eth_data.split_at_mut(14);
+    let eth_frame = netsim_packets::EthernetFrame::mut_from_bytes(eth_header_slice).unwrap();
+    eth_frame.dst_addr = netsim_packets::MacAddr { bytes: [0x52, 0x54, 0x00, 0x12, 0x34, 0x56] };
+    eth_frame.src_addr = netsim_packets::MacAddr { bytes: [0x02, 0x15, 0xb2, 0x00, 0x00, 0x00] };
+    eth_frame.ethertype = 0x0800.into();
+    eth_payload_slice.copy_from_slice(&ip_data);
+
+    let icmp_packet = eth_data;
 
     let req = SlirpReq::SendPacket(bytes::Bytes::from(icmp_packet));
     let result = actor.handle_action(None, req, &mut ctx).await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_slirp_backend_icmp_ping() {
+    for backend in [slirp_actor::SlirpBackend::CFfi, slirp_actor::SlirpBackend::Native] {
+        run_slirp_backend_icmp_ping_test(backend).await;
+    }
 }
