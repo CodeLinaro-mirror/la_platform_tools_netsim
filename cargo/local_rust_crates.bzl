@@ -18,13 +18,6 @@ def _lrc_impl(module_ctx):
         struct(name = "getrandom_v0_2", path = "/".join([workspace_root, "external", "rust", "android-crates-io-pinned", "crates", "getrandom"])),
         struct(name = "pica", path = workspace_root + "/third_party/rust/crates/pica"),
         struct(name = "protobuf-rust", path = android_crates_io + "/protobuf"),
-        # winapi-util is required by termcolor on Windows (and so, transitively,
-        # by the cxx codegen host tool via codespan-reporting). AOSP does not
-        # ship it in external/rust/android-crates-io because nothing in the
-        # platform build targets Windows, so the only copy in the checkout is
-        # the one vendored for the emulator. TODO: move this crate into
-        # android-crates-io so the path below can be dropped.
-        struct(name = "winapi-util", path = workspace_root + "/hardware/generic/goldfish/third_party/rust/crates/winapi-util-0.1.9"),
     ]
 
     for crate in _CUSTOM_PATH_CRATES:
@@ -223,6 +216,7 @@ def _lrc_impl(module_ctx):
         "utf8_iter",
         "want",
         "which",
+        "winapi-util",
         "windows-link",
         "windows-sys",
         "windows-targets",
