@@ -121,6 +121,26 @@ pub struct Args {
     #[arg(long, alias = "no_test_beacons", overrides_with("test_beacons"))]
     pub no_test_beacons: bool,
 
+    /// Enable pure Rust Slirp native backend
+    #[arg(
+        long,
+        alias = "slirp_native",
+        alias = "native_slirp",
+        alias = "native-slirp",
+        overrides_with("no_slirp_native")
+    )]
+    pub slirp_native: bool,
+
+    /// Disable pure Rust Slirp native backend (use legacy C libslirp FFI)
+    #[arg(
+        long,
+        alias = "no_slirp_native",
+        alias = "no_native_slirp",
+        alias = "no-native-slirp",
+        overrides_with("slirp_native")
+    )]
+    pub no_slirp_native: bool,
+
     /// Set the initial SSID for the default Access Point (defaults to
     /// 'AndroidWifi')
     #[command(flatten)]
@@ -198,7 +218,8 @@ impl Args {
     // the environment.
     pub(crate) fn parse() -> Args {
         let mut args: Vec<String> = env::args().collect();
-        // This simple split WILL FAIL on quoted values like: --host "my custom host"
+        // This simple split WILL FAIL on quoted values like: --host "my custom
+        // host"
         if let Ok(env_str) = env::var("NETSIM_ARGS") {
             args.extend(env_str.split_whitespace().map(|s| s.to_string()));
         }

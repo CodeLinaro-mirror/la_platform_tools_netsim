@@ -133,8 +133,8 @@ impl DhcpManager {
                     _ => {}
                 }
             } else if dhcp_packet.op == 1 {
-                // Legacy BOOTP request! (op == 1 (BootRequest), but no DHCP Message Type
-                // option!)
+                // Legacy BOOTP request! (op == 1 (BootRequest), but no DHCP
+                // Message Type option!)
                 self.handle_bootp_request(responses, config, clock, &dhcp_packet);
             }
         }

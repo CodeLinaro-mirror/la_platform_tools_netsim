@@ -154,8 +154,9 @@ async fn handle_new_connection(
                     .into_iter()
                     .collect()
             } else if is_emulator {
-                // TODO(b/557342150): Dynamically allocate cellular IPs for multi-instance
-                // Goldfish once isolated SLIRP/TAP routing is supported.
+                // TODO(b/557342150): Dynamically allocate cellular IPs for
+                // multi-instance Goldfish once isolated
+                // SLIRP/TAP routing is supported.
                 vec![CellNetworkConfig {
                     ip_address: IpAddr::V4(GOLDFISH_IPV4_ADDR),
                     prefixlen: GOLDFISH_IPV4_PREFIXLEN,
@@ -413,7 +414,8 @@ impl NetsimDaemon {
         info!("netsim startup");
 
         // enable Rust backtrace by setting env RUST_BACKTRACE=full
-        // SAFETY: Single-threaded initialization code. Caller must guarantee this.
+        // SAFETY: Single-threaded initialization code. Caller must guarantee
+        // this.
         unsafe {
             env::set_var("RUST_BACKTRACE", "full");
         }
@@ -430,7 +432,8 @@ impl NetsimDaemon {
         });
 
         // Pre-check TAP permissions if configured.
-        // We do this BEFORE redirection so the user can see the error in the console.
+        // We do this BEFORE redirection so the user can see the error in the
+        // console.
         #[cfg(all(target_os = "linux", not(feature = "cuttlefish")))]
         if let Some(ref tap_config) = wifi_tap
             && let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config)
@@ -445,7 +448,8 @@ impl NetsimDaemon {
                 error!("{err:?}");
             }
 
-            // Duplicating the previous two logs to be included in netsim_stderr.log
+            // Duplicating the previous two logs to be included in
+            // netsim_stderr.log
             info!("netsim artifacts path: {:?}", netsimd_temp_dir());
             info!("{args:#?}");
         }
@@ -458,7 +462,8 @@ impl NetsimDaemon {
         );
 
         let mut attempts = 0;
-        // Support Cuttlefish multi-instance by using instance-specific INI files.
+        // Support Cuttlefish multi-instance by using instance-specific INI
+        // files.
         let instance_num = get_instance(args.instance);
 
         loop {
@@ -466,7 +471,8 @@ impl NetsimDaemon {
                 IniFile::new_for_dir(discovery_dir.clone(), instance_num).map_err(init_error)?;
 
             // Attempt to acquire the singleton lock for the netsim daemon.
-            // The lock is managed by direct file locking on the netsim.ini file.
+            // The lock is managed by direct file locking on the netsim.ini
+            // file.
             match ini_file.try_acquire().map_err(init_error)? {
                 // This instance is the Writer (the primary daemon).
                 IniFileAccess::Writer(uninitialized_guard) => {
@@ -547,19 +553,28 @@ impl NetsimDaemon {
             eth_actor_state,
         ) = {
             // Setup Slirp Actor
+            let slirp_backend = if args.no_slirp_native {
+                slirp_actor::SlirpBackend::CFfi
+            } else if args.slirp_native {
+                slirp_actor::SlirpBackend::Native
+            } else {
+                Default::default()
+            };
             let (slirp_runner, slirp_client) = slirp_actor::new();
-            let slirp_actor_state = slirp_actor::SlirpActor::new(
+            let slirp_actor_state = slirp_actor::SlirpActor::new_with_backend(
                 Default::default(),
                 args.http_proxy.clone(),
                 args.host_dns.clone(),
+                slirp_backend,
             )
             .await;
 
             // Setup Wifi Actor
             let (wifi_runner, wifi_client) = wifi_actor::new();
             // Initialize wifi_tap configuration.
-            // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d" pattern for
-            // pooling. If --wifi-tap is set, it overrides everything.
+            // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d"
+            // pattern for pooling. If --wifi-tap is set, it
+            // overrides everything.
             let wifi_tap = {
                 #[cfg(target_os = "linux")]
                 {
@@ -577,7 +592,8 @@ impl NetsimDaemon {
                 }
             };
 
-            // TAP preflight check is now done in `new_with_dirs` before lock acquisition.
+            // TAP preflight check is now done in `new_with_dirs` before lock
+            // acquisition.
 
             let wifi_actor_state = wifi_actor::WifiActor::new(
                 Some(Arc::new(ap_client.clone())),
@@ -687,8 +703,8 @@ impl NetsimDaemon {
                 Ok(listener) => {
                     let local_addr = listener.local_addr().map_err(init_error)?;
                     addr = Some(local_addr);
-                    // Spawn legacy Rootcanal control server for host-side test runners (like
-                    // pts-bot/mmi2grpc).
+                    // Spawn legacy Rootcanal control server for host-side test
+                    // runners (like pts-bot/mmi2grpc).
                     tokio::spawn(rootcanal_server::run(listener, device_client.clone()));
                 }
                 Err(e) => {
@@ -749,8 +765,8 @@ impl NetsimDaemon {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
 
-        // Even if stale file removal failed, we can proceed as ini_guard.write will
-        // overwrite.
+        // Even if stale file removal failed, we can proceed as ini_guard.write
+        // will overwrite.
         let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
         info!("Wrote to INI file {}", initialized_guard.path().display());
 
@@ -772,13 +788,14 @@ impl NetsimDaemon {
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
         chip_clients.insert(ChipKind::NFC, Box::new(nfc_client.clone()));
-        // Note: ApClient is NOT added to chip_clients as it is now an independent
-        // specialist.
+        // Note: ApClient is NOT added to chip_clients as it is now an
+        // independent specialist.
 
         // Setup Link Actor State
         // Create a new map for LinkActor.
-        // We need to inject ChipClients into LinkActor so it can propagate link changes
-        // (like RSSI updates) to the underlying radio actors (e.g., BluetoothActor).
+        // We need to inject ChipClients into LinkActor so it can propagate link
+        // changes (like RSSI updates) to the underlying radio actors
+        // (e.g., BluetoothActor).
         let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k, v.clone())).collect();
         let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
@@ -1128,10 +1145,10 @@ pub async fn run() -> RunResult {
     match NetsimDaemon::new().await {
         Ok(StartUpMode::Owner(daemon, _ini_guard)) => daemon.run_daemon().await,
         Ok(StartUpMode::Client(config)) => {
-            // If we are just a client, we shouldn't necessarily fail, but if the user
-            // expected to start a NEW daemon, they might be confused.
-            // For now, valid behavior is to print info and exit normally (acting as a
-            // client/discovery).
+            // If we are just a client, we shouldn't necessarily fail, but if
+            // the user expected to start a NEW daemon, they might
+            // be confused. For now, valid behavior is to print info
+            // and exit normally (acting as a client/discovery).
             info!("Another netsimd is running. Will use its config: {:?}", config);
             info!("Target gRPC port: {}", config.grpc_port);
             RunResult::ExitedNormally

@@ -4,7 +4,9 @@ use std::collections::hash_map::Entry;
 
 use actor_framework::{ActorService, DynContext};
 #[cfg(not(feature = "cuttlefish"))]
-use libslirp_rs::{LibSlirp, ProxyManager};
+use libslirp_rs::LibSlirp;
+#[cfg(not(feature = "cuttlefish"))]
+use slirp::ProxyManager;
 
 use crate::{
     error::SlirpError,
@@ -78,7 +80,8 @@ impl SlirpActor {
         // Create internal downlink channel
         let (downlink_tx, downlink_rx) = tokio::sync::mpsc::unbounded_channel();
 
-        // Wrap tx in Box<dyn PacketSender>, effectively removing the bridge thread
+        // Wrap tx in Box<dyn PacketSender>, effectively removing the bridge
+        // thread
         let slirp = LibSlirp::new(config, Box::new(downlink_tx), proxy_manager, tx_proxy_bytes);
         self.backend_instance = Some(SlirpBackendInstance::CFfi(slirp));
 
@@ -100,8 +103,24 @@ impl SlirpActor {
         #[cfg(not(feature = "cuttlefish"))]
         let mut native_config = to_native_config(&self.config);
 
-        if self.http_proxy.is_some() {
-            tracing::warn!("Native Slirp backend does not support HTTP proxy yet");
+        if let Some(ref proxy) = self.http_proxy {
+            native_config.http_proxy = Some(proxy.clone());
+            #[cfg(feature = "http-proxy")]
+            {
+                let (tx, rx) = std::sync::mpsc::channel();
+                match http_proxy::Manager::new(proxy, rx) {
+                    Ok(manager) => {
+                        native_config.proxy_manager = Some(std::sync::Arc::new(manager));
+                        native_config.proxy_tx =
+                            Some(std::sync::Arc::new(std::sync::Mutex::new(tx)));
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to initialize HTTP Proxy Manager for Native backend: {e}"
+                        );
+                    }
+                }
+            }
         }
 
         let (downlink_tx, downlink_rx) = tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
@@ -125,10 +144,12 @@ impl SlirpActor {
         ctx.spawn(
             task_id,
             Box::pin(async move {
-                // If `dns_servers` is empty or matches default configuration [8.8.8.8],
-                // automatically discover host DNS servers so guest queries are not
-                // routed to hardcoded public servers. Explicitly configured DNS server
-                // lists are preserved and never overridden.
+                // If `dns_servers` is empty or matches default configuration
+                // [8.8.8.8], automatically discover host DNS
+                // servers so guest queries are not
+                // routed to hardcoded public servers. Explicitly configured DNS
+                // server lists are preserved and never
+                // overridden.
                 if native_config.dns_servers.is_empty()
                     || native_config.dns_servers == [slirp::DEFAULT_DNS_SERVER]
                 {
@@ -231,7 +252,8 @@ impl ActorService for SlirpActor {
                     e.insert(ClientInfo { sink: downlink_tx, notifier });
                     ctx.add_stream(client_id, stream);
 
-                    // Spawn isolated background forwarding task on SlirpActor's runtime context
+                    // Spawn isolated background forwarding task on SlirpActor's
+                    // runtime context
                     ctx.spawn(
                         client_id,
                         Box::pin(async move {

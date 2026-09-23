@@ -23,6 +23,7 @@ fn test_tcp_checksum() {
 
     let checksum = tcp_checksum(&tcp_packet, src_addr, dst_addr);
 
-    // This is the correct checksum value calculated manually and with online tools.
+    // This is the correct checksum value calculated manually and with online
+    // tools.
     assert_eq!(checksum, 8965);
 }

@@ -15,6 +15,7 @@ doctest = false
 [dependencies]
 bytes = { version = "1.4.0" }
 libc = "0.2"
+slirp = { path = "../slirp" }
 tokio = { version = "1.32.0", features = ["net", "rt-multi-thread", "sync"] }
 tracing = "0.1"
 windows-sys = { version = "0.59.0", features = ["Win32_Networking_WinSock"] }
