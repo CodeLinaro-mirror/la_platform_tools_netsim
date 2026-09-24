@@ -490,6 +490,7 @@ def netsim_rust_library(
         # Else it's likely a single-file setup.
         crate_root_opts = [
             "tests/mod.rs",
+            "tests/integration_test.rs",
             "tests/integration_tests.rs",
         ]
         crate_root = None
