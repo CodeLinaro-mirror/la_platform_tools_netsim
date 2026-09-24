@@ -184,3 +184,57 @@ async fn test_test_beacons_args() {
     world.then_device_list_contains_by_name("gDevice-beacon-1").await;
     world.then_device_list_contains_by_name("gDevice-beacon-2").await;
 }
+
+// Scenario: Start daemon with unresolvable HTTP proxy
+//   Given I start netsimd with an unresolvable --http-proxy
+//   Then netsimd logs the error without crashing or exiting, and gRPC services
+// remain responsive
+#[tokio::test]
+async fn test_daemon_startup_with_invalid_proxy() {
+    let mut args = daemon::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.http_proxy = Some("http://invalid-unresolvable-proxy.invalid:8080".to_string());
+
+    // Daemon should start up successfully without crashing or exiting
+    let mut world = World::new_with_args(args).await;
+    world.when_spawn_daemon().await;
+
+    // Verify gRPC frontend service is healthy and responsive
+    let version = world.when_get_version().await;
+    assert!(!version.is_empty());
+}
+
+// Scenario: Start daemon with empty --http-proxy override
+//   Given I start netsimd with an empty/whitespace --http-proxy
+//   Then sanitize() clears http_proxy to None and daemon starts normally
+#[tokio::test]
+async fn test_daemon_startup_with_empty_http_proxy() {
+    let mut args = daemon::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.http_proxy = Some("   ".to_string());
+
+    let mut world = World::new_with_args(args).await;
+    world.when_spawn_daemon().await;
+
+    let version = world.when_get_version().await;
+    assert!(!version.is_empty());
+}
+
+// Scenario: Start daemon with valid HTTP proxy
+//   Given I start netsimd with a valid --http-proxy
+//   Then netsimd initializes HTTP proxy manager and starts normally
+#[tokio::test]
+async fn test_daemon_startup_with_valid_proxy() {
+    let mut args = daemon::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.http_proxy = Some("http://127.0.0.1:8080".to_string());
+
+    let mut world = World::new_with_args(args).await;
+    world.when_spawn_daemon().await;
+
+    let version = world.when_get_version().await;
+    assert!(!version.is_empty());
+}

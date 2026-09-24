@@ -7,7 +7,7 @@ use netsim_model::{CellNetworkConfig, Quirks, RadioTechnology, RegistrationStatu
 use tracing::{debug, error};
 
 use crate::{
-    call_service::CallService,
+    call_service::{CallResponse, CallService},
     config::SimProfile,
     constants::CALL_RING_TIMEOUT,
     data_service::DataService,
@@ -83,10 +83,10 @@ impl ModemImpl {
             network_service: NetworkService::new(quirks, home_plmn),
             sms_service: SmsService::new(quirks),
             stk_service: StkService::new(profile.stk.clone()),
-            sup_service: SupService::default(),
+            sup_service: SupService::new(quirks),
             misc_service,
             call_service: CallService::default(),
-            data_service: DataService::new(network_configs),
+            data_service: DataService::new(quirks, network_configs),
             quirks,
             _state: State::Idle,
         }
@@ -116,7 +116,7 @@ impl ModemImpl {
                 } else {
                     number_presentation as u8
                 };
-                let number_str = val.number.strip_prefix('+').unwrap_or(val.number);
+                let number_str = val.number;
                 let clip = format!("+CLIP: \"{number_str}\",{},,,,{mode}\r\n", val.toa);
                 effects.push(ModemEffect::Response(clip.into_bytes()));
             }
@@ -145,9 +145,9 @@ impl ModemImpl {
     pub fn trigger_remote_hangup(&mut self) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
         self.call_service.receive_hangup();
-        // Goldfish RIL uses RING as universal URC to trigger callRing/callStateChanged
-        // for remote call teardown
-        effects.push(ModemEffect::Response(b"RING\r\n".to_vec()));
+        // Goldfish RIL uses RING as universal URC to trigger
+        // callRing/callStateChanged for remote call teardown
+        effects.push(ModemEffect::Response(CallResponse::Ring.to_string().into_bytes()));
         effects
     }
 
@@ -193,6 +193,15 @@ impl ModemImpl {
         effects
     }
 
+    /// Sets Emergency Callback Mode (ECBM) and emits a `+WSOS` URC.
+    ///
+    /// TODO(b/562993662): Expose via cell.proto / ModemAction when external
+    /// ECBM simulation is needed.
+    pub fn trigger_emergency_callback_mode(&mut self, enabled: bool) -> Vec<ModemEffect> {
+        let response = self.call_service.set_emergency_mode(enabled);
+        vec![ModemEffect::Response(response.to_string().into_bytes())]
+    }
+
     pub fn set_phone_number(&mut self, phone: PhoneNumber) {
         self.sim_service.set_msisdn(Some(&phone));
     }
@@ -214,8 +223,12 @@ impl ModemImpl {
         self.data_service.network_configs()
     }
 
-    pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) {
-        self.network_service.set_signal_strength(rssi, ber);
+    pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) -> Vec<ModemEffect> {
+        self.network_service
+            .set_signal_strength(rssi, ber)
+            .into_iter()
+            .map(|r| ModemEffect::Response(r.into_bytes()))
+            .collect()
     }
 
     pub fn set_registration(
@@ -316,7 +329,8 @@ impl ModemImpl {
         self.stk_service = StkService::new(profile.stk.clone());
         self.network_service.set_home_plmn(home_plmn);
 
-        // Reset network registration to trigger fresh attachment to new home PLMN
+        // Reset network registration to trigger fresh attachment to new home
+        // PLMN
         effects.extend(
             self.set_registration(RegistrationType::Voice, RegistrationStatus::NotRegistered),
         );
@@ -719,8 +733,9 @@ mod tests {
             Vec::new(),
         );
         // We pass a command Y that returns Err on Command::parse(Y).
-        // Since Y does not start with AT or RING, and we bypass split_chained_commands,
-        // we can pass it directly to execute_chained_commands.
+        // Since Y does not start with AT or RING, and we bypass
+        // split_chained_commands, we can pass it directly to
+        // execute_chained_commands.
         let sub_commands = vec![b"INVALID".to_vec()];
         let effects = modem.execute_chained_commands(&sub_commands);
 

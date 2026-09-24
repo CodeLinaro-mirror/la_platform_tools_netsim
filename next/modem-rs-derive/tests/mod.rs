@@ -39,8 +39,6 @@ pub enum Command<'a> {
     SetCdmaRoamingPreference(u8),
     #[command(tag = "AT+MBAU=")]
     SimAuthentication(#[parser(parse_raw_data)] &'a [u8]),
-    #[command(tag = "AT+REMOTEUPADATEPHONENUMBER")]
-    UpdatePhoneNumber(#[parser(parse_raw_data)] &'a [u8]),
     #[command(tag = "AT+CCFC=")]
     CallForwarding { reason: u8, mode: u8, number: Option<QuotedString<'a>>, type_: Option<u8> },
     #[command(tag = "ATD")]
@@ -63,10 +61,6 @@ pub enum Command<'a> {
     SetEmergencyMode(u8),
     #[command(tag = "AT+WSOS?")]
     QueryEmergencyMode,
-    #[command(tag = "AT+REMOTECALL=")]
-    RemoteCall(#[parser(parse_raw_data)] &'a [u8]),
-    #[command(tag = "RING")]
-    Ring,
     #[command(tag = "AT+COPS?")]
     QueryOperator,
     #[command(tag = "AT+CSQ")]
@@ -231,13 +225,6 @@ fn test_parse_mbau() {
 }
 
 #[test]
-fn test_parse_remote_update_phone_number() {
-    let (rem, cmd) = Command::parse(b"AT+REMOTEUPADATEPHONENUMBER1234").unwrap();
-    assert!(rem.is_empty());
-    assert_eq!(cmd, Command::UpdatePhoneNumber(b"1234"));
-}
-
-#[test]
 fn test_parse_ccfc_set() {
     let (rem, cmd) = Command::parse(b"AT+CCFC=1,1,\"12345\",145").unwrap();
     assert!(rem.is_empty());
@@ -327,20 +314,6 @@ fn test_parse_wsos_query() {
     let (rem, cmd) = Command::parse(b"AT+WSOS?").unwrap();
     assert!(rem.is_empty());
     assert_eq!(cmd, Command::QueryEmergencyMode);
-}
-
-#[test]
-fn test_parse_remotecall() {
-    let (rem, cmd) = Command::parse(b"AT+REMOTECALL=123").unwrap();
-    assert!(rem.is_empty());
-    assert_eq!(cmd, Command::RemoteCall(b"123"));
-}
-
-#[test]
-fn test_parse_ring() {
-    let (rem, cmd) = Command::parse(b"RING").unwrap();
-    assert!(rem.is_empty());
-    assert_eq!(cmd, Command::Ring);
 }
 
 #[test]

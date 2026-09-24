@@ -149,3 +149,16 @@ impl std::str::FromStr for ChipKind {
         }
     }
 }
+
+impl std::fmt::Display for ChipKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::fmt::Display for ChipInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let chip_kind = self.chip.as_ref().map_or(ChipKind::UNSPECIFIED, |c| c.kind);
+        write!(f, "{chip_kind} on device {}", self.device_name())
+    }
+}

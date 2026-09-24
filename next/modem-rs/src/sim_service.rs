@@ -59,9 +59,6 @@ pub enum SimCommand<'a> {
     TransmitLogicalChannel(u8, u8, ApduData<'a>),
     #[command(tag = "AT+CPWD=")]
     ChangePassword(Facility, QuotedString<'a>, QuotedString<'a>),
-    /// VENDOR: Query PIN retries
-    #[command(tag = "AT+SPIC")]
-    QueryPinRetriesSpic,
     /// 3GPP2 C.S0023: Set CDMA subscription source
     #[command(tag = "AT+CCSS=")]
     SetCdmaSubscriptionSource(CdmaSubscriptionSource),
@@ -82,9 +79,6 @@ pub enum SimCommand<'a> {
     /// SIM authentication (Vendor caret version)
     #[command(tag = "AT^MBAU=")]
     SimAuthenticationVendor(ApduData<'a>),
-    /// VENDOR: Update phone number
-    #[command(tag = "AT+REMOTEUPADATEPHONENUMBER=")]
-    UpdatePhoneNumber(PhoneNumber),
     #[command(tag = "AT+CEID")]
     GetEid,
     #[command(tag = "AT+CATR")]
@@ -373,7 +367,6 @@ pub enum SimResponse {
     CdmaRoamingPreference(CdmaRoamingPreference),
     SimAuthentication(String),
     FacilityLockStatus(u8),
-    PinRetriesSpic(u32),
     PinRemainingAttempts { pin_type: PinType, retries: u32, default_retries: u32 },
     Eid(String),
     Atr(String),
@@ -413,7 +406,6 @@ impl std::fmt::Display for SimResponse {
             SimResponse::CdmaRoamingPreference(pref) => write!(f, "+WRMP: {pref}\r\n"),
             SimResponse::SimAuthentication(resp) => write!(f, "{resp}"),
             SimResponse::FacilityLockStatus(status) => write!(f, "+CLCK: {status}\r\n"),
-            SimResponse::PinRetriesSpic(retries) => write!(f, "+SPIC: {retries}\r\n"),
             SimResponse::PinRemainingAttempts { pin_type, retries, default_retries } => {
                 write!(f, "+CPINR: \"{}\",{retries},{default_retries}\r\n", pin_type.as_str())
             }
@@ -424,6 +416,21 @@ impl std::fmt::Display for SimResponse {
 }
 
 type SimResult = Result<Option<SimResponse>, ExecutionResult>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PinVerifyError {
+    IncorrectPassword,
+    Blocked,
+}
+
+impl PinVerifyError {
+    pub const fn into_cme_error(self, blocked_error: CmeError) -> CmeError {
+        match self {
+            Self::Blocked => blocked_error,
+            Self::IncorrectPassword => CmeError::IncorrectPassword,
+        }
+    }
+}
 
 /// Encapsulates credentials (PIN and PUK), remaining attempts, and maximum
 /// attempts.
@@ -501,23 +508,37 @@ impl PinEntry {
 
     /// Verifies candidate PIN. On match resets retries; on mismatch decrements
     /// retries.
-    pub fn verify_pin(&mut self, candidate: &str) -> Result<(), CmeError> {
+    pub fn verify_pin(&mut self, candidate: &str) -> Result<(), PinVerifyError> {
+        if self.is_blocked() {
+            return Err(PinVerifyError::Blocked);
+        }
         if !candidate.is_ascii() || !VALID_PIN_LEN.contains(&candidate.len()) {
-            return Err(CmeError::IncorrectPassword);
+            return Err(PinVerifyError::IncorrectPassword);
         }
         if candidate == self.pin {
             self.reset_pin_retries();
             Ok(())
         } else {
             self.decrement_pin_retries();
-            Err(CmeError::IncorrectPassword)
+            if self.is_blocked() {
+                Err(PinVerifyError::Blocked)
+            } else {
+                Err(PinVerifyError::IncorrectPassword)
+            }
         }
     }
 
     /// Changes the PIN after verifying the old PIN.
-    pub fn change_pin(&mut self, old_password: &str, new_password: &str) -> Result<(), CmeError> {
+    pub fn change_pin(
+        &mut self,
+        old_password: &str,
+        new_password: &str,
+    ) -> Result<(), PinVerifyError> {
+        if self.is_blocked() {
+            return Err(PinVerifyError::Blocked);
+        }
         if !new_password.is_ascii() || !VALID_PIN_LEN.contains(&new_password.len()) {
-            return Err(CmeError::IncorrectPassword);
+            return Err(PinVerifyError::IncorrectPassword);
         }
         self.verify_pin(old_password)?;
         self.pin = new_password.to_string();
@@ -621,6 +642,18 @@ impl SimService {
     /// Returns true if the SIM is in the Ready state.
     pub(crate) fn is_ready(&self) -> bool {
         self.state == SimState::Ready
+    }
+
+    /// Returns the CME error corresponding to a non-ready SIM lifecycle state,
+    /// or None if the SIM is ready for normal operation.
+    pub(crate) fn gating_error(&self) -> Option<CmeError> {
+        match self.state {
+            SimState::Absent => Some(CmeError::SimNotInserted),
+            SimState::PinRequired => Some(CmeError::SimPinRequired),
+            SimState::PukRequired => Some(CmeError::SimPukRequired),
+            SimState::PermBlocked => Some(CmeError::SimFailure),
+            SimState::Ready => None,
+        }
     }
 
     /// Unprovisions and completely wipes the SIM card, restoring to default.
@@ -1038,7 +1071,7 @@ impl SimService {
                 } else {
                     self.pin1.change_pin(input, new_pin).map_err(|err| {
                         self.sync_pin1_state();
-                        ExecutionResult::cme_error(err)
+                        ExecutionResult::cme_error(err.into_cme_error(CmeError::SimPukRequired))
                     })?;
                     Ok(None)
                 }
@@ -1047,15 +1080,15 @@ impl SimService {
                 if pin_or_puk_len == 0 {
                     return Err(ExecutionResult::cme_error(CmeError::IncorrectPassword));
                 }
-                if input == self.pin2.pin {
-                    self.pin2.reset_pin_retries();
-                }
+                self.pin2.verify_pin(input).map_err(|err| {
+                    ExecutionResult::cme_error(err.into_cme_error(CmeError::SimPuk2Required))
+                })?;
                 Ok(None)
             }
             (SimState::PinRequired, _) => {
-                self.pin1.verify_pin(input).map_err(|err| {
+                self.pin1.verify_pin(input).map_err(|_err| {
                     self.sync_pin1_state();
-                    ExecutionResult::cme_error(err)
+                    ExecutionResult::cme_error(CmeError::IncorrectPassword)
                 })?;
                 self.state = SimState::Ready;
                 Ok(None)
@@ -1295,8 +1328,8 @@ impl SimService {
         self.selected_aids[idx] = None;
         self.selected_files[idx] = None;
 
-        // Non-standard: AOSP Goldfish RIL requires "+CCHC" response on channel close to
-        // prevent serialization locks.
+        // Non-standard: AOSP Goldfish RIL requires "+CCHC" response on channel
+        // close to prevent serialization locks.
         // TODO: Extract goldfish-specific quirks into flags.
         Ok(Some(SimResponse::CloseLogicalChannel))
     }
@@ -1664,21 +1697,14 @@ impl SimService {
         match facility {
             Facility::SimPin | Facility::SimPin2 | Facility::FixedDial => {
                 let is_pin1 = facility == Facility::SimPin;
-
-                if !is_pin1 && self.pin2.is_blocked() {
-                    return Err(ExecutionResult::cme_error(CmeError::SimPuk2Required));
-                }
-
+                let blocked_err =
+                    if is_pin1 { CmeError::SimPukRequired } else { CmeError::SimPuk2Required };
                 let target = if is_pin1 { &mut self.pin1 } else { &mut self.pin2 };
                 target.change_pin(old, new).map_err(|err| {
                     if is_pin1 {
                         self.sync_pin1_state();
-                        ExecutionResult::cme_error(CmeError::IncorrectPassword)
-                    } else if self.pin2.is_blocked() {
-                        ExecutionResult::cme_error(CmeError::SimPuk2Required)
-                    } else {
-                        ExecutionResult::cme_error(err)
                     }
+                    ExecutionResult::cme_error(err.into_cme_error(blocked_err))
                 })?;
                 Ok(None)
             }
@@ -1686,7 +1712,9 @@ impl SimService {
                 if self.barring_password.is_blocked() {
                     return Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed));
                 }
-                self.barring_password.change_pin(old, new).map_err(ExecutionResult::cme_error)?;
+                self.barring_password.change_pin(old, new).map_err(|err| {
+                    ExecutionResult::cme_error(err.into_cme_error(CmeError::IncorrectPassword))
+                })?;
                 Ok(None)
             }
             _ => Err(ExecutionResult::cme_error(CmeError::OperationNotSupported)),
@@ -1719,7 +1747,9 @@ impl SimService {
                         }
                         None
                     })
-                    .map_err(ExecutionResult::cme_error)
+                    .map_err(|err| {
+                        ExecutionResult::cme_error(err.into_cme_error(CmeError::IncorrectPassword))
+                    })
             }
             FacilityLockMode::QueryStatus => {
                 let is_locked = self.call_barring_locks.contains_key(&facility);
@@ -1744,11 +1774,6 @@ impl SimService {
             }
         };
         Ok(Some(SimResponse::SimAuthentication(response.to_string())))
-    }
-
-    fn handle_update_phone_number(&mut self, phone: PhoneNumber) -> SimResult {
-        self.set_msisdn(Some(&phone));
-        Ok(None)
     }
 
     pub(crate) fn handle_set_facility_lock(
@@ -1791,7 +1816,7 @@ impl SimService {
                     })
                     .map_err(|err| {
                         self.sync_pin1_state();
-                        ExecutionResult::cme_error(err)
+                        ExecutionResult::cme_error(err.into_cme_error(CmeError::SimPukRequired))
                     })
             }
             FacilityLockMode::QueryStatus => {
@@ -1821,7 +1846,9 @@ impl SimService {
                         self.fdn_enabled = mode == FacilityLockMode::Lock;
                         None
                     })
-                    .map_err(ExecutionResult::cme_error)
+                    .map_err(|err| {
+                        ExecutionResult::cme_error(err.into_cme_error(CmeError::SimPuk2Required))
+                    })
             }
             FacilityLockMode::QueryStatus => {
                 Ok(Some(SimResponse::FacilityLockStatus(if self.fdn_enabled { 1 } else { 0 })))
@@ -1855,11 +1882,6 @@ impl SimService {
         }
 
         false
-    }
-
-    fn handle_query_pin_retries_spic(&self) -> SimResult {
-        let retries = self.pin1.pin_retries;
-        Ok(Some(SimResponse::PinRetriesSpic(retries)))
     }
 
     fn handle_query_pin_retries_cpinr(&self, pin_type: PinType) -> SimResult {
@@ -1897,7 +1919,6 @@ impl SimService {
                 self.handle_change_password(*facility, *old_password, *new_password)
             }
             SimCommand::QueryPinRetries(pin_type) => self.handle_query_pin_retries_cpinr(*pin_type),
-            SimCommand::QueryPinRetriesSpic => self.handle_query_pin_retries_spic(),
             SimCommand::SetCdmaSubscriptionSource(source) => {
                 self.cdma_subscription_source = *source;
                 Ok(None)
@@ -1914,9 +1935,6 @@ impl SimService {
             }
             SimCommand::SimAuthentication(data) => self.handle_sim_authentication(*data),
             SimCommand::SimAuthenticationVendor(data) => self.handle_sim_authentication(*data),
-            SimCommand::UpdatePhoneNumber(phone_number) => {
-                self.handle_update_phone_number(phone_number.clone())
-            }
             SimCommand::GetEid => Self::get_optional_field(self.eid.clone(), SimResponse::Eid),
             SimCommand::GetAtr => Self::get_optional_field(self.atr.clone(), SimResponse::Atr),
         };
@@ -2151,7 +2169,8 @@ mod tests {
         let mut service = SimService::new();
         service.load_profile(&profile);
 
-        // Try invalid length PIN2 -> fails immediately, does NOT decrement retries
+        // Try invalid length PIN2 -> fails immediately, does NOT decrement
+        // retries
         let res = service.handle_set_fdn_lock(FacilityLockMode::Lock, Some(QuotedString("123")));
         assert_eq!(res.err(), Some(ExecutionResult::cme_error(CmeError::IncorrectPassword)));
         assert_eq!(service.pin2.pin_retries, 3);
@@ -2543,15 +2562,15 @@ mod tests {
         assert_eq!(entry.puk_attempts(), (8, 8));
 
         // Invalid length PIN
-        assert_eq!(entry.verify_pin("12"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.verify_pin("12"), Err(PinVerifyError::IncorrectPassword));
         assert_eq!(entry.pin_retries, 5); // Length error does not decrement
 
         // Non-ASCII PIN rejected without retry decrement
-        assert_eq!(entry.verify_pin("123\u{1F980}"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.verify_pin("123\u{1F980}"), Err(PinVerifyError::IncorrectPassword));
         assert_eq!(entry.pin_retries, 5);
 
         // Mismatched PIN decrements
-        assert_eq!(entry.verify_pin("0000"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.verify_pin("0000"), Err(PinVerifyError::IncorrectPassword));
         assert_eq!(entry.pin_retries, 4);
 
         // Matching PIN resets to max_pin_retries (5, not default 3)
@@ -2559,11 +2578,14 @@ mod tests {
         assert_eq!(entry.pin_retries, 5);
 
         // Invalid length candidate rejected without state corruption
-        assert_eq!(entry.change_pin("4321", "12"), Err(CmeError::IncorrectPassword));
+        assert_eq!(entry.change_pin("4321", "12"), Err(PinVerifyError::IncorrectPassword));
         assert_eq!(entry.pin, "4321");
 
         // Non-ASCII candidate rejected without state corruption
-        assert_eq!(entry.change_pin("4321", "123\u{1F980}"), Err(CmeError::IncorrectPassword));
+        assert_eq!(
+            entry.change_pin("4321", "123\u{1F980}"),
+            Err(PinVerifyError::IncorrectPassword)
+        );
         assert_eq!(entry.pin, "4321");
 
         // Change PIN
@@ -2574,6 +2596,7 @@ mod tests {
         // Unblock with PUK
         entry.pin_retries = 0;
         assert!(entry.is_blocked());
+        assert_eq!(entry.verify_pin("4321"), Err(PinVerifyError::Blocked));
         assert_eq!(entry.unblock_with_puk("87654321", "12"), Err(CmeError::IncorrectPassword));
         assert_eq!(
             entry.unblock_with_puk("8765432\u{1F980}", "1111"),

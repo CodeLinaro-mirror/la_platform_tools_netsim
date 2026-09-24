@@ -15,6 +15,9 @@ use std::{
     os::raw::{c_char, c_int, c_void},
 };
 
+/// Callback signature for rootcanal log interception.
+pub type FfiLogCallback = extern "C" fn(level: c_int, message: *const c_char);
+
 unsafe extern "C" {
     /// Creates a new Bluetooth controller.
     ///
@@ -112,4 +115,11 @@ unsafe extern "C" {
         source_addr: *const uint8_t,
         destination_addr: *const uint8_t,
     ) -> bool;
+
+    /// Registers a log callback for rootcanal logs.
+    ///
+    /// # Safety
+    /// When specified, `callback` must point to a thread-safe `extern "C"`
+    /// function that expects a valid null-terminated C string.
+    pub fn ffi_set_log_callback(callback: Option<FfiLogCallback>);
 }

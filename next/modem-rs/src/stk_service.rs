@@ -80,12 +80,6 @@ pub enum StkCommand<'a> {
     SendStkEnvelope(QuotedString<'a>),
     #[command(tag = "AT+CUSATT=")]
     SendStkTerminalResponse(QuotedString<'a>),
-    #[command(tag = "AT+STKEN=")]
-    SetStkEnabled(bool),
-    #[command(tag = "AT+STKUR=")]
-    SetStkUnsolicitedResult(bool),
-    #[command(tag = "AT+STK=")]
-    SetStk(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,7 +139,6 @@ pub struct StkService {
     // Path of selected menu_ids from root. Empty means main menu.
     current_path: Vec<u8>,
     stk_enabled: bool,
-    stk_reporting: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -166,12 +159,7 @@ impl Default for StkService {
 impl StkService {
     pub fn new(stk_config: Stk) -> Self {
         let has_menu = !stk_config.setup_menu.text.is_empty();
-        Self {
-            stk_config,
-            current_path: Vec::new(),
-            stk_enabled: has_menu,
-            stk_reporting: true, // Default to true to match legacy mock/tests
-        }
+        Self { stk_config, current_path: Vec::new(), stk_enabled: has_menu }
     }
 
     fn get_current_items(&self) -> &[StkMenuItem] {
@@ -323,10 +311,7 @@ impl StkService {
                     self.current_path.push(item_id);
                 }
 
-                let mut urcs = Vec::new();
-                if self.stk_reporting {
-                    urcs.push(StkResponse::UsatProactiveCommand(proactive_cmd));
-                }
+                let urcs = vec![StkResponse::UsatProactiveCommand(proactive_cmd)];
 
                 return Ok(StkExecutionResult {
                     response: Some(StkResponse::UsatEnvelopeResponse("0".to_string())),
@@ -341,7 +326,7 @@ impl StkService {
 
     fn sync_stk_menu_urc(&self) -> StkExecutionResult {
         let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
+        if self.stk_enabled && !self.stk_config.setup_menu.text.is_empty() {
             urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
         }
         StkExecutionResult { response: None, urcs }
@@ -349,14 +334,11 @@ impl StkService {
 
     fn handle_query_stk_ready(&self) -> StkResult {
         let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
+        if self.stk_enabled && !self.stk_config.setup_menu.text.is_empty() {
             urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
         }
         Ok(StkExecutionResult {
-            response: Some(StkResponse::StkReady {
-                ready: self.stk_enabled as u8,
-                support: self.stk_reporting as u8,
-            }),
+            response: Some(StkResponse::StkReady { ready: self.stk_enabled as u8, support: 1 }),
             urcs,
         })
     }
@@ -378,34 +360,24 @@ impl StkService {
 
                     if let Some(cmd) = proactive_cmd {
                         self.current_path.push(item_id);
-
-                        if self.stk_reporting {
-                            urcs.push(StkResponse::UsatProactiveCommand(cmd));
-                        }
+                        urcs.push(StkResponse::UsatProactiveCommand(cmd));
                     }
                 }
                 TerminalResponseAction::Terminate => {
                     self.current_path.clear();
-                    if self.stk_reporting {
-                        urcs.push(StkResponse::UsatSessionEnd);
-                    }
+                    urcs.push(StkResponse::UsatSessionEnd);
                 }
                 TerminalResponseAction::Back => {
                     self.current_path.pop();
-                    if self.stk_reporting {
-                        if self.current_path.is_empty() {
-                            urcs.push(StkResponse::UsatSessionEnd);
-                        } else if let Some(parent_item) = self.get_item_at_path(&self.current_path)
-                        {
-                            urcs.push(StkResponse::UsatProactiveCommand(parent_item.text.clone()));
-                        }
+                    if self.current_path.is_empty() {
+                        urcs.push(StkResponse::UsatSessionEnd);
+                    } else if let Some(parent_item) = self.get_item_at_path(&self.current_path) {
+                        urcs.push(StkResponse::UsatProactiveCommand(parent_item.text.clone()));
                     }
                 }
                 TerminalResponseAction::EndSession => {
                     self.current_path.clear();
-                    if self.stk_reporting {
-                        urcs.push(StkResponse::UsatSessionEnd);
-                    }
+                    urcs.push(StkResponse::UsatSessionEnd);
                 }
                 TerminalResponseAction::None => {}
             }
@@ -433,15 +405,6 @@ impl StkService {
             }
             StkCommand::SendStkTerminalResponse(response) => {
                 self.handle_send_stk_terminal_response(*response)
-            }
-            StkCommand::SetStk(_) => Ok(StkExecutionResult::default()),
-            StkCommand::SetStkEnabled(enabled) => {
-                self.stk_enabled = *enabled;
-                Ok(self.sync_stk_menu_urc())
-            }
-            StkCommand::SetStkUnsolicitedResult(reporting) => {
-                self.stk_reporting = *reporting;
-                Ok(self.sync_stk_menu_urc())
             }
         };
         res.map_or_else(|e| e, ExecutionResult::from)

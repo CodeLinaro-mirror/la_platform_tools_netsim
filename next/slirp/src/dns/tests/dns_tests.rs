@@ -227,8 +227,8 @@ fn test_create_dns_search_option() {
 #[tokio::test]
 async fn test_discover_host_dns_servers_async() {
     let servers = discover_host_dns_servers().await;
-    // Host discovery should always return at least one non-empty address (real or
-    // localhost fallback)
+    // Host discovery should always return at least one non-empty address (real
+    // or localhost fallback)
     assert!(!servers.is_empty());
     for server in &servers {
         assert!(!server.is_unspecified());

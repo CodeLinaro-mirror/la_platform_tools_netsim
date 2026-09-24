@@ -35,6 +35,41 @@ pub struct TcpHeader {
     pub urgent_ptr: U16<NetworkEndian>,
 }
 
+/// TCP Option Kinds.
+pub mod option_kind {
+    pub const EOL: u8 = 0;
+    pub const NOP: u8 = 1;
+    pub const MSS: u8 = 2;
+    pub const WS: u8 = 3;
+    pub const SACK_PERMITTED: u8 = 4;
+}
+
+/// TCP MSS Option.
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
+#[repr(C)]
+pub struct TcpOptionMss {
+    pub kind: u8,
+    pub len: u8,
+    pub mss: U16<NetworkEndian>,
+}
+
+/// TCP Window Scale Option.
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
+#[repr(C)]
+pub struct TcpOptionWindowScale {
+    pub kind: u8,
+    pub len: u8,
+    pub shift: u8,
+}
+
+/// TCP SACK Permitted Option.
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
+#[repr(C)]
+pub struct TcpOptionSackPermitted {
+    pub kind: u8,
+    pub len: u8,
+}
+
 /// TCP flags.
 pub mod flags {
     pub const FIN: u16 = 1;

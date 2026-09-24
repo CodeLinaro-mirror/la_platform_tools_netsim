@@ -49,8 +49,6 @@ EXACT_DEP_MAPPING = {
     ":ap_actor_cxx": "libnetsim_next_ap_actor_cxx",
     ":hostap_crypto_shim": "libnetsim_next_ap_actor_cxx",
     "@boringssl//:crypto": "libcrypto",
-    "//next/slirp/host:slirp-host": "libnetsim_slirp_host",
-    "//next/slirp/host:slirp-host_testing": "libnetsim_slirp_host_testing",
 }
 
 IGNORED_DEPS = {
@@ -423,8 +421,6 @@ def netsim_rust_library(
     **kwargs,
 ):
   prefix = "libnetsim_next_"
-  if name == "slirp-host":
-    prefix = "libnetsim_"
   if name in IGNORED_TARGETS:
     return
   if deps is None:
@@ -691,9 +687,7 @@ def netsim_rust_library(
       if is_test_package_allowed(package_name):
         integ_dict = {
             "type": "rust_test_host",
-            "name": (
-                f"{prefix}{name.replace('-', '_')}_integration_tests"
-            ),
+            "name": f"{prefix}{name.replace('-', '_')}_integration_tests",
             "crate_name": f"{crate_name}_tests",
             "crate_root": crate_root,
             "srcs": sorted(list(set(integration_test_srcs))),

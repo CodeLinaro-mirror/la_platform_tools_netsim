@@ -17,9 +17,9 @@ use crate::steps::{
         then_wait_for_response_containing,
     },
     setup::{
-        given_data_modem, given_goldfish_37_modem, given_modem, given_modem_with_fdn_sim_profile,
-        given_modem_with_locked_sim, given_modem_with_msisdn_in_fs,
-        given_modem_with_network_config, given_modem_with_number,
+        given_data_modem, given_goldfish_37_data_modem, given_goldfish_37_modem, given_modem,
+        given_modem_with_fdn_sim_profile, given_modem_with_locked_sim,
+        given_modem_with_msisdn_in_fs, given_modem_with_network_config, given_modem_with_number,
         given_modem_with_perm_blocked_sim, given_modem_with_sim_profile,
         given_modem_with_xml_profile,
     },
@@ -44,8 +44,9 @@ impl World {
     pub fn new() -> Self {
         crate::common::init_logger();
         // No network handler needed for constructor.
-        // If tests need to inspect network events, they should capture them from
-        // dispatch output. For now, we assume tests rely on modem responses.
+        // If tests need to inspect network events, they should capture them
+        // from dispatch output. For now, we assume tests rely on modem
+        // responses.
         let clock = Arc::new(MockClock::default());
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let manager = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
@@ -76,6 +77,10 @@ impl World {
 
     pub fn given_data_modem(&mut self, name: &str) {
         given_data_modem(self, name);
+    }
+
+    pub fn given_goldfish_37_data_modem(&mut self, name: &str) {
+        given_goldfish_37_data_modem(self, name);
     }
 
     pub fn given_modem_with_network_config(
@@ -211,6 +216,12 @@ impl World {
     pub fn send_and_expect_error(&mut self, name: &str, command: &str, expected_error: &str) {
         self.when_at_command(name, command);
         self.then_response_is(name, expected_error);
+    }
+
+    /// Triggers Emergency Callback Mode (ECBM) on the named modem.
+    pub fn trigger_emergency_callback_mode(&mut self, name: &str, enabled: bool) {
+        let (id, _) = self.get_modem(name);
+        self.manager.trigger_emergency_callback_mode(id, enabled);
     }
 
     // --- Compound Telephony Workflows ---

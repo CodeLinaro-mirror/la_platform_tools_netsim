@@ -82,8 +82,8 @@ fn test_timer_lifecycle_with_mock_clock() {
     assert_eq!(fired.len(), 1);
     assert_eq!(fired[0], TimerEvent::Test);
 
-    // Next event is now the second one, which is 50ms away (200ms original - 150ms
-    // advanced)
+    // Next event is now the second one, which is 50ms away (200ms original -
+    // 150ms advanced)
     assert_eq!(timers.next_event_in().unwrap(), Duration::from_millis(50));
 
     // Advance past second event

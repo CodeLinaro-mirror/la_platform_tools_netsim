@@ -77,26 +77,26 @@ impl Default for sockaddr_storage {
 }
 
 fn v4_ref(storage: &sockaddr_storage) -> &sockaddr_in {
-    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
-    // `sockaddr_in`. Neither types have any padding.
+    // SAFETY: `sockaddr_storage` has size and alignment that is at least that
+    // of `sockaddr_in`. Neither types have any padding.
     unsafe { &*((storage as *const sockaddr_storage).cast::<sockaddr_in>()) }
 }
 
 fn v6_ref(storage: &sockaddr_storage) -> &sockaddr_in6 {
-    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
-    // `sockaddr_in6`. Neither types have any padding.
+    // SAFETY: `sockaddr_storage` has size and alignment that is at least that
+    // of `sockaddr_in6`. Neither types have any padding.
     unsafe { &*((storage as *const sockaddr_storage).cast::<sockaddr_in6>()) }
 }
 
 fn v4_mut(storage: &mut sockaddr_storage) -> &mut sockaddr_in {
-    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
-    // `sockaddr_in`. Neither types have any padding.
+    // SAFETY: `sockaddr_storage` has size and alignment that is at least that
+    // of `sockaddr_in`. Neither types have any padding.
     unsafe { &mut *((storage as *mut sockaddr_storage).cast::<sockaddr_in>()) }
 }
 
 fn v6_mut(storage: &mut sockaddr_storage) -> &mut sockaddr_in6 {
-    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
-    // `sockaddr_in6`. Neither types have any padding.
+    // SAFETY: `sockaddr_storage` has size and alignment that is at least that
+    // of `sockaddr_in6`. Neither types have any padding.
     unsafe { &mut *((storage as *mut sockaddr_storage).cast::<sockaddr_in6>()) }
 }
 
@@ -373,7 +373,8 @@ mod tests {
         let in_v6_port = net::ntohs(in_v6.sin6_port);
         let in_v6_flowinfo = net::ntohl(in_v6.sin6_flowinfo);
 
-        // Compare ip, port, flowinfo after conversion from SocketAddrV6 -> sockaddr_in6
+        // Compare ip, port, flowinfo after conversion from SocketAddrV6 ->
+        // sockaddr_in6
         assert_eq!(sockaddr.port(), in_v6_port);
         assert_eq!(sockaddr.ip().octets(), in_v6_ip_octets);
         assert_eq!(sockaddr.flowinfo(), in_v6_flowinfo);
