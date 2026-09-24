@@ -1,13 +1,10 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    net::{Ipv4Addr, Ipv6Addr},
-    str,
-    time::Duration,
-};
+use std::{str, time::Duration};
 
-use netsim_model::{Call, Quirks, RegistrationStatus};
+pub use modem_rs_derive::ParsableEnum;
+use netsim_model::{Call, CellNetworkConfig, Quirks, RegistrationStatus};
 use nom::IResult;
 
 use crate::{
@@ -16,12 +13,86 @@ use crate::{
     data_service::DataResponse,
     misc_service::MiscResponse,
     network_service::NetworkResponse,
-    parser::QuotedString,
     sim_service::SimResponse,
     sms_service::SmsResponse,
     stk_service::StkResponse,
     sup_service::SupResponse,
 };
+
+/// Parses a double-quoted string (e.g. `"foo"`) or an unquoted token delimited
+/// by comma, semicolon, or carriage return/newline.
+pub fn parse_quoted_or_unquoted(input: &[u8]) -> IResult<&[u8], &str> {
+    if let Ok((rem, qs)) = QuotedString::parse(input) {
+        return Ok((rem, qs.as_str()));
+    }
+    use nom::{bytes::complete::take_while1, combinator::map_res};
+    let (input, content) = map_res(
+        take_while1(|c: u8| c != b',' && c != b';' && c != b'\r' && c != b'\n'),
+        std::str::from_utf8,
+    )(input)?;
+    Ok((input, content))
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct QuotedString<'a>(pub &'a str);
+
+impl<'a> QuotedString<'a> {
+    pub fn as_str(self) -> &'a str {
+        self.0
+    }
+}
+
+impl<'a> Parsable<'a> for QuotedString<'a> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        use nom::{
+            bytes::complete::{tag, take_while},
+            combinator::map_res,
+            sequence::delimited,
+        };
+        let (input, content) = delimited(
+            tag(br#"""#),
+            map_res(take_while(|c| c != b'"'), std::str::from_utf8),
+            tag(br#"""#),
+        )(input)?;
+        Ok((input, QuotedString(content)))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct PinString<'a>(pub &'a str);
+
+impl<'a> PinString<'a> {
+    pub fn as_str(self) -> &'a str {
+        self.0
+    }
+}
+
+impl<'a> Parsable<'a> for PinString<'a> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, content) = parse_quoted_or_unquoted(input)?;
+        Ok((input, PinString(content)))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct ApduData<'a>(pub &'a str);
+
+impl<'a> ApduData<'a> {
+    pub fn as_str(self) -> &'a str {
+        self.0
+    }
+
+    pub fn decode_hex(self) -> Result<Vec<u8>, hex::FromHexError> {
+        hex::decode(self.0)
+    }
+}
+
+impl<'a> Parsable<'a> for ApduData<'a> {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        let (input, content) = parse_quoted_or_unquoted(input)?;
+        Ok((input, ApduData(content)))
+    }
+}
 
 pub trait Parsable<'a>: Sized {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self>;
@@ -54,27 +125,28 @@ impl Parsable<'_> for u32 {
     }
 }
 
+impl Parsable<'_> for usize {
+    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        nom::combinator::map_res(
+            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
+            |s: &str| s.parse::<usize>(),
+        )(input)
+    }
+}
+
 pub const AT_OK: &[u8] = b"OK\r\n";
 pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 
 pub const DEFAULT_PIN: &str = "1234";
 pub const DEFAULT_PIN2: &str = "5678";
-
-pub const DEFAULT_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
-pub const DEFAULT_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
-pub const DEFAULT_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
-
-// Aligned with libslirp-rs and emulator networking defaults.
-pub const DEFAULT_IPV6_GATEWAY: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2);
-pub const DEFAULT_IPV6_DNS: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3);
-pub const DEFAULT_IPV6_ADDR: Ipv6Addr = Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15);
-pub const DEFAULT_IPV6_PREFIX: u32 = 64;
+pub const DEFAULT_PUK2: &str = "12345678";
+pub const DEFAULT_BARRING_PASSWORD: &str = "0000";
 
 // A unique identifier for a modem instance.
 pub type ModemId = u32;
 
 // Custom error type for the library.
-use std::fmt;
+use std::fmt::{self, Write};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModemError {
@@ -312,12 +384,69 @@ impl TryFrom<&str> for Plmn {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ParsePhoneNumberError {
+    Empty,
+    InvalidCharacters(String),
+    TrailingCharacters(String),
+}
+
+impl fmt::Display for ParsePhoneNumberError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => write!(f, "phone number cannot be empty"),
+            Self::InvalidCharacters(s) => write!(f, "invalid characters in phone number: '{s}'"),
+            Self::TrailingCharacters(s) => {
+                write!(f, "unparsed trailing characters in phone number: '{s}'")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ParsePhoneNumberError {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct PhoneNumber(String);
 
+impl TryFrom<String> for PhoneNumber {
+    type Error = ParsePhoneNumberError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
+impl From<PhoneNumber> for String {
+    fn from(phone: PhoneNumber) -> Self {
+        phone.0
+    }
+}
+
+impl std::str::FromStr for PhoneNumber {
+    type Err = ParsePhoneNumberError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Err(ParsePhoneNumberError::Empty);
+        }
+        match Self::parse(s.as_bytes()) {
+            Ok((rem, phone)) => {
+                if rem.is_empty() {
+                    Ok(phone)
+                } else {
+                    let trailing = String::from_utf8_lossy(rem).to_string();
+                    Err(ParsePhoneNumberError::TrailingCharacters(trailing))
+                }
+            }
+            Err(_) => Err(ParsePhoneNumberError::InvalidCharacters(s.to_string())),
+        }
+    }
+}
+
 impl PhoneNumber {
-    #[cfg(any(test, feature = "test-utils"))]
-    pub fn new(s: impl Into<String>) -> Self {
+    #[cfg(any(test, feature = "test-utils", feature = "testing"))]
+    pub fn new_for_test(s: impl Into<String>) -> Self {
         Self(s.into())
     }
 
@@ -341,6 +470,12 @@ impl PhoneNumber {
         self.0.starts_with("*99")
             && self.0.ends_with('#')
             && self.0.as_bytes().get(3).is_some_and(|&c| c == b'*' || c == b'#')
+    }
+}
+
+impl AsRef<str> for PhoneNumber {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -419,10 +554,7 @@ impl AdnRecord {
             digits.insert(0, '+');
         }
 
-        let number = match PhoneNumber::parse(digits.as_bytes()) {
-            Ok(([], p)) => Some(p),
-            _ => None,
-        };
+        let number = digits.parse().ok();
         Some(Self { alpha_tag, number })
     }
 
@@ -450,9 +582,7 @@ impl AdnRecord {
                 .filter(|c| c.is_ascii_digit() || *c == '*' || *c == '#')
                 .collect();
             if !clean_digits.is_empty() {
-                let ton_npi = if phone.as_str().starts_with('+')
-                    || (clean_digits.len() == 11 && clean_digits.starts_with('1'))
-                {
+                let ton_npi = if clean_digits.len() == 11 && clean_digits.starts_with('1') {
                     TypeOfAddress::International
                 } else {
                     phone.toa()
@@ -482,20 +612,29 @@ impl fmt::Display for PhoneNumber {
     }
 }
 
-/// Type of Address (TON/NPI) as defined in 3GPP TS 24.008 / TS 23.040 Table
-/// 9.1.2.5.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Type of Address (TON/NPI) as defined in 3GPP TS 24.008 Table 10.5.118 and
+/// 3GPP TS 23.040 Table 9.1.2.5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum, Default)]
 #[repr(u8)]
 pub enum TypeOfAddress {
-    /// National / Unknown numbering plan (0x81 = 129).
-    National = 129,
+    /// Non-standard placeholder (0) transmitted by Android Goldfish RIL in
+    /// `RadioMessaging::setSmscAddress` (`AT+CSCA=...,0`).
+    /// Not a valid 3GPP TOA octet (Bit 8 is 0).
+    GoldfishCompat = 0,
+    /// Default 3GPP Type of Address (0x81 = 129).
+    /// TON = 000 (Unknown), NPI = 0001 (ISDN / telephony E.164).
+    /// Mandated by 3GPP TS 27.005 §3.1 when number lacks '+'.
+    #[default]
+    Unknown = 129,
     /// International numbering plan with E.164 (0x91 = 145).
+    /// TON = 001 (International), NPI = 0001 (ISDN / telephony E.164).
+    /// Mandated by 3GPP TS 27.005 §3.1 when number starts with '+'.
     International = 145,
 }
 
 impl TypeOfAddress {
     pub fn from_number(number: &str) -> Self {
-        if number.starts_with('+') { Self::International } else { Self::National }
+        if number.starts_with('+') { Self::International } else { Self::Unknown }
     }
 
     pub const fn is_international(self) -> bool {
@@ -521,6 +660,11 @@ impl From<TypeOfAddress> for u8 {
 
 impl<'a> Parsable<'a> for PhoneNumber {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
+        if let Ok((rem, qs)) = QuotedString::parse(input) {
+            let (_, p) = Self::parse(qs.as_str().as_bytes())?;
+            return Ok((rem, p));
+        }
+
         use nom::{
             bytes::complete::{tag, take_while1},
             combinator::{opt, recognize},
@@ -529,7 +673,7 @@ impl<'a> Parsable<'a> for PhoneNumber {
 
         // ONLY allow clean number characters (digits, *, #, and optional leading +)
         let (remaining, digits) = recognize(pair(
-            opt(tag(b"+")),
+            opt(tag::<_, _, nom::error::Error<&[u8]>>(b"+")),
             take_while1(|c: u8| matches!(c, b'0'..=b'9' | b'*' | b'#')),
         ))(input)?;
 
@@ -545,8 +689,8 @@ impl<'a> Parsable<'a> for PhoneNumber {
 pub struct DialString(String);
 
 impl DialString {
-    pub fn parse(bytes: &[u8]) -> Option<Self> {
-        let s = std::str::from_utf8(bytes).ok()?.trim();
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim();
         // Allow all standard dial characters and modifiers
         let is_valid = !s.is_empty()
             && s.chars().all(|c| {
@@ -615,6 +759,14 @@ impl DialString {
     }
 }
 
+impl std::str::FromStr for DialString {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s).ok_or(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DialArgs {
     pub number: PhoneNumber,
@@ -625,7 +777,10 @@ pub struct DialArgs {
 impl<'a> Parsable<'a> for DialArgs {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         let (input, content) = crate::parser::parse_until_semicolon(input)?;
-        let dial_str = DialString::parse(content).ok_or_else(|| {
+        let s = std::str::from_utf8(content).map_err(|_err| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+        })?;
+        let dial_str: DialString = s.parse().map_err(|_err| {
             nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))
         })?;
         let number = dial_str.clean_number().ok_or_else(|| {
@@ -712,7 +867,7 @@ impl fmt::Debug for ModemSink {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum CmeeMode {
     #[default]
@@ -721,19 +876,7 @@ pub enum CmeeMode {
     Verbose = 2, // Returns "+CME ERROR: <verbose string>"
 }
 
-impl<'a> Parsable<'a> for CmeeMode {
-    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Disable)),
-            1 => Ok((input, Self::Numeric)),
-            2 => Ok((input, Self::Verbose)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum RegistrationUnsolicitedMode {
     #[default]
@@ -742,37 +885,13 @@ pub enum RegistrationUnsolicitedMode {
     EnableWithLocation = 2,
 }
 
-impl<'a> Parsable<'a> for RegistrationUnsolicitedMode {
-    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Disable)),
-            1 => Ok((input, Self::Enable)),
-            2 => Ok((input, Self::EnableWithLocation)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum RadioPowerLevel {
     Minimum = 0,
     #[default]
     Full = 1,
     DisableRf = 4,
-}
-
-impl<'a> Parsable<'a> for RadioPowerLevel {
-    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Minimum)),
-            1 => Ok((input, Self::Full)),
-            4 => Ok((input, Self::DisableRf)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
 }
 
 /// Standardized 3GPP TS 27.007 Section 9.2 Mobile Equipment Error Codes
@@ -801,6 +920,14 @@ pub enum CmeError {
     FixedDialNumberOnlyAllowed,
     Custom(u32, &'static str),
 }
+
+impl fmt::Display for CmeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.verbose_str())
+    }
+}
+
+impl std::error::Error for CmeError {}
 
 impl CmeError {
     pub fn code(&self) -> u32 {
@@ -866,7 +993,102 @@ impl CmeError {
     }
 }
 
-/// Combined structured response enum across all modem-rs services.
+/// Standard 3GPP TS 27.005 Message Service Failure Error Codes (+CMS ERROR).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CmsError {
+    InvalidPduParameter,
+    SimNotInserted,
+    SimPinRequired,
+    InvalidMemoryIndex,
+    MemoryFull,
+}
+
+impl fmt::Display for CmsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.verbose_str())
+    }
+}
+
+impl std::error::Error for CmsError {}
+
+impl CmsError {
+    pub fn code(&self) -> u32 {
+        match *self {
+            Self::InvalidPduParameter => 304,
+            Self::SimNotInserted => 310,
+            Self::SimPinRequired => 311,
+            Self::InvalidMemoryIndex => 321,
+            Self::MemoryFull => 322,
+        }
+    }
+
+    pub fn verbose_str(&self) -> &'static str {
+        match *self {
+            Self::InvalidPduParameter => "invalid PDU mode parameter",
+            Self::SimNotInserted => "SIM not inserted",
+            Self::SimPinRequired => "SIM PIN required",
+            Self::InvalidMemoryIndex => "invalid memory index",
+            Self::MemoryFull => "memory full",
+        }
+    }
+
+    pub fn format_response(&self, mode: CmeeMode) -> std::borrow::Cow<'static, str> {
+        match mode {
+            CmeeMode::Disable => std::borrow::Cow::Borrowed("ERROR\r\n"),
+            CmeeMode::Numeric => {
+                std::borrow::Cow::Owned(format!("+CMS ERROR: {}\r\n", self.code()))
+            }
+            CmeeMode::Verbose => {
+                std::borrow::Cow::Owned(format!("+CMS ERROR: {}\r\n", self.verbose_str()))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
+#[repr(u8)]
+pub enum SmsMessageStatus {
+    #[default]
+    ReceivedUnread = 0,
+    ReceivedRead = 1,
+    StoredUnsent = 2,
+    StoredSent = 3,
+}
+
+impl From<SmsMessageStatus> for u8 {
+    fn from(val: SmsMessageStatus) -> Self {
+        val as u8
+    }
+}
+
+impl std::fmt::Display for SmsMessageStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+pub type MessageStatus = SmsMessageStatus;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SimSmsMessage {
+    pub status: SmsMessageStatus,
+    pub pdu: Vec<u8>,
+}
+
+impl SimSmsMessage {
+    #[cfg(test)]
+    pub fn new(status: SmsMessageStatus, pdu: Vec<u8>) -> Self {
+        Self { status, pdu }
+    }
+
+    /// Marks received unread messages as read (TS 27.005 §3.1 / §3.5.3).
+    pub fn mark_read(&mut self) {
+        if self.status == SmsMessageStatus::ReceivedUnread {
+            self.status = SmsMessageStatus::ReceivedRead;
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
     Sim(SimResponse),
@@ -944,37 +1166,74 @@ impl From<StkResponse> for Response {
     }
 }
 
-/// Contains all the results of a successfully executed command.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct HandledCommand {
-    /// The immediate responses to send back to the client.
     pub responses: Vec<Response>,
-    /// An optional follow-up action for the CellularNetworkSimulator to
-    /// perform.
     pub actions: Vec<CommandAction>,
 }
 
 impl HandledCommand {
-    /// Creates a result with a simple "OK" response and no follow-up action.
     pub fn ok() -> Self {
         Self { responses: vec![Response::Ok], actions: vec![] }
     }
 
-    /// Creates a result with a simple "OK" response AND a follow-up action.
     pub fn ok_with_actions(actions: Vec<CommandAction>) -> Self {
         Self { responses: vec![Response::Ok], actions }
     }
 }
 
-/// Represents the outcome of a command execution from the parser.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CommandError {
+    Cme(CmeError),
+    Cms(CmsError),
+    #[default]
+    Generic,
+}
+
+impl fmt::Display for CommandError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cme(err) => write!(f, "{err}"),
+            Self::Cms(err) => write!(f, "{err}"),
+            Self::Generic => write!(f, "generic error"),
+        }
+    }
+}
+
+impl std::error::Error for CommandError {}
+
+impl CommandError {
+    pub fn format_response(&self, mode: CmeeMode) -> std::borrow::Cow<'static, str> {
+        match self {
+            Self::Cme(err) => match mode {
+                CmeeMode::Disable => std::borrow::Cow::Borrowed("ERROR\r\n"),
+                _ => std::borrow::Cow::Owned(err.format_response(mode)),
+            },
+            Self::Cms(err) => err.format_response(mode),
+            Self::Generic => std::borrow::Cow::Borrowed("ERROR\r\n"),
+        }
+    }
+}
+
+impl From<CmeError> for CommandError {
+    fn from(err: CmeError) -> Self {
+        Self::Cme(err)
+    }
+}
+
+impl From<CmsError> for CommandError {
+    fn from(err: CmsError) -> Self {
+        Self::Cms(err)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionResult {
     /// The command was successfully handled, yielding responses and/or action.
     Success(HandledCommand),
 
-    /// The command failed, optionally with a structured Mobile Equipment error
-    /// and/or URCs emitted prior to failure.
-    Error { cme: Option<CmeError>, urcs: Vec<Response> },
+    /// The command failed with an explicit error reason and optional URCs.
+    Error { error: CommandError, urcs: Vec<Response> },
 
     /// This command has not been refactored yet and should be handled by the
     /// legacy system.
@@ -991,11 +1250,51 @@ impl ExecutionResult {
     }
 
     pub fn error() -> Self {
-        Self::Error { cme: None, urcs: Vec::new() }
+        Self::Error { error: CommandError::Generic, urcs: Vec::new() }
+    }
+
+    pub fn error_with_urcs(error: impl Into<CommandError>, urcs: Vec<Response>) -> Self {
+        Self::Error { error: error.into(), urcs }
     }
 
     pub fn cme_error(cme: CmeError) -> Self {
-        Self::Error { cme: Some(cme), urcs: Vec::new() }
+        Self::Error { error: CommandError::Cme(cme), urcs: Vec::new() }
+    }
+
+    pub fn cms_error(cms: CmsError) -> Self {
+        Self::Error { error: CommandError::Cms(cms), urcs: Vec::new() }
+    }
+
+    /// Formats the error and preceding URCs into the target string buffer.
+    /// Returns `true` if this was an Error or Unhandled result, `false` on
+    /// Success.
+    pub fn format_error_into(&self, out: &mut String, mode: CmeeMode) -> bool {
+        match self {
+            Self::Error { error, urcs } => {
+                for r in urcs {
+                    let _ = write!(out, "{r}");
+                }
+                out.push_str(&error.format_response(mode));
+                true
+            }
+            Self::Unhandled => {
+                out.push_str("ERROR\r\n");
+                true
+            }
+            Self::Success(_) => false,
+        }
+    }
+
+    pub fn with_urcs(mut self, mut urcs: Vec<Response>) -> Self {
+        match self {
+            Self::Error { urcs: ref mut target_urcs, .. } => *target_urcs = urcs,
+            Self::Success(ref mut handled) => {
+                urcs.append(&mut handled.responses);
+                handled.responses = urcs;
+            }
+            Self::Unhandled => {}
+        }
+        self
     }
 }
 
@@ -1033,6 +1332,18 @@ impl From<CmeError> for ExecutionResult {
     }
 }
 
+impl From<CmsError> for ExecutionResult {
+    fn from(err: CmsError) -> Self {
+        Self::cms_error(err)
+    }
+}
+
+impl From<CommandError> for ExecutionResult {
+    fn from(err: CommandError) -> Self {
+        Self::Error { error: err, urcs: Vec::new() }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HostEvent {
     SinkError(u32),
@@ -1050,13 +1361,17 @@ pub struct ModemInfo {
     pub ber: u32,
     pub voice_registration: RegistrationStatus,
     pub data_registration: RegistrationStatus,
+    pub network_configs: Vec<CellNetworkConfig>,
 }
 
-/// Represents the signal strength parameters for all supported tech layout (22
-/// fields). Default values are initialized to standard "unknown" values (99 for
-/// RSSI, i32::MAX for others).
+/// Multi-technology composite signal strength (22 fields) required by Android's
+/// Radio AIDL (`android.hardware.radio.network.SignalStrength`).
+///
+/// Note: While standard 3GPP TS 27.007 §8.5 `+CSQ` only defines `<rssi>,<ber>`
+/// ([`SignalQuality`]), Android's emulator RIL overloads `+CSQ` to pass this
+/// full AIDL parcel (b/206814247).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SignalStrength {
+pub struct AidlSignalStrength {
     pub gsm_rssi: i32,
     pub gsm_ber: i32,
     pub cdma_dbm: i32,
@@ -1081,7 +1396,7 @@ pub struct SignalStrength {
     pub nr_csi_sinr: i32,
 }
 
-impl Default for SignalStrength {
+impl Default for AidlSignalStrength {
     fn default() -> Self {
         let max = i32::MAX;
         let unknown = crate::constants::CSQ_SIGNAL_UNKNOWN as i32;
@@ -1112,10 +1427,45 @@ impl Default for SignalStrength {
     }
 }
 
-impl SignalStrength {
-    pub fn to_csq_response(&self) -> String {
-        format!(
-            "+CSQ: {},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\r\n",
+impl AidlSignalStrength {
+    pub fn from_quality(quality: SignalQuality, act: AccessTechnology) -> Self {
+        let SignalQuality { rssi, ber } = quality;
+        let mut ss = Self::default();
+        match act {
+            AccessTechnology::Gsm => {
+                ss.gsm_rssi = rssi as i32;
+                ss.gsm_ber = ber as i32;
+            }
+            AccessTechnology::Wcdma => {
+                ss.wcdma_rssi = rssi as i32;
+                ss.wcdma_ber = ber as i32;
+            }
+            AccessTechnology::Lte => {
+                ss.lte_rssi = rssi as i32;
+                ss.lte_rsrp = Self::rssi_to_rsrp(rssi);
+            }
+            AccessTechnology::Nr => {
+                ss.nr_ss_rsrp = Self::rssi_to_rsrp(rssi);
+            }
+        }
+        ss
+    }
+
+    fn rssi_to_rsrp(rssi: u8) -> i32 {
+        if rssi == crate::constants::CSQ_SIGNAL_UNKNOWN {
+            return i32::MAX;
+        }
+        let rsrp_dbm = -140 + (rssi as i32 * 3);
+        let rsrp_csq = -rsrp_dbm;
+        rsrp_csq.clamp(44, 140)
+    }
+}
+
+impl std::fmt::Display for AidlSignalStrength {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.gsm_rssi,
             self.gsm_ber,
             self.cdma_dbm,
@@ -1142,7 +1492,7 @@ impl SignalStrength {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum CopsMode {
     #[default]
@@ -1153,39 +1503,13 @@ pub enum CopsMode {
     ManualAutomatic = 4,
 }
 
-impl<'a> Parsable<'a> for CopsMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Automatic)),
-            1 => Ok((input, Self::Manual)),
-            2 => Ok((input, Self::Deregister)),
-            3 => Ok((input, Self::SetFormatOnly)),
-            4 => Ok((input, Self::ManualAutomatic)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum CopsFormat {
     LongAlphanumeric = 0,
     ShortAlphanumeric = 1,
     #[default]
     Numeric = 2,
-}
-
-impl<'a> Parsable<'a> for CopsFormat {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::LongAlphanumeric)),
-            1 => Ok((input, Self::ShortAlphanumeric)),
-            2 => Ok((input, Self::Numeric)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1256,7 +1580,7 @@ impl<'a> Parsable<'a> for CallHoldParam {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
 pub enum FacilityLockMode {
     Unlock = 0,
@@ -1264,19 +1588,7 @@ pub enum FacilityLockMode {
     QueryStatus = 2,
 }
 
-impl<'a> Parsable<'a> for FacilityLockMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Unlock)),
-            1 => Ok((input, Self::Lock)),
-            2 => Ok((input, Self::QueryStatus)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum SmsBroadcastMode {
     #[default]
@@ -1284,18 +1596,41 @@ pub enum SmsBroadcastMode {
     Discard = 1,
 }
 
-impl<'a> Parsable<'a> for SmsBroadcastMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Accept)),
-            1 => Ok((input, Self::Discard)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
+/// Cell broadcast message configuration (3GPP TS 27.005 §3.3.4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BroadcastConfig {
+    pub mode: SmsBroadcastMode,
+    pub mids: String,
+    pub dcss: String,
+}
+
+impl Default for BroadcastConfig {
+    fn default() -> Self {
+        Self { mode: SmsBroadcastMode::Accept, mids: String::new(), dcss: String::new() }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Radio signal quality parameters (3GPP TS 27.007 §8.5 `+CSQ`: `<rssi>`,
+/// `<ber>`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SignalQuality {
+    pub rssi: u8,
+    pub ber: u8,
+}
+
+impl SignalQuality {
+    pub const fn new(rssi: u8, ber: u8) -> Self {
+        Self { rssi, ber }
+    }
+}
+
+impl Default for SignalQuality {
+    fn default() -> Self {
+        Self { rssi: 20, ber: 99 }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum ProductSerialNumberType {
     #[default]
@@ -1305,106 +1640,45 @@ pub enum ProductSerialNumberType {
     Svn = 3,
 }
 
-impl<'a> Parsable<'a> for ProductSerialNumberType {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::ImeiWithInfo)),
-            1 => Ok((input, Self::Imei)),
-            2 => Ok((input, Self::ImeiWithSvn)),
-            3 => Ok((input, Self::Svn)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum IcfFormat {
     Data8Stop2 = 1,
     Data8Parity1Stop1 = 2,
+    #[default]
     Data8Stop1 = 3,
     Data7Stop2 = 4,
     Data7Parity1Stop1 = 5,
     Data7Stop1 = 6,
 }
 
-impl<'a> Parsable<'a> for IcfFormat {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            1 => Ok((input, Self::Data8Stop2)),
-            2 => Ok((input, Self::Data8Parity1Stop1)),
-            3 => Ok((input, Self::Data8Stop1)),
-            4 => Ok((input, Self::Data7Stop2)),
-            5 => Ok((input, Self::Data7Parity1Stop1)),
-            6 => Ok((input, Self::Data7Stop1)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum IcfParity {
     Odd = 0,
     Even = 1,
     Mark = 2,
+    #[default]
     Space = 3,
 }
 
-impl<'a> Parsable<'a> for IcfParity {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Odd)),
-            1 => Ok((input, Self::Even)),
-            2 => Ok((input, Self::Mark)),
-            3 => Ok((input, Self::Space)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum FlowControlMode {
     None = 0,
     XonXoff = 1,
+    #[default]
     Hardware = 2,
 }
 
-impl<'a> Parsable<'a> for FlowControlMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::None)),
-            1 => Ok((input, Self::XonXoff)),
-            2 => Ok((input, Self::Hardware)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
 pub enum CallMode {
     SingleMode = 0,
     AlternateVoiceData = 1,
 }
 
-impl<'a> Parsable<'a> for CallMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::SingleMode)),
-            1 => Ok((input, Self::AlternateVoiceData)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum CdmaSubscriptionSource {
     #[default]
@@ -1412,71 +1686,12 @@ pub enum CdmaSubscriptionSource {
     Nv = 1,
 }
 
-impl<'a> Parsable<'a> for CdmaSubscriptionSource {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::RuimSim)),
-            1 => Ok((input, Self::Nv)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
-pub enum ClipActivation {
-    #[default]
-    Disable = 0,
-    Enable = 1,
-}
-
-impl<'a> Parsable<'a> for ClipActivation {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Disable)),
-            1 => Ok((input, Self::Enable)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipProvisionStatus {
     NotProvisioned = 0,
     Provisioned = 1,
     Unknown = 2,
-}
-
-impl<'a> Parsable<'a> for ClipProvisionStatus {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::NotProvisioned)),
-            1 => Ok((input, Self::Provisioned)),
-            2 => Ok((input, Self::Unknown)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum CallWaitingPresentation {
-    Disable = 0,
-    Enable = 1,
-}
-
-impl<'a> Parsable<'a> for CallWaitingPresentation {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Disable)),
-            1 => Ok((input, Self::Enable)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1498,20 +1713,20 @@ impl NumberPresentation {
     pub fn format_number<'a>(&self, number: Option<&'a PhoneNumber>) -> FormattedNumber<'a> {
         match self {
             Self::Restricted | Self::NotAvailable => {
-                FormattedNumber { number: "", toa: TypeOfAddress::National }
+                FormattedNumber { number: "", toa: TypeOfAddress::Unknown }
             }
             Self::Allowed => {
                 if let Some(num) = number {
                     FormattedNumber { number: num.as_str(), toa: num.toa() }
                 } else {
-                    FormattedNumber { number: "", toa: TypeOfAddress::National }
+                    FormattedNumber { number: "", toa: TypeOfAddress::Unknown }
                 }
             }
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
 pub enum CallWaitingMode {
     Disable = 0,
@@ -1519,34 +1734,11 @@ pub enum CallWaitingMode {
     Query = 2,
 }
 
-impl<'a> Parsable<'a> for CallWaitingMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Disable)),
-            1 => Ok((input, Self::Enable)),
-            2 => Ok((input, Self::Query)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
 pub enum CallWaitingStatus {
     NotActive = 0,
     Active = 1,
-}
-
-impl<'a> Parsable<'a> for CallWaitingStatus {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::NotActive)),
-            1 => Ok((input, Self::Active)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
 }
 
 impl<'a> Parsable<'a> for bool {
@@ -1560,7 +1752,7 @@ impl<'a> Parsable<'a> for bool {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum ClirMode {
     #[default]
@@ -1569,19 +1761,7 @@ pub enum ClirMode {
     Suppression = 2,
 }
 
-impl<'a> Parsable<'a> for ClirMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::SubscriptionDefault)),
-            1 => Ok((input, Self::Invocation)),
-            2 => Ok((input, Self::Suppression)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
 pub enum CallForwardingReason {
     Unconditional = 0,
@@ -1592,22 +1772,7 @@ pub enum CallForwardingReason {
     AllConditional = 5,
 }
 
-impl<'a> Parsable<'a> for CallForwardingReason {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Unconditional)),
-            1 => Ok((input, Self::Busy)),
-            2 => Ok((input, Self::NoReply)),
-            3 => Ok((input, Self::NotReachable)),
-            4 => Ok((input, Self::All)),
-            5 => Ok((input, Self::AllConditional)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
 pub enum CallForwardingMode {
     Disable = 0,
@@ -1617,38 +1782,12 @@ pub enum CallForwardingMode {
     Erasure = 4,
 }
 
-impl<'a> Parsable<'a> for CallForwardingMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Disable)),
-            1 => Ok((input, Self::Enable)),
-            2 => Ok((input, Self::Query)),
-            3 => Ok((input, Self::Registration)),
-            4 => Ok((input, Self::Erasure)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ParsableEnum)]
 #[repr(u8)]
 pub enum UssdMode {
     DisableUrc = 0,
     EnableUrc = 1,
     Cancel = 2,
-}
-
-impl<'a> Parsable<'a> for UssdMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::DisableUrc)),
-            1 => Ok((input, Self::EnableUrc)),
-            2 => Ok((input, Self::Cancel)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1672,7 +1811,7 @@ pub enum UssdStatus {
     NetworkTimeout = 5,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum SpeakerMuteMode {
     Off = 0,
@@ -1682,38 +1821,13 @@ pub enum SpeakerMuteMode {
     OffDialRingOnConnectOffCarrier = 3,
 }
 
-impl<'a> Parsable<'a> for SpeakerMuteMode {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Off)),
-            1 => Ok((input, Self::OnAndOffOnCarrier)),
-            2 => Ok((input, Self::AlwaysOn)),
-            3 => Ok((input, Self::OffDialRingOnConnectOffCarrier)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum CdmaRoamingPreference {
     #[default]
     HomeOnly = 0,
     RoamingOnly = 1,
     Automatic = 2,
-}
-
-impl<'a> Parsable<'a> for CdmaRoamingPreference {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::HomeOnly)),
-            1 => Ok((input, Self::RoamingOnly)),
-            2 => Ok((input, Self::Automatic)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1729,13 +1843,13 @@ pub enum PdpType {
 impl<'a> Parsable<'a> for PdpType {
     fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
         let (input, quoted) = QuotedString::parse(input)?;
-        match quoted.as_ref() {
-            b"IP" => Ok((input, Self::Ip)),
-            b"IPV6" => Ok((input, Self::Ipv6)),
-            b"IPV4V6" => Ok((input, Self::Ipv4v6)),
-            b"PPP" => Ok((input, Self::Ppp)),
-            b"Non-IP" => Ok((input, Self::NonIp)),
-            b"Cell" => Ok((input, Self::Cell)),
+        match quoted.as_str() {
+            "IP" => Ok((input, Self::Ip)),
+            "IPV6" => Ok((input, Self::Ipv6)),
+            "IPV4V6" => Ok((input, Self::Ipv4v6)),
+            "PPP" => Ok((input, Self::Ppp)),
+            "Non-IP" => Ok((input, Self::NonIp)),
+            "Cell" => Ok((input, Self::Cell)),
             _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
         }
     }
@@ -1750,6 +1864,30 @@ impl std::fmt::Display for PdpType {
             PdpType::Ppp => write!(f, "PPP"),
             PdpType::NonIp => write!(f, "Non-IP"),
             PdpType::Cell => write!(f, "Cell"),
+        }
+    }
+}
+
+/// 3GPP TS 27.007 §10.1.12 Layer 2 Protocol `<L2P>` for `AT+CGDATA`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Layer2Protocol {
+    #[default]
+    Ppp,
+    Null,
+    Ip,
+    Packet,
+}
+
+impl std::str::FromStr for Layer2Protocol {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "PPP" => Ok(Self::Ppp),
+            "NULL" => Ok(Self::Null),
+            "IP" => Ok(Self::Ip),
+            "PACKET" => Ok(Self::Packet),
+            _ => Err(()),
         }
     }
 }
@@ -1784,25 +1922,7 @@ impl std::fmt::Display for CmeeMode {
     }
 }
 
-impl std::fmt::Display for CallHoldAction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-impl std::fmt::Display for FacilityLockMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
 impl std::fmt::Display for SmsBroadcastMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-impl std::fmt::Display for ProductSerialNumberType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", *self as u8)
     }
@@ -1826,31 +1946,7 @@ impl std::fmt::Display for FlowControlMode {
     }
 }
 
-impl std::fmt::Display for CallMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
 impl std::fmt::Display for CdmaSubscriptionSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-impl std::fmt::Display for ClipActivation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-impl std::fmt::Display for CallWaitingPresentation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-impl std::fmt::Display for CallWaitingMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", *self as u8)
     }
@@ -1863,24 +1959,6 @@ impl std::fmt::Display for CallWaitingStatus {
 }
 
 impl std::fmt::Display for ClirMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-impl std::fmt::Display for CallForwardingReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-impl std::fmt::Display for CallForwardingMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-impl std::fmt::Display for UssdMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", *self as u8)
     }
@@ -1916,7 +1994,8 @@ impl std::fmt::Display for CdmaRoamingPreference {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Radio access technologies modelled by the modem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum AccessTechnology {
     Gsm = 0,
@@ -1926,15 +2005,19 @@ pub enum AccessTechnology {
     Nr = 11,
 }
 
-impl<'a> Parsable<'a> for AccessTechnology {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            0 => Ok((input, Self::Gsm)),
-            2 => Ok((input, Self::Wcdma)),
-            7 => Ok((input, Self::Lte)),
-            11 => Ok((input, Self::Nr)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+impl AccessTechnology {
+    pub fn from_wire(wire: u8, quirks: Quirks) -> Result<Self, ExecutionResult> {
+        let is_goldfish = quirks.goldfish_ril_37_or_earlier;
+        match wire {
+            0 | 1 | 8 => Ok(Self::Gsm),
+            2 | 4 | 5 => Ok(Self::Wcdma),
+            3 if is_goldfish => Ok(Self::Lte),
+            3 => Ok(Self::Gsm),
+            6 if is_goldfish => Ok(Self::Nr),
+            6 => Ok(Self::Wcdma),
+            7 | 9 | 10 => Ok(Self::Lte),
+            11 | 12 => Ok(Self::Nr),
+            _ => Err(ExecutionResult::cme_error(CmeError::IncorrectParameters)),
         }
     }
 }
@@ -1945,7 +2028,7 @@ impl std::fmt::Display for AccessTechnology {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
 #[repr(u8)]
 pub enum CtecTechnology {
     Gsm = 1,
@@ -1955,50 +2038,150 @@ pub enum CtecTechnology {
     Nr = 64,
 }
 
-impl<'a> Parsable<'a> for CtecTechnology {
-    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
-        let (input, val) = u8::parse(input)?;
-        match val {
-            1 => Ok((input, Self::Gsm)),
-            2 => Ok((input, Self::Wcdma)),
-            32 => Ok((input, Self::Lte)),
-            64 => Ok((input, Self::Nr)),
-            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
-        }
-    }
-}
-
 impl std::fmt::Display for CtecTechnology {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", *self as u8)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Facility locks supported by AT+CLCK and AT+CPWD.
+///
+/// Ref: 3GPP TS 27.007 § 7.4 (Facility lock +CLCK), § 7.5 (Change password
+/// +CPWD), 3GPP TS 22.088 (Call Barring supplementary services),
+/// 3GPP TS 22.030 § 6.5.6.5 (Supplementary service control codes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Facility {
+    /// SIM lock (PIN1) — "SC" (TS 27.007 § 7.4).
     SimPin,
+    /// SIM PIN2 — "P2" (TS 27.007 § 7.5). Note: Used with +CPWD to change PIN2.
+    SimPin2,
+    /// Fixed Dialing Number — "FD" (TS 27.007 § 7.4).
     FixedDial,
-    Other,
+    /// Bar All Outgoing Calls — "AO" (TS 27.007 § 7.4, TS 22.088 BAOC,
+    /// activation code 33).
+    BarAllOutgoing,
+    /// Bar Outgoing International Calls — "OI" (TS 27.007 § 7.4, TS 22.088
+    /// BOIC, activation code 331).
+    BarOutgoingInternational,
+    /// Bar Outgoing International Calls except to Home PLMN — "OX" (TS 27.007 §
+    /// 7.4, TS 22.088 BOIC-exHC, activation code 332).
+    BarOutgoingInternationalExceptHome,
+    /// Bar All Incoming Calls — "AI" (TS 27.007 § 7.4, TS 22.088 BAIC,
+    /// activation code 35).
+    BarAllIncoming,
+    /// Bar Incoming Calls when Roaming outside the home PLMN country — "IR" (TS
+    /// 27.007 § 7.4, TS 22.088 BIC-Roam, activation code 351).
+    BarIncomingRoaming,
+    /// All Barring Services — "AB" (TS 27.007 § 7.4, TS 22.030 § 6.5.6.5,
+    /// activation code 330).
+    BarAll,
+    /// All Outgoing Barring Services — "AG" (TS 27.007 § 7.4, TS 22.030 §
+    /// 6.5.6.5, activation code 333).
+    BarAllOutgoingServices,
+    /// All Incoming Barring Services — "AC" (TS 27.007 § 7.4, TS 22.030 §
+    /// 6.5.6.5, activation code 353).
+    BarAllIncomingServices,
+    /// Any unrecognized facility string.
+    Unsupported,
+}
+
+impl Facility {
+    /// Returns the standard 3GPP 2-character facility code, or "UNSUPPORTED".
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SimPin => "SC",
+            Self::SimPin2 => "P2",
+            Self::FixedDial => "FD",
+            Self::BarAllOutgoing => "AO",
+            Self::BarOutgoingInternational => "OI",
+            Self::BarOutgoingInternationalExceptHome => "OX",
+            Self::BarAllIncoming => "AI",
+            Self::BarIncomingRoaming => "IR",
+            Self::BarAll => "AB",
+            Self::BarAllOutgoingServices => "AG",
+            Self::BarAllIncomingServices => "AC",
+            Self::Unsupported => "UNSUPPORTED",
+        }
+    }
+
+    /// Resolves a facility from its 2-character string code.
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "SC" => Self::SimPin,
+            "P2" => Self::SimPin2,
+            "FD" => Self::FixedDial,
+            "AO" => Self::BarAllOutgoing,
+            "OI" => Self::BarOutgoingInternational,
+            "OX" => Self::BarOutgoingInternationalExceptHome,
+            "AI" => Self::BarAllIncoming,
+            "IR" => Self::BarIncomingRoaming,
+            "AB" => Self::BarAll,
+            "AG" => Self::BarAllOutgoingServices,
+            "AC" => Self::BarAllIncomingServices,
+            _ => Self::Unsupported,
+        }
+    }
+
+    /// Returns true if this facility is a 3GPP TS 22.088 / TS 22.030 call
+    /// barring supplementary service.
+    pub const fn is_call_barring(self) -> bool {
+        matches!(
+            self,
+            Self::BarAll
+                | Self::BarAllOutgoingServices
+                | Self::BarAllIncomingServices
+                | Self::BarAllOutgoing
+                | Self::BarOutgoingInternational
+                | Self::BarOutgoingInternationalExceptHome
+                | Self::BarAllIncoming
+                | Self::BarIncomingRoaming
+        )
+    }
 }
 
 impl<'a> Parsable<'a> for Facility {
     fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
         let (input, quoted) = QuotedString::parse(input)?;
-        match quoted.as_ref() {
-            b"SC" => Ok((input, Self::SimPin)),
-            b"FD" => Ok((input, Self::FixedDial)),
-            _ => Ok((input, Self::Other)),
+        Ok((input, Self::from_str(quoted.as_str())))
+    }
+}
+
+/// Query selector for AT+CPINR remaining retry queries (3GPP TS 27.007 § 8.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PinType {
+    SimPin,
+    SimPuk,
+    SimPin2,
+    SimPuk2,
+}
+
+impl PinType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SimPin => "SIM PIN",
+            Self::SimPuk => "SIM PUK",
+            Self::SimPin2 => "SIM PIN2",
+            Self::SimPuk2 => "SIM PUK2",
         }
     }
 }
 
-impl std::fmt::Display for Facility {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Facility::SimPin => write!(f, "SC"),
-            Facility::FixedDial => write!(f, "FD"),
-            Facility::Other => write!(f, "OTHER"),
-        }
+impl<'a> Parsable<'a> for PinType {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, quoted) = QuotedString::parse(input)?;
+        let pin_type = match quoted.as_str() {
+            "SIM PIN" => Self::SimPin,
+            "SIM PUK" => Self::SimPuk,
+            "SIM PIN2" => Self::SimPin2,
+            "SIM PUK2" => Self::SimPuk2,
+            _ => {
+                return Err(nom::Err::Error(nom::error::Error::new(
+                    input,
+                    nom::error::ErrorKind::Tag,
+                )));
+            }
+        };
+        Ok((input, pin_type))
     }
 }
 
@@ -2006,6 +2189,281 @@ impl<'a> Parsable<'a> for crate::apdu::Instruction {
     fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
         let (input, val) = u8::parse(input)?;
         Ok((input, crate::apdu::Instruction::from(val)))
+    }
+}
+
+/// ITU-T V.250 §6.3.6 Speaker volume level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
+#[repr(u8)]
+pub enum SpeakerVolume {
+    Off = 0,
+    #[default]
+    Low = 1,
+    Medium = 2,
+    High = 3,
+}
+
+impl std::fmt::Display for SpeakerVolume {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+/// 3GPP TS 27.007 §10.1.13 Packet Domain Event Reporting mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ParsableEnum)]
+#[repr(u8)]
+pub enum PacketEventReportingMode {
+    #[default]
+    Buffer = 0,
+    Discard = 1,
+    Forward = 2,
+}
+
+/// 3GPP TS 27.007 §5.5 TE character set selection (+CSCS).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CharacterSet {
+    #[default]
+    Gsm,
+    Hex,
+    Ira,
+    Pccp437,
+    Iso8859_1,
+    Ucs2,
+    Utf8,
+}
+
+impl<'a> Parsable<'a> for CharacterSet {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (rem, qs) = QuotedString::parse(input)?;
+        match qs.as_str() {
+            "GSM" => Ok((rem, Self::Gsm)),
+            "HEX" => Ok((rem, Self::Hex)),
+            "IRA" => Ok((rem, Self::Ira)),
+            "PCCP437" => Ok((rem, Self::Pccp437)),
+            "8859-1" => Ok((rem, Self::Iso8859_1)),
+            "UCS2" => Ok((rem, Self::Ucs2)),
+            "UTF-8" => Ok((rem, Self::Utf8)),
+            _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Tag))),
+        }
+    }
+}
+
+/// 3GPP TS 22.004 / TS 27.007 §7.4, §7.11, §7.12 Telecommunication service
+/// class `<class>`. Represented as a sum of integers (bitmask).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ServiceClass(pub u8);
+
+impl ServiceClass {
+    pub const VOICE: Self = Self(1);
+    pub const DATA: Self = Self(2);
+    pub const FAX: Self = Self(4);
+    pub const VOICE_DATA_FAX: Self = Self(7);
+    pub const SHORT_MESSAGE_SERVICE: Self = Self(8);
+    pub const DATA_CIRCUIT_SYNC: Self = Self(16);
+    pub const DATA_CIRCUIT_ASYNC: Self = Self(32);
+    pub const DEDICATED_PACKET_ACCESS: Self = Self(64);
+    pub const DEDICATED_PAD_ACCESS: Self = Self(128);
+    pub const ALL_SERVICES: Self = Self(255);
+
+    /// Returns `true` if all bits in `other` are set in `self`.
+    pub const fn contains(self, other: Self) -> bool {
+        (self.0 & other.0) == other.0
+    }
+
+    pub const fn as_u8(self) -> u8 {
+        self.0
+    }
+}
+
+impl Default for ServiceClass {
+    fn default() -> Self {
+        Self::VOICE_DATA_FAX
+    }
+}
+
+impl<'a> Parsable<'a> for ServiceClass {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, val) = <u8 as Parsable>::parse(input)?;
+        Ok((input, Self(val)))
+    }
+}
+
+impl std::fmt::Display for ServiceClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// 3GPP TS 27.007 §7.14 DTMF tone character [0-9*#A-Da-d].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DtmfTone(pub u8);
+
+impl std::fmt::Display for DtmfTone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0 as char)
+    }
+}
+
+impl<'a> Parsable<'a> for DtmfTone {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (rem, s) = parse_quoted_or_unquoted(input)?;
+        let mut chars = s.chars();
+        let ch = chars.next().ok_or_else(|| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+        })?;
+        if chars.next().is_some() {
+            return Err(nom::Err::Error(nom::error::Error::new(
+                input,
+                nom::error::ErrorKind::Verify,
+            )));
+        }
+
+        if matches!(ch, '0'..='9' | '*' | '#' | 'A'..='D' | 'a'..='d') {
+            Ok((rem, DtmfTone(ch as u8)))
+        } else {
+            Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify)))
+        }
+    }
+}
+
+/// 3GPP TS 27.007 §7.14 DTMF command arguments (+VTS=<tone>[,<duration>]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DtmfArgs {
+    pub tone: DtmfTone,
+    pub duration: Option<u32>,
+}
+
+impl<'a> Parsable<'a> for DtmfArgs {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, tone) = DtmfTone::parse(input)?;
+        let (input, duration) = if let Ok((rem, _)) =
+            nom::bytes::complete::tag::<_, _, nom::error::Error<&[u8]>>(b",")(input)
+        {
+            let (rem, dur) = u32::parse(rem)?;
+            (rem, Some(dur))
+        } else {
+            (input, None)
+        };
+        Ok((input, DtmfArgs { tone, duration }))
+    }
+}
+
+/// Cuttlefish / Android vendor CTEC 4-byte priority tier bitmask.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CtecPreferredMask(pub u32);
+
+impl<'a> Parsable<'a> for CtecPreferredMask {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (rem, raw_str) = parse_quoted_or_unquoted(input)?;
+        let clean = raw_str.trim();
+        let clean = clean.strip_prefix("0x").or_else(|| clean.strip_prefix("0X")).unwrap_or(clean);
+        let val = u32::from_str_radix(clean, 16).map_err(|_err| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))
+        })?;
+
+        let tier_mask = crate::constants::SUPPORTED_CTEC_TECHS
+            .iter()
+            .fold(0u8, |acc, &tech| acc | (tech as u8));
+
+        if val.to_le_bytes().iter().any(|&tier| (tier & !tier_mask) != 0) {
+            return Err(nom::Err::Error(nom::error::Error::new(
+                input,
+                nom::error::ErrorKind::Verify,
+            )));
+        }
+
+        Ok((rem, CtecPreferredMask(val)))
+    }
+}
+
+/// 3GPP TS 27.007 §11.1.15 UICC Application Identifier (AID) hex string.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct ApplicationId<'a>(pub &'a str);
+
+impl<'a> ApplicationId<'a> {
+    pub fn as_str(self) -> &'a str {
+        self.0
+    }
+}
+
+impl<'a> Parsable<'a> for ApplicationId<'a> {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (rem, raw_str) = parse_quoted_or_unquoted(input)?;
+        if !raw_str.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(nom::Err::Error(nom::error::Error::new(
+                input,
+                nom::error::ErrorKind::Verify,
+            )));
+        }
+        Ok((rem, ApplicationId(raw_str)))
+    }
+}
+
+/// 3GPP TS 27.007 §10.1.1 / Goldfish RIL PDP context activation arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PdpContextActivateArgs {
+    pub cid: u8,
+    pub state: bool,
+}
+
+impl<'a> Parsable<'a> for PdpContextActivateArgs {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, first) = u8::parse(input)?;
+        let (input, _) = nom::bytes::complete::tag(b",")(input)?;
+        let (input, second) = u8::parse(input)?;
+
+        // Compatibility hack for legacy Goldfish/Reference RIL.
+        // It sends AT+CGACT using non-standard <cid>,<state> format.
+        // We detect this by checking if the parsed state is > 1 (which means it's
+        // actually the CID) or if the parsed CID is 0 (which means it's the state 0).
+        let (cid, state_val) =
+            if first > 1 || second == 0 { (first, second) } else { (second, first) };
+        if state_val > 1 {
+            return Err(nom::Err::Error(nom::error::Error::new(
+                input,
+                nom::error::ErrorKind::MapRes,
+            )));
+        }
+        Ok((input, PdpContextActivateArgs { cid, state: state_val == 1 }))
+    }
+}
+
+/// 3GPP TS 27.005 §3.5.1 Send SMS command arguments (+CMGS).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendSmsArgs<'a> {
+    Text { da: QuotedString<'a>, toda: Option<TypeOfAddress> },
+    Pdu { length: usize },
+}
+
+impl<'a> Parsable<'a> for SendSmsArgs<'a> {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        if let Ok((rem, da)) = QuotedString::parse(input) {
+            let (rem, toda) = nom::combinator::opt(nom::sequence::preceded(
+                nom::bytes::complete::tag(b","),
+                TypeOfAddress::parse,
+            ))(rem)?;
+            return Ok((rem, SendSmsArgs::Text { da, toda }));
+        }
+        let (input, length) = nom::combinator::map_res(
+            nom::combinator::map_res(nom::character::complete::digit1, std::str::from_utf8),
+            |s: &str| s.parse::<usize>(),
+        )(input)?;
+        Ok((input, SendSmsArgs::Pdu { length }))
+    }
+}
+
+/// 3GPP TS 27.007 §7.11 Call forwarding utility arguments (+CCFCU).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallForwardUtilityArgs<'a>(pub &'a str);
+
+impl<'a> Parsable<'a> for CallForwardUtilityArgs<'a> {
+    fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+        let (input, content) =
+            nom::bytes::complete::take_while(|c: u8| c != b'\r' && c != b'\n')(input)?;
+        let s = std::str::from_utf8(content).map_err(|_err| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
+        })?;
+        Ok((input, CallForwardUtilityArgs(s)))
     }
 }
 
@@ -2038,50 +2496,50 @@ mod tests {
     #[test]
     fn test_dial_string_clean_number() {
         // Valid
-        let dial = DialString::parse(b"12345").unwrap();
+        let dial = DialString::parse("12345").unwrap();
         assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
 
-        let dial = DialString::parse(b"+16505550100").unwrap();
+        let dial = DialString::parse("+16505550100").unwrap();
         assert_eq!(dial.clean_number().unwrap().as_str(), "+16505550100");
 
         // Strips CLIR and modifiers
-        let dial = DialString::parse(b"12345i,1234").unwrap();
+        let dial = DialString::parse("12345i,1234").unwrap();
         assert_eq!(dial.clean_number().unwrap().as_str(), "12345");
 
-        let dial = DialString::parse(b"+12345I,678").unwrap();
+        let dial = DialString::parse("+12345I,678").unwrap();
         assert_eq!(dial.clean_number().unwrap().as_str(), "+12345");
 
         // Strictly rejects invalid dial characters (like 'a')
-        assert!(DialString::parse(b"123a45").is_none());
-        assert!(DialString::parse(b"123b45").is_none());
-        assert!(DialString::parse(b"123c45").is_none());
+        assert!(DialString::parse("123a45").is_none());
+        assert!(DialString::parse("123b45").is_none());
+        assert!(DialString::parse("123c45").is_none());
     }
 
     #[test]
     fn test_dial_string_clir() {
-        let dial = DialString::parse(b"12345i").unwrap();
+        let dial = DialString::parse("12345i").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
 
-        let dial = DialString::parse(b"12345I").unwrap();
+        let dial = DialString::parse("12345I").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Invocation);
 
-        let dial = DialString::parse(b"12345").unwrap();
+        let dial = DialString::parse("12345").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::SubscriptionDefault);
         assert_eq!(dial.clir(ClirMode::Invocation), ClirMode::Invocation);
 
         // Modifiers with pause/wait
-        let dial = DialString::parse(b"12345i,1234").unwrap();
+        let dial = DialString::parse("12345i,1234").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
 
         // Number suffix with @ parameters where @ part has no CLIR suffix
-        let dial = DialString::parse(b"12345i@1,2").unwrap();
+        let dial = DialString::parse("12345i@1,2").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
 
-        let dial = DialString::parse(b"12345I@1,2").unwrap();
+        let dial = DialString::parse("12345I@1,2").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Invocation);
 
         // Emergency dial string with CLIR suffix after @
-        let dial = DialString::parse(b"911@1,#i").unwrap();
+        let dial = DialString::parse("911@1,#i").unwrap();
         assert_eq!(dial.clir(ClirMode::SubscriptionDefault), ClirMode::Suppression);
     }
 
@@ -2107,54 +2565,54 @@ mod tests {
 
     #[test]
     fn test_phone_number_is_gprs_dial() {
-        assert!(PhoneNumber::new("*99#").is_gprs_dial());
-        assert!(PhoneNumber::new("*99*1#").is_gprs_dial());
-        assert!(PhoneNumber::new("*99***1#").is_gprs_dial());
-        assert!(!PhoneNumber::new("12345").is_gprs_dial());
-        assert!(!PhoneNumber::new("*99").is_gprs_dial());
-        assert!(!PhoneNumber::new("*99#1").is_gprs_dial());
+        assert!(PhoneNumber::new_for_test("*99#").is_gprs_dial());
+        assert!(PhoneNumber::new_for_test("*99*1#").is_gprs_dial());
+        assert!(PhoneNumber::new_for_test("*99***1#").is_gprs_dial());
+        assert!(!PhoneNumber::new_for_test("12345").is_gprs_dial());
+        assert!(!PhoneNumber::new_for_test("*99").is_gprs_dial());
+        assert!(!PhoneNumber::new_for_test("*99#1").is_gprs_dial());
     }
 
     #[test]
     fn test_phone_number_toa() {
-        assert_eq!(PhoneNumber::new("+16505550100").toa(), TypeOfAddress::International);
-        assert_eq!(PhoneNumber::new("16505550100").toa(), TypeOfAddress::National);
-        assert_eq!(PhoneNumber::new("12345").toa(), TypeOfAddress::National);
+        assert_eq!(PhoneNumber::new_for_test("+16505550100").toa(), TypeOfAddress::International);
+        assert_eq!(PhoneNumber::new_for_test("16505550100").toa(), TypeOfAddress::Unknown);
+        assert_eq!(PhoneNumber::new_for_test("12345").toa(), TypeOfAddress::Unknown);
     }
 
     #[test]
     fn test_number_presentation_format_number() {
-        let phone = PhoneNumber::new("12345");
+        let phone = PhoneNumber::new_for_test("12345");
 
         // Allowed
         let formatted = NumberPresentation::Allowed.format_number(Some(&phone));
         assert_eq!(formatted.number, "12345");
-        assert_eq!(formatted.toa, TypeOfAddress::National);
+        assert_eq!(formatted.toa, TypeOfAddress::Unknown);
 
-        let int_phone = PhoneNumber::new("+12345");
+        let int_phone = PhoneNumber::new_for_test("+12345");
         let formatted = NumberPresentation::Allowed.format_number(Some(&int_phone));
         assert_eq!(formatted.number, "+12345");
         assert_eq!(formatted.toa, TypeOfAddress::International);
 
         let formatted = NumberPresentation::Allowed.format_number(None);
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, TypeOfAddress::National);
+        assert_eq!(formatted.toa, TypeOfAddress::Unknown);
 
         // Restricted
         let formatted = NumberPresentation::Restricted.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, TypeOfAddress::National);
+        assert_eq!(formatted.toa, TypeOfAddress::Unknown);
 
         // Not Available
         let formatted = NumberPresentation::NotAvailable.format_number(Some(&phone));
         assert_eq!(formatted.number, "");
-        assert_eq!(formatted.toa, TypeOfAddress::National);
+        assert_eq!(formatted.toa, TypeOfAddress::Unknown);
     }
 
     #[test]
     fn test_adn_record_encode_from_number() {
         let record_len = UiccFileId::Msisdn.default_record_len().expect("file id is record based");
-        let phone = PhoneNumber::new("+15555215554");
+        let phone = PhoneNumber::new_for_test("+15555215554");
         let record = AdnRecord::encode_from_number(&phone, record_len);
         assert_eq!(record.len(), record_len);
         // Alpha identifier is padded with 0xFF
@@ -2171,7 +2629,7 @@ mod tests {
         assert_eq!(&record[26..28], &[0xFF, 0xFF]);
 
         // Empty digits returns standard unassigned 0xFF record
-        let empty = PhoneNumber::new("");
+        let empty = PhoneNumber::new_for_test("");
         assert_eq!(AdnRecord::encode_from_number(&empty, 28), vec![0xFF; 28]);
     }
 
@@ -2192,7 +2650,7 @@ mod tests {
 
     #[test]
     fn test_adn_record_msisdn_with_alpha_tag() {
-        let record = AdnRecord::new(Some("MySIM"), Some(PhoneNumber::new("+15551234567")));
+        let record = AdnRecord::new(Some("MySIM"), Some(PhoneNumber::new_for_test("+15551234567")));
         let encoded = record.encode(28);
         assert_eq!(encoded.len(), 28);
 
@@ -2203,7 +2661,7 @@ mod tests {
 
     #[test]
     fn test_adn_record_service_code() {
-        let record = AdnRecord::new(Some("Voicemail"), Some(PhoneNumber::new("*86")));
+        let record = AdnRecord::new(Some("Voicemail"), Some(PhoneNumber::new_for_test("*86")));
         let encoded = record.encode(38);
         let decoded = AdnRecord::decode(&encoded).expect("Should decode service code record");
         assert_eq!(decoded.alpha_tag.as_deref(), Some("Voicemail"));
@@ -2219,7 +2677,7 @@ mod tests {
 
     #[test]
     fn test_adn_record_long_number_truncation() {
-        let long_number = PhoneNumber::new("123456789012345678901234");
+        let long_number = PhoneNumber::new_for_test("123456789012345678901234");
         let record = AdnRecord::new(Some("Long"), Some(long_number));
         let encoded = record.encode(28);
 
@@ -2236,12 +2694,12 @@ mod tests {
         assert!(AdnRecord::decode(&[0x06, 0x81, 0x21, 0x43, 0x65, 0x87, 0x09]).is_none());
 
         // encode() with len < 14 returns 0xFF buffer
-        let rec = AdnRecord::new(Some("A"), Some(PhoneNumber::new("123")));
+        let rec = AdnRecord::new(Some("A"), Some(PhoneNumber::new_for_test("123")));
         assert_eq!(rec.encode(0), Vec::<u8>::new());
         assert_eq!(rec.encode(13), vec![0xFF; 13]);
 
         // Exactly 14 bytes (alpha_len == 0)
-        let rec_14 = AdnRecord::new(None::<&str>, Some(PhoneNumber::new("+15551234567")));
+        let rec_14 = AdnRecord::new(None::<&str>, Some(PhoneNumber::new_for_test("+15551234567")));
         let encoded_14 = rec_14.encode(14);
         assert_eq!(encoded_14.len(), 14);
         let decoded_14 = AdnRecord::decode(&encoded_14).unwrap();
@@ -2249,7 +2707,7 @@ mod tests {
         assert_eq!(decoded_14.number.as_ref().map(|p| p.as_str()), Some("+15551234567"));
 
         // Exactly 14 bytes with alpha_tag truncates alpha to 0 bytes cleanly
-        let rec_with_tag = AdnRecord::new(Some("Tag"), Some(PhoneNumber::new("123456")));
+        let rec_with_tag = AdnRecord::new(Some("Tag"), Some(PhoneNumber::new_for_test("123456")));
         let encoded_14_tag = rec_with_tag.encode(14);
         let decoded_14_tag = AdnRecord::decode(&encoded_14_tag).unwrap();
         assert_eq!(decoded_14_tag.alpha_tag, None);
@@ -2259,7 +2717,7 @@ mod tests {
     #[test]
     fn test_adn_record_odd_vs_even_digit_padding() {
         // Odd digits: 7 digits ("1234567") -> 4 BCD bytes: 21 43 65 F7
-        let rec_odd = AdnRecord::new(None::<&str>, Some(PhoneNumber::new("1234567")));
+        let rec_odd = AdnRecord::new(None::<&str>, Some(PhoneNumber::new_for_test("1234567")));
         let encoded_odd = rec_odd.encode(28);
         assert_eq!(encoded_odd[14], 5); // 1 TON + 4 BCD bytes
         assert_eq!(encoded_odd[15], 0x81);
@@ -2269,7 +2727,7 @@ mod tests {
         assert_eq!(decoded_odd.number.as_ref().map(|p| p.as_str()), Some("1234567"));
 
         // Even digits: 8 digits ("12345678") -> 4 BCD bytes: 21 43 65 87
-        let rec_even = AdnRecord::new(None::<&str>, Some(PhoneNumber::new("12345678")));
+        let rec_even = AdnRecord::new(None::<&str>, Some(PhoneNumber::new_for_test("12345678")));
         let encoded_even = rec_even.encode(28);
         assert_eq!(encoded_even[14], 5);
         assert_eq!(&encoded_even[16..20], &[0x21, 0x43, 0x65, 0x87]);
@@ -2278,7 +2736,7 @@ mod tests {
         assert_eq!(decoded_even.number.as_ref().map(|p| p.as_str()), Some("12345678"));
 
         // Single digit ("5") -> 1 BCD byte: F5, len 2
-        let rec_single = AdnRecord::new(None::<&str>, Some(PhoneNumber::new("5")));
+        let rec_single = AdnRecord::new(None::<&str>, Some(PhoneNumber::new_for_test("5")));
         let encoded_single = rec_single.encode(28);
         assert_eq!(encoded_single[14], 2);
         assert_eq!(encoded_single[16], 0xF5);
@@ -2326,14 +2784,14 @@ mod tests {
     #[test]
     fn test_adn_record_alpha_tag_edge_cases() {
         // Full alpha field with no trailing 0xFF (exactly 14 characters)
-        let rec = AdnRecord::new(Some("12345678901234"), Some(PhoneNumber::new("999")));
+        let rec = AdnRecord::new(Some("12345678901234"), Some(PhoneNumber::new_for_test("999")));
         let enc = rec.encode(28);
         assert_eq!(&enc[..14], b"12345678901234");
         let dec = AdnRecord::decode(&enc).unwrap();
         assert_eq!(dec.alpha_tag.as_deref(), Some("12345678901234"));
 
         // Alpha field with spaces preserved
-        let rec_spaces = AdnRecord::new(Some("John Doe "), Some(PhoneNumber::new("999")));
+        let rec_spaces = AdnRecord::new(Some("John Doe "), Some(PhoneNumber::new_for_test("999")));
         let enc_spaces = rec_spaces.encode(28);
         let dec_spaces = AdnRecord::decode(&enc_spaces).unwrap();
         assert_eq!(dec_spaces.alpha_tag.as_deref(), Some("John Doe "));
@@ -2344,7 +2802,7 @@ mod tests {
         // 50-byte record (alpha_len = 50 - 14 = 36 bytes)
         let rec = AdnRecord::new(
             Some("Alpha tag in 50-byte record"),
-            Some(PhoneNumber::new("+15550001111")),
+            Some(PhoneNumber::new_for_test("+15550001111")),
         );
         let enc = rec.encode(50);
         assert_eq!(enc.len(), 50);
@@ -2422,5 +2880,160 @@ mod tests {
 
         let invalid_json = "\"1234\"";
         assert!(serde_json::from_str::<Plmn>(invalid_json).is_err());
+    }
+
+    #[test]
+    fn test_command_error_format_response() {
+        let cme = CommandError::Cme(CmeError::SimPinRequired);
+        assert_eq!(cme.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(cme.format_response(CmeeMode::Numeric), "+CME ERROR: 11\r\n");
+        assert_eq!(cme.format_response(CmeeMode::Verbose), "+CME ERROR: SIM PIN required\r\n");
+
+        let cms = CommandError::Cms(CmsError::SimNotInserted);
+        assert_eq!(cms.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(cms.format_response(CmeeMode::Numeric), "+CMS ERROR: 310\r\n");
+        assert_eq!(cms.format_response(CmeeMode::Verbose), "+CMS ERROR: SIM not inserted\r\n");
+
+        let generic = CommandError::Generic;
+        assert_eq!(generic.format_response(CmeeMode::Disable), "ERROR\r\n");
+        assert_eq!(generic.format_response(CmeeMode::Numeric), "ERROR\r\n");
+        assert_eq!(generic.format_response(CmeeMode::Verbose), "ERROR\r\n");
+        assert_eq!(CommandError::default(), CommandError::Generic);
+
+        let mut out = String::new();
+        let res = ExecutionResult::cme_error(CmeError::SimPinRequired);
+        assert!(res.format_error_into(&mut out, CmeeMode::Numeric));
+        assert_eq!(out, "+CME ERROR: 11\r\n");
+
+        let mut out_success = String::new();
+        assert!(!ExecutionResult::ok().format_error_into(&mut out_success, CmeeMode::Numeric));
+        assert!(out_success.is_empty());
+    }
+
+    #[test]
+    fn test_sim_sms_message_mark_read() {
+        let mut msg = SimSmsMessage::new(SmsMessageStatus::ReceivedUnread, vec![1, 2, 3]);
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedUnread);
+        msg.mark_read();
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedRead);
+        msg.mark_read();
+        assert_eq!(msg.status, SmsMessageStatus::ReceivedRead);
+
+        let mut sent_msg = SimSmsMessage::new(SmsMessageStatus::StoredSent, vec![4, 5]);
+        sent_msg.mark_read();
+        assert_eq!(sent_msg.status, SmsMessageStatus::StoredSent);
+    }
+
+    #[test]
+    fn test_phone_number_as_ref() {
+        let phone = PhoneNumber::new_for_test("+1234567890");
+        assert_eq!(phone.as_str(), "+1234567890");
+        assert_eq!(phone.as_ref(), "+1234567890");
+        let opt_phone = Some(phone);
+        assert_eq!(opt_phone.as_ref().map(PhoneNumber::as_str), Some("+1234567890"));
+    }
+
+    #[test]
+    fn test_cms_error_codes_and_messages() {
+        let expected = [
+            (CmsError::InvalidPduParameter, 304, "invalid PDU mode parameter"),
+            (CmsError::SimNotInserted, 310, "SIM not inserted"),
+            (CmsError::SimPinRequired, 311, "SIM PIN required"),
+            (CmsError::InvalidMemoryIndex, 321, "invalid memory index"),
+            (CmsError::MemoryFull, 322, "memory full"),
+        ];
+        for (err, code, verbose) in expected {
+            assert_eq!(err.code(), code);
+            assert_eq!(err.verbose_str(), verbose);
+            assert_eq!(format!("{err}"), verbose);
+        }
+    }
+
+    #[test]
+    fn test_phone_number_serde_and_from_str() {
+        let phone: PhoneNumber = "+16505550100".parse().unwrap();
+        assert_eq!(phone.as_str(), "+16505550100");
+        assert!(phone.is_international());
+
+        let json = serde_json::to_string(&phone).unwrap();
+        assert_eq!(json, "\"+16505550100\"");
+        let deserialized: PhoneNumber = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, phone);
+
+        assert!(matches!(
+            "invalid#phone".parse::<PhoneNumber>(),
+            Err(ParsePhoneNumberError::InvalidCharacters(_))
+        ));
+        assert!(matches!("".parse::<PhoneNumber>(), Err(ParsePhoneNumberError::Empty)));
+        assert!(matches!(
+            "12345extra".parse::<PhoneNumber>(),
+            Err(ParsePhoneNumberError::TrailingCharacters(_))
+        ));
+        assert!(serde_json::from_str::<PhoneNumber>("\"invalid#phone\"").is_err());
+    }
+
+    #[test]
+    fn test_access_technology_from_wire_standard() {
+        let quirks = Quirks::default();
+        let expected = [
+            (0, Ok(AccessTechnology::Gsm)),
+            (1, Ok(AccessTechnology::Gsm)),
+            (2, Ok(AccessTechnology::Wcdma)),
+            (3, Ok(AccessTechnology::Gsm)),
+            (4, Ok(AccessTechnology::Wcdma)),
+            (5, Ok(AccessTechnology::Wcdma)),
+            (6, Ok(AccessTechnology::Wcdma)),
+            (7, Ok(AccessTechnology::Lte)),
+            (8, Ok(AccessTechnology::Gsm)),
+            (9, Ok(AccessTechnology::Lte)),
+            (10, Ok(AccessTechnology::Lte)),
+            (11, Ok(AccessTechnology::Nr)),
+            (12, Ok(AccessTechnology::Nr)),
+            (13, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (99, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+        ];
+        for (raw, want) in expected {
+            assert_eq!(AccessTechnology::from_wire(raw, quirks), want, "<AcT>={raw}");
+        }
+    }
+
+    #[test]
+    fn test_access_technology_from_wire_goldfish_37() {
+        let quirks = Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() };
+        let expected = [
+            (0, Ok(AccessTechnology::Gsm)),
+            (1, Ok(AccessTechnology::Gsm)),
+            (2, Ok(AccessTechnology::Wcdma)),
+            (3, Ok(AccessTechnology::Lte)),
+            (4, Ok(AccessTechnology::Wcdma)),
+            (5, Ok(AccessTechnology::Wcdma)),
+            (6, Ok(AccessTechnology::Nr)),
+            (7, Ok(AccessTechnology::Lte)),
+            (8, Ok(AccessTechnology::Gsm)),
+            (9, Ok(AccessTechnology::Lte)),
+            (10, Ok(AccessTechnology::Lte)),
+            (11, Ok(AccessTechnology::Nr)),
+            (12, Ok(AccessTechnology::Nr)),
+            (13, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+            (99, Err(ExecutionResult::cme_error(CmeError::IncorrectParameters))),
+        ];
+        for (raw, want) in expected {
+            assert_eq!(AccessTechnology::from_wire(raw, quirks), want, "<AcT>={raw}");
+        }
+    }
+
+    #[test]
+    fn test_types_defaults() {
+        assert_eq!(IcfFormat::default(), IcfFormat::Data8Stop1);
+        assert_eq!(IcfParity::default(), IcfParity::Space);
+        assert_eq!(FlowControlMode::default(), FlowControlMode::Hardware);
+        assert_eq!(ServiceClass::default(), ServiceClass::VOICE_DATA_FAX);
+        assert_eq!(TypeOfAddress::default(), TypeOfAddress::Unknown);
+
+        let (_, sc) = ServiceClass::parse(b"3").unwrap();
+        assert_eq!(sc.as_u8(), 3);
+        assert!(sc.contains(ServiceClass::VOICE));
+        assert!(sc.contains(ServiceClass::DATA));
+        assert!(!sc.contains(ServiceClass::FAX));
     }
 }

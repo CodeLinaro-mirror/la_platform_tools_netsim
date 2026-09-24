@@ -23,6 +23,9 @@ pub fn format_registration_status(status: RegistrationStatus) -> &'static str {
         RegistrationStatus::DENIED => "denied",
         RegistrationStatus::UNKNOWN => "unknown",
         RegistrationStatus::ROAMING => "roaming",
+        RegistrationStatus::SMS_ONLY_HOME => "sms-only-home",
+        RegistrationStatus::SMS_ONLY_ROAMING => "sms-only-roaming",
+        RegistrationStatus::EMERGENCY => "emergency",
     }
 }
 

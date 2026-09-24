@@ -1,0 +1,61 @@
+# Copyright 2026 - The Android Open Source Project
+
+"""rustix bazel build rule"""
+
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "rustix",
+    srcs = select({
+        "@rules_rust//rust/platform:linux": glob(["src/**/*.rs"]),
+        "//conditions:default": glob(
+            include = ["src/**/*.rs"],
+            exclude = ["src/backend/linux_raw/**"],
+        ),
+    }),
+    aliases = {
+        "@errno": "libc_errno",
+    },
+    crate_features = [
+        "alloc",
+        "event",
+        "fs",
+        "libc",
+        "libc_errno",
+        "mm",
+        "net",
+        "param",
+        "pipe",
+        "std",
+        "use-libc",
+        "use-libc-auxv",
+    ],
+    crate_name = "rustix",
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    rustc_flags = [
+        "--cfg=libc",
+        "--cfg=static_assertions",
+    ] + select({
+        "@rules_rust//rust/platform:linux": [
+            "--cfg=linux_like",
+            "--cfg=linux_kernel",
+            "--cfg=rustix_no_linux_raw",
+        ],
+        "@rules_rust//rust/platform:macos": [
+            "--cfg=apple",
+            "--cfg=bsd",
+        ],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "@bitflags",
+        "@errno",
+        "@libc",
+    ] + select({
+        "@rules_rust//rust/platform:windows": ["@windows-sys"],
+        "//conditions:default": [],
+    }),
+)

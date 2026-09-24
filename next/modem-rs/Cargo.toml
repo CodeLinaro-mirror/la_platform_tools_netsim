@@ -28,12 +28,12 @@ netsim-model = { path = "../model" }
 nom = "7"
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6.0"
-serde_json = "1.0"
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
 tracing = "0.1"
 
 [dev-dependencies]
 modem-rs = { path = ".", features = ["test-utils"] }
+serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3.23"
 once_cell = "1.19"
@@ -41,3 +41,4 @@ tempfile = "3"
 
 [features]
 test-utils = []
+testing = []

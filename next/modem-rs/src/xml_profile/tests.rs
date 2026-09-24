@@ -9,6 +9,8 @@ use crate::{
     apdu::Instruction,
     constants::{SW_FILE_NOT_FOUND, SW_SUCCESS, UiccFileId},
     profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML},
+    sim_service::{SimCommand, SimResponse, SimService},
+    types::{ExecutionResult, HandledCommand, Response},
 };
 
 #[test]
@@ -381,10 +383,10 @@ fn test_builtin_profiles_omit_cphs_mwi() {
 #[test]
 fn test_sim_service_with_parsed_profile_rejects_missing_ef() {
     let profile = parse_xml_profile(PROFILE_DEFAULT_XML).unwrap();
-    let mut service = crate::sim_service::SimService::from_profile(&profile);
+    let mut service = SimService::from_profile(&profile);
     let target_fid = UiccFileId::VoiceMailIndicatorCphs.as_u16();
 
-    let get_resp_cmd = crate::sim_service::SimCommand::SimIo {
+    let get_resp_cmd = SimCommand::SimIo {
         command: Instruction::GetResponse,
         file_id: target_fid,
         p1: 0,
@@ -396,19 +398,19 @@ fn test_sim_service_with_parsed_profile_rejects_missing_ef() {
     let result = service.execute(&get_resp_cmd);
     assert_eq!(
         result,
-        crate::types::ExecutionResult::Success(crate::types::HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![
-                crate::types::Response::Sim(crate::sim_service::SimResponse::RestrictedSimAccess {
+                Response::Sim(SimResponse::RestrictedSimAccess {
                     sw: SW_FILE_NOT_FOUND,
                     data: None,
                 }),
-                crate::types::Response::Ok,
+                Response::Ok,
             ],
             actions: vec![],
         })
     );
 
-    let read_binary_cmd = crate::sim_service::SimCommand::SimIo {
+    let read_binary_cmd = SimCommand::SimIo {
         command: Instruction::ReadBinary,
         file_id: target_fid,
         p1: 0,
@@ -420,13 +422,13 @@ fn test_sim_service_with_parsed_profile_rejects_missing_ef() {
     let result = service.execute(&read_binary_cmd);
     assert_eq!(
         result,
-        crate::types::ExecutionResult::Success(crate::types::HandledCommand {
+        ExecutionResult::Success(HandledCommand {
             responses: vec![
-                crate::types::Response::Sim(crate::sim_service::SimResponse::RestrictedSimAccess {
+                Response::Sim(SimResponse::RestrictedSimAccess {
                     sw: SW_FILE_NOT_FOUND,
                     data: None,
                 }),
-                crate::types::Response::Ok,
+                Response::Ok,
             ],
             actions: vec![],
         })

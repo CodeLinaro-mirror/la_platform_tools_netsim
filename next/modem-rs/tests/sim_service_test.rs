@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use modem_rs::profiles::{PROFILE_CTS_XML, PROFILE_DEFAULT_XML, PROFILE_TEL_ALASKA_XML};
+
 use crate::{common::constants::*, steps::*, world::World};
 
 // Scenario: Query PIN Status
@@ -1793,37 +1795,58 @@ fn test_response_buffer_cleared_on_channel_close() {
 #[test]
 fn test_crsm_get_response_ef_msisdn() {
     let mut world = World::new();
-    given_modem_with_msisdn_in_fs(&mut world, "A");
+    world.given_modem_with_msisdn_in_fs("A");
 
     // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 15
     // Header format (15 bytes): 00 00 00 1C 6F 40 04 00 00 00 00 00 02 01 1C
-    when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,15");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,0000001C6F4004000000000002011C");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=192,28480,0,0,15",
+        &["+CRSM: 144,0,0000001C6F4004000000000002011C", "OK"],
+    );
 }
 
 #[test]
 fn test_crsm_get_response_df_telecom() {
     let mut world = World::new();
-    given_modem_with_msisdn_in_fs(&mut world, "A");
+    world.given_modem_with_msisdn_in_fs("A");
 
     // GET_RESPONSE for DF_TELECOM (7F10 / 32528) with P3 = 22
     // Header format: File ID at bytes 4-5 is 7F10, File Type at byte 6 is 02 (DF),
     // num_ef_children at byte 15 is 03
-    when_at_command_sent(&mut world, "A", "AT+CRSM=192,32528,0,0,22");
-    then_response_is(&mut world, "A", "+CRSM: 144,0,000000007F1002000000000000000300000000000000");
-    then_response_is(&mut world, "A", "OK");
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=192,32528,0,0,22",
+        &["+CRSM: 144,0,000000007F1002000000000000000300000000000000", "OK"],
+    );
 }
 
 #[test]
-fn test_crsm_get_response_wrong_length() {
+fn test_crsm_get_response_p3_larger_than_header() {
     let mut world = World::new();
-    given_modem_with_msisdn_in_fs(&mut world, "A");
+    world.given_modem_with_msisdn_in_fs("A");
 
     // GET_RESPONSE for EF_MSISDN (6F40 / 28480) with P3 = 50 > 15 byte header
-    when_at_command_sent(&mut world, "A", "AT+CRSM=192,28480,0,0,50");
-    then_response_is(&mut world, "A", "+CRSM: 103,0");
-    then_response_is(&mut world, "A", "OK");
+    // Per ISO/IEC 7816-4 and 3GPP TS 27.007 §8.18, returns available 15 bytes
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=192,28480,0,0,50",
+        &["+CRSM: 144,0,0000001C6F4004000000000002011C", "OK"],
+    );
+}
+
+#[test]
+fn test_crsm_get_response_transparent_ef_p3_15() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    // GET_RESPONSE for EF_FPLMN (6F7B / 28539) with P3 = 15 returns 14-byte header
+    // Byte 13 is 01 (length of following data), Byte 14 is 00 (transparent)
+    world.send_and_expect(
+        "A",
+        "AT+CRSM=192,28539,0,0,15",
+        &["+CRSM: 144,0,0000001E6F7B0400000000000100", "OK"],
+    );
 }
 
 #[test]
@@ -1875,62 +1898,28 @@ fn test_crsm_update_record_wrong_length() {
 }
 
 #[test]
-fn test_msisdn_in_default_sim0_profile() {
-    let mut world = World::new();
-    // PROFILE_DEFAULT_XML defines EF_MSISDN in DF_TELECOM (0x7F10) with dummy
-    // number 15551234567
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_DEFAULT_XML);
+fn test_msisdn_profile_reads() {
+    let test_cases = [
+        (PROFILE_DEFAULT_XML, "FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF"),
+        (PROFILE_TEL_ALASKA_XML, "FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF"),
+        (PROFILE_CTS_XML, "00000000000000000000000000000891688118109844F0FFFFFFFFFF"),
+    ];
 
-    // Initial MSISDN should be resolved from DF_TELECOM and overridden to
-    // 15555211001
-    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
-    );
-    then_response_is(&mut world, "A", "OK");
-}
-
-#[test]
-fn test_msisdn_in_tel_alaska_profile() {
-    let mut world = World::new();
-    // PROFILE_TEL_ALASKA_XML defines EF_MSISDN in ADF_USIM (0x7FFF) with dummy
-    // number 15551234567
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_TEL_ALASKA_XML);
-
-    // Initial MSISDN should be resolved from ADF_USIM, populated in DF_TELECOM, and
-    // overridden to 15555211001
-    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CRSM: 144,0,FFFFFFFFFFFFFFFFFFFFFFFFFFFF07915155251100F1FFFFFFFFFFFF",
-    );
-    then_response_is(&mut world, "A", "OK");
-}
-
-#[test]
-fn test_msisdn_in_cts_profile() {
-    let mut world = World::new();
-    // PROFILE_CTS_XML defines EF_MSISDN in ADF_USIM (0x7FFF) with custom number
-    // +8618810189440
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
-
-    // Custom non-fallback MSISDN should be preserved from ADF_USIM
-    when_at_command_sent(&mut world, "A", "AT+CRSM=178,28480,1,4,28");
-    then_response_is(
-        &mut world,
-        "A",
-        "+CRSM: 144,0,00000000000000000000000000000891688118109844F0FFFFFFFFFF",
-    );
-    then_response_is(&mut world, "A", "OK");
+    for (profile_xml, expected_record_hex) in test_cases {
+        let mut world = World::new();
+        given_modem_with_xml_profile(&mut world, "A", profile_xml);
+        world.send_and_expect(
+            "A",
+            "AT+CRSM=178,28480,1,4,28",
+            &[&format!("+CRSM: 144,0,{expected_record_hex}"), "OK"],
+        );
+    }
 }
 
 #[test]
 fn test_carrier_api_cts_profile_mbdn_update_and_read() {
     let mut world = World::new();
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
+    given_modem_with_xml_profile(&mut world, "A", PROFILE_CTS_XML);
 
     let tag_a_payload =
         "74616741FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF06812143658709FFFFFFFFFFFFFF";
@@ -1976,7 +1965,7 @@ fn test_carrier_api_cts_profile_mbdn_update_and_read() {
 #[test]
 fn test_dual_df_synchronization_mbdn_and_msisdn() {
     let mut world = World::new();
-    given_modem_with_xml_profile(&mut world, "A", modem_rs::profiles::PROFILE_CTS_XML);
+    given_modem_with_xml_profile(&mut world, "A", PROFILE_CTS_XML);
 
     let mbdn_payload =
         "74616741FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF06812143658709FFFFFFFFFFFFFF";
@@ -2136,4 +2125,142 @@ fn test_cphs_mwi_not_found_in_default_sim0_profile() {
     );
     then_response_is(&mut world, "A", RESP_CRSM_FILE_NOT_FOUND);
     then_response_is(&mut world, "A", "OK");
+}
+
+fn assert_pin_retries(world: &mut World, modem: &str, pin_type: &str, retries: u32, default: u32) {
+    world.send_and_expect(
+        modem,
+        &format!("AT+CPINR=\"{pin_type}\""),
+        &[&format!("+CPINR: \"{pin_type}\",{retries},{default}"), "OK"],
+    );
+}
+
+#[test]
+fn test_pin1_pin2_isolation_and_facility_locks() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // 1. AT+CPWD="SC" changes PIN1
+    world.send_and_expect_ok("A", "AT+CPWD=\"SC\",\"1234\",\"9999\"");
+
+    // 2. AT+CPWD="P2" changes PIN2 without affecting PIN1
+    world.send_and_expect_ok("A", "AT+CPWD=\"P2\",\"1234\",\"7777\"");
+
+    // Changing with wrong old PIN2 fails with CME ERROR: 16
+    world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"1234\",\"8888\"", "+CME ERROR: 16");
+
+    // Unsupported facility in AT+CPWD returns CME ERROR: 4
+    world.send_and_expect_error("A", "AT+CPWD=\"XX\",\"1234\",\"5678\"", "+CME ERROR: 4");
+
+    // 3. AT+CPIN in READY state validates old PIN1 before update
+    world.send_and_expect_ok("A", "AT+CPIN=\"9999\",\"1111\"");
+    world.send_and_expect_error("A", "AT+CPIN=\"0000\",\"2222\"", "+CME ERROR: 16");
+
+    // 4. AT+CLCK for call barring facilities (AO, OI, etc.)
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 0", "OK"]);
+
+    // Missing password returns CME ERROR: 16 (IncorrectPassword)
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",1", "+CME ERROR: 16");
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",0", "+CME ERROR: 16");
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 0", "OK"]);
+
+    // Lock with correct default barring password "0000" succeeds
+    world.send_and_expect_ok("A", "AT+CLCK=\"AO\",1,\"0000\"");
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 1", "OK"]);
+
+    // Lock with incorrect barring password fails with CME ERROR: 16
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",0,\"wrong\"", "+CME ERROR: 16");
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 1", "OK"]);
+
+    // Unlock with correct barring password "0000" succeeds
+    world.send_and_expect_ok("A", "AT+CLCK=\"AO\",0,\"0000\"");
+    world.send_and_expect("A", "AT+CLCK=\"AO\",2", &["+CLCK: 0", "OK"]);
+
+    // Change barring password using AT+CPWD="AB" from "0000" to "4321"
+    world.send_and_expect_ok("A", "AT+CPWD=\"AB\",\"0000\",\"4321\"");
+
+    // Old password fails now
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",0,\"0000\"", "+CME ERROR: 16");
+
+    // New password succeeds
+    world.send_and_expect_ok("A", "AT+CLCK=\"AO\",0,\"4321\"");
+
+    // P2 is only valid in AT+CPWD, not AT+CLCK; AT+CLCK="P2",1 returns CME ERROR: 4
+    world.send_and_expect_error("A", "AT+CLCK=\"P2\",1", "+CME ERROR: 4");
+
+    // Unsupported facility returns CME ERROR: 4
+    world.send_and_expect_error("A", "AT+CLCK=\"ZZ\",2", "+CME ERROR: 4");
+}
+
+#[test]
+fn test_pin2_exhaustion_and_puk2_unlock() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // Attempt invalid PIN2 in CPWD until retries reach 0 (2 attempts return CME
+    // ERROR: 16)
+    for _ in 0..2 {
+        world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"0000\",\"1111\"", "+CME ERROR: 16");
+    }
+
+    // Third failure exhausts retries -> CME ERROR: 18 (SimPuk2Required)
+    world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"0000\",\"1111\"", "+CME ERROR: 18");
+
+    // Subsequent CPWD attempts return SimPuk2Required
+    world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"1234\",\"1111\"", "+CME ERROR: 18");
+
+    // Query PIN retries confirms PIN2 is 0
+    assert_pin_retries(&mut world, "A", "SIM PIN2", 0, 3);
+
+    // Unlock PIN2 via PUK2 using AT+CPIN="<puk2>","<new_pin2>"
+    world.send_and_expect_ok("A", "AT+CPIN=\"12345678\",\"5678\"");
+
+    // PIN2 retries restored to 3
+    assert_pin_retries(&mut world, "A", "SIM PIN2", 3, 3);
+}
+
+#[test]
+fn test_call_barring_lockout_after_failed_attempts() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // 3 failed attempts return CME ERROR: 16
+    for _ in 0..3 {
+        world.send_and_expect_error("A", "AT+CLCK=\"AO\",1,\"wrong\"", "+CME ERROR: 16");
+    }
+
+    // Subsequent lock attempt is blocked -> CME ERROR: 3 (OperationNotAllowed),
+    // even with correct password
+    world.send_and_expect_error("A", "AT+CLCK=\"AO\",1,\"0000\"", "+CME ERROR: 3");
+
+    // Subsequent password change attempt is also blocked -> CME ERROR: 3
+    world.send_and_expect_error("A", "AT+CPWD=\"AB\",\"0000\",\"1234\"", "+CME ERROR: 3");
+}
+
+#[test]
+fn test_pin1_retries_decremented_when_pin2_blocked() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // Exhaust PIN2 retries to 0
+    for _ in 0..2 {
+        world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"0000\",\"1111\"", "+CME ERROR: 16");
+    }
+    world.send_and_expect_error("A", "AT+CPWD=\"P2\",\"0000\",\"1111\"", "+CME ERROR: 18");
+    assert_pin_retries(&mut world, "A", "SIM PIN2", 0, 3);
+    assert_pin_retries(&mut world, "A", "SIM PIN", 3, 3);
+
+    // Attempting wrong 4-digit PIN1 in AT+CPIN must decrement PIN1 retries, not
+    // PUK2
+    world.send_and_expect_error("A", "AT+CPIN=\"0000\",\"9999\"", "+CME ERROR: 16");
+    assert_pin_retries(&mut world, "A", "SIM PIN", 2, 3);
+    assert_pin_retries(&mut world, "A", "SIM PUK2", 10, 10);
 }

@@ -95,7 +95,6 @@ impl ActorService for UwbActor {
 
         self.chip_states
             .write()
-            .unwrap()
             .insert(handle, UwbChipState { chip: chip.clone(), p2p_tx_count, p2p_rx_count });
         self.initial_chips.insert(chip_id, chip);
         self.chip_to_handle.insert(chip_id, handle);
@@ -109,7 +108,7 @@ impl ActorService for UwbActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-        Ok(self.chip_states.read().unwrap().get(handle).map(|state| state.chip.clone()))
+        Ok(self.chip_states.read().get(handle).map(|state| state.chip.clone()))
     }
 
     async fn handle_update(
@@ -119,7 +118,7 @@ impl ActorService for UwbActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-        let mut chips = self.chip_states.write().unwrap();
+        let mut chips = self.chip_states.write();
         let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
 
         update.apply(&mut state.chip);
@@ -133,7 +132,7 @@ impl ActorService for UwbActor {
         ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let handle = self.chip_to_handle.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
-        let state = self.chip_states.write().unwrap().remove(&handle).unwrap();
+        let state = self.chip_states.write().remove(&handle).ok_or(ChipError::ChipNotFound(id))?;
 
         // Disconnect from Pica. This completes asynchronously as we'll receive a
         // `PicaEvent::Disconnected` event in the lifecycle `on_tick`.
@@ -164,7 +163,7 @@ impl ActorService for UwbActor {
                 let initial_chip =
                     self.initial_chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
                 let chip = {
-                    let mut chips = self.chip_states.write().unwrap();
+                    let mut chips = self.chip_states.write();
                     let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
                     state.chip = initial_chip.clone();
                     state.chip.clone()
@@ -185,7 +184,6 @@ impl ActorService for UwbActor {
                 let stats = self
                     .chip_states
                     .read()
-                    .unwrap()
                     .values()
                     .map(|state| {
                         let mut radio_stats = netsim_model::NetsimRadioStats::default();
@@ -238,7 +236,7 @@ impl ActorService for UwbActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(self.chip_states.read().unwrap().values().map(|state| state.chip.clone()).collect())
+        Ok(self.chip_states.read().values().map(|state| state.chip.clone()).collect())
     }
 }
 

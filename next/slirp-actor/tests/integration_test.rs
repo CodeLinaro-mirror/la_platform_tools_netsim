@@ -203,3 +203,49 @@ async fn test_switch_backend() {
     assert!(result.is_ok());
     assert_eq!(actor.backend(), slirp_actor::SlirpBackend::Native);
 }
+
+#[cfg(not(target_os = "windows"))]
+#[tokio::test]
+async fn test_slirp_native_backend_icmp_ping() {
+    let (tx_out, _rx_out) = mpsc::unbounded_channel::<bytes::Bytes>();
+    let mut actor = SlirpActor::new_with_backend(
+        Default::default(),
+        None,
+        None,
+        slirp_actor::SlirpBackend::Native,
+    )
+    .await;
+    let mut ctx = MockContext;
+
+    let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
+    let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
+    let sink: netsim_model::PacketSink =
+        Box::pin(futures::sink::unfold(tx_out, |tx, bytes| async move {
+            let _ = tx.send(bytes);
+            Ok(tx)
+        }));
+    let result = actor
+        .handle_action(
+            None,
+            SlirpReq::Register { client_id: 0, stream, sink, notifier: None },
+            &mut ctx,
+        )
+        .await;
+    assert!(result.is_ok());
+
+    actor.on_start(&mut ctx).await;
+
+    let builder = etherparse::PacketBuilder::ethernet2(
+        [0x02, 0x15, 0xb2, 0x00, 0x00, 0x00],
+        [0x52, 0x54, 0x00, 0x12, 0x34, 0x56],
+    )
+    .ipv4([10, 0, 2, 15], [8, 8, 8, 8], 64)
+    .icmpv4_echo_request(0x1234, 1);
+
+    let mut icmp_packet = Vec::new();
+    builder.write(&mut icmp_packet, b"netsim icmp ping payload").unwrap();
+
+    let req = SlirpReq::SendPacket(bytes::Bytes::from(icmp_packet));
+    let result = actor.handle_action(None, req, &mut ctx).await;
+    assert!(result.is_ok());
+}

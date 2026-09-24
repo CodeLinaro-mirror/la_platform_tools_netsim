@@ -254,8 +254,8 @@ a massive amount of work to reach feature parity with the C++
   - [x] Add support for voice and data network registration.
   - [x] Implement unsolicited registration status updates.
 - [ ] **Implement Signal Strength (`AT+CSQ`):**
-  - [ ] Implement the Cuttlefish-specific `+CSQ` command with a detailed
-        `SignalStrength` struct.
+  - [x] Implement the Cuttlefish-specific `+CSQ` command with a detailed
+        `AidlSignalStrength` struct.
   - [ ] Implement a loop to continuously update the signal strength.
 - [x] **Implement Preferred Network Type (`AT+CTEC`):**
   - [x] Add support for getting and setting the preferred network type.
@@ -280,8 +280,8 @@ missing most of the features and complexity of the C++ `sim_service.cpp`.
 - [x] **Implement full PIN/PUK Management (`AT+CPIN`):**
   - [x] Handle all SIM states (ABSENT, NOT_READY, READY, PIN, PUK).
   - [x] Handle all PIN/PUK operations correctly.
-- [ ] **Implement Facility Lock (`AT+CLCK`):**
-  - [ ] Add support for locking, unlocking, and querying all facilities.
+- [x] **Implement Facility Lock (`AT+CLCK`):**
+  - [x] Add support for locking, unlocking, and querying all facilities.
 - [x] **Enhance Logical Channel Support (`AT+CCHO`, `AT+CCHC`, `AT+CGLA`)**: Implemented basic open/close channel lifecycle and transmit APDU mocking.
   - [x] Add support for Application Identifiers (AIDs).
 - [ ] **eSIM & eUICC Support (GSMA SGP.22 & GlobalPlatform Card Spec)**:
@@ -323,8 +323,8 @@ features in the Rust version.
   - [x] Add a PDU parser to handle SMS messages in PDU mode.
 - [x] **Implement SMS Status Reports:**
   - [x] Add the logic for generating and sending SMS status reports.
-- [ ] **Improve Error Handling:**
-  - [ ] Use more specific CMS (Cellular Messaging Service) error codes.
+- [x] **Improve Error Handling:**
+  - [x] Use more specific CMS (Cellular Messaging Service) error codes.
 
 ### STK Service (`src/stk_service.rs`)
 

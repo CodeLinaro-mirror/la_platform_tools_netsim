@@ -120,19 +120,49 @@ impl Stats {
             }
             if let Some(na) = nfc_api {
                 let mut total_calls = 0;
-                if let Some(core) = na.nci_core.as_ref() {
-                    total_calls += core.reset.unwrap_or(0);
-                    total_calls += core.init.unwrap_or(0);
-                }
-                if let Some(rf) = na.nci_rf.as_ref() {
-                    total_calls += rf.discover.unwrap_or(0);
-                    total_calls += rf.discover_select.unwrap_or(0);
-                    total_calls += rf.deactivate.unwrap_or(0);
-                    total_calls += rf.rf_set_listen_mode_routing.unwrap_or(0);
-                }
-                if let Some(data) = na.nci_data.as_ref() {
-                    total_calls += data.send.unwrap_or(0);
-                    total_calls += data.receive.unwrap_or(0);
+                if na.nfc_adapter.is_some() || na.tag.is_some() || na.card_emulation.is_some() {
+                    if let Some(adapter) = na.nfc_adapter.as_ref() {
+                        total_calls += [
+                            adapter.enable,
+                            adapter.disable,
+                            adapter.enable_reader_mode,
+                            adapter.disable_reader_mode,
+                            adapter.set_listen_mode_routing,
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .sum::<i32>();
+                    }
+                    if let Some(tag) = na.tag.as_ref() {
+                        total_calls += [tag.connect, tag.close, tag.transceive]
+                            .into_iter()
+                            .flatten()
+                            .sum::<i32>();
+                    }
+                    if let Some(ce) = na.card_emulation.as_ref() {
+                        total_calls += [ce.process_command_apdu, ce.send_response_apdu]
+                            .into_iter()
+                            .flatten()
+                            .sum::<i32>();
+                    }
+                } else {
+                    if let Some(core) = na.nci_core.as_ref() {
+                        total_calls += [core.reset, core.init].into_iter().flatten().sum::<i32>();
+                    }
+                    if let Some(rf) = na.nci_rf.as_ref() {
+                        total_calls += [
+                            rf.discover,
+                            rf.discover_select,
+                            rf.deactivate,
+                            rf.rf_set_listen_mode_routing,
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .sum::<i32>();
+                    }
+                    if let Some(data) = na.nci_data.as_ref() {
+                        total_calls += [data.send, data.receive].into_iter().flatten().sum::<i32>();
+                    }
                 }
                 api_stats.nfc_total_calls = Some(total_calls);
                 api_stats.nfc = netsim_proto::protobuf::MessageField::some(na);
@@ -286,6 +316,44 @@ mod tests {
         let mut stats = Stats::new("1.0.0".to_string(), None, Arc::new(FrontendStats::default()));
 
         let mut nfc_api = netsim_proto::stats::NfcApiStats::new();
+        let mut adapter = netsim_proto::stats::NfcAdapterStats::new();
+        adapter.enable = Some(1);
+        adapter.disable = Some(2);
+        adapter.enable_reader_mode = Some(3);
+        adapter.disable_reader_mode = Some(4);
+        adapter.set_listen_mode_routing = Some(5);
+        nfc_api.nfc_adapter = netsim_proto::protobuf::MessageField::some(adapter);
+
+        let mut tag = netsim_proto::stats::TagStats::new();
+        tag.connect = Some(6);
+        tag.close = Some(7);
+        tag.transceive = Some(8);
+        nfc_api.tag = netsim_proto::protobuf::MessageField::some(tag);
+
+        let mut ce = netsim_proto::stats::CardEmulationStats::new();
+        ce.process_command_apdu = Some(9);
+        ce.send_response_apdu = Some(10);
+        nfc_api.card_emulation = netsim_proto::protobuf::MessageField::some(ce);
+
+        let proto = stats.get_combined_stats(CombinedStatsInputs {
+            active_stats: vec![],
+            wifi_stats: None,
+            wifi_api: None,
+            uwb_api: None,
+            nfc_api: Some(nfc_api),
+            nfc_stats: None,
+            nfc_service_stats: None,
+        });
+
+        let api_stats = proto.api_stats.as_ref().expect("Api stats missing");
+        assert_eq!(api_stats.nfc_total_calls(), 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10);
+    }
+
+    #[test]
+    fn test_nfc_stats_legacy_translation() {
+        let mut stats = Stats::new("1.0.0".to_string(), None, Arc::new(FrontendStats::default()));
+
+        let mut nfc_api = netsim_proto::stats::NfcApiStats::new();
         let mut core = netsim_proto::stats::NciCoreStats::new();
         core.reset = Some(1);
         core.init = Some(2);
@@ -315,5 +383,79 @@ mod tests {
 
         let api_stats = proto.api_stats.as_ref().expect("Api stats missing");
         assert_eq!(api_stats.nfc_total_calls(), 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8);
+    }
+
+    #[test]
+    fn test_nfc_stats_partial_framework() {
+        let mut stats = Stats::new("1.0.0".to_string(), None, Arc::new(FrontendStats::default()));
+
+        // Test with only tag present
+        let mut nfc_api = netsim_proto::stats::NfcApiStats::new();
+        let mut tag = netsim_proto::stats::TagStats::new();
+        tag.connect = Some(3);
+        nfc_api.tag = netsim_proto::protobuf::MessageField::some(tag);
+
+        let proto = stats.get_combined_stats(CombinedStatsInputs {
+            active_stats: vec![],
+            wifi_stats: None,
+            wifi_api: None,
+            uwb_api: None,
+            nfc_api: Some(nfc_api),
+            nfc_stats: None,
+            nfc_service_stats: None,
+        });
+        assert_eq!(proto.api_stats.as_ref().unwrap().nfc_total_calls(), 3);
+
+        // Test with only card_emulation present
+        let mut nfc_api2 = netsim_proto::stats::NfcApiStats::new();
+        let mut ce = netsim_proto::stats::CardEmulationStats::new();
+        ce.process_command_apdu = Some(4);
+        nfc_api2.card_emulation = netsim_proto::protobuf::MessageField::some(ce);
+
+        let proto2 = stats.get_combined_stats(CombinedStatsInputs {
+            active_stats: vec![],
+            wifi_stats: None,
+            wifi_api: None,
+            uwb_api: None,
+            nfc_api: Some(nfc_api2),
+            nfc_stats: None,
+            nfc_service_stats: None,
+        });
+        assert_eq!(proto2.api_stats.as_ref().unwrap().nfc_total_calls(), 4);
+    }
+
+    #[test]
+    fn test_nfc_stats_partial_legacy() {
+        let mut stats = Stats::new("1.0.0".to_string(), None, Arc::new(FrontendStats::default()));
+
+        // Test with only core present
+        let mut nfc_api = netsim_proto::stats::NfcApiStats::new();
+        let mut core = netsim_proto::stats::NciCoreStats::new();
+        core.init = Some(5);
+        nfc_api.nci_core = netsim_proto::protobuf::MessageField::some(core);
+
+        let proto = stats.get_combined_stats(CombinedStatsInputs {
+            active_stats: vec![],
+            wifi_stats: None,
+            wifi_api: None,
+            uwb_api: None,
+            nfc_api: Some(nfc_api),
+            nfc_stats: None,
+            nfc_service_stats: None,
+        });
+        assert_eq!(proto.api_stats.as_ref().unwrap().nfc_total_calls(), 5);
+
+        // Test with empty legacy stats (all None)
+        let nfc_api_empty = netsim_proto::stats::NfcApiStats::new();
+        let proto_empty = stats.get_combined_stats(CombinedStatsInputs {
+            active_stats: vec![],
+            wifi_stats: None,
+            wifi_api: None,
+            uwb_api: None,
+            nfc_api: Some(nfc_api_empty),
+            nfc_stats: None,
+            nfc_service_stats: None,
+        });
+        assert_eq!(proto_empty.api_stats.as_ref().unwrap().nfc_total_calls(), 0);
     }
 }

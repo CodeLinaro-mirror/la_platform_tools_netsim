@@ -3,17 +3,19 @@
 
 // src/network_service.rs
 
+use std::iter::once;
+
 use modem_rs_derive::CommandParser;
 use netsim_model::{Quirks, RegistrationStatus};
 use tracing::{info, warn};
 
 use crate::{
     constants::{DEFAULT_OPERATOR_NAME_LONG, DEFAULT_OPERATOR_NAME_SHORT, DEFAULT_PLMN},
-    parser::{QuotedString, parse_raw_data},
+    parser::QuotedString,
     types::{
-        AccessTechnology, CmeError, CopsFormat, CopsMode, CtecTechnology, ExecutionResult,
-        OperatorStatus, Parsable, Plmn, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
-        SignalStrength,
+        AccessTechnology, AidlSignalStrength, CmeError, CopsFormat, CopsMode, CtecPreferredMask,
+        CtecTechnology, ExecutionResult, OperatorStatus, Parsable, Plmn, RadioPowerLevel,
+        RegistrationUnsolicitedMode, Response, SignalQuality,
     },
 };
 
@@ -25,7 +27,12 @@ pub enum NetworkCommand<'a> {
     #[command(tag = "AT+COPS=?")]
     QueryAvailableOperators,
     #[command(tag = "AT+COPS=")]
-    SetOperator { mode: CopsMode, format: Option<CopsFormat>, oper: Option<QuotedString<'a>> },
+    SetOperator {
+        mode: CopsMode,
+        format: Option<CopsFormat>,
+        oper: Option<QuotedString<'a>>,
+        act: Option<u8>,
+    },
     #[command(tag = "AT+CREG?")]
     QueryVoiceNetworkRegistration,
     #[command(tag = "AT+CREG=")]
@@ -41,9 +48,9 @@ pub enum NetworkCommand<'a> {
     #[command(tag = "AT+CFUN?")]
     QueryRadioPower,
     #[command(tag = "AT+CFUN=")]
-    SetRadioPower(RadioPowerLevel),
+    SetRadioPower(RadioPowerLevel, Option<bool>),
     #[command(tag = "AT+CSQ")]
-    QuerySignalStrength,
+    QuerySignalQuality,
     #[command(tag = "AT+CESQ")]
     QueryExtendedSignalQuality,
     #[command(tag = "AT+CTEC?")]
@@ -51,7 +58,7 @@ pub enum NetworkCommand<'a> {
     #[command(tag = "AT+CTEC=?")]
     QuerySupportedNetworkTechnology,
     #[command(tag = "AT+CTEC=")]
-    SetNetworkTechnology(CtecTechnology, #[parser(parse_raw_data)] &'a [u8]),
+    SetNetworkTechnology(CtecTechnology, Option<CtecPreferredMask>),
 }
 
 const DUMMY_LAC: &str = "2142";
@@ -92,11 +99,7 @@ pub enum NetworkUrc {
         cid: Option<String>,
         act: Option<AccessTechnology>,
     },
-    SignalStrength {
-        rssi: u8,
-        ber: u8,
-        act: AccessTechnology,
-    },
+    SignalQuality(AidlSignalStrength),
 }
 
 impl std::fmt::Display for NetworkUrc {
@@ -115,9 +118,7 @@ impl std::fmt::Display for NetworkUrc {
                     write!(f, "{prefix}: {stat}\r\n")
                 }
             }
-            NetworkUrc::SignalStrength { rssi, ber, act } => {
-                write!(f, "{}", build_csq_response_string(*rssi, *ber, *act))
-            }
+            NetworkUrc::SignalQuality(ss) => write!(f, "+CSQ: {ss}\r\n"),
         }
     }
 }
@@ -131,11 +132,7 @@ pub enum NetworkResponse {
         plmn: String,
         quirks: Quirks,
     },
-    SignalStrength {
-        rssi: u8,
-        ber: u8,
-        act: AccessTechnology,
-    },
+    SignalQuality(AidlSignalStrength),
     RegistrationQuery {
         reg_type: RegistrationType,
         unsol_mode: RegistrationUnsolicitedMode,
@@ -184,9 +181,7 @@ impl std::fmt::Display for NetworkResponse {
                     write!(f, "+COPS: {mode},{format},0\r\n")
                 }
             }
-            NetworkResponse::SignalStrength { rssi, ber, act } => {
-                write!(f, "{}", build_csq_response_string(*rssi, *ber, *act))
-            }
+            NetworkResponse::SignalQuality(ss) => write!(f, "+CSQ: {ss}\r\n"),
             NetworkResponse::RegistrationQuery {
                 reg_type,
                 unsol_mode,
@@ -283,40 +278,11 @@ impl std::fmt::Display for NetworkResponse {
 
 type NetworkResult = Result<Option<NetworkResponse>, ExecutionResult>;
 
-/// Formats the unsolicited signal quality (CSQ) report according to the
-/// extended 22-field layout.
-///
-/// Delegates to the `SignalStrength` struct which encapsulates all signal
-/// parameters and correctly invalidates measurements that are not
-/// applicable to the currently active radio access technology
-/// (`act`).
-fn build_csq_response_string(rssi: u8, ber: u8, act: AccessTechnology) -> String {
-    let mut ss = SignalStrength::default();
-    match act {
-        AccessTechnology::Gsm => {
-            ss.gsm_rssi = rssi as i32;
-            ss.gsm_ber = ber as i32;
-        }
-        AccessTechnology::Wcdma => {
-            ss.wcdma_rssi = rssi as i32;
-            ss.wcdma_ber = ber as i32;
-        }
-        AccessTechnology::Lte => {
-            ss.lte_rssi = rssi as i32;
-            ss.lte_rsrp = NetworkService::rssi_to_rsrp(rssi);
-        }
-        AccessTechnology::Nr => {
-            ss.nr_ss_rsrp = NetworkService::rssi_to_rsrp(rssi);
-        }
-    }
-    ss.to_csq_response()
-}
-
 // Holds all state related to the network.
 pub struct NetworkService {
     voice_registration: RegistrationStatus,
     data_registration: RegistrationStatus,
-    signal_strength: (u8, u8), // (rssi, ber)
+    signal_quality: SignalQuality,
     voice_unsol_mode: RegistrationUnsolicitedMode,
     data_unsol_mode: RegistrationUnsolicitedMode,
     lte_unsol_mode: RegistrationUnsolicitedMode,
@@ -325,7 +291,7 @@ pub struct NetworkService {
     cops_mode: CopsMode,
     cops_format: CopsFormat,
     current_network_mode: CtecTechnology,
-    preferred_network_mode: u32,
+    preferred_network_mode: CtecPreferredMask,
     is_attached: bool,
     act: AccessTechnology,
     pub(crate) quirks: Quirks,
@@ -336,7 +302,7 @@ impl NetworkService {
         Self {
             voice_registration: RegistrationStatus::NotRegistered,
             data_registration: RegistrationStatus::NotRegistered,
-            signal_strength: (20, 99),
+            signal_quality: SignalQuality::default(),
             voice_unsol_mode: RegistrationUnsolicitedMode::default(),
             data_unsol_mode: RegistrationUnsolicitedMode::default(),
             lte_unsol_mode: RegistrationUnsolicitedMode::default(),
@@ -353,7 +319,7 @@ impl NetworkService {
             // (numeric MCC/MNC) must be the default for Goldfish compatibility.
             cops_format: CopsFormat::Numeric,
             current_network_mode: CtecTechnology::Lte,
-            preferred_network_mode: CtecTechnology::Nr as u32,
+            preferred_network_mode: CtecPreferredMask(CtecTechnology::Nr as u32),
             is_attached: false,
             act: AccessTechnology::Lte,
             quirks,
@@ -365,14 +331,17 @@ impl NetworkService {
     pub fn is_attached(&self) -> bool {
         self.is_attached
     }
+    pub fn is_radio_on(&self) -> bool {
+        self.radio_power == RadioPowerLevel::Full
+    }
     pub fn voice_registration(&self) -> RegistrationStatus {
         self.voice_registration
     }
     pub fn data_registration(&self) -> RegistrationStatus {
         self.data_registration
     }
-    pub fn signal_strength(&self) -> (u8, u8) {
-        self.signal_strength
+    pub fn signal_quality(&self) -> SignalQuality {
+        self.signal_quality
     }
 
     pub fn detach_network(&mut self) {
@@ -387,12 +356,16 @@ impl NetworkService {
         self.plmn.as_ref()
     }
 
-    pub fn set_operator_manual(&mut self, mode: CopsMode, oper: Option<&[u8]>) -> NetworkResult {
-        self.handle_set_operator(mode, Some(CopsFormat::LongAlphanumeric), oper)
+    pub fn set_operator_manual(&mut self, mode: CopsMode, oper: Option<&str>) -> NetworkResult {
+        self.handle_set_operator(mode, Some(CopsFormat::LongAlphanumeric), oper, None)
     }
 
     pub fn attach_network(&mut self) -> Vec<String> {
         self.attach_network_urcs().iter().map(|u| u.to_string()).collect()
+    }
+
+    fn current_signal_strength(&self) -> AidlSignalStrength {
+        AidlSignalStrength::from_quality(self.signal_quality, self.act)
     }
 
     fn attach_network_urcs(&mut self) -> Vec<NetworkUrc> {
@@ -410,27 +383,7 @@ impl NetworkService {
         self.voice_registration = RegistrationStatus::RegisteredHome;
         self.data_registration = RegistrationStatus::RegisteredHome;
 
-        let mut urcs = self.all_registration_urcs();
-        let (rssi, ber) = self.signal_strength;
-        urcs.push(NetworkUrc::SignalStrength { rssi, ber, act: self.act });
-
-        urcs
-    }
-
-    fn rssi_to_rsrp(rssi: u8) -> i32 {
-        if rssi == crate::constants::CSQ_SIGNAL_UNKNOWN {
-            return i32::MAX;
-        }
-        // Map CSQ (0-31) linearly to LTE RSRP range [-140, -44] dBm (3GPP TS 36.133).
-        // CSQ 0 -> -140 dBm, CSQ 31 -> -47 dBm (step of 3 dBm)
-        // rsrp_dbm = -140 + (rssi * 3)
-        let rsrp_dbm = -140 + (rssi as i32 * 3);
-
-        // AIDL expects -1 * rsrp_dbm
-        let rsrp_csq = -rsrp_dbm;
-
-        // Clamp to 3GPP TS 36.133 valid RSRP range [44, 140] (-44 dBm to -140 dBm)
-        rsrp_csq.clamp(44, 140)
+        self.tech_change_urcs()
     }
 
     pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Option<String> {
@@ -499,12 +452,8 @@ impl NetworkService {
             self.current_network_mode = new_mode;
             self.act = new_act;
             if self.is_attached {
-                let mut urcs = String::new();
-                for urc in self.all_registration_urcs() {
-                    urcs.push_str(&urc.to_string());
-                }
-                let (rssi, ber) = self.signal_strength;
-                urcs.push_str(&build_csq_response_string(rssi, ber, self.act));
+                let urcs: String =
+                    self.tech_change_urcs().into_iter().map(|u| u.to_string()).collect();
                 if urcs.is_empty() { None } else { Some(urcs) }
             } else {
                 None
@@ -516,7 +465,36 @@ impl NetworkService {
 
     /// Sets the signal strength and bit error rate.
     pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) {
-        self.signal_strength = (rssi, ber);
+        self.signal_quality = SignalQuality::new(rssi, ber);
+    }
+
+    /// Applies `<AcT>`, returning whether the active technology changed.
+    fn apply_resolved_act(&mut self, new_act: AccessTechnology) -> bool {
+        let new_mode = match new_act {
+            AccessTechnology::Gsm => CtecTechnology::Gsm,
+            AccessTechnology::Wcdma => CtecTechnology::Wcdma,
+            AccessTechnology::Lte => CtecTechnology::Lte,
+            AccessTechnology::Nr => CtecTechnology::Nr,
+        };
+
+        if self.current_network_mode == new_mode && self.act == new_act {
+            return false;
+        }
+
+        info!(
+            "apply_resolved_act: mode={new_mode}, act={new_act} (was mode={}, act={})",
+            self.current_network_mode, self.act
+        );
+        self.current_network_mode = new_mode;
+        self.act = new_act;
+        true
+    }
+
+    fn tech_change_urcs(&self) -> Vec<NetworkUrc> {
+        self.all_registration_urcs()
+            .into_iter()
+            .chain(once(NetworkUrc::SignalQuality(self.current_signal_strength())))
+            .collect()
     }
 
     // --- Pure command handlers ---
@@ -543,12 +521,14 @@ impl NetworkService {
         &mut self,
         mode: CopsMode,
         format: Option<CopsFormat>,
-        oper: Option<&[u8]>,
+        oper: Option<&str>,
+        act: Option<u8>,
     ) -> NetworkResult {
-        info!(
-            "handle_set_operator: mode={mode}, format={format:?}, oper={:?}",
-            oper.map(|o| String::from_utf8_lossy(o))
-        );
+        info!("handle_set_operator: mode={mode}, format={format:?}, oper={oper:?}, act={act:?}");
+
+        let act = act.map(|w| AccessTechnology::from_wire(w, self.quirks)).transpose()?;
+
+        let mut urcs = Vec::new();
 
         match mode {
             CopsMode::Automatic => {
@@ -556,52 +536,56 @@ impl NetworkService {
                 if let Some(fmt) = format {
                     self.cops_format = fmt;
                 }
-                let mut urcs = Vec::new();
-                if !self.is_attached && self.radio_power == RadioPowerLevel::Full {
+                let tech_changed = act.is_some_and(|a| self.apply_resolved_act(a));
+                if self.is_attached {
+                    if tech_changed {
+                        urcs.extend(self.tech_change_urcs());
+                    }
+                } else if self.radio_power == RadioPowerLevel::Full {
                     urcs.extend(self.attach_network_urcs());
                 }
                 if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
             }
             CopsMode::Manual => {
-                if let Some(op_bytes) = oper {
-                    let op_str = match std::str::from_utf8(op_bytes) {
-                        Ok(s) => s,
-                        Err(_) => return Err(ExecutionResult::error()),
-                    };
+                let Some(op_str) = oper else {
+                    return Err(ExecutionResult::error());
+                };
+                self.cops_mode = CopsMode::Manual;
+                if let Some(fmt) = format {
+                    self.cops_format = fmt;
+                }
 
-                    self.cops_mode = CopsMode::Manual;
-                    if let Some(fmt) = format {
-                        self.cops_format = fmt;
-                    }
+                let is_valid_operator = self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
+                    || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
+                    || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
 
-                    let is_valid_operator =
-                        self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
-                            || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
-                            || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
-
-                    if is_valid_operator {
-                        let mut urcs = Vec::new();
-                        if !self.is_attached && self.radio_power == RadioPowerLevel::Full {
-                            urcs.extend(self.attach_network_urcs());
+                if is_valid_operator {
+                    let tech_changed = act.is_some_and(|a| self.apply_resolved_act(a));
+                    if self.is_attached {
+                        if tech_changed {
+                            urcs.extend(self.tech_change_urcs());
                         }
+                    } else if self.radio_power == RadioPowerLevel::Full {
+                        urcs.extend(self.attach_network_urcs());
+                    }
+                    if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
+                } else {
+                    self.is_attached = false;
+                    self.voice_registration = RegistrationStatus::Denied;
+                    self.data_registration = RegistrationStatus::Denied;
+                    urcs = self.all_registration_urcs();
+
+                    // Legacy Goldfish RIL treats CME 30 as an invalid argument (b/495634151).
+                    if self.quirks.goldfish_ril_37_or_earlier {
                         if urcs.is_empty() {
                             Ok(None)
                         } else {
                             Ok(Some(NetworkResponse::Urcs(urcs)))
                         }
                     } else {
-                        self.cops_mode = CopsMode::Automatic;
-                        self.is_attached = false;
-                        self.voice_registration = RegistrationStatus::Denied;
-                        self.data_registration = RegistrationStatus::Denied;
-                        let urcs = self.all_registration_urcs();
-                        Err(ExecutionResult::Error {
-                            cme: Some(CmeError::NoNetworkService),
-                            urcs: vec![Response::Network(NetworkResponse::Urcs(urcs))],
-                        })
+                        Err(ExecutionResult::cme_error(CmeError::NoNetworkService)
+                            .with_urcs(vec![Response::Network(NetworkResponse::Urcs(urcs))]))
                     }
-                } else {
-                    Err(ExecutionResult::error())
                 }
             }
             CopsMode::Deregister => {
@@ -609,7 +593,6 @@ impl NetworkService {
                 if let Some(fmt) = format {
                     self.cops_format = fmt;
                 }
-                let mut urcs = Vec::new();
                 if self.is_attached {
                     self.is_attached = false;
                     self.voice_registration = RegistrationStatus::NotRegistered;
@@ -619,43 +602,40 @@ impl NetworkService {
                 if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
             }
             CopsMode::SetFormatOnly => {
-                if let Some(fmt) = format {
-                    self.cops_format = fmt;
-                    Ok(None)
-                } else {
-                    Err(ExecutionResult::error())
+                let Some(fmt) = format else {
+                    return Err(ExecutionResult::error());
+                };
+                self.cops_format = fmt;
+                if act.is_some_and(|a| self.apply_resolved_act(a)) && self.is_attached {
+                    urcs.extend(self.tech_change_urcs());
                 }
+                if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
             }
             CopsMode::ManualAutomatic => {
-                if let Some(op_bytes) = oper {
-                    let op_str = match std::str::from_utf8(op_bytes) {
-                        Ok(s) => s,
-                        Err(_) => return Err(ExecutionResult::error()),
-                    };
-
-                    self.cops_mode = CopsMode::ManualAutomatic;
-                    if let Some(fmt) = format {
-                        self.cops_format = fmt;
-                    }
-
-                    let manual_success = self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
-                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
-                        || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
-                    let mut urcs = Vec::new();
-                    if manual_success {
-                        if !self.is_attached && self.radio_power == RadioPowerLevel::Full {
-                            urcs.extend(self.attach_network_urcs());
-                        }
-                    } else {
-                        self.cops_mode = CopsMode::Automatic;
-                        if !self.is_attached && self.radio_power == RadioPowerLevel::Full {
-                            urcs.extend(self.attach_network_urcs());
-                        }
-                    }
-                    if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
-                } else {
-                    Err(ExecutionResult::error())
+                let Some(op_str) = oper else {
+                    return Err(ExecutionResult::error());
+                };
+                self.cops_mode = CopsMode::ManualAutomatic;
+                if let Some(fmt) = format {
+                    self.cops_format = fmt;
                 }
+
+                let manual_success = self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
+                    || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
+                    || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
+                if !manual_success {
+                    self.cops_mode = CopsMode::Automatic;
+                }
+
+                let tech_changed = act.is_some_and(|a| self.apply_resolved_act(a));
+                if self.is_attached {
+                    if tech_changed {
+                        urcs.extend(self.tech_change_urcs());
+                    }
+                } else if self.radio_power == RadioPowerLevel::Full {
+                    urcs.extend(self.attach_network_urcs());
+                }
+                if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
             }
         }
     }
@@ -673,9 +653,8 @@ impl NetworkService {
         Ok(Some(NetworkResponse::AvailableOperators(vec![default_op])))
     }
 
-    fn handle_query_signal_strength(&self) -> NetworkResult {
-        let (rssi, ber) = self.signal_strength;
-        Ok(Some(NetworkResponse::SignalStrength { rssi, ber, act: self.act }))
+    fn handle_query_signal_quality(&self) -> NetworkResult {
+        Ok(Some(NetworkResponse::SignalQuality(self.current_signal_strength())))
     }
 
     fn handle_query_extended_signal_quality(&self) -> NetworkResult {
@@ -741,7 +720,7 @@ impl NetworkService {
     fn handle_query_current_ctec(&self) -> NetworkResult {
         Ok(Some(NetworkResponse::Ctec {
             current: self.current_network_mode,
-            preferred: self.preferred_network_mode,
+            preferred: self.preferred_network_mode.0,
         }))
     }
 
@@ -749,34 +728,13 @@ impl NetworkService {
         Ok(Some(NetworkResponse::CtecSupported(crate::constants::SUPPORTED_CTEC_TECHS.to_vec())))
     }
 
-    fn handle_set_ctec(&mut self, current: CtecTechnology, preferred: &[u8]) -> NetworkResult {
-        let preferred_str = match std::str::from_utf8(preferred) {
-            Ok(s) => s.trim(),
-            Err(_) => return Err(ExecutionResult::error()),
-        };
-        let preferred_clean = preferred_str.trim_matches('"').trim();
-        // Strip hex prefix "0x" or "0X" if present
-        let preferred_clean = preferred_clean
-            .strip_prefix("0x")
-            .or_else(|| preferred_clean.strip_prefix("0X"))
-            .unwrap_or(preferred_clean);
-
-        let preferred_mask = match u32::from_str_radix(preferred_clean, 16) {
-            Ok(val) => val,
-            Err(_) => return Err(ExecutionResult::error()),
-        };
-
-        // Validate allowed technologies mask
-        let allowed_mask = crate::constants::SUPPORTED_CTEC_TECHS
-            .iter()
-            .fold(0u32, |acc, &tech| acc | (tech as u32));
-
-        // Validate preferred mask only contains supported technologies
-        if (preferred_mask & !allowed_mask) != 0 {
-            return Err(ExecutionResult::error());
-        }
-
-        info!("handle_set_ctec: current={current}, preferred_mask={preferred_mask:#X}");
+    fn handle_set_ctec(
+        &mut self,
+        current: CtecTechnology,
+        preferred: Option<CtecPreferredMask>,
+    ) -> NetworkResult {
+        let preferred_mask = preferred.unwrap_or(CtecPreferredMask(0));
+        info!("handle_set_ctec: current={current}, preferred_mask={:#X}", preferred_mask.0);
         self.current_network_mode = current;
         self.preferred_network_mode = preferred_mask;
         self.act = match current {
@@ -787,12 +745,7 @@ impl NetworkService {
         };
         info!("handle_set_ctec: updated self.act to {}", self.act);
 
-        let mut urcs = Vec::new();
-        if self.is_attached {
-            urcs = self.all_registration_urcs();
-            let (rssi, ber) = self.signal_strength;
-            urcs.push(NetworkUrc::SignalStrength { rssi, ber, act: self.act });
-        }
+        let urcs = if self.is_attached { self.tech_change_urcs() } else { Vec::new() };
 
         Ok(Some(NetworkResponse::CtecSetResult { urcs }))
     }
@@ -804,6 +757,7 @@ impl NetworkService {
     fn handle_set_radio_power(
         &mut self,
         power: RadioPowerLevel,
+        reset: Option<bool>,
         enable_unsolicited_urcs: bool,
     ) -> NetworkResult {
         let old_power = self.radio_power;
@@ -813,8 +767,9 @@ impl NetworkService {
 
         let was_on = old_power == RadioPowerLevel::Full;
         let is_on = self.radio_power == RadioPowerLevel::Full;
+        let should_reset = reset == Some(true);
 
-        if was_on && !is_on {
+        if (was_on && !is_on) || should_reset {
             self.is_attached = false;
             self.voice_registration = RegistrationStatus::NotRegistered;
             self.data_registration = RegistrationStatus::NotRegistered;
@@ -879,10 +834,10 @@ impl NetworkService {
         let res = match command {
             NetworkCommand::QueryOperator => self.handle_query_operator(),
             NetworkCommand::QueryAvailableOperators => self.handle_query_available_operators(),
-            NetworkCommand::SetOperator { mode, format, oper } => {
-                self.handle_set_operator(*mode, *format, oper.as_deref())
+            NetworkCommand::SetOperator { mode, format, oper, act } => {
+                self.handle_set_operator(*mode, *format, oper.as_ref().map(|s| s.as_str()), *act)
             }
-            NetworkCommand::QuerySignalStrength => self.handle_query_signal_strength(),
+            NetworkCommand::QuerySignalQuality => self.handle_query_signal_quality(),
             NetworkCommand::QueryExtendedSignalQuality => {
                 self.handle_query_extended_signal_quality()
             }
@@ -905,13 +860,13 @@ impl NetworkService {
                 self.handle_set_registration(RegistrationType::Lte, *mode)
             }
             NetworkCommand::QueryRadioPower => self.handle_query_radio_power(),
-            NetworkCommand::SetRadioPower(power) => {
-                self.handle_set_radio_power(*power, enable_unsolicited_urcs)
+            NetworkCommand::SetRadioPower(power, reset) => {
+                self.handle_set_radio_power(*power, *reset, enable_unsolicited_urcs)
             }
             NetworkCommand::QueryCurrentNetworkTechnology => self.handle_query_current_ctec(),
             NetworkCommand::QuerySupportedNetworkTechnology => self.handle_query_supported_ctec(),
             NetworkCommand::SetNetworkTechnology(current, preferred) => {
-                self.handle_set_ctec(*current, preferred.as_ref())
+                self.handle_set_ctec(*current, *preferred)
             }
         };
         res.into()

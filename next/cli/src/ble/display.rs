@@ -252,37 +252,36 @@ pub fn print_sniff_response(res: &SniffResponse, _verbose: bool) {
         TimeDisplay::new(duration.as_secs() as i64, duration.subsec_nanos()).utc_display_hms();
     let hex_packet = res.packet.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join("");
 
-    let packet_type_str = match res.packet.first().copied() {
-        Some(0x00) => "UNKNOWN",
-        Some(0x01) => "ACL",
-        Some(0x02) => "SCO",
-        Some(0x03) => "LE_CONNECTED_ISOCHRONOUS_PDU",
-        Some(0x04) => "LE_BROADCAST_ISOCHRONOUS_PDU",
-        Some(0x05) => "DISCONNECT",
-        Some(0x06) => "INQUIRY",
-        Some(0x07) => "INQUIRY_RESPONSE",
-        Some(0x0B) => "LE_LEGACY_ADVERTISING_PDU",
-        Some(0x37) => "LE_EXTENDED_ADVERTISING_PDU",
-        Some(0x40) => "LE_PERIODIC_ADVERTISING_PDU",
-        Some(0x0C) => "LE_CONNECT",
-        Some(0x0D) => "LE_CONNECT_COMPLETE",
-        Some(0x0E) => "LE_SCAN",
-        Some(0x0F) => "LE_SCAN_RESPONSE",
-        Some(0x10) => "PAGE",
-        Some(0x11) => "PAGE_RESPONSE",
-        Some(0x12) => "PAGE_REJECT",
-        Some(0x1D) => "REMOTE_NAME_REQUEST",
-        Some(0x1E) => "REMOTE_NAME_REQUEST_RESPONSE",
-        Some(0x34) => "LMP",
-        Some(0x41) => "LLCP",
-        None => "EMPTY",
-        Some(_) => "", // Fallback correctly handled below
-    };
-
-    let packet_type = if packet_type_str.is_empty() {
-        format!("0x{:02X}", res.packet.first().unwrap())
-    } else {
-        packet_type_str.to_string()
+    let packet_type = match res.packet.first() {
+        None => "EMPTY".to_string(),
+        Some(&byte) => {
+            let name: Option<&'static str> = match byte {
+                0x00 => Some("UNKNOWN"),
+                0x01 => Some("ACL"),
+                0x02 => Some("SCO"),
+                0x03 => Some("LE_CONNECTED_ISOCHRONOUS_PDU"),
+                0x04 => Some("LE_BROADCAST_ISOCHRONOUS_PDU"),
+                0x05 => Some("DISCONNECT"),
+                0x06 => Some("INQUIRY"),
+                0x07 => Some("INQUIRY_RESPONSE"),
+                0x0B => Some("LE_LEGACY_ADVERTISING_PDU"),
+                0x37 => Some("LE_EXTENDED_ADVERTISING_PDU"),
+                0x40 => Some("LE_PERIODIC_ADVERTISING_PDU"),
+                0x0C => Some("LE_CONNECT"),
+                0x0D => Some("LE_CONNECT_COMPLETE"),
+                0x0E => Some("LE_SCAN"),
+                0x0F => Some("LE_SCAN_RESPONSE"),
+                0x10 => Some("PAGE"),
+                0x11 => Some("PAGE_RESPONSE"),
+                0x12 => Some("PAGE_REJECT"),
+                0x1D => Some("REMOTE_NAME_REQUEST"),
+                0x1E => Some("REMOTE_NAME_REQUEST_RESPONSE"),
+                0x34 => Some("LMP"),
+                0x41 => Some("LLCP"),
+                _ => None,
+            };
+            name.map(str::to_string).unwrap_or_else(|| format!("0x{byte:02X}"))
+        }
     };
 
     #[derive(Serialize)]
