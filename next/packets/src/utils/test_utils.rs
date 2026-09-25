@@ -1,9 +1,28 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
+use std::{
+    net::{Ipv4Addr, Ipv6Addr},
+    path::Path,
+};
 
-use crate::{packet, packet::json::to_json};
+use zerocopy::{IntoBytes, U16, U32};
+
+use crate::{
+    ethernet::{
+        ArpPacket, EthernetFrame, MacAddr,
+        frame::{arp_hardware, ether_type},
+    },
+    icmp::v6::Icmpv6Header,
+    ip::frame::{Ipv4Header, Ipv6Header},
+    packet,
+    packet::json::to_json,
+    transport::{tcp::TcpHeader, udp::UdpHeader},
+    utils::checksum::{
+        icmpv6_checksum, ipv4_checksum, tcp_checksum, tcp_checksum_v6, udp_checksum,
+        udp_checksum_v6,
+    },
+};
 
 /// Validates that the JSON output from parsing a PCAP file matches the golden
 /// JSON file.
@@ -217,47 +236,65 @@ fn compare_values(n_val: &serde_json::Value, t_val: &serde_json::Value) -> bool 
     }
 }
 
-/// A simple packet builder for creating test packets.
+const IPV4_HEADER_LEN: usize = std::mem::size_of::<crate::ip::frame::Ipv4Header>();
+const IPV6_HEADER_LEN: usize = std::mem::size_of::<crate::ip::frame::Ipv6Header>();
+
+/// A chained builder for whole packets, intended for tests and control-plane
+/// traffic.
+///
+/// Layers are appended in order and their length and checksum fields are filled
+/// in by [`PacketBuilder::payload`], once the total size is known. That means a
+/// caller cannot forget to set a length, and cannot leave a mandatory checksum
+/// zeroed -- two mistakes that are invisible in a hex dump and have each caused
+/// a silently-dropped packet in this tree.
+///
+/// ```
+/// use netsim_packets::{IP_P_UDP, PacketBuilder, ether_type};
+///
+/// let packet = PacketBuilder::new([0xff; 6], [0x02; 6], ether_type::IPV4)
+///     .ipv4([10, 0, 2, 15], [10, 0, 2, 2], IP_P_UDP)
+///     .udp(68, 67)
+///     .payload(b"hello");
+/// // 14 Ethernet + 20 IPv4 + 8 UDP + 5 payload
+/// assert_eq!(packet.len(), 47);
+/// ```
+///
+/// This allocates, so it is not meant for the forwarding hot path; the
+/// zero-copy `*Builder` types write into a caller-provided buffer instead.
+#[derive(Default)]
 pub struct PacketBuilder {
     buffer: Vec<u8>,
-    src_ip: Option<[u8; 4]>,
-    dst_ip: Option<[u8; 4]>,
+    /// Offset of the IPv4 header and its addresses, for length and checksums.
+    ipv4: Option<(usize, Ipv4Addr, Ipv4Addr)>,
+    /// Offset of the IPv6 header and its addresses, for length and checksums.
+    ipv6: Option<(usize, Ipv6Addr, Ipv6Addr)>,
+    /// Offset of the UDP header, whose length and checksum span the payload.
+    udp: Option<usize>,
+    /// Offset of the TCP header, whose checksum spans the payload.
+    tcp: Option<usize>,
+    /// Offset of the ICMPv6 header, whose checksum spans the payload.
+    icmpv6: Option<usize>,
 }
 
 impl PacketBuilder {
     /// Creates a new PacketBuilder with Ethernet header.
     pub fn new(dst_mac: [u8; 6], src_mac: [u8; 6], ethertype: u16) -> Self {
-        use zerocopy::IntoBytes;
-
-        use crate::ethernet::{EthernetFrame, MacAddr};
-
         let eth_header =
             EthernetFrame::new(MacAddr::new(dst_mac), MacAddr::new(src_mac), ethertype);
         let mut buffer = Vec::new();
         buffer.extend_from_slice(eth_header.as_bytes());
-        Self { buffer, src_ip: None, dst_ip: None }
+        Self { buffer, ..Default::default() }
     }
 
-    /// Adds an IPv4 header.
-    pub fn ipv4(
-        mut self,
-        src_ip: [u8; 4],
-        dst_ip: [u8; 4],
-        protocol: u8,
-        payload_len: usize,
-    ) -> Self {
-        use zerocopy::{IntoBytes, U16};
+    /// Adds an IPv4 header. `total_length` and the header checksum are filled
+    /// in by [`Self::payload`].
+    pub fn ipv4(mut self, src_ip: [u8; 4], dst_ip: [u8; 4], protocol: u8) -> Self {
+        self.ipv4 = Some((self.buffer.len(), Ipv4Addr::from(src_ip), Ipv4Addr::from(dst_ip)));
 
-        use crate::ip::frame::Ipv4Header;
-
-        self.src_ip = Some(src_ip);
-        self.dst_ip = Some(dst_ip);
-
-        let total_len = (20 + payload_len) as u16;
-        let mut ip_header = Ipv4Header {
+        let ip_header = Ipv4Header {
             version_ihl: 0x45, // Ver 4, IHL 5
             dscp_ecn: 0,
-            total_length: U16::new(total_len),
+            total_length: U16::new(0),
             identification: U16::new(1),
             flags_fragment_offset: U16::new(0),
             ttl: 64,
@@ -266,30 +303,45 @@ impl PacketBuilder {
             source_addr: src_ip,
             dest_addr: dst_ip,
         };
-        ip_header.update_checksum();
         self.buffer.extend_from_slice(ip_header.as_bytes());
         self
     }
 
-    /// Adds a UDP header.
-    pub fn udp(mut self, src_port: u16, dst_port: u16, payload_len: usize) -> Self {
-        use zerocopy::{IntoBytes, U16};
+    /// Adds an IPv6 header. `payload_length` is filled in by [`Self::payload`].
+    pub fn ipv6(mut self, src_ip: [u8; 16], dst_ip: [u8; 16], next_header: u8) -> Self {
+        self.ipv6 = Some((self.buffer.len(), Ipv6Addr::from(src_ip), Ipv6Addr::from(dst_ip)));
 
-        use crate::transport::udp::UdpHeader;
+        let ip_header = Ipv6Header::new(src_ip, dst_ip, next_header);
+        self.buffer.extend_from_slice(ip_header.as_bytes());
+        self
+    }
 
-        let udp_len = (8 + payload_len) as u16;
+    /// Overrides the IPv6 hop limit, which NDP requires to be 255.
+    ///
+    /// Panics if no IPv6 header has been added.
+    pub fn hop_limit(mut self, hop_limit: u8) -> Self {
+        let (offset, ..) = self.ipv6.expect("hop_limit() requires an IPv6 header");
+        // hop_limit is the 8th byte of the IPv6 header.
+        self.buffer[offset + 7] = hop_limit;
+        self
+    }
+
+    /// Adds a UDP header. The length and checksum are filled in by
+    /// [`Self::payload`].
+    pub fn udp(mut self, src_port: u16, dst_port: u16) -> Self {
+        self.udp = Some(self.buffer.len());
+
         let udp_header = UdpHeader {
             source_port: U16::new(src_port),
             dest_port: U16::new(dst_port),
-            length: U16::new(udp_len),
-            checksum: U16::new(0), // Optional in IPv4
+            length: U16::new(0),
+            checksum: U16::new(0),
         };
         self.buffer.extend_from_slice(udp_header.as_bytes());
         self
     }
 
-    /// Adds a TCP header.
-    #[allow(clippy::too_many_arguments)]
+    /// Adds a TCP header. The checksum is filled in by [`Self::payload`].
     pub fn tcp(
         mut self,
         src_port: u16,
@@ -298,16 +350,13 @@ impl PacketBuilder {
         ack: u32,
         flags: u16,
         window: u16,
-        payload: &[u8],
     ) -> Self {
-        use zerocopy::{IntoBytes, U16, U32};
-
-        use crate::transport::tcp::TcpHeader;
+        self.tcp = Some(self.buffer.len());
 
         let data_offset = 5; // 5 * 32-bit words = 20 bytes
         let data_offset_reserved_flags = (data_offset << 12) | (flags & 0x1FF);
 
-        let mut tcp_header = TcpHeader {
+        let tcp_header = TcpHeader {
             source_port: U16::new(src_port),
             dest_port: U16::new(dst_port),
             sequence_num: U32::new(seq),
@@ -318,14 +367,22 @@ impl PacketBuilder {
             urgent_ptr: U16::new(0),
         };
 
-        if let (Some(src), Some(dst)) = (self.src_ip, self.dst_ip) {
-            tcp_header.update_checksum(src, dst, payload);
-        }
-
         self.buffer.extend_from_slice(tcp_header.as_bytes());
-        // NOTE: The payload is used here for checksum calculation but is NOT added to
-        // the buffer. The caller must ensure the same payload is passed to
-        // `.payload()` subsequently.
+        self
+    }
+
+    /// Adds an ICMPv6 header. `rest` is the four bytes following the checksum,
+    /// which the message type defines: the flags for a Neighbor Advertisement,
+    /// or the identifier and sequence number for an Echo.
+    ///
+    /// The checksum is mandatory for ICMPv6 and is filled in by
+    /// [`Self::payload`].
+    pub fn icmpv6(mut self, icmpv6_type: u8, icmpv6_code: u8, rest: [u8; 4]) -> Self {
+        self.icmpv6 = Some(self.buffer.len());
+
+        let icmpv6_header =
+            Icmpv6Header { icmpv6_type, icmpv6_code, icmpv6_checksum: U16::new(0), rest };
+        self.buffer.extend_from_slice(icmpv6_header.as_bytes());
         self
     }
 
@@ -338,13 +395,9 @@ impl PacketBuilder {
         target_mac: [u8; 6],
         target_ip: [u8; 4],
     ) -> Self {
-        use zerocopy::{IntoBytes, U16};
-
-        use crate::ethernet::{ArpPacket, MacAddr};
-
         let arp_header = ArpPacket {
-            hardware_type: U16::new(1),      // Ethernet
-            protocol_type: U16::new(0x0800), // IPv4
+            hardware_type: U16::new(arp_hardware::ETHERNET),
+            protocol_type: U16::new(ether_type::IPV4),
             hardware_addr_len: 6,
             protocol_addr_len: 4,
             opcode: U16::new(opcode),
@@ -357,8 +410,157 @@ impl PacketBuilder {
         self
     }
 
+    /// Appends `payload` and finalizes the packet, deriving every length and
+    /// checksum field from the bytes that were actually written.
     pub fn payload(mut self, payload: &[u8]) -> Vec<u8> {
         self.buffer.extend_from_slice(payload);
+
+        let total = self.buffer.len();
+
+        // Transport layer first: the IPv4 header checksum covers total_length,
+        // so the IP headers have to be patched last.
+        if let Some(offset) = self.udp {
+            let length = (total - offset) as u16;
+            self.buffer[offset + 4..offset + 6].copy_from_slice(&length.to_be_bytes());
+            let checksum = match (self.ipv4, self.ipv6) {
+                (Some((_, src, dst)), _) => Some(udp_checksum(&self.buffer[offset..], src, dst)),
+                (_, Some((_, src, dst))) => Some(udp_checksum_v6(&self.buffer[offset..], src, dst)),
+                _ => None,
+            };
+            if let Some(checksum) = checksum {
+                self.buffer[offset + 6..offset + 8].copy_from_slice(&checksum.to_be_bytes());
+            }
+        }
+
+        if let Some(offset) = self.tcp {
+            let checksum = match (self.ipv4, self.ipv6) {
+                (Some((_, src, dst)), _) => Some(tcp_checksum(&self.buffer[offset..], src, dst)),
+                (_, Some((_, src, dst))) => Some(tcp_checksum_v6(&self.buffer[offset..], src, dst)),
+                _ => None,
+            };
+            if let Some(checksum) = checksum {
+                self.buffer[offset + 16..offset + 18].copy_from_slice(&checksum.to_be_bytes());
+            }
+        }
+
+        if let Some(offset) = self.icmpv6 {
+            // ICMPv6 checksums are mandatory; a zero one is silently dropped.
+            let (_, src, dst) = self.ipv6.expect("icmpv6() requires an IPv6 header");
+            let checksum = icmpv6_checksum(&self.buffer[offset..], src, dst);
+            self.buffer[offset + 2..offset + 4].copy_from_slice(&checksum.to_be_bytes());
+        }
+
+        if let Some((offset, ..)) = self.ipv4 {
+            let total_length = (total - offset) as u16;
+            self.buffer[offset + 2..offset + 4].copy_from_slice(&total_length.to_be_bytes());
+            let checksum = ipv4_checksum(&self.buffer[offset..offset + IPV4_HEADER_LEN]);
+            self.buffer[offset + 10..offset + 12].copy_from_slice(&checksum.to_be_bytes());
+        }
+
+        if let Some((offset, ..)) = self.ipv6 {
+            let payload_length = (total - offset - IPV6_HEADER_LEN) as u16;
+            self.buffer[offset + 4..offset + 6].copy_from_slice(&payload_length.to_be_bytes());
+        }
+
         self.buffer
+    }
+
+    /// Finalizes a packet that carries no payload beyond its headers.
+    pub fn build(self) -> Vec<u8> {
+        self.payload(&[])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ethernet::frame::ether_type,
+        icmp::v6::Icmpv6Type,
+        ip::frame::{IP_P_ICMPV6, IP_P_TCP, IP_P_UDP},
+    };
+
+    const DST_MAC: [u8; 6] = [0x02, 0, 0, 0, 0, 1];
+    const SRC_MAC: [u8; 6] = [0x02, 0, 0, 0, 0, 2];
+    const SRC_V4: [u8; 4] = [10, 0, 2, 15];
+    const DST_V4: [u8; 4] = [10, 0, 2, 2];
+    const SRC_V6: [u8; 16] = [0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+    const DST_V6: [u8; 16] = [0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+
+    const ETH_LEN: usize = 14;
+
+    fn be16(bytes: &[u8]) -> u16 {
+        u16::from_be_bytes([bytes[0], bytes[1]])
+    }
+
+    #[test]
+    fn udp_over_ipv4_lengths_and_checksums() {
+        let payload = b"hello world";
+        let packet = PacketBuilder::new(DST_MAC, SRC_MAC, ether_type::IPV4)
+            .ipv4(SRC_V4, DST_V4, IP_P_UDP)
+            .udp(68, 67)
+            .payload(payload);
+
+        let ip = ETH_LEN;
+        let udp = ip + IPV4_HEADER_LEN;
+        assert_eq!(packet.len(), udp + 8 + payload.len());
+
+        // IPv4 total_length covers the IP header and everything after it.
+        assert_eq!(be16(&packet[ip + 2..]), (packet.len() - ip) as u16);
+        // UDP length covers the UDP header and the payload.
+        assert_eq!(be16(&packet[udp + 4..]), (packet.len() - udp) as u16);
+
+        // A correct checksum re-checksums to zero.
+        assert_eq!(ipv4_checksum(&packet[ip..ip + IPV4_HEADER_LEN]), 0);
+        assert_ne!(be16(&packet[udp + 6..]), 0);
+        assert_eq!(
+            udp_checksum(&packet[udp..], Ipv4Addr::from(SRC_V4), Ipv4Addr::from(DST_V4)),
+            0xFFFF
+        );
+    }
+
+    #[test]
+    fn tcp_over_ipv6_checksum_uses_the_v6_pseudo_header() {
+        let packet = PacketBuilder::new(DST_MAC, SRC_MAC, ether_type::IPV6)
+            .ipv6(SRC_V6, DST_V6, IP_P_TCP)
+            .tcp(1234, 80, 1, 0, 0x002, 65535)
+            .payload(b"GET /");
+
+        let ip = ETH_LEN;
+        let tcp = ip + IPV6_HEADER_LEN;
+        // IPv6 payload_length excludes the 40-byte fixed header.
+        assert_eq!(be16(&packet[ip + 4..]), (packet.len() - ip - IPV6_HEADER_LEN) as u16);
+        assert_ne!(be16(&packet[tcp + 16..]), 0);
+        assert_eq!(
+            tcp_checksum_v6(&packet[tcp..], Ipv6Addr::from(SRC_V6), Ipv6Addr::from(DST_V6)),
+            0
+        );
+    }
+
+    #[test]
+    fn icmpv6_checksum_is_always_filled_in() {
+        let packet = PacketBuilder::new(DST_MAC, SRC_MAC, ether_type::IPV6)
+            .ipv6(SRC_V6, DST_V6, IP_P_ICMPV6)
+            .hop_limit(255)
+            .icmpv6(Icmpv6Type::NeighborAdvertisement as u8, 0, [0x60, 0, 0, 0])
+            .payload(&DST_V6);
+
+        let ip = ETH_LEN;
+        let icmpv6 = ip + IPV6_HEADER_LEN;
+        // NDP requires a hop limit of 255; it is the 8th byte of the header.
+        assert_eq!(packet[ip + 7], 255);
+        assert_ne!(be16(&packet[icmpv6 + 2..]), 0);
+        assert_eq!(
+            icmpv6_checksum(&packet[icmpv6..], Ipv6Addr::from(SRC_V6), Ipv6Addr::from(DST_V6)),
+            0
+        );
+    }
+
+    #[test]
+    fn build_finalizes_a_header_only_packet() {
+        let packet = PacketBuilder::new(DST_MAC, SRC_MAC, ether_type::ARP)
+            .arp(1, SRC_MAC, SRC_V4, [0; 6], DST_V4)
+            .build();
+        assert_eq!(packet.len(), ETH_LEN + 28);
     }
 }

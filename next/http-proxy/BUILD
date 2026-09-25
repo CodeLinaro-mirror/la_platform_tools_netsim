@@ -13,10 +13,10 @@ netsim_rust_library(
     edition = "2024",
     enable_integration_test = False,
     deps = [
+        "//next/packets",
         "//next/slirp",
         "@base64",
         "@bytes",
-        "@etherparse",
         "@parking_lot",
         "@percent-encoding",
         "@thiserror",
