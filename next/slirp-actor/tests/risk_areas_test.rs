@@ -13,77 +13,11 @@
 
 use std::net::Ipv4Addr;
 
-use netsim_packets::{
-    EthernetFrame, IP_P_TCP, IP_P_UDP, Ipv4Builder, MacAddr, TCP_FLAG_ACK, TCP_FLAG_FIN,
-    TCP_FLAG_RST, TCP_FLAG_SYN, TcpBuilder, UdpPacketBuilder,
-};
+use netsim_packets::{EthernetFrame, IP_P_UDP, Ipv4Builder, MacAddr, UdpPacketBuilder};
 use slirp_actor::SlirpBackend;
 use zerocopy::FromBytes;
 
-use super::test_driver::SlirpTestDriver;
-
-/// Helper to construct a zero-copy Ethernet + IPv4 + TCP packet using
-/// `netsim-packets`.
-#[allow(clippy::too_many_arguments)]
-fn create_tcp_packet(
-    src_ip: Ipv4Addr,
-    dst_ip: Ipv4Addr,
-    src_port: u16,
-    dst_port: u16,
-    seq: u32,
-    ack: u32,
-    syn: bool,
-    ack_flag: bool,
-    fin: bool,
-    rst: bool,
-    window_size: u16,
-    payload: &[u8],
-) -> bytes::Bytes {
-    let mut flags = 0u16;
-    if syn {
-        flags |= TCP_FLAG_SYN;
-    }
-    if ack_flag {
-        flags |= TCP_FLAG_ACK;
-    }
-    if fin {
-        flags |= TCP_FLAG_FIN;
-    }
-    if rst {
-        flags |= TCP_FLAG_RST;
-    }
-
-    let mut tcp_data = vec![0u8; 20 + payload.len()];
-    let mut tcp_builder = TcpBuilder::new(&mut tcp_data, src_ip, dst_ip).unwrap();
-    tcp_builder
-        .source_port(src_port)
-        .dest_port(dst_port)
-        .sequence_num(seq)
-        .ack_num(ack)
-        .flags(flags)
-        .window_size(window_size);
-
-    if !payload.is_empty() {
-        tcp_builder.payload(payload);
-    }
-
-    tcp_builder.build();
-
-    let mut ip_data = vec![0u8; 20 + tcp_data.len()];
-    let mut ipv4_builder = Ipv4Builder::new(&mut ip_data, IP_P_TCP, src_ip, dst_ip).unwrap();
-    ipv4_builder.payload(&tcp_data).unwrap();
-    ipv4_builder.build().unwrap();
-
-    let mut eth_data = vec![0u8; 14 + ip_data.len()];
-    let (eth_header_slice, eth_payload_slice) = eth_data.split_at_mut(14);
-    let eth_frame = EthernetFrame::mut_from_bytes(eth_header_slice).unwrap();
-    eth_frame.dst_addr = MacAddr { bytes: [0x52, 0x54, 0x00, 0x12, 0x34, 0x56] };
-    eth_frame.src_addr = MacAddr { bytes: [0x02, 0x15, 0xb2, 0x00, 0x00, 0x00] };
-    eth_frame.ethertype = 0x0800.into();
-    eth_payload_slice.copy_from_slice(&ip_data);
-
-    bytes::Bytes::from(eth_data)
-}
+use super::{packet_helpers::create_tcp_packet, test_driver::SlirpTestDriver};
 
 /// Helper to construct a zero-copy Ethernet + IPv4 + UDP DNS query packet using
 /// `netsim-packets`.
