@@ -22,7 +22,11 @@ use std::{env, fs::File, path::PathBuf};
 
 use args::{GetCapture, NetsimArgs};
 use clap::Parser;
-use common::util::{ini_file::get_server_address, netsim_logger, os_utils::get_instance};
+use common::util::{
+    ini_file::{get_http_server_address, get_server_address},
+    netsim_logger,
+    os_utils::get_instance,
+};
 use file_handler::FileHandler;
 use grpcio::{ChannelBuilder, EnvBuilder};
 use netsim_proto::{
@@ -30,6 +34,7 @@ use netsim_proto::{
     cell_grpc::CellServiceClient, frontend, frontend_grpc::FrontendServiceClient,
     nfc_service_grpc::NfcServiceClient,
 };
+use netsim_rest_api::{ListDeviceResponse, NetsimRestClient};
 use tracing::error;
 
 use crate::{
@@ -69,6 +74,7 @@ fn perform_streaming_request(
 /// the given command
 fn perform_command(
     command: &mut args::Command,
+    rest_client: &NetsimRestClient,
     client: FrontendServiceClient,
     cell_client: impl CellClient,
     verbose: bool,
@@ -123,11 +129,8 @@ fn perform_command(
                 Ok(None)
             }
             &mut args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
-                let response = grpc_client::send_grpc(&client, &GrpcRequest::ListDevice)?;
-                let GrpcResponse::ListDevice(response) = response else {
-                    return Err(format!("Expected ListDeviceResponse. Got: {response:?}").into());
-                };
-                let id = find_id_for_remove(response, cmd)?;
+                let response = rest_client.get_devices().send_blocking()?;
+                let id = find_id_for_remove(&response, cmd)?;
                 let res = grpc_client::send_grpc(
                     &client,
                     &GrpcRequest::DeleteDevice(frontend::DeleteDeviceRequest {
@@ -154,12 +157,9 @@ fn perform_command(
     Ok(())
 }
 
-fn find_id_for_remove(
-    response: frontend::ListDeviceResponse,
-    cmd: &args::BeaconRemove,
-) -> Result<u32> {
-    let devices = response.devices;
-    let device = devices
+fn find_id_for_remove(response: &ListDeviceResponse, cmd: &args::BeaconRemove) -> Result<u32> {
+    let device = response
+        .devices
         .iter()
         .find(|device| device.name == cmd.device_name)
         .ok_or_else(|| format!("Device not found: {}", cmd.device_name))?;
@@ -199,6 +199,22 @@ fn process_result(
         Err(e) => Err(format!("Grpc call error: {e}").into()),
     }
 }
+/// Runs `command` if it is served over the REST API; returns `None` otherwise.
+fn run_rest(command: &args::Command, rest: &NetsimRestClient, verbose: bool) -> Option<Result<()>> {
+    let result = match command {
+        args::Command::Version => rest
+            .get_version()
+            .send_blocking()
+            .map(|resp| println!("Netsim version: {}", resp.version)),
+        args::Command::Link(args::Link::List) => rest
+            .get_links()
+            .send_blocking()
+            .map(|resp| println!("{}", display::Displayer::new(&resp, verbose))),
+        _ => return None,
+    };
+    Some(result.map_err(Error::from))
+}
+
 /// Standard Netsim CLI entry point
 fn main() {
     let mut args = NetsimArgs::parse();
@@ -217,10 +233,22 @@ fn main() {
         browser::open("https://google.github.io/bumble/hive/index.html");
         return;
     }
+
+    let instance_num = get_instance(args.instance);
+    let http_server = get_http_server_address(instance_num).unwrap_or_default();
+    let rest_client = NetsimRestClient::from_addr(http_server);
+
+    if let Some(result) = run_rest(&args.command, &rest_client, args.verbose) {
+        if let Err(e) = result {
+            error!("{e}");
+        }
+        return;
+    }
+
     let server = match (args.vsock, args.port) {
         (Some(vsock), _) => format!("vsock:{vsock}"),
         (_, Some(port)) => format!("localhost:{port}"),
-        _ => get_server_address(get_instance(args.instance)).unwrap_or_default(),
+        _ => get_server_address(instance_num).unwrap_or_default(),
     };
     let channel =
         ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build())).connect(&server);
@@ -230,7 +258,9 @@ fn main() {
     let ble_client = BleServiceClient::new(channel.clone());
 
     if let args::Command::Ap(ap_cmd) = &args.command {
-        if let Err(e) = crate::ap::client::execute(ap_cmd, &access_point_client, args.verbose) {
+        if let Err(e) =
+            crate::ap::client::execute(ap_cmd, &rest_client, &access_point_client, args.verbose)
+        {
             error!("{e}");
         }
         return;
@@ -269,14 +299,17 @@ fn main() {
         return;
     }
 
-    if let Err(e) = perform_command(&mut args.command, frontend_client, cell_client, args.verbose) {
+    if let Err(e) =
+        perform_command(&mut args.command, &rest_client, frontend_client, cell_client, args.verbose)
+    {
         error!("{e}");
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use netsim_proto::{frontend::ListDeviceResponse, model::Device as DeviceProto};
+    use netsim_model::Device;
+    use netsim_rest_api::ListDeviceResponse;
 
     use crate::{args::BeaconRemove, find_id_for_remove};
 
@@ -288,11 +321,10 @@ mod tests {
         let cmd = &BeaconRemove { device_name: device_name.clone() };
 
         let response = ListDeviceResponse {
-            devices: vec![DeviceProto { id: device_id, name: device_name, ..Default::default() }],
-            ..Default::default()
+            devices: vec![Device { id: device_id, name: device_name, ..Default::default() }],
         };
 
-        let id = find_id_for_remove(response, cmd);
+        let id = find_id_for_remove(&response, cmd);
         assert!(id.is_ok(), "{}", id.unwrap_err());
         let id = id.unwrap();
 

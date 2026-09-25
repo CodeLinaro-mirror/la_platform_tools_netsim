@@ -28,8 +28,12 @@ async fn test_grpc_and_rest_share_actor_state() {
     // Then both front ends report the same daemon version
     let grpc_version = world.when_get_version().await;
     assert!(!grpc_version.is_empty(), "gRPC version must not be empty");
-    let rest_version =
-        rest_client.get_version().await.expect("Failed to get version via REST client");
+    let rest_version = rest_client
+        .get_version()
+        .send()
+        .await
+        .expect("Failed to get version via REST client")
+        .version;
     assert_eq!(rest_version, grpc_version, "REST version must match gRPC version");
 
     // When I create a device over gRPC
@@ -40,7 +44,7 @@ async fn test_grpc_and_rest_share_actor_state() {
     // Then the device is visible over REST, so both front ends are backed by
     // the same actors rather than by separate state.
     let devices_resp =
-        rest_client.get_devices().await.expect("Failed to get devices via REST client");
+        rest_client.get_devices().send().await.expect("Failed to get devices via REST client");
     assert!(
         devices_resp.devices.iter().any(|d| d.name == device_name),
         "REST get_devices() must contain the gRPC created device: {devices_resp:?}"
@@ -51,7 +55,7 @@ async fn test_grpc_and_rest_share_actor_state() {
 
     // Then the device is no longer visible over REST
     let devices_resp =
-        rest_client.get_devices().await.expect("Failed to get devices via REST client");
+        rest_client.get_devices().send().await.expect("Failed to get devices via REST client");
     assert!(
         !devices_resp.devices.iter().any(|d| d.name == device_name),
         "REST get_devices() must not contain the deleted device: {devices_resp:?}"
@@ -75,14 +79,14 @@ async fn test_rest_is_not_served_on_grpc_port() {
     // When I send a REST request to the gRPC port, Then it fails
     let rest_on_grpc_port = NetsimRestClient::new("localhost", world.grpc_port);
     assert!(
-        rest_on_grpc_port.get_version().await.is_err(),
+        rest_on_grpc_port.get_version().send().await.is_err(),
         "gRPC port must not serve the REST API"
     );
 
     // And the same request against the HTTP port succeeds, so the failure
     // above is the port and not a broken client or a dead daemon.
     let rest_client = NetsimRestClient::new("localhost", world.http_port);
-    assert!(rest_client.get_version().await.is_ok(), "HTTP port must serve the REST API");
+    assert!(rest_client.get_version().send().await.is_ok(), "HTTP port must serve the REST API");
 }
 
 // Scenario: The Bound HTTP Port Is Discoverable

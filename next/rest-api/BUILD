@@ -26,6 +26,7 @@ netsim_rust_library(
         "@hyper-util",
         "@serde",
         "@serde_json",
+        "@thiserror",
         "@tokio",
         "@tracing",
     ],
