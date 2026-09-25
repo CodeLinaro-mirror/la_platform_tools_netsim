@@ -88,8 +88,43 @@ pub struct ApUpdate {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ap {
     pub config: ApCreate,
-    // TODO: Add other state fields if needed
-    // Use ignore to skip serialization of fields that are not relevant to the model
-    #[serde(skip)]
+    /// MAC addresses of the stations currently associated with this AP.
+    ///
+    /// Mirrors `AccessPoint.connected_devices` on the gRPC surface. Defaulted
+    /// rather than required so a client may omit it when sending an `Ap`.
+    #[serde(default)]
     pub associations: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `associations` carried a `#[serde(skip)]`, so `GET /v1/aps` computed the
+    /// association list and serde silently dropped it from the response body.
+    #[test]
+    fn ap_associations_are_serialized() {
+        let ap =
+            Ap { config: ApCreate::default(), associations: vec!["02:15:B2:00:00:01".to_string()] };
+
+        let val = serde_json::to_value(&ap).expect("Ap must serialize");
+
+        assert_eq!(
+            val["associations"],
+            serde_json::json!(["02:15:B2:00:00:01"]),
+            "associations must reach the wire, got: {val}"
+        );
+    }
+
+    /// The fix replaced `skip` with `default` rather than dropping the
+    /// attribute, so a client may still omit the field when sending an `Ap`.
+    #[test]
+    fn ap_associations_may_be_omitted_on_the_wire() {
+        let ap: Ap = serde_json::from_value(serde_json::json!({
+            "config": ApCreate::default()
+        }))
+        .expect("associations must be optional on input");
+
+        assert!(ap.associations.is_empty());
+    }
 }
