@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(unreachable_pub)]
+
 pub mod apdu;
 mod call_service;
 mod capabilities;

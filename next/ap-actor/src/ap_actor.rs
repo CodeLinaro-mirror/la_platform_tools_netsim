@@ -33,7 +33,7 @@ impl From<ApId> for u32 {
 
 /// Shared Stream ID for the singleton packet stream (matching SLIRP_ID
 /// convention)
-pub const WIFI_STREAM_ID: u32 = u32::MAX - 1;
+pub(crate) const WIFI_STREAM_ID: u32 = u32::MAX - 1;
 
 /// Configuration for creating a new Access Point.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -70,7 +70,7 @@ pub struct ApConfig {
 pub const DEFAULT_AP_BSSID: MacAddr = MacAddr::new([0x02, 0x15, 0xb2, 0x00, 0x00, 0x00]);
 
 /// Computes the unique BSSID for an AP based on its ID offset.
-pub const fn compute_ap_bssid(id: ApId) -> MacAddr {
+const fn compute_ap_bssid(id: ApId) -> MacAddr {
     let offset_id = (id.0 as u16) + 1;
     let [b0, b1] = offset_id.to_be_bytes();
     let mut bytes = DEFAULT_AP_BSSID.bytes;

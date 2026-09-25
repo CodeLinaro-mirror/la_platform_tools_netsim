@@ -32,7 +32,7 @@ use url::Url;
 
 use crate::{Error, Result};
 
-pub type RawDescriptor = i32;
+type RawDescriptor = i32;
 
 /// Proxy configuration
 pub struct ProxyConfig {
@@ -113,7 +113,7 @@ impl ProxyConfig {
 }
 
 /// Convert TcpStream to RawDescriptor (i32)
-pub fn into_raw_descriptor(stream: TcpStream) -> Result<RawDescriptor> {
+pub(crate) fn into_raw_descriptor(stream: TcpStream) -> Result<RawDescriptor> {
     let std_stream = stream.into_std()?;
     std_stream.set_nonblocking(false)?;
 

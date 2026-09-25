@@ -91,7 +91,7 @@ fn get_path_from_avd_ini(ini_content: &str) -> Result<PathBuf, String> {
 }
 
 // Reads the AVD-specific .ini file or directory and returns the AVD's data directory path.
-pub fn get_avd_data_path(avd_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
+fn get_avd_data_path(avd_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
     if !avd_path.exists() {
         return Err(format!("AVD path not found: {}", avd_path.display()).into());
     }
@@ -173,7 +173,7 @@ fn generate_next_mac(used_addresses: &HashSet<String>) -> Result<String, Box<dyn
 /// Retrieves the Bluetooth MAC address for a given AVD name.
 /// If the config or address doesn't exist, it finds the next available
 /// sequential MAC, creates a new config, and saves it.
-pub fn get_or_create_bluetooth_mac(avd_ini_path: &str) -> Result<String, Box<dyn Error>> {
+fn get_or_create_bluetooth_mac(avd_ini_path: &str) -> Result<String, Box<dyn Error>> {
     // First, check if this AVD already has a configured address.
     let avd_path = PathBuf::from(avd_ini_path);
     match read_netsim_config_for_avd(&avd_path) {
@@ -209,7 +209,7 @@ pub fn get_or_create_bluetooth_mac(avd_ini_path: &str) -> Result<String, Box<dyn
 /// Public function that reads the netsim.ini config, updates the
 /// 'bluetooth.address' field, and writes the entire config back to the AVD
 /// directory.
-pub fn set_bluetooth_mac(avd_path: &str, address: &str) -> Result<(), Box<dyn Error>> {
+fn set_bluetooth_mac(avd_path: &str, address: &str) -> Result<(), Box<dyn Error>> {
     let avd_ini_path = PathBuf::from(avd_path);
     let mut config = read_netsim_config_for_avd(&avd_ini_path).unwrap_or_default();
     if !address.is_empty() {

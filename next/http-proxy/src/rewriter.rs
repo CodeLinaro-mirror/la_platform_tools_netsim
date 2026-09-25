@@ -126,7 +126,7 @@ async fn rewrite_request_to_absolute_form<R: AsyncRead + Unpin>(
 ///
 /// # Arguments
 /// * `destination_addr`: The `SocketAddr` of the final destination server.
-pub async fn connect_with_header_rewrite(
+pub(crate) async fn connect_with_header_rewrite(
     proxy_addr: SocketAddr,
     auth_header: Option<String>,
 ) -> Result<TcpStream> {

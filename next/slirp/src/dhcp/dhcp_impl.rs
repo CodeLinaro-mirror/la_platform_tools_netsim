@@ -16,13 +16,13 @@ use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned};
 
 use crate::{Config, SlirpResponse, clock::Clock, dns::create_dns_search_option};
 
-pub const DHCP_MAGIC_COOKIE: [u8; 4] = [99, 130, 83, 99];
+pub(crate) const DHCP_MAGIC_COOKIE: [u8; 4] = [99, 130, 83, 99];
 const LEASE_TIME: Duration = Duration::from_secs(24 * 3600);
 const MAX_LEASES: usize = 16;
 
 #[derive(FromBytes, KnownLayout, Unaligned, Immutable, IntoBytes)]
 #[repr(C)]
-pub struct DhcpPacket {
+pub(crate) struct DhcpPacket {
     pub op: u8,
     pub htype: u8,
     pub hlen: u8,
@@ -41,16 +41,16 @@ pub struct DhcpPacket {
     pub options: [u8; 308],
 }
 
-pub type DhcpPacketRef<'a> = Ref<&'a [u8], DhcpPacket>;
+pub(crate) type DhcpPacketRef<'a> = Ref<&'a [u8], DhcpPacket>;
 
 impl DhcpPacket {
-    pub fn parse(bytes: &[u8]) -> Option<(DhcpPacketRef<'_>, &[u8])> {
+    pub(crate) fn parse(bytes: &[u8]) -> Option<(DhcpPacketRef<'_>, &[u8])> {
         Ref::from_prefix(bytes).ok()
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub enum DhcpMessageType {
+pub(crate) enum DhcpMessageType {
     Discover = 1,
     Offer = 2,
     Request = 3,

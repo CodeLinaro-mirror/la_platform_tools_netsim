@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::{ConnectionArgs, SlirpResponse, UdpConnectionArgs, UdpConnectionInfo};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UdpFlow {
+pub(crate) struct UdpFlow {
     pub guest_addr: SocketAddr,
     pub original_dest: SocketAddr,
     #[serde(skip)]

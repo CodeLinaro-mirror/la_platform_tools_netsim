@@ -64,13 +64,13 @@ impl SceneClient {
 
 /// Netsim wrapper around Casimir's Scene to handle concurrency and dynamic
 /// device addition.
-pub struct NetsimScene {
+pub(crate) struct NetsimScene {
     scene: casimir::Scene,
     cmd_rx: tokio::sync::mpsc::UnboundedReceiver<SceneCommand>,
 }
 
 impl NetsimScene {
-    pub fn new(cmd_rx: tokio::sync::mpsc::UnboundedReceiver<SceneCommand>) -> Self {
+    pub(crate) fn new(cmd_rx: tokio::sync::mpsc::UnboundedReceiver<SceneCommand>) -> Self {
         Self { scene: casimir::Scene::new(), cmd_rx }
     }
 }

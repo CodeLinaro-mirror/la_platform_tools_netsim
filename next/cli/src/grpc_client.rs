@@ -9,7 +9,7 @@ use protobuf::well_known_types::empty;
 use crate::error::Result;
 
 /// Wrapper struct for application defined ClientResponseReader
-pub struct ClientResponseReader {
+pub(crate) struct ClientResponseReader {
     /// Delegated handler for reading responses
     pub handler: Box<dyn ClientResponseReadable>,
 }
@@ -22,14 +22,14 @@ impl ClientResponseReader {
 }
 
 /// Trait for ClientResponseReader handler functions
-pub trait ClientResponseReadable {
+pub(crate) trait ClientResponseReadable {
     /// Process each chunk of streaming response
     fn handle_chunk(&mut self, chunk: &[u8]) -> Result<()>;
 }
 
 // Enum of Grpc Requests holding the request proto as applicable
 #[derive(Debug, PartialEq)]
-pub enum GrpcRequest {
+pub(crate) enum GrpcRequest {
     ListDevice,
     Reset,
     ListCapture,
@@ -47,7 +47,7 @@ pub enum GrpcRequest {
 
 // Enum of Grpc Responses holding the response proto as applicable
 #[derive(Debug, PartialEq)]
-pub enum GrpcResponse {
+pub(crate) enum GrpcResponse {
     ListDevice(frontend::ListDeviceResponse),
     Reset,
     ListCapture(frontend::ListCaptureResponse),
@@ -63,7 +63,7 @@ pub enum GrpcResponse {
     Unknown,
 }
 
-pub fn get_capture(
+pub(crate) fn get_capture(
     client: &FrontendServiceClient,
     req: &frontend::GetCaptureRequest,
     client_reader: &mut ClientResponseReader,
@@ -80,7 +80,7 @@ pub fn get_capture(
     })
 }
 
-pub trait GrpcMethodExecutor {
+pub(crate) trait GrpcMethodExecutor {
     fn send_grpc(&self, grpc_request: &GrpcRequest) -> Result<GrpcResponse>;
 }
 
@@ -136,7 +136,7 @@ impl GrpcMethodExecutor for FrontendServiceClient {
     }
 }
 
-pub fn send_grpc(
+pub(crate) fn send_grpc(
     client: &FrontendServiceClient,
     grpc_request: &GrpcRequest,
 ) -> Result<GrpcResponse> {

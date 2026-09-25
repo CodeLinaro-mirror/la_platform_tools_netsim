@@ -13,7 +13,7 @@ use tracing::warn;
 use crate::{BluetoothEvent, ranging};
 
 /// A thread-safe map of chip states.
-pub type ChipMap = Arc<RwLock<HashMap<ChipId, Chip>>>;
+type ChipMap = Arc<RwLock<HashMap<ChipId, Chip>>>;
 
 /// Implementation of `RootcanalCallbacks` for the Bluetooth Actor.
 /// We need to wrap this in a Mutex even though Rootcanal runs on

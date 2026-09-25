@@ -43,7 +43,7 @@ fn chip_kind_to_proto(chip_kind: ArgsChipKind) -> ChipKind {
 
 impl Command {
     /// Return the generated request protobuf message
-    pub fn get_request(&self) -> Result<GrpcRequest> {
+    pub(crate) fn get_request(&self) -> Result<GrpcRequest> {
         Ok(match self {
             Command::Radio(cmd) => {
                 let mut chip = Chip { ..Default::default() };
@@ -195,7 +195,10 @@ impl Command {
     }
 
     /// Create and return the request protobuf(s) for the command.
-    pub fn get_requests<T: GrpcMethodExecutor>(&mut self, client: &T) -> Result<Vec<GrpcRequest>> {
+    pub(crate) fn get_requests<T: GrpcMethodExecutor>(
+        &mut self,
+        client: &T,
+    ) -> Result<Vec<GrpcRequest>> {
         match self {
             Command::Capture(Capture::Patch(cmd)) => {
                 let mut reqs = Vec::new();

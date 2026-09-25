@@ -160,25 +160,25 @@ impl From<in_addr> for u32 {
 mod net {
     /// Converts a value from host byte order to network byte order.
     #[inline]
-    pub fn htonl(hostlong: u32) -> u32 {
+    pub(super) fn htonl(hostlong: u32) -> u32 {
         hostlong.to_be()
     }
 
     /// Converts a value from network byte order to host byte order.
     #[inline]
-    pub fn ntohl(netlong: u32) -> u32 {
+    pub(super) fn ntohl(netlong: u32) -> u32 {
         u32::from_be(netlong)
     }
 
     /// Converts a value from host byte order to network byte order.
     #[inline]
-    pub fn htons(hostshort: u16) -> u16 {
+    pub(super) fn htons(hostshort: u16) -> u16 {
         hostshort.to_be()
     }
 
     /// Converts a value from network byte order to host byte order.
     #[inline]
-    pub fn ntohs(netshort: u16) -> u16 {
+    pub(super) fn ntohs(netshort: u16) -> u16 {
         u16::from_be(netshort)
     }
 }

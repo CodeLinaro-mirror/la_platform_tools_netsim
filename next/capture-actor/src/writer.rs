@@ -48,7 +48,7 @@ pub trait CaptureWriter: Send + Sync {
 /// Generic PCAP writer.
 ///
 /// Handles writing the PCAP global header and record headers.
-pub struct PcapWriter {
+pub(crate) struct PcapWriter {
     writer: BufWriter<File>,
     records_written: u64,
     bytes_written: u64,
@@ -61,7 +61,7 @@ impl PcapWriter {
     ///
     /// * `path` - The path to the output file.
     /// * `network` - The Link-Layer Header Type (DLT).
-    pub async fn new<P: AsRef<Path>>(path: P, network: u32) -> io::Result<Self> {
+    pub(crate) async fn new<P: AsRef<Path>>(path: P, network: u32) -> io::Result<Self> {
         let file = File::create(path).await?;
         let mut writer = BufWriter::new(file);
 

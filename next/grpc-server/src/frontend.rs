@@ -21,7 +21,7 @@ use netsim_proto::{
 use crate::frontend_converter::to_proto_device;
 
 #[derive(Clone)]
-pub struct FrontendClient {
+pub(crate) struct FrontendClient {
     device_client: DeviceClient,
     link_client: Arc<dyn LinkClient>,
     ap_client: ap_actor::ApClient,
@@ -31,7 +31,7 @@ pub struct FrontendClient {
 }
 
 impl FrontendClient {
-    pub fn new(
+    pub(crate) fn new(
         device_client: DeviceClient,
         link_client: Arc<dyn LinkClient>,
         ap_client: ap_actor::ApClient,

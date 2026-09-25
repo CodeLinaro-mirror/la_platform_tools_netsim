@@ -6,12 +6,12 @@ use std::{io, path::Path};
 use crate::writer::{CaptureWriter, DLT_NFC_NCI, PcapWriter};
 
 /// PCAP writer for NFC NCI packets.
-pub struct NciPcapWriter;
+pub(crate) struct NciPcapWriter;
 
 impl NciPcapWriter {
     /// Wraps [`PcapWriter`] with [`DLT_NFC_NCI`] as the format.
     #[allow(clippy::new_ret_no_self)]
-    pub async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
+    pub(crate) async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
         Ok(Box::new(PcapWriter::new(path, DLT_NFC_NCI).await?))
     }
 }

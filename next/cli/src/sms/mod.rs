@@ -3,5 +3,5 @@
 
 //! SMS commands compatible with the Android Emulator console sms commands.
 
-pub mod args;
-pub mod client;
+pub(crate) mod args;
+pub(crate) mod client;

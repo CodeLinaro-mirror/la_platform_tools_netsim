@@ -20,11 +20,11 @@ pub(crate) struct Ieee80211Manager {
 }
 
 impl Ieee80211Manager {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {}
     }
 
-    pub fn generate_beacon(
+    pub(crate) fn generate_beacon(
         &self,
         ap: &mut ApState,
         beacon_interval: u16,
@@ -131,7 +131,7 @@ impl Ieee80211Manager {
     }
 
     /// Handles an incoming Management Frame
-    pub fn handle_frame(
+    pub(crate) fn handle_frame(
         &mut self,
         ap: &mut ApState,
         frame: &[u8],
@@ -403,7 +403,7 @@ impl Ieee80211Manager {
         frame
     }
 
-    pub fn build_deauth_frame(
+    pub(crate) fn build_deauth_frame(
         &self,
         ap: &mut ApState,
         dest: netsim_packets::MacAddr,

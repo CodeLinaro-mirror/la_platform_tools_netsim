@@ -128,7 +128,7 @@ impl Message {
     }
 }
 
-pub fn parse_answers(bytes: &[u8]) -> Result<Vec<(IpAddr, String)>> {
+pub(crate) fn parse_answers(bytes: &[u8]) -> Result<Vec<(IpAddr, String)>> {
     let mut cursor = Cursor::new(bytes);
     let msg = Message::parse(&mut cursor)?;
     let mut responses = Vec::with_capacity(msg.answers.len());
@@ -421,7 +421,7 @@ impl ResourceData {
 type Result<T> = core::result::Result<T, DnsError>;
 
 #[derive(Debug, thiserror::Error)]
-pub enum DnsError {
+pub(crate) enum DnsError {
     #[error("Response expected")]
     ResponseExpected,
     #[error("Standard query expected")]

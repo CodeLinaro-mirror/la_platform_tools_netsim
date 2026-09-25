@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::unwrap_used)]
+#![allow(unreachable_pub)]
 
 //! `packets` is a crate for zero-copy parsing and handling of network packets.
 //!

@@ -39,7 +39,7 @@ pub enum WifiResponse {
     Chip(Box<netsim_model::Chip>),
 }
 
-pub type SlirpPendingRequest = (
+pub(crate) type SlirpPendingRequest = (
     tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
     tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
     tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,

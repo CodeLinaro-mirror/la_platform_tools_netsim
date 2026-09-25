@@ -12,7 +12,7 @@ use netsim_packets::MacAddress;
 use tokio::sync::{mpsc as tokio_mpsc, oneshot};
 use tracing::info;
 
-pub type ClientId = u32;
+type ClientId = u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlirpIpv4Lease {
@@ -137,7 +137,7 @@ impl fmt::Debug for SlirpCreate {
     }
 }
 
-pub struct ClientInfo {
+pub(crate) struct ClientInfo {
     pub sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
     pub notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
     pub isolated: bool,
@@ -152,7 +152,7 @@ pub(crate) enum SlirpBackendInstance {
 }
 
 impl SlirpBackendInstance {
-    pub fn input(&self, msg: bytes::Bytes) {
+    pub(crate) fn input(&self, msg: bytes::Bytes) {
         match self {
             #[cfg(not(feature = "cuttlefish"))]
             SlirpBackendInstance::CFfi(slirp) => {
@@ -164,7 +164,7 @@ impl SlirpBackendInstance {
         }
     }
 
-    pub fn shutdown(self) {
+    pub(crate) fn shutdown(self) {
         match self {
             #[cfg(not(feature = "cuttlefish"))]
             SlirpBackendInstance::CFfi(slirp) => {

@@ -7,6 +7,6 @@
 /// Initiating the environment for logging with given prefix
 ///
 /// The current log format follows the same format as Android Emulator team.
-pub fn init(prefix: &'static str, is_verbose: bool) {
+pub(crate) fn init(prefix: &'static str, is_verbose: bool) {
     common::util::netsim_logger::init(prefix, is_verbose);
 }

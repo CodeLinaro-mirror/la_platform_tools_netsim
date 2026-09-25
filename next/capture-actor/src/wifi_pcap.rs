@@ -22,14 +22,14 @@ use crate::writer::{CaptureWriter, DLT_IEEE802_11_RADIO, PcapWriter};
 /// PCAP writer for Wi-Fi packets.
 ///
 /// Wraps IEEE 802.11 packets with a Radiotap header.
-pub struct WifiPcapWriter {
+pub(crate) struct WifiPcapWriter {
     inner: PcapWriter,
 }
 
 impl WifiPcapWriter {
     /// Creates a new Wi-Fi PCAP writer.
     #[allow(clippy::new_ret_no_self)]
-    pub async fn new<P: AsRef<Path>>(path: P) -> Result<Box<dyn CaptureWriter>> {
+    pub(crate) async fn new<P: AsRef<Path>>(path: P) -> Result<Box<dyn CaptureWriter>> {
         Ok(Box::new(Self { inner: PcapWriter::new(path, DLT_IEEE802_11_RADIO).await? }))
     }
 }

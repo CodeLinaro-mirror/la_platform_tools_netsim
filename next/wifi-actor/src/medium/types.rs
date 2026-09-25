@@ -5,7 +5,7 @@ use netsim_packets::MacAddress;
 
 use crate::error::WifiError;
 
-pub type WifiResult<T> = Result<T, WifiError>;
+pub(crate) type WifiResult<T> = Result<T, WifiError>;
 
 #[derive(Clone, Debug)]
 pub struct Station {

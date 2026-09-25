@@ -10,12 +10,12 @@ use std::{io, path::Path};
 use crate::writer::{CaptureWriter, DLT_ETHERNET, PcapWriter};
 
 /// PCAP writer for Ethernet packets.
-pub struct EthernetPcapWriter;
+pub(crate) struct EthernetPcapWriter;
 
 impl EthernetPcapWriter {
     /// Wraps [`PcapWriter`] with [`DLT_ETHERNET`] as the format.
     #[allow(clippy::new_ret_no_self)]
-    pub async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
+    pub(crate) async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
         Ok(Box::new(PcapWriter::new(path, DLT_ETHERNET).await?))
     }
 }

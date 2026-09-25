@@ -60,7 +60,7 @@ impl fmt::Display for DeviceId {
     }
 }
 
-pub mod api {
+pub(crate) mod api {
     use serde::{Deserialize, Serialize};
 
     use crate::{

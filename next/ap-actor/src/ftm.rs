@@ -31,7 +31,11 @@ impl FtmResponder {
     /// Note: In a real physical exchange, t4 would be captured upon packet
     /// arrival. Here, we pre-calculate timestamps to simulate a specific
     /// distance (RTT).
-    pub fn handle_ftm_request(ap: &mut ApState, src: MacAddr, dialog_token: u8) -> Vec<Vec<u8>> {
+    pub(crate) fn handle_ftm_request(
+        ap: &mut ApState,
+        src: MacAddr,
+        dialog_token: u8,
+    ) -> Vec<Vec<u8>> {
         let mut responses = Vec::new();
 
         // 1. Initial FTM Frame (ASAP=1)

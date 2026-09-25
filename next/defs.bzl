@@ -13,7 +13,7 @@ load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
-NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
+NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies", "-Dunreachable_pub"]
 NETSIM_CLIPPY_FLAGS = [
     "-Dwarnings",
     # Async / Concurrency
@@ -471,8 +471,8 @@ def netsim_rust_library(
     # 3. Automatic Unit Test
     if enable_unit_test:
         # There can be integ test deps that are not used in unit tests,
-        # so disable unused_crate_dependencies.
-        test_flags = [f for f in rustc_flags if f != "-Dunused_crate_dependencies"]
+        # so disable unused_crate_dependencies and unreachable_pub.
+        test_flags = [f for f in rustc_flags if f not in ["-Dunused_crate_dependencies", "-Dunreachable_pub"]]
 
         rust_test(
             name = "test",
@@ -502,8 +502,8 @@ def netsim_rust_library(
 
     if has_integration_test:
         # Integration tests receive all library dependencies for convenience,
-        # so disable unused_crate_dependencies.
-        test_flags = [f for f in rustc_flags if f != "-Dunused_crate_dependencies"]
+        # so disable unused_crate_dependencies and unreachable_pub.
+        test_flags = [f for f in rustc_flags if f not in ["-Dunused_crate_dependencies", "-Dunreachable_pub"]]
 
         # If there's a mod.rs, it's typically the root.
         # Else it's likely a single-file setup.

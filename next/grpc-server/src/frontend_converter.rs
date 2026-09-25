@@ -20,7 +20,7 @@ use netsim_proto::{
     protobuf::{EnumOrUnknown, MessageField},
 };
 
-pub fn to_proto_position(p: ApiPosition) -> ProtoPosition {
+pub(crate) fn to_proto_position(p: ApiPosition) -> ProtoPosition {
     let mut pos = ProtoPosition::new();
     pos.x = p.x;
     pos.y = p.y;
@@ -28,7 +28,7 @@ pub fn to_proto_position(p: ApiPosition) -> ProtoPosition {
     pos
 }
 
-pub fn to_proto_orientation(o: ApiOrientation) -> ProtoOrientation {
+pub(crate) fn to_proto_orientation(o: ApiOrientation) -> ProtoOrientation {
     let mut orient = ProtoOrientation::new();
     orient.yaw = o.yaw;
     orient.pitch = o.pitch;
@@ -36,7 +36,7 @@ pub fn to_proto_orientation(o: ApiOrientation) -> ProtoOrientation {
     orient
 }
 
-pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
+pub(crate) fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
     match k {
         ApiChipKind::BLUETOOTH => ProtoChipKind::BLUETOOTH,
         ApiChipKind::WIFI => ProtoChipKind::WIFI,
@@ -50,7 +50,7 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
     }
 }
 
-pub fn to_proto_chip(c: netsim_model::Chip) -> ProtoChip {
+pub(crate) fn to_proto_chip(c: netsim_model::Chip) -> ProtoChip {
     let mut chip = ProtoChip::new();
     chip.id = c.id;
     chip.kind = EnumOrUnknown::new(to_proto_chip_kind(c.kind));
@@ -107,7 +107,7 @@ fn to_proto_radio(r: &netsim_model::Radio) -> netsim_proto::model::chip::Radio {
     radio
 }
 
-pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
+pub(crate) fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     let mut device = ProtoDevice::new();
     device.id = d.id;
     device.name = d.name;
@@ -120,7 +120,7 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     device
 }
 
-pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
+pub(crate) fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
     // Currently only supports BLE Beacon
     if c.has_ble_beacon() {
         let beacon_create = c.ble_beacon();
@@ -216,15 +216,15 @@ fn from_proto_advertise_data(
     }
 }
 
-pub fn from_proto_position(p: ProtoPosition) -> ApiPosition {
+pub(crate) fn from_proto_position(p: ProtoPosition) -> ApiPosition {
     ApiPosition { x: p.x, y: p.y, z: p.z }
 }
 
-pub fn from_proto_orientation(o: ProtoOrientation) -> ApiOrientation {
+pub(crate) fn from_proto_orientation(o: ProtoOrientation) -> ApiOrientation {
     ApiOrientation { yaw: o.yaw, pitch: o.pitch, roll: o.roll }
 }
 
-pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
+pub(crate) fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
     match k {
         ProtoChipKind::BLUETOOTH => Some(ApiChipKind::BLUETOOTH),
         ProtoChipKind::WIFI => Some(ApiChipKind::WIFI),
@@ -238,7 +238,7 @@ pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
     }
 }
 
-pub fn to_proto_link(l: ApiLink) -> ProtoLink {
+pub(crate) fn to_proto_link(l: ApiLink) -> ProtoLink {
     let mut link = ProtoLink::new();
     link.id = l.id.0;
     link.sender_id = l.sender.0;
@@ -254,7 +254,7 @@ pub fn to_proto_link(l: ApiLink) -> ProtoLink {
     link
 }
 
-pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
+pub(crate) fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
     let variant = if let Some(chip_oneof) = c.chip {
         match chip_oneof {
             netsim_proto::model::chip::Chip::Bt(bt) => {
@@ -318,14 +318,14 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
     }
 }
 
-pub fn from_proto_radio_update(r: Option<netsim_proto::model::chip::Radio>) -> RadioUpdate {
+fn from_proto_radio_update(r: Option<netsim_proto::model::chip::Radio>) -> RadioUpdate {
     match r {
         Some(r) => RadioUpdate { state: r.state },
         None => RadioUpdate { state: None },
     }
 }
 
-pub fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
+pub(crate) fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
     let sender = netsim_model::ChipId(proto.sender_id);
     let receiver = netsim_model::ChipId(proto.receiver_id);
     let rssi = proto.rssi as i8;

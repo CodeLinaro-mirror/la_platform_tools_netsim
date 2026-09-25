@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-pub use netsim_types::ChipKind;
+pub(crate) use netsim_types::ChipKind;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
@@ -69,7 +69,7 @@ impl From<u32> for ChipId {
     }
 }
 /// A reply channel for sending the result of an operation back to the caller.
-pub type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
+pub(crate) type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
 
 /// Defines the message protocol for the chip service actor.
 ///
@@ -152,7 +152,7 @@ impl fmt::Debug for ChipCreate {
     }
 }
 
-pub use crate::{
+pub(crate) use crate::{
     bluetooth::{BeaconParams, BluetoothCreate, BluetoothMode, beacon::BleBeacon},
     cell::CellCreate,
     nfc::{Nfc, NfcUpdate},

@@ -16,7 +16,7 @@ use netsim_model::{ChipError, ChipId, DeviceParams};
 use rootcanal::Rootcanal;
 
 /// Creates a new `DeviceChip` and registers it with the `rootcanal` emulator.
-pub fn create(
+pub(crate) fn create(
     _rootcanal: &Rootcanal,
     _chip_id: ChipId,
     _params: &DeviceParams,

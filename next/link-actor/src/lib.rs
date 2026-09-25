@@ -1,8 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(unreachable_pub)]
-
 mod error;
 mod lifecycle;
 mod link_actor;

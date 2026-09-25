@@ -16,7 +16,7 @@ const STATS_PRINT_OPTIONS: PrintOptions = PrintOptions {
 
 const DEFAULT_STATS_FILENAME: &str = "netsim_session_stats.json";
 
-pub struct CombinedStatsInputs {
+pub(crate) struct CombinedStatsInputs {
     pub active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
     pub wifi_stats: Option<netsim_proto::stats::WifiStats>,
     pub wifi_api: Option<netsim_proto::stats::WifiApiStats>,
@@ -27,7 +27,7 @@ pub struct CombinedStatsInputs {
 }
 
 #[derive(Debug)]
-pub struct Stats {
+pub(crate) struct Stats {
     proto: ProtoNetsimStats,
     start_time: Option<Instant>,
     // History of stats for deleted chips.
@@ -50,7 +50,7 @@ impl Default for Stats {
 }
 
 impl Stats {
-    pub fn new(
+    pub(crate) fn new(
         version: String,
         path: Option<std::path::PathBuf>,
         frontend_stats: std::sync::Arc<netsim_model::FrontendStats>,
@@ -75,7 +75,7 @@ impl Stats {
         }
     }
 
-    pub fn update_device_count(&mut self, current_count: usize, created: bool) {
+    pub(crate) fn update_device_count(&mut self, current_count: usize, created: bool) {
         if created {
             let new_total = self.proto.device_count() + 1;
             self.proto.set_device_count(new_total);
@@ -86,15 +86,18 @@ impl Stats {
         }
     }
 
-    pub fn archive(&mut self, radio_stats: netsim_proto::stats::NetsimRadioStats) {
+    pub(crate) fn archive(&mut self, radio_stats: netsim_proto::stats::NetsimRadioStats) {
         self.archived_radio_stats.push(radio_stats);
     }
 
-    pub fn add_device_stats(&mut self, device_stats: netsim_proto::stats::NetsimDeviceStats) {
+    pub(crate) fn add_device_stats(
+        &mut self,
+        device_stats: netsim_proto::stats::NetsimDeviceStats,
+    ) {
         self.proto.device_stats.push(device_stats);
     }
 
-    pub fn get_combined_stats(&mut self, inputs: CombinedStatsInputs) -> ProtoNetsimStats {
+    pub(crate) fn get_combined_stats(&mut self, inputs: CombinedStatsInputs) -> ProtoNetsimStats {
         let CombinedStatsInputs {
             mut active_stats,
             wifi_stats,

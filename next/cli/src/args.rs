@@ -17,7 +17,7 @@ use netsim_proto::model::chip::ble_beacon::{
 };
 
 #[derive(Debug, Parser)]
-pub struct NetsimArgs {
+pub(crate) struct NetsimArgs {
     #[command(subcommand)]
     pub command: Command,
     /// Set verbose mode
@@ -36,7 +36,7 @@ pub struct NetsimArgs {
 
 #[derive(Debug, Subcommand, PartialEq)]
 #[command(infer_subcommands = true)]
-pub enum Command {
+pub(crate) enum Command {
     /// Print Netsim version information
     Version,
     /// Control the radio state of a device
@@ -81,7 +81,7 @@ pub enum Command {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct Radio {
+pub(crate) struct Radio {
     /// Radio type
     #[arg(value_enum, ignore_case = true)]
     pub radio_type: RadioType,
@@ -93,7 +93,7 @@ pub struct Radio {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub enum RadioType {
+pub(crate) enum RadioType {
     Ble,
     Classic,
     Wifi,
@@ -120,7 +120,7 @@ impl fmt::Display for RadioType {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub enum ChipKind {
+pub(crate) enum ChipKind {
     #[value(alias("bt"))]
     Bluetooth,
     Wifi,
@@ -146,7 +146,7 @@ impl fmt::Display for ChipKind {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub enum UpDownStatus {
+pub(crate) enum UpDownStatus {
     Up,
     Down,
 }
@@ -158,7 +158,7 @@ impl fmt::Display for UpDownStatus {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct Move {
+pub(crate) struct Move {
     /// Device name
     pub name: String,
     /// x position of device
@@ -170,7 +170,7 @@ pub struct Move {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub struct Devices {
+pub(crate) struct Devices {
     /// Continuously print device(s) information every second
     #[arg(short, long)]
     pub continuous: bool,
@@ -180,14 +180,14 @@ pub struct Devices {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Default)]
-pub enum OnOffState {
+pub(crate) enum OnOffState {
     #[default]
     On,
     Off,
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub enum Beacon {
+pub(crate) enum Beacon {
     /// Create a beacon chip
     #[command(subcommand)]
     Create(BeaconCreate),
@@ -200,13 +200,13 @@ pub enum Beacon {
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub enum BeaconCreate {
+pub(crate) enum BeaconCreate {
     /// Create a Bluetooth low-energy beacon chip
     Ble(BeaconCreateBle),
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub struct BeaconCreateBle {
+pub(crate) struct BeaconCreateBle {
     /// Name of the device to create
     pub device_name: Option<String>,
     /// Name of the beacon chip to create within the new device. May only be
@@ -225,13 +225,13 @@ pub struct BeaconCreateBle {
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub enum BeaconPatch {
+pub(crate) enum BeaconPatch {
     /// Modify a Bluetooth low-energy beacon chip
     Ble(BeaconPatchBle),
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub struct BeaconPatchBle {
+pub(crate) struct BeaconPatchBle {
     /// Name of the device that contains the chip
     pub device_name: String,
     /// Name of the beacon chip to modify
@@ -249,7 +249,7 @@ pub struct BeaconPatchBle {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct BeaconRemove {
+pub(crate) struct BeaconRemove {
     /// Name of the device to remove
     pub device_name: String,
 }
@@ -272,7 +272,7 @@ pub struct BeaconBleAdvertiseData {
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub enum Link {
+pub(crate) enum Link {
     /// List all current links and their properties
     List,
     /// Create a new link
@@ -284,7 +284,7 @@ pub enum Link {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct LinkCreate {
+pub(crate) struct LinkCreate {
     /// Chip kind for the link
     #[arg(value_enum, ignore_case = true)]
     pub chip_kind: ChipKind,
@@ -306,7 +306,7 @@ pub struct LinkCreate {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct LinkPatch {
+pub(crate) struct LinkPatch {
     /// Chip kind for the link.
     #[arg(value_enum, ignore_case = true)]
     pub chip_kind: ChipKind,
@@ -328,7 +328,7 @@ pub struct LinkPatch {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct LinkDelete {
+pub(crate) struct LinkDelete {
     /// Chip kind for the link.
     #[arg(value_enum, ignore_case = true)]
     pub chip_kind: ChipKind,
@@ -495,7 +495,7 @@ pub enum TxPowerLevel {
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub enum Capture {
+pub(crate) enum Capture {
     /// List currently available Captures (packet captures)
     List(ListCapture),
     /// Patch a Capture source to turn packet capture on/off
@@ -505,7 +505,7 @@ pub enum Capture {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub struct ListCapture {
+pub(crate) struct ListCapture {
     /// Optional strings of pattern for captures to list. Possible filter fields
     /// include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
@@ -515,7 +515,7 @@ pub struct ListCapture {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub struct PatchCapture {
+pub(crate) struct PatchCapture {
     /// Packet capture state
     #[arg(value_enum, ignore_case = true)]
     pub state: OnOffState,
@@ -525,7 +525,7 @@ pub struct PatchCapture {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub struct GetCapture {
+pub(crate) struct GetCapture {
     /// Optional strings of pattern for captures to get. Possible filter fields
     /// include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,

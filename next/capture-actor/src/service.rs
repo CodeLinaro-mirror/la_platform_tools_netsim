@@ -50,7 +50,7 @@ pub(crate) struct InternalCaptureInfo {
 }
 
 impl InternalCaptureInfo {
-    pub fn from_create_params(id: ChipId, params: CaptureCreate) -> Result<Self, CaptureError> {
+    fn from_create_params(id: ChipId, params: CaptureCreate) -> Result<Self, CaptureError> {
         let enabled = params.enabled_flag.load(Ordering::SeqCst);
         let (seconds, nanos) = if enabled {
             let d = std::time::SystemTime::now()

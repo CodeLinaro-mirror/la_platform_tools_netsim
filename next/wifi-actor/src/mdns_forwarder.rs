@@ -156,7 +156,7 @@ fn create_ethernet_frame(packet: &[u8], ip_addr: &Ipv4Addr) -> Result<Vec<u8>, S
         .collect())
 }
 
-pub async fn run_mdns_forwarder(tx: UnboundedSender<Bytes>) -> Result<(), String> {
+pub(crate) async fn run_mdns_forwarder(tx: UnboundedSender<Bytes>) -> Result<(), String> {
     // Setup socket using socket2 for REUSEPORT/REUSEADDR and JoinMulticast
     let domain = socket2::Domain::IPV4;
     let socket = socket2::Socket::new(domain, socket2::Type::DGRAM, Some(socket2::Protocol::UDP))

@@ -7,12 +7,9 @@
 //! hooks. This allows the Actor Implementation to perform operations outside of
 //! ActorService handlers.
 
-use bytes::Bytes;
 use tracing::debug;
 
-use crate::{ActorService, DynContext};
-
-pub type StreamMessage = Bytes;
+use crate::{ActorService, DynContext, StreamMessage};
 
 /// Defines the lifecycle hooks for an actor's shared state (Context).
 ///

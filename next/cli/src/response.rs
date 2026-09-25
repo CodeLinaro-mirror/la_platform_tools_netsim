@@ -15,7 +15,7 @@ use crate::{
 };
 
 impl args::Command {
-    pub fn print_response(
+    pub(crate) fn print_response(
         &self,
         response: &GrpcResponse,
         cells: Option<&[netsim_proto::cell::Cell]>,
@@ -374,7 +374,7 @@ impl args::Command {
         }
     }
 
-    pub fn chip_kind_to_string(chip_kind: ChipKind) -> String {
+    pub(crate) fn chip_kind_to_string(chip_kind: ChipKind) -> String {
         match chip_kind {
             ChipKind::UNSPECIFIED => "UNSPECIFIED",
             ChipKind::BLUETOOTH => "BLUETOOTH",
@@ -389,7 +389,7 @@ impl args::Command {
         .into()
     }
 
-    pub fn filter_captures(captures: &mut Vec<model::Capture>, keys: &[String]) {
+    pub(crate) fn filter_captures(captures: &mut Vec<model::Capture>, keys: &[String]) {
         // Filter out list of captures with matching pattern
         captures.retain(|capture| {
             keys.iter().map(|key| key.to_uppercase()).all(|key| {

@@ -136,7 +136,7 @@ impl Default for SlirpConfig {
 
 /// Struct to hold a "C" `SlirpConfig` and the Rust storage that is
 /// referenced by `SlirpConfig`.
-pub struct SlirpConfigs {
+pub(crate) struct SlirpConfigs {
     /// The "C" representation of the Slirp configuration.
     pub c_slirp_config: libslirp_sys::SlirpConfig,
 
@@ -265,7 +265,7 @@ impl SlirpConfigs {
     /// # Arguments
     ///
     /// * `config` - A reference to the Rust `SlirpConfig`.
-    pub fn new(config: &SlirpConfig) -> SlirpConfigs {
+    pub(crate) fn new(config: &SlirpConfig) -> SlirpConfigs {
         let as_cstring =
             |s: &Option<String>| s.as_ref().and_then(|s| CString::new(s.as_bytes()).ok());
         let c_tftp_path = config

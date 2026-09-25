@@ -8,7 +8,7 @@ use crate::{
     grpc_client::ClientResponseReadable,
 };
 
-pub struct FileHandler {
+pub(crate) struct FileHandler {
     pub file: File,
     pub path: PathBuf,
 }

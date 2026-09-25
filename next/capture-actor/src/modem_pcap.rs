@@ -67,14 +67,14 @@ fn compute_fcs<I: IntoIterator<Item = u8>>(data: I) -> u8 {
 }
 
 /// PCAP writer for Cellular Modem AT command traffic.
-pub struct ModemPcapWriter {
+pub(crate) struct ModemPcapWriter {
     inner: PcapWriter,
 }
 
 impl ModemPcapWriter {
     /// Creates a new Modem AT PCAP writer using DLT_USER0 (147).
     #[allow(clippy::new_ret_no_self)]
-    pub async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
+    pub(crate) async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
         let inner = PcapWriter::new(path, DLT_USER0).await?;
         Ok(Box::new(Self { inner }))
     }

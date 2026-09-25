@@ -13,7 +13,7 @@ use serde::Serialize;
 const H4_EVENT_PACKET_TYPE: u8 = 0x04;
 const SCAN_RSP_KEY_OFFSET: u16 = 0x0100;
 
-pub struct BleEvent {
+pub(crate) struct BleEvent {
     pub timestamp_str: String,
     pub addr_display: String,
     pub event_type_str: String,
@@ -24,13 +24,13 @@ pub struct BleEvent {
 }
 
 #[derive(Clone)]
-pub struct AdPayload {
+pub(crate) struct AdPayload {
     pub ad_type: u8,
     pub type_str: String,
     pub decoded_val: String,
 }
 
-pub fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleEvent> {
+pub(crate) fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleEvent> {
     let mut events = Vec::new();
     let now =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
@@ -200,7 +200,7 @@ fn format_hex_data(data: &[u8]) -> String {
     data.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")
 }
 
-pub fn print_json_event(event: &BleEvent, verbose: bool) {
+pub(crate) fn print_json_event(event: &BleEvent, verbose: bool) {
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -246,7 +246,7 @@ pub fn print_json_event(event: &BleEvent, verbose: bool) {
     }
 }
 
-pub fn print_sniff_response(res: &SniffResponse, _verbose: bool) {
+pub(crate) fn print_sniff_response(res: &SniffResponse, _verbose: bool) {
     let duration = std::time::Duration::from_micros(res.timestamp as u64);
     let timestamp =
         TimeDisplay::new(duration.as_secs() as i64, duration.subsec_nanos()).utc_display_hms();

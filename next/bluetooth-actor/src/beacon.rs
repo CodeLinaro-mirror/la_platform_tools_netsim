@@ -48,7 +48,7 @@ fn send_hci_command<T: HciCommand + IntoBytes + Immutable + KnownLayout>(
 }
 
 /// Creates a new `BeaconChip`.
-pub fn create(
+pub(crate) fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &BeaconParams,

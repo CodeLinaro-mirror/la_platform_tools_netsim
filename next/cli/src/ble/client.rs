@@ -14,7 +14,7 @@ use super::{
 };
 use crate::error::Result;
 
-pub fn execute(cmd: &BleCommand, client: &BleServiceClient, verbose: bool) -> Result<()> {
+pub(crate) fn execute(cmd: &BleCommand, client: &BleServiceClient, verbose: bool) -> Result<()> {
     match cmd {
         BleCommand::Scan(args) => {
             let mut req = ScanRequest::new();
