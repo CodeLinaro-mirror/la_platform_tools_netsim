@@ -87,6 +87,8 @@ pub struct ApUpdate {
 /// Access Point specific chip information.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ap {
+    #[serde(default)]
+    pub id: u32,
     pub config: ApCreate,
     /// MAC addresses of the stations currently associated with this AP.
     ///
@@ -104,8 +106,11 @@ mod tests {
     /// association list and serde silently dropped it from the response body.
     #[test]
     fn ap_associations_are_serialized() {
-        let ap =
-            Ap { config: ApCreate::default(), associations: vec!["02:15:B2:00:00:01".to_string()] };
+        let ap = Ap {
+            id: 1,
+            config: ApCreate::default(),
+            associations: vec!["02:15:B2:00:00:01".to_string()],
+        };
 
         let val = serde_json::to_value(&ap).expect("Ap must serialize");
 
