@@ -59,7 +59,7 @@ use crate::{
     version::get_version,
 };
 
-const MAX_INIT_RETRIES: i32 = 20;
+const MAX_INIT_RETRIES: i32 = 100;
 const RETRY_DELAY: Duration = Duration::from_millis(100);
 
 #[derive(Debug, PartialEq)]
@@ -343,6 +343,8 @@ pub struct NetsimDaemon {
     join_set: JoinSet<()>,
     /// Manages the network listeners (UDS, gRPC) for incoming connections.
     streams: Streams,
+    /// Path to the discovery INI file.
+    ini_path: PathBuf,
     /// Client for interacting with the Device Service.
     device_client: DeviceClient,
     /// Client for interacting with the Capture Service.
@@ -406,6 +408,7 @@ impl NetsimDaemon {
 
         #[cfg(feature = "cuttlefish")]
         if let Some(connector_instance) = args.connector_instance {
+            Self::redirect_daemon_logs(&args, Some(connector_instance));
             info!("netsim startup (Connector mode)");
             return match Self::run_netsimd_connector(args, connector_instance).await {
                 Ok(()) => Err(RunResult::ExitedNormally),
@@ -441,19 +444,6 @@ impl NetsimDaemon {
             && let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config)
         {
             return Err(RunResult::InitializationError(format!("TAP configuration failed: {}", e)));
-        }
-
-        if !args.logtostderr {
-            if let Err(err) =
-                redirect_std_stream(&get_instance_name(args.instance, args.connector_instance))
-            {
-                error!("{err:?}");
-            }
-
-            // Duplicating the previous two logs to be included in
-            // netsim_stderr.log
-            info!("netsim artifacts path: {:?}", netsimd_temp_dir());
-            info!("{args:#?}");
         }
 
         info!(
@@ -496,10 +486,29 @@ impl NetsimDaemon {
         }
     }
 
+    fn redirect_daemon_logs(args: &Args, connector_instance: Option<u16>) {
+        if !args.logtostderr {
+            if let Err(err) =
+                redirect_std_stream(&get_instance_name(args.instance, connector_instance))
+            {
+                error!("{err:?}");
+            }
+
+            // Duplicating the previous two logs to be included in
+            // netsim_stderr.log
+            info!("netsim artifacts path: {:?}", netsimd_temp_dir());
+            info!("{args:#?}");
+        }
+    }
+
     async fn initialize_primary_daemon(
         ini_guard: IniFileUninitialized,
         args: Args,
     ) -> Result<StartUpMode, RunResult> {
+        // Redirect stdout/stderr ONLY after acquiring `netsim.ini.lock` so a
+        // newly spawned instance waiting on `.lock` does not truncate the
+        // active/draining primary daemon's logs.
+        Self::redirect_daemon_logs(&args, None);
         info!("Acquired lock (Owner)");
         info!("INI file path: {}", ini_guard.path().display());
 
@@ -767,11 +776,6 @@ impl NetsimDaemon {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
 
-        // Even if stale file removal failed, we can proceed as ini_guard.write
-        // will overwrite.
-        let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
-        info!("Wrote to INI file {}", initialized_guard.path().display());
-
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
         let bt_actor_state =
@@ -883,6 +887,12 @@ impl NetsimDaemon {
             crate::test_beacons::create_test_beacons(&device_client).await;
         }
 
+        // Write netsim.ini atomically ONLY after DeviceActor, Default AP, and test beacons
+        // are running so external launchers cannot connect before actors are ready.
+        let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
+        let ini_path = initialized_guard.path().to_path_buf();
+        info!("Wrote to INI file {}", ini_path.display());
+
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();
 
@@ -899,6 +909,7 @@ impl NetsimDaemon {
                 device_task,
                 capture_task,
                 artifact_dir,
+                ini_path,
                 link_client: Box::new(link_client),
                 slirp_client,
                 chip_clients: daemon_chip_clients,
@@ -925,7 +936,7 @@ impl NetsimDaemon {
         })
     }
 
-    async fn shutdown_actors(&mut self) {
+    async fn shutdown_actors(&mut self, grpc_shutdown: Option<grpcio::ShutdownFuture>) {
         info!("Graceful shutdown requested for all actors");
 
         let link_fut = self.link_client.shutdown();
@@ -955,6 +966,9 @@ impl NetsimDaemon {
                 warn!("CaptureActor shutdown error: {}", e);
             }
             let _ = (&mut self.capture_task).await;
+        }
+        if let Some(fut) = grpc_shutdown {
+            let _ = fut.await;
         }
     }
 
@@ -1027,7 +1041,7 @@ impl NetsimDaemon {
                             let device_client = self.device_client.clone();
                             let capture_client = self.capture_client.clone();
                             let next_chip_id = self.next_chip_id.clone();
-                                                        // Spawn connection handling to avoid blocking the main loop
+                            // Spawn connection handling to avoid blocking the main loop
                             // handle_new_connection performs async operations (like device_client.add_chip)
                             // which could delay accepting other connections if awaited directly.
                             tokio::spawn(handle_new_connection(device_client, capture_client, next_chip_id, stream, sink, chip_info, guid));
@@ -1063,14 +1077,27 @@ impl NetsimDaemon {
                 }
             }
         }
-        if !self.device_task.is_finished() {
-            let _ = self.device_client.shutdown().await;
-            let _ = (&mut self.device_task).await;
-        }
-        self.shutdown_actors().await;
-        self.join_set.shutdown().await;
+        IniFileInitialized::unlink_discovery_files(&self.ini_path);
+        let grpc_shutdown = self._grpc_server.as_mut().map(|s| {
+            let fut = s.shutdown();
+            s.cancel_all_calls();
+            fut
+        });
+        // Shut down DeviceActor sequentially before secondary actors so it can
+        // query active chip stats during on_shutdown() without racing against
+        // chip actor termination. Bound entire teardown to 5s.
+        let teardown = async {
+            if !self.device_task.is_finished() {
+                let _ = self.device_client.shutdown().await;
+                let _ = (&mut self.device_task).await;
+            }
+            self.shutdown_actors(grpc_shutdown).await;
+            self.join_set.shutdown().await;
+        };
+        let _ = tokio::time::timeout(Duration::from_secs(5), teardown).await;
         info!("NetsimDaemon main loop exited.");
-        // Zip all artifacts
+        // Zip all artifacts synchronously while `.lock` is still held so the next
+        // instance cannot call remove_old_artifacts_in_dir() until zipping completes.
         if let Err(err) = zip_artifacts_in_dir(&self.artifact_dir) {
             error!("Failed to zip artifacts: {err:?}");
         }
