@@ -46,6 +46,7 @@ pub struct World {
         Option<grpcio::ClientDuplexReceiver<netsim_proto::packet_streamer::PacketResponse>>,
 
     pub grpc_port: u16,
+    pub http_port: u16,
     _temp_dir: PathBuf,
     _ini_guard: Option<daemon::IniFileInitialized>,
 }
@@ -93,6 +94,7 @@ impl World {
         };
 
         let grpc_port = daemon.grpc_port().expect("NetsimDaemon has no gRPC port");
+        let http_port = daemon.http_port().expect("NetsimDaemon has no HTTP port");
 
         // Allow some time for bindings
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -117,6 +119,7 @@ impl World {
             packet_sender: None,
             packet_receiver: None,
             grpc_port,
+            http_port,
             _temp_dir: temp_dir,
             _ini_guard: Some(ini_guard),
         }
