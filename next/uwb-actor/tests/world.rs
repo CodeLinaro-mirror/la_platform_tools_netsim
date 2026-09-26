@@ -8,7 +8,7 @@ use device_actor::DeviceClient;
 use netsim_model::{
     Chip, ChipClient, ChipCreate, ChipError, ChipId, ChipUpdate, ClientError, DeviceId,
 };
-use netsim_testing::mocks::{mock_sink, mock_stream};
+use netsim_testing::{mock_sink, mock_stream};
 use pdl_runtime::Packet;
 use pica::packets::uci;
 use tokio::sync::mpsc::{Receiver, Sender};
