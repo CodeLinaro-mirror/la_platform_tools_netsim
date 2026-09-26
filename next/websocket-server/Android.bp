@@ -116,6 +116,7 @@ rust_test_host {
     srcs: [
         "tests/edge_cases.rs",
         "tests/happy_path.rs",
+        "tests/loopback.rs",
         "tests/mod.rs",
         "tests/world.rs",
     ],

@@ -26,6 +26,7 @@ fn create_test_chip_info() -> ChipInfo {
             address: "".to_string(),
             sim_type: None,
             sim_profile: None,
+            loopback: false,
         }),
         device_info: Some(DeviceInfo {
             name: "test-lifecycle-device".to_string(),
