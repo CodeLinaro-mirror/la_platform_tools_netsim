@@ -76,6 +76,17 @@ impl<'a, T> Displayer<'a, T> {
     }
 }
 
+/// Adds `.display(verbose)` to types that have a `Displayer`, like
+/// [`std::path::Path::display`]. Bounded so it never shadows other `display()`
+/// methods (e.g. `PathBuf` still reaches `Path::display`).
+pub trait DisplayExt {
+    fn display(&self, verbose: bool) -> Displayer<'_, &Self> {
+        Displayer::new(self, verbose)
+    }
+}
+
+impl<T: ?Sized> DisplayExt for T where for<'a> Displayer<'a, &'a T>: fmt::Display {}
+
 impl fmt::Display for Displayer<'_, &ListDeviceResponse> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;

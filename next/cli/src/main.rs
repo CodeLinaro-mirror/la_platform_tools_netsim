@@ -18,7 +18,7 @@ mod requests;
 mod response;
 mod sms;
 
-use std::{env, fs::File, path::PathBuf};
+use std::{env, fs::File, path::PathBuf, process::ExitCode};
 
 use args::{GetCapture, NetsimArgs};
 use clap::Parser;
@@ -39,6 +39,7 @@ use tracing::error;
 
 use crate::{
     cell_helper::CellClient,
+    display::DisplayExt,
     error::{Error, Result},
     grpc_client::{ClientResponseReader, GrpcRequest, GrpcResponse},
 };
@@ -174,14 +175,13 @@ fn continuous_perform_command(
     grpc_request: &GrpcRequest,
     verbose: bool,
 ) -> Result<()> {
-    loop {
+    repeat(true, || {
         let response = grpc_client::send_grpc(client, grpc_request)?;
         let cells = cell_client.and_then(|cc| {
             cc.list(&netsim_proto::cell::ListCellsRequest::new()).map(|res| res.cells).ok()
         });
-        process_result(command, Ok(Some(response)), cells.as_deref(), Some(grpc_request), verbose)?;
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
+        process_result(command, Ok(Some(response)), cells.as_deref(), Some(grpc_request), verbose)
+    })
 }
 /// Check and handle the gRPC call result
 fn process_result(
@@ -206,43 +206,55 @@ fn run_rest(command: &args::Command, rest: &NetsimRestClient, verbose: bool) -> 
             .get_version()
             .send_blocking()
             .map(|resp| println!("Netsim version: {}", resp.version)),
-        args::Command::Link(args::Link::List) => rest
-            .get_links()
-            .send_blocking()
-            .map(|resp| println!("{}", display::Displayer::new(&resp, verbose))),
+        args::Command::Link(args::Link::List) => {
+            rest.get_links().send_blocking().map(|resp| println!("{}", resp.display(verbose)))
+        }
         _ => return None,
     };
     Some(result.map_err(Error::from))
 }
 
 /// Standard Netsim CLI entry point
-fn main() {
-    let mut args = NetsimArgs::parse();
+fn main() -> ExitCode {
+    let args = NetsimArgs::parse();
     netsim_logger::init("netsim", args.verbose);
-    if matches!(args.command, args::Command::Gui) {
-        println!("Opening netsim web UI on default web browser");
-        browser::open("http://localhost:7681/");
-        return;
-    } else if matches!(args.command, args::Command::Artifact) {
-        let artifact_dir = common::system::netsimd_temp_dir();
-        println!("netsim artifact directory: {}", artifact_dir.display());
-        browser::open(artifact_dir);
-        return;
-    } else if matches!(args.command, args::Command::Bumble) {
-        println!("Opening Bumble Hive on default web browser");
-        browser::open("https://google.github.io/bumble/hive/index.html");
-        return;
+    match run(args) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            error!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Dispatches `args.command` to the browser, the REST API, or gRPC.
+fn run(args: NetsimArgs) -> Result<()> {
+    let verbose = args.verbose;
+    match &args.command {
+        args::Command::Gui => {
+            println!("Opening netsim web UI on default web browser");
+            browser::open("http://localhost:7681/");
+            return Ok(());
+        }
+        args::Command::Artifact => {
+            let artifact_dir = common::system::netsimd_temp_dir();
+            println!("netsim artifact directory: {}", artifact_dir.display());
+            browser::open(artifact_dir);
+            return Ok(());
+        }
+        args::Command::Bumble => {
+            println!("Opening Bumble Hive on default web browser");
+            browser::open("https://google.github.io/bumble/hive/index.html");
+            return Ok(());
+        }
+        _ => {}
     }
 
     let instance_num = get_instance(args.instance);
     let http_server = get_http_server_address(instance_num).unwrap_or_default();
     let rest_client = NetsimRestClient::from_addr(http_server);
-
-    if let Some(result) = run_rest(&args.command, &rest_client, args.verbose) {
-        if let Err(e) = result {
-            error!("{e}");
-        }
-        return;
+    if let Some(result) = run_rest(&args.command, &rest_client, verbose) {
+        return result;
     }
 
     let server = match (args.vsock, args.port) {
@@ -252,57 +264,43 @@ fn main() {
     };
     let channel =
         ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build())).connect(&server);
-    let frontend_client = FrontendServiceClient::new(channel.clone());
-    let access_point_client = AccessPointServiceClient::new(channel.clone());
-    let nfc_client = NfcServiceClient::new(channel.clone());
-    let ble_client = BleServiceClient::new(channel.clone());
-
-    if let args::Command::Ap(ap_cmd) = &args.command {
-        if let Err(e) =
-            crate::ap::client::execute(ap_cmd, &rest_client, &access_point_client, args.verbose)
-        {
-            error!("{e}");
+    match args.command {
+        args::Command::Ap(cmd) => crate::ap::client::execute(
+            &cmd,
+            &rest_client,
+            &AccessPointServiceClient::new(channel),
+            verbose,
+        ),
+        args::Command::Ble(cmd) => {
+            crate::ble::client::execute(&cmd, &BleServiceClient::new(channel), verbose)
         }
-        return;
-    }
-
-    if let args::Command::Ble(ble_cmd) = &args.command {
-        if let Err(e) = crate::ble::client::execute(ble_cmd, &ble_client, args.verbose) {
-            error!("{e}");
+        args::Command::Gsm(cmd) => {
+            crate::gsm::client::execute(cmd, &CellServiceClient::new(channel), verbose)
         }
-        return;
-    }
-
-    let cell_client = CellServiceClient::new(channel.clone());
-
-    if matches!(&args.command, args::Command::Gsm(_) | args::Command::Sms(_)) {
-        match args.command {
-            args::Command::Gsm(gsm_cmd) => {
-                if let Err(e) = crate::gsm::client::execute(gsm_cmd, &cell_client, args.verbose) {
-                    error!("{e}");
-                }
-            }
-            args::Command::Sms(sms_cmd) => {
-                if let Err(e) = crate::sms::client::execute(sms_cmd, &cell_client, args.verbose) {
-                    error!("{e}");
-                }
-            }
-            _ => unreachable!(),
+        args::Command::Sms(cmd) => {
+            crate::sms::client::execute(cmd, &CellServiceClient::new(channel), verbose)
         }
-        return;
-    }
-
-    if let args::Command::Nfc(nfc_cmd) = &args.command {
-        if let Err(e) = crate::nfc::client::execute(nfc_cmd, &nfc_client, args.verbose) {
-            error!("{e}");
+        args::Command::Nfc(cmd) => {
+            crate::nfc::client::execute(&cmd, &NfcServiceClient::new(channel), verbose)
         }
-        return;
+        mut command => perform_command(
+            &mut command,
+            &rest_client,
+            FrontendServiceClient::new(channel.clone()),
+            CellServiceClient::new(channel),
+            verbose,
+        ),
     }
+}
 
-    if let Err(e) =
-        perform_command(&mut args.command, &rest_client, frontend_client, cell_client, args.verbose)
-    {
-        error!("{e}");
+/// Runs `f` once, or once a second until it fails when `continuous` is set.
+pub(crate) fn repeat(continuous: bool, mut f: impl FnMut() -> Result<()>) -> Result<()> {
+    loop {
+        f()?;
+        if !continuous {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
 

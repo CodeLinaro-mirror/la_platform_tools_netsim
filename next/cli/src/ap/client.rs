@@ -20,16 +20,10 @@ pub fn execute(
 ) -> Result<()> {
     match cmd {
         ApCommand::List(args) => {
-            if args.continuous {
-                loop {
-                    let res = rest_client.get_aps().send_blocking()?;
-                    print_list_ap_response(&res, verbose);
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                }
-            } else {
-                let res = rest_client.get_aps().send_blocking()?;
-                print_list_ap_response(&res, verbose);
-            }
+            crate::repeat(args.continuous, || {
+                print_list_ap_response(&rest_client.get_aps().send_blocking()?, verbose);
+                Ok(())
+            })?;
         }
         ApCommand::Create(args) => {
             let mut ap = access_point::AccessPoint::new();
