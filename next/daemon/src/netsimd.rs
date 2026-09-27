@@ -661,7 +661,7 @@ impl NetsimDaemon {
         match bind_tcp_loopback(resolved_hci_port) {
             Ok(listener) => {
                 actual_hci_port = Some(listener.local_addr().map_err(init_error)?.port());
-                tokio::spawn(hci_server::server::run(listener, device_client.clone()));
+                tokio::spawn(hci_server::run(listener, device_client.clone()));
             }
             Err(e) => {
                 if is_explicit_hci {
