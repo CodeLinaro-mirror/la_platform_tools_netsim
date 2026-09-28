@@ -362,6 +362,17 @@ async fn test_receive_pdu_action_forwarding() {
         .client
         .perform_action(
             chip_id,
+            cell_actor::CellAction::SetVoiceRegistration {
+                status: netsim_model::RegistrationStatus::RegisteredHome,
+            },
+        )
+        .await
+        .unwrap();
+
+    harness
+        .client
+        .perform_action(
+            chip_id,
             cell_actor::CellAction::ReceivePdu {
                 pdu: "0011000B915155255155F40000AA01F0".to_string(),
             },
@@ -388,6 +399,17 @@ async fn test_receive_sms_action_forwarding() {
     harness.client.create(chip_id, params).await.unwrap();
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    harness
+        .client
+        .perform_action(
+            chip_id,
+            cell_actor::CellAction::SetVoiceRegistration {
+                status: netsim_model::RegistrationStatus::RegisteredHome,
+            },
+        )
+        .await
+        .unwrap();
 
     harness
         .client

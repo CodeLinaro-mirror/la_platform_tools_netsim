@@ -8,9 +8,9 @@ use netsim_model::Quirks;
 use nom::IResult;
 
 use crate::{
+    RadioAdmission, SmsStore,
     parser::QuotedString,
     pdu::SubmitPdu,
-    sim_service::SimService, // Required for Sim storage
     types::{
         BroadcastConfig, CmsError, CommandAction, ExecutionResult, HandledCommand, Parsable,
         PhoneNumber, Response, SendSmsArgs, SimSmsMessage, SmsAck, SmsBroadcastMode,
@@ -278,16 +278,6 @@ impl SmsService {
         self.transaction_state.is_active()
     }
 
-    fn check_sim_ready(sim_service: &SimService) -> Result<(), CmsError> {
-        if !sim_service.is_present() {
-            Err(CmsError::SimNotInserted)
-        } else if !sim_service.is_ready() {
-            Err(CmsError::SimPinRequired)
-        } else {
-            Ok(())
-        }
-    }
-
     fn validate_sim_index(index: usize) -> Result<u8, CmsError> {
         u8::try_from(index).ok().filter(|&i| i > 0).ok_or(CmsError::InvalidMemoryIndex)
     }
@@ -297,7 +287,16 @@ impl SmsService {
         pdu: &[u8],
         sender: Option<&str>,
         destination: Option<PhoneNumber>,
+        network_service: &impl RadioAdmission,
     ) -> ExecutionResult {
+        // Radio/registration state may drop while the DTE is waiting at the '>' prompt after AT+CMGS.
+        if let Err(err) = network_service.can_originate_sms() {
+            return if self.quirks.goldfish_ril_37_or_earlier {
+                ExecutionResult::cme_error(err.into())
+            } else {
+                ExecutionResult::cms_error(err.into())
+            };
+        }
         let (message_reference, actions) = if self.message_format == MessageFormat::Text {
             let to = destination.map(String::from).unwrap_or_default();
             let text = String::from_utf8_lossy(pdu).into_owned();
@@ -337,9 +336,10 @@ impl SmsService {
         ))
     }
 
-    pub fn handle_prompt_input(
+    pub(crate) fn handle_prompt_input(
         &mut self,
-        sim_service: &mut SimService,
+        sim: &mut impl SmsStore,
+        network_service: &impl RadioAdmission,
         command_bytes: &[u8],
         sender: Option<&str>,
     ) -> Option<ExecutionResult> {
@@ -358,10 +358,10 @@ impl SmsService {
 
         let exec_res = match std::mem::take(&mut self.transaction_state) {
             SmsTransactionState::Storing { status, .. } => {
-                self.handle_store_sms(sim_service, pdu, status).into()
+                self.handle_store_sms(sim, pdu, status).into()
             }
             SmsTransactionState::Sending { destination, .. } => {
-                self.handle_send_sms(pdu, sender, destination)
+                self.handle_send_sms(pdu, sender, destination, network_service)
             }
             SmsTransactionState::Idle => unreachable!(),
         };
@@ -381,9 +381,9 @@ impl SmsService {
         if slot > MAX_ME_SMS_CAPACITY { None } else { Some(slot) }
     }
 
-    pub fn handle_store_sms(
+    pub(crate) fn handle_store_sms(
         &mut self,
-        sim_service: &mut SimService,
+        sim: &mut impl SmsStore,
         pdu: &[u8],
         status: SmsMessageStatus,
     ) -> SmsResult {
@@ -391,13 +391,9 @@ impl SmsService {
 
         // TS 27.005 §3.2.2: <mem2> (storage2) is for writing and sending messages
         if self.storage2 == MessageStorage::Sim {
-            Self::check_sim_ready(sim_service)?;
             let message = SimSmsMessage { status, pdu: raw_pdu };
-            if let Some(index) = sim_service.store_sms(message) {
-                Ok(SmsSuccess::new(Some(SmsResponse::WriteSms { index: index as usize })))
-            } else {
-                Err(CmsError::MemoryFull.into())
-            }
+            let index = sim.store_sms(message)?;
+            Ok(SmsSuccess::new(Some(SmsResponse::WriteSms { index: index as usize })))
         } else {
             let index = self.allocate_me_slot().ok_or(CmsError::MemoryFull)?;
             self.messages.insert(index, SimSmsMessage { status, pdu: raw_pdu });
@@ -406,15 +402,11 @@ impl SmsService {
     }
 
     // TS 27.005 §3.2.2: <mem1> (storage1) is for reading and deleting messages
-    pub fn handle_delete_sms(&mut self, sim_service: &mut SimService, index: usize) -> SmsResult {
+    pub(crate) fn handle_delete_sms(&mut self, sim: &mut impl SmsStore, index: usize) -> SmsResult {
         if self.storage1 == MessageStorage::Sim {
-            Self::check_sim_ready(sim_service)?;
             let sim_index = Self::validate_sim_index(index)?;
-            if sim_service.delete_sms(sim_index) {
-                Ok(SmsSuccess::new(None))
-            } else {
-                Err(CmsError::InvalidMemoryIndex.into())
-            }
+            sim.delete_sms(sim_index)?;
+            Ok(SmsSuccess::new(None))
         } else if self.messages.remove(&index).is_some() {
             Ok(SmsSuccess::new(None))
         } else {
@@ -423,14 +415,10 @@ impl SmsService {
     }
 
     // TS 27.005 §3.2.2: <mem1> (storage1) is for reading and deleting messages
-    pub fn handle_read_sms(&mut self, sim_service: &mut SimService, index: usize) -> SmsResult {
+    pub(crate) fn handle_read_sms(&mut self, sim: &mut impl SmsStore, index: usize) -> SmsResult {
         if self.storage1 == MessageStorage::Sim {
-            Self::check_sim_ready(sim_service)?;
             let sim_index = Self::validate_sim_index(index)?;
-            let msg = sim_service
-                .read_sms(sim_index)
-                .map_err(|_err| CmsError::SimNotInserted)?
-                .ok_or(CmsError::InvalidMemoryIndex)?;
+            let msg = sim.read_sms(sim_index)?;
             Ok(SmsSuccess::new(Some(SmsResponse::ReadSms { status: msg.status, pdu: msg.pdu })))
         } else {
             let msg = self.messages.get_mut(&index).ok_or(CmsError::InvalidMemoryIndex)?;
@@ -487,7 +475,14 @@ impl SmsService {
         })))
     }
 
-    pub fn handle_wait_for_send_sms(&mut self, args: SendSmsArgs) -> SmsResult {
+    pub(crate) fn handle_wait_for_send_sms(
+        &mut self,
+        args: SendSmsArgs,
+        network_service: &impl RadioAdmission,
+    ) -> SmsResult {
+        if !self.quirks.goldfish_ril_37_or_earlier {
+            network_service.can_originate_sms().map_err(CmsError::from)?;
+        }
         match (self.message_format, args) {
             (MessageFormat::Text, SendSmsArgs::Text { destination_address, .. }) => {
                 let destination =
@@ -562,16 +557,17 @@ impl SmsService {
     }
 
     // Explicit execute method instead of Trait
-    pub fn execute<'a>(
+    pub(crate) fn execute<'a>(
         &mut self,
         command: &SmsCommand<'a>,
-        sim_service: &mut SimService,
+        sim: &mut impl SmsStore,
+        network_service: &impl RadioAdmission,
     ) -> ExecutionResult {
         let sms_result = match command {
-            SmsCommand::SendSms(args) => self.handle_wait_for_send_sms(*args),
+            SmsCommand::SendSms(args) => self.handle_wait_for_send_sms(*args, network_service),
             SmsCommand::StoreSms(len, stat) => self.handle_wait_for_store_sms(*len, *stat),
-            SmsCommand::ReadSms(index) => self.handle_read_sms(sim_service, *index),
-            SmsCommand::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
+            SmsCommand::ReadSms(index) => self.handle_read_sms(sim, *index),
+            SmsCommand::DeleteSms(index) => self.handle_delete_sms(sim, *index),
             SmsCommand::SendSmsAck => self.handle_send_sms_ack(SmsAck::Success),
             SmsCommand::SendSmsAckWithVal(ack) => self.handle_send_sms_ack(*ack),
             SmsCommand::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
@@ -609,5 +605,34 @@ impl From<SmsSuccess> for ExecutionResult {
         }
         let actions = success.actions;
         ExecutionResult::Success(HandledCommand { responses, actions })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        capabilities::AdmissionDenial,
+        tests::test_utils::{MockCardState, MockRadioAdmission},
+    };
+
+    #[test]
+    fn test_send_sms_radio_admission_gating() {
+        let mut sms = SmsService::default();
+        let mut sim = MockCardState::default();
+        let mut admission =
+            MockRadioAdmission { admission: Err(AdmissionDenial::NoNetworkService) };
+
+        let cmd = SmsCommand::SendSms(SendSmsArgs::Pdu { length: 15 });
+        let res = sms.execute(&cmd, &mut sim, &admission);
+        assert_eq!(res, ExecutionResult::cms_error(CmsError::NoNetworkService));
+
+        admission.admission = Ok(());
+        let res = sms.execute(&cmd, &mut sim, &admission);
+        assert!(matches!(
+            res,
+            ExecutionResult::Success(HandledCommand { responses, .. })
+                if responses == vec![Response::Sms(SmsResponse::Prompt { goldfish_compat: false })]
+        ));
     }
 }

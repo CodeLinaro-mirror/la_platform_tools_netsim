@@ -3,7 +3,10 @@
 
 pub mod apdu;
 mod call_service;
+mod capabilities;
 pub mod config;
+
+pub(crate) use capabilities::{CardState, RadioAdmission, SmsStore};
 pub mod constants;
 mod data_service;
 mod metrics;
@@ -24,6 +27,8 @@ pub mod time;
 pub mod xml_profile;
 
 pub mod test_utils;
+#[cfg(test)]
+mod tests;
 mod types; // Test utils might need to be public for integration tests
 
 // The Public API
