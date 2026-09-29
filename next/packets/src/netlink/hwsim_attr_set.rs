@@ -5,7 +5,7 @@
 
 use std::fmt;
 
-use zerocopy::IntoBytes;
+use zerocopy::{Immutable, IntoBytes};
 
 use crate::{
     ethernet::MacAddr,
@@ -136,57 +136,56 @@ impl HwsimAttrSetBuilder {
         self
     }
 
+    fn extend_attr<T: IntoBytes + Immutable>(&mut self, attr: T) {
+        self.extend_attributes(attr.as_bytes());
+    }
+
     /// Sets the flags.
     pub fn flags(&mut self, flags: u32) -> &mut Self {
-        let attr = mac80211_hwsim::HwsimAttrFlags {
+        self.extend_attr(mac80211_hwsim::HwsimAttrFlags {
             header: NlAttrHdr::new(8, HwsimAttrEnum::Flags as u16),
             flags,
-        };
-        self.extend_attributes(attr.as_bytes());
+        });
         self.flags = Some(flags);
         self
     }
 
     /// Sets the RX rate index.
     pub fn rx_rate(&mut self, rx_rate_idx: u32) -> &mut Self {
-        let attr = mac80211_hwsim::HwsimAttrRxRate {
+        self.extend_attr(mac80211_hwsim::HwsimAttrRxRate {
             header: NlAttrHdr::new(8, HwsimAttrEnum::RxRate as u16),
             rx_rate_idx,
-        };
-        self.extend_attributes(attr.as_bytes());
+        });
         self.rx_rate_idx = Some(rx_rate_idx);
         self
     }
 
     /// Sets the signal strength.
     pub fn signal(&mut self, signal: u32) -> &mut Self {
-        let attr = mac80211_hwsim::HwsimAttrSignal {
+        self.extend_attr(mac80211_hwsim::HwsimAttrSignal {
             header: NlAttrHdr::new(8, HwsimAttrEnum::Signal as u16),
             signal,
-        };
-        self.extend_attributes(attr.as_bytes());
+        });
         self.signal = Some(signal);
         self
     }
 
     /// Sets the cookie.
     pub fn cookie(&mut self, cookie: u64) -> &mut Self {
-        let attr = mac80211_hwsim::HwsimAttrCookie {
+        self.extend_attr(mac80211_hwsim::HwsimAttrCookie {
             header: NlAttrHdr::new(12, HwsimAttrEnum::Cookie as u16),
             cookie,
-        };
-        self.extend_attributes(attr.as_bytes());
+        });
         self.cookie = Some(cookie);
         self
     }
 
     /// Sets the frequency.
     pub fn freq(&mut self, freq: u32) -> &mut Self {
-        let attr = mac80211_hwsim::HwsimAttrFreq {
+        self.extend_attr(mac80211_hwsim::HwsimAttrFreq {
             header: NlAttrHdr::new(8, HwsimAttrEnum::Freq as u16),
             freq,
-        };
-        self.extend_attributes(attr.as_bytes());
+        });
         self.freq = Some(freq);
         self
     }
@@ -467,5 +466,27 @@ mod tests {
         let p_flags = flag.flags;
         assert_eq!(idx, 2);
         assert_eq!(p_flags, 0x0401);
+    }
+
+    #[test]
+    fn test_hwsim_attr_set_builder_scalar_attributes() {
+        let mut builder = HwsimAttrSet::builder();
+        builder.flags(0x1234_5678).rx_rate(42).signal(99).cookie(0xfeed_face_cafe_beef).freq(5180);
+        let attr_set = builder.build().expect("Failed to build HwsimAttrSet");
+
+        assert_eq!(attr_set.flags, Some(0x1234_5678));
+        assert_eq!(attr_set.rx_rate_idx, Some(42));
+        assert_eq!(attr_set.signal, Some(99));
+        assert_eq!(attr_set.cookie, Some(0xfeed_face_cafe_beef));
+        assert_eq!(attr_set.freq, Some(5180));
+
+        // Verify that attributes can be parsed back and roundtrip correctly
+        let parsed =
+            HwsimAttrSet::parse(&attr_set.attributes).expect("Failed to parse built attributes");
+        assert_eq!(parsed.flags, Some(0x1234_5678));
+        assert_eq!(parsed.rx_rate_idx, Some(42));
+        assert_eq!(parsed.signal, Some(99));
+        assert_eq!(parsed.cookie, Some(0xfeed_face_cafe_beef));
+        assert_eq!(parsed.freq, Some(5180));
     }
 }
