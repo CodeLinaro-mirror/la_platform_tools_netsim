@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 
 from tasks.task import Task
 from utils import (
-    AOSP_ROOT,
+    NETSIM_ROOT,
     get_bazel_build_configs,
     get_bazel_path,
     get_bazel_startup_options,
@@ -50,7 +50,7 @@ class TestTask(Task):
           + ["--test_output=streamed"],
           self.env,
           "bazel test",
-          AOSP_ROOT,
+          NETSIM_ROOT,
       )
     except Exception as e:
       if self.buildbot:
@@ -68,14 +68,14 @@ class TestTask(Task):
           [str(bazel)] + startup_options + ["info", "testlogs"],
           capture_output=True,
           text=True,
-          cwd=AOSP_ROOT,
+          cwd=NETSIM_ROOT,
           env=self.env,
           check=True,
       )
       testlogs_dir = Path(result.stdout.strip())
     except subprocess.CalledProcessError as e:
       logging.warning(f"Failed to get testlogs dir via bazel info: {e}")
-      testlogs_dir = AOSP_ROOT / "bazel-testlogs"
+      testlogs_dir = NETSIM_ROOT / "bazel-testlogs"
 
     dest_dir = Path(self.args.dist_dir).absolute() / "logs" / "bazel-logs"
 

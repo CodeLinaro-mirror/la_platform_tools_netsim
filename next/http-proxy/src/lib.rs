@@ -12,8 +12,8 @@
 //! optional Basic authentication.
 //!
 //! The crate also includes a `Manager` struct that implements the
-//! `ProxyManager` trait from `libslirp_rs`, allowing it to be used
-//! with the `libslirp` library for managing TCP connections through
+//! `ProxyManager` trait from `slirp`, allowing it to be used
+//! with the `slirp` library for managing TCP connections through
 //! the proxy.
 //!
 //! ## Example
@@ -52,3 +52,4 @@ pub use connector::*;
 pub use dns_manager::*;
 pub use error::{Error, Result};
 pub use manager::*;
+pub use util::ProxyConfig;

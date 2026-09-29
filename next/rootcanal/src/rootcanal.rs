@@ -96,6 +96,47 @@ impl BtOps for BtOpsWrapper {
     }
 }
 
+extern "C" fn rootcanal_log_callback(
+    level: std::os::raw::c_int,
+    message: *const std::os::raw::c_char,
+) {
+    if message.is_null() {
+        return;
+    }
+    let _ = std::panic::catch_unwind(|| {
+        // SAFETY: Rootcanal passes a valid null-terminated C string pointing to the
+        // formatted log message.
+        let c_str = unsafe { std::ffi::CStr::from_ptr(message) };
+        let msg = c_str.to_string_lossy();
+
+        // Rootcanal log levels match rootcanal::log::Verbosity:
+        // 0=kDebug, 1=kInfo, 2=kWarning, 3=kError, 4=kFatal
+        match level {
+            0 => tracing::debug!(target: "rootcanal", "{msg}"),
+            1 => tracing::info!(target: "rootcanal", "{msg}"),
+            2 => tracing::warn!(target: "rootcanal", "{msg}"),
+            3 => tracing::error!(target: "rootcanal", "{msg}"),
+            _ => tracing::error!(target: "rootcanal", "{msg}"),
+        }
+    });
+}
+
+/// Configures rootcanal logging to dispatch through Rust's `tracing` framework.
+///
+/// This routes rootcanal logs through active tracing subscribers and test
+/// writers, preventing direct stdout/stderr pollution.
+pub(crate) fn init_rootcanal_logging() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        // SAFETY: `ffi_set_log_callback` registers a static extern "C" function
+        // pointer. The callback performs safe string conversion and
+        // dispatches to `tracing` macros.
+        unsafe {
+            crate::ffi::ffi_set_log_callback(Some(rootcanal_log_callback));
+        }
+    });
+}
+
 impl Rootcanal {
     /// Creates a new Bluetooth subsystem.
     pub fn new(
@@ -103,6 +144,7 @@ impl Rootcanal {
         disable_address_reuse: bool,
         on_packet: Box<dyn Fn(ControllerId, Bytes, Phy, i32) + Send + Sync>,
     ) -> Arc<Self> {
+        init_rootcanal_logging();
         Arc::new(Self {
             controllers: Mutex::new(HashMap::new()),
             callbacks,

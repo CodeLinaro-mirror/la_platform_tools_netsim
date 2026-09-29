@@ -36,10 +36,13 @@ impl Connector {
         self.proxy_addr
     }
 
-    /// Returns the proxy authorization header if username and password are
-    /// provided.
+    /// Returns the proxy authorization header if username is provided.
+    ///
+    /// If no password is provided, it defaults to an empty password per RFC
+    /// 7617.
     pub fn auth_header(&self) -> Option<String> {
-        if let (Some(username), Some(password)) = (&self.username, &self.password) {
+        if let Some(username) = &self.username {
+            let password = self.password.as_deref().unwrap_or("");
             let encoded_auth = base64_encode(format!("{}:{}", username, password).as_bytes());
             let auth_header = format!(
                 "Proxy-Authorization: Basic {}\r\n",
@@ -223,5 +226,152 @@ mod tests {
         let received_request = server_task.await.unwrap();
         let expected_request = "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n";
         assert_eq!(received_request, expected_request);
+    }
+
+    #[test]
+    fn test_auth_header_with_empty_password() {
+        let connector =
+            Connector::new("127.0.0.1:8080".parse().unwrap(), Some("user".into()), Some("".into()));
+        assert_eq!(
+            connector.auth_header(),
+            Some("Proxy-Authorization: Basic dXNlcjo=\r\n".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_connect_with_percent_encoded_auth() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_addr = listener.local_addr().unwrap();
+        let addr: SocketAddr = lookup_host("localhost:8000").await.unwrap().next().unwrap();
+
+        let handle = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let expected_greeting = format!(
+                "CONNECT {} HTTP/1.1\r\nProxy-Authorization: Basic dXNlcjpwYXNzL3dvcmQ=\r\n\r\n",
+                &addr
+            );
+            let mut buf = [0; 1024];
+            let n = stream.read(&mut buf).await.unwrap();
+            let actual_greeting = String::from_utf8_lossy(&buf[..n]);
+            assert_eq!(actual_greeting, expected_greeting);
+            let response = "HTTP/1.1 200 Connection established\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = Connector::new(proxy_addr, Some("user".into()), Some("pass/word".into()));
+        client.connect(addr).await.unwrap();
+        handle.await.unwrap();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_connect_with_empty_password_auth() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_addr = listener.local_addr().unwrap();
+        let addr: SocketAddr = lookup_host("localhost:8000").await.unwrap().next().unwrap();
+
+        let handle = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let expected_greeting = format!(
+                "CONNECT {} HTTP/1.1\r\nProxy-Authorization: Basic dXNlcjo=\r\n\r\n",
+                &addr
+            );
+            let mut buf = [0; 1024];
+            let n = stream.read(&mut buf).await.unwrap();
+            let actual_greeting = String::from_utf8_lossy(&buf[..n]);
+            assert_eq!(actual_greeting, expected_greeting);
+            let response = "HTTP/1.1 200 Connection established\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = Connector::new(proxy_addr, Some("user".into()), Some("".into()));
+        client.connect(addr).await.unwrap();
+        handle.await.unwrap();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_connect_rejected_with_407() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_addr = listener.local_addr().unwrap();
+        let addr: SocketAddr = lookup_host("localhost:8000").await.unwrap().next().unwrap();
+
+        let handle = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buf = [0; 1024];
+            let _ = stream.read(&mut buf).await.unwrap();
+            let response = "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = Connector::new(proxy_addr, Some("user".into()), Some("wrongpass".into()));
+        let res = client.connect(addr).await;
+        assert!(res.is_err());
+        handle.await.unwrap();
+        Ok(())
+    }
+
+    #[test]
+    fn test_auth_header_bare_username_defaults_to_empty_password() {
+        let client = Connector::new("127.0.0.1:8080".parse().unwrap(), Some("user".into()), None);
+        assert_eq!(
+            client.auth_header(),
+            Some("Proxy-Authorization: Basic dXNlcjo=\r\n".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_connect_with_bare_username() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_addr = listener.local_addr().unwrap();
+        let addr: SocketAddr = lookup_host("localhost:8000").await.unwrap().next().unwrap();
+
+        let handle = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let expected_greeting = format!(
+                "CONNECT {} HTTP/1.1\r\nProxy-Authorization: Basic dXNlcjo=\r\n\r\n",
+                &addr
+            );
+            let mut buf = [0; 1024];
+            let n = stream.read(&mut buf).await.unwrap();
+            let actual_greeting = String::from_utf8_lossy(&buf[..n]);
+            assert_eq!(actual_greeting, expected_greeting);
+            let response = "HTTP/1.1 200 Connection established\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = Connector::new(proxy_addr, Some("user".into()), None);
+        client.connect(addr).await.unwrap();
+        handle.await.unwrap();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_connect_with_percent_decoded_auth_end_to_end() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_addr = listener.local_addr().unwrap();
+        let addr: SocketAddr = lookup_host("localhost:8000").await.unwrap().next().unwrap();
+
+        let handle = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let expected_greeting = format!(
+                "CONNECT {} HTTP/1.1\r\nProxy-Authorization: Basic dXNlcjpwYXNzL3dvcmQ=\r\n\r\n",
+                &addr
+            );
+            let mut buf = [0; 1024];
+            let n = stream.read(&mut buf).await.unwrap();
+            let actual_greeting = String::from_utf8_lossy(&buf[..n]);
+            assert_eq!(actual_greeting, expected_greeting);
+            let response = "HTTP/1.1 200 Connection established\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let config =
+            crate::util::ProxyConfig::from_string(&format!("http://user:pass%2fword@{proxy_addr}"))
+                .unwrap();
+        let client = Connector::new(config.addr, config.username, config.password);
+        client.connect(addr).await.unwrap();
+        handle.await.unwrap();
+        Ok(())
     }
 }

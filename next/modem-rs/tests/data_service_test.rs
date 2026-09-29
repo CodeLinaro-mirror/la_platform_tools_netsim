@@ -68,7 +68,7 @@ fn test_update_physical_channel_configs() {
 #[test]
 fn test_read_dynamic_param() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     when_at_command_sent(
         &mut world,
@@ -85,10 +85,36 @@ fn test_read_dynamic_param() {
         &mut world,
         "A",
         &format!(
-            "+CGCONTRDP: {TEST_PDP_CID},{DEFAULT_BEARER_ID},\"{TEST_APN}\",{TEST_IP_ADDR},{TEST_GATEWAY},{TEST_DNS}"
+            "+CGCONTRDP: {TEST_PDP_CID},{DEFAULT_BEARER_ID},\"{TEST_APN}\",\"{TEST_IP_ADDR}\",\"{TEST_GATEWAY}\",\"{TEST_DNS}\""
         ),
     );
     then_response_is(&mut world, "A", "OK");
+}
+
+#[test]
+fn test_read_dynamic_param_goldfish_37() {
+    let mut world = World::new();
+    world.given_goldfish_37_data_modem("A");
+
+    world.send_and_expect_ok(
+        "A",
+        &format!("AT+CGDCONT={TEST_PDP_CID},\"{TEST_PDP_TYPE}\",\"{TEST_APN}\""),
+    );
+    world.send_and_expect(
+        "A",
+        &format!("ATD{GPRS_DIAL_STRING_PREFIX}{TEST_PDP_CID}#"),
+        &["CONNECT"],
+    );
+    world.send_and_expect(
+        "A",
+        &format!("AT+CGCONTRDP={TEST_PDP_CID}"),
+        &[
+            &format!(
+                "+CGCONTRDP: {TEST_PDP_CID},{DEFAULT_BEARER_ID},\"{TEST_APN}\",{TEST_IP_ADDR},{TEST_GATEWAY},{TEST_DNS}"
+            ),
+            "OK",
+        ],
+    );
 }
 
 // Scenario: Query PDP Context
@@ -159,8 +185,25 @@ fn test_enter_data_state() {
     );
     then_wait_for_response_containing(&mut world, "A", "OK");
 
-    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={TEST_PDP_CID}"));
+    // Explicit valid L2P "PPP"
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"PPP\",{TEST_PDP_CID}"));
     then_response_is(&mut world, "A", "CONNECT");
+
+    // Omitted L2P defaults to PPP
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=,{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Explicit valid L2P "IP"
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"IP\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Unsupported L2P returns error
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"INVALID\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Bare CID without L2P slot is rejected
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "ERROR");
 }
 
 // Scenario: Set Packet Event Reporting
@@ -185,7 +228,7 @@ fn test_set_packet_event_reporting() {
 #[test]
 fn test_show_pdp_address() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // 1. Define context (auto-activated by default)
     when_at_command_sent(
@@ -222,7 +265,7 @@ fn test_show_pdp_address() {
 #[test]
 fn test_gprs_dialing_fallback() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // 1. Define the context first
     when_at_command_sent(
@@ -259,7 +302,7 @@ fn test_dial_non_existent_context() {
 #[test]
 fn test_gprs_dialing_default_cid() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // Define PDP context 1
     when_at_command_sent(
@@ -282,7 +325,7 @@ fn test_gprs_dialing_default_cid() {
 #[test]
 fn test_multiple_concurrent_pdp_contexts() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // 1. Define and activate PDP context 1
     when_at_command_sent(
@@ -304,27 +347,24 @@ fn test_multiple_concurrent_pdp_contexts() {
     when_at_command_sent(&mut world, "A", &format!("AT+CGACT=1,{TEST_PDP_CID_ALT}")); // Activate CID 2
     then_wait_for_response_containing(&mut world, "A", "OK");
 
-    // 3. Verify unique IP addresses via AT+CGPADDR
     when_at_command_sent(&mut world, "A", &format!("AT+CGPADDR={TEST_PDP_CID}"));
     then_response_is(&mut world, "A", &format!("+CGPADDR: {TEST_PDP_CID},\"{TEST_IP_ADDR_ONLY}\""));
     then_response_is(&mut world, "A", "OK");
 
-    // Verify unique IP addresses via AT+CGPADDR
     when_at_command_sent(&mut world, "A", &format!("AT+CGPADDR={TEST_PDP_CID_ALT}"));
     then_response_is(
         &mut world,
         "A",
-        &format!("+CGPADDR: {TEST_PDP_CID_ALT},\"{TEST_IP_ADDR_ALT_ONLY}\""),
+        &format!("+CGPADDR: {TEST_PDP_CID_ALT},\"{TEST_IP_ADDR_ONLY}\""),
     );
     then_response_is(&mut world, "A", "OK");
 
-    // 4. Verify unique IP addresses via AT+CGCONTRDP
     when_at_command_sent(&mut world, "A", &format!("AT+CGCONTRDP={TEST_PDP_CID}"));
     then_response_is(
         &mut world,
         "A",
         &format!(
-            "+CGCONTRDP: {TEST_PDP_CID},{DEFAULT_BEARER_ID},\"{TEST_APN1}\",{TEST_IP_ADDR},{TEST_GATEWAY},{TEST_DNS}"
+            "+CGCONTRDP: {TEST_PDP_CID},{DEFAULT_BEARER_ID},\"{TEST_APN1}\",\"{TEST_IP_ADDR}\",\"{TEST_GATEWAY}\",\"{TEST_DNS}\""
         ),
     );
     then_response_is(&mut world, "A", "OK");
@@ -334,7 +374,7 @@ fn test_multiple_concurrent_pdp_contexts() {
         &mut world,
         "A",
         &format!(
-            "+CGCONTRDP: {TEST_PDP_CID_ALT},{DEFAULT_BEARER_ID},\"{TEST_APN2}\",{TEST_IP_ADDR_ALT},{TEST_GATEWAY},{TEST_DNS}"
+            "+CGCONTRDP: {TEST_PDP_CID_ALT},{DEFAULT_BEARER_ID},\"{TEST_APN2}\",\"{TEST_IP_ADDR}\",\"{TEST_GATEWAY}\",\"{TEST_DNS}\""
         ),
     );
     then_response_is(&mut world, "A", "OK");
@@ -343,7 +383,7 @@ fn test_multiple_concurrent_pdp_contexts() {
 #[test]
 fn test_goldfish_ril_compat_incorrect_cgact() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // 1. Define and activate PDP context 1
     when_at_command_sent(
@@ -387,7 +427,7 @@ fn test_goldfish_ril_compat_incorrect_cgact() {
     then_response_is(
         &mut world,
         "A",
-        &format!("+CGPADDR: {TEST_PDP_CID_ALT},\"{TEST_IP_ADDR_ALT_ONLY}\""),
+        &format!("+CGPADDR: {TEST_PDP_CID_ALT},\"{TEST_IP_ADDR_ONLY}\""),
     );
     then_response_is(&mut world, "A", "OK");
 
@@ -494,7 +534,8 @@ fn test_data_commands_invalid_cid() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    // CID 2 does not exist (no contexts defined at all, or we only define CID 1)
+    // CID 2 does not exist (no contexts defined at all, or we only define CID
+    // 1)
     when_at_command_sent(
         &mut world,
         "A",
@@ -545,5 +586,102 @@ fn test_data_commands_invalid_cid() {
     then_response_is(&mut world, "A", "ERROR");
 
     when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={INVALID_PDP_CID}")); // Enter data state for CID 2
+    then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_invalid_cid_reports_cme_error() {
+    let mut world = World::new();
+    given_data_modem(&mut world, "A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    when_at_command_sent(
+        &mut world,
+        "A",
+        &format!("AT+CGDCONT={TEST_PDP_CID},\"{TEST_PDP_TYPE}\",\"{TEST_APN}\""),
+    );
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", &format!("ATD{GPRS_DIAL_STRING_PREFIX}{TEST_PDP_CID}#"));
+    then_response_is(&mut world, "A", "CONNECT");
+
+    when_at_command_sent(&mut world, "A", &format!("AT+CGPADDR={INVALID_PDP_CID}"));
+    then_response_is(&mut world, "A", "+CME ERROR: 21");
+
+    when_at_command_sent(&mut world, "A", &format!("AT+CGCONTRDP={INVALID_PDP_CID}"));
+    then_response_is(&mut world, "A", "+CME ERROR: 21");
+}
+
+#[test]
+fn test_pdp_type_mismatch_fails() {
+    let mut world = World::new();
+    // Default data modem has only IPv4 configured
+    given_data_modem(&mut world, "A");
+
+    // CMEE=0 (default): generic ERROR.
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IPV6\",\"test.apn\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "ATD*99***1#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Address query should fail because no IPv6 config exists
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Dynamic param query should fail because no IPv6 config exists
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=1");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Goldfish/Cuttlefish RIL sets CMEE=1 at init. Emit CME error to avoid 3s
+    // HAL timeout.
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CME ERROR: 30");
+
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=1");
+    then_response_is(&mut world, "A", "+CME ERROR: 30");
+}
+
+#[test]
+fn test_ipv6_pdp_context_success() {
+    let mut world = World::new();
+    let v6_config = netsim_model::CellNetworkConfig {
+        ip_address: "fec0::15".parse().unwrap(),
+        prefixlen: 64,
+        gateway: "fec0::2".parse().unwrap(),
+        dns: "fec0::3".parse().unwrap(),
+    };
+    world.given_modem_with_network_config("A", v6_config);
+
+    // Define IPv6 context on an IPv6-configured modem
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=1,\"IPV6\",\"test.apn\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "ATD*99***1#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");
+    then_response_is(&mut world, "A", "+CGPADDR: 1,\"fec0::15\"");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=1");
+    then_response_is(
+        &mut world,
+        "A",
+        "+CGCONTRDP: 1,5,\"test.apn\",\"fec0::15/64\",\"fec0::2\",\"fec0::3\"",
+    );
+    then_response_is(&mut world, "A", "OK");
+
+    // IPv4 context on an IPv6-only modem should fail address query
+    when_at_command_sent(&mut world, "A", "AT+CGDCONT=2,\"IP\",\"test2.apn\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "ATD*99***2#");
+    then_response_is(&mut world, "A", "CONNECT");
+
+    when_at_command_sent(&mut world, "A", "AT+CGPADDR=2");
     then_response_is(&mut world, "A", "ERROR");
 }

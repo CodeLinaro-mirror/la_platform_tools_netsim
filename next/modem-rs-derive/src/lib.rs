@@ -5,6 +5,53 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Ident, Type, parse_macro_input};
 
+#[proc_macro_derive(ParsableEnum)]
+pub fn parsable_enum_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+    let variants = match &input.data {
+        Data::Enum(data) => &data.variants,
+        _ => panic!("#[derive(ParsableEnum)] is only supported for enums"),
+    };
+
+    let mut match_arms = Vec::new();
+    let mut next_discriminant = 0u8;
+
+    for variant in variants {
+        let v_name = &variant.ident;
+        let val =
+            if let Some((_, syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(lit_int), .. }))) =
+                &variant.discriminant
+            {
+                let parsed_val: u8 = lit_int.base10_parse().expect("Discriminant must be u8");
+                next_discriminant = parsed_val.checked_add(1).unwrap_or(0);
+                parsed_val
+            } else {
+                let current = next_discriminant;
+                next_discriminant = next_discriminant.checked_add(1).unwrap_or(0);
+                current
+            };
+
+        match_arms.push(quote! {
+            #val => Ok((input, Self::#v_name)),
+        });
+    }
+
+    let expanded = quote! {
+        impl<'a> crate::types::Parsable<'a> for #name {
+            fn parse(input: &'a [u8]) -> nom::IResult<&'a [u8], Self> {
+                let (input, val) = <u8 as crate::types::Parsable>::parse(input)?;
+                match val {
+                    #(#match_arms)*
+                    _ => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))),
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
 #[proc_macro_derive(CommandParser, attributes(command, parser))]
 pub fn command_parser_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -51,20 +98,9 @@ pub fn command_parser_derive(input: TokenStream) -> TokenStream {
                 let mut names = Vec::new();
                 let mut parsers = Vec::new();
                 for (i, field) in fields.unnamed.iter().enumerate() {
-                    let field_name = Ident::new(&format!("field_{}", i), variant_name.span());
+                    let field_name = Ident::new(&format!("field_{i}"), variant_name.span());
                     names.push(quote! { #field_name });
-                    let field_type = &field.ty;
-
-                    if let Some(parser_attr) =
-                        field.attrs.iter().find(|a| a.path().is_ident("parser"))
-                    {
-                        let parser: syn::Expr = parser_attr.parse_args().unwrap();
-                        parsers.push(quote! { let (input, #field_name) = #parser(input)?; });
-                    } else {
-                        let parser = get_parser_for_type(field_type);
-                        parsers.push(quote! { let (input, #field_name) = #parser(input)?; });
-                    }
-                    parsers.push(quote! { let (input, _) = nom::combinator::opt(nom::bytes::complete::tag(b","))(input)?; });
+                    parsers.push(generate_field_parser(&field_name, field));
                 }
                 (quote! { ( #(#names),* ) }, parsers)
             }
@@ -74,18 +110,7 @@ pub fn command_parser_derive(input: TokenStream) -> TokenStream {
                 for field in &fields.named {
                     let field_name = field.ident.as_ref().unwrap();
                     names.push(quote! { #field_name });
-                    let field_type = &field.ty;
-
-                    if let Some(parser_attr) =
-                        field.attrs.iter().find(|a| a.path().is_ident("parser"))
-                    {
-                        let parser: syn::Expr = parser_attr.parse_args().unwrap();
-                        parsers.push(quote! { let (input, #field_name) = #parser(input)?; });
-                    } else {
-                        let parser = get_parser_for_type(field_type);
-                        parsers.push(quote! { let (input, #field_name) = #parser(input)?; });
-                    }
-                    parsers.push(quote! { let (input, _) = nom::combinator::opt(nom::bytes::complete::tag(b","))(input)?; });
+                    parsers.push(generate_field_parser(field_name, field));
                 }
                 (quote! { { #(#names),* } }, parsers)
             }
@@ -155,20 +180,57 @@ pub fn command_parser_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(impl_block)
 }
 
-fn get_parser_for_type(ty: &Type) -> proc_macro2::TokenStream {
-    if let Type::Path(type_path) = ty {
-        if type_path.path.segments.len() == 1 && type_path.path.segments[0].ident == "Option" {
-            if let syn::PathArguments::AngleBracketed(args) = &type_path.path.segments[0].arguments
-            {
-                if args.args.len() == 1 {
-                    if let syn::GenericArgument::Type(inner_ty) = &args.args[0] {
-                        let inner_parser = get_parser_for_type(inner_ty);
-                        return quote! { nom::combinator::opt(#inner_parser) };
-                    }
-                }
-            }
-        }
-    }
+fn generate_field_parser(field_name: &Ident, field: &syn::Field) -> proc_macro2::TokenStream {
+    let field_type = &field.ty;
 
-    quote! { <#ty as Parsable>::parse }
+    let parse_field =
+        if let Some(parser_attr) = field.attrs.iter().find(|a| a.path().is_ident("parser")) {
+            let parser: syn::Expr = parser_attr.parse_args().unwrap();
+            quote! { let (input, #field_name) = #parser(input)?; }
+        } else if let Some(inner_ty) = get_option_inner_type(field_type) {
+            // Slot-aligned parsing: an optional field is None only when its comma- or
+            // semicolon-delimited slot is empty. Non-empty tokens that fail to
+            // parse trigger a syntax error.
+            quote! {
+                let (input, #field_name) = if input.is_empty()
+                    || input.starts_with(b",")
+                    || input.starts_with(b"\r")
+                    || input.starts_with(b"\n")
+                    || input.starts_with(b";")
+                {
+                    (input, None)
+                } else {
+                    let (input, v) = <#inner_ty as Parsable>::parse(input)?;
+                    (input, Some(v))
+                };
+            }
+        } else {
+            quote! {
+                let (input, #field_name) = <#field_type as Parsable>::parse(input)?;
+            }
+        };
+
+    quote! {
+        #parse_field
+        let (input, _) = nom::combinator::opt(nom::bytes::complete::tag(b","))(input)?;
+    }
+}
+
+fn get_option_inner_type(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else { return None };
+    if type_path.path.segments.len() != 1 {
+        return None;
+    }
+    let seg = &type_path.path.segments[0];
+    if seg.ident != "Option" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else { return None };
+    if args.args.len() != 1 {
+        return None;
+    }
+    match &args.args[0] {
+        syn::GenericArgument::Type(inner_ty) => Some(inner_ty),
+        _ => None,
+    }
 }

@@ -50,11 +50,17 @@ struct FragmentCache {
     fragments: Vec<Vec<u8>>,
     total_len: usize,
     last_fragment_received: bool,
+    last_accessed_tick: u64,
 }
 
 impl FragmentCache {
     fn new() -> Self {
-        Self { fragments: Vec::new(), total_len: 0, last_fragment_received: false }
+        Self {
+            fragments: Vec::new(),
+            total_len: 0,
+            last_fragment_received: false,
+            last_accessed_tick: 0,
+        }
     }
 
     fn is_complete(&self) -> bool {
@@ -88,6 +94,7 @@ impl FragmentCache {
 #[derive(Default)]
 pub struct Reassembler {
     cache: HashMap<u16, FragmentCache>,
+    access_counter: u64,
 }
 
 impl Reassembler {
@@ -100,7 +107,32 @@ impl Reassembler {
         let identification = ipv4_header.identification.get();
         let more_fragments = ipv4_header.flags_fragment_offset.get() & 0x2000 != 0;
 
+        self.access_counter = self.access_counter.wrapping_add(1);
+        let current_tick = self.access_counter;
+
+        const MAX_REASSEMBLY_ENTRIES: usize = 64;
+        const MAX_FRAGMENTS_PER_PACKET: usize = 128;
+
+        let limit_exceeded = self
+            .cache
+            .get(&identification)
+            .map(|entry| entry.fragments.len() >= MAX_FRAGMENTS_PER_PACKET)
+            .unwrap_or(false);
+
+        if limit_exceeded {
+            self.cache.remove(&identification);
+            return None;
+        }
+
+        crate::utils::lru::evict_lru(
+            &mut self.cache,
+            MAX_REASSEMBLY_ENTRIES,
+            &identification,
+            |entry| entry.last_accessed_tick,
+        );
+
         let cache_entry = self.cache.entry(identification).or_insert_with(FragmentCache::new);
+        cache_entry.last_accessed_tick = current_tick;
         cache_entry.fragments.push(fragment.to_vec());
 
         if !more_fragments {

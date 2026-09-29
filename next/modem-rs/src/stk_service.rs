@@ -24,8 +24,8 @@ const RESULT_SESSION_TERMINATED: u8 = 0x10;
 const RESULT_BACKWARD_MOVE: u8 = 0x11;
 
 // Envelope Hex ASCII Tags (used in AT+CUSATE)
-const HEX_TAG_SMS_PP_DOWNLOAD: &[u8] = b"D1";
-const HEX_TAG_MENU_SELECTION: &[u8] = b"D3";
+const HEX_TAG_SMS_PP_DOWNLOAD: &str = "D1";
+const HEX_TAG_MENU_SELECTION: &str = "D3";
 
 const HEX_TAG_LEN: usize = 2;
 
@@ -75,17 +75,11 @@ pub enum StkCommand<'a> {
     #[command(tag = "AT+CUSATD?")]
     QueryStkReady,
     #[command(tag = "AT+CUSATD=")]
-    SetStkReady(u8, Option<QuotedString<'a>>),
+    SetStkReady(bool, Option<QuotedString<'a>>),
     #[command(tag = "AT+CUSATE=")]
     SendStkEnvelope(QuotedString<'a>),
     #[command(tag = "AT+CUSATT=")]
     SendStkTerminalResponse(QuotedString<'a>),
-    #[command(tag = "AT+STKEN=")]
-    SetStkEnabled(bool),
-    #[command(tag = "AT+STKUR=")]
-    SetStkUnsolicitedResult(bool),
-    #[command(tag = "AT+STK=")]
-    SetStk(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,7 +139,6 @@ pub struct StkService {
     // Path of selected menu_ids from root. Empty means main menu.
     current_path: Vec<u8>,
     stk_enabled: bool,
-    stk_reporting: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -166,12 +159,7 @@ impl Default for StkService {
 impl StkService {
     pub fn new(stk_config: Stk) -> Self {
         let has_menu = !stk_config.setup_menu.text.is_empty();
-        Self {
-            stk_config,
-            current_path: Vec::new(),
-            stk_enabled: has_menu,
-            stk_reporting: true, // Default to true to match legacy mock/tests
-        }
+        Self { stk_config, current_path: Vec::new(), stk_enabled: has_menu }
     }
 
     fn get_current_items(&self) -> &[StkMenuItem] {
@@ -200,9 +188,8 @@ impl StkService {
         last_item
     }
 
-    fn parse_menu_selection(command: &[u8]) -> Option<u8> {
-        let hex_str = std::str::from_utf8(command).ok()?;
-        let bytes = hex::decode(hex_str).ok()?;
+    fn parse_menu_selection(command: &str) -> Option<u8> {
+        let bytes = hex::decode(command).ok()?;
 
         if bytes.is_empty() || bytes[0] != TAG_MENU_SELECTION {
             return None;
@@ -235,9 +222,8 @@ impl StkService {
         item_id
     }
 
-    fn parse_terminal_response(command: &[u8]) -> Option<TerminalResponseAction> {
-        let hex_str = std::str::from_utf8(command).ok()?;
-        let bytes = hex::decode(hex_str).ok()?;
+    fn parse_terminal_response(command: &str) -> Option<TerminalResponseAction> {
+        let bytes = hex::decode(command).ok()?;
 
         let mut remaining = &bytes[..];
         let mut command_type = None;
@@ -284,7 +270,7 @@ impl StkService {
         }
     }
 
-    fn handle_envelope_command(&mut self, command: &[u8]) -> StkResult {
+    fn handle_envelope_command(&mut self, command: &str) -> StkResult {
         if command.len() < HEX_TAG_LEN {
             return Err(ExecutionResult::error());
         }
@@ -294,8 +280,7 @@ impl StkService {
         if tag == HEX_TAG_SMS_PP_DOWNLOAD {
             // Fallback for Terminal Response simulation in tests (e.g. Display Text, Get
             // Input)
-            let hex_str = std::str::from_utf8(command).map_err(|_err| ExecutionResult::error())?;
-            let bytes = hex::decode(hex_str).map_err(|_err| ExecutionResult::error())?;
+            let bytes = hex::decode(command).map_err(|_err| ExecutionResult::error())?;
             if bytes.len() >= SIMPLIFIED_ENVELOPE_MIN_LEN {
                 let cmd_type =
                     ProactiveCommandType::try_from(bytes[SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX]);
@@ -326,10 +311,7 @@ impl StkService {
                     self.current_path.push(item_id);
                 }
 
-                let mut urcs = Vec::new();
-                if self.stk_reporting {
-                    urcs.push(StkResponse::UsatProactiveCommand(proactive_cmd));
-                }
+                let urcs = vec![StkResponse::UsatProactiveCommand(proactive_cmd)];
 
                 return Ok(StkExecutionResult {
                     response: Some(StkResponse::UsatEnvelopeResponse("0".to_string())),
@@ -344,7 +326,7 @@ impl StkService {
 
     fn sync_stk_menu_urc(&self) -> StkExecutionResult {
         let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
+        if self.stk_enabled && !self.stk_config.setup_menu.text.is_empty() {
             urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
         }
         StkExecutionResult { response: None, urcs }
@@ -352,23 +334,20 @@ impl StkService {
 
     fn handle_query_stk_ready(&self) -> StkResult {
         let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
+        if self.stk_enabled && !self.stk_config.setup_menu.text.is_empty() {
             urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
         }
         Ok(StkExecutionResult {
-            response: Some(StkResponse::StkReady {
-                ready: self.stk_enabled as u8,
-                support: self.stk_reporting as u8,
-            }),
+            response: Some(StkResponse::StkReady { ready: self.stk_enabled as u8, support: 1 }),
             urcs,
         })
     }
 
     fn handle_send_stk_terminal_response(&mut self, response: QuotedString) -> StkResult {
-        let response_bytes = response.as_ref();
+        let response_str = response.as_str();
         let mut urcs = Vec::new();
 
-        if let Some(action) = Self::parse_terminal_response(response_bytes) {
+        if let Some(action) = Self::parse_terminal_response(response_str) {
             match action {
                 TerminalResponseAction::Select(item_id) => {
                     let proactive_cmd = {
@@ -381,34 +360,24 @@ impl StkService {
 
                     if let Some(cmd) = proactive_cmd {
                         self.current_path.push(item_id);
-
-                        if self.stk_reporting {
-                            urcs.push(StkResponse::UsatProactiveCommand(cmd));
-                        }
+                        urcs.push(StkResponse::UsatProactiveCommand(cmd));
                     }
                 }
                 TerminalResponseAction::Terminate => {
                     self.current_path.clear();
-                    if self.stk_reporting {
-                        urcs.push(StkResponse::UsatSessionEnd);
-                    }
+                    urcs.push(StkResponse::UsatSessionEnd);
                 }
                 TerminalResponseAction::Back => {
                     self.current_path.pop();
-                    if self.stk_reporting {
-                        if self.current_path.is_empty() {
-                            urcs.push(StkResponse::UsatSessionEnd);
-                        } else if let Some(parent_item) = self.get_item_at_path(&self.current_path)
-                        {
-                            urcs.push(StkResponse::UsatProactiveCommand(parent_item.text.clone()));
-                        }
+                    if self.current_path.is_empty() {
+                        urcs.push(StkResponse::UsatSessionEnd);
+                    } else if let Some(parent_item) = self.get_item_at_path(&self.current_path) {
+                        urcs.push(StkResponse::UsatProactiveCommand(parent_item.text.clone()));
                     }
                 }
                 TerminalResponseAction::EndSession => {
                     self.current_path.clear();
-                    if self.stk_reporting {
-                        urcs.push(StkResponse::UsatSessionEnd);
-                    }
+                    urcs.push(StkResponse::UsatSessionEnd);
                 }
                 TerminalResponseAction::None => {}
             }
@@ -428,23 +397,14 @@ impl StkService {
         let res = match command {
             StkCommand::QueryStkReady => self.handle_query_stk_ready(),
             StkCommand::SetStkReady(download, _profile) => {
-                self.stk_enabled = *download == 1;
+                self.stk_enabled = *download;
                 Ok(self.sync_stk_menu_urc())
             }
             StkCommand::SendStkEnvelope(envelope_command) => {
-                self.handle_envelope_command(envelope_command.as_ref())
+                self.handle_envelope_command(envelope_command.as_str())
             }
             StkCommand::SendStkTerminalResponse(response) => {
                 self.handle_send_stk_terminal_response(*response)
-            }
-            StkCommand::SetStk(_) => Ok(StkExecutionResult::default()),
-            StkCommand::SetStkEnabled(enabled) => {
-                self.stk_enabled = *enabled;
-                Ok(self.sync_stk_menu_urc())
-            }
-            StkCommand::SetStkUnsolicitedResult(reporting) => {
-                self.stk_reporting = *reporting;
-                Ok(self.sync_stk_menu_urc())
             }
         };
         res.map_or_else(|e| e, ExecutionResult::from)
@@ -519,8 +479,7 @@ mod tests {
             "D3", "07", // Envelope: Tag D3 (Menu Selection), Length 07
             "82", "02", "8281", // Device IDs: Tag 82, Len 02, ME (82) to UICC (81)
             "10", "01", "50" // Item Identifier: Tag 10, Len 01, Item ID 50
-        )
-        .as_bytes();
+        );
         let item_id = StkService::parse_menu_selection(command);
         assert_eq!(item_id, Some(0x50));
     }
@@ -534,8 +493,7 @@ mod tests {
             "012400", // Command Details: Tag 81, Len 03, Num 01, Type 24 (SELECT ITEM), Qual 00
             "82", "02", "8281", // Device IDs: Tag 82, Len 02, ME (82) to UICC (81)
             "83", "02", "0001" // Result: Tag 83, Len 02, Success (00), Item ID (01)
-        )
-        .as_bytes();
+        );
         let action = StkService::parse_terminal_response(command);
         assert_eq!(action, Some(TerminalResponseAction::Select(0x01)));
 
@@ -544,8 +502,7 @@ mod tests {
             "81", "03", "012400", // Command Details: SELECT ITEM
             "82", "02", "8281", // Device IDs: ME to UICC
             "83", "02", "0050" // Result: Success (00), Item ID (50)
-        )
-        .as_bytes();
+        );
         let action2 = StkService::parse_terminal_response(command2);
         assert_eq!(action2, Some(TerminalResponseAction::Select(0x50)));
 
@@ -554,8 +511,7 @@ mod tests {
             "81", "03", "012400", // Command Details: SELECT ITEM
             "82", "02", "8281", // Device IDs: ME to UICC
             "83", "01", "10" // Result: Session Terminated by User (0x10)
-        )
-        .as_bytes();
+        );
         let action_term = StkService::parse_terminal_response(command_term);
         assert_eq!(action_term, Some(TerminalResponseAction::Terminate));
 
@@ -564,8 +520,7 @@ mod tests {
             "81", "03", "012400", // Command Details: SELECT ITEM
             "82", "02", "8281", // Device IDs: ME to UICC
             "83", "01", "11" // Result: Backward Move (0x11)
-        )
-        .as_bytes();
+        );
         let action_back = StkService::parse_terminal_response(command_back);
         assert_eq!(action_back, Some(TerminalResponseAction::Back));
 
@@ -576,8 +531,7 @@ mod tests {
             "012100", // Command Details: Tag 81, Len 03, Num 01, Type 21 (DISPLAY TEXT), Qual 00
             "82", "02", "8281", // Device IDs: ME to UICC
             "83", "01", "00" // Result: Success (00)
-        )
-        .as_bytes();
+        );
         let action_other = StkService::parse_terminal_response(command_other);
         assert_eq!(action_other, Some(TerminalResponseAction::EndSession));
     }
@@ -595,14 +549,11 @@ mod tests {
         // 2. Select SIM (0x50) via Envelope
         // Envelope payload with Item ID 0x50: D30782028281100150
         let res = service
-            .handle_envelope_command(
-                concat!(
-                    "D3", "07", // Envelope: Tag D3 (Menu Selection), Length 07
-                    "82", "02", "8281", // Device IDs: ME to UICC
-                    "10", "01", "50" // Item ID 0x50
-                )
-                .as_bytes(),
-            )
+            .handle_envelope_command(concat!(
+                "D3", "07", // Envelope: Tag D3 (Menu Selection), Length 07
+                "82", "02", "8281", // Device IDs: ME to UICC
+                "10", "01", "50" // Item ID 0x50
+            ))
             .unwrap();
         assert_eq!(res.response, Some(StkResponse::UsatEnvelopeResponse("0".to_string())));
         assert_eq!(
@@ -616,14 +567,11 @@ mod tests {
         // 3. Select SubMenu1 (0x01) via TR
         // TR payload: Select Item, Success, Item ID 01 -> 81030124008202828183020001
         let res = service
-            .handle_send_stk_terminal_response(QuotedString(
-                concat!(
-                    "81", "03", "012400", // Command Details: SELECT ITEM (0x24)
-                    "82", "02", "8281", // Device IDs: ME (82) to UICC (81)
-                    "83", "02", "0001" // Result: Success (00), Item ID 01
-                )
-                .as_bytes(),
-            ))
+            .handle_send_stk_terminal_response(QuotedString(concat!(
+                "81", "03", "012400", // Command Details: SELECT ITEM (0x24)
+                "82", "02", "8281", // Device IDs: ME (82) to UICC (81)
+                "83", "02", "0001" // Result: Success (00), Item ID 01
+            )))
             .unwrap();
         assert_eq!(res.response, Some(StkResponse::UsatTerminalResponse(0)));
         assert_eq!(
@@ -637,14 +585,11 @@ mod tests {
         // 4. Backward move via TR
         // TR payload: Result Backward Move 0x11 -> 810301240082028281830111
         let res = service
-            .handle_send_stk_terminal_response(QuotedString(
-                concat!(
-                    "81", "03", "012400", // Command Details: SELECT ITEM
-                    "82", "02", "8281", // Device IDs: ME to UICC
-                    "83", "01", "11" // Result: Backward Move (0x11)
-                )
-                .as_bytes(),
-            ))
+            .handle_send_stk_terminal_response(QuotedString(concat!(
+                "81", "03", "012400", // Command Details: SELECT ITEM
+                "82", "02", "8281", // Device IDs: ME to UICC
+                "83", "01", "11" // Result: Backward Move (0x11)
+            )))
             .unwrap();
         assert_eq!(res.response, Some(StkResponse::UsatTerminalResponse(0)));
         assert_eq!(
@@ -657,28 +602,22 @@ mod tests {
 
         // 5. Select SubMenu1 (0x01) again
         let _ = service
-            .handle_send_stk_terminal_response(QuotedString(
-                concat!(
-                    "81", "03", "012400", // Command Details: SELECT ITEM (0x24)
-                    "82", "02", "8281", // Device IDs: ME (82) to UICC (81)
-                    "83", "02", "0001" // Result: Success (00), Item ID 01
-                )
-                .as_bytes(),
-            ))
+            .handle_send_stk_terminal_response(QuotedString(concat!(
+                "81", "03", "012400", // Command Details: SELECT ITEM (0x24)
+                "82", "02", "8281", // Device IDs: ME (82) to UICC (81)
+                "83", "02", "0001" // Result: Success (00), Item ID 01
+            )))
             .unwrap();
         assert_eq!(service.current_path, vec![0x50, 0x01]);
 
         // 6. Select DisplayText1 (0x01) from sub-submenu (leaf command text is sent)
         // TR payload: Select Item, Success, Item ID 01 -> 81030124008202828183020001
         let res = service
-            .handle_send_stk_terminal_response(QuotedString(
-                concat!(
-                    "81", "03", "012400", // Command Details: SELECT ITEM (0x24)
-                    "82", "02", "8281", // Device IDs: ME (82) to UICC (81)
-                    "83", "02", "0001" // Result: Success (00), Item ID 01
-                )
-                .as_bytes(),
-            ))
+            .handle_send_stk_terminal_response(QuotedString(concat!(
+                "81", "03", "012400", // Command Details: SELECT ITEM (0x24)
+                "82", "02", "8281", // Device IDs: ME (82) to UICC (81)
+                "83", "02", "0001" // Result: Success (00), Item ID 01
+            )))
             .unwrap();
         assert_eq!(res.response, Some(StkResponse::UsatTerminalResponse(0)));
         assert_eq!(
@@ -691,14 +630,11 @@ mod tests {
         // TR payload: Command Details (Type 21), Result (Success) ->
         // 810301210082028281830100
         let res = service
-            .handle_send_stk_terminal_response(QuotedString(
-                concat!(
-                    "81", "03", "012100", // Command Details: DISPLAY TEXT (0x21)
-                    "82", "02", "8281", // Device IDs: ME to UICC
-                    "83", "01", "00" // Result: Success (00)
-                )
-                .as_bytes(),
-            ))
+            .handle_send_stk_terminal_response(QuotedString(concat!(
+                "81", "03", "012100", // Command Details: DISPLAY TEXT (0x21)
+                "82", "02", "8281", // Device IDs: ME to UICC
+                "83", "01", "00" // Result: Success (00)
+            )))
             .unwrap();
         assert_eq!(res.response, Some(StkResponse::UsatTerminalResponse(0)));
         assert_eq!(res.urcs, vec![StkResponse::UsatSessionEnd]); // Expect session end URC
@@ -707,14 +643,11 @@ mod tests {
         // 7. Select USIM (0x4E) from main menu (leaf, no sub-items)
         // Envelope payload: D3078202828110014E
         let res = service
-            .handle_envelope_command(
-                concat!(
-                    "D3", "07", // Envelope: Tag D3 (Menu Selection), Length 07
-                    "82", "02", "8281", // Device IDs: ME to UICC
-                    "10", "01", "4E" // Item ID 0x4E (USIM)
-                )
-                .as_bytes(),
-            )
+            .handle_envelope_command(concat!(
+                "D3", "07", // Envelope: Tag D3 (Menu Selection), Length 07
+                "82", "02", "8281", // Device IDs: ME to UICC
+                "10", "01", "4E" // Item ID 0x4E (USIM)
+            ))
             .unwrap();
         assert_eq!(
             res.urcs,
@@ -730,28 +663,22 @@ mod tests {
 
         // Select SIM (0x50) to go to submenu
         let _ = service
-            .handle_envelope_command(
-                concat!(
-                    "D3", "07", // Envelope: Tag D3 (Menu Selection), Length 07
-                    "82", "02", "8281", // Device IDs: ME to UICC
-                    "10", "01", "50" // Item ID 0x50
-                )
-                .as_bytes(),
-            )
+            .handle_envelope_command(concat!(
+                "D3", "07", // Envelope: Tag D3 (Menu Selection), Length 07
+                "82", "02", "8281", // Device IDs: ME to UICC
+                "10", "01", "50" // Item ID 0x50
+            ))
             .unwrap();
         assert_eq!(service.current_path, vec![0x50]);
 
         // Send Terminal Response with Session Terminated by User (0x10)
         // TR payload: Result 0x10 -> 810301240082028281830110
         let res = service
-            .handle_send_stk_terminal_response(QuotedString(
-                concat!(
-                    "81", "03", "012400", // Command Details: SELECT ITEM
-                    "82", "02", "8281", // Device IDs: ME to UICC
-                    "83", "01", "10" // Result: Session Terminated by User (0x10)
-                )
-                .as_bytes(),
-            ))
+            .handle_send_stk_terminal_response(QuotedString(concat!(
+                "81", "03", "012400", // Command Details: SELECT ITEM
+                "82", "02", "8281", // Device IDs: ME to UICC
+                "83", "01", "10" // Result: Session Terminated by User (0x10)
+            )))
             .unwrap();
         assert_eq!(res.response, Some(StkResponse::UsatTerminalResponse(0)));
         assert_eq!(res.urcs, vec![StkResponse::UsatSessionEnd]);

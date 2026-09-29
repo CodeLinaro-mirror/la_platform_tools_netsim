@@ -12,7 +12,8 @@ if [[ "$(uname)" == "Darwin" ]]; then
 else
     DEFAULT_SDK="${HOME}/Android/Sdk"
 fi
-SDK_DIR="${ANDROID_SDK_ROOT:-${DEFAULT_SDK}}"
+SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${DEFAULT_SDK}}}"
+export LD_LIBRARY_PATH="${SDK_DIR}/emulator/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 EMULATOR_BIN="${SDK_DIR}/emulator/emulator"
 NETSIM_BIN="${SDK_DIR}/emulator/netsim"
 NETSIMD_BIN="${SDK_DIR}/emulator/netsimd"
@@ -22,6 +23,13 @@ echo "=========================================================="
 echo " Starting Netsim Daemon & Dual Pixel 10 Emulators (Headless)"
 echo " Features: Nfc, netsimx"
 echo "=========================================================="
+
+# Helper function for resilient daemonization
+run_daemon() {
+    local log_file="$1"
+    shift
+    nohup "$@" > "${log_file}" 2>&1 &
+}
 
 # 1. Clean up existing processes
 echo "[1/4] Terminating existing emulator and netsimd instances..."
@@ -34,13 +42,14 @@ sleep 2
 
 # 2. Start Netsim Daemon with Host DNS routing
 echo "[2/4] Starting Netsim Daemon (${NETSIMD_BIN}) with --host-dns 8.8.8.8,8.8.4.4..."
-"${NETSIMD_BIN}" --host-dns 8.8.8.8,8.8.4.4 > /tmp/netsimd_runtime.log 2>&1 &
+run_daemon /tmp/netsimd_runtime.log "${NETSIMD_BIN}" --host-dns 8.8.8.8,8.8.4.4
 sleep 2
 
 # 3. Launch Dual Emulators
 echo "[3/4] Launching Pixel_10 (5554) and Pixel_10_2 (5556) with Features..."
-"${EMULATOR_BIN}" -avd Pixel_10 -port 5554 -no-window -no-snapshot-load -dns-server 8.8.8.8,8.8.4.4 -feature Nfc -feature netsimx > /tmp/emu_5554.log 2>&1 &
-"${EMULATOR_BIN}" -avd Pixel_10_2 -port 5556 -no-window -no-snapshot-load -dns-server 8.8.8.8,8.8.4.4 -feature Nfc -feature netsimx > /tmp/emu_5556.log 2>&1 &
+run_daemon /tmp/emu_5554.log "${EMULATOR_BIN}" -avd Pixel_10 -port 5554 -no-window -no-snapshot-load -dns-server 8.8.8.8,8.8.4.4 -feature Nfc -feature netsimx
+run_daemon /tmp/emu_5556.log "${EMULATOR_BIN}" -avd Pixel_10_2 -port 5556 -no-window -no-snapshot-load -dns-server 8.8.8.8,8.8.4.4 -feature Nfc -feature netsimx
+disown -a 2>/dev/null || true
 
 # 4. Wait for boot completion
 echo "[4/4] Waiting for boot completion..."

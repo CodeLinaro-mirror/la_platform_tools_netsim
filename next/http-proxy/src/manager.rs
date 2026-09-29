@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use libslirp_rs::{ProxyConnect, ProxyManager};
+use slirp::{ProxyConnect, ProxyManager};
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 
@@ -20,7 +20,7 @@ use crate::{
 /// # Manager
 ///
 /// The `Manager` struct implements the `ProxyManager` trait from
-/// `libslirp_rs`.  It is responsible for managing TCP connections
+/// `slirp`.  It is responsible for managing TCP connections
 /// through an HTTP proxy using the `Connector` struct.
 ///
 /// The `Manager` uses a `tokio::runtime::Runtime` to spawn tasks for
@@ -38,7 +38,7 @@ use crate::{
 /// ```
 /// use std::net::SocketAddr;
 ///
-/// use libslirp_rs::ProxyConnect;
+/// use slirp::ProxyConnect;
 ///
 /// struct MyProxyConnect;
 ///
@@ -74,10 +74,10 @@ impl Manager {
         });
 
         // We initialize a private, isolated tokio runtime for HTTP proxy tasks.
-        // Sharing the main daemon runtime with high-throughput actors (like Slirp or
-        // Bluetooth) can cause scheduling delays for HTTP reachability checks,
-        // leading to PARTIAL_CONNECTIVITY status. Isolation ensures consistent
-        // performance.
+        // Sharing the main daemon runtime with high-throughput actors (like
+        // Slirp or Bluetooth) can cause scheduling delays for HTTP
+        // reachability checks, leading to PARTIAL_CONNECTIVITY status.
+        // Isolation ensures consistent performance.
         let runtime = Arc::new(Runtime::new()?);
 
         Ok(Self {
@@ -116,8 +116,8 @@ impl ProxyManager for Manager {
         let connector = self.connector.clone();
 
         self.runtime.handle().spawn(async move {
-            let fd = match connector.connect(sockaddr).await {
-                Ok(tcp_stream) => into_raw_descriptor(tcp_stream),
+            let fd = match connector.connect(sockaddr).await.and_then(into_raw_descriptor) {
+                Ok(fd) => fd,
                 Err(e) => {
                     warn!("Failed to connect to proxy {}. {}", sockaddr, e);
                     -1

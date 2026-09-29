@@ -41,6 +41,8 @@ pub struct Args {
     ///     `http://<server>:<port>`
     ///     `http://<username>:<password>@<server>:<port>`
     ///     (the 'http://' prefix can be omitted)
+    /// Specify an empty string (`--http-proxy ""`) to disable an ambient
+    /// `http_proxy` environment variable.
     #[arg(long, verbatim_doc_comment)]
     #[cfg_attr(not(feature = "cuttlefish"), arg(env = "http_proxy"))]
     pub http_proxy: Option<String>,
@@ -119,6 +121,26 @@ pub struct Args {
     #[arg(long, alias = "no_test_beacons", overrides_with("test_beacons"))]
     pub no_test_beacons: bool,
 
+    /// Enable pure Rust Slirp native backend
+    #[arg(
+        long,
+        alias = "slirp_native",
+        alias = "native_slirp",
+        alias = "native-slirp",
+        overrides_with("no_slirp_native")
+    )]
+    pub slirp_native: bool,
+
+    /// Disable pure Rust Slirp native backend (use legacy C libslirp FFI)
+    #[arg(
+        long,
+        alias = "no_slirp_native",
+        alias = "no_native_slirp",
+        alias = "no-native-slirp",
+        overrides_with("slirp_native")
+    )]
+    pub no_slirp_native: bool,
+
     /// Set the initial SSID for the default Access Point (defaults to
     /// 'AndroidWifi')
     #[command(flatten)]
@@ -196,10 +218,68 @@ impl Args {
     // the environment.
     pub(crate) fn parse() -> Args {
         let mut args: Vec<String> = env::args().collect();
-        // This simple split WILL FAIL on quoted values like: --host "my custom host"
+        // This simple split WILL FAIL on quoted values like: --host "my custom
+        // host"
         if let Ok(env_str) = env::var("NETSIM_ARGS") {
             args.extend(env_str.split_whitespace().map(|s| s.to_string()));
         }
-        Args::parse_from(args)
+        let mut parsed = Args::parse_from(args);
+        parsed.sanitize();
+        parsed
+    }
+
+    /// Sanitizes parsed arguments, trimming whitespace and treating empty
+    /// strings (e.g. `--http-proxy ""`) as `None`.
+    pub fn sanitize(&mut self) {
+        if let Some(proxy) = self.http_proxy.take() {
+            let trimmed = proxy.trim();
+            if !trimmed.is_empty() {
+                self.http_proxy = Some(trimmed.to_string());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_empty_http_proxy_cleared() {
+        let mut args = Args { http_proxy: Some("   ".to_string()), ..Default::default() };
+        args.sanitize();
+        assert_eq!(args.http_proxy, None);
+    }
+
+    #[test]
+    fn test_whitespace_http_proxy_trimmed() {
+        let mut args = Args {
+            http_proxy: Some("  http://proxy.example.com:8080  ".to_string()),
+            ..Default::default()
+        };
+        args.sanitize();
+        assert_eq!(args.http_proxy, Some("http://proxy.example.com:8080".to_string()));
+    }
+
+    #[test]
+    fn test_http_proxy_empty_cli_flag_clears_proxy() {
+        let mut args = Args::parse_from(["netsimd", "--http-proxy", ""]);
+        args.sanitize();
+        assert_eq!(args.http_proxy, None);
+    }
+
+    #[test]
+    fn test_none_http_proxy_stays_none() {
+        let mut args = Args { http_proxy: None, ..Default::default() };
+        args.sanitize();
+        assert_eq!(args.http_proxy, None);
+    }
+
+    #[test]
+    fn test_http_proxy_valid_flag_trimmed() {
+        let mut args =
+            Args::parse_from(["netsimd", "--http-proxy", "  http://proxy.example.com:8080  "]);
+        args.sanitize();
+        assert_eq!(args.http_proxy, Some("http://proxy.example.com:8080".to_string()));
     }
 }

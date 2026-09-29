@@ -451,9 +451,12 @@ impl DeviceActor {
         } else {
             None
         };
-
         // Archive stats (if found)
         if let Some((chip, stream_stats, cached_stats)) = chip_to_archive {
+            info!(
+                "DeviceActor: Removed chip {chip_id} (kind {}) from device {device_id}",
+                chip.kind
+            );
             self.archive_chip_stats(device_id, &chip, stream_stats, cached_stats.as_ref()).await;
         }
 
@@ -468,10 +471,9 @@ impl DeviceActor {
         };
 
         // Notify Link Actor
-        self.link_client
-            .notify_chip_removed(chip_id)
-            .await
-            .expect("Failed to notify LinkActor of chip remove");
+        if let Err(e) = self.link_client.notify_chip_removed(chip_id).await {
+            warn!("DeviceActor: Failed to notify LinkActor of chip remove: {e}");
+        }
 
         if should_delete {
             info!("DeviceActor: Device {} is empty, auto-deleting", device_id);
@@ -577,13 +579,20 @@ impl DeviceActor {
         } else {
             chip.product_name.clone()
         };
-        info!(
-            "DeviceActor: AddChip {} ({}, {}) to device {}",
-            chip_name, manufacturer, product_name, entity.device.name
-        );
-
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
         let chip_kind = chip.kind;
+
+        if !chip.name.is_empty() && chip.name != entity.device.name {
+            info!(
+                "DeviceActor: AddChip {chip_id} (kind {chip_kind}, name \"{}\") to device {} ({})",
+                chip.name, entity.device.id, entity.device.name
+            );
+        } else {
+            info!(
+                "DeviceActor: AddChip {chip_id} (kind {chip_kind}) to device {} ({})",
+                entity.device.id, entity.device.name
+            );
+        }
 
         let (packet_stream, packet_sink, stream_stats) = create_capture_and_wrap_streams(
             capture_client.clone(),
@@ -600,7 +609,7 @@ impl DeviceActor {
         }
 
         let chip_client = chip_clients.get(&chip_kind).ok_or_else(|| {
-            DeviceError::ChipKindNotSupported(format!("No chip client for {:?}", chip_kind))
+            DeviceError::ChipKindNotSupported(format!("No chip client for {chip_kind}"))
         })?;
 
         chip.id = chip_id.0;
@@ -615,10 +624,9 @@ impl DeviceActor {
         chip_client.create(chip_id, chip_create_params).await?;
         entity.device.chips.push(chip);
 
-        link_client
-            .notify_chip_added(chip_id, chip_kind)
-            .await
-            .expect("Failed to notify LinkActor of chip add");
+        if let Err(e) = link_client.notify_chip_added(chip_id, chip_kind).await {
+            warn!("DeviceActor: Failed to notify LinkActor of chip add: {e}");
+        }
 
         Ok(chip_id)
     }
@@ -670,7 +678,7 @@ impl DeviceActor {
         params: DeviceAddChip,
         ctx: &mut DynContext<Self>,
     ) -> Result<DeviceActionResult, DeviceError> {
-        info!("DeviceActor: AddChipByGuid for device {}", params.device_guid);
+        debug!("DeviceActor: AddChipByGuid {} for device {}", params.chip.kind, params.device_guid);
 
         if let Some(id) = self.guid_to_id.get(&params.device_guid) {
             // Add Chip to Existing Device
@@ -911,6 +919,13 @@ impl ActorService for DeviceActor {
         let Some(entity) = self.devices.get_mut(&id) else {
             return Err(DeviceError::DeviceNotFound(id.to_string()));
         };
+        if update.pose.position.is_some()
+            || update.pose.orientation.is_some()
+            || update.name.is_some()
+            || update.visible.is_some()
+        {
+            info!("DeviceActor: Updating device {id} with {:?}", update);
+        }
         update.apply(&mut entity.device);
 
         for chip in entity.device.chips.iter_mut() {
@@ -949,7 +964,7 @@ impl ActorService for DeviceActor {
                 || chip_update.enabled.is_some()
             {
                 info!(
-                    "DeviceActor: Updating chip {} (kind {:?}) with {:?}",
+                    "DeviceActor: Updating chip {} (kind {}) with {:?}",
                     chip.id, chip.kind, chip_update
                 );
                 *chip = chip_client.update(ChipId(chip.id), chip_update).await?;

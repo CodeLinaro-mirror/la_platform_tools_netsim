@@ -8,10 +8,18 @@ use netsim_packets::{
 };
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NdpEntry {
+    pub mac: MacAddr,
+    #[serde(skip)]
+    pub last_accessed_tick: u64,
+}
+
 /// Handles Neighbor Discovery Protocol (NDP) for IPv6.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NdpTable {
-    pub(crate) cache: HashMap<Ipv6Addr, MacAddr>,
+    pub(crate) cache: HashMap<Ipv6Addr, NdpEntry>,
+    pub(crate) access_counter: u64,
 }
 
 impl Default for NdpTable {
@@ -22,12 +30,26 @@ impl Default for NdpTable {
 
 impl NdpTable {
     pub fn new() -> Self {
-        Self { cache: HashMap::new() }
+        Self { cache: HashMap::new(), access_counter: 0 }
     }
 
-    /// Adds a static entry to the NDP table.
+    /// Adds or updates an entry in the NDP table with bounded size limit and
+    /// LRU eviction.
     pub fn add_entry(&mut self, ip: Ipv6Addr, mac: MacAddr) {
-        self.cache.insert(ip, mac);
+        const MAX_NDP_ENTRIES: usize = 512;
+        self.access_counter = self.access_counter.wrapping_add(1);
+        let current_tick = self.access_counter;
+
+        crate::utils::lru::evict_lru(&mut self.cache, MAX_NDP_ENTRIES, &ip, |entry| {
+            entry.last_accessed_tick
+        });
+
+        self.cache.insert(ip, NdpEntry { mac, last_accessed_tick: current_tick });
+    }
+
+    /// Looks up a MAC address for the given IPv6 address.
+    pub fn lookup(&self, ip: &Ipv6Addr) -> Option<MacAddr> {
+        self.cache.get(ip).map(|entry| entry.mac)
     }
 
     /// Handles an incoming Neighbor Solicitation packet.
@@ -37,7 +59,7 @@ impl NdpTable {
     /// packet.
     pub fn handle_packet(&mut self, packet: &NeighborSolicitation) -> Option<Vec<u8>> {
         let target_addr = Ipv6Addr::from(packet.target_addr);
-        if self.cache.contains_key(&target_addr) {
+        if self.lookup(&target_addr).is_some() {
             // This is a request for an IP we own. Generate a reply.
             let mut reply_buf = [0u8; std::mem::size_of::<NeighborAdvertisement>()];
             let builder = NeighborAdvertisementBuilder::new(&mut reply_buf)?;

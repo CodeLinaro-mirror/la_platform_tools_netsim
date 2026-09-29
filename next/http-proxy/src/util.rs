@@ -8,7 +8,7 @@
 // descriptors.
 //
 // The `ProxyConfig` struct holds the parsed proxy configuration,
-// including protocol, address, username, and password. The
+// including address, username, and password. The
 // `from_string` function parses a proxy configuration string in the
 // format `[protocol://][username:password@]host:port` or
 // `[protocol://][username:password@]/[host/]:port` and returns a
@@ -20,14 +20,15 @@
 // with libraries that require raw file descriptors, such as
 // `libslirp_rs`.
 
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
 #[cfg(unix)]
 use std::os::fd::IntoRawFd;
 #[cfg(windows)]
 use std::os::windows::io::IntoRawSocket;
 
-use regex::Regex;
+use percent_encoding::percent_decode_str;
 use tokio::net::TcpStream;
+use url::Url;
 
 use crate::{Error, Result};
 
@@ -35,7 +36,6 @@ pub type RawDescriptor = i32;
 
 /// Proxy configuration
 pub struct ProxyConfig {
-    pub _protocol: String,
     pub addr: SocketAddr,
     pub username: Option<String>,
     pub password: Option<String>,
@@ -47,86 +47,83 @@ impl ProxyConfig {
     /// The function expects the proxy configuration string to be in the
     /// following format:
     ///
+    /// ```text
     /// [protocol://][username:password@]host:port
     /// [protocol://][username:password@]/[host/]:port
+    /// ```
     ///
     /// where:
     ///
-    /// * `protocol`: The network protocol (e.g., `http`, `https`, `socks5`). If
-    ///   not provided, defaults to `http`.
-    /// * `username`: and `password` are optional credentials for
-    ///   authentication.
+    /// * `protocol`: The network protocol (e.g., `http`, `https`). If not
+    ///   provided, defaults to `http`.
+    /// * `username` and `password` are optional credentials for authentication.
     /// * `host`: The hostname or IP address of the proxy server. If it's an
     ///   IPv6 address, it should be enclosed in square brackets (e.g.,
-    ///   "[::1]").
+    ///   `"[::1]"`).
     /// * `port`: The port number on which the proxy server is listening.
     ///
     /// # Errors
-    /// Returns a `Error` if the input string is not in a
+    /// Returns an [Error] if the input string is not in a
     /// valid format or if the hostname/port resolution fails.
-    ///
-    /// # Limitations
-    /// * Usernames and passwords cannot contain `@` or `:`.
     pub fn from_string(config_string: &str) -> Result<ProxyConfig> {
-        static RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
-            Regex::new(r"^(?:(?P<protocol>\w+)://)?(?:(?P<user>\w+):(?P<pass>\w+)@)?(?P<host>(?:[\w\.-]+|\[[^\]]+\])):(?P<port>\d+)$").unwrap()
-        });
-        let caps = RE.captures(config_string).ok_or(Error::MalformedConfigString)?;
+        let normalized = if !config_string.contains("://") {
+            format!("http://{config_string}")
+        } else {
+            config_string.to_string()
+        };
 
-        let protocol =
-            caps.name("protocol").map_or_else(|| "http".to_string(), |m| m.as_str().to_string());
-        let username = caps.name("user").map(|m| m.as_str().to_string());
-        let password = caps.name("pass").map(|m| m.as_str().to_string());
+        let parsed = Url::parse(&normalized).map_err(|err| match err {
+            url::ParseError::InvalidIpv4Address
+            | url::ParseError::InvalidIpv6Address
+            | url::ParseError::IdnaError
+            | url::ParseError::InvalidDomainCharacter => Error::InvalidHost(Box::new(err)),
+            url::ParseError::InvalidPort => Error::InvalidPortNumber(Box::new(err)),
+            _ => Error::MalformedConfigString,
+        })?;
 
-        // Extract host, removing surrounding brackets if present
-        let hostname = caps
-            .name("host")
-            .ok_or(Error::MalformedConfigString)?
-            .as_str()
-            .trim_matches(|c| c == '[' || c == ']')
-            .to_string();
+        let port = parsed.port_or_known_default().ok_or_else(|| {
+            Error::InvalidPortNumber(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "No port number in the URL",
+            )))
+        })?;
 
-        let port = caps
-            .name("port")
-            .ok_or(Error::MalformedConfigString)?
-            .as_str()
-            .parse::<u16>()
-            .map_err(|err| Error::InvalidPortNumber(Box::new(err)))?;
-
-        let host = (hostname, port)
-            .to_socket_addrs()
+        let addr = parsed
+            .socket_addrs(|| Some(port))
             .map_err(|err| Error::InvalidHost(Box::new(err)))?
-            .next() // Take the first resolved address
+            .into_iter()
+            .next()
             .ok_or_else(|| {
                 Error::InvalidHost(Box::new(std::io::Error::new(
                     std::io::ErrorKind::NotFound,
                     "No address found",
                 )))
-            })?
-            .ip();
+            })?;
 
-        Ok(ProxyConfig {
-            _protocol: protocol,
-            username,
-            password,
-            addr: SocketAddr::from((host, port)),
-        })
+        let username = Some(parsed.username())
+            .filter(|s| !s.is_empty())
+            .map(|s| percent_decode_str(s).decode_utf8_lossy().into_owned());
+        let password = parsed
+            .password()
+            .filter(|s| !s.is_empty())
+            .map(|s| percent_decode_str(s).decode_utf8_lossy().into_owned());
+
+        Ok(ProxyConfig { addr, username, password })
     }
 }
 
 /// Convert TcpStream to RawDescriptor (i32)
-pub fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
-    let std_stream = stream.into_std().expect("into_raw_descriptor's into_std() failed");
-
-    std_stream.set_nonblocking(false).expect("non-blocking");
+pub fn into_raw_descriptor(stream: TcpStream) -> Result<RawDescriptor> {
+    let std_stream = stream.into_std()?;
+    std_stream.set_nonblocking(false)?;
 
     // Use into_raw_fd for Unix to pass raw file descriptor to C
     #[cfg(unix)]
-    return std_stream.into_raw_fd();
+    return Ok(std_stream.into_raw_fd());
 
     // Use into_raw_socket for Windows to pass raw socket to C
     #[cfg(windows)]
-    std_stream.into_raw_socket().try_into().expect("Failed to convert Raw Socket value into i32")
+    Ok(std_stream.into_raw_socket().try_into().map_err(std::io::Error::other)?)
 }
 
 #[cfg(test)]
@@ -142,7 +139,6 @@ mod tests {
             (
                 "127.0.0.1:8080",
                 ProxyConfig {
-                    _protocol: "http".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
@@ -151,7 +147,6 @@ mod tests {
             (
                 "http://127.0.0.1:8080",
                 ProxyConfig {
-                    _protocol: "http".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
@@ -160,16 +155,6 @@ mod tests {
             (
                 "https://127.0.0.1:8080",
                 ProxyConfig {
-                    _protocol: "https".to_owned(),
-                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
-                    username: None,
-                    password: None,
-                },
-            ),
-            (
-                "sock5://127.0.0.1:8080",
-                ProxyConfig {
-                    _protocol: "sock5".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
@@ -178,7 +163,6 @@ mod tests {
             (
                 "user:pass@192.168.0.18:3128",
                 ProxyConfig {
-                    _protocol: "http".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(192, 168, 0, 18)), 3128)),
                     username: Some("user".to_string()),
                     password: Some("pass".to_string()),
@@ -187,7 +171,6 @@ mod tests {
             (
                 "https://[::1]:7000",
                 ProxyConfig {
-                    _protocol: "https".to_owned(),
                     addr: SocketAddr::from((
                         IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
                         7000,
@@ -199,7 +182,6 @@ mod tests {
             (
                 "[::1]:7000",
                 ProxyConfig {
-                    _protocol: "http".to_owned(),
                     addr: SocketAddr::from((
                         IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
                         7000,
@@ -208,9 +190,82 @@ mod tests {
                     password: None,
                 },
             ),
+            (
+                ":@127.0.0.1:8080",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
+                    username: None,
+                    password: None,
+                },
+            ),
+            (
+                "http://:@127.0.0.1:8080",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
+                    username: None,
+                    password: None,
+                },
+            ),
+            (
+                "user:p%40ss@192.168.0.18:3128",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(192, 168, 0, 18)), 3128)),
+                    username: Some("user".to_string()),
+                    password: Some("p@ss".to_string()),
+                },
+            ),
+            (
+                "user:pass%2fword@192.168.0.18:3128",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(192, 168, 0, 18)), 3128)),
+                    username: Some("user".to_string()),
+                    password: Some("pass/word".to_string()),
+                },
+            ),
+            (
+                "user%20name:pass@192.168.0.18:3128",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(192, 168, 0, 18)), 3128)),
+                    username: Some("user name".to_string()),
+                    password: Some("pass".to_string()),
+                },
+            ),
+            (
+                "user@127.0.0.1:8080",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
+                    username: Some("user".to_string()),
+                    password: None,
+                },
+            ),
+            (
+                "user:@127.0.0.1:8080",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
+                    username: Some("user".to_string()),
+                    password: None,
+                },
+            ),
+            (
+                "127.0.0.1",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 80)),
+                    username: None,
+                    password: None,
+                },
+            ),
+            (
+                "https://127.0.0.1",
+                ProxyConfig {
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 443)),
+                    username: None,
+                    password: None,
+                },
+            ),
         ];
 
-        // TODO: Mock DNS server to to test hostname. e.g. "proxy.example.com:3000".
+        // TODO: Mock DNS server to to test hostname. e.g.
+        // "proxy.example.com:3000".
         for (input, expected) in data {
             let result = ProxyConfig::from_string(input);
             assert!(
@@ -233,16 +288,16 @@ mod tests {
             ("http://", Error::MalformedConfigString),
             ("", Error::MalformedConfigString),
             ("256.0.0.1:8080", Error::InvalidHost(dummy_error())),
-            ("127.0.0.1:foo", Error::MalformedConfigString),
-            ("127.0.0.1:-2", Error::MalformedConfigString),
+            ("127.0.0.1:foo", Error::InvalidPortNumber(dummy_error())),
+            ("127.0.0.1:-2", Error::InvalidPortNumber(dummy_error())),
             ("127.0.0.1:100000", Error::InvalidPortNumber(dummy_error())),
-            ("127.0.0.1", Error::MalformedConfigString),
-            ("http:127.0.0.1:8080", Error::MalformedConfigString),
+            ("http:127.0.0.1:8080", Error::InvalidPortNumber(dummy_error())),
             ("::1:8080", Error::MalformedConfigString),
-            ("user@pass:127.0.0.1:8080", Error::MalformedConfigString),
-            ("user@127.0.0.1:8080", Error::MalformedConfigString),
+            ("user@pass:127.0.0.1:8080", Error::InvalidPortNumber(dummy_error())),
             ("proxy.example.com:7000", Error::InvalidHost(dummy_error())),
-            ("[::1}:7000", Error::MalformedConfigString),
+            (":@proxy.example.com:7000", Error::InvalidHost(dummy_error())),
+            ("foo..bar:8080", Error::InvalidHost(dummy_error())),
+            ("[::1}:7000", Error::InvalidHost(dummy_error())),
         ];
 
         for (input, expected_error) in data {

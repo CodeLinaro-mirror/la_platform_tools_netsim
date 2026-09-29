@@ -257,6 +257,7 @@ ALLOWED_TESTING_TARGETS = {
     "ap-actor",
     "slirp",
     "slirp-actor",
+    "slirp-host",
 }
 
 
@@ -382,6 +383,10 @@ def rust_test_suite(*args, **kwargs):
   pass
 
 
+def test_suite(*args, **kwargs):
+  pass
+
+
 def rust_protobuf(*args, **kwargs):
   name = kwargs.get("name")
   srcs = kwargs.get("srcs", [])
@@ -415,6 +420,7 @@ def netsim_rust_library(
     crate_name=None,
     **kwargs,
 ):
+  prefix = "libnetsim_next_"
   if name in IGNORED_TARGETS:
     return
   if deps is None:
@@ -477,7 +483,7 @@ def netsim_rust_library(
   # 1. Main Library Target
   main_tgt = {
       "type": "rust_library_host",
-      "name": f"libnetsim_next_{name.replace('-', '_')}",
+      "name": f"{prefix}{name.replace('-', '_')}",
       "crate_name": crate_name,
       "stem": f"lib{crate_name}",
       "crate_root": crate_root_mapped,
@@ -531,7 +537,7 @@ def netsim_rust_library(
   if name in ALLOWED_TESTING_TARGETS:
     testing_tgt = {
         "type": "rust_library_host",
-        "name": f"libnetsim_next_{name.replace('-', '_')}_testing",
+        "name": f"{prefix}{name.replace('-', '_')}_testing",
         "crate_name": crate_name,
         "stem": f"lib{crate_name}_testing",
         "crate_root": crate_root_mapped,
@@ -588,7 +594,7 @@ def netsim_rust_library(
     if is_test_package_allowed(package_name):
       unit_tgt = {
           "type": "rust_test_host",
-          "name": f"libnetsim_next_{name.replace('-', '_')}_tests",
+          "name": f"{prefix}{name.replace('-', '_')}_tests",
           "crate_name": crate_name,
           "crate_root": crate_root_mapped,
           "srcs": srcs_content + data_content,
@@ -654,7 +660,7 @@ def netsim_rust_library(
               set(
                   testing_rustlibs
                   + test_rustlibs
-                  + [f"libnetsim_next_{name.replace('-', '_')}_testing"]
+                  + [f"{prefix}{name.replace('-', '_')}_testing"]
               )
           )
       )
@@ -681,9 +687,7 @@ def netsim_rust_library(
       if is_test_package_allowed(package_name):
         integ_dict = {
             "type": "rust_test_host",
-            "name": (
-                f"libnetsim_next_{name.replace('-', '_')}_integration_tests"
-            ),
+            "name": f"{prefix}{name.replace('-', '_')}_integration_tests",
             "crate_name": f"{crate_name}_tests",
             "crate_root": crate_root,
             "srcs": sorted(list(set(integration_test_srcs))),
@@ -777,7 +781,13 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
     )
 
   soong_name = (
-      "netsimd" if name == "daemon" else ("netsim" if name == "netsim" else f"netsim_next_{name.replace('-', '_')}")
+      "netsimd"
+      if name == "daemon"
+      else (
+          "netsim"
+          if name == "netsim"
+          else f"netsim_next_{name.replace('-', '_')}"
+      )
   )
 
   bin_dict = {
@@ -933,6 +943,7 @@ SANDBOX = {
     "exports_files": exports_files,
     "rust_test": rust_test,
     "rust_test_suite": rust_test_suite,
+    "test_suite": test_suite,
     "rust_protobuf": rust_protobuf,
     "netsim_rust_library": netsim_rust_library,
     "netsim_rust_binary": netsim_rust_binary,

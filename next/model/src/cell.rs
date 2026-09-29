@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::IpAddr;
+
 use serde::{Deserialize, Serialize};
 
 use crate::chip::ChipId;
@@ -9,11 +11,21 @@ pub const MODEM_STATE_DOWN: &str = "down";
 pub const MODEM_STATE_RINGING: &str = "ringing";
 pub const MODEM_STATE_IDLE: &str = "idle";
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CellNetworkConfig {
+    pub ip_address: IpAddr,
+    pub prefixlen: u8,
+    pub gateway: IpAddr,
+    pub dns: IpAddr,
+}
+
 /// Parameters for creating a Cellular chip.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CellCreate {
     pub sim_type: Option<i32>,
     pub sim_profile: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub network_configs: Vec<CellNetworkConfig>,
 }
 
 /// Quirks for compatibility with different guest-side implementations.
@@ -26,6 +38,9 @@ pub struct Quirks {
     /// Flag indicating whether CTZV (NITZ time zone reporting) should be
     /// enabled by default.
     pub auto_ctzv: bool,
+    /// Flag indicating whether IPv6 PDP contexts should fall back to IPv4
+    /// when only IPv4 network configurations are available.
+    pub allow_ipv4_for_ipv6: bool,
 }
 
 /// Cellular technology specific chip information.
@@ -44,6 +59,8 @@ pub struct Cell {
     /// Quirks for compatibility with different guest-side implementations.
     #[serde(default)]
     pub quirks: Quirks,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub network_configs: Vec<CellNetworkConfig>,
     #[serde(default)]
     pub sms_count: u32,
     #[serde(default)]
@@ -66,6 +83,7 @@ impl Default for Cell {
             sim_type: None,
             sim_profile: None,
             quirks: Quirks::default(),
+            network_configs: Vec::new(),
             sms_count: 0,
             rssi: 0,
             ber: 0,
@@ -165,13 +183,21 @@ pub struct CellUpdate {
     #[serde(flatten)]
     pub radio: crate::chip::RadioUpdate,
     pub state: Option<String>,
+    /// Cellular network configurations for future data calls.
+    ///
+    /// Note: do not signal changes via `+CGEV` (b/562098771).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network_configs: Option<Vec<CellNetworkConfig>>,
 }
 
 impl CellUpdate {
     pub fn apply(&self, cell: &mut Cell) {
         self.radio.apply(&mut cell.radio);
         if let Some(state) = &self.state {
-            cell.state = state.clone();
+            cell.state.clone_from(state);
+        }
+        if let Some(cfgs) = &self.network_configs {
+            cell.network_configs.clone_from(cfgs);
         }
     }
 }

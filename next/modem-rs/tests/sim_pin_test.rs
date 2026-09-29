@@ -9,8 +9,8 @@ use crate::{common::constants::*, world::World};
 //   Then response from "A" is "ERROR"
 //   When AT command 'AT+CPIN="0000"' is sent to "A"
 //   Then response from "A" is "ERROR"
-//   When AT command "AT+SPIC" is sent to "A"
-//   Then response from "A" is "+SPIC: 1"
+//   When AT command 'AT+CPINR="SIM PIN"' is sent to "A"
+//   Then response from "A" is "+CPINR: \"SIM PIN\",1,3"
 //   And response from "A" is "OK"
 #[test]
 fn test_pin_retry_counter() {
@@ -24,7 +24,11 @@ fn test_pin_retry_counter() {
     world.send_and_expect_error("A", &format!("AT+CPIN=\"{INVALID_PIN}\""), "ERROR");
 
     // Query retries
-    world.send_and_expect("A", "AT+SPIC", &[&format!("+SPIC: {}", DEFAULT_PIN_RETRIES - 2), "OK"]);
+    world.send_and_expect(
+        "A",
+        "AT+CPINR=\"SIM PIN\"",
+        &[&format!("+CPINR: \"SIM PIN\",{},{DEFAULT_PIN_RETRIES}", DEFAULT_PIN_RETRIES - 2), "OK"],
+    );
 }
 
 #[test]
@@ -48,6 +52,9 @@ fn test_pin_validation_errors() {
         &format!("AT+CPIN=\"{TOO_LONG_PIN}\""),
         CME_ERROR_INCORRECT_PASSWORD,
     );
+
+    // 3. Non-ASCII PIN (multi-byte UTF-8) -> expect CME ERROR 16
+    world.send_and_expect_error("A", "AT+CPIN=\"\u{00E9}\u{00E9}\"", CME_ERROR_INCORRECT_PASSWORD);
 
     // Transition to PukRequired to test PUK validation
     world.send_and_expect_error(

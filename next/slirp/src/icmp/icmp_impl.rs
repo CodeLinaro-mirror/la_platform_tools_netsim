@@ -80,7 +80,8 @@ impl IcmpManager {
                     echo_payload,
                 );
             } else {
-                // External IPv4 ping! Forward to host driver via Icmp connection flow.
+                // External IPv4 ping! Forward to host driver via Icmp
+                // connection flow.
                 let guest_id = echo_request.identifier.get();
                 let flow_key = (guest_ip, dest_ip, guest_id);
 
