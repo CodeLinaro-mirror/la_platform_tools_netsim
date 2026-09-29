@@ -8,7 +8,7 @@ use tracing::{debug, error};
 
 use crate::{
     CardState, RadioAdmission,
-    call_service::{CallCommand, CallResponse, CallService},
+    call_service::{CallCommand, CallService},
     config::{ProfileMetadata, SimProfile},
     constants::CALL_RING_TIMEOUT,
     data_service::DataService,
@@ -21,9 +21,9 @@ use crate::{
     sup_service::SupService,
     time::Clock,
     types::{
-        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, ModemError, ModemId,
-        NumberPresentation, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode, Response,
-        SignalQuality,
+        AT_OK, CmeError, CommandAction, CopsMode, ExecutionResult, HangupReason, ModemError,
+        ModemId, NumberPresentation, PhoneNumber, RadioPowerLevel, RegistrationUnsolicitedMode,
+        Response, SignalQuality,
     },
 };
 
@@ -154,9 +154,8 @@ impl ModemImpl {
     pub fn trigger_remote_hangup(&mut self) -> Vec<ModemEffect> {
         let mut effects = Vec::new();
         self.call_service.receive_hangup();
-        // Goldfish RIL uses RING as universal URC to trigger
-        // callRing/callStateChanged for remote call teardown
-        effects.push(ModemEffect::Response(CallResponse::Ring.to_string().into_bytes()));
+        let urc = HangupReason::Normal.as_urc_str(self.quirks.goldfish_ril_37_or_earlier);
+        effects.push(ModemEffect::Response(urc.as_bytes().to_vec()));
         effects
     }
 

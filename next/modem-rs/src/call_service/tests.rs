@@ -4,7 +4,7 @@
 use super::{CallDirection, CallResponse, CallService, CallState};
 use crate::{
     tests::test_utils::{MockCardState, MockRadioAdmission},
-    types::{ClirMode, CommandAction, DialArgs, NumberPresentation, PhoneNumber},
+    types::{ClirMode, CommandAction, DialArgs, HangupReason, NumberPresentation, PhoneNumber},
 };
 
 #[test]
@@ -62,7 +62,11 @@ fn test_ath_rejects_waiting_preserves_active() {
         super::CallResponse::WithActions(actions) => {
             assert_eq!(
                 actions,
-                vec![crate::types::CommandAction::HangupCall { initiator: id, target_peer: peer2 }]
+                vec![crate::types::CommandAction::HangupCall {
+                    initiator: id,
+                    target_peer: peer2,
+                    reason: HangupReason::Busy,
+                }]
             );
         }
         other => panic!("Unexpected response: {other:?}"),
@@ -103,7 +107,11 @@ fn test_ath_drops_active_preserves_held() {
         super::CallResponse::WithActions(actions) => {
             assert_eq!(
                 actions,
-                vec![crate::types::CommandAction::HangupCall { initiator: id, target_peer: peer2 }]
+                vec![crate::types::CommandAction::HangupCall {
+                    initiator: id,
+                    target_peer: peer2,
+                    reason: HangupReason::Normal,
+                }]
             );
         }
         other => panic!("Unexpected response: {other:?}"),
@@ -211,7 +219,11 @@ fn test_chld_0_rejects_waiting_preserves_held() {
             assert_eq!(actions.len(), 1);
             assert_eq!(
                 actions[0],
-                crate::types::CommandAction::HangupCall { initiator: id, target_peer: peer_wait }
+                crate::types::CommandAction::HangupCall {
+                    initiator: id,
+                    target_peer: peer_wait,
+                    reason: HangupReason::Busy,
+                }
             );
         }
         other => panic!("Unexpected response: {other:?}"),
@@ -272,10 +284,12 @@ fn test_chld_0_releases_held_when_no_waiting() {
             assert!(actions.contains(&crate::types::CommandAction::HangupCall {
                 initiator: id,
                 target_peer: peer_held1,
+                reason: HangupReason::Normal,
             }));
             assert!(actions.contains(&crate::types::CommandAction::HangupCall {
                 initiator: id,
                 target_peer: peer_held2,
+                reason: HangupReason::Normal,
             }));
         }
         other => panic!("Unexpected response: {other:?}"),
@@ -325,10 +339,12 @@ fn test_ath_teardown_conference_drops_all_active_legs() {
             assert!(actions.contains(&crate::types::CommandAction::HangupCall {
                 initiator: id,
                 target_peer: peer1,
+                reason: HangupReason::Normal,
             }));
             assert!(actions.contains(&crate::types::CommandAction::HangupCall {
                 initiator: id,
                 target_peer: peer2,
+                reason: HangupReason::Normal,
             }));
         }
         other => panic!("Unexpected response: {other:?}"),
