@@ -110,6 +110,8 @@ fn test_call_ring_timeout() {
     // Advance time > 30s
     world.when_time_advances_ms(30100);
 
+    world.then_response_is("A", "NO ANSWER");
+
     // Verify C is idle (AT+CLCC returns just OK)
     world.assert_idle("C");
 }
@@ -249,7 +251,7 @@ fn test_external_call_control() {
 
     // Remote Hangup
     when_external_call_hungup(&mut world, "A");
-    world.then_response_is("A", "RING");
+    world.then_response_is("A", "NO CARRIER");
 
     // Verify Idle
     world.assert_idle("A");
@@ -578,7 +580,7 @@ fn test_fdn_dial_restriction() {
 
     // Hang up B
     world.hangup("B");
-    world.then_response_is("A", "RING");
+    world.then_response_is("A", "BUSY");
 
     // Enable FDN lock using PIN2 "5678"
     world.send_and_expect_ok("A", "AT+CLCK=\"FD\",1,\"5678\"");
@@ -759,7 +761,7 @@ fn test_single_incoming_call_declined_udub_chld0() {
     world.release_held_calls("A");
 
     // Calling peer B receives remote hangup URC
-    then_wait_for_response_containing(&mut world, "B", "RING");
+    then_wait_for_response_containing(&mut world, "B", "BUSY");
 
     // Verify both modems are now idle
     world.assert_idle("A");
@@ -925,7 +927,47 @@ fn test_mt_incoming_call_delivery_matrix() {
     world.assert_clcc("B", &[&format!("+CLCC: 1,1,0,0,0,{num_str},145")]);
 
     world.hangup("A");
-    world.then_response_is("B", "RING"); // remote hangup indication
+    world.then_response_is("B", "NO CARRIER"); // remote hangup indication
+    world.assert_idle("A");
+    world.assert_idle("B");
+}
+
+#[test]
+fn test_goldfish_37_udub_and_timeout_preserves_ring() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+    world.given_goldfish_37_modem("B");
+    let (id_a, _) = world.get_modem("A");
+    let (id_b, _) = world.get_modem("B");
+    world
+        .manager
+        .get_modem_mut(id_a)
+        .unwrap()
+        .set_voice_registration(RegistrationStatus::RegisteredHome);
+    world
+        .manager
+        .get_modem_mut(id_b)
+        .unwrap()
+        .set_voice_registration(RegistrationStatus::RegisteredHome);
+
+    world.dial("B", "A");
+
+    // Callee A rejects incoming call with AT+CHLD=0 (UDUB)
+    world.release_held_calls("A");
+
+    world.then_response_is("B", "RING");
+    world.assert_idle("A");
+    world.assert_idle("B");
+
+    world.dial("B", "A");
+    world.when_time_advances_ms(30100);
+    world.then_response_is("B", "RING");
+    world.assert_idle("A");
+    world.assert_idle("B");
+
+    world.connect_call("B", "A");
+    world.hangup("A");
+    world.then_response_is("B", "RING");
     world.assert_idle("A");
     world.assert_idle("B");
 }

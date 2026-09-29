@@ -539,15 +539,14 @@ impl ModemNetworkSimulator {
                     }
                 }
             }
-            CommandAction::HangupCall { initiator, target_peer } => {
+            CommandAction::HangupCall { initiator, target_peer, reason } => {
                 self.metrics.calls_hung_up.fetch_add(1, AtomicOrdering::Relaxed);
 
                 if let Some(target) = self.modems.get_mut(&target_peer)
                     && target.receive_hangup_from_peer_id(initiator)
                 {
-                    // Goldfish RIL uses RING as universal URC to trigger callRing/callStateChanged
-                    // for remote call teardown
-                    effects.push((target_peer, ModemEffect::Response(b"RING\r\n".to_vec())));
+                    let urc = reason.as_urc_str(target.quirks.goldfish_ril_37_or_earlier);
+                    effects.push((target_peer, ModemEffect::Response(urc.as_bytes().to_vec())));
                 }
 
                 if let Some(initiator_modem) = self.modems.get(&initiator)

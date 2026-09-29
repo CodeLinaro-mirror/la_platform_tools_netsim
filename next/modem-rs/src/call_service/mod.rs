@@ -8,7 +8,7 @@ use crate::{
     CardState, RadioAdmission,
     types::{
         CallHoldAction, CallHoldParam, ClirMode, CmeError, CommandAction, DialArgs, DtmfArgs,
-        ExecutionResult, ModemId, NumberPresentation, Parsable, PhoneNumber,
+        ExecutionResult, HangupReason, ModemId, NumberPresentation, Parsable, PhoneNumber,
     },
 };
 
@@ -67,6 +67,10 @@ impl CallState {
 
     fn is_inbound(self) -> bool {
         matches!(self, CallState::Incoming | CallState::Waiting)
+    }
+
+    pub fn release_reason(self) -> HangupReason {
+        if self.is_inbound() { HangupReason::Busy } else { HangupReason::Normal }
     }
 
     fn is_foreground(self) -> bool {
@@ -266,6 +270,7 @@ impl CallService {
                 call.peer_id.map(|peer_id| CommandAction::HangupCall {
                     initiator: id,
                     target_peer: peer_id,
+                    reason: call.state.release_reason(),
                 })
             })
             .collect();
@@ -278,7 +283,11 @@ impl CallService {
         self.calls.retain(|call| {
             if call.state.is_inbound() {
                 if let Some(peer_id) = call.peer_id {
-                    actions.push(CommandAction::HangupCall { initiator: id, target_peer: peer_id });
+                    actions.push(CommandAction::HangupCall {
+                        initiator: id,
+                        target_peer: peer_id,
+                        reason: HangupReason::NoAnswer,
+                    });
                 }
                 false
             } else {
@@ -513,7 +522,11 @@ impl CallService {
 
             if should_drop {
                 if let Some(peer_id) = call.peer_id {
-                    actions.push(CommandAction::HangupCall { initiator: id, target_peer: peer_id });
+                    actions.push(CommandAction::HangupCall {
+                        initiator: id,
+                        target_peer: peer_id,
+                        reason: call.state.release_reason(),
+                    });
                 }
                 false
             } else {
@@ -559,6 +572,7 @@ impl CallService {
                             actions.push(CommandAction::HangupCall {
                                 initiator: id,
                                 target_peer: peer_id,
+                                reason: call.state.release_reason(),
                             });
                         }
                         false
@@ -577,6 +591,7 @@ impl CallService {
                         actions.push(CommandAction::HangupCall {
                             initiator: id,
                             target_peer: peer_id,
+                            reason: call.state.release_reason(),
                         });
                     }
                     self.remove_call(idx);
@@ -588,6 +603,7 @@ impl CallService {
                                 actions.push(CommandAction::HangupCall {
                                     initiator: id,
                                     target_peer: peer,
+                                    reason: c.state.release_reason(),
                                 });
                             }
                             false

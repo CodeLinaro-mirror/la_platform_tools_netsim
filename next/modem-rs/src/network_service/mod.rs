@@ -404,8 +404,11 @@ impl NetworkService {
     ) -> Option<String> {
         match reg_type {
             RegistrationType::Voice => {
-                if self.voice_registration != status {
-                    self.voice_registration = status;
+                let old_status = self.voice_registration;
+                self.voice_registration = status;
+                if self.wire_registration_status(old_status)
+                    != self.wire_registration_status(status)
+                {
                     self.format_registration_urc(RegistrationType::Voice, status)
                         .map(|u| u.to_string())
                 } else {
@@ -413,8 +416,11 @@ impl NetworkService {
                 }
             }
             RegistrationType::Data | RegistrationType::Lte => {
-                if self.data_registration != status {
-                    self.data_registration = status;
+                let old_status = self.data_registration;
+                self.data_registration = status;
+                if self.wire_registration_status(old_status)
+                    != self.wire_registration_status(status)
+                {
                     let mut urcs = String::new();
                     if let Some(cgreg) =
                         self.format_registration_urc(RegistrationType::Data, status)
@@ -694,6 +700,14 @@ impl NetworkService {
         }
     }
 
+    fn wire_registration_status(&self, status: RegistrationStatus) -> RegistrationStatus {
+        if self.quirks.goldfish_ril_37_or_earlier && status == RegistrationStatus::Emergency {
+            RegistrationStatus::NotRegistered
+        } else {
+            status
+        }
+    }
+
     fn should_include_location(
         &self,
         unsol_mode: RegistrationUnsolicitedMode,
@@ -718,7 +732,7 @@ impl NetworkService {
 
     fn handle_query_registration(&self, reg_type: RegistrationType) -> NetworkResult {
         let unsol_mode = self.unsol_mode(reg_type);
-        let status = self.registration_status(reg_type);
+        let status = self.wire_registration_status(self.registration_status(reg_type));
         let location = self.registration_location(unsol_mode, status);
         Ok(Some(NetworkResponse::RegistrationQuery { reg_type, unsol_mode, status, location }))
     }
@@ -735,7 +749,7 @@ impl NetworkService {
         *self.unsol_mode_mut(reg_type) = mode;
         let mut urcs = Vec::new();
         let status = self.registration_status(reg_type);
-        if status != RegistrationStatus::NotRegistered
+        if self.wire_registration_status(status) != RegistrationStatus::NotRegistered
             && mode != RegistrationUnsolicitedMode::Disable
             && let Some(urc) = self.format_registration_urc(reg_type, status)
         {
@@ -826,6 +840,7 @@ impl NetworkService {
         if unsol_mode == RegistrationUnsolicitedMode::Disable {
             None
         } else {
+            let status = self.wire_registration_status(status);
             let location = self.registration_location(unsol_mode, status);
             Some(NetworkUrc::Registration { reg_type, status, location })
         }

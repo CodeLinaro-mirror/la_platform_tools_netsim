@@ -132,3 +132,47 @@ fn test_radio_admission_truth_table() {
     assert_eq!(net.can_originate_sms(), Err(AdmissionDenial::NoNetworkService));
     assert!(!net.can_terminate_sms());
 }
+
+#[test]
+fn test_emergency_registration_wire_status_quirk_gating() {
+    let mut legacy_service = NetworkService::new(
+        Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() },
+        None,
+    );
+    let mut modern_service = NetworkService::new(
+        Quirks { goldfish_ril_37_or_earlier: false, ..Default::default() },
+        None,
+    );
+
+    assert_eq!(
+        legacy_service.wire_registration_status(RegistrationStatus::Emergency),
+        RegistrationStatus::NotRegistered
+    );
+    assert_eq!(
+        modern_service.wire_registration_status(RegistrationStatus::Emergency),
+        RegistrationStatus::Emergency
+    );
+
+    legacy_service.voice_registration = RegistrationStatus::Emergency;
+    let query_legacy =
+        legacy_service.handle_query_registration(RegistrationType::Voice).unwrap().unwrap();
+    assert_eq!(format!("{query_legacy}"), "+CREG: 0,0\r\n");
+
+    modern_service.voice_registration = RegistrationStatus::Emergency;
+    let query_modern =
+        modern_service.handle_query_registration(RegistrationType::Voice).unwrap().unwrap();
+    assert_eq!(format!("{query_modern}"), "+CREG: 0,8\r\n");
+
+    legacy_service.voice_unsol_mode = RegistrationUnsolicitedMode::Enable;
+    modern_service.voice_unsol_mode = RegistrationUnsolicitedMode::Enable;
+    legacy_service.voice_registration = RegistrationStatus::NotRegistered;
+    modern_service.voice_registration = RegistrationStatus::NotRegistered;
+
+    let legacy_urc =
+        legacy_service.set_registration(RegistrationType::Voice, RegistrationStatus::Emergency);
+    assert_eq!(legacy_urc, None);
+
+    let modern_urc =
+        modern_service.set_registration(RegistrationType::Voice, RegistrationStatus::Emergency);
+    assert_eq!(modern_urc, Some("+CREG: 8\r\n".to_string()));
+}
