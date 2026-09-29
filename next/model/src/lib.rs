@@ -69,7 +69,7 @@ pub use crate::chip::MockChipClient;
 pub use crate::client_error::ClientError;
 // From device::api
 pub use crate::device::api::{
-    ChipCreateVariant, DeviceChipCreate, DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate,
+    ChipCreateVariant, DeviceChipCreate, DeviceCreate, DeviceUpdate, PoseUpdate,
 };
 // From device.rs
 pub use crate::device::{
@@ -80,7 +80,7 @@ pub use crate::device_error::DeviceError;
 // From initial_info.rs
 pub use crate::initial_info::{ChipInfo, ChipKind};
 // From link.rs
-pub use crate::link::{Link, LinkId, LinkUpdate};
+pub use crate::link::{Link, LinkCreate, LinkId, LinkUpdate};
 // From stats.rs
 pub use crate::stats::{
     FrontendStats, NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind, WifiStats,

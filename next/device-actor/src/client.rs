@@ -42,10 +42,9 @@ impl DeviceClient {
         self.inner.get(id).err_into::<ClientError>().await
     }
 
-    pub async fn list(&self) -> Result<device_api::ListDeviceResponse, ClientError> {
+    pub async fn list(&self) -> Result<Vec<device_api::Device>, ClientError> {
         debug!("Sending list devices request");
-        let devices = self.inner.list().err_into::<ClientError>().await?;
-        Ok(device_api::ListDeviceResponse { devices })
+        self.inner.list().err_into::<ClientError>().await
     }
 
     /// Resolves a device ID from a name.
@@ -54,9 +53,8 @@ impl DeviceClient {
     /// If multiple devices have the same name, it returns the first one found.
     pub async fn resolve_id_by_name(&self, name: &str) -> Result<DeviceId, ClientError> {
         debug!("Resolving device ID for name: {}", name);
-        let list_resp = self.list().err_into::<ClientError>().await?;
-        list_resp
-            .devices
+        let devices = self.list().await?;
+        devices
             .into_iter()
             .find(|d| d.name == name)
             .map(|d| DeviceId(d.id))
@@ -76,12 +74,12 @@ impl DeviceClient {
         let device_id = if let Some(id) = id.filter(|&v| v != 0) {
             DeviceId(id)
         } else if let Some(name) = name {
-            self.resolve_id_by_name(name).err_into::<ClientError>().await?
+            self.resolve_id_by_name(name).await?
         } else {
             return Err(ClientError::Send("Device ID or Name must be provided".to_string()));
         };
         update.id = device_id.0;
-        self.update(device_id, update).err_into::<ClientError>().await
+        self.update(device_id, update).await
     }
 
     /// Updates an existing device's properties.

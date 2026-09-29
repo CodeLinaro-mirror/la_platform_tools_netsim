@@ -115,14 +115,59 @@ fn build_response<B: Into<Bytes>>(status: StatusCode, body: B) -> Response<Full<
 }
 
 fn error_response(status: StatusCode, message: &str) -> Response<Full<Bytes>> {
-    build_response(status, serde_json::json!({ "error": message }).to_string())
+    let body = serde_json::to_string(&crate::ErrorResponse { error: message.to_string() })
+        .unwrap_or_else(|_| r#"{"error":"Internal Server Error"}"#.to_string());
+    build_response(status, body)
 }
 
-/// Helper that serializes to JSON or returns 500 automatically
-fn json_response<T: serde::Serialize>(status: StatusCode, val: &T) -> Response<Full<Bytes>> {
+/// Helper that serializes to JSON with 200 OK or returns 500 automatically.
+fn json_response<T: serde::Serialize>(val: &T) -> Response<Full<Bytes>> {
     match serde_json::to_string(val) {
-        Ok(json) => build_response(status, json),
+        Ok(json) => build_response(StatusCode::OK, json),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
+}
+
+/// Local wrapper around [`Response`] so domain types and `Result<T, E>` can
+/// convert into an HTTP JSON response via standard [`From`]/[`Into`].
+struct JsonResponse(Response<Full<Bytes>>);
+
+impl From<Response<Full<Bytes>>> for JsonResponse {
+    fn from(resp: Response<Full<Bytes>>) -> Self {
+        Self(resp)
+    }
+}
+
+impl From<crate::VersionResponse> for JsonResponse {
+    fn from(resp: crate::VersionResponse) -> Self {
+        Self(json_response(&resp))
+    }
+}
+
+impl From<Vec<crate::Device>> for JsonResponse {
+    fn from(devices: Vec<crate::Device>) -> Self {
+        Self(json_response(&crate::ListDeviceResponse::from(devices)))
+    }
+}
+
+impl From<Vec<crate::Link>> for JsonResponse {
+    fn from(links: Vec<crate::Link>) -> Self {
+        Self(json_response(&crate::ListLinkResponse::from(links)))
+    }
+}
+
+impl From<Vec<(u32, ap_actor::ApState)>> for JsonResponse {
+    fn from(aps: Vec<(u32, ap_actor::ApState)>) -> Self {
+        Self(json_response(&crate::ListApResponse::from(aps)))
+    }
+}
+
+impl<T: Into<JsonResponse>, E: std::fmt::Display> From<Result<T, E>> for JsonResponse {
+    fn from(res: Result<T, E>) -> Self {
+        match res {
+            Ok(val) => val.into(),
+            Err(e) => Self(error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())),
+        }
     }
 }
 
@@ -134,6 +179,10 @@ impl RestServer {
         version: String,
     ) -> Self {
         Self { device_client, link_client, ap_client, version }
+    }
+
+    fn get_version(&self) -> crate::VersionResponse {
+        crate::VersionResponse { version: self.version.clone() }
     }
 
     /// Serves one HTTP request. Reads and bounds the body, then dispatches.
@@ -180,39 +229,14 @@ impl RestServer {
         path: &str,
         _body: &[u8],
     ) -> Response<Full<Bytes>> {
-        match (method, path) {
-            (&Method::GET, "/v1/version") => {
-                json_response(StatusCode::OK, &serde_json::json!({ "version": self.version }))
-            }
-            (&Method::GET, "/v1/devices") => match self.device_client.list().await {
-                Ok(resp) => json_response(StatusCode::OK, &resp),
-                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
-            },
-            (&Method::GET, "/v1/links") => match self.link_client.list().await {
-                Ok(links) => json_response(StatusCode::OK, &crate::ListLinkResponse { links }),
-                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
-            },
-            (&Method::GET, "/v1/aps") => match self.ap_client.list_aps().await {
-                Ok(aps) => {
-                    let aps = aps
-                        .into_iter()
-                        .map(|(_, state)| crate::Ap {
-                            config: state.config.into(),
-                            associations: {
-                                // `ApState::associations` is a `HashSet<MacAddr>`, so format each
-                                // `MacAddr` and sort to keep the JSON array order stable across calls.
-                                let mut associations: Vec<String> =
-                                    state.associations.into_iter().map(|m| m.to_string()).collect();
-                                associations.sort();
-                                associations
-                            },
-                        })
-                        .collect();
-                    json_response(StatusCode::OK, &crate::ListApResponse { aps })
-                }
-                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
-            },
-            _ => error_response(StatusCode::NOT_FOUND, &format!("Not Found: {} {}", method, path)),
-        }
+        let resp: JsonResponse = match (method, path) {
+            (&Method::GET, crate::path::VERSION) => self.get_version().into(),
+            (&Method::GET, crate::path::DEVICES) => self.device_client.list().await.into(),
+            (&Method::GET, crate::path::LINKS) => self.link_client.list().await.into(),
+            (&Method::GET, crate::path::APS) => self.ap_client.list_aps().await.into(),
+            _ => error_response(StatusCode::NOT_FOUND, &format!("Not Found: {} {}", method, path))
+                .into(),
+        };
+        resp.0
     }
 }

@@ -38,6 +38,14 @@ pub struct Link {
     pub rssi: i8,
 }
 
+/// Parameters for creating an RF Link.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LinkCreate {
+    pub sender: ChipId,
+    pub receiver: ChipId,
+    pub rssi: i8,
+}
+
 /// Update for a Link.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LinkUpdate {

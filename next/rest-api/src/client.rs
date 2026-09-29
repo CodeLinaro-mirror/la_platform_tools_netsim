@@ -5,7 +5,7 @@
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{ListApResponse, ListDeviceResponse, ListLinkResponse};
+use crate::{ListApResponse, ListDeviceResponse, ListLinkResponse, VersionResponse};
 
 /// Client for interacting with the Netsim REST API over HTTP/1.1.
 #[derive(Clone, Debug)]
@@ -75,25 +75,22 @@ impl NetsimRestClient {
 
     /// Convenience method to retrieve daemon version string.
     pub async fn get_version(&self) -> Result<String, String> {
-        let val: serde_json::Value = self.fetch_json("/v1/version").await?;
-        val.get("version")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .ok_or_else(|| "Missing 'version' field in /v1/version response".to_string())
+        let resp: VersionResponse = self.fetch_json(crate::path::VERSION).await?;
+        Ok(resp.version)
     }
 
     /// Convenience method to list devices.
     pub async fn get_devices(&self) -> Result<ListDeviceResponse, String> {
-        self.fetch_json("/v1/devices").await
+        self.fetch_json(crate::path::DEVICES).await
     }
 
     /// Convenience method to list links.
     pub async fn get_links(&self) -> Result<ListLinkResponse, String> {
-        self.fetch_json("/v1/links").await
+        self.fetch_json(crate::path::LINKS).await
     }
 
     /// Convenience method to list APs.
     pub async fn get_aps(&self) -> Result<ListApResponse, String> {
-        self.fetch_json("/v1/aps").await
+        self.fetch_json(crate::path::APS).await
     }
 }

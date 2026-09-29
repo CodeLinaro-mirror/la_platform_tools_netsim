@@ -128,14 +128,14 @@ impl FrontendClient {
             tracing::warn!("Failed to get radio stats: {}", e);
         }
 
-        let response = client.list().await.map_err(|e| {
+        let devices = client.list().await.map_err(|e| {
             RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,
                 format!("Failed to list devices: {}", e),
             )
         })?;
         let mut proto_response = ListDeviceResponse::new();
-        for device in response.devices {
+        for device in devices {
             proto_response.devices.push(to_proto_device(device));
         }
         Ok(proto_response)
