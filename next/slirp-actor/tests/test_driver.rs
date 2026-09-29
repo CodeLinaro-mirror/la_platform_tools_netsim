@@ -81,7 +81,7 @@ impl SlirpTestDriver {
         actor
             .handle_action(
                 None,
-                SlirpReq::Register { client_id: 0, stream, sink, notifier: None },
+                SlirpReq::Register { client_id: 0, stream, sink, notifier: None, isolated: false },
                 &mut ctx,
             )
             .await

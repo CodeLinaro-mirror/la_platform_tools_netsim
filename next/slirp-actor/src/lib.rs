@@ -11,7 +11,10 @@ mod slirp_client;
 
 use actor_framework::ResourceActor;
 pub use error::SlirpError;
-pub use slirp_actor::{SlirpActor, SlirpBackend, SlirpConfig, SlirpCreate, SlirpReq, SlirpStatus};
+pub use slirp_actor::{
+    SlirpActor, SlirpBackend, SlirpConfig, SlirpCreate, SlirpIpv4Lease, SlirpIpv6Lease, SlirpLease,
+    SlirpReq, SlirpStatus,
+};
 pub use slirp_client::SlirpClient;
 
 /// Creates a new SlirpActor and returns the runner and a client.

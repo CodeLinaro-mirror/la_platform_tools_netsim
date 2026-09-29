@@ -522,4 +522,7 @@ pub use transport::{
     udp::UdpHeader,
     udp_json::{JsonUdpHeader, to_json},
 };
-pub use utils::{test_utils, test_utils::PacketBuilder};
+pub use utils::{
+    test_utils,
+    test_utils::{PacketBuilder, build_arp_frame, build_icmpv6_ns_frame},
+};

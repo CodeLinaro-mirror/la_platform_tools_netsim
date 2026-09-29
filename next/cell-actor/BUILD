@@ -11,6 +11,7 @@ DEPS = [
     "//next/device-api",
     "//next/model",
     "//next/modem-rs",
+    "//next/slirp-actor",
     "@tokio",
     "@tracing",
     "@bytes",
