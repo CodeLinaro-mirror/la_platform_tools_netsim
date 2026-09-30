@@ -336,18 +336,7 @@ impl TcpManager {
                                     conn.recv.nxt = guest_seq.wrapping_add(1);
 
                                     // 2. Send final ACK to guest
-                                    packet_to_send = Some(SendTcpPacketArgs {
-                                        conn_id: Some(conn_id),
-                                        sequence_num: conn.send.nxt,
-                                        ack_num: conn.recv.nxt,
-                                        guest_addr: conn.guest_addr,
-                                        host_addr: conn.host_addr,
-                                        ack: true,
-                                        fin: false,
-                                        syn: false,
-                                        rst: false,
-                                        payload: &[],
-                                    });
+                                    packet_to_send = Some(SendTcpPacketArgs::ack(conn_id, &conn));
 
                                     // 3. Notify the host driver that the connection is established!
                                     responses.push(SlirpResponse::ConnectionEstablished(conn_id));
@@ -370,18 +359,7 @@ impl TcpManager {
                             if !tcp_payload.is_empty() {
                                 conn.recv.nxt =
                                     conn.recv.nxt.wrapping_add(tcp_payload.len() as u32);
-                                packet_to_send = Some(SendTcpPacketArgs {
-                                    conn_id: Some(conn_id),
-                                    sequence_num: conn.send.nxt,
-                                    ack_num: conn.recv.nxt,
-                                    guest_addr: conn.guest_addr,
-                                    host_addr: conn.host_addr,
-                                    ack: true,
-                                    fin: false,
-                                    syn: false,
-                                    rst: false,
-                                    payload: &[],
-                                });
+                                packet_to_send = Some(SendTcpPacketArgs::ack(conn_id, &conn));
                                 responses.push(SlirpResponse::WriteToConnection(
                                     conn_id,
                                     Bytes::copy_from_slice(tcp_payload),
@@ -396,18 +374,7 @@ impl TcpManager {
                                     guest_addr: conn.guest_addr,
                                 });
                                 if packet_to_send.is_none() {
-                                    packet_to_send = Some(SendTcpPacketArgs {
-                                        conn_id: Some(conn_id),
-                                        sequence_num: conn.send.nxt,
-                                        ack_num: conn.recv.nxt,
-                                        guest_addr: conn.guest_addr,
-                                        host_addr: conn.host_addr,
-                                        ack: true,
-                                        fin: false,
-                                        syn: false,
-                                        rst: false,
-                                        payload: &[],
-                                    });
+                                    packet_to_send = Some(SendTcpPacketArgs::ack(conn_id, &conn));
                                 }
                             }
                         }
@@ -417,18 +384,7 @@ impl TcpManager {
                                 // Simultaneous close
                                 conn.state = State::Closing;
                                 conn.recv.nxt = conn.recv.nxt.wrapping_add(1);
-                                packet_to_send = Some(SendTcpPacketArgs {
-                                    conn_id: Some(conn_id),
-                                    sequence_num: conn.send.nxt,
-                                    ack_num: conn.recv.nxt,
-                                    guest_addr: conn.guest_addr,
-                                    host_addr: conn.host_addr,
-                                    ack: true,
-                                    fin: false,
-                                    syn: false,
-                                    rst: false,
-                                    payload: &[],
-                                });
+                                packet_to_send = Some(SendTcpPacketArgs::ack(conn_id, &conn));
                             } else if is_ack && ack_num == conn.send.nxt {
                                 conn.state = State::FinWait2;
                             }
@@ -438,18 +394,7 @@ impl TcpManager {
                             if is_fin {
                                 conn.state = State::TimeWait;
                                 conn.recv.nxt = conn.recv.nxt.wrapping_add(1);
-                                packet_to_send = Some(SendTcpPacketArgs {
-                                    conn_id: Some(conn_id),
-                                    sequence_num: conn.send.nxt,
-                                    ack_num: conn.recv.nxt,
-                                    guest_addr: conn.guest_addr,
-                                    host_addr: conn.host_addr,
-                                    ack: true,
-                                    fin: false,
-                                    syn: false,
-                                    rst: false,
-                                    payload: &[],
-                                });
+                                packet_to_send = Some(SendTcpPacketArgs::ack(conn_id, &conn));
                                 timers.schedule(TIME_WAIT_DURATION, TimerEvent::Tcp(conn_id));
                             }
                         }
