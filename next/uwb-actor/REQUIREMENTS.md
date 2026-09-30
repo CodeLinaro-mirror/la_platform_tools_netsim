@@ -106,7 +106,7 @@ UWB-Actor sits between the **Device-Actor** (upstream) and **Pica**
 
 - **RQ-SPATIAL-01**: The system shall apply **Topology Updates** (Position, Orientation) to a thread-safe shared state.
 - **RQ-SPATIAL-02**: The system shall provide a custom ranging estimator to Pica, enabling queries with minimal overhead.
-- **RQ-SPATIAL-03**: The system shall support creating/destroying Pica Anchors (virtual devices) via the Side-Channel if requested (future scope), but shall primarily rely on Peer-to-Peer ranging between simulated chips.
+- **RQ-SPATIAL-03**: The system shall support creating and destroying Pica Anchors (virtual devices) modeled as chips (`UwbMode::Anchor`), enabling simulated chips to range with virtual anchors.
 
 ### 4.4 Observability
 
@@ -141,6 +141,7 @@ UWB-Actor sits between the **Device-Actor** (upstream) and **Pica**
 | **RQ-UCI-03**     | Transparent Passthrough        | `N/A`                    | **Missing**                                                              | **None** |
 | **RQ-SPATIAL-01** | Propagate Position/Orientation | `N/A`                    | **Missing**                                                              | **None** |
 | **RQ-SPATIAL-02** | Ranging Updates                | `N/A`                    | **Missing**                                                              | **None** |
+| **RQ-SPATIAL-03** | Anchor CRUD & Ranging          | `ranging_test.rs`        | `test_ranging_between_chip_and_anchor`, `test_anchor_crud_errors`        | **Full** |
 | **RQ-OBS-01**     | Get Statistics                 | `stats_test.rs`          | `test_read_statistics`                                                   | **Full** |
 | **RQ-OBS-02**     | PCAP Capture                   | `pcap_test.rs`           | `test_pcap_capture`                                                      | **Full** |
 
