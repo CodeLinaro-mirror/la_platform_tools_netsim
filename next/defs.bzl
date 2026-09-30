@@ -219,6 +219,9 @@ def _netsim_clippy_test_impl(ctx):
         depth = len(segments) - 1
         target_out_dir = "/".join([".."] * depth) if depth > 0 else "."
         srcs = info.srcs.to_list()
+        pkg_dir = root_file.dirname.rsplit("/", 1)[0]
+        if any([not s.is_source and s.dirname == pkg_dir for s in srcs]):
+            target_out_dir = ".."
 
         # Collect dependencies for THIS target t!
         t_rlibs = []
