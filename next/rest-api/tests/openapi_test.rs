@@ -1,13 +1,28 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-//! Tests for OpenAPI 3.1 route dispatch and specification validation.
+//! Prototype of the `openapi.yaml`-first pipeline on a small Widget test API.
+//!
+//! One OpenAPI 3.1 YAML document ([`spec`]) is the source of truth:
+//!
+//! * [`validate`] checks that it stays within the subset Cuttlefish's
+//!   `cvd env` and the stub generators consume.
+//! * [`generate_rust`], [`generate_cpp`], and [`generate_python`] emit the
+//!   Rust `serde` types + [`ROUTES`] table, C++ `nlohmann::json` structs, and
+//!   Python `@dataclass` types directly from [`spec`].
+//! * `GET /v1/openapi.json` serves [`spec`] serialized as JSON, and [`find_route`]
+//!   dispatches requests through the generated [`ROUTES`] table.
 
 use hyper::Method;
-use netsim_rest_api::openapi::{JSON, Route, find_route, validate};
+use netsim_rest_api::openapi::{
+    JSON, Route, find_route, generate_cpp, generate_python, generate_rust, validate,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+/// Rust types and route table generated from [`spec`] by [`generate_rust`].
+/// `test_generate_rust` asserts that [`generate_rust`] produces this exact
+/// code.
 mod generated {
     use super::*;
 
@@ -190,6 +205,191 @@ fn test_validate_rejects_unfriendly_documents() {
         let errors = validate(&doc);
         assert!(errors.iter().any(|e| e.contains(expected)), "{expected}: {errors:?}");
     }
+}
+
+#[test]
+fn test_generate_rust() {
+    let doc = spec();
+    let json = serde_json::to_string_pretty(&doc).unwrap_or_default();
+    let expected_body = "\
+/// Widget color.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Color {
+    #[serde(rename = \"RED\")]
+    Red,
+    #[serde(rename = \"GREEN\")]
+    Green,
+}
+
+/// Empty response body.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Empty {}
+
+/// A widget.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Widget {
+    pub color: Color,
+    pub name: String,
+    /// Optional display label.
+    #[serde(default, skip_serializing_if = \"Option::is_none\")]
+    pub label: Option<String>,
+}
+
+/// Response body for `ListWidgets`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ListWidgetsResponse {
+    pub widgets: Vec<Widget>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Op {
+    ListWidgets,
+    CreateWidget,
+    GetWidget,
+    DeleteWidget,
+    ResetWidget,
+}
+
+pub const ROUTES: &[Route<Op>] = &[
+    Route::new(Method::GET, \"/v1/widgets\", Op::ListWidgets),
+    Route::new(Method::POST, \"/v1/widgets\", Op::CreateWidget),
+    Route::new(Method::GET, \"/v1/widgets/{name}\", Op::GetWidget),
+    Route::new(Method::DELETE, \"/v1/widgets/{name}\", Op::DeleteWidget),
+    Route::new(Method::POST, \"/v1/widgets/{name}:reset\", Op::ResetWidget),
+];
+";
+    let expected = format!(
+        "/// OpenAPI 3.1 JSON document (from `openapi.yaml`) served by `GET /v1/openapi.json`.\npub const OPENAPI_JSON: &str = {json:?};\n\n{expected_body}"
+    );
+    assert_eq!(generate_rust(&doc), expected);
+
+    // Multi-line descriptions emit `/// ` on every line.
+    let multiline = json!({
+        "components": {
+            "schemas": {
+                "Note": {
+                    "type": "object",
+                    "description": "Line 1.\nLine 2.",
+                    "required": ["text"],
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Field line 1.\nField line 2."
+                        }
+                    }
+                }
+            }
+        }
+    });
+    let rust = generate_rust(&multiline);
+    assert!(rust.contains("/// Line 1.\n/// Line 2.\n"), "{rust}");
+    assert!(rust.contains("    /// Field line 1.\n    /// Field line 2.\n"), "{rust}");
+}
+
+#[test]
+fn test_netsim_openapi_spec() {
+    let doc: Value = serde_json::from_str(netsim_rest_api::OPENAPI_JSON).unwrap();
+    assert_eq!(validate(&doc), Vec::<String>::new());
+
+    let ops: Vec<String> = netsim_rest_api::ROUTES.iter().map(Route::operation_id).collect();
+    assert_eq!(ops, ["ListAps", "ListDevices", "ListLinks", "GetVersion"]);
+
+    let cpp = generate_cpp(&doc);
+    assert!(cpp.contains("struct VersionResponse {"), "{cpp}");
+    assert!(cpp.contains("struct ListDeviceResponse {"), "{cpp}");
+    assert!(cpp.contains("struct ListLinkResponse {"), "{cpp}");
+    assert!(cpp.contains("struct ListApResponse {"), "{cpp}");
+
+    let py = generate_python(&doc);
+    assert!(py.contains("class WifiMode(StrEnum):\n    A = \"a\""), "{py}");
+    assert!(py.contains("class ListDeviceResponse:\n    devices: list[Device]"), "{py}");
+}
+
+#[test]
+fn test_generate_cpp() {
+    let expected = "\
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+#include <nlohmann/json.hpp>
+
+enum class Color {
+  kRed,
+  kGreen,
+};
+NLOHMANN_JSON_SERIALIZE_ENUM(Color, {
+  {Color::kRed, \"RED\"},
+  {Color::kGreen, \"GREEN\"},
+})
+
+struct Empty {};
+
+struct Widget {
+  Color color;
+  std::string name;
+  std::optional<std::string> label;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Widget, color, name, label)
+
+struct ListWidgetsResponse {
+  std::vector<Widget> widgets;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(ListWidgetsResponse, widgets)
+";
+    assert_eq!(generate_cpp(&spec()), expected);
+}
+
+#[test]
+fn test_generate_python() {
+    let expected = "\
+from dataclasses import dataclass
+from enum import StrEnum
+
+
+class Color(StrEnum):
+    RED = \"RED\"
+    GREEN = \"GREEN\"
+
+
+@dataclass
+class Empty:
+    pass
+
+
+@dataclass
+class Widget:
+    color: Color
+    name: str
+    label: str | None = None
+
+
+@dataclass
+class ListWidgetsResponse:
+    widgets: list[Widget]
+";
+    assert_eq!(generate_python(&spec()), expected);
+
+    // Optional fields listed before required fields in JSON are still emitted
+    // after required fields in Python `@dataclass`.
+    let reordered = json!({
+        "components": {
+            "schemas": {
+                "Item": {
+                    "type": "object",
+                    "required": ["id"],
+                    "properties": {
+                        "note": { "type": "string" },
+                        "id": { "type": "string" }
+                    }
+                }
+            }
+        }
+    });
+    assert_eq!(
+        generate_python(&reordered),
+        "from dataclasses import dataclass\nfrom enum import StrEnum\n\n\n@dataclass\nclass Item:\n    id: str\n    note: str | None = None\n"
+    );
 }
 
 #[test]

@@ -229,13 +229,20 @@ impl RestServer {
         path: &str,
         _body: &[u8],
     ) -> Response<Full<Bytes>> {
-        let resp: JsonResponse = match (method, path) {
-            (&Method::GET, crate::path::VERSION) => self.get_version().into(),
-            (&Method::GET, crate::path::DEVICES) => self.device_client.list().await.into(),
-            (&Method::GET, crate::path::LINKS) => self.link_client.list().await.into(),
-            (&Method::GET, crate::path::APS) => self.ap_client.list_aps().await.into(),
-            _ => error_response(StatusCode::NOT_FOUND, &format!("Not Found: {} {}", method, path))
-                .into(),
+        if *method == Method::GET && path == crate::path::OPENAPI {
+            return build_response(StatusCode::OK, crate::OPENAPI_JSON);
+        }
+        let resp: JsonResponse = match crate::openapi::find_route(crate::ROUTES, method, path) {
+            Some((route, _params)) => match route.op {
+                crate::Op::GetVersion => self.get_version().into(),
+                crate::Op::ListDevices => self.device_client.list().await.into(),
+                crate::Op::ListLinks => self.link_client.list().await.into(),
+                crate::Op::ListAps => self.ap_client.list_aps().await.into(),
+            },
+            None => {
+                error_response(StatusCode::NOT_FOUND, &format!("Not Found: {} {}", method, path))
+                    .into()
+            }
         };
         resp.0
     }

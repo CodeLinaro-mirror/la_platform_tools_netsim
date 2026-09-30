@@ -4,13 +4,8 @@
 //! Wi-Fi Access Point (AP) REST API endpoints and data transfer models.
 
 pub use netsim_model::{Ap, ApCreate, ApUpdate};
-use serde::{Deserialize, Serialize};
 
-/// Response body for listing Wi-Fi Access Points.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct ListApResponse {
-    pub aps: Vec<Ap>,
-}
+pub use crate::ListApResponse;
 
 impl From<Vec<(u32, ap_actor::ApState)>> for ListApResponse {
     fn from(aps: Vec<(u32, ap_actor::ApState)>) -> Self {

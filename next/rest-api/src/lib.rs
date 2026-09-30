@@ -8,7 +8,10 @@
 
 #![allow(clippy::indexing_slicing)]
 
+use hyper::Method;
 use serde::{Deserialize, Serialize};
+
+use crate::openapi::Route;
 
 pub mod ap_api;
 pub mod client;
@@ -26,20 +29,11 @@ pub use server::*;
 /// Endpoint paths shared by the REST server and client, so the two cannot
 /// drift apart. Usable as `match` patterns.
 pub mod path {
+    pub const OPENAPI: &str = "/v1/openapi.json";
     pub const VERSION: &str = "/v1/version";
     pub const DEVICES: &str = "/v1/devices";
     pub const LINKS: &str = "/v1/links";
     pub const APS: &str = "/v1/aps";
 }
 
-/// Response body for `GET /v1/version`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VersionResponse {
-    pub version: String,
-}
-
-/// Standard JSON error response body returned by REST endpoints on failure.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ErrorResponse {
-    pub error: String,
-}
+include!(concat!(env!("OUT_DIR"), "/openapi_generated.rs"));

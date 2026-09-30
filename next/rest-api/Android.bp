@@ -4,6 +4,43 @@ package {
     default_applicable_licenses: ["tools_netsim_license"],
 }
 
+rust_binary_host {
+    name: "netsim_next_gen_api",
+    edition: "2024",
+    stem: "netsim_next_gen_api",
+    crate_root: "src/bin/gen_api.rs",
+    srcs: [
+        "src/bin/gen_api.rs",
+        "src/openapi.rs",
+        "src/openapi/cpp_gen.rs",
+        "src/openapi/py_gen.rs",
+        "src/openapi/reserved_idents.inc",
+        "src/openapi/rust_gen.rs",
+        "src/openapi/spec.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libhyper",
+        "libserde_json",
+        "libserde_yaml",
+    ],
+}
+
+genrule {
+    name: "netsim_next_openapi_rust_gen",
+    tools: [
+        "netsim_next_gen_api",
+    ],
+    cmd: "$(location netsim_next_gen_api) --rust $(in) > $(out)",
+    out: [
+        "openapi_generated.rs",
+    ],
+    srcs: [
+        "openapi.yaml",
+    ],
+}
+
 rust_library_host {
     name: "libnetsim_next_rest_api",
     crate_name: "netsim_rest_api",
@@ -11,6 +48,7 @@ rust_library_host {
     stem: "libnetsim_rest_api",
     crate_root: "src/lib.rs",
     srcs: [
+        ":netsim_next_openapi_rust_gen",
         "src/lib.rs",
         "src/openapi/reserved_idents.inc",
         "tests/openapi.yaml",
@@ -40,6 +78,7 @@ rust_library_host {
     stem: "libnetsim_rest_api_testing",
     crate_root: "src/lib.rs",
     srcs: [
+        ":netsim_next_openapi_rust_gen",
         "src/lib.rs",
         "src/openapi/reserved_idents.inc",
         "tests/openapi.yaml",
@@ -74,6 +113,7 @@ rust_test_host {
         "general_tests",
     ],
     srcs: [
+        ":netsim_next_openapi_rust_gen",
         "src/lib.rs",
         "src/openapi/reserved_idents.inc",
         "tests/openapi.yaml",

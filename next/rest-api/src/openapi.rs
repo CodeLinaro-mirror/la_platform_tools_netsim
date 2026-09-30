@@ -1,12 +1,27 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-//! OpenAPI 3.1 route dispatch and validation for the `/v1` REST API.
+//! OpenAPI 3.1 route dispatch, validation, and multi-language stub generation
+//! for the `/v1` REST API.
+
+#[path = "openapi/cpp_gen.rs"]
+mod cpp_gen;
+#[path = "openapi/py_gen.rs"]
+mod py_gen;
+#[path = "openapi/rust_gen.rs"]
+mod rust_gen;
+#[path = "openapi/spec.rs"]
+mod spec;
 
 use std::{collections::BTreeSet, fmt::Debug};
 
+pub use cpp_gen::generate_cpp;
 use hyper::Method;
+pub use py_gen::generate_python;
+pub use rust_gen::generate_rust;
 use serde_json::Value;
+pub use spec::expand;
+pub(crate) use spec::{SchemaKind, Spec};
 
 /// OpenAPI version required by [`validate`].
 pub const OPENAPI_VERSION: &str = "3.1.0";
