@@ -249,8 +249,8 @@ fn to_socketaddr_storage(dns: &[SocketAddr]) -> [libslirp_sys::sockaddr_storage;
     if dns.len() > MAX_DNS_SERVERS {
         warn!("Too many DNS servers, only keeping the first {} ones", MAX_DNS_SERVERS);
     }
-    for i in 0..usize::min(dns.len(), MAX_DNS_SERVERS) {
-        result[i] = dns[i].into();
+    for (dest, src) in result.iter_mut().zip(dns.iter()) {
+        *dest = (*src).into();
     }
     result
 }

@@ -435,8 +435,17 @@ impl FrontendClient {
             if length == 0 {
                 break;
             }
+            let Some(chunk) = buffer.get(..length) else {
+                let _ = sink
+                    .fail(RpcStatus::with_message(
+                        RpcStatusCode::INTERNAL,
+                        "Read length exceeds buffer capacity".to_string(),
+                    ))
+                    .await;
+                return;
+            };
             let mut response = GetCaptureResponse::new();
-            response.capture_stream = buffer[..length].to_vec();
+            response.capture_stream = chunk.to_vec();
             if let Err(e) = sink.send((response, WriteFlags::default())).await {
                 tracing::warn!("Failed to send get_capture response chunk: {e:?}");
                 return;

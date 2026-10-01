@@ -34,11 +34,10 @@ impl Decoder for NciCodec {
     type Error = std::io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if src.len() < 3 {
+        let Some(&payload_len) = src.get(2) else {
             return Ok(None);
-        }
-        let payload_len = src[2] as usize;
-        let total_len = 3 + payload_len;
+        };
+        let total_len = 3 + payload_len as usize;
         if src.len() < total_len {
             src.reserve(total_len - src.len());
             return Ok(None);
@@ -185,8 +184,8 @@ impl ActorService for NfcActor {
                         if !enabled_clone.load(Ordering::Acquire) {
                             continue;
                         }
-                        if bytes.len() >= 3 {
-                            match (bytes[0] >> 5) & 0x07 {
+                        if let &[b0, _, _, ..] = bytes.as_ref() {
+                            match (b0 >> 5) & 0x07 {
                                 NCI_MT_DATA => {
                                     nfc_stats_clone.incr_nci_data_tx();
                                     if mode_clone.load(Ordering::Relaxed)
@@ -228,8 +227,8 @@ impl ActorService for NfcActor {
         // Bridge Guest -> Casimir
         let nfc_stats_rx = self.nfc_stats.clone();
         let packet_stream = packet_stream.inspect(move |bytes| {
-            if bytes.len() >= 3 {
-                match (bytes[0] >> 5) & 0x07 {
+            if let &[b0, _, _, ..] = bytes.as_ref() {
+                match (b0 >> 5) & 0x07 {
                     NCI_MT_DATA => {
                         nfc_stats_rx.incr_nci_data_rx();
                         tx_count_clone.fetch_add(1, Ordering::Relaxed);

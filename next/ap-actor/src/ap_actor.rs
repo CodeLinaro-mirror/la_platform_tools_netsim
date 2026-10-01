@@ -74,8 +74,9 @@ const fn compute_ap_bssid(id: ApId) -> MacAddr {
     let offset_id = (id.0 as u16) + 1;
     let [b0, b1] = offset_id.to_be_bytes();
     let mut bytes = DEFAULT_AP_BSSID.bytes;
-    bytes[4] = b0;
-    bytes[5] = b1;
+    let [.., b4, b5] = &mut bytes;
+    *b4 = b0;
+    *b5 = b1;
     MacAddr::new(bytes)
 }
 

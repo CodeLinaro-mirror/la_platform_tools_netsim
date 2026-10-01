@@ -128,7 +128,10 @@ fn perform_command(
                 let GrpcRequest::GetCapture(request) = req else {
                     return Err(format!("Expected GetCaptureRequest. Got: {req:?}").into());
                 };
-                perform_streaming_request(&client, cmd, request, &cmd.filenames[i].to_owned())?;
+                let filename = cmd.filenames.get(i).cloned().ok_or_else(|| {
+                    Error::from(format!("Missing filename for request index {i}"))
+                })?;
+                perform_streaming_request(&client, cmd, request, &filename)?;
                 Ok(None)
             }
             &mut args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {

@@ -89,9 +89,7 @@ impl Future for NetsimScene {
                     let _ = resp.send(res);
                 }
                 SceneCommand::RemoveDevice { id, resp } => {
-                    if (id as usize) < this.scene.devices.len()
-                        && this.scene.devices[id as usize].is_some()
-                    {
+                    if this.scene.devices.get(id as usize).is_some_and(Option::is_some) {
                         this.scene.disconnect(id as usize);
                     }
                     let _ = resp.send(Ok(()));

@@ -48,11 +48,13 @@ impl UwbStats {
     }
 
     pub(crate) fn incr(&self, api: UwbApi) {
-        self.uwb_apis.data[api as usize].fetch_add(1, Ordering::Relaxed);
+        if let Some(counter) = self.uwb_apis.data.get(api as usize) {
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     pub(crate) fn get(&self, api: UwbApi) -> u32 {
-        self.uwb_apis.data[api as usize].load(Ordering::Relaxed)
+        self.uwb_apis.data.get(api as usize).map_or(0, |counter| counter.load(Ordering::Relaxed))
     }
 
     pub(crate) fn to_proto(&self) -> netsim_proto::stats::UwbApiStats {

@@ -19,14 +19,15 @@ impl Decoder for ModemCodec {
             // AT commands are terminated by \r or \n.
             // Interactive prompts (like SMS input) terminate on Ctrl+Z (\x1a) or ESC
             // (\x1b).
-            if let Some(pos) =
-                src.iter().position(|&b| b == b'\n' || b == b'\r' || b == b'\x1a' || b == b'\x1b')
+            if let Some((pos, &delimiter)) = src
+                .iter()
+                .enumerate()
+                .find(|&(_, &b)| b == b'\n' || b == b'\r' || b == b'\x1a' || b == b'\x1b')
             {
-                let delimiter = src[pos];
                 if delimiter == b'\n' || delimiter == b'\r' {
                     let data = src.split_to(pos);
                     src.advance(1); // Consume the delimiter
-                    if delimiter == b'\r' && !src.is_empty() && src[0] == b'\n' {
+                    if delimiter == b'\r' && matches!(src.as_ref(), &[b'\n', ..]) {
                         src.advance(1); // Consume trailing \n
                     }
                     if data.is_empty() {

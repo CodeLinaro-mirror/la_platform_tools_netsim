@@ -184,13 +184,9 @@ impl Ieee80211Manager {
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let src = frame.get_source();
         // Action Frame Body starts after Header (24 bytes)
-        if raw_frame.len() < 26 {
-            // Header + Category + Action
+        let Some(&[category, action, ..]) = raw_frame.get(24..) else {
             return Ok(vec![]);
-        }
-        let body = &raw_frame[24..];
-        let category = body[0];
-        let action = body[1];
+        };
 
         debug!("ApActor: Action Frame Cat={} Act={} from {}", category, action, src);
 
@@ -254,12 +250,11 @@ impl Ieee80211Manager {
 
         // Parse Auth Fixed Fields (Alg, Seq, Status)
         // Mgmt Header is usually 24 bytes (FC+Duration+3Addr+SC)
-        if raw_frame.len() < 24 + 6 {
+        let Some(body) = raw_frame.get(24..) else {
             warn!("ApActor: Auth frame too short");
             return Ok(vec![]);
-        }
+        };
 
-        let body = &raw_frame[24..];
         let fixed = match AuthenticationFixedFields::read_from_prefix(body) {
             Ok((f, _)) => f,
             Err(_) => {
@@ -305,7 +300,10 @@ impl Ieee80211Manager {
             // 802.11-2016 12.4.8.2: SAE Auth frames use Seq 1 for Commit, Seq 2 for
             // Confirm. SAE Standard: Commit is Seq 1, Confirm is Seq 2.
 
-            let sae_payload = &body[6..]; // Payload after fixed fields
+            let Some(sae_payload) = body.get(6..) else {
+                warn!("ApActor: Auth frame missing SAE payload");
+                return Ok(vec![]);
+            };
 
             let mut resp_frames = Vec::new();
 
@@ -554,10 +552,9 @@ impl Ieee80211Manager {
         // Ieee80211 doesn't have `payload()`, but `decode` validates it.
         // We'll operate on `raw_frame` slice for IE parsing. Header is usually 24 bytes
         // for Mgmt.
-        if raw_frame.len() < 24 {
+        let Some(ies) = raw_frame.get(24..) else {
             return Ok(vec![]);
-        }
-        let ies = &raw_frame[24..];
+        };
 
         let mut requested_ssid = None;
 
@@ -680,12 +677,12 @@ impl Ieee80211Manager {
         ieee80211_frame: Ieee80211,
         shared_keys: &SharedKeyStore,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
-        let dump_len = std::cmp::min(frame.len(), 48);
+        let dump = frame.get(..48).unwrap_or(frame);
         warn!(
             "ApActor: Data Frame Debug [{} bytes] (stype: {:?}) hex: {:02x?}",
             frame.len(),
             ieee80211_frame.stype(),
-            &frame[..dump_len]
+            dump
         );
 
         if !ieee80211_frame.is_eapol().unwrap_or(false) {
@@ -693,12 +690,14 @@ impl Ieee80211Manager {
         }
 
         info!("ApActor: Received EAPOL frame from src={}", ieee80211_frame.get_source());
-        let payload = &ieee80211_frame.get_payload()[8..]; // EAPOL Body after LLC
-
-        if payload.len() < 4 {
+        let frame_payload = ieee80211_frame.get_payload();
+        let Some(payload) = frame_payload.get(8..) else {
             return Ok(vec![]);
-        }
-        let eapol_type = payload[1];
+        };
+
+        let &[_, eapol_type, _, _, ref eap_packet @ ..] = payload else {
+            return Ok(vec![]);
+        };
 
         // EAPOL-Start (Type 1)
         if eapol_type == 1 {
@@ -736,12 +735,6 @@ impl Ieee80211Manager {
         // EAP-Packet (Type 0)
         if eapol_type == 0 {
             if let Some(auth) = ap.eap_sessions.get_mut(&ieee80211_frame.get_source()) {
-                // Skip EAPOL Header (4 bytes)
-                if payload.len() < 4 {
-                    return Ok(vec![]);
-                }
-                let eap_packet = &payload[4..];
-
                 match auth.handle_eap(eap_packet) {
                     Ok(outputs) => {
                         let mut frames = Vec::new();

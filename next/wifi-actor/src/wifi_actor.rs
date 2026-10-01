@@ -169,7 +169,9 @@ impl WifiActor {
         // Fast path: Avoid full PDL decode overhead for standard data packets.
         // HwsimMsg format: NlMsgHdr (16 bytes) + HwsimMsgHdr (hwsim_cmd at offset 16).
         // HwsimCmd::StartPmsr relies on netsim_packets::HwsimCmd::StartPmsr as u8.
-        if packet.len() >= 20 && packet[16] == netsim_packets::HwsimCmd::StartPmsr as u8 {
+        if packet.len() >= 20
+            && packet.get(16).copied() == Some(netsim_packets::HwsimCmd::StartPmsr as u8)
+        {
             if let Ok(hwsim_msg) = netsim_packets::HwsimMsg::decode_full(&packet) {
                 if hwsim_msg.hwsim_hdr.hwsim_cmd == netsim_packets::HwsimCmd::StartPmsr {
                     if let Some(resp) =

@@ -44,6 +44,7 @@ mod bindings {
     #![allow(clippy::too_many_arguments)]
     #![allow(clippy::unnecessary_cast)]
     #![allow(clippy::undocumented_unsafe_blocks)]
+    #![allow(clippy::indexing_slicing)]
     // TODO(b/203002625) - since rustc 1.53, bindgen causes UB warnings
     // Remove this once bindgen figures out how to do this correctly
     #![allow(deref_nullptr)]
