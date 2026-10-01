@@ -169,35 +169,29 @@ impl FrontendClient {
                     device_info: None,
                 };
 
-                let device_create = device_api::DeviceCreate {
-                    device_config: device_config.clone(),
-                    chip: chip_config,
-                };
+                let device_create = device_api::DeviceCreate { device_config, chip: chip_config };
 
-                match client.create_device(device_create).await {
-                    Ok(id) => {
-                        let mut device = netsim_proto::model::Device::new();
-                        device.id = id.0;
-                        device.name = device_config.name;
-                        device.visible = Some(device_config.visible);
-                        device.position = protobuf::MessageField::some(
-                            crate::frontend_converter::to_proto_position(
-                                device_config.pose.position,
-                            ),
-                        );
-                        device.orientation = protobuf::MessageField::some(
-                            crate::frontend_converter::to_proto_orientation(
-                                device_config.pose.orientation,
-                            ),
-                        );
+                let id = client
+                    .create_device(device_create)
+                    .await
+                    .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?;
+                let device = client
+                    .get(id)
+                    .await
+                    .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?
+                    .ok_or_else(|| {
+                        RpcStatus::with_message(
+                            RpcStatusCode::INTERNAL,
+                            "Device not found after creation".into(),
+                        )
+                    })?;
 
-                        Ok(netsim_proto::frontend::CreateDeviceResponse {
-                            device: protobuf::MessageField::some(device),
-                            ..Default::default()
-                        })
-                    }
-                    Err(e) => Err(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string())),
-                }
+                Ok(netsim_proto::frontend::CreateDeviceResponse {
+                    device: protobuf::MessageField::some(
+                        crate::frontend_converter::to_proto_device(device),
+                    ),
+                    ..Default::default()
+                })
             } else {
                 Err(RpcStatus::with_message(
                     RpcStatusCode::INVALID_ARGUMENT,
@@ -883,5 +877,67 @@ mod tests {
         let err = ClientError::Framework(Box::new(std::io::Error::other("err")));
         let status = to_rpc_status(err);
         assert_eq!(status.code(), RpcStatusCode::INTERNAL);
+    }
+
+    #[tokio::test]
+    async fn test_handle_create_device_uwb() {
+        let mut mock_client = MockActorClient::<DeviceActor>::new();
+        let expected_id = device_api::DeviceId(100);
+
+        mock_client
+            .expect_create()
+            .withf(|params| {
+                matches!(
+                    &params.chip.chip,
+                    device_api::ChipCreateVariant::Uwb(netsim_model::UwbCreate::Anchor {
+                        address: Some(addr)
+                    }) if addr == "00:01"
+                )
+            })
+            .times(1)
+            .returning(move |_| Ok(expected_id));
+
+        mock_client.expect_get().withf(move |id| *id == expected_id).times(1).returning(
+            move |_| {
+                Ok(Some(device_api::Device {
+                    id: 100,
+                    name: "uwb-device".to_string(),
+                    visible: true,
+                    pose: Default::default(),
+                    builtin: false,
+                    device_info: None,
+                    chips: vec![netsim_model::Chip {
+                        id: 101,
+                        kind: netsim_model::ChipKind::UWB,
+                        name: "uwb-anchor".to_string(),
+                        manufacturer: "".to_string(),
+                        product_name: "".to_string(),
+                        pose: Default::default(),
+                        variant: Some(netsim_model::ChipVariant::Uwb(Default::default())),
+                        ..Default::default()
+                    }],
+                }))
+            },
+        );
+
+        let client = DeviceClient::new(Box::new(mock_client));
+        let mut req = netsim_proto::frontend::CreateDeviceRequest::new();
+        let mut device_proto = netsim_proto::model::DeviceCreate::new();
+        device_proto.name = "uwb-device".to_string();
+        let mut chip_proto = netsim_proto::model::ChipCreate::new();
+        chip_proto.name = "uwb-anchor".to_string();
+        chip_proto.kind = EnumOrUnknown::new(netsim_proto::common::ChipKind::UWB);
+        chip_proto.address = "00:01".to_string();
+        device_proto.chips.push(chip_proto);
+        req.device = protobuf::MessageField::some(device_proto);
+
+        let resp = FrontendClient::handle_create_device(client, req).await.unwrap();
+        assert_eq!(resp.device.name, "uwb-device");
+        assert_eq!(resp.device.chips.len(), 1);
+        assert_eq!(
+            resp.device.chips[0].kind,
+            EnumOrUnknown::new(netsim_proto::common::ChipKind::UWB)
+        );
+        assert_eq!(resp.device.chips[0].name, "uwb-anchor");
     }
 }

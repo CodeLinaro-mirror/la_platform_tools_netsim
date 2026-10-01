@@ -55,8 +55,8 @@ pub(crate) enum Command {
     Capture(Capture),
     /// Opens netsim artifacts directory (log, pcaps)
     Artifact,
-    /// A chip that sends advertisements at a set interval
-    #[command(subcommand)]
+    /// A fixed simulated radio node (BLE beacon or UWB anchor)
+    #[command(subcommand, visible_alias("anchor"))]
     Beacon(Beacon),
     /// Open Bumble Hive Web Page
     Bumble,
@@ -203,6 +203,37 @@ pub(crate) enum Beacon {
 pub(crate) enum BeaconCreate {
     /// Create a Bluetooth low-energy beacon chip
     Ble(BeaconCreateBle),
+    /// Create an Ultra-wideband anchor chip
+    Uwb(BeaconCreateUwb),
+}
+
+#[derive(Debug, Args, PartialEq, Default)]
+pub(crate) struct BeaconCreateUwb {
+    /// Name of the device to create
+    pub device_name: Option<String>,
+    /// Name of the anchor chip to create within the new device
+    pub chip_name: Option<String>,
+    /// UWB short address of the anchor (e.g. 00:01). Will be allocated if not provided
+    #[arg(long)]
+    pub address: Option<String>,
+    /// x position of device in meters
+    #[arg(long, allow_hyphen_values = true)]
+    pub x: Option<f32>,
+    /// y position of device in meters
+    #[arg(long, allow_hyphen_values = true)]
+    pub y: Option<f32>,
+    /// z position of device in meters
+    #[arg(long, allow_hyphen_values = true)]
+    pub z: Option<f32>,
+    /// Yaw orientation of device in degrees
+    #[arg(long, allow_hyphen_values = true)]
+    pub yaw: Option<f32>,
+    /// Pitch orientation of device in degrees
+    #[arg(long, allow_hyphen_values = true)]
+    pub pitch: Option<f32>,
+    /// Roll orientation of device in degrees
+    #[arg(long, allow_hyphen_values = true)]
+    pub roll: Option<f32>,
 }
 
 #[derive(Debug, Args, PartialEq, Default)]

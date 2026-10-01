@@ -9,7 +9,7 @@ use link_api::Link as ApiLink;
 use netsim_model::{
     AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, BluetoothCreate,
     BluetoothMode, BluetoothUpdate, ChipId, ChipKind as ApiChipKind, ChipUpdate, ChipVariantUpdate,
-    Interval, RadioUpdate, TxPower,
+    Interval, RadioUpdate, TxPower, UwbCreate,
 };
 use netsim_proto::{
     common::ChipKind as ProtoChipKind,
@@ -121,7 +121,7 @@ pub(crate) fn to_proto_device(d: ApiDevice) -> ProtoDevice {
 }
 
 pub(crate) fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
-    // Currently only supports BLE Beacon
+    // Supports BLE beacons, Bluetooth devices, and UWB anchors.
     if c.has_ble_beacon() {
         let beacon_create = c.ble_beacon();
         let settings = beacon_create.settings.as_ref().map(from_proto_advertise_settings);
@@ -148,6 +148,16 @@ pub(crate) fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> 
             manufacturer: c.manufacturer,
             product_name: c.product_name,
             chip: ChipCreateVariant::Bluetooth(bt_create),
+        })
+    } else if c.kind.enum_value_or_default() == ProtoChipKind::UWB {
+        // Proto ChipCreate reuses the top-level address field for UWB anchor short MAC.
+        let uwb_create =
+            UwbCreate::Anchor { address: (!c.address.is_empty()).then_some(c.address) };
+        Some(DeviceChipCreate {
+            name: c.name,
+            manufacturer: c.manufacturer,
+            product_name: c.product_name,
+            chip: ChipCreateVariant::Uwb(uwb_create),
         })
     } else {
         None
@@ -347,5 +357,34 @@ pub(crate) fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
         Some(ApiLink { id: netsim_model::LinkId(proto.id), sender, receiver, kind, rssi })
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_proto_chip_create_uwb_default_address() {
+        let mut chip = ChipCreate::new();
+        chip.name = "uwb-anchor".to_string();
+        chip.kind = EnumOrUnknown::new(ProtoChipKind::UWB);
+        let device_chip = from_proto_chip_create(chip).unwrap();
+        assert_eq!(device_chip.name, "uwb-anchor");
+        assert_eq!(device_chip.chip, ChipCreateVariant::Uwb(UwbCreate::Anchor { address: None }));
+    }
+
+    #[test]
+    fn test_from_proto_chip_create_uwb_custom_address() {
+        let mut chip = ChipCreate::new();
+        chip.name = "uwb-anchor".to_string();
+        chip.address = "00:01".to_string();
+        chip.kind = EnumOrUnknown::new(ProtoChipKind::UWB);
+        let device_chip = from_proto_chip_create(chip).unwrap();
+        assert_eq!(device_chip.name, "uwb-anchor");
+        assert_eq!(
+            device_chip.chip,
+            ChipCreateVariant::Uwb(UwbCreate::Anchor { address: Some("00:01".to_string()) })
+        );
     }
 }
