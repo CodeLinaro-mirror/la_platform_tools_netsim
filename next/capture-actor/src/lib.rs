@@ -25,12 +25,11 @@ pub use capture_api::{
     CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo, CaptureSender, Direction,
 };
 pub use error::CaptureError;
-pub use modem_pcap::ModemPcapWriter;
 pub use writer::{
     DLT_BLUETOOTH_H4, DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO, DLT_NFC_NCI, DLT_USER0,
 };
 
-pub mod client;
+mod client;
 pub use client::CaptureClient;
 
 /// Creates a new Capture actor and its client.
