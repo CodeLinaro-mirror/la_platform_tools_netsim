@@ -77,12 +77,13 @@ pub enum Phy {
     BrEdr = 1,
 }
 
-impl From<c_int> for Phy {
-    fn from(item: c_int) -> Self {
+impl TryFrom<c_int> for Phy {
+    type Error = c_int;
+    fn try_from(item: c_int) -> std::result::Result<Self, Self::Error> {
         match item {
-            0 => Phy::LowEnergy,
-            1 => Phy::BrEdr,
-            _ => panic!("Unknown PHY value"),
+            0 => Ok(Phy::LowEnergy),
+            1 => Ok(Phy::BrEdr),
+            unknown => Err(unknown),
         }
     }
 }

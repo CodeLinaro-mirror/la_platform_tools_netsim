@@ -185,7 +185,9 @@ impl ActorService for SlirpActor {
         _create: Self::Create,
         _: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        panic!("SlirpActor::create should not be called. Use RegisterSink action instead.")
+        Err(SlirpError::Internal(
+            "SlirpActor::create should not be called. Use RegisterSink action instead.".into(),
+        ))
     }
 
     async fn handle_get(
@@ -202,7 +204,7 @@ impl ActorService for SlirpActor {
         _: Self::Update,
         _: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        panic!("Update not supported")
+        Err(SlirpError::Internal("Update not supported".into()))
     }
 
     async fn handle_delete(

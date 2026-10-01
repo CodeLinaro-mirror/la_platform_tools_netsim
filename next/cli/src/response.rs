@@ -193,7 +193,7 @@ impl args::Command {
                     }
                 }
                 Link::List => {
-                    unimplemented!("Link::List uses the REST API and is handled in main.rs.")
+                    return Err("Link::List uses the REST API and is handled in main.rs.".into());
                 }
                 Link::Patch(args) => {
                     if let Some(rssi) = args.rssi
@@ -245,7 +245,7 @@ impl args::Command {
             },
             // These commands are intercepted early in main.rs and have no direct gRPC pipeline.
             _ => {
-                unimplemented!("No Grpc Response for this Command.");
+                return Err("No Grpc Response for this Command.".into());
             }
         }
         Ok(())

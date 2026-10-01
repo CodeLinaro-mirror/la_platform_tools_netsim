@@ -451,7 +451,6 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
             }
             Err(e) => {
                 error!("Failed to attach TAP for chip {}: {}", chip_id, e);
-                panic!("Failed to attach TAP for chip {}: {}", chip_id, e);
             }
         }
         #[cfg(not(target_os = "linux"))]

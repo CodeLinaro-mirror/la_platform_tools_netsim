@@ -62,7 +62,10 @@ impl Decoder for H4Codec {
             H4_SCO_TYPE => src[3] as usize,
             H4_EVT_TYPE => src[2] as usize,
             H4_ISO_TYPE => (usize::from(src[4] & 0x0f) << 8) | usize::from(src[3]),
-            _ => unreachable!(),
+            _ => {
+                warn!("Unexpected H4 type: {h4_type:#x}");
+                return Ok(None);
+            }
         };
 
         let total_len = 1 + preamble_size + payload_length;

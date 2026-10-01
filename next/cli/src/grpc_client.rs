@@ -16,15 +16,15 @@ pub struct ClientResponseReader {
 
 /// Delegating functions to handler
 impl ClientResponseReader {
-    fn handle_chunk(&self, chunk: &[u8]) {
-        self.handler.handle_chunk(chunk);
+    fn handle_chunk(&mut self, chunk: &[u8]) -> Result<()> {
+        self.handler.handle_chunk(chunk)
     }
 }
 
 /// Trait for ClientResponseReader handler functions
 pub trait ClientResponseReadable {
     /// Process each chunk of streaming response
-    fn handle_chunk(&self, chunk: &[u8]);
+    fn handle_chunk(&mut self, chunk: &[u8]) -> Result<()>;
 }
 
 // Enum of Grpc Requests holding the request proto as applicable
@@ -71,14 +71,13 @@ pub fn get_capture(
     let mut stream = client.get_capture(req)?;
     // Use block_on to run the async block handling all chunks
     futures::executor::block_on(async {
-        // Read every available chunk from gRPC stream
-        while let Some(Ok(chunk)) = stream.next().await {
+        while let Some(chunk_res) = stream.next().await {
+            let chunk = chunk_res?;
             let bytes = chunk.capture_stream;
-            client_reader.handle_chunk(&bytes);
+            client_reader.handle_chunk(&bytes)?;
         }
-    });
-
-    Ok(())
+        Ok(())
+    })
 }
 
 pub trait GrpcMethodExecutor {

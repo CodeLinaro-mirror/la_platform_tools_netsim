@@ -363,7 +363,10 @@ impl SmsService {
             SmsTransactionState::Sending { destination, .. } => {
                 self.handle_send_sms(pdu, sender, destination, network_service)
             }
-            SmsTransactionState::Idle => unreachable!(),
+            SmsTransactionState::Idle => {
+                tracing::warn!("Unexpected SmsTransactionState::Idle in handle_prompt_input");
+                return None;
+            }
         };
 
         Some(exec_res)

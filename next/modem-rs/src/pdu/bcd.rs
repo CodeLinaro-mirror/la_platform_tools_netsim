@@ -19,8 +19,7 @@ pub fn bcd_to_string(bytes: &[u8]) -> String {
             12 => s.push('a'),
             13 => s.push('b'),
             14 => s.push('c'),
-            0x0F => break,
-            _ => unreachable!(),
+            _ => break,
         }
 
         match high {
@@ -30,8 +29,7 @@ pub fn bcd_to_string(bytes: &[u8]) -> String {
             12 => s.push('a'),
             13 => s.push('b'),
             14 => s.push('c'),
-            0x0F => break,
-            _ => unreachable!(),
+            _ => break,
         }
     }
     s

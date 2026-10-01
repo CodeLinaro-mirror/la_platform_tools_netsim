@@ -1004,7 +1004,9 @@ impl SimService {
 
     fn handle_get_sim_status(&self) -> SimResult {
         let status = match self.state {
-            SimState::Absent => unreachable!("Absent state handled in execute"),
+            SimState::Absent => {
+                return Err(ExecutionResult::cme_error(CmeError::SimNotInserted));
+            }
             SimState::Ready => RequiredPin::None,
             SimState::PinRequired => RequiredPin::SimPin,
             SimState::PukRequired => RequiredPin::SimPuk,
@@ -1026,7 +1028,7 @@ impl SimService {
         let pin_or_puk_len = input.len();
         let new_pin_str = new_pin.as_ref().map(|p| p.as_str());
         match (self.state, new_pin_str) {
-            (SimState::Absent, _) => unreachable!("Absent state handled in execute"),
+            (SimState::Absent, _) => Err(ExecutionResult::cme_error(CmeError::SimNotInserted)),
             (SimState::PermBlocked, _) => {
                 Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed))
             }
