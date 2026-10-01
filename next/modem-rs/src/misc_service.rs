@@ -351,10 +351,6 @@ impl MiscService {
         Ok(None)
     }
 
-    pub fn set_time(&mut self, time: CclkTime) {
-        self.cclk = Some(time);
-    }
-
     fn handle_query_time(&self) -> MiscResult {
         let cclk = match self.cclk {
             Some(time) => time,

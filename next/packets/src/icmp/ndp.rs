@@ -9,6 +9,37 @@ use zerocopy::{
     byteorder::NetworkEndian,
 };
 
+/// NDP option type codes (RFC 4861 section 4.6).
+pub mod ndp_option {
+    /// Carries the sender's link-layer address (section 4.6.1).
+    pub const SOURCE_LINK_LAYER_ADDR: u8 = 1;
+    /// Carries the advertised target's link-layer address (section 4.6.1).
+    ///
+    /// Including this in a Neighbor Advertisement lets the peer populate its
+    /// neighbor cache without a second round trip.
+    pub const TARGET_LINK_LAYER_ADDR: u8 = 2;
+    /// Describes an on-link prefix (section 4.6.2).
+    pub const PREFIX_INFORMATION: u8 = 3;
+    /// Advertises recursive DNS servers (RFC 8106).
+    pub const RDNSS: u8 = 25;
+}
+
+/// Neighbor Advertisement flag bits (RFC 4861 section 4.4).
+pub mod na_flags {
+    /// The sender is a router.
+    pub const ROUTER: u8 = 0x80;
+    /// The advertisement answers a Neighbor Solicitation.
+    pub const SOLICITED: u8 = 0x40;
+    /// The receiver should overwrite an existing cache entry.
+    pub const OVERRIDE: u8 = 0x20;
+}
+
+/// The hop limit every NDP message must use (RFC 4861 section 11.2).
+///
+/// A receiver checks for 255 to prove the message was not forwarded by a
+/// router, so anything less is discarded.
+pub const NDP_HOP_LIMIT: u8 = 255;
+
 /// Represents a Neighbor Solicitation packet.
 #[repr(C)]
 #[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]

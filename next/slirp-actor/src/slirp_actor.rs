@@ -4,15 +4,50 @@
 use std::{
     collections::HashMap,
     fmt,
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 };
 
-use netsim_model::{PacketSink, PacketStream};
+use netsim_model::{ChipId, PacketSink, PacketStream};
 use netsim_packets::MacAddress;
-use tokio::sync::mpsc as tokio_mpsc;
+use tokio::sync::{mpsc as tokio_mpsc, oneshot};
 use tracing::info;
 
 pub type ClientId = u32;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlirpIpv4Lease {
+    pub ip_address: Ipv4Addr,
+    pub prefixlen: u8,
+    pub gateway: Ipv4Addr,
+    pub dns: Ipv4Addr,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlirpIpv6Lease {
+    pub ip_address: Ipv6Addr,
+    pub prefixlen: u8,
+    pub gateway: Ipv6Addr,
+    pub dns: Ipv6Addr,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlirpLease {
+    pub v4: SlirpIpv4Lease,
+    pub v6: Option<SlirpIpv6Lease>,
+}
+
+struct SlirpSubnetParams {
+    network: Ipv4Addr,
+    netmask: Ipv4Addr,
+    gateway: Ipv4Addr,
+    dns: Ipv4Addr,
+    dhcp_start: Ipv4Addr,
+    in6_enabled: bool,
+    prefix_addr6: Ipv6Addr,
+    prefix_len: u8,
+    gateway6: Ipv6Addr,
+    dns6: Ipv6Addr,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SlirpBackend {
@@ -47,9 +82,17 @@ pub enum SlirpReq {
         stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
         sink: netsim_model::PacketSink,
         notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
+        isolated: bool,
     },
     Unregister {
         client_id: ClientId,
+    },
+    AllocateLease {
+        chip_id: ChipId,
+        respond_to: oneshot::Sender<Option<SlirpLease>>,
+    },
+    ReleaseLease {
+        chip_id: ChipId,
     },
     SwitchBackend(SlirpBackend),
 }
@@ -58,11 +101,20 @@ impl std::fmt::Debug for SlirpReq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SlirpReq::SendPacket(_) => write!(f, "SlirpReq::SendPacket(...)"),
-            SlirpReq::Register { client_id, .. } => {
-                write!(f, "SlirpReq::Register {{ client_id: {client_id}, ... }}")
+            SlirpReq::Register { client_id, isolated, .. } => {
+                write!(
+                    f,
+                    "SlirpReq::Register {{ client_id: {client_id}, isolated: {isolated}, ... }}"
+                )
             }
             SlirpReq::Unregister { client_id } => {
                 write!(f, "SlirpReq::Unregister {{ client_id: {client_id} }}")
+            }
+            SlirpReq::AllocateLease { chip_id, .. } => {
+                write!(f, "SlirpReq::AllocateLease {{ chip_id: {chip_id} }}")
+            }
+            SlirpReq::ReleaseLease { chip_id } => {
+                write!(f, "SlirpReq::ReleaseLease {{ chip_id: {chip_id} }}")
             }
             SlirpReq::SwitchBackend(backend) => {
                 write!(f, "SlirpReq::SwitchBackend({:?})", backend)
@@ -88,6 +140,7 @@ impl fmt::Debug for SlirpCreate {
 pub struct ClientInfo {
     pub sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
     pub notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
+    pub isolated: bool,
 }
 
 pub(crate) enum SlirpBackendInstance {
@@ -128,6 +181,7 @@ pub struct SlirpActor {
     pub(crate) config: SlirpConfig,
     pub(crate) http_proxy: Option<String>,
     pub(crate) clients: HashMap<ClientId, ClientInfo>,
+    pub(crate) static_ips: HashMap<ChipId, Ipv4Addr>,
     pub(crate) mac_table: HashMap<MacAddress, ClientId>,
     pub(crate) next_stream_id: usize,
     pub(crate) active_stream_id: Option<usize>,
@@ -181,7 +235,7 @@ impl SlirpActor {
     }
 
     pub async fn new_with_backend(
-        #[allow(unused_mut)] mut config: SlirpConfig,
+        mut config: SlirpConfig,
         http_proxy: Option<String>,
         host_dns: Option<String>,
         backend_type: SlirpBackend,
@@ -209,6 +263,7 @@ impl SlirpActor {
             config,
             http_proxy,
             clients: HashMap::new(),
+            static_ips: HashMap::new(),
             mac_table: HashMap::new(),
             next_stream_id: 1,
             active_stream_id: None,
@@ -220,6 +275,110 @@ impl SlirpActor {
     pub fn backend(&self) -> SlirpBackend {
         self.backend_type
     }
+
+    #[cfg(not(feature = "cuttlefish"))]
+    fn subnet_params(&self) -> SlirpSubnetParams {
+        SlirpSubnetParams {
+            network: self.config.vnetwork,
+            netmask: self.config.vnetmask,
+            gateway: self.config.vhost,
+            dns: self.config.vnameserver,
+            dhcp_start: self.config.vdhcp_start,
+            in6_enabled: self.config.in6_enabled,
+            prefix_addr6: self.config.vprefix_addr6,
+            prefix_len: self.config.vprefix_len,
+            gateway6: self.config.vhost6,
+            dns6: self.config.vnameserver6,
+        }
+    }
+
+    #[cfg(feature = "cuttlefish")]
+    fn subnet_params(&self) -> SlirpSubnetParams {
+        // The native DHCP server always advertises a /24 and the RA a /64 of guest_ipv6.
+        let netmask = Ipv4Addr::new(255, 255, 255, 0);
+        let prefix_addr6 = Ipv6Addr::from(u128::from(self.config.guest_ipv6) & (!0u128 << 64));
+        SlirpSubnetParams {
+            network: Ipv4Addr::from(u32::from(self.config.host_ipv4) & u32::from(netmask)),
+            netmask,
+            gateway: self.config.host_ipv4,
+            dns: self.config.host_ipv4,
+            dhcp_start: Ipv4Addr::new(10, 0, 2, 16),
+            in6_enabled: true,
+            prefix_addr6,
+            prefix_len: 64,
+            gateway6: self.config.host_ipv6,
+            dns6: self.config.host_ipv6,
+        }
+    }
+
+    pub(crate) fn allocate_lease(&mut self, chip_id: ChipId) -> Option<SlirpLease> {
+        let params = self.subnet_params();
+        let prefixlen = u32::from(params.netmask).count_ones() as u8;
+
+        let host = if let Some(&ip_address) = self.static_ips.get(&chip_id) {
+            ip_address.octets()[3]
+        } else {
+            // Reserve 16 addresses for libslirp's BOOTP/DHCP pool (NB_BOOTP_CLIENTS = 16).
+            let [o0, o1, o2, _] = params.network.octets();
+            let start_host = params.dhcp_start.octets()[3].checked_add(16)?;
+            let Some(ip_address) =
+                (start_host..=254u8).map(|h| Ipv4Addr::new(o0, o1, o2, h)).find(|&ip| {
+                    ip != params.gateway
+                        && ip != params.dns
+                        && !self.static_ips.values().any(|&used| used == ip)
+                })
+            else {
+                tracing::warn!("Slirp static IP pool exhausted for chip {chip_id}");
+                return None;
+            };
+            let host = ip_address.octets()[3];
+            self.static_ips.insert(chip_id, ip_address);
+            host
+        };
+
+        let ip_address = Ipv4Addr::new(
+            params.network.octets()[0],
+            params.network.octets()[1],
+            params.network.octets()[2],
+            host,
+        );
+        let v4 = SlirpIpv4Lease { ip_address, prefixlen, gateway: params.gateway, dns: params.dns };
+
+        let v6 = if params.in6_enabled {
+            Some(SlirpIpv6Lease {
+                ip_address: ipv6_lease_addr(params.prefix_addr6, host),
+                prefixlen: params.prefix_len,
+                gateway: params.gateway6,
+                dns: params.dns6,
+            })
+        } else {
+            None
+        };
+
+        Some(SlirpLease { v4, v6 })
+    }
+
+    pub(crate) fn release_lease(&mut self, chip_id: ChipId) {
+        self.static_ips.remove(&chip_id);
+    }
+
+    pub(crate) fn matches_static_ipv6(&self, target: Ipv6Addr) -> bool {
+        let params = self.subnet_params();
+        if params.in6_enabled {
+            return self
+                .static_ips
+                .values()
+                .any(|&ip4| ipv6_lease_addr(params.prefix_addr6, ip4.octets()[3]) == target);
+        }
+        false
+    }
+}
+
+fn ipv6_lease_addr(prefix_addr6: Ipv6Addr, host: u8) -> Ipv6Addr {
+    let mut octets = prefix_addr6.octets();
+    octets[14] = 0;
+    octets[15] = host;
+    Ipv6Addr::from(octets)
 }
 
 impl Drop for SlirpActor {

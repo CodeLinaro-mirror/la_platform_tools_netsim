@@ -1176,12 +1176,12 @@ impl World {
     /// BDD Step: Given all devices are modified (visible=false, position
     /// nonzero)
     pub async fn given_all_devices_are_modified(&self) {
-        let response = self
+        let devices = self
             .client
             .list()
             .await
             .expect("Failed to list devices during given_all_devices_are_modified");
-        for device in response.devices {
+        for device in devices {
             let id = DeviceId(device.id);
             let mut update = DeviceUpdate::default();
             update.id = id.0;
@@ -1234,12 +1234,12 @@ impl World {
 
     /// BDD Step: Then all device properties should be back to default
     pub async fn then_all_devices_are_reset(&self) {
-        let response = self
+        let devices = self
             .client
             .list()
             .await
             .expect("Failed to list devices during then_all_devices_are_reset");
-        for device in response.devices {
+        for device in devices {
             assert!(device.visible, "Device {} should be visible after reset", device.id);
             assert_eq!(
                 device.pose.position,
@@ -1252,19 +1252,15 @@ impl World {
 
     /// BDD Step: Then a specific device should exist in the list
     pub async fn then_device_exists(&self, id: DeviceId) {
-        let response = self.client.list().await.unwrap();
-        assert!(
-            response.devices.iter().any(|d| d.id == id.0),
-            "Device {} should exist in the list",
-            id.0
-        );
+        let devices = self.client.list().await.unwrap();
+        assert!(devices.iter().any(|d| d.id == id.0), "Device {} should exist in the list", id.0);
     }
 
     /// BDD Step: Then a specific device should NOT exist in the list
     pub async fn then_device_does_not_exist(&self, id: DeviceId) {
-        let response = self.client.list().await.unwrap();
+        let devices = self.client.list().await.unwrap();
         assert!(
-            !response.devices.iter().any(|d| d.id == id.0),
+            !devices.iter().any(|d| d.id == id.0),
             "Device {} should NOT exist in the list",
             id.0
         );

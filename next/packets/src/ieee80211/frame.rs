@@ -545,25 +545,24 @@ impl Ieee80211 {
         [ccmp[7], ccmp[6], ccmp[5], ccmp[4], ccmp[1], ccmp[0]]
     }
 
+    fn get_addr_at(&self, offset: usize) -> MacAddress {
+        self.bytes
+            .get(offset..offset + 6)
+            .and_then(|slice| slice.try_into().ok())
+            .map(MacAddress::new)
+            .unwrap_or(MacAddress::new([0; 6]))
+    }
+
     pub fn get_addr1(&self) -> MacAddress {
-        if self.bytes.len() < 10 {
-            return MacAddress::new([0; 6]);
-        }
-        MacAddress::new(self.bytes[4..10].try_into().unwrap())
+        self.get_addr_at(4)
     }
 
     pub fn get_addr2(&self) -> MacAddress {
-        if self.bytes.len() < 16 {
-            return MacAddress::new([0; 6]);
-        }
-        MacAddress::new(self.bytes[10..16].try_into().unwrap())
+        self.get_addr_at(10)
     }
 
     pub fn get_addr3(&self) -> MacAddress {
-        if self.bytes.len() < 22 {
-            return MacAddress::new([0; 6]);
-        }
-        MacAddress::new(self.bytes[16..22].try_into().unwrap())
+        self.get_addr_at(16)
     }
 
     pub fn get_fc(&self) -> u16 {
@@ -835,12 +834,26 @@ pub struct Ieee80211ToAp {
 }
 
 impl Ieee80211ToAp {
-    pub fn encode_to_bytes(&self) -> Result<Vec<u8>, String> {
+    fn encode_with_direction(
+        &self,
+        direction: FrameDirection,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, String> {
         let mut fc = 0u16;
         fc |= (self.version as u16) & 0x03;
         fc |= ((self.ftype as u16) & 0x03) << 2;
         fc |= ((self.stype as u16) & 0x0F) << 4;
-        fc |= 0x0100; // ToDS=1
+        let (ds_flag, addrs) = match direction {
+            FrameDirection::ToAp => {
+                // ToDS=1, Addr1=BSSID, Addr2=SA, Addr3=DA
+                (0x0100, [&self.bssid.bytes, &self.source.bytes, &self.destination.bytes])
+            }
+            FrameDirection::FromAp => {
+                // FromDS=1, Addr1=DA, Addr2=BSSID, Addr3=SA
+                (0x0200, [&self.destination.bytes, &self.bssid.bytes, &self.source.bytes])
+            }
+        };
+        fc |= ds_flag;
 
         if self.protected != 0 {
             fc |= 0x4000;
@@ -864,16 +877,20 @@ impl Ieee80211ToAp {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&fc.to_le_bytes());
         bytes.extend_from_slice(&self.duration_id.to_le_bytes());
-        bytes.extend_from_slice(&self.bssid.bytes); // Addr1 (BSSID)
-        bytes.extend_from_slice(&self.source.bytes); // Addr2 (SA)
-        bytes.extend_from_slice(&self.destination.bytes); // Addr3 (DA)
+        for addr in addrs {
+            bytes.extend_from_slice(addr);
+        }
         bytes.extend_from_slice(&self.seq_ctrl.to_le_bytes());
         if let Some(qos) = self.qos_ctrl {
             bytes.extend_from_slice(&qos);
         }
-        bytes.extend_from_slice(&self.payload);
+        bytes.extend_from_slice(payload);
 
         Ok(bytes)
+    }
+
+    pub fn encode_to_bytes(&self) -> Result<Vec<u8>, String> {
+        self.encode_with_direction(FrameDirection::ToAp, &self.payload)
     }
 }
 
@@ -907,45 +924,29 @@ pub struct Ieee80211FromAp {
 }
 
 impl Ieee80211FromAp {
+    fn as_to_ap_header(&self) -> Ieee80211ToAp {
+        Ieee80211ToAp {
+            duration_id: self.duration_id,
+            ftype: self.ftype,
+            stype: self.stype,
+            destination: self.destination,
+            source: self.source,
+            bssid: self.bssid,
+            seq_ctrl: self.seq_ctrl,
+            qos_ctrl: self.qos_ctrl,
+            protected: self.protected,
+            order: self.order,
+            more_frags: self.more_frags,
+            retry: self.retry,
+            pm: self.pm,
+            more_data: self.more_data,
+            version: self.version,
+            payload: Vec::new(),
+        }
+    }
+
     pub fn encode_to_bytes(&self) -> Result<Vec<u8>, String> {
-        let mut fc = 0u16;
-        fc |= (self.version as u16) & 0x03;
-        fc |= ((self.ftype as u16) & 0x03) << 2;
-        fc |= ((self.stype as u16) & 0x0F) << 4;
-        fc |= 0x0200; // FromDS=1
-
-        if self.protected != 0 {
-            fc |= 0x4000;
-        }
-        if self.order != 0 {
-            fc |= 0x8000;
-        }
-        if self.more_frags != 0 {
-            fc |= 0x0400;
-        }
-        if self.retry != 0 {
-            fc |= 0x0800;
-        }
-        if self.pm != 0 {
-            fc |= 0x1000;
-        }
-        if self.more_data != 0 {
-            fc |= 0x2000;
-        }
-
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&fc.to_le_bytes());
-        bytes.extend_from_slice(&self.duration_id.to_le_bytes());
-        bytes.extend_from_slice(&self.destination.bytes); // Addr1 (DA)
-        bytes.extend_from_slice(&self.bssid.bytes); // Addr2 (BSSID)
-        bytes.extend_from_slice(&self.source.bytes); // Addr3 (SA)
-        bytes.extend_from_slice(&self.seq_ctrl.to_le_bytes());
-        if let Some(qos) = self.qos_ctrl {
-            bytes.extend_from_slice(&qos);
-        }
-        bytes.extend_from_slice(&self.payload);
-
-        Ok(bytes)
+        self.as_to_ap_header().encode_with_direction(FrameDirection::FromAp, &self.payload)
     }
 }
 
@@ -1272,5 +1273,118 @@ mod tests {
         let qos_null_bytes = make_fc_bytes(2, 12);
         let qos_null_frame = Ieee80211::decode(&qos_null_bytes).unwrap();
         assert!(!qos_null_frame.is_payload_bearing_data());
+    }
+
+    #[test]
+    fn test_get_addr_accessors_and_short_frames() {
+        let addr1 = MacAddress::new([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
+        let addr2 = MacAddress::new([0x11, 0x12, 0x13, 0x14, 0x15, 0x16]);
+        let addr3 = MacAddress::new([0x21, 0x22, 0x23, 0x24, 0x25, 0x26]);
+        let zero_addr = MacAddress::new([0; 6]);
+
+        let mut bytes = vec![0u8; 4];
+        bytes.extend_from_slice(&addr1.bytes);
+        bytes.extend_from_slice(&addr2.bytes);
+        bytes.extend_from_slice(&addr3.bytes);
+
+        let full_frame = Ieee80211 { bytes: bytes.clone() };
+        assert_eq!(full_frame.get_addr1(), addr1);
+        assert_eq!(full_frame.get_addr2(), addr2);
+        assert_eq!(full_frame.get_addr3(), addr3);
+
+        let short_frame = Ieee80211 { bytes: bytes[..9].to_vec() };
+        assert_eq!(short_frame.get_addr1(), zero_addr);
+        assert_eq!(short_frame.get_addr2(), zero_addr);
+        assert_eq!(short_frame.get_addr3(), zero_addr);
+
+        let partial_frame = Ieee80211 { bytes: bytes[..15].to_vec() };
+        assert_eq!(partial_frame.get_addr1(), addr1);
+        assert_eq!(partial_frame.get_addr2(), zero_addr);
+        assert_eq!(partial_frame.get_addr3(), zero_addr);
+    }
+
+    #[test]
+    fn test_encode_to_bytes_to_ap_and_from_ap_all_flags() {
+        let dst = MacAddress::new([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+        let src = MacAddress::new([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]);
+        let bssid = MacAddress::new([0x02, 0x00, 0x00, 0x00, 0x01, 0x01]);
+        let payload = vec![0xCA, 0xFE, 0xBA, 0xBE];
+
+        let to_ap = Ieee80211ToAp {
+            duration_id: 0x1234,
+            ftype: FrameType::Data,
+            stype: 0x08, // QoS Data
+            destination: dst,
+            source: src,
+            bssid,
+            seq_ctrl: 0x0420,
+            qos_ctrl: Some([0x05, 0x00]),
+            protected: 1,
+            order: 0,
+            more_frags: 1,
+            retry: 1,
+            pm: 1,
+            more_data: 1,
+            version: 0,
+            payload: payload.clone(),
+        };
+
+        let to_ap_bytes = to_ap.encode_to_bytes().expect("encode ToAp should succeed");
+        let to_ap_frame = Ieee80211::decode_full(&to_ap_bytes).expect("decode ToAp should succeed");
+        // FC: Data (2 << 2 = 0x0008) | QoS (8 << 4 = 0x0080) | ToDS (0x0100)
+        //   | MoreFrags (0x0400) | Retry (0x0800) | PM (0x1000)
+        //   | MoreData (0x2000) | Protected (0x4000) = 0x7D88
+        assert_eq!(to_ap_frame.get_fc(), 0x7D88);
+        assert!(to_ap_frame.is_to_ds());
+        assert!(!to_ap_frame.is_from_ds());
+        assert_eq!(to_ap_frame.get_addr1(), bssid);
+        assert_eq!(to_ap_frame.get_addr2(), src);
+        assert_eq!(to_ap_frame.get_addr3(), dst);
+        assert_eq!(to_ap_frame.get_destination(), dst);
+        assert_eq!(to_ap_frame.get_source(), src);
+        assert_eq!(to_ap_frame.get_bssid(), Some(bssid));
+        assert_eq!(to_ap_frame.get_payload(), payload);
+
+        let mut to_ap_ordered = to_ap.clone();
+        to_ap_ordered.order = 1;
+        let to_ap_ordered_bytes =
+            to_ap_ordered.encode_to_bytes().expect("encode ordered ToAp should succeed");
+        let to_ap_ordered_frame = Ieee80211::decode_full(&to_ap_ordered_bytes)
+            .expect("decode ordered ToAp should succeed");
+        assert_eq!(to_ap_ordered_frame.get_fc(), 0xFD88);
+
+        let from_ap = Ieee80211FromAp {
+            duration_id: 0x1234,
+            ftype: FrameType::Data,
+            stype: 0x08, // QoS Data
+            destination: dst,
+            source: src,
+            bssid,
+            seq_ctrl: 0x0420,
+            qos_ctrl: Some([0x05, 0x00]),
+            protected: 1,
+            order: 0,
+            more_frags: 1,
+            retry: 1,
+            pm: 1,
+            more_data: 1,
+            version: 0,
+            payload: payload.clone(),
+        };
+
+        let from_ap_bytes = from_ap.encode_to_bytes().expect("encode FromAp should succeed");
+        let from_ap_frame =
+            Ieee80211::decode_full(&from_ap_bytes).expect("decode FromAp should succeed");
+        // FC with FromDS (0x0200) instead of ToDS (0x0100) = 0x7E88
+        assert_eq!(from_ap_frame.get_fc(), 0x7E88);
+        assert!(!from_ap_frame.is_to_ds());
+        assert!(from_ap_frame.is_from_ds());
+        assert_eq!(from_ap_frame.get_addr1(), dst);
+        assert_eq!(from_ap_frame.get_addr2(), bssid);
+        assert_eq!(from_ap_frame.get_addr3(), src);
+        assert_eq!(from_ap_frame.get_destination(), dst);
+        assert_eq!(from_ap_frame.get_source(), src);
+        assert_eq!(from_ap_frame.get_bssid(), Some(bssid));
+        assert_eq!(from_ap_frame.get_payload(), payload);
     }
 }

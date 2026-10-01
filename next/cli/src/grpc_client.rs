@@ -30,7 +30,6 @@ pub trait ClientResponseReadable {
 // Enum of Grpc Requests holding the request proto as applicable
 #[derive(Debug, PartialEq)]
 pub enum GrpcRequest {
-    GetVersion,
     ListDevice,
     Reset,
     ListCapture,
@@ -49,7 +48,6 @@ pub enum GrpcRequest {
 // Enum of Grpc Responses holding the response proto as applicable
 #[derive(Debug, PartialEq)]
 pub enum GrpcResponse {
-    GetVersion(frontend::VersionResponse),
     ListDevice(frontend::ListDeviceResponse),
     Reset,
     ListCapture(frontend::ListCaptureResponse),
@@ -90,9 +88,6 @@ pub trait GrpcMethodExecutor {
 impl GrpcMethodExecutor for FrontendServiceClient {
     fn send_grpc(&self, grpc_request: &GrpcRequest) -> Result<GrpcResponse> {
         match grpc_request {
-            GrpcRequest::GetVersion => {
-                Ok(GrpcResponse::GetVersion(self.get_version(&empty::Empty::new())?))
-            }
             GrpcRequest::ListDevice => {
                 Ok(GrpcResponse::ListDevice(self.list_device(&empty::Empty::new())?))
             }

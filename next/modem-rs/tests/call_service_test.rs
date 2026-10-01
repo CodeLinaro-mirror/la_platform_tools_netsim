@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use netsim_model::RegistrationStatus;
+
 use crate::{common::constants::*, steps::*, world::World};
 
 // Scenario: Emergency Call
@@ -25,7 +27,7 @@ fn test_emergency_call() {
 #[test]
 fn test_standard_call() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Dial international number
     world.send_and_expect_ok("A", &format!("ATD+{TEST_PHONE_NUMBER_ALT};"));
@@ -58,7 +60,7 @@ fn test_standard_call() {
 #[test]
 fn test_query_current_calls() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
     world.given_modem_with_number("B", CALL_PEER_B);
     world.given_modem_with_number("C", CALL_PEER_C);
 
@@ -107,6 +109,8 @@ fn test_call_ring_timeout() {
 
     // Advance time > 30s
     world.when_time_advances_ms(30100);
+
+    world.then_response_is("A", "NO ANSWER");
 
     // Verify C is idle (AT+CLCC returns just OK)
     world.assert_idle("C");
@@ -195,7 +199,7 @@ fn test_query_emergency_mode() {
 #[test]
 fn test_external_incoming_call() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Enable CLIP
     world.send_and_expect_ok("A", "AT+CLIP=1");
@@ -233,7 +237,7 @@ fn test_external_incoming_call() {
 #[test]
 fn test_external_call_control() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Dial
     world.send_and_expect_ok("A", &format!("ATD{CALL_PEER_EXT};"));
@@ -247,7 +251,7 @@ fn test_external_call_control() {
 
     // Remote Hangup
     when_external_call_hungup(&mut world, "A");
-    world.then_response_is("A", "RING");
+    world.then_response_is("A", "NO CARRIER");
 
     // Verify Idle
     world.assert_idle("A");
@@ -266,7 +270,7 @@ fn test_external_call_control() {
 #[test]
 fn test_external_call_hold() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Dial and Answer to get Active call
     world.send_and_expect_ok("A", &format!("ATD{CALL_PEER_EXT};"));
@@ -289,7 +293,7 @@ fn test_external_call_hold() {
 #[test]
 fn test_dial_speed_dial_does_not_fallback() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Dial *999# which starts with *99 and ends with #, but is not standard GPRS
     // dial format. It should NOT fall back, but remain handled by CallService
@@ -301,7 +305,7 @@ fn test_dial_speed_dial_does_not_fallback() {
 #[test]
 fn test_emergency_dial_syntax() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Emergency with category and CLIR
     world.send_and_expect_ok("A", &format!("ATD{}@1,#I;", TEST_EMERGENCY_NUMBER));
@@ -407,7 +411,7 @@ fn test_emergency_call_with_sim_puk_locked() {
 #[test]
 fn test_wsos_emergency_mode_full_lifecycle() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     world.send_and_expect("A", "AT+WSOS?", &["+WSOS: 0", "OK"]);
     world.send_and_expect_ok("A", "AT+WSOS=1");
@@ -485,7 +489,7 @@ fn test_emergency_mode_concurrent_dial_rejected_while_emergency_active() {
 #[test]
 fn test_dial_clir_semicolon() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Dial with CLIR 'i' and semicolon
     world.send_and_expect_ok("A", &format!("ATD{CALL_PEER_ALT_2}i;"));
@@ -497,7 +501,7 @@ fn test_dial_clir_semicolon() {
 #[test]
 fn test_invalid_dial_syntax() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Plus in the middle should be rejected
     world.send_and_expect_error("A", "ATD123+456;", "ERROR");
@@ -576,7 +580,7 @@ fn test_fdn_dial_restriction() {
 
     // Hang up B
     world.hangup("B");
-    world.then_response_is("A", "RING");
+    world.then_response_is("A", "BUSY");
 
     // Enable FDN lock using PIN2 "5678"
     world.send_and_expect_ok("A", "AT+CLCK=\"FD\",1,\"5678\"");
@@ -721,7 +725,7 @@ fn test_dial_with_pause_modifier() {
 #[test]
 fn test_external_incoming_call_answered_ata() {
     let mut world = World::new();
-    world.given_modem("A");
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
 
     // Enable CLIP
     world.send_and_expect_ok("A", "AT+CLIP=1");
@@ -757,7 +761,7 @@ fn test_single_incoming_call_declined_udub_chld0() {
     world.release_held_calls("A");
 
     // Calling peer B receives remote hangup URC
-    then_wait_for_response_containing(&mut world, "B", "RING");
+    then_wait_for_response_containing(&mut world, "B", "BUSY");
 
     // Verify both modems are now idle
     world.assert_idle("A");
@@ -800,4 +804,170 @@ fn test_empty_call_list_teardown_idempotency() {
 
     // ATH on idle modem succeeds idempotently with OK (3GPP TS 22.030 §4.5.5.1)
     world.send_and_expect_ok("A", "ATH");
+}
+
+#[test]
+fn test_voice_call_registration_admission_matrix() {
+    let mut world = World::new();
+    world.given_modem("A");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    let (id, _) = world.get_modem("A");
+
+    // Radio Off (CFUN=0)
+    world.send_and_expect_ok("A", "AT+CFUN=0");
+    world.send_and_expect_error("A", "ATD123456;", "+CME ERROR: 30");
+    world.send_and_expect_error("A", "ATD911@;", "+CME ERROR: 30");
+
+    // Airplane mode / DisableRf (CFUN=4)
+    world.send_and_expect_ok("A", "AT+CFUN=4");
+    world.send_and_expect_error("A", "ATD123456;", "+CME ERROR: 30");
+    world.send_and_expect_error("A", "ATD911@;", "+CME ERROR: 30");
+
+    world.send_and_expect_ok("A", "AT+CFUN=1");
+
+    // Unregistered (NotRegistered, Searching, Denied)
+    for status in [
+        RegistrationStatus::NotRegistered,
+        RegistrationStatus::Searching,
+        RegistrationStatus::Denied,
+    ] {
+        world.manager.get_modem_mut(id).unwrap().set_voice_registration(status);
+        world.send_and_expect_error("A", "ATD123456;", "+CME ERROR: 30");
+        // Emergency calls bypass registration per 3GPP TS 22.101 §10.1
+        world.send_and_expect_ok("A", "ATD911@;");
+        world.then_response_is("A", "RING");
+        world.hangup("A");
+    }
+
+    // Emergency Only (Status 8)
+    world.manager.get_modem_mut(id).unwrap().set_voice_registration(RegistrationStatus::Emergency);
+    world.send_and_expect_error("A", "ATD123456;", "+CME ERROR: 32");
+    world.send_and_expect_ok("A", "ATD911@;");
+    world.then_response_is("A", "RING");
+    world.hangup("A");
+
+    world
+        .manager
+        .get_modem_mut(id)
+        .unwrap()
+        .set_voice_registration(RegistrationStatus::RegisteredHome);
+    world.send_and_expect_ok("A", "ATD123456;");
+    world.hangup("A");
+    world.send_and_expect_ok("A", "ATD911@;");
+    world.then_response_is("A", "RING");
+    world.hangup("A");
+
+    // Registered Roaming (Status 5)
+    world.manager.get_modem_mut(id).unwrap().set_voice_registration(RegistrationStatus::Roaming);
+    world.send_and_expect_ok("A", "ATD123456;");
+    world.hangup("A");
+    world.send_and_expect_ok("A", "ATD911@;");
+    world.then_response_is("A", "RING");
+    world.hangup("A");
+}
+
+#[test]
+fn test_mt_incoming_call_delivery_matrix() {
+    let mut world = World::new();
+    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
+    world.given_modem_with_number("B", TEST_PHONE_NUMBER_LONG_B);
+
+    // Callee Radio Off (AT+CFUN=0): caller dials, callee gets NO RING / NO CLIP
+    world.send_and_expect_ok("B", "AT+CFUN=0");
+    world.send_and_expect_ok("A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B};"));
+    world.then_no_response("B");
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[]);
+
+    let (id_b, _) = world.get_modem("B");
+
+    // Callee Radio On (AT+CFUN=1) but Unregistered: caller dials, callee gets NO
+    // RING
+    world.send_and_expect_ok("B", "AT+CFUN=1");
+    world
+        .manager
+        .get_modem_mut(id_b)
+        .unwrap()
+        .set_voice_registration(RegistrationStatus::NotRegistered);
+    world.send_and_expect_ok("A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B};"));
+    world.then_no_response("B");
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[]);
+
+    // Callee Radio On (AT+CFUN=1) but Emergency Registration: caller dials, callee
+    // gets NO RING
+    world
+        .manager
+        .get_modem_mut(id_b)
+        .unwrap()
+        .set_voice_registration(RegistrationStatus::Emergency);
+    world.send_and_expect_ok("A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B};"));
+    world.then_no_response("B");
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[]);
+
+    // Callee Radio On (AT+CFUN=1) + Registered: caller dials, callee gets RING /
+    // CLIP
+    world
+        .manager
+        .get_modem_mut(id_b)
+        .unwrap()
+        .set_voice_registration(RegistrationStatus::RegisteredHome);
+    world.send_and_expect_ok("B", "AT+CLIP=1");
+    world.when_time_advances_ms(15); // Wait for attach (RegisteredHome)
+
+    world.send_and_expect_ok("A", &format!("ATD{TEST_PHONE_NUMBER_LONG_B};"));
+    world.then_response_contains("B", "RING");
+    let num_str = TEST_PHONE_NUMBER_LONG_A.strip_prefix('+').unwrap_or(TEST_PHONE_NUMBER_LONG_A);
+    world.then_response_contains("B", &format!("+CLIP: \"{num_str}\""));
+
+    world.send_and_expect_ok("B", "ATA");
+    world.then_response_is("A", "RING"); // Caller receives connection indication
+    world.assert_clcc("B", &[&format!("+CLCC: 1,1,0,0,0,{num_str},145")]);
+
+    world.hangup("A");
+    world.then_response_is("B", "NO CARRIER"); // remote hangup indication
+    world.assert_idle("A");
+    world.assert_idle("B");
+}
+
+#[test]
+fn test_goldfish_37_udub_and_timeout_preserves_ring() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+    world.given_goldfish_37_modem("B");
+    let (id_a, _) = world.get_modem("A");
+    let (id_b, _) = world.get_modem("B");
+    world
+        .manager
+        .get_modem_mut(id_a)
+        .unwrap()
+        .set_voice_registration(RegistrationStatus::RegisteredHome);
+    world
+        .manager
+        .get_modem_mut(id_b)
+        .unwrap()
+        .set_voice_registration(RegistrationStatus::RegisteredHome);
+
+    world.dial("B", "A");
+
+    // Callee A rejects incoming call with AT+CHLD=0 (UDUB)
+    world.release_held_calls("A");
+
+    world.then_response_is("B", "RING");
+    world.assert_idle("A");
+    world.assert_idle("B");
+
+    world.dial("B", "A");
+    world.when_time_advances_ms(30100);
+    world.then_response_is("B", "RING");
+    world.assert_idle("A");
+    world.assert_idle("B");
+
+    world.connect_call("B", "A");
+    world.hangup("A");
+    world.then_response_is("B", "RING");
+    world.assert_idle("A");
+    world.assert_idle("B");
 }
