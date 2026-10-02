@@ -39,6 +39,11 @@ NETSIM_CLIPPY_FLAGS = [
     "-Dclippy::match_wild_err_arm",
     "-Dclippy::unwrap_in_result",
     "-Dclippy::unwrap_used",
+    "-Dclippy::panic",
+    "-Dclippy::todo",
+    "-Dclippy::unimplemented",
+    "-Dclippy::unreachable",
+    "-Dclippy::panic_in_result_fn",
 ]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.
@@ -277,6 +282,11 @@ def _netsim_clippy_test_impl(ctx):
             t_args.add("-Aclippy::unwrap_used")
             t_args.add("-Aclippy::field_reassign_with_default")
             t_args.add("-Aclippy::module_inception")
+            t_args.add("-Aclippy::panic")
+            t_args.add("-Aclippy::unreachable")
+            t_args.add("-Aclippy::unimplemented")
+            t_args.add("-Aclippy::todo")
+            t_args.add("-Aclippy::panic_in_result_fn")
         else:
             t_args.add("--crate-type=rlib")
         t_args.add("--crate-name=%s" % info.name)

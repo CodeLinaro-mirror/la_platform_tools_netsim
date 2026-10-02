@@ -87,9 +87,9 @@ fn perform_command(
         args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_))
         | args::Command::Link(_) => command.get_requests(&client),
         args::Command::Beacon(args::Beacon::Remove(_)) => {
-            Ok(vec![args::Command::Devices(args::Devices::default()).get_request()])
+            Ok(vec![args::Command::Devices(args::Devices::default()).get_request()?])
         }
-        _ => Ok(vec![command.get_request()]),
+        _ => Ok(vec![command.get_request()?]),
     }?;
     let mut process_error = false;
     let is_continuous = match command {
@@ -109,7 +109,8 @@ fn perform_command(
             // Continuous option sends the gRPC call every second
             &mut args::Command::Devices(ref cmd) if cmd.continuous => {
                 continuous_perform_command(command, &client, cell_client.as_ref(), req, verbose)?;
-                unreachable!("Continuous command should loop forever until error");
+                error!("Continuous command unexpectedly terminated without error");
+                return Ok(());
             }
             &mut args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
                 continuous_perform_command(
@@ -119,7 +120,8 @@ fn perform_command(
                     req,
                     verbose,
                 )?;
-                unreachable!("Continuous command should loop forever until error");
+                error!("Continuous command unexpectedly terminated without error");
+                return Ok(());
             }
             // Get Capture use streaming gRPC reader request
             args::Command::Capture(args::Capture::Get(cmd)) => {

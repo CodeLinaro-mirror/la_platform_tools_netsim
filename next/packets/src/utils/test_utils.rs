@@ -1,6 +1,9 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+// Test assertion utilities re-exported for integration tests.
+#![allow(clippy::panic)]
+
 use std::{
     net::{Ipv4Addr, Ipv6Addr},
     path::Path,

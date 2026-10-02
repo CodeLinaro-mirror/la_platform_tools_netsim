@@ -43,8 +43,8 @@ fn chip_kind_to_proto(chip_kind: ArgsChipKind) -> ChipKind {
 
 impl Command {
     /// Return the generated request protobuf message
-    pub fn get_request(&self) -> GrpcRequest {
-        match self {
+    pub fn get_request(&self) -> Result<GrpcRequest> {
+        Ok(match self {
             Command::Radio(cmd) => {
                 let mut chip = Chip { ..Default::default() };
                 let chip_state = match cmd.status {
@@ -115,14 +115,16 @@ impl Command {
             Command::Capture(cmd) => match cmd {
                 Capture::List(_) => GrpcRequest::ListCapture,
                 Capture::Get(_) => {
-                    unimplemented!(
+                    return Err(
                         "get_request not implemented for Capture Get command. Use get_requests instead."
-                    )
+                            .into(),
+                    );
                 }
                 Capture::Patch(_) => {
-                    unimplemented!(
+                    return Err(
                         "get_request not implemented for Capture Patch command. Use get_requests instead."
-                    )
+                            .into(),
+                    );
                 }
             },
 
@@ -187,9 +189,9 @@ impl Command {
             },
             // These commands are intercepted early in main.rs and have no direct gRPC pipeline.
             _ => {
-                unimplemented!("get_request is not implemented for this command.");
+                return Err("get_request is not implemented for this command.".into());
             }
-        }
+        })
     }
 
     /// Create and return the request protobuf(s) for the command.
@@ -239,9 +241,8 @@ impl Command {
             }
             Command::Link(link_cmd) => Self::handle_link_command(client, link_cmd),
             _ => {
-                unimplemented!(
-                    "get_requests not implemented for this command. Use get_request instead."
-                )
+                Err("get_requests not implemented for this command. Use get_request instead."
+                    .into())
             }
         }
     }
@@ -252,7 +253,7 @@ impl Command {
     ) -> Result<Vec<GrpcRequest>> {
         match link_cmd {
             Link::List => {
-                unimplemented!("Link::List uses the REST API and is handled directly in main.rs.")
+                Err("Link::List uses the REST API and is handled directly in main.rs.".into())
             }
             Link::Create(cmd) => {
                 let chip_kind = chip_kind_to_proto(cmd.chip_kind);
@@ -533,7 +534,7 @@ mod tests {
         // `get_request` does NOT take a client.
         // So this helper is fine for `get_request` commands.
         // But for `Link` commands we need `test_link_command`.
-        let request = command.get_request();
+        let request = command.get_request().unwrap();
         assert_eq!(request, expected_grpc_request);
     }
 

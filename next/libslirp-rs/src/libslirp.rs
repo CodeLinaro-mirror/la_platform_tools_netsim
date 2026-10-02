@@ -1143,7 +1143,10 @@ impl CallbackContext {
             //    safe
             let storage = unsafe { *addr };
             let af = storage.ss_family as i32;
-            let socket_addr: SocketAddr = storage.into();
+            let Ok(socket_addr) = SocketAddr::try_from(storage) else {
+                warn!("Unsupported address family: {}", storage.ss_family);
+                return false;
+            };
             proxy_manager.try_connect(
                 socket_addr,
                 connect_id,

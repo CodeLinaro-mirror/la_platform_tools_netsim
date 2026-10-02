@@ -869,7 +869,11 @@ impl NetsimDaemon {
             (true, false) => true,
             (false, true) => false,
             (false, false) => cfg!(feature = "cuttlefish"),
-            (true, true) => panic!("unexpected flag combination"),
+            (true, true) => {
+                return Err(init_error(
+                    "unexpected flag combination: cannot set both --test-beacons and --no-test-beacons",
+                ));
+            }
         };
 
         if test_beacons {

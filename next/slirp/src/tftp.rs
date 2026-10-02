@@ -502,8 +502,8 @@ fn build_udp_packet(
 
     // 2. Build IP Header
     let (ip_header_slice, ip_payload) = eth_payload.split_at_mut(ip_header_len);
-    match (dest_addr.ip(), is_ipv6) {
-        (IpAddr::V4(guest_ip), false) => {
+    match dest_addr.ip() {
+        IpAddr::V4(guest_ip) => {
             let mut ipv4_builder = Ipv4Builder::new(
                 ip_header_slice,
                 netsim_packets::IP_P_UDP,
@@ -514,7 +514,7 @@ fn build_udp_packet(
             ipv4_builder.payload_len(udp_header_len + payload.len());
             ipv4_builder.build();
         }
-        (IpAddr::V6(guest_ip), true) => {
+        IpAddr::V6(guest_ip) => {
             let mut ipv6_builder = Ipv6Builder::new(
                 ip_header_slice,
                 netsim_packets::IP_P_UDP,
@@ -525,7 +525,6 @@ fn build_udp_packet(
             ipv6_builder.payload_len(udp_header_len + payload.len());
             ipv6_builder.build();
         }
-        _ => unreachable!(),
     }
 
     // 3. Build UDP Header and Payload
