@@ -1,0 +1,22 @@
+# Copyright 2026 - The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
+"""unsafe-libyaml bazel build rule"""
+
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "unsafe-libyaml",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/bin/**"],
+    ),
+    crate_name = "unsafe_libyaml",
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    rustc_flags = [
+        "--cap-lints=allow",
+    ],
+)
