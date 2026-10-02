@@ -125,9 +125,7 @@ async fn handle_new_connection(
                 ..Default::default()
             })))
         }
-        ChipKind::UWB => {
-            Some(netsim_model::ChipVariant::Uwb(netsim_model::Uwb { radio: Default::default() }))
-        }
+        ChipKind::UWB => Some(netsim_model::ChipVariant::Uwb(netsim_model::Uwb::default())),
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }

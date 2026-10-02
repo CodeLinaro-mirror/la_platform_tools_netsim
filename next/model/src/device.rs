@@ -64,7 +64,7 @@ pub mod api {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate},
+        chip::{BleBeacon, BluetoothCreate, CellCreate, Uwb, UwbCreate, UwbMode, WifiCreate},
         device::{DeviceConfig, Orientation, Position},
         nfc::{Nfc, NfcCreate},
     };
@@ -191,9 +191,7 @@ pub mod api {
                 ChipCreateVariant::Wifi(wifi) => {
                     crate::chip::ChipVariant::Wifi(crate::wifi::Wifi::from(wifi))
                 }
-                ChipCreateVariant::Uwb(_uwb) => {
-                    crate::chip::ChipVariant::Uwb(crate::uwb::Uwb { radio: Default::default() })
-                }
+                ChipCreateVariant::Uwb(uwb) => crate::chip::ChipVariant::Uwb(Uwb::from(uwb)),
                 ChipCreateVariant::Cell(cell) => {
                     crate::chip::ChipVariant::Cell(crate::cell::Cell {
                         sim_type: cell.sim_type,
@@ -247,8 +245,13 @@ pub mod api {
                     Some(crate::chip::ChipVariant::Wifi(_wifi)) => {
                         ChipCreateVariant::Wifi(crate::chip::WifiCreate::default())
                     }
-                    Some(crate::chip::ChipVariant::Uwb(_uwb)) => {
-                        ChipCreateVariant::Uwb(crate::chip::UwbCreate::default())
+                    Some(crate::chip::ChipVariant::Uwb(uwb)) => {
+                        ChipCreateVariant::Uwb(match uwb.mode {
+                            UwbMode::Device => UwbCreate::Device,
+                            UwbMode::Anchor => UwbCreate::Anchor {
+                                address: (!uwb.address.is_empty()).then_some(uwb.address),
+                            },
+                        })
                     }
                     Some(crate::chip::ChipVariant::Cell(cell)) => {
                         ChipCreateVariant::Cell(crate::chip::CellCreate {
