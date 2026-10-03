@@ -5,7 +5,7 @@ use actor_framework::ResourceClient;
 use netsim_model::{ChipId, ClientError, PacketSink, PacketStream};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
-use crate::slirp_actor::{SlirpActor, SlirpLease, SlirpReq};
+use crate::slirp_actor::{SlirpActor, SlirpCreate, SlirpLease, SlirpReq};
 
 #[derive(Clone, Debug)]
 pub struct SlirpClient {
@@ -23,7 +23,7 @@ impl SlirpClient {
         packet_sink: Option<PacketSink>,
     ) -> Result<(), ClientError> {
         self.client
-            .create(super::SlirpCreate { packet_stream, packet_sink })
+            .create(SlirpCreate { packet_stream, packet_sink })
             .await
             .map(|_| ())
             .map_err(|e| ClientError::Send(e.to_string()))

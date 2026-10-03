@@ -251,7 +251,7 @@ impl ActorService for SlirpActor {
                 if let Entry::Vacant(e) = self.clients.entry(client_id) {
                     tracing::info!("SlirpActor: Registering client {client_id}");
                     let (downlink_tx, mut downlink_rx) = tokio::sync::mpsc::unbounded_channel();
-                    e.insert(ClientInfo { sink: downlink_tx, notifier, isolated });
+                    e.insert(ClientInfo::new(downlink_tx, notifier, isolated));
                     ctx.add_stream(client_id, stream);
 
                     // Spawn isolated background forwarding task on SlirpActor's
