@@ -14,6 +14,30 @@ async fn test_default_query_parameters() {
 }
 
 #[tokio::test]
+async fn test_percent_encoded_query_parameters() {
+    let mut world = TestWorld::new().await;
+
+    // Percent-encoded name and Bluetooth MAC address
+    let client_a = world
+        .given_a_websocket_client_connected(
+            Some("Pixel%209&x=a+b"),
+            Some("00%3A1a%3A11%3Ae2%3Ae0%3A01"),
+        )
+        .await;
+    world.then_backend_receives_add_chip_request(client_a, "Pixel 9", "00:1a:11:e2:e0:01");
+
+    // '+' decoded as space in form-urlencoded query strings
+    let client_b = world.given_a_websocket_client_connected(Some("Pixel+9"), None).await;
+    world.then_backend_receives_add_chip_request(client_b, "Pixel 9", "");
+
+    // Plain unencoded values (such as Bumble's) remain unchanged
+    let client_c = world
+        .given_a_websocket_client_connected(Some("bumble&loopback=1"), Some("00:11:22:33:44:55"))
+        .await;
+    world.then_backend_receives_add_chip_request(client_c, "bumble", "00:11:22:33:44:55");
+}
+
+#[tokio::test]
 async fn test_invalid_resource_path() {
     let mut world = TestWorld::new().await;
 
