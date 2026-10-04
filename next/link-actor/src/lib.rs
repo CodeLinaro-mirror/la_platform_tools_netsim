@@ -7,7 +7,6 @@ mod link_actor;
 mod service;
 
 use actor_framework::ResourceActor;
-pub use error::LinkError;
 pub use link_actor::LinkActor;
 
 // # Link Actor
