@@ -7,9 +7,10 @@
 //! hooks. This allows the Actor Implementation to perform operations outside of
 //! ActorService handlers.
 
+use bytes::Bytes;
 use tracing::debug;
 
-use crate::{ActorService, DynContext, StreamMessage};
+use crate::{ActorService, DynContext};
 
 /// Defines the lifecycle hooks for an actor's shared state (Context).
 ///
@@ -45,7 +46,7 @@ pub trait ActorLifecycle: ActorService {
     fn on_stream(
         &mut self,
         _id: Self::Id,
-        _message: StreamMessage,
+        _message: Bytes,
         _ctx: &mut DynContext<Self>,
     ) -> impl std::future::Future<Output = ()> + Send {
         futures::future::ready(())
