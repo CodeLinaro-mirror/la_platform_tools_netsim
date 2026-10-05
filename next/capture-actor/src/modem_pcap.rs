@@ -40,7 +40,7 @@ use std::{io, path::Path, time::SystemTime};
 use async_trait::async_trait;
 use capture_api::Direction;
 
-use crate::writer::{CaptureWriter, DLT_USER0, PcapWriter};
+use crate::writer::{CaptureWriter, DataLinkType, PcapWriter};
 
 /// GSM 07.10 Basic Frame opening/closing delimiter.
 const GSM0710_FLAG: u8 = 0xF9;
@@ -72,10 +72,10 @@ pub(crate) struct ModemPcapWriter {
 }
 
 impl ModemPcapWriter {
-    /// Creates a new Modem AT PCAP writer using DLT_USER0 (147).
+    /// Creates a new Modem AT PCAP writer using User0 / DLT_USER0 (147).
     #[allow(clippy::new_ret_no_self)]
     pub(crate) async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
-        let inner = PcapWriter::new(path, DLT_USER0).await?;
+        let inner = PcapWriter::new(path, DataLinkType::User0).await?;
         Ok(Box::new(Self { inner }))
     }
 

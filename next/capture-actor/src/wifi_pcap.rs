@@ -17,7 +17,7 @@ use capture_api::Direction;
 use netsim_packets::{HwsimCmd, HwsimFrame, HwsimMsg, create_radiotap_packet};
 use tracing::warn;
 
-use crate::writer::{CaptureWriter, DLT_IEEE802_11_RADIO, PcapWriter};
+use crate::writer::{CaptureWriter, DataLinkType, PcapWriter};
 
 /// PCAP writer for Wi-Fi packets.
 ///
@@ -30,7 +30,7 @@ impl WifiPcapWriter {
     /// Creates a new Wi-Fi PCAP writer.
     #[allow(clippy::new_ret_no_self)]
     pub(crate) async fn new<P: AsRef<Path>>(path: P) -> Result<Box<dyn CaptureWriter>> {
-        Ok(Box::new(Self { inner: PcapWriter::new(path, DLT_IEEE802_11_RADIO).await? }))
+        Ok(Box::new(Self { inner: PcapWriter::new(path, DataLinkType::Ieee80211Radio).await? }))
     }
 }
 
