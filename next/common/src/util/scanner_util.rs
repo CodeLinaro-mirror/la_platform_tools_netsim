@@ -5,12 +5,7 @@ const HCI_EVENT_PACKET: u8 = 0x04;
 const HCI_LE_META_EVENT: u8 = 0x3E;
 const HCI_LE_ADVERTISING_REPORT: u8 = 0x02;
 
-const HCI_HEADER_MIN_LEN: usize = 5;
 const REPORT_HEADER_LEN: usize = 9;
-const MAC_ADDR_OFFSET: usize = 2;
-const MAC_ADDR_LEN: usize = 6;
-const PAYLOAD_LEN_OFFSET: usize = 8;
-const RSSI_LEN: usize = 1;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScanResult {
@@ -21,58 +16,42 @@ pub struct ScanResult {
 }
 
 pub fn parse_hci_scan_report(data: &[u8]) -> Result<Vec<ScanResult>, &'static str> {
-    // 1. Validation: Min length check
-    // Header (3) + Subevent (1) + NumReports (1) = 5 bytes minimum structure
-    if data.len() < HCI_HEADER_MIN_LEN {
+    let &[event_pkt, le_meta, _, subevent, num_reports, ref rest_data @ ..] = data else {
         return Err("Packet too short");
-    }
+    };
 
-    // 2. Validate HCI Header
-    if data[0] != HCI_EVENT_PACKET {
+    if event_pkt != HCI_EVENT_PACKET {
         return Err("Not an HCI Event packet");
     }
-    if data[1] != HCI_LE_META_EVENT {
+    if le_meta != HCI_LE_META_EVENT {
         return Err("Not an LE Meta Event");
     }
-    if data[3] != HCI_LE_ADVERTISING_REPORT {
+    if subevent != HCI_LE_ADVERTISING_REPORT {
         return Err("Not an LE Advertising Report");
     }
 
-    // 3. Extract Num Reports
-    let num_reports = data[4] as usize;
+    let num_reports = num_reports as usize;
     let mut results = Vec::new();
-    let mut cursor = HCI_HEADER_MIN_LEN;
+    let mut remaining = rest_data;
 
     for _ in 0..num_reports {
-        // Check if cursor has enough bytes for fixed report header
-        // (Event Type [1] + Addr Type [1] + Addr [6] + Data Len [1] = 9 bytes)
-        if cursor + REPORT_HEADER_LEN > data.len() {
-            return Err("Packet truncated: header exceeds buffer");
-        }
-
-        let event_type = data[cursor];
-        let mut mac = [0u8; 6];
-        mac.copy_from_slice(
-            &data[cursor + MAC_ADDR_OFFSET..cursor + MAC_ADDR_OFFSET + MAC_ADDR_LEN],
-        );
         // Packet is already Big Endian (human readable), do not reverse.
-
-        let payload_len = data[cursor + PAYLOAD_LEN_OFFSET] as usize;
-        let payload_start = cursor + REPORT_HEADER_LEN;
-        let payload_end = payload_start + payload_len;
-
-        // Check payload + RSSI byte (1 byte)
-        if payload_end + RSSI_LEN > data.len() {
+        let Some((&[event_type, _addr_type, mac @ .., payload_len_raw], after_hdr)) =
+            remaining.split_first_chunk::<REPORT_HEADER_LEN>()
+        else {
+            return Err("Packet truncated: header exceeds buffer");
+        };
+        let payload_len = payload_len_raw as usize;
+        let Some((payload_slice, after_payload)) = after_hdr.split_at_checked(payload_len) else {
             return Err("Packet truncated: payload exceeds buffer");
-        }
-
-        let payload = data[payload_start..payload_end].to_vec();
-        let rssi = data[payload_end] as i8;
-
+        };
+        let Some((&rssi_u8, next_remaining)) = after_payload.split_first() else {
+            return Err("Packet truncated: payload exceeds buffer");
+        };
+        let payload = payload_slice.to_vec();
+        let rssi = rssi_u8 as i8;
         results.push(ScanResult { mac, event_type, rssi, payload });
-
-        // Advance cursor: Header (9) + Payload (len) + RSSI (1)
-        cursor += REPORT_HEADER_LEN + payload_len + RSSI_LEN;
+        remaining = next_remaining;
     }
 
     Ok(results)
@@ -95,6 +74,7 @@ mod tests {
 
     const SUBEVENT_CODE_LEN: usize = 1;
     const NUM_REPORTS_LEN: usize = 1;
+    const RSSI_LEN: usize = 1;
 
     struct TestReport<'a> {
         event_type: u8,

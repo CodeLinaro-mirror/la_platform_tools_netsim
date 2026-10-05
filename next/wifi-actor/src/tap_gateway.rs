@@ -71,8 +71,8 @@ impl TapInterface {
         if bytes.len() >= libc::IFNAMSIZ {
             return Err(WifiError::Internal(Box::from("Interface name too long")));
         }
-        for (i, b) in bytes.iter().enumerate() {
-            if_req.ifr_name[i] = *b as libc::c_char;
+        for (dest, &b) in if_req.ifr_name.iter_mut().zip(bytes) {
+            *dest = b as libc::c_char;
         }
 
         // Set flags
@@ -418,8 +418,10 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
             loop {
                 match tap.read(&mut buf).await {
                     Ok(n) => {
-                        if n > 0 {
-                            let packet = bytes::Bytes::copy_from_slice(&buf[..n]);
+                        if let Some(slice) = buf.get(..n)
+                            && !slice.is_empty()
+                        {
+                            let packet = bytes::Bytes::copy_from_slice(slice);
                             if tx.send(packet).is_err() {
                                 // Receiver closed
                                 break;

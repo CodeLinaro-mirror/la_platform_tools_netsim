@@ -108,13 +108,16 @@ impl args::Command {
                             .into());
                         };
                         let device = &res.device;
-                        if device.chips.len() == 1 {
-                            println!(
-                                "Created device '{}' with ble beacon chip '{}'",
-                                device.name, device.chips[0].name
-                            );
-                        } else {
-                            return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
+                        match device.chips.as_slice() {
+                            [chip] => {
+                                println!(
+                                    "Created device '{}' with ble beacon chip '{}'",
+                                    device.name, chip.name
+                                );
+                            }
+                            _ => {
+                                return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
+                            }
                         }
                     }
                 },

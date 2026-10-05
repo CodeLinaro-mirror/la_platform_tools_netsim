@@ -392,7 +392,6 @@ fn count_p2p_ranging_measurements(bytes: &[u8]) -> Result<u64, ()> {
     Err(())
 }
 
-#[allow(clippy::collapsible_if)]
 fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
     use pica::packets::uci::{
         ControlPacket, ControlPacketChild, DataPacket, DataPacketChild, SessionConfigPacketChild,
@@ -401,12 +400,12 @@ fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
 
     use crate::stats::UwbApi;
 
-    if bytes.is_empty() {
+    let Some(&b0) = bytes.first() else {
         return;
-    }
+    };
 
-    let mt = (bytes[0] >> 5) & 0x07;
-    let dpf_or_gid = bytes[0] & 0x0f;
+    let mt = (b0 >> 5) & 0x07;
+    let dpf_or_gid = b0 & 0x0f;
 
     if mt == 1 {
         if let Ok((packet, _)) = ControlPacket::decode(bytes) {
@@ -454,34 +453,33 @@ fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
                 _ => {}
             }
         }
-    } else if mt == 0 && dpf_or_gid == 1 {
-        if let Ok((packet, _)) = DataPacket::decode(bytes) {
-            if let Ok(DataPacketChild::DataMessageSnd(_)) = packet.specialize() {
-                stats.incr(UwbApi::SendData);
-            }
-        }
+    } else if mt == 0
+        && dpf_or_gid == 1
+        && let Ok((packet, _)) = DataPacket::decode(bytes)
+        && let Ok(DataPacketChild::DataMessageSnd(_)) = packet.specialize()
+    {
+        stats.incr(UwbApi::SendData);
     }
 }
 
-#[allow(clippy::collapsible_if)]
 fn parse_and_count_uci_data_receive(bytes: &[u8], stats: &crate::stats::UwbStats) {
     use pica::packets::uci::{DataPacket, DataPacketChild};
 
     use crate::stats::UwbApi;
 
-    if bytes.is_empty() {
+    let Some(&b0) = bytes.first() else {
         return;
-    }
+    };
 
-    let mt = (bytes[0] >> 5) & 0x07;
-    let dpf = bytes[0] & 0x0f;
+    let mt = (b0 >> 5) & 0x07;
+    let dpf = b0 & 0x0f;
 
-    if mt == 0 && dpf == 2 {
-        if let Ok((packet, _)) = DataPacket::decode(bytes) {
-            if let Ok(DataPacketChild::DataMessageRcv(_)) = packet.specialize() {
-                stats.incr(UwbApi::OnDataReceived);
-            }
-        }
+    if mt == 0
+        && dpf == 2
+        && let Ok((packet, _)) = DataPacket::decode(bytes)
+        && let Ok(DataPacketChild::DataMessageRcv(_)) = packet.specialize()
+    {
+        stats.incr(UwbApi::OnDataReceived);
     }
 }
 

@@ -23,8 +23,8 @@ impl FromStr for Address {
             return Err(Error::MalformedAddress(s.to_string()));
         }
         let mut address = [0; 6];
-        for (i, part) in parts.iter().enumerate() {
-            address[i] = u8::from_str_radix(part, 16)?;
+        for (dest, part) in address.iter_mut().zip(&parts) {
+            *dest = u8::from_str_radix(part, 16)?;
         }
         Ok(Self { address })
     }

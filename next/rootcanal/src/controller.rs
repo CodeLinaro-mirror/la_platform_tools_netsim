@@ -185,18 +185,21 @@ impl ControllerImpl {
     /// Receives an HCI packet from the host.
     pub(crate) fn receive_hci(&self, data: Bytes) {
         self.hci_commands_in.fetch_add(1, Ordering::Relaxed);
+        let (&first, payload) = match data.as_ref() {
+            [first, rest @ ..] => (first, rest),
+            [] => return,
+        };
         let controller = self.controller.lock();
-        let idc = data[0] as c_int;
-        let data: &[u8] = &data[1..];
+        let idc = first as c_int;
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
-        // as long as `self` exists. `data` is a valid slice, and we provide its
+        // as long as `self` exists. `payload` is a valid slice, and we provide its
         // length to ensure the C++ side does not read out of bounds.
         unsafe {
             ffi::ffi_controller_receive_hci(
                 controller.0,
                 idc,
-                data.as_ptr(),
-                data.len() as ffi::size_t,
+                payload.as_ptr(),
+                payload.len() as ffi::size_t,
             )
         };
     }

@@ -5,6 +5,7 @@
 const MAX_AD_PAYLOAD_LEN: usize = 31;
 
 // AD Structure Types
+const AD_TYPE_NAME_SHORTENED: u8 = 0x08;
 const AD_TYPE_NAME_COMPLETE: u8 = 0x09;
 const AD_TYPE_TX_POWER_LEVEL: u8 = 0x0A;
 
@@ -28,17 +29,18 @@ pub fn construct_data(
     // Local Name
     if let Some(name) = device_name {
         let name_bytes = name.as_bytes();
-        if !name_bytes.is_empty() {
-            let mut len = name_bytes.len();
-            // Max length check (remaining space)
-            // Current data len + 2 (length + type)
-            if data.len() + len + 2 > MAX_AD_PAYLOAD_LEN {
-                len = MAX_AD_PAYLOAD_LEN - data.len() - 2;
-            }
-            if len > 0 {
-                data.push((len + 1) as u8);
-                data.push(AD_TYPE_NAME_COMPLETE); // Complete Local Name
-                data.extend_from_slice(&name_bytes[..len]);
+        if data.len() + 2 < MAX_AD_PAYLOAD_LEN {
+            let max_len = MAX_AD_PAYLOAD_LEN - data.len() - 2;
+            let sub = name_bytes.get(..max_len).unwrap_or(name_bytes);
+            if !sub.is_empty() {
+                let name_type = if sub.len() == name_bytes.len() {
+                    AD_TYPE_NAME_COMPLETE
+                } else {
+                    AD_TYPE_NAME_SHORTENED
+                };
+                data.push((sub.len() + 1) as u8);
+                data.push(name_type);
+                data.extend_from_slice(sub);
             }
         }
     }
@@ -75,21 +77,18 @@ pub fn construct_data(
         }
     }
 
-    for (class_id, item_size, uuids) in
-        [(0x03, 2, uuids_16), (0x05, 4, uuids_32), (0x07, 16, uuids_128)]
+    for (complete_id, incomplete_id, uuid_size, uuids) in
+        [(0x03, 0x02, 2, uuids_16), (0x05, 0x04, 4, uuids_32), (0x07, 0x06, 16, uuids_128)]
     {
-        if !uuids.is_empty() {
-            let mut add_len = uuids.len();
-            if data.len() + add_len + 2 > MAX_AD_PAYLOAD_LEN {
-                let available = MAX_AD_PAYLOAD_LEN.saturating_sub(data.len() + 2);
-                add_len = (available / item_size) * item_size; // Fit as many
-                // whole UUIDs as
-                // possible
-            }
-            if add_len > 0 {
-                data.push((add_len + 1) as u8);
+        if data.len() + 2 < MAX_AD_PAYLOAD_LEN {
+            let max_space = MAX_AD_PAYLOAD_LEN - data.len() - 2;
+            let max_uuid_bytes = (max_space / uuid_size) * uuid_size;
+            let sub = uuids.get(..max_uuid_bytes).unwrap_or(&uuids);
+            if !sub.is_empty() {
+                let class_id = if sub.len() == uuids.len() { complete_id } else { incomplete_id };
+                data.push((sub.len() + 1) as u8);
                 data.push(class_id);
-                data.extend(&uuids[..add_len]);
+                data.extend_from_slice(sub);
             }
         }
     }
@@ -202,7 +201,7 @@ mod tests {
         let data = construct_data(&adv_data, &Some(long_name));
         assert_eq!(data.len(), 31);
         assert_eq!(data[0], 0x1e); // Length = 30 (29 + 1 type)
-        assert_eq!(data[1], 0x09);
+        assert_eq!(data[1], 0x08);
         assert_eq!(&data[2..], "A".repeat(29).as_bytes());
     }
 
@@ -247,5 +246,21 @@ mod tests {
         let data = construct_data(&adv_data, &None);
         // Invalid services should be skipped. Empty data remains.
         assert_eq!(data, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_construct_data_truncate_service_uuids() {
+        let mut adv_data = netsim_model::AdvertiseData::default();
+        for i in 0..16 {
+            adv_data
+                .services
+                .push(netsim_model::Service { uuid: format!("{:04X}", 0x1800 + i), data: vec![] });
+        }
+        let data = construct_data(&adv_data, &None);
+        assert_eq!(data.len(), 30);
+        assert_eq!(data[0], 29);
+        assert_eq!(data[1], 0x02);
+        assert_eq!(&data[2..4], &[0x00, 0x18]);
+        assert_eq!(&data[28..30], &[0x0D, 0x18]);
     }
 }

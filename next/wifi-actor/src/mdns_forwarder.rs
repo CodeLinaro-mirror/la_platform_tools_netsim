@@ -185,7 +185,9 @@ pub(crate) async fn run_mdns_forwarder(tx: UnboundedSender<Bytes>) -> Result<(),
     loop {
         match socket.recv_from(&mut buf).await {
             Ok((size, src_addr)) => {
-                let packet = &buf[..size];
+                let Some(packet) = buf.get(..size) else {
+                    continue;
+                };
                 if let SocketAddr::V4(socket_addr_v4) = src_addr {
                     debug!("Received {} bytes from {:?}", packet.len(), socket_addr_v4);
                     match create_ethernet_frame(packet, socket_addr_v4.ip()) {

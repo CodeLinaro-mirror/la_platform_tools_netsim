@@ -33,7 +33,8 @@ impl CursorExt for Cursor<&[u8]> {
     fn read_u8(&mut self) -> std::io::Result<u8> {
         let mut buf = [0; 1];
         self.read_exact(&mut buf)?;
-        Ok(buf[0])
+        let [byte] = buf;
+        Ok(byte)
     }
 
     fn read_u16(&mut self) -> std::io::Result<u16> {
@@ -497,7 +498,8 @@ impl NamePart {
         let end = size as usize;
         let buffer_ref: &[u8] = cursor.get_ref();
         let start = cursor.position() as usize;
-        let label = str::from_utf8(&buffer_ref[start..start + end])?.to_string();
+        let label_bytes = buffer_ref.get(start..start + end).ok_or(DnsError::InvalidLength)?;
+        let label = str::from_utf8(label_bytes)?.to_string();
         cursor.seek(SeekFrom::Current(end as i64))?;
         Ok(NamePart::Label(label))
     }

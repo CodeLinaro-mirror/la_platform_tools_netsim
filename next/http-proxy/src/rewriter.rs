@@ -88,12 +88,10 @@ async fn rewrite_request_to_absolute_form<R: AsyncRead + Unpin>(
     // --- Rewrite if Host is present, otherwise pass through ---
     let final_request_line = if let Some(host) = host {
         let request_parts: Vec<&str> = request_line.split_whitespace().collect();
-        if request_parts.len() != 3 {
-            return Err(Error::MalformedRequestLine(request_line.trim_end().to_string()));
-        }
-        let method = request_parts[0];
-        let path = request_parts[1];
-        let version = request_parts[2];
+        let [method, path, version] = match request_parts.as_slice() {
+            [m, p, v] => [*m, *p, *v],
+            _ => return Err(Error::MalformedRequestLine(request_line.trim_end().to_string())),
+        };
         let absolute_uri = format!("http://{}{}", host, path);
         format!("{} {} {}\r\n", method, absolute_uri, version)
     } else {

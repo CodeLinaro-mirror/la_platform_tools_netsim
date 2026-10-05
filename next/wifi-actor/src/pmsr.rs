@@ -76,12 +76,12 @@ pub(crate) fn handle_start_pmsr(
     }
 
     fn add_nested(buffer: &mut Vec<u8>, attr_type: u16, closure: impl FnOnce(&mut Vec<u8>)) {
-        let start = buffer.len();
-        buffer.extend_from_slice(&0u16.to_le_bytes()); // placeholder len
+        let mut nested = Vec::new();
+        closure(&mut nested);
+        let len = (4 + nested.len()) as u16;
+        buffer.extend_from_slice(&len.to_le_bytes());
         buffer.extend_from_slice(&(attr_type | 0x8000).to_le_bytes()); // Nested flag
-        closure(buffer);
-        let len = (buffer.len() - start) as u16;
-        buffer[start..start + 2].copy_from_slice(&len.to_le_bytes());
+        buffer.extend_from_slice(&nested);
         let pad = (4 - (len % 4)) % 4;
         for _ in 0..pad {
             buffer.push(0);
@@ -98,8 +98,8 @@ pub(crate) fn handle_start_pmsr(
             add_nested(b2, peer_idx, |b3| {
                 // Peer 1
                 let fake_mac = if responder_chip.kind == netsim_model::ChipKind::WIFI {
-                    let id_bytes = responder_chip.id.to_be_bytes();
-                    [0x02, 0x00, id_bytes[0], id_bytes[1], id_bytes[2], id_bytes[3]]
+                    let [id0, id1, id2, id3] = responder_chip.id.to_be_bytes();
+                    [0x02, 0x00, id0, id1, id2, id3]
                 } else {
                     [0x00, 0x11, 0x22, 0x33, 0x44, 0x55]
                 };
@@ -132,7 +132,7 @@ pub(crate) fn handle_start_pmsr(
 
     // Fix total NlMsg length
     let total_len = out_msg.len() as u32;
-    out_msg[0..4].copy_from_slice(&total_len.to_le_bytes());
+    out_msg.get_mut(0..4)?.copy_from_slice(&total_len.to_le_bytes());
 
     Some(Bytes::from(out_msg))
 }

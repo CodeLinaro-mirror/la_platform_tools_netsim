@@ -3,6 +3,8 @@
 
 #![allow(clippy::unwrap_used)]
 #![allow(unreachable_pub)]
+// TODO(b/568876970): Refactor unchecked indexing in packets.
+#![allow(clippy::indexing_slicing)]
 
 //! `packets` is a crate for zero-copy parsing and handling of network packets.
 //!

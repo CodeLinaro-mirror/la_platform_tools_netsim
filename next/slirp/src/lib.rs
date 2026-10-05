@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::unwrap_used)]
+// TODO(b/568876970): Refactor unchecked indexing in slirp.
+#![allow(clippy::indexing_slicing)]
 
 pub mod arp;
 pub mod dhcp;

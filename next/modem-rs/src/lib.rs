@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(unreachable_pub)]
+// TODO(b/568876970): Refactor unchecked indexing in modem-rs.
+#![allow(clippy::indexing_slicing)]
 
 pub mod apdu;
 mod call_service;
