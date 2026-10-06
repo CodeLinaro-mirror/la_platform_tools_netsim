@@ -67,6 +67,12 @@ const RETRY_DELAY: Duration = Duration::from_millis(100);
 const LIVENESS_PROBE_ATTEMPTS: u32 = 2;
 /// Per-attempt deadline for [`is_netsimd_alive`] gRPC connection probes.
 const LIVENESS_PROBE_TIMEOUT: Duration = Duration::from_millis(400);
+/// Maximum time to wait for `DeviceActor` and secondary actors to shut down.
+const ACTOR_TEARDOWN_TIMEOUT: Duration = Duration::from_secs(5);
+/// Maximum time to wait for session artifact zipping while `netsim.ini.lock` is held.
+const ARTIFACT_ZIP_TIMEOUT: Duration = Duration::from_secs(3);
+/// Hard deadline for daemon teardown before forcing process exit to release `netsim.ini.lock`.
+const TEARDOWN_WATCHDOG_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
@@ -285,6 +291,36 @@ async fn is_netsimd_alive(grpc_port: u16) -> bool {
         debug!("is_netsimd_alive attempt {attempt}/{LIVENESS_PROBE_ATTEMPTS} failed for {addr}");
     }
     false
+}
+
+/// Runs `zip_fn` on Tokio's blocking pool and waits at most `timeout_duration`
+/// for it. Returns `true` when `zip_fn` returned before the deadline (a zip
+/// error is logged but still counts, because the task is finished) and `false`
+/// when it timed out or panicked. On timeout the blocking task is detached via
+/// `runtime.shutdown_background()` as `run()` exits, so callers must not assume
+/// the artifact directory is quiescent afterwards.
+async fn run_zip_with_timeout<F, E>(timeout_duration: Duration, zip_fn: F) -> bool
+where
+    F: FnOnce() -> Result<(), E> + Send + 'static,
+    E: std::fmt::Debug + Send + 'static,
+{
+    let Ok(join_result) =
+        tokio::time::timeout(timeout_duration, tokio::task::spawn_blocking(zip_fn)).await
+    else {
+        warn!("Artifact zip exceeded {timeout_duration:?}; leaving artifacts unzipped");
+        return false;
+    };
+    match join_result {
+        Ok(Ok(())) => true,
+        Ok(Err(err)) => {
+            error!("Failed to zip artifacts: {err:?}");
+            true
+        }
+        Err(err) => {
+            error!("Artifact zip task panicked: {err}");
+            false
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1106,8 +1142,10 @@ impl NetsimDaemon {
         }
     }
 
-    /// Runs the main event loop for the daemon.
-    pub async fn run_daemon(mut self) -> RunResult {
+    /// Runs the main event loop for the daemon, then tears it down while
+    /// `ini_guard` keeps `netsim.ini.lock` held; the guard is released only
+    /// after `self` (actors, gRPC server, C++ FFI state) has been dropped.
+    pub async fn run_daemon(mut self, ini_guard: IniFileInitialized) -> RunResult {
         info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
 
         let shutdown_signal = shutdown_signal();
@@ -1165,6 +1203,25 @@ impl NetsimDaemon {
                 }
             }
         }
+        // Hard watchdog armed with a disarm channel: if actor teardown,
+        // zipping, or a C++ FFI destructor (`Drop` of `NetsimDaemon`) hangs
+        // past `TEARDOWN_WATCHDOG_TIMEOUT` while `netsim.ini.lock` is still
+        // held, force-exit so the OS releases `.lock`. Dropping `watchdog_tx`
+        // at the end of `run_daemon` disconnects the channel so the blocking
+        // task exits immediately on normal shutdown.
+        let (watchdog_tx, watchdog_rx) = std::sync::mpsc::channel::<()>();
+        tokio::task::spawn_blocking(move || {
+            if matches!(
+                watchdog_rx.recv_timeout(TEARDOWN_WATCHDOG_TIMEOUT),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ) {
+                error!(
+                    "Teardown watchdog fired after {TEARDOWN_WATCHDOG_TIMEOUT:?}; exiting without releasing resources gracefully"
+                );
+                std::process::exit(2);
+            }
+        });
+
         IniFileInitialized::unlink_discovery_file_if_owner(&self.ini_path, self.ini_lock_inode);
         let grpc_shutdown = self._grpc_server.as_mut().map(|s| {
             let fut = s.shutdown();
@@ -1173,7 +1230,7 @@ impl NetsimDaemon {
         });
         // Shut down DeviceActor sequentially before secondary actors so it can
         // query active chip stats during on_shutdown() without racing against
-        // chip actor termination. Bound entire teardown to 5s.
+        // chip actor termination.
         let teardown = async {
             if !self.device_task.is_finished() {
                 let _ = self.device_client.shutdown().await;
@@ -1182,13 +1239,24 @@ impl NetsimDaemon {
             self.shutdown_actors(grpc_shutdown).await;
             self.join_set.shutdown().await;
         };
-        let _ = tokio::time::timeout(Duration::from_secs(5), teardown).await;
-        info!("NetsimDaemon main loop exited.");
-        // Zip all artifacts synchronously while `.lock` is still held so the next
-        // instance cannot call remove_old_artifacts_in_dir() until zipping completes.
-        if let Err(err) = zip_artifacts_in_dir(&self.artifact_dir) {
-            error!("Failed to zip artifacts: {err:?}");
+        if tokio::time::timeout(ACTOR_TEARDOWN_TIMEOUT, teardown).await.is_err() {
+            warn!(
+                "Actor teardown exceeded {ACTOR_TEARDOWN_TIMEOUT:?} timeout; continuing shutdown"
+            );
         }
+        info!("NetsimDaemon main loop exited.");
+        // Zip session artifacts under `ARTIFACT_ZIP_TIMEOUT` while `.lock` is
+        // still held so a successor cannot call `remove_old_artifacts_in_dir()`
+        // mid-zip.
+        let artifact_dir = self.artifact_dir.clone();
+        let _ =
+            run_zip_with_timeout(ARTIFACT_ZIP_TIMEOUT, move || zip_artifacts_in_dir(&artifact_dir))
+                .await;
+        // Drop `self` (C++ FFI / gRPC destructors) and then the discovery lock
+        // while the teardown watchdog is still armed, then disarm it.
+        drop(self);
+        drop(ini_guard);
+        drop(watchdog_tx);
         RunResult::ExitedNormally
     }
 }
@@ -1257,10 +1325,24 @@ async fn shutdown_signal() {
     }
 }
 
-#[tokio::main]
-pub async fn run() -> RunResult {
+pub fn run() -> RunResult {
+    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            return RunResult::InitializationError(format!("Failed to start Tokio runtime: {err}"));
+        }
+    };
+    let result = runtime.block_on(run_async());
+    // Detach any wedged worker or timed-out `spawn_blocking` task immediately
+    // once `run_async()` returns (`Runtime::drop` would block indefinitely, and
+    // waiting after `ini_guard` is dropped would keep `.lock`-less cleanup alive).
+    runtime.shutdown_background();
+    result
+}
+
+async fn run_async() -> RunResult {
     match NetsimDaemon::new().await {
-        Ok(StartUpMode::Owner(daemon, _ini_guard)) => daemon.run_daemon().await,
+        Ok(StartUpMode::Owner(daemon, ini_guard)) => daemon.run_daemon(ini_guard).await,
         Ok(StartUpMode::Client(config)) => {
             // If we are just a client, we shouldn't necessarily fail, but if
             // the user expected to start a NEW daemon, they might
@@ -1568,5 +1650,34 @@ mod tests {
         assert!(!is_netsimd_alive(dead_port).await);
         // Two 400ms attempts must stay well below the Initializing retry budget.
         assert!(probe_start.elapsed() < Duration::from_secs(3));
+    }
+
+    #[tokio::test]
+    async fn test_run_zip_with_timeout_bounds_a_stalled_zip() {
+        assert!(run_zip_with_timeout(Duration::from_secs(1), || Ok::<(), io::Error>(())).await);
+        // A zip error is logged but still counts as finished.
+        assert!(
+            run_zip_with_timeout(Duration::from_secs(1), || Err(io::Error::other("zip failed")))
+                .await
+        );
+        // A panicking blocking task resolves `JoinError` to `false` without aborting teardown.
+        assert!(
+            !run_zip_with_timeout(Duration::from_secs(1), || -> Result<(), io::Error> {
+                panic!("zip panicked");
+            })
+            .await
+        );
+
+        // A zip task that never returns must not block teardown.
+        let (unblock_zip_tx, unblock_zip_rx) = std::sync::mpsc::channel::<()>();
+        let start = std::time::Instant::now();
+        let finished_in_time = run_zip_with_timeout(Duration::from_millis(100), move || {
+            let _ = unblock_zip_rx.recv();
+            Ok::<(), io::Error>(())
+        })
+        .await;
+        assert!(!finished_in_time);
+        assert!(start.elapsed() < Duration::from_secs(1));
+        drop(unblock_zip_tx);
     }
 }

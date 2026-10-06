@@ -159,6 +159,16 @@ impl World {
         }
     }
 
+    /// Then netsim.ini is gone and netsim.ini.lock can be acquired again
+    pub fn then_discovery_files_released(&self) {
+        assert!(!self._temp_dir.join("netsim.ini").exists(), "netsim.ini was not removed");
+        let ini_file = daemon::IniFile::new_for_dir(self._temp_dir.clone(), 1).unwrap();
+        assert!(
+            matches!(ini_file.try_acquire(), Ok(daemon::IniFileAccess::Writer(_))),
+            "netsim.ini.lock was not released"
+        );
+    }
+
     /// When I request the version
     pub async fn when_get_version(&mut self) -> String {
         let resp = self
@@ -285,16 +295,17 @@ impl World {
             .expect("RPC failed");
     }
 
-    /// Start the daemon in the background (World owns the logical flow, usually
-    /// we spawn daemon in a thread or task) Note: In these tests, we often
-    /// spawn the daemon task.
+    /// Start the daemon in the background, handing it the discovery lock so
+    /// that, as in `daemon::run`, `netsim.ini.lock` is released when
+    /// `run_daemon` returns.
     pub async fn when_spawn_daemon(&mut self) {
         if self.daemon_task.is_some() {
             panic!("Daemon already spawned");
         }
         if let Some(daemon) = self.daemon.take() {
+            let ini_guard = self._ini_guard.take().expect("Discovery lock already handed over");
             let task = tokio::spawn(async move {
-                let _ = daemon.run_daemon().await;
+                let _ = daemon.run_daemon(ini_guard).await;
             });
             self.daemon_task = Some(task);
         } else {
