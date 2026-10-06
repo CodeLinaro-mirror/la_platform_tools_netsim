@@ -45,7 +45,6 @@ impl Command {
     /// Return the generated request protobuf message
     pub fn get_request(&self) -> GrpcRequest {
         match self {
-            Command::Version => GrpcRequest::GetVersion,
             Command::Radio(cmd) => {
                 let mut chip = Chip { ..Default::default() };
                 let chip_state = match cmd.status {
@@ -186,14 +185,6 @@ impl Command {
                     GrpcRequest::DeleteChip(frontend::DeleteChipRequest { ..Default::default() })
                 }
             },
-            Command::Link(link_cmd) => match link_cmd {
-                Link::List => GrpcRequest::ListLink,
-                _ => {
-                    unimplemented!(
-                        "get_request not implemented for Link Patch/Delete/Create command. Use get_requests instead."
-                    )
-                }
-            },
             // These commands are intercepted early in main.rs and have no direct gRPC pipeline.
             _ => {
                 unimplemented!("get_request is not implemented for this command.");
@@ -260,7 +251,9 @@ impl Command {
         link_cmd: &Link,
     ) -> Result<Vec<GrpcRequest>> {
         match link_cmd {
-            Link::List => Ok(vec![GrpcRequest::ListLink]),
+            Link::List => {
+                unimplemented!("Link::List uses the REST API and is handled directly in main.rs.")
+            }
             Link::Create(cmd) => {
                 let chip_kind = chip_kind_to_proto(cmd.chip_kind);
                 let sender_ids = Self::resolve_chip_ids(
@@ -555,11 +548,6 @@ mod tests {
         let client = MockClient::new(mock_responses);
         let requests = command_struct.get_requests(&client).unwrap();
         assert_eq!(requests, expected_requests);
-    }
-
-    #[test]
-    fn test_version_request() {
-        test_command("netsim-cli version", Command::Version, GrpcRequest::GetVersion)
     }
 
     fn get_expected_radio(
@@ -1518,12 +1506,5 @@ mod tests {
     fn test_patch_beacon_mfg_data_fails() {
         let command = String::from("netsim-cli beacon patch ble --manufacturer-data not-a-number");
         assert!(NetsimArgs::try_parse_from(command.split_whitespace()).is_err());
-    }
-
-    #[test]
-    fn test_link_list_request() {
-        let command = Command::Link(Link::List);
-        let grpc_request = command.get_request();
-        assert_eq!(grpc_request, GrpcRequest::ListLink);
     }
 }

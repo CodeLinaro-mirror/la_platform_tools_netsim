@@ -13,7 +13,7 @@ use crate::uwb_actor::UwbActor;
 /// A client for communicating with the UWB Actor.
 /// Wraps a generic `ResourceClient` and implements `ChipClient`.
 #[derive(Clone, Debug)]
-pub struct UwbClient(pub ResourceClient<UwbActor>);
+pub struct UwbClient(pub(crate) ResourceClient<UwbActor>);
 
 #[async_trait]
 impl ChipClient for UwbClient {

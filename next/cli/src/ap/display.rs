@@ -1,16 +1,15 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use netsim_model::Ap;
 use netsim_proto::access_point;
+use netsim_rest_api::ListApResponse;
 
-pub fn print_list_ap_response(response: &access_point::ListAccessPointsResponse, _verbose: bool) {
-    if response.access_points.is_empty() {
+pub fn print_list_ap_response(response: &ListApResponse, _verbose: bool) {
+    if response.aps.is_empty() {
         println!("No available Access Points found.");
         return;
     }
-
-    let mut aps = response.access_points.clone();
-    aps.sort_by_key(|ap| ap.id);
 
     println!(
         "{:<2} | {:<20} | {:<17} | {:<20} | {:<4} | {:<2} | {:<9} | {:<6} | {:<7}",
@@ -18,9 +17,39 @@ pub fn print_list_ap_response(response: &access_point::ListAccessPointsResponse,
     );
     println!("{:-<108}", "-");
 
-    for ap in &aps {
-        print_ap(ap);
+    let mut aps: Vec<&Ap> = response.aps.iter().collect();
+    aps.sort_by_key(|ap| ap.id);
+    for ap in aps {
+        print_rest_ap(ap);
     }
+}
+
+pub fn print_rest_ap(ap: &Ap) {
+    let cfg = &ap.config;
+    let security = if cfg.enterprise_enabled {
+        "WPA2/WPA3 Enterprise"
+    } else if cfg.sae {
+        "WPA3 Personal"
+    } else if cfg.wpa_passphrase.as_deref().is_some_and(|p| !p.is_empty()) {
+        "WPA2 Personal"
+    } else {
+        "None"
+    };
+
+    let phy_mode = format!("802.11{}", cfg.hw_mode);
+    let hidden = if cfg.hidden_ssid { "Yes" } else { "No" };
+    let clients = ap.associations.len();
+    let country_code = cfg.country_code.as_deref().unwrap_or("");
+
+    print!(
+        "{:<2} | {:<20} | {:<17} | {:<20} | {:<4} | {:<2} | {:<9} | {:<6} | {:<7}",
+        ap.id, cfg.ssid, cfg.bssid, security, cfg.channel, country_code, phy_mode, hidden, clients
+    );
+
+    if !cfg.mac_acl_list.is_empty() {
+        print!(" | Client MAC ACL List: {:?}", cfg.mac_acl_list);
+    }
+    println!();
 }
 
 pub fn print_ap(ap: &access_point::AccessPoint) {

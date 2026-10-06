@@ -65,7 +65,7 @@ pub mod api {
 
     use crate::{
         chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate},
-        device::{Device, DeviceConfig, Orientation, Position},
+        device::{DeviceConfig, Orientation, Position},
         nfc::{Nfc, NfcCreate},
     };
 
@@ -87,16 +87,12 @@ pub mod api {
     }
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-    pub struct ListDeviceResponse {
-        pub devices: Vec<Device>,
-    }
-
-    #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct DeviceUpdate {
         pub id: u32,
         pub name: Option<String>,
         pub visible: Option<bool>,
         //TODO: pub chip_id: Option<ChipId>,
+        #[serde(default)]
         pub pose: PoseUpdate,
         //TODO: pub links: Option<Vec<Link>,
         pub chips: Option<Vec<crate::chip::ChipUpdate>>,

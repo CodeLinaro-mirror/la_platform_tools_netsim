@@ -35,8 +35,8 @@ fn elevation(delta: Vec3) -> f32 {
 
 /// Internal Pose struct for mathematical representation.
 pub(crate) struct Pose {
-    pub position: Vec3,
-    pub orientation: Quat,
+    pub(crate) position: Vec3,
+    pub(crate) orientation: Quat,
 }
 
 impl From<&netsim_model::Pose> for Pose {

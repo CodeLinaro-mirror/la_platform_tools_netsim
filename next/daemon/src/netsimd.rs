@@ -4,7 +4,6 @@
 use std::{
     collections::HashMap,
     env, io,
-    net::{IpAddr, Ipv4Addr},
     path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
     time::Duration,
@@ -28,8 +27,8 @@ use futures::{FutureExt, SinkExt, StreamExt, pin_mut};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    BluetoothMode, CellNetworkConfig, ChipClient, ChipInfo, ChipKind, DeviceParams,
-    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, Pose, set_if_some,
+    BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams, PacketSink as ApiPacketSink,
+    PacketStream as ApiPacketStream, Pose, set_if_some,
 };
 use packet_stream::{
     StreamAddress, Streams,
@@ -59,7 +58,7 @@ use crate::{
     version::get_version,
 };
 
-const MAX_INIT_RETRIES: i32 = 20;
+const MAX_INIT_RETRIES: i32 = 100;
 const RETRY_DELAY: Duration = Duration::from_millis(100);
 
 #[derive(Debug, PartialEq)]
@@ -78,14 +77,6 @@ pub enum StartUpMode {
     Owner(NetsimDaemon, IniFileInitialized),
     Client(NetsimConfig),
 }
-
-/// Fixed Goldfish/QEMU user-mode networking (SLIRP) parameters.
-///
-/// Matches emulator SLIRP defaults (`net/slirp.c`).
-const GOLDFISH_IPV4_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 15);
-const GOLDFISH_IPV4_PREFIXLEN: u8 = 24;
-const GOLDFISH_IPV4_GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 2);
-const GOLDFISH_IPV4_DNS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 3);
 
 async fn handle_new_connection(
     device_client: DeviceClient,
@@ -114,9 +105,11 @@ async fn handle_new_connection(
         }
     };
 
-    if let Some(device_info) = chip_info.device_info.as_ref().filter(|d| !d.avd_path.is_empty()) {
+    if chip.kind == ChipKind::BLUETOOTH
+        && let Some(device_info) = chip_info.device_info.as_ref().filter(|d| !d.avd_path.is_empty())
+    {
         chip.address =
-            crate::avd_config::resolve_bluetooth_mac(&device_info.avd_path, &chip.address);
+            crate::avd_config::resolve_bluetooth_mac(&device_info.avd_path, &chip.address).await;
     }
 
     if chip.address.is_empty() && chip.id.len() == 17 {
@@ -153,16 +146,6 @@ async fn handle_new_connection(
                     .await
                     .into_iter()
                     .collect()
-            } else if is_emulator {
-                // TODO(b/557342150): Dynamically allocate cellular IPs for
-                // multi-instance Goldfish once isolated
-                // SLIRP/TAP routing is supported.
-                vec![CellNetworkConfig {
-                    ip_address: IpAddr::V4(GOLDFISH_IPV4_ADDR),
-                    prefixlen: GOLDFISH_IPV4_PREFIXLEN,
-                    gateway: IpAddr::V4(GOLDFISH_IPV4_GATEWAY),
-                    dns: IpAddr::V4(GOLDFISH_IPV4_DNS),
-                }]
             } else {
                 Vec::new()
             };
@@ -183,6 +166,7 @@ async fn handle_new_connection(
                     is_cuttlefish,
                     auto_ctzv,
                     allow_ipv4_for_ipv6,
+                    dynamic_slirp_lease: is_emulator,
                 },
                 network_configs,
                 ..Default::default()
@@ -341,6 +325,8 @@ pub struct NetsimDaemon {
     join_set: JoinSet<()>,
     /// Manages the network listeners (UDS, gRPC) for incoming connections.
     streams: Streams,
+    /// Path to the discovery INI file.
+    ini_path: PathBuf,
     /// Client for interacting with the Device Service.
     device_client: DeviceClient,
     /// Client for interacting with the Capture Service.
@@ -353,6 +339,11 @@ pub struct NetsimDaemon {
     args: Args,
     /// The gRPC server instance (kept alive).
     _grpc_server: Option<grpcio::Server>,
+    /// The port the HTTP /v1 API is listening on.
+    http_port: Option<u16>,
+    /// The HTTP listener task, aborted when the daemon is dropped so the HTTP
+    /// port does not outlive it.
+    http_task: tokio::task::JoinHandle<()>,
     /// The DeviceActor task handle.
     device_task: tokio::task::JoinHandle<()>,
     /// The CaptureActor task handle.
@@ -363,6 +354,17 @@ pub struct NetsimDaemon {
 
     slirp_client: SlirpClient,
     chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
+}
+
+impl Drop for NetsimDaemon {
+    fn drop(&mut self) {
+        // The HTTP listener task owns its TCP listener. Aborting it here
+        // releases the port, so restarting the daemon in the same process does
+        // not fail with "Address already in use".
+        self.http_task.abort();
+        self.device_task.abort();
+        self.capture_task.abort();
+    }
 }
 
 impl NetsimDaemon {
@@ -404,6 +406,7 @@ impl NetsimDaemon {
 
         #[cfg(feature = "cuttlefish")]
         if let Some(connector_instance) = args.connector_instance {
+            Self::redirect_daemon_logs(&args, Some(connector_instance));
             info!("netsim startup (Connector mode)");
             return match Self::run_netsimd_connector(args, connector_instance).await {
                 Ok(()) => Err(RunResult::ExitedNormally),
@@ -439,19 +442,6 @@ impl NetsimDaemon {
             && let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config)
         {
             return Err(RunResult::InitializationError(format!("TAP configuration failed: {}", e)));
-        }
-
-        if !args.logtostderr {
-            if let Err(err) =
-                redirect_std_stream(&get_instance_name(args.instance, args.connector_instance))
-            {
-                error!("{err:?}");
-            }
-
-            // Duplicating the previous two logs to be included in
-            // netsim_stderr.log
-            info!("netsim artifacts path: {:?}", netsimd_temp_dir());
-            info!("{args:#?}");
         }
 
         info!(
@@ -494,10 +484,29 @@ impl NetsimDaemon {
         }
     }
 
+    fn redirect_daemon_logs(args: &Args, connector_instance: Option<u16>) {
+        if !args.logtostderr {
+            if let Err(err) =
+                redirect_std_stream(&get_instance_name(args.instance, connector_instance))
+            {
+                error!("{err:?}");
+            }
+
+            // Duplicating the previous two logs to be included in
+            // netsim_stderr.log
+            info!("netsim artifacts path: {:?}", netsimd_temp_dir());
+            info!("{args:#?}");
+        }
+    }
+
     async fn initialize_primary_daemon(
         ini_guard: IniFileUninitialized,
         args: Args,
     ) -> Result<StartUpMode, RunResult> {
+        // Redirect stdout/stderr ONLY after acquiring `netsim.ini.lock` so a
+        // newly spawned instance waiting on `.lock` does not truncate the
+        // active/draining primary daemon's logs.
+        Self::redirect_daemon_logs(&args, None);
         info!("Acquired lock (Owner)");
         info!("INI file path: {}", ini_guard.path().display());
 
@@ -525,9 +534,27 @@ impl NetsimDaemon {
         // Setup Device Server Channel
         let (device_runner, device_client) = device_actor::new();
 
+        // Setup Slirp Actor
+        let slirp_backend = if args.no_slirp_native {
+            slirp_actor::SlirpBackend::CFfi
+        } else if args.slirp_native {
+            slirp_actor::SlirpBackend::Native
+        } else {
+            Default::default()
+        };
+        let (slirp_runner, slirp_client) = slirp_actor::new();
+        let slirp_actor_state = slirp_actor::SlirpActor::new_with_backend(
+            Default::default(),
+            args.http_proxy.clone(),
+            args.host_dns.clone(),
+            slirp_backend,
+        )
+        .await;
+
         // Setup Cell Server
         let (cell_runner, cell_client) = cell_actor::new();
-        let cell_actor_state = cell_actor::CellActor::new(device_client.clone());
+        let cell_actor_state =
+            cell_actor::CellActor::new(device_client.clone(), slirp_client.clone());
 
         // Setup Capture Server
         let (capture_runner, capture_client) = capture_actor::new();
@@ -541,34 +568,7 @@ impl NetsimDaemon {
         let (ap_runner, ap_client) = ap_actor::new();
         let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 
-        let (
-            slirp_runner,
-            slirp_client,
-            slirp_actor_state,
-            wifi_runner,
-            wifi_client,
-            wifi_actor_state,
-            eth_runner,
-            eth_client,
-            eth_actor_state,
-        ) = {
-            // Setup Slirp Actor
-            let slirp_backend = if args.no_slirp_native {
-                slirp_actor::SlirpBackend::CFfi
-            } else if args.slirp_native {
-                slirp_actor::SlirpBackend::Native
-            } else {
-                Default::default()
-            };
-            let (slirp_runner, slirp_client) = slirp_actor::new();
-            let slirp_actor_state = slirp_actor::SlirpActor::new_with_backend(
-                Default::default(),
-                args.http_proxy.clone(),
-                args.host_dns.clone(),
-                slirp_backend,
-            )
-            .await;
-
+        let (wifi_runner, wifi_client, wifi_actor_state, eth_runner, eth_client, eth_actor_state) = {
             // Setup Wifi Actor
             let (wifi_runner, wifi_client) = wifi_actor::new();
             // Initialize wifi_tap configuration.
@@ -610,17 +610,7 @@ impl NetsimDaemon {
             let eth_actor_state =
                 ethernet_actor::EthernetActor::new(slirp_client.clone(), device_client.clone());
 
-            (
-                slirp_runner,
-                slirp_client,
-                slirp_actor_state,
-                wifi_runner,
-                wifi_client,
-                wifi_actor_state,
-                eth_runner,
-                eth_client,
-                eth_actor_state,
-            )
+            (wifi_runner, wifi_client, wifi_actor_state, eth_runner, eth_client, eth_actor_state)
         };
 
         // Setup NFC Server
@@ -651,6 +641,15 @@ impl NetsimDaemon {
             frontend_stats.clone(),
         )
         .await?;
+
+        // HTTP server for the /v1 API
+        let resolved_http_port =
+            resolve_port_with_env(args.http_port, "NETSIM_HTTP_PORT", |name| std::env::var(name))
+                .unwrap_or(0);
+        let http_listener = bind_tcp_loopback(resolved_http_port).map_err(|e| {
+            init_error(format!("Failed to bind requested HTTP port {resolved_http_port}: {e}"))
+        })?;
+        let actual_http_port = http_listener.local_addr().map_err(init_error)?.port();
 
         // HCI TCP socket server
         let instance_num = get_instance(args.instance);
@@ -761,14 +760,10 @@ impl NetsimDaemon {
         if let Some(ws_port) = actual_ws_port {
             ini_data.insert("ws.port".to_string(), ws_port.to_string());
         }
+        ini_data.insert("http.port".to_string(), actual_http_port.to_string());
         if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
-
-        // Even if stale file removal failed, we can proceed as ini_guard.write
-        // will overwrite.
-        let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
-        info!("Wrote to INI file {}", initialized_guard.path().display());
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
@@ -881,8 +876,22 @@ impl NetsimDaemon {
             crate::test_beacons::create_test_beacons(&device_client).await;
         }
 
+        // Write netsim.ini atomically ONLY after DeviceActor, Default AP, and test beacons
+        // are running so external launchers cannot connect before actors are ready.
+        let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
+        let ini_path = initialized_guard.path().to_path_buf();
+        info!("Wrote to INI file {}", ini_path.display());
+
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();
+
+        let http_task = tokio::spawn(netsim_rest_api::server::run(
+            http_listener,
+            device_client.clone(),
+            Arc::new(link_client.clone()),
+            ap_client.clone(),
+            get_version(),
+        ));
 
         Ok(StartUpMode::Owner(
             NetsimDaemon {
@@ -894,9 +903,12 @@ impl NetsimDaemon {
                 listener_addresses,
                 args,
                 _grpc_server: Some(grpc_server),
+                http_port: Some(actual_http_port),
+                http_task,
                 device_task,
                 capture_task,
                 artifact_dir,
+                ini_path,
                 link_client: Box::new(link_client),
                 slirp_client,
                 chip_clients: daemon_chip_clients,
@@ -914,6 +926,11 @@ impl NetsimDaemon {
         })
     }
 
+    /// Gets the HTTP /v1 API port, if the server is running.
+    pub fn http_port(&self) -> Option<u16> {
+        self.http_port
+    }
+
     /// Gets the Rootcanal test port, if the server is running.
     #[cfg(feature = "cuttlefish")]
     pub fn test_port(&self) -> Option<u16> {
@@ -923,7 +940,7 @@ impl NetsimDaemon {
         })
     }
 
-    async fn shutdown_actors(&mut self) {
+    async fn shutdown_actors(&mut self, grpc_shutdown: Option<grpcio::ShutdownFuture>) {
         info!("Graceful shutdown requested for all actors");
 
         let link_fut = self.link_client.shutdown();
@@ -953,6 +970,9 @@ impl NetsimDaemon {
                 warn!("CaptureActor shutdown error: {}", e);
             }
             let _ = (&mut self.capture_task).await;
+        }
+        if let Some(fut) = grpc_shutdown {
+            let _ = fut.await;
         }
     }
 
@@ -1025,7 +1045,7 @@ impl NetsimDaemon {
                             let device_client = self.device_client.clone();
                             let capture_client = self.capture_client.clone();
                             let next_chip_id = self.next_chip_id.clone();
-                                                        // Spawn connection handling to avoid blocking the main loop
+                            // Spawn connection handling to avoid blocking the main loop
                             // handle_new_connection performs async operations (like device_client.add_chip)
                             // which could delay accepting other connections if awaited directly.
                             tokio::spawn(handle_new_connection(device_client, capture_client, next_chip_id, stream, sink, chip_info, guid));
@@ -1053,6 +1073,11 @@ impl NetsimDaemon {
                         break;
                     }
                 }
+                http_result = &mut self.http_task => {
+                    if self.handle_secondary_task_completion(Some(http_result)) {
+                        break;
+                    }
+                }
 
                 // Branch 4: Graceful shutdown
                 () = &mut shutdown_signal => {
@@ -1061,14 +1086,27 @@ impl NetsimDaemon {
                 }
             }
         }
-        if !self.device_task.is_finished() {
-            let _ = self.device_client.shutdown().await;
-            let _ = (&mut self.device_task).await;
-        }
-        self.shutdown_actors().await;
-        self.join_set.shutdown().await;
+        IniFileInitialized::unlink_discovery_files(&self.ini_path);
+        let grpc_shutdown = self._grpc_server.as_mut().map(|s| {
+            let fut = s.shutdown();
+            s.cancel_all_calls();
+            fut
+        });
+        // Shut down DeviceActor sequentially before secondary actors so it can
+        // query active chip stats during on_shutdown() without racing against
+        // chip actor termination. Bound entire teardown to 5s.
+        let teardown = async {
+            if !self.device_task.is_finished() {
+                let _ = self.device_client.shutdown().await;
+                let _ = (&mut self.device_task).await;
+            }
+            self.shutdown_actors(grpc_shutdown).await;
+            self.join_set.shutdown().await;
+        };
+        let _ = tokio::time::timeout(Duration::from_secs(5), teardown).await;
         info!("NetsimDaemon main loop exited.");
-        // Zip all artifacts
+        // Zip all artifacts synchronously while `.lock` is still held so the next
+        // instance cannot call remove_old_artifacts_in_dir() until zipping completes.
         if let Err(err) = zip_artifacts_in_dir(&self.artifact_dir) {
             error!("Failed to zip artifacts: {err:?}");
         }
