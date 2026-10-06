@@ -38,7 +38,6 @@ netsim_rust_library(
     deps = [
         "//next/model",
         "@bytes",
-        "@chrono",
         "@hex",
         "@jiff",
         "@nom",

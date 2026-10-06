@@ -73,7 +73,7 @@ impl ModemImpl {
         let enable_unsol = profile.enable_unsolicited_urcs.unwrap_or(true);
         let home_plmn = profile.home_plmn();
         let sim_service = SimService::from_profile(&profile);
-        let mut misc_service = MiscService::new(clock);
+        let mut misc_service = MiscService::new(clock.clone());
         if quirks.auto_ctzv {
             misc_service.set_ctzv_mode(true);
         }
@@ -82,7 +82,7 @@ impl ModemImpl {
             enable_unsolicited_urcs: enable_unsol,
             sim_service,
             network_service: NetworkService::new(quirks, home_plmn),
-            sms_service: SmsService::new(quirks),
+            sms_service: SmsService::new(quirks, clock),
             stk_service: StkService::new(profile.stk.clone()),
             sup_service: SupService::new(quirks),
             misc_service,

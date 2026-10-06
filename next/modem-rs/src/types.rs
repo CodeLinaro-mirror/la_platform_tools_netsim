@@ -814,7 +814,7 @@ pub enum CommandAction {
     HangupCall { initiator: ModemId, target_peer: ModemId, reason: HangupReason },
     HoldCall { holder: ModemId, target: ModemId },
     ResumeCall { resumer: ModemId, target: ModemId },
-    ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
+    ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<crate::pdu::StatusReport> },
     ReceiveTextSms { to: String, text: String },
     AcknowledgeIncomingSms { ack: SmsAck },
     None,

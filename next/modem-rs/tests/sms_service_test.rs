@@ -1,6 +1,9 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
+use jiff::{Timestamp, tz::TimeZone};
 use modem_rs::PhoneNumber;
 use netsim_model::RegistrationStatus;
 
@@ -548,6 +551,9 @@ fn test_legacy_sms() {
 #[test]
 fn test_sms_status_report() {
     let mut world = World::new();
+    world.clock.set_zoned(
+        Timestamp::from_second(1_781_551_845).expect("valid timestamp").to_zoned(TimeZone::UTC),
+    );
     given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_B);
     given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_A);
 
@@ -571,7 +577,9 @@ fn test_sms_status_report() {
 
     // B should receive the CMT unsolicited response
     then_wait_for_response_containing(&mut world, "B", "+CMT: ,20");
-    then_wait_for_response_containing(&mut world, "B", "00240B915155255155");
+    then_wait_for_response_containing(&mut world, "B", "00240B915155255155F6000062605191035400");
+
+    world.clock.advance(Duration::from_secs(5));
 
     // B acknowledges delivery via AT+CNMA=1 per 3GPP TS 27.005
     when_at_command_sent(&mut world, "B", "AT+CNMA=1");
@@ -579,7 +587,7 @@ fn test_sms_status_report() {
 
     // A should receive the CDS unsolicited response (Status Report)
     then_wait_for_response_containing(&mut world, "A", "+CDS: 25");
-    then_response_contains(&mut world, "A", "0002010B915155255155F4");
+    then_response_contains(&mut world, "A", "0002010B915155255155F4626051910354006260519103050000");
 }
 
 #[test]
