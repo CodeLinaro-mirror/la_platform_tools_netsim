@@ -80,10 +80,7 @@ impl Manager {
         // Isolation ensures consistent performance.
         let runtime = Arc::new(Runtime::new()?);
 
-        Ok(Self {
-            runtime,
-            connector: Connector::new(config.addr, config.username, config.password),
-        })
+        Ok(Self { runtime, connector: config.into_connector() })
     }
 }
 

@@ -40,7 +40,7 @@ impl Connector {
     ///
     /// If no password is provided, it defaults to an empty password per RFC
     /// 7617.
-    pub fn auth_header(&self) -> Option<String> {
+    pub(crate) fn auth_header(&self) -> Option<String> {
         if let Some(username) = &self.username {
             let password = self.password.as_deref().unwrap_or("");
             let encoded_auth = base64_encode(format!("{}:{}", username, password).as_bytes());
@@ -59,7 +59,7 @@ impl Connector {
     /// If the address is on port 80, it will be rewritten to an absolute-form
     /// request. Otherwise, it will connect directly.
     pub async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
-        let proxy_addr = self.proxy_addr;
+        let proxy_addr = self.proxy_addr();
         let auth_header = self.auth_header();
         if addr.port() == 80 {
             rewriter::connect_with_header_rewrite(proxy_addr, auth_header).await
@@ -229,6 +229,13 @@ mod tests {
     }
 
     #[test]
+    fn test_proxy_addr() {
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let connector = Connector::new(addr, None, None);
+        assert_eq!(connector.proxy_addr(), addr);
+    }
+
+    #[test]
     fn test_auth_header_with_empty_password() {
         let connector =
             Connector::new("127.0.0.1:8080".parse().unwrap(), Some("user".into()), Some("".into()));
@@ -366,10 +373,10 @@ mod tests {
             stream.write_all(response.as_bytes()).await.unwrap();
         });
 
-        let config =
+        let client =
             crate::util::ProxyConfig::from_string(&format!("http://user:pass%2fword@{proxy_addr}"))
-                .unwrap();
-        let client = Connector::new(config.addr, config.username, config.password);
+                .unwrap()
+                .into_connector();
         client.connect(addr).await.unwrap();
         handle.await.unwrap();
         Ok(())
