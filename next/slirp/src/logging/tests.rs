@@ -23,3 +23,47 @@ fn test_logging_topics_enabled() {
     assert!(!is_enabled(Topic::Tcp));
     assert!(!is_enabled(Topic::Udp));
 }
+
+#[test]
+fn test_parse_debug_topics_individual() {
+    assert_eq!(Topic::parse_debug_topics("tcp"), Topic::Tcp as u32);
+    assert_eq!(Topic::parse_debug_topics("udp"), Topic::Udp as u32);
+    assert_eq!(Topic::parse_debug_topics("icmp"), Topic::Icmp as u32);
+    assert_eq!(Topic::parse_debug_topics("dhcp"), Topic::Dhcp as u32);
+    assert_eq!(Topic::parse_debug_topics("dns"), Topic::Dns as u32);
+    assert_eq!(Topic::parse_debug_topics("tftp"), Topic::Tftp as u32);
+    assert_eq!(Topic::parse_debug_topics("arp"), Topic::Arp as u32);
+}
+
+#[test]
+fn test_parse_debug_topics_all() {
+    assert_eq!(Topic::parse_debug_topics("all"), u32::MAX);
+    assert_eq!(Topic::parse_debug_topics("ALL"), u32::MAX);
+}
+
+#[test]
+fn test_parse_debug_topics_whitespace_and_case() {
+    let flags = Topic::parse_debug_topics("  TCP ,  uDp  , ArP  ");
+    assert_eq!(flags, (Topic::Tcp as u32) | (Topic::Udp as u32) | (Topic::Arp as u32));
+}
+
+#[test]
+fn test_parse_debug_topics_unknown_and_empty() {
+    assert_eq!(Topic::parse_debug_topics(""), 0);
+    assert_eq!(Topic::parse_debug_topics("unknown,foo,bar"), 0);
+    assert_eq!(Topic::parse_debug_topics("unknown,tcp,invalid"), Topic::Tcp as u32);
+}
+
+#[test]
+fn test_topic_from_name() {
+    assert_eq!(Topic::from_name("tcp"), Some(Topic::Tcp));
+    assert_eq!(Topic::from_name("  uDp  "), Some(Topic::Udp));
+    assert_eq!(Topic::from_name("ICMP"), Some(Topic::Icmp));
+    assert_eq!(Topic::from_name("dhcp"), Some(Topic::Dhcp));
+    assert_eq!(Topic::from_name("dns"), Some(Topic::Dns));
+    assert_eq!(Topic::from_name("tftp"), Some(Topic::Tftp));
+    assert_eq!(Topic::from_name("arp"), Some(Topic::Arp));
+    assert_eq!(Topic::from_name("all"), None);
+    assert_eq!(Topic::from_name("unknown"), None);
+    assert_eq!(Topic::from_name(""), None);
+}
