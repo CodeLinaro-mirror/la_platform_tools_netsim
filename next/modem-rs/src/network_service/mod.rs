@@ -531,6 +531,27 @@ impl NetworkService {
         }))
     }
 
+    fn is_valid_operator(&self, op_str: &str) -> bool {
+        self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
+            || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
+            || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT
+    }
+
+    fn select_operator(
+        &mut self,
+        act: Option<AccessTechnology>,
+        sim: &impl CardState,
+    ) -> Vec<NetworkUrc> {
+        let tech_changed = act.is_some_and(|a| self.apply_resolved_act(a));
+        if self.is_attached {
+            if tech_changed { self.tech_change_urcs() } else { Vec::new() }
+        } else if self.radio_power == RadioPowerLevel::Full {
+            self.attach_network_urcs(sim)
+        } else {
+            Vec::new()
+        }
+    }
+
     fn handle_set_operator(
         &mut self,
         mode: CopsMode,
@@ -551,14 +572,7 @@ impl NetworkService {
                 if let Some(fmt) = format {
                     self.cops_format = fmt;
                 }
-                let tech_changed = act.is_some_and(|a| self.apply_resolved_act(a));
-                if self.is_attached {
-                    if tech_changed {
-                        urcs.extend(self.tech_change_urcs());
-                    }
-                } else if self.radio_power == RadioPowerLevel::Full {
-                    urcs.extend(self.attach_network_urcs(sim));
-                }
+                urcs.extend(self.select_operator(act, sim));
                 if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
             }
             CopsMode::Manual => {
@@ -570,19 +584,8 @@ impl NetworkService {
                     self.cops_format = fmt;
                 }
 
-                let is_valid_operator = self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
-                    || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
-                    || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
-
-                if is_valid_operator {
-                    let tech_changed = act.is_some_and(|a| self.apply_resolved_act(a));
-                    if self.is_attached {
-                        if tech_changed {
-                            urcs.extend(self.tech_change_urcs());
-                        }
-                    } else if self.radio_power == RadioPowerLevel::Full {
-                        urcs.extend(self.attach_network_urcs(sim));
-                    }
+                if self.is_valid_operator(op_str) {
+                    urcs.extend(self.select_operator(act, sim));
                     if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
                 } else {
                     self.is_attached = false;
@@ -636,21 +639,11 @@ impl NetworkService {
                     self.cops_format = fmt;
                 }
 
-                let manual_success = self.plmn.as_ref().is_some_and(|p| op_str == p.as_str())
-                    || op_str == crate::constants::DEFAULT_OPERATOR_NAME_LONG
-                    || op_str == crate::constants::DEFAULT_OPERATOR_NAME_SHORT;
-                if !manual_success {
+                if !self.is_valid_operator(op_str) {
                     self.cops_mode = CopsMode::Automatic;
                 }
 
-                let tech_changed = act.is_some_and(|a| self.apply_resolved_act(a));
-                if self.is_attached {
-                    if tech_changed {
-                        urcs.extend(self.tech_change_urcs());
-                    }
-                } else if self.radio_power == RadioPowerLevel::Full {
-                    urcs.extend(self.attach_network_urcs(sim));
-                }
+                urcs.extend(self.select_operator(act, sim));
                 if urcs.is_empty() { Ok(None) } else { Ok(Some(NetworkResponse::Urcs(urcs))) }
             }
         }
