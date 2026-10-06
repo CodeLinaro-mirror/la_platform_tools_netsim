@@ -9,7 +9,8 @@ use netsim_proto::{
         patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto,
     },
     model::{
-        self, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto, Position,
+        self, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto, Orientation,
+        Position,
         chip::{
             BleBeacon as Chip_Ble_Beacon, Bluetooth as Chip_Bluetooth, Chip as Chip_Type,
             Radio as Chip_Radio,
@@ -147,6 +148,35 @@ impl Command {
                                         ..Default::default()
                                     },
                                 )),
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        });
+
+                        let result = frontend::CreateDeviceRequest { device, ..Default::default() };
+                        GrpcRequest::CreateDevice(result)
+                    }
+                    BeaconCreate::Uwb(args) => {
+                        let position = Position {
+                            x: args.x.unwrap_or_default(),
+                            y: args.y.unwrap_or_default(),
+                            z: args.z.unwrap_or_default(),
+                            ..Default::default()
+                        };
+                        let orientation = Orientation {
+                            yaw: args.yaw.unwrap_or_default(),
+                            pitch: args.pitch.unwrap_or_default(),
+                            roll: args.roll.unwrap_or_default(),
+                            ..Default::default()
+                        };
+                        let device = MessageField::some(DeviceCreateProto {
+                            name: args.device_name.clone().unwrap_or_default(),
+                            position: MessageField::some(position),
+                            orientation: MessageField::some(orientation),
+                            chips: vec![ChipCreateProto {
+                                name: args.chip_name.clone().unwrap_or_default(),
+                                kind: ChipKind::UWB.into(),
+                                address: args.address.clone().unwrap_or_default(),
                                 ..Default::default()
                             }],
                             ..Default::default()
@@ -477,7 +507,7 @@ mod tests {
         },
         model::{
             self, Chip as ChipProto, ChipCreate as ChipCreateProto, Device as DeviceProto,
-            DeviceCreate as DeviceCreateProto, Link as LinkProto, Position,
+            DeviceCreate as DeviceCreateProto, Link as LinkProto, Orientation, Position,
             chip::{
                 BleBeacon as BleBeaconProto, Bluetooth as Chip_Bluetooth, Chip as ChipKindProto,
                 Radio as Chip_Radio,
@@ -500,9 +530,9 @@ mod tests {
     use crate::{
         args::{
             AdvertiseMode, BeaconBleAdvertiseData, BeaconBleScanResponseData, BeaconBleSettings,
-            BeaconCreateBle, BeaconPatchBle, Command, Devices, Interval, Link, LinkCreate,
-            LinkPatch, ListCapture, Move, NetsimArgs, ParsableBytes, Radio, RadioType, TxPower,
-            TxPowerLevel,
+            BeaconCreateBle, BeaconCreateUwb, BeaconPatchBle, Command, Devices, Interval, Link,
+            LinkCreate, LinkPatch, ListCapture, Move, NetsimArgs, ParsableBytes, Radio, RadioType,
+            TxPower, TxPowerLevel,
         },
         error::Error,
     };
@@ -1510,5 +1540,123 @@ mod tests {
     fn test_patch_beacon_mfg_data_fails() {
         let command = String::from("netsim-cli beacon patch ble --manufacturer-data not-a-number");
         assert!(NetsimArgs::try_parse_from(command.split_whitespace()).is_err());
+    }
+
+    #[test]
+    fn test_beacon_create_uwb_all_params() {
+        let device_name = "uwb_dev";
+        let chip_name = "uwb_chip";
+        let address = "00:01";
+        let x = -1.5;
+        let y = 2.0;
+        let z = -3.0;
+        let yaw = -90.0;
+        let pitch = 20.0;
+        let roll = 30.0;
+
+        let command = Command::Beacon(Beacon::Create(BeaconCreate::Uwb(BeaconCreateUwb {
+            device_name: Some(device_name.to_string()),
+            chip_name: Some(chip_name.to_string()),
+            address: Some(address.to_string()),
+            x: Some(x),
+            y: Some(y),
+            z: Some(z),
+            yaw: Some(yaw),
+            pitch: Some(pitch),
+            roll: Some(roll),
+        })));
+
+        let device = MessageField::some(DeviceCreateProto {
+            name: device_name.to_string(),
+            position: MessageField::some(Position { x, y, z, ..Default::default() }),
+            orientation: MessageField::some(Orientation { yaw, pitch, roll, ..Default::default() }),
+            chips: vec![ChipCreateProto {
+                name: chip_name.to_string(),
+                kind: ChipKind::UWB.into(),
+                address: address.to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        let expected_request =
+            GrpcRequest::CreateDevice(CreateDeviceRequest { device, ..Default::default() });
+
+        test_command(
+            format!(
+                "netsim-cli beacon create uwb {device_name} {chip_name} --address {address} --x {x} --y {y} --z {z} --yaw {yaw} --pitch {pitch} --roll {roll}"
+            )
+            .as_str(),
+            command,
+            expected_request,
+        );
+    }
+
+    #[test]
+    fn test_beacon_create_uwb_default() {
+        let command =
+            Command::Beacon(Beacon::Create(BeaconCreate::Uwb(BeaconCreateUwb::default())));
+
+        let device = MessageField::some(DeviceCreateProto {
+            position: MessageField::some(Position::default()),
+            orientation: MessageField::some(Orientation::default()),
+            chips: vec![ChipCreateProto { kind: ChipKind::UWB.into(), ..Default::default() }],
+            ..Default::default()
+        });
+        let expected_request =
+            GrpcRequest::CreateDevice(CreateDeviceRequest { device, ..Default::default() });
+
+        test_command("netsim-cli beacon create uwb", command, expected_request);
+    }
+
+    #[test]
+    fn test_beacon_create_uwb_with_address() {
+        let command = Command::Beacon(Beacon::Create(BeaconCreate::Uwb(BeaconCreateUwb {
+            address: Some("00:01".to_string()),
+            ..Default::default()
+        })));
+
+        let device = MessageField::some(DeviceCreateProto {
+            position: MessageField::some(Position::default()),
+            orientation: MessageField::some(Orientation::default()),
+            chips: vec![ChipCreateProto {
+                kind: ChipKind::UWB.into(),
+                address: "00:01".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        let expected_request =
+            GrpcRequest::CreateDevice(CreateDeviceRequest { device, ..Default::default() });
+
+        test_command("netsim-cli beacon create uwb --address 00:01", command, expected_request);
+    }
+
+    #[test]
+    fn test_anchor_alias_create_uwb() {
+        let command = Command::Beacon(Beacon::Create(BeaconCreate::Uwb(BeaconCreateUwb {
+            device_name: Some("my-anchor".to_string()),
+            address: Some("00:01".to_string()),
+            ..Default::default()
+        })));
+
+        let device = MessageField::some(DeviceCreateProto {
+            name: "my-anchor".to_string(),
+            position: MessageField::some(Position::default()),
+            orientation: MessageField::some(Orientation::default()),
+            chips: vec![ChipCreateProto {
+                kind: ChipKind::UWB.into(),
+                address: "00:01".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        let expected_request =
+            GrpcRequest::CreateDevice(CreateDeviceRequest { device, ..Default::default() });
+
+        test_command(
+            "netsim-cli anchor create uwb my-anchor --address 00:01",
+            command,
+            expected_request,
+        );
     }
 }

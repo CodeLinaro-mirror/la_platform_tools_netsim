@@ -97,7 +97,7 @@ impl args::Command {
 
             Command::Beacon(action) => match action {
                 Beacon::Create(kind) => match kind {
-                    BeaconCreate::Ble(_) => {
+                    BeaconCreate::Ble(_) | BeaconCreate::Uwb(_) => {
                         if !verbose {
                             return Ok(());
                         }
@@ -110,8 +110,12 @@ impl args::Command {
                         let device = &res.device;
                         match device.chips.as_slice() {
                             [chip] => {
+                                let kind_str = match kind {
+                                    BeaconCreate::Ble(_) => "ble beacon",
+                                    BeaconCreate::Uwb(_) => "uwb anchor",
+                                };
                                 println!(
-                                    "Created device '{}' with ble beacon chip '{}'",
+                                    "Created device '{}' with {kind_str} chip '{}'",
                                     device.name, chip.name
                                 );
                             }
