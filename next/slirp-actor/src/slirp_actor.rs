@@ -138,9 +138,33 @@ impl fmt::Debug for SlirpCreate {
 }
 
 pub(crate) struct ClientInfo {
-    pub sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
-    pub notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
-    pub isolated: bool,
+    sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
+    notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
+    isolated: bool,
+}
+
+impl ClientInfo {
+    pub(crate) fn new(
+        sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
+        notifier: Option<tokio_mpsc::UnboundedSender<netsim_model::ChipId>>,
+        isolated: bool,
+    ) -> Self {
+        Self { sink, notifier, isolated }
+    }
+
+    pub(crate) fn send(&self, msg: bytes::Bytes) {
+        let _ = self.sink.send(msg);
+    }
+
+    pub(crate) fn notify_disconnected(&self, id: u32) {
+        if let Some(notifier) = &self.notifier {
+            let _ = notifier.send(netsim_model::ChipId(id));
+        }
+    }
+
+    pub(crate) fn is_isolated(&self) -> bool {
+        self.isolated
+    }
 }
 
 pub(crate) enum SlirpBackendInstance {
