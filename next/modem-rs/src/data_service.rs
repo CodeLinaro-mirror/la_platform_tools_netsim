@@ -593,21 +593,15 @@ fn parse_cid_from_gprs_dial(number: &str) -> Option<u8> {
 
     // Expecting a format like *99, *99*<cid>, or *99***<cid> (at most 5
     // segments)
-    if parts.len() < 2 || parts.len() > 5 || !parts[0].is_empty() || parts[1] != "99" {
+    if parts.len() > 5 {
         return None;
     }
 
-    // Case 1: *99# (parts are ["", "99"])
-    if parts.len() == 2 {
-        return Some(1);
+    match parts.as_slice() {
+        ["", "99"] => Some(1),
+        ["", "99", .., last_part] if !last_part.is_empty() => last_part.parse::<u8>().ok(),
+        _ => None,
     }
-
-    // Case 2: *99*<cid># or *99***<cid># (parts.len() > 2)
-    let last_part = parts.last()?;
-    if last_part.is_empty() {
-        return None;
-    }
-    last_part.parse::<u8>().ok()
 }
 
 #[cfg(test)]
