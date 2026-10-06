@@ -6,12 +6,15 @@
 //! Provides REST API request and response models and the HTTP endpoint
 //! dispatcher for managing devices, links, and access points.
 
+#![allow(clippy::indexing_slicing)]
+
 use serde::{Deserialize, Serialize};
 
 pub mod ap_api;
 pub mod client;
 pub mod device_api;
 pub mod link_api;
+pub mod openapi;
 pub mod server;
 
 pub use ap_api::*;
