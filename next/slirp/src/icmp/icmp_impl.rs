@@ -58,8 +58,9 @@ impl IcmpManager {
             return;
         };
         if icmp_header.icmp_type == IcmpType::EchoRequest as u8 {
-            let identifier = u16::from_be_bytes([icmp_header.rest[0], icmp_header.rest[1]]);
-            let sequence_number = u16::from_be_bytes([icmp_header.rest[2], icmp_header.rest[3]]);
+            let [id0, id1, seq0, seq1] = icmp_header.rest;
+            let identifier = u16::from_be_bytes([id0, id1]);
+            let sequence_number = u16::from_be_bytes([seq0, seq1]);
             let echo_request =
                 IcmpEcho { identifier: identifier.into(), sequence_number: sequence_number.into() };
             let echo_payload = icmp_payload;
@@ -138,7 +139,10 @@ impl IcmpManager {
         )
         .unwrap();
 
-        ipv4_builder.payload_mut()[..icmp_len].copy_from_slice(icmp_reply);
+        let Some(dest) = ipv4_builder.payload_mut().get_mut(..icmp_len) else {
+            return;
+        };
+        dest.copy_from_slice(icmp_reply);
         ipv4_builder.payload_len(icmp_len);
         ipv4_builder.build();
 
@@ -151,7 +155,10 @@ impl IcmpManager {
         eth_frame.dst_addr = config.guest_mac;
         eth_frame.src_addr = config.gateway_mac;
         eth_frame.ethertype = 0x0800.into();
-        eth_payload_slice[..total_ipv4_len].copy_from_slice(&ipv4_buffer);
+        let Some(dest) = eth_payload_slice.get_mut(..total_ipv4_len) else {
+            return;
+        };
+        dest.copy_from_slice(&ipv4_buffer);
 
         responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer)));
     }
@@ -191,14 +198,24 @@ impl IcmpManager {
         icmp_header.icmp_checksum = 0.into();
 
         // Write echo fields into the 4-byte rest field
-        icmp_header.rest[..2].copy_from_slice(&echo_request.identifier.get().to_be_bytes());
-        icmp_header.rest[2..].copy_from_slice(&echo_request.sequence_number.get().to_be_bytes());
+        let id = u32::from(echo_request.identifier.get());
+        let seq = u32::from(echo_request.sequence_number.get());
+        icmp_header.rest = ((id << 16) | seq).to_be_bytes();
 
-        echo_payload_slice[..echo_payload.len()].copy_from_slice(echo_payload);
+        let Some(dest) = echo_payload_slice.get_mut(..echo_payload.len()) else {
+            return;
+        };
+        dest.copy_from_slice(echo_payload);
 
         // 3. Calculate ICMP checksum on the builder's payload
-        let checksum = netsim_packets::ipv4_checksum(&icmp_payload[..total_icmp_len]);
-        let icmp_header = IcmpHeader::mut_from_bytes(&mut icmp_payload[..icmp_header_len]).unwrap();
+        let Some(full_icmp_slice) = icmp_payload.get(..total_icmp_len) else {
+            return;
+        };
+        let checksum = netsim_packets::ipv4_checksum(full_icmp_slice);
+        let Some(header_slice) = icmp_payload.get_mut(..icmp_header_len) else {
+            return;
+        };
+        let icmp_header = IcmpHeader::mut_from_bytes(header_slice).unwrap();
         icmp_header.icmp_checksum.set(checksum);
 
         // 4. Finalize the IPv4 header
@@ -215,7 +232,10 @@ impl IcmpManager {
         eth_frame.dst_addr = guest_mac;
         eth_frame.src_addr = config.gateway_mac;
         eth_frame.ethertype = 0x0800.into();
-        eth_payload_slice[..total_ipv4_len].copy_from_slice(&ipv4_buffer);
+        let Some(dest) = eth_payload_slice.get_mut(..total_ipv4_len) else {
+            return;
+        };
+        dest.copy_from_slice(&ipv4_buffer);
 
         responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer)));
     }
@@ -256,10 +276,17 @@ impl IcmpManager {
         icmp_type: IcmpType,
         icmp_code: u8,
     ) {
-        let mut buffer = vec![0u8; 1500];
         let eth_header_len = 14;
         let ipv4_header_len = 20;
         let icmp_header_len = std::mem::size_of::<IcmpHeader>();
+
+        let offending_slice = offending_packet.get(..64).unwrap_or(offending_packet);
+        let data_len = offending_slice.len();
+
+        let total_icmp_len = icmp_header_len + data_len;
+        let total_len = eth_header_len + ipv4_header_len + total_icmp_len;
+
+        let mut buffer = vec![0u8; total_len];
 
         let (eth_header_slice, eth_payload) = buffer.split_at_mut(eth_header_len);
         let eth_frame = EthernetFrame::mut_from_bytes(eth_header_slice).unwrap();
@@ -285,20 +312,18 @@ impl IcmpManager {
         icmp_header.icmp_checksum = 0.into();
         icmp_header.rest.fill(0); // Fill the unused 4 bytes with 0
 
-        let data_len = std::cmp::min(offending_packet.len(), 64);
-        data_slice[..data_len].copy_from_slice(&offending_packet[..data_len]);
+        data_slice.copy_from_slice(offending_slice);
 
-        let total_icmp_len = icmp_header_len + data_len;
         ipv4_builder.payload_len(total_icmp_len);
         ipv4_builder.build();
 
         // Calculate ICMP checksum
-        let checksum = netsim_packets::ipv4_checksum(&ipv4_payload[..total_icmp_len]);
-        let icmp_header = IcmpHeader::mut_from_bytes(&mut ipv4_payload[..icmp_header_len]).unwrap();
+        let checksum = netsim_packets::ipv4_checksum(ipv4_payload);
+        let (header_slice, _) = ipv4_payload.split_at_mut(icmp_header_len);
+        let icmp_header = IcmpHeader::mut_from_bytes(header_slice).unwrap();
         icmp_header.icmp_checksum.set(checksum);
 
-        let total_len = eth_header_len + ipv4_header_len + total_icmp_len;
-        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer[..total_len])));
+        responses.push(SlirpResponse::Packet(Bytes::from(buffer)));
     }
 
     fn send_destination_unreachable(
