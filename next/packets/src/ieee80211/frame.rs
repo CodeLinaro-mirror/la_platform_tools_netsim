@@ -423,16 +423,16 @@ impl Ieee80211 {
 
     pub fn is_multicast(&self) -> bool {
         // Addr1 is at offset 4
-        self.bytes[4] & 1 == 1
+        self.bytes.get(4).is_some_and(|b| b & 1 == 1)
     }
 
     pub fn is_broadcast(&self) -> bool {
-        self.bytes[4..10] == [0xFF; 6]
+        self.bytes.get(4..10) == Some(&[0xFF; 6])
     }
 
     pub fn needs_encryption(&self) -> bool {
         // Frame Control byte 1, bit 6 (0x40) is Protected Frame
-        self.bytes[1] & 0x40 != 0
+        self.bytes.get(1).is_some_and(|b| b & 0x40 != 0)
     }
 
     pub fn needs_decryption(&self) -> bool {
@@ -440,10 +440,10 @@ impl Ieee80211 {
     }
 
     pub fn hdr_length(&self) -> usize {
-        if self.bytes.len() < 2 {
+        let Some(&fc_bytes) = self.bytes.first_chunk::<2>() else {
             return 24;
-        } // Default safe
-        let fc = u16::from_le_bytes([self.bytes[0], self.bytes[1]]);
+        };
+        let fc = u16::from_le_bytes(fc_bytes);
         let to_ds = (fc & 0x0100) != 0;
         let from_ds = (fc & 0x0200) != 0;
         let mut len = if to_ds && from_ds { 30 } else { 24 };
@@ -468,67 +468,46 @@ impl Ieee80211 {
 
     pub fn get_nonce(&self, pn: &[u8]) -> [u8; 13] {
         let mut nonce = [0u8; 13];
-        // Priority (0)
-        nonce[0] = 0;
-        // Addr2 (TA) is at offset 10 for Data frames (ToDS=0/1, FromDS=0/1)
-        if self.bytes.len() >= 16 {
-            nonce[1..7].copy_from_slice(&self.bytes[10..16]);
+        if let (Some(dest), Some(src)) = (nonce.get_mut(1..7), self.bytes.get(10..16)) {
+            dest.copy_from_slice(src);
         }
-        // PN (PN5 at nonce[7], PN0 at nonce[12])
-        if pn.len() >= 6 {
-            nonce[7] = pn[0]; // PN5
-            nonce[8] = pn[1]; // PN4
-            nonce[9] = pn[2]; // PN3
-            nonce[10] = pn[3]; // PN2
-            nonce[11] = pn[4]; // PN1
-            nonce[12] = pn[5]; // PN0
+        if let (Some(dest), Some(src)) = (nonce.get_mut(7..13), pn.get(..6)) {
+            dest.copy_from_slice(src);
         }
         nonce
     }
 
     pub fn get_payload(&self) -> Vec<u8> {
         let offset = self.hdr_length();
-        if offset < self.bytes.len() { self.bytes[offset..].to_vec() } else { Vec::new() }
+        self.bytes.get(offset..).map_or_else(Vec::new, |p| p.to_vec())
     }
 
     pub fn get_aad(&self) -> Vec<u8> {
-        let mut aad = Vec::new();
-        if self.bytes.len() < 24 {
-            return aad;
-        }
+        let Some((hdr, _)) = self.bytes.split_first_chunk::<24>() else {
+            return Vec::new();
+        };
+        let &[fc0, fc1, _, _, ref addr1_2_3 @ .., seq0, _] = hdr;
+        // Mask FC: Retry(11), PwrMgmt(12), MoreData(13) -> 0 (!0x38 in fc1)
+        // Protected(14) -> 1 (| 0x40 in fc1)
+        let mut aad =
+            [&[fc0, (fc1 & !0x38) | 0x40][..], addr1_2_3.as_slice(), &[seq0 & 0x0f, 0x00]].concat();
 
-        let fc = u16::from_le_bytes([self.bytes[0], self.bytes[1]]);
-        // Mask FC: Retry(11), PwrMgmt(12), MoreData(13) -> 0
-        // Protected(14) -> 1
-        let mut fc_masked = fc & !0x3800;
-        fc_masked |= 0x4000;
-
-        aad.extend_from_slice(&fc_masked.to_le_bytes());
-        aad.extend_from_slice(&self.bytes[4..10]); // Addr1
-        aad.extend_from_slice(&self.bytes[10..16]); // Addr2
-        aad.extend_from_slice(&self.bytes[16..22]); // Addr3
-
-        // Seq Ctrl masked (Sequence Number -> 0, Fragment Number preserved)
-        let sc = u16::from_le_bytes([self.bytes[22], self.bytes[23]]);
-        let sc_masked = sc & 0x000F;
-        aad.extend_from_slice(&sc_masked.to_le_bytes());
+        let fc = u16::from_le_bytes([fc0, fc1]);
 
         let to_ds = (fc & 0x0100) != 0;
         let from_ds = (fc & 0x0200) != 0;
         let has_addr4 = to_ds && from_ds;
         let mut qos_offset = 24;
 
-        if has_addr4 && self.bytes.len() >= 30 {
-            aad.extend_from_slice(&self.bytes[24..30]); // Addr4
+        if has_addr4 && let Some(addr4) = self.bytes.get(24..30) {
+            aad.extend_from_slice(addr4);
             qos_offset = 30;
         }
 
         // QoS Control masked (TID kept, bits 4-15 -> 0)
         let is_qos = (fc & 0x000C) == 0x0008 && (fc & 0x0080) != 0;
-        if is_qos && self.bytes.len() >= qos_offset + 2 {
-            let qos_ctrl_0 = self.bytes[qos_offset];
-            aad.push(qos_ctrl_0 & 0x0F);
-            aad.push(0x00);
+        if is_qos && let Some(&[qos_ctrl_0, _]) = self.bytes.get(qos_offset..qos_offset + 2) {
+            aad.extend_from_slice(&[qos_ctrl_0 & 0x0F, 0x00]);
         }
 
         aad
@@ -536,13 +515,13 @@ impl Ieee80211 {
 
     pub fn get_packet_number(&self) -> [u8; 6] {
         let offset = self.hdr_length();
-        if self.bytes.len() < offset + 8 {
-            return [0; 6];
+        if let Some(&[c0, c1, _, _, c4, c5, c6, c7]) =
+            self.bytes.get(offset..).and_then(|s| s.first_chunk::<8>())
+        {
+            [c7, c6, c5, c4, c1, c0]
+        } else {
+            [0; 6]
         }
-        let ccmp = &self.bytes[offset..offset + 8];
-        // PN0, PN1, Rsvd, KeyID, PN2, PN3, PN4, PN5
-        // Return [PN5, PN4, PN3, PN2, PN1, PN0]
-        [ccmp[7], ccmp[6], ccmp[5], ccmp[4], ccmp[1], ccmp[0]]
     }
 
     fn get_addr_at(&self, offset: usize) -> MacAddress {
@@ -566,10 +545,7 @@ impl Ieee80211 {
     }
 
     pub fn get_fc(&self) -> u16 {
-        if self.bytes.len() < 2 {
-            return 0;
-        }
-        u16::from_le_bytes([self.bytes[0], self.bytes[1]])
+        self.bytes.first_chunk::<2>().map_or(0, |&b| u16::from_le_bytes(b))
     }
 
     pub fn is_to_ds(&self) -> bool {
@@ -590,21 +566,14 @@ impl Ieee80211 {
         } else {
             4 // Addr1
         };
-        if self.bytes.len() >= offset + 6 {
-            self.bytes[offset..offset + 6].copy_from_slice(&addr.bytes);
+        if let Some(dest_slice) = self.bytes.get_mut(offset..offset + 6) {
+            dest_slice.copy_from_slice(&addr.bytes);
         }
     }
 
     pub fn get_source(&self) -> MacAddress {
         if self.is_from_ds() {
-            if self.is_to_ds() {
-                if self.bytes.len() < 30 {
-                    return MacAddress::new([0; 6]);
-                }
-                MacAddress::new(self.bytes[24..30].try_into().unwrap())
-            } else {
-                self.get_addr3()
-            }
+            if self.is_to_ds() { self.get_addr_at(24) } else { self.get_addr3() }
         } else {
             self.get_addr2()
         }
@@ -650,12 +619,10 @@ impl Ieee80211 {
 
     pub fn is_eapol(&self) -> Result<bool, String> {
         let offset = self.hdr_length();
-
-        if self.bytes.len() < offset + 8 {
+        let Some(llc) = self.bytes.get(offset..offset + 8) else {
             return Ok(false);
-        }
-        let llc = &self.bytes[offset..offset + 8];
-        if llc == [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8E] { Ok(true) } else { Ok(false) }
+        };
+        Ok(llc == [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8E])
     }
 
     pub fn is_qos_data(&self) -> bool {
@@ -667,6 +634,9 @@ impl Ieee80211 {
     }
 
     pub fn decode_full(bytes: &[u8]) -> Result<Self, String> {
+        if bytes.len() < 10 {
+            return Err(format!("Packet too short: len {} < 10", bytes.len()));
+        }
         Ok(Self { bytes: bytes.to_vec() })
     }
 
@@ -690,19 +660,18 @@ impl Ieee80211 {
         is_qos: bool,
         seq: u16,
     ) -> Result<Self, String> {
-        if packet.len() < 14 {
-            return Err("Packet too short".into());
-        }
-        let dst = MacAddress::new(
-            packet[0..6].try_into().map_err(|e: std::array::TryFromSliceError| e.to_string())?,
-        );
-        let src = MacAddress::new(
-            packet[6..12].try_into().map_err(|e: std::array::TryFromSliceError| e.to_string())?,
-        );
-        let ethertype = [packet[12], packet[13]];
-        let payload = &packet[14..];
+        let Some((&dst_bytes, rest)) = packet.split_first_chunk::<6>() else {
+            return Err("Packet too short".to_string());
+        };
+        let Some((&src_bytes, rest)) = rest.split_first_chunk::<6>() else {
+            return Err("Packet too short".to_string());
+        };
+        let Some((&ethertype, payload)) = rest.split_first_chunk::<2>() else {
+            return Err("Packet too short".to_string());
+        };
+        let dst = MacAddress::new(dst_bytes);
+        let src = MacAddress::new(src_bytes);
 
-        let mut new_packet = Vec::new();
         // If is_qos: Data (0x88)
         let fc: u16 = match (direction, is_qos) {
             (FrameDirection::FromAp, true) => 0x0288,
@@ -710,44 +679,28 @@ impl Ieee80211 {
             (FrameDirection::ToAp, true) => 0x0188,
             (FrameDirection::ToAp, false) => 0x0108,
         };
-        new_packet.extend_from_slice(&fc.to_le_bytes());
-        new_packet.extend_from_slice(&0u16.to_le_bytes()); // Duration/ID
 
-        match direction {
-            FrameDirection::FromAp => {
-                // Downlink (AP -> STA):
-                // Addr1 (RA) = Destination (Client)
-                new_packet.extend_from_slice(&dst.bytes);
-                // Addr2 (TA) = BSSID (AP)
-                new_packet.extend_from_slice(&bssid.bytes);
-                // Addr3 (SA) = Source (Original Source)
-                new_packet.extend_from_slice(&src.bytes);
-            }
-            FrameDirection::ToAp => {
-                // Uplink/ToDS (STA -> AP):
-                // Addr1 (RA) = BSSID (AP)
-                new_packet.extend_from_slice(&bssid.bytes);
-                // Addr2 (TA) = Source (Client)
-                new_packet.extend_from_slice(&src.bytes);
-                // Addr3 (DA) = Destination
-                new_packet.extend_from_slice(&dst.bytes);
-            }
-        }
+        let (addr1, addr2, addr3) = match direction {
+            FrameDirection::FromAp => (&dst.bytes, &bssid.bytes, &src.bytes),
+            FrameDirection::ToAp => (&bssid.bytes, &src.bytes, &dst.bytes),
+        };
 
-        let seq_ctrl = seq << 4;
-        new_packet.extend_from_slice(&seq_ctrl.to_le_bytes()); // Sequence Control
+        let seq_ctrl = (seq << 4).to_le_bytes();
+        let qos_slice: &[u8] = if is_qos { &[0x00, 0x00] } else { &[] };
 
-        // QoS Control (if present)
-        if is_qos {
-            // TID 0, no EOSP, no Ack Policy, no AMSDU
-            new_packet.extend_from_slice(&[0x00, 0x00]);
-        }
-
-        // LLC/SNAP
-        new_packet.extend_from_slice(&[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00]);
-        new_packet.extend_from_slice(&ethertype);
-
-        new_packet.extend_from_slice(payload);
+        let new_packet = [
+            &fc.to_le_bytes()[..],
+            &0u16.to_le_bytes(), // Duration/ID
+            addr1.as_slice(),
+            addr2.as_slice(),
+            addr3.as_slice(),
+            &seq_ctrl,
+            qos_slice,
+            &[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00],
+            &ethertype,
+            payload,
+        ]
+        .concat();
 
         Ok(Self { bytes: new_packet })
     }
@@ -757,24 +710,23 @@ impl Ieee80211 {
         let sa = self.get_source();
         let payload = self.get_payload();
 
-        // Check LLC/SNAP: AA AA 03 00 00 00
-        if payload.len() < 8 || payload[0..6] != [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00] {
-            return Err("Not LLC/SNAP encapsulated or unknown OUI".into());
-        }
+        let Some((&[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00], rest @ [_, _, ..])) =
+            payload.split_at_checked(6)
+        else {
+            return Err("Not LLC/SNAP encapsulated or unknown OUI".to_string());
+        };
 
-        // EtherType is at offset 6
-        let ethertype = &payload[6..8];
-        let data = &payload[8..];
-
-        let mut eth_frame = Vec::with_capacity(14 + data.len());
-        eth_frame.extend_from_slice(&da.bytes);
-        eth_frame.extend_from_slice(&sa.bytes);
-        eth_frame.extend_from_slice(ethertype);
-        eth_frame.extend_from_slice(data);
-        Ok(eth_frame)
+        Ok([da.bytes.as_slice(), sa.bytes.as_slice(), rest].concat())
     }
 
     pub fn into_from_ap(&self) -> Result<Ieee80211FromAp, String> {
+        let Some((header, _)) = self.bytes.split_first_chunk::<24>() else {
+            return Err("Frame too short".to_string());
+        };
+        let &[_, _, dur0, dur1, .., seq0, seq1] = header;
+        let duration_id = u16::from_le_bytes([dur0, dur1]);
+        let seq_ctrl = u16::from_le_bytes([seq0, seq1]);
+
         let fc = self.get_fc();
         let ftype = match (fc & 0x000C) >> 2 {
             0 => FrameType::Management,
@@ -785,20 +737,20 @@ impl Ieee80211 {
         let stype = ((fc & 0x00F0) >> 4) as u8;
 
         let is_qos = (fc & 0x000C) == 0x0008 && (stype & 0x08) != 0;
-        let qos_ctrl = if is_qos && self.bytes.len() >= 26 {
-            Some([self.bytes[24], self.bytes[25]])
+        let qos_ctrl = if is_qos {
+            self.bytes.get(24..26).and_then(|s| s.first_chunk::<2>().copied())
         } else {
             None
         };
 
         Ok(Ieee80211FromAp {
-            duration_id: u16::from_le_bytes([self.bytes[2], self.bytes[3]]),
+            duration_id,
             ftype,
             stype,
             destination: self.get_destination(),
             source: self.get_source(),
-            bssid: self.get_bssid().unwrap_or(MacAddress::new([0; 6])),
-            seq_ctrl: u16::from_le_bytes([self.bytes[22], self.bytes[23]]),
+            bssid: self.get_bssid().ok_or_else(|| "Missing BSSID".to_string())?,
+            seq_ctrl,
             qos_ctrl,
             protected: if (fc & 0x4000) != 0 { 1 } else { 0 },
             order: if (fc & 0x8000) != 0 { 1 } else { 0 },
@@ -874,19 +826,19 @@ impl Ieee80211ToAp {
             fc |= 0x2000;
         }
 
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&fc.to_le_bytes());
-        bytes.extend_from_slice(&self.duration_id.to_le_bytes());
-        for addr in addrs {
-            bytes.extend_from_slice(addr);
-        }
-        bytes.extend_from_slice(&self.seq_ctrl.to_le_bytes());
-        if let Some(qos) = self.qos_ctrl {
-            bytes.extend_from_slice(&qos);
-        }
-        bytes.extend_from_slice(payload);
-
-        Ok(bytes)
+        let [a1, a2, a3] = addrs;
+        let qos_slice: &[u8] = self.qos_ctrl.as_ref().map_or(&[], |q| q.as_slice());
+        Ok([
+            &fc.to_le_bytes()[..],
+            &self.duration_id.to_le_bytes(),
+            a1.as_slice(),
+            a2.as_slice(),
+            a3.as_slice(),
+            &self.seq_ctrl.to_le_bytes(),
+            qos_slice,
+            payload,
+        ]
+        .concat())
     }
 
     pub fn encode_to_bytes(&self) -> Result<Vec<u8>, String> {
@@ -1386,5 +1338,60 @@ mod tests {
         assert_eq!(from_ap_frame.get_source(), src);
         assert_eq!(from_ap_frame.get_bssid(), Some(bssid));
         assert_eq!(from_ap_frame.get_payload(), payload);
+    }
+
+    #[test]
+    fn test_get_aad() {
+        let addr1 = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
+        let addr2 = [0x11, 0x12, 0x13, 0x14, 0x15, 0x16];
+        let addr3 = [0x21, 0x22, 0x23, 0x24, 0x25, 0x26];
+        let addr4 = [0x31, 0x32, 0x33, 0x34, 0x35, 0x36];
+
+        // 1. Short frame (< 24 bytes) returns empty AAD
+        let short_frame = Ieee80211 { bytes: vec![0u8; 23] };
+        assert!(short_frame.get_aad().is_empty());
+
+        // 2. Non-QoS Data frame (ToDS=1, FromDS=0):
+        // fc0 = 0x3B (Subtype=0b0011, Type=Data 0b10, Version=0b11) -> preserved as 0x3B
+        // fc1 = 0xBD (ToDS=1, FromDS=0, MoreFrag=1, Retry=1, PwrMgmt=1, MoreData=1, Protected=0, Order=1)
+        // After masking Retry/PwrMgmt/MoreData (!0x38) and setting Protected (| 0x40):
+        // (0xBD & !0x38) | 0x40 = 0x85 | 0x40 = 0xC5
+        // Sequence Control: seq0 = 0xAB (Frag=0xB, Seq low=0xA), seq1 = 0xCD -> [0x0B, 0x00]
+        let mut non_qos_bytes = vec![0x3B, 0xBD, 0x12, 0x34];
+        non_qos_bytes.extend_from_slice(&addr1);
+        non_qos_bytes.extend_from_slice(&addr2);
+        non_qos_bytes.extend_from_slice(&addr3);
+        non_qos_bytes.extend_from_slice(&[0xAB, 0xCD]);
+
+        let non_qos_frame = Ieee80211 { bytes: non_qos_bytes };
+        let mut expected_non_qos = vec![0x3B, 0xC5];
+        expected_non_qos.extend_from_slice(&addr1);
+        expected_non_qos.extend_from_slice(&addr2);
+        expected_non_qos.extend_from_slice(&addr3);
+        expected_non_qos.extend_from_slice(&[0x0B, 0x00]);
+        assert_eq!(non_qos_frame.get_aad(), expected_non_qos);
+
+        // 3. QoS Data frame with Addr4 (ToDS=1, FromDS=1):
+        // fc0 = 0x88 (Type=Data, Subtype=QoS Data)
+        // fc1 = 0x3B (ToDS=1, FromDS=1, MoreFrag=0, Retry=1, PwrMgmt=1, MoreData=1, Protected=0, Order=0)
+        // Masked fc1: (0x3B & !0x38) | 0x40 = 0x03 | 0x40 = 0x43
+        // QoS Control: [0xF5, 0xAA] -> TID (low 4 bits) kept: [0x05, 0x00]
+        let mut qos_wds_bytes = vec![0x88, 0x3B, 0x00, 0x00];
+        qos_wds_bytes.extend_from_slice(&addr1);
+        qos_wds_bytes.extend_from_slice(&addr2);
+        qos_wds_bytes.extend_from_slice(&addr3);
+        qos_wds_bytes.extend_from_slice(&[0xF7, 0x12]); // Frag = 7
+        qos_wds_bytes.extend_from_slice(&addr4);
+        qos_wds_bytes.extend_from_slice(&[0xF5, 0xAA]); // QoS Ctrl
+
+        let qos_wds_frame = Ieee80211 { bytes: qos_wds_bytes };
+        let mut expected_qos_wds = vec![0x88, 0x43];
+        expected_qos_wds.extend_from_slice(&addr1);
+        expected_qos_wds.extend_from_slice(&addr2);
+        expected_qos_wds.extend_from_slice(&addr3);
+        expected_qos_wds.extend_from_slice(&[0x07, 0x00]);
+        expected_qos_wds.extend_from_slice(&addr4);
+        expected_qos_wds.extend_from_slice(&[0x05, 0x00]);
+        assert_eq!(qos_wds_frame.get_aad(), expected_qos_wds);
     }
 }

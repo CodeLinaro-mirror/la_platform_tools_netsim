@@ -66,11 +66,7 @@ pub struct LeLlFrameHeader {
 /// Reverses the bits in a byte. Used for Bluetooth HEC/CRC calculations
 /// where the spec often defines shift registers operating on LSB first.
 fn reverse_byte(b: u8) -> u8 {
-    let lookup: [u8; 16] = [
-        0b0000, 0b1000, 0b0100, 0b1100, 0b0010, 0b1010, 0b0110, 0b1110, 0b0001, 0b1001, 0b0101,
-        0b1101, 0b0011, 0b1011, 0b0111, 0b1111,
-    ];
-    (lookup[(b & 0xF) as usize] << 4) | lookup[(b >> 4) as usize]
+    b.reverse_bits()
 }
 
 /// Computes the 8-bit Header Error Check (HEC) for Bluetooth Baseband packets.
@@ -107,7 +103,9 @@ impl<'a> BitWriter<'a> {
             let bit = (val >> i) & 1;
             let byte_idx = self.pos / 8;
             let bit_idx = self.pos % 8;
-            self.buf[byte_idx] |= (bit as u8) << bit_idx;
+            if let Some(slot) = self.buf.get_mut(byte_idx) {
+                *slot |= (bit as u8) << bit_idx;
+            }
             self.pos += 1;
         }
     }
@@ -134,27 +132,20 @@ fn build_bt_packet_header(
 }
 
 pub fn create_bredr_bb_packet(packet: &[u8]) -> Option<Vec<u8>> {
-    if packet.len() < 7 {
-        return None;
-    }
-
-    let p_type = packet[0];
+    let (&p_type, rest) = packet.split_first()?;
     let is_page = match p_type {
         RC_PACKET_TYPE_PAGE => true,
         RC_PACKET_TYPE_ACL => false,
         _ => return None,
     };
 
-    if is_page && packet.len() < 10 {
-        return None;
-    }
+    let (&address, rest) = rest.split_first_chunk::<6>()?;
+    let (&ref_lap, &[uap, a4, a5]) = (address.first_chunk::<3>()?, address.last_chunk::<3>()?);
+    let [l0, l1, l2] = ref_lap;
+    let lap = u32::from_le_bytes([l0, l1, l2, 0]);
+    let nap = u16::from_le_bytes([a4, a5]);
 
-    let address = &packet[1..7];
-    let lap = u32::from_le_bytes([address[0], address[1], address[2], 0]);
-    let uap = address[3];
-    let nap = u16::from_le_bytes([address[4], address[5]]);
-
-    let payload = if is_page { &[] } else { &packet[7..] };
+    let payload = if is_page { &[] } else { rest };
     if payload.len() > MAX_ACL_PAYLOAD_LEN {
         return None;
     }
@@ -175,7 +166,7 @@ pub fn create_bredr_bb_packet(packet: &[u8]) -> Option<Vec<u8>> {
         corrected_header_bits: 0,
         corrected_payload_bits: 0,
         lap,
-        ref_lap: [address[0], address[1], address[2]],
+        ref_lap,
         ref_uap: uap,
         packet_header: build_bt_packet_header(uap, 0, packet_type_bits, true, true, true),
         flags: DEFAULT_BB_FLAGS,
@@ -185,7 +176,7 @@ pub fn create_bredr_bb_packet(packet: &[u8]) -> Option<Vec<u8>> {
     bb.extend_from_slice(header.as_bytes());
 
     if is_page {
-        let class_of_device = &packet[7..10];
+        let (&class_of_device, _) = rest.split_first_chunk::<3>()?;
 
         // 18-byte packed FHS (Frequency Hop Synchronization) payload
         // Structure is defined in Bluetooth Core Spec Vol 2, Part B, Section 6.5.1
@@ -209,9 +200,9 @@ pub fn create_bredr_bb_packet(packet: &[u8]) -> Option<Vec<u8>> {
         w.write(0, 6); // Undefined (2) / SR (2) / SP (2) = 6 bits (total 64 bits = 8 bytes)
         w.write(uap.into(), 8); // UAP (byte 8)
         w.write(nap.into(), 16); // NAP (bytes 9..10)
-        w.write(class_of_device[0].into(), 8); // Class of Device (bytes 11..13)
-        w.write(class_of_device[1].into(), 8);
-        w.write(class_of_device[2].into(), 8);
+        for byte in class_of_device {
+            w.write(byte.into(), 8);
+        }
         w.write(1, 3); // LT_ADDR
         w.write(0, 26); // Clock
         w.write(0, 3); // Page Scan Mode
@@ -227,7 +218,7 @@ pub fn create_bredr_bb_packet(packet: &[u8]) -> Option<Vec<u8>> {
         w.write(LLID_L2CAP_START.into(), 2);
         w.write(FLOW_GO.into(), 1);
         w.write(payload.len() as u64, length_bits);
-        bb.extend_from_slice(&p_header[..header_len]);
+        bb.extend_from_slice(p_header.get(..header_len)?);
 
         bb.extend_from_slice(payload);
         bb.extend_from_slice(&0u16.to_le_bytes()); // CRC
@@ -240,15 +231,17 @@ pub fn create_bredr_bb_packet(packet: &[u8]) -> Option<Vec<u8>> {
 /// format. The LE_LL pseudo-header requires the Access Address and a 2-byte PDU
 /// header.
 pub fn create_le_ll_packet(packet: &[u8]) -> Option<Vec<u8>> {
-    if packet.len() < 16 || packet[0] != LE_LEGACY_ADVERTISING_PDU {
+    let (&pdu_type, rest) = packet.split_first()?;
+    if pdu_type != LE_LEGACY_ADVERTISING_PDU {
         return None;
     }
 
-    let source_address = &packet[1..7];
-    let tx_add = packet[13] & 1;
-    let rx_add = packet[14] & 1;
-    let adv_type = packet[15] & 0x0F;
-    let adv_data = &packet[16..];
+    let (header_bytes, adv_data) = rest.split_first_chunk::<15>()?;
+    let &source_address = header_bytes.first_chunk::<6>()?;
+    let &[tx_add_raw, rx_add_raw, adv_type_raw] = header_bytes.last_chunk::<3>()?;
+    let tx_add = tx_add_raw & 1;
+    let rx_add = rx_add_raw & 1;
+    let adv_type = adv_type_raw & 0x0F;
     if adv_data.len() > MAX_LE_PAYLOAD_LEN {
         return None;
     }
@@ -267,13 +260,7 @@ pub fn create_le_ll_packet(packet: &[u8]) -> Option<Vec<u8>> {
 
     let header = LeLlFrameHeader { access_address: LE_ADV_ACCESS_ADDRESS, pdu_header };
 
-    let mut bb = Vec::with_capacity(32);
-    bb.extend_from_slice(header.as_bytes());
-    bb.extend_from_slice(source_address);
-    bb.extend_from_slice(adv_data);
-    bb.extend_from_slice(&[0, 0, 0]); // CRC
-
-    Some(bb)
+    Some([header.as_bytes(), &source_address, adv_data, &[0, 0, 0]].concat())
 }
 
 #[cfg(test)]

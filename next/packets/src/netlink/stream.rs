@@ -47,32 +47,19 @@ impl<'a> Iterator for NetlinkStream<'a> {
         let msg_len = hdr.nlmsg_len as usize;
 
         if msg_len < std::mem::size_of::<NlMsgHdr>() {
-            return Some(Err(format!("Invalid nlmsg_len: {}", msg_len)));
+            return Some(Err(format!("Invalid nlmsg_len: {msg_len}")));
         }
 
-        if msg_len > self.buffer.len() {
-            // Incomplete message
+        let Some(payload) = self.buffer.get(std::mem::size_of::<NlMsgHdr>()..msg_len) else {
             return Some(Err(format!(
-                "Incomplete message: expected {} bytes, have {}",
-                msg_len,
+                "Incomplete message: expected {msg_len} bytes, have {}",
                 self.buffer.len()
             )));
-        }
-
-        let _payload_len = msg_len - std::mem::size_of::<NlMsgHdr>();
-        let payload = &self.buffer[std::mem::size_of::<NlMsgHdr>()..msg_len];
+        };
 
         // Advance buffer
         let aligned_len = nlmsg_align(msg_len);
-        if aligned_len > self.buffer.len() {
-            // This might happen if the last message is not padded but we expect padding?
-            // Usually the buffer should contain the padding if it's a stream.
-            // But if it's the exact end of buffer, maybe padding is missing?
-            // Let's be safe and just consume what we have if it's the end.
-            self.buffer = &[];
-        } else {
-            self.buffer = &self.buffer[aligned_len..];
-        }
+        self.buffer = self.buffer.get(aligned_len..).unwrap_or(&[]);
 
         Some(Ok((*hdr, payload)))
     }

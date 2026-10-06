@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
-pub fn build_packet_json(layers: Value, packet_len: usize, protocols: &str) -> Value {
+pub fn build_packet_json(mut layers: Value, packet_len: usize, protocols: &str) -> Value {
     let now = SystemTime::now();
     let epoch_secs = now.duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
     let frame = serde_json::json!({
@@ -14,14 +14,14 @@ pub fn build_packet_json(layers: Value, packet_len: usize, protocols: &str) -> V
         "frame.cap_len": packet_len, // Assuming no truncation for now
         "frame.protocols": protocols
     });
-    let mut source = serde_json::json!({ "layers": layers });
-    let layers_mut = source["layers"].as_object_mut().unwrap();
-    layers_mut.insert("frame".to_string(), frame);
+    if let Some(layers_mut) = layers.as_object_mut() {
+        layers_mut.insert("frame".to_string(), frame);
+    }
     serde_json::json!([{
         "_index": "packets-2025-06-14",
         "_type": "doc",
         "_score": null,
-        "_source": source
+        "_source": { "layers": layers }
     }])
 }
 
