@@ -15,7 +15,7 @@ use tracing::{error, info, warn};
 use crate::{
     error::ServerError,
     handshake::{handle_websocket_handshake, write_http_response},
-    transport::{run_loopback, run_websocket_transport, setup_virtual_chip},
+    transport::{run_websocket_transport, setup_virtual_chip},
 };
 
 const TARGET_PATH: &str = "/v1/websocket/bt";
@@ -56,34 +56,27 @@ async fn handle_websocket_client(stream: TcpStream, addr: SocketAddr, device_cli
         tokio::sync::mpsc::channel::<Result<bytes::Bytes, std::io::Error>>(CHANNEL_CAPACITY);
     let (sink_tx, sink_rx) = tokio::sync::mpsc::channel::<bytes::Bytes>(CHANNEL_CAPACITY);
 
-    // 2. Register the virtual chip with the device actor, or echo packets
-    //    straight back for a loopback stream (no device is created).
-    let mut loopback_task = None;
-    let device = if is_loopback(&queries) {
-        info!("WebSocket loopback stream for {addr}");
-        loopback_task = Some(tokio::spawn(run_loopback(addr, stream_rx, sink_tx)));
-        None
-    } else {
+    // 2. Register the virtual chip with the device actor
+    let device_id =
         match setup_virtual_chip(&device_client, queries, addr, stream_rx, sink_tx).await {
-            Ok(id) => Some((id, device_client)),
+            Ok(id) => id,
             Err(e) => {
                 warn!("Failed to setup virtual chip for {addr}: {e}");
                 return;
             }
-        }
-    };
+        };
 
     // 3. Start the WebSocket transport loops (Read/Write/Forward)
-    run_websocket_transport(websocket_reader, websocket_writer, addr, stream_tx, sink_rx, device)
-        .await;
-    if let Some(task) = loopback_task {
-        task.abort();
-    }
-}
-
-/// True when the client asked for a loopback stream (`?loopback=1`).
-fn is_loopback(queries: &HashMap<String, String>) -> bool {
-    matches!(queries.get("loopback").map(String::as_str), Some("1" | "true"))
+    run_websocket_transport(
+        websocket_reader,
+        websocket_writer,
+        addr,
+        stream_tx,
+        sink_rx,
+        device_id,
+        device_client,
+    )
+    .await;
 }
 
 /// Performs the initial HTTP handshake and upgrades to WebSocket.

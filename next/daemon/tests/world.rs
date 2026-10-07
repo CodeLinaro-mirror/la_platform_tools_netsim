@@ -20,15 +20,11 @@ use netsim_proto::{
     common::ChipKind,
     frontend::{CreateDeviceRequest, DeleteChipRequest, DeleteDeviceRequest},
     frontend_grpc::FrontendServiceClient,
-    hci_packet::hcipacket::PacketType,
     model::{ChipCreate, DeviceCreate},
     nfc_service_grpc::NfcServiceClient,
-    packet_streamer::PacketRequest,
     packet_streamer_grpc::PacketStreamerClient,
     protobuf::{EnumOrUnknown, MessageField},
-    startup::{Chip as StartupChip, ChipInfo, DeviceInfo},
 };
-use tokio::time::timeout;
 
 // Share a single gRPC Environment across all server instances within the same
 // process (namely during parallel test execution) to prevent Abseil lock
@@ -745,6 +741,8 @@ impl World {
     }
 
     pub async fn when_send_packet_initial_info(&mut self, chip_name: &str) {
+        let sender = self.packet_sender.as_mut().expect("No packet sender");
+        let mut initial_req = netsim_proto::packet_streamer::PacketRequest::new();
         let mut chip_info = netsim_proto::startup::ChipInfo::new();
         chip_info.name = chip_name.to_string();
 
@@ -753,7 +751,12 @@ impl World {
         chip.address = "11:22:33:44:55:66".to_string();
         chip_info.chip = netsim_proto::protobuf::MessageField::some(chip);
 
-        self.send_initial_info(chip_info).await;
+        initial_req.set_initial_info(chip_info);
+
+        sender
+            .send((initial_req, grpcio::WriteFlags::default()))
+            .await
+            .expect("Failed to send InitialInfo");
     }
 
     pub async fn when_send_hci_packet(
@@ -783,40 +786,5 @@ impl World {
     pub async fn then_packet_stream_receives(&mut self) {
         let receiver = self.packet_receiver.as_mut().expect("No packet receiver");
         let _ = receiver.next().await;
-    }
-
-    /// Sends InitialInfo for a Bluetooth chip with `loopback` set.
-    pub async fn when_send_loopback_initial_info(&mut self, device_name: &str) {
-        let mut chip = StartupChip::new();
-        chip.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
-        chip.loopback = true;
-        let mut device_info = DeviceInfo::new();
-        device_info.name = device_name.to_string();
-        let mut chip_info = ChipInfo::new();
-        chip_info.chip = MessageField::some(chip);
-        chip_info.device_info = MessageField::some(device_info);
-        self.send_initial_info(chip_info).await;
-    }
-
-    async fn send_initial_info(&mut self, chip_info: ChipInfo) {
-        let sender = self.packet_sender.as_mut().expect("No packet sender");
-        let mut initial_req = PacketRequest::new();
-        initial_req.set_initial_info(chip_info);
-        sender
-            .send((initial_req, grpcio::WriteFlags::default()))
-            .await
-            .expect("Failed to send InitialInfo");
-    }
-
-    pub async fn then_packet_stream_receives_hci(&mut self, packet_type: PacketType, data: &[u8]) {
-        let receiver = self.packet_receiver.as_mut().expect("No packet receiver");
-        let response = timeout(Duration::from_secs(5), receiver.next())
-            .await
-            .expect("Timed out waiting for a packet")
-            .expect("Stream ended")
-            .expect("Stream error");
-        let hci = response.hci_packet();
-        assert_eq!(hci.packet_type.enum_value_or_default(), packet_type);
-        assert_eq!(hci.packet, data);
     }
 }
