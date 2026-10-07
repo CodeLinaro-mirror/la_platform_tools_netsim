@@ -12,7 +12,7 @@ const AD_TYPE_TX_POWER_LEVEL: u8 = 0x0A;
 const AD_TYPE_MANUFACTURER_SPECIFIC: u8 = 0xFF;
 
 /// Helper to construct advertising data payload
-pub fn construct_data(
+pub(crate) fn construct_data(
     adv_data: &netsim_model::AdvertiseData,
     device_name: &Option<String>,
 ) -> Vec<u8> {
@@ -100,23 +100,23 @@ pub fn construct_data(
 /// This matches the legacy C++ behavior and netsim daemon behavior where
 /// the address is derived from the ID.
 /// Example: ID 1000 -> 00:00:00:00:03:e8
-pub fn generate_legacy_address(chip_id: u32) -> String {
+pub(crate) fn generate_legacy_address(chip_id: u32) -> String {
     format!("00:00:00:00:{:02x}:{:02x}", (chip_id >> 8) & 0xFF, chip_id & 0xFF)
 }
 
 /// Generates a default name for a beacon from a Chip ID.
-pub fn generate_default_name(chip_id: u32) -> String {
+pub(crate) fn generate_default_name(chip_id: u32) -> String {
     format!("Beacon-{}", chip_id)
 }
 
 // HCI Constants used for testing and packet parsing
 
 /// HCI Packet Type: Event
-pub const HCI_EVENT_PACKET: u8 = 0x04;
+const HCI_EVENT_PACKET: u8 = 0x04;
 /// HCI Event Code: LE Meta Event
-pub const LE_META_EVENT: u8 = 0x3E;
+const LE_META_EVENT: u8 = 0x3E;
 /// LE Subevent Code: Advertising Report
-pub const LE_ADVERTISING_REPORT: u8 = 0x02;
+const LE_ADVERTISING_REPORT: u8 = 0x02;
 
 // Offsets within LE Advertising Report Event
 // Byte 0: Packet Type
@@ -131,28 +131,6 @@ pub const LE_ADVERTISING_REPORT: u8 = 0x02;
 pub const REPORT_NUM_REPORTS_OFFSET: usize = 4;
 /// Offset of the Address field in an LE Advertising Report
 pub const REPORT_ADDR_OFFSET: usize = 12;
-
-// HCI Commands
-
-/// Set Standard Event Mask (0x0C01) - Enable all events Mask: FF FF FF FF FF FF
-/// FF FF
-pub const CMD_SET_EVENT_MASK_STD: &[u8] =
-    &[0x01, 0x01, 0x0C, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-
-/// Set LE Event Mask (0x2001) - Enable all LE events Mask: FF 00 00 00 00 00 00
-/// 00
-pub const CMD_LE_SET_EVENT_MASK: &[u8] =
-    &[0x01, 0x01, 0x20, 0x08, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-
-/// LE Set Scan Parameters (0x200B)
-/// 01 (Cmd) 0B 20 (OpCode) 07 (Len) 00 (Type: Passive) 10 00 (Interval) 10 00
-/// (Window) 00 (OwnAddr) 00 (Filter)
-pub const CMD_LE_SET_SCAN_PARAMS: &[u8] =
-    &[0x01, 0x0B, 0x20, 0x07, 0x00, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
-
-/// LE Set Scan Enable (0x200C)
-/// 01 (Cmd) 0C 20 (OpCode) 02 (Len) 01 (Enable) 00 (FilterDup)
-pub const CMD_LE_SET_SCAN_ENABLE: &[u8] = &[0x01, 0x0C, 0x20, 0x02, 0x01, 0x00];
 
 /// Helper to check if a packet is an LE Advertising Report
 pub const fn is_le_advertising_report(packet: &[u8]) -> bool {
