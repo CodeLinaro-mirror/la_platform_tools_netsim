@@ -3,6 +3,7 @@
 
 use std::{
     collections::HashMap,
+    future::ready,
     io,
     net::{SocketAddr, TcpStream},
 };
@@ -10,11 +11,12 @@ use std::{
 use bytes::Bytes;
 use device_actor::DeviceClient;
 use device_api::DeviceId;
-use futures::StreamExt;
+use futures::{StreamExt, sink::unfold};
 use netsim_model::{
     BluetoothCreate, BluetoothMode, Controller, DeviceParams, PacketSink, PacketStream,
 };
 use tokio::{sync::mpsc, task::JoinSet};
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 use tungstenite::{Message, WebSocket};
 
@@ -54,18 +56,7 @@ pub(crate) async fn setup_virtual_chip(
         ..Default::default()
     };
 
-    let packet_stream: PacketStream = Box::new(
-        tokio_stream::wrappers::ReceiverStream::new(stream_rx)
-            .filter_map(|res| std::future::ready(res.ok())),
-    );
-    let packet_sink: PacketSink = Box::pin(futures::sink::unfold(
-        sink_tx,
-        |tx: mpsc::Sender<Bytes>, item: Bytes| async move {
-            tx.send(item).await.map_err(|err| io::Error::new(io::ErrorKind::BrokenPipe, err))?;
-            Ok(tx)
-        },
-    ));
-
+    let (packet_stream, packet_sink) = packet_stream_and_sink(stream_rx, sink_tx);
     let request = device_api::DeviceAddChip {
         device_guid,
         packet_stream: Some(packet_stream),
@@ -83,15 +74,46 @@ pub(crate) async fn setup_virtual_chip(
     device_client.add_chip(request).await.map_err(ServerError::DeviceActor)
 }
 
+/// Echoes every packet back to the client until either side closes.
+///
+/// Uses the same stream/sink adapters as a registered chip, so a loopback
+/// stream exercises the same plumbing without creating a device.
+pub(crate) async fn run_loopback(
+    addr: SocketAddr,
+    stream_rx: mpsc::Receiver<Result<Bytes, io::Error>>,
+    sink_tx: mpsc::Sender<Bytes>,
+) {
+    let (packet_stream, packet_sink) = packet_stream_and_sink(stream_rx, sink_tx);
+    if let Err(e) = packet_stream.map(Ok).forward(packet_sink).await {
+        warn!("WebSocket loopback stream for {addr} failed: {e}");
+    }
+}
+
+/// Adapts the WebSocket transport channels to the device actor's packet types.
+fn packet_stream_and_sink(
+    stream_rx: mpsc::Receiver<Result<Bytes, io::Error>>,
+    sink_tx: mpsc::Sender<Bytes>,
+) -> (PacketStream, PacketSink) {
+    let packet_stream: PacketStream =
+        Box::new(ReceiverStream::new(stream_rx).filter_map(|res| ready(res.ok())));
+    let packet_sink: PacketSink =
+        Box::pin(unfold(sink_tx, |tx: mpsc::Sender<Bytes>, item: Bytes| async move {
+            tx.send(item).await.map_err(|err| io::Error::new(io::ErrorKind::BrokenPipe, err))?;
+            Ok(tx)
+        }));
+    (packet_stream, packet_sink)
+}
+
 /// Spawns threads and tasks to manage WebSocket traffic and chip lifecycle.
+///
+/// `device` is the registered device to delete on close; `None` for loopback.
 pub(crate) async fn run_websocket_transport(
     mut websocket_reader: WebSocket<TcpStream>,
     mut websocket_writer: WebSocket<TcpStream>,
     addr: SocketAddr,
     stream_tx: mpsc::Sender<Result<Bytes, io::Error>>,
     mut sink_rx: mpsc::Receiver<Bytes>,
-    device_id: DeviceId,
-    device_client: DeviceClient,
+    device: Option<(DeviceId, DeviceClient)>,
 ) {
     let (outbound_msg_tx, mut outbound_msg_rx) = mpsc::unbounded_channel::<Message>();
 
@@ -150,6 +172,10 @@ pub(crate) async fn run_websocket_transport(
 
     // 4. Cleanup Task: Triggered when WebSocket reader or writer closes
     JoinSet::from_iter([reader_task, writer_task]).join_next().await;
+    let Some((device_id, device_client)) = device else {
+        info!("WebSocket loopback stream for {addr} closed");
+        return;
+    };
     info!("Cleaning up WebSocket device {device_id} for {addr}");
     if let Err(e) = device_client.delete(device_id).await {
         warn!("Failed to delete virtual WebSocket device {device_id}: {e}");
