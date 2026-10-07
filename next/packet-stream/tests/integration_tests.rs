@@ -23,7 +23,6 @@ fn create_test_chip_info() -> ChipInfo {
             address: "".to_string(),
             sim_type: None,
             sim_profile: None,
-            loopback: false,
         }),
         device_info: Some(DeviceInfo {
             name: "test-device".to_string(),

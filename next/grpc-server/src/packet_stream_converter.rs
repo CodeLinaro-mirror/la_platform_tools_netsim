@@ -29,7 +29,6 @@ fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
         address: proto.address,
         sim_type: if proto.sim_type != 0 { Some(proto.sim_type) } else { None },
         sim_profile: proto.sim_profile,
-        loopback: proto.loopback,
     }
 }
 
