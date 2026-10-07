@@ -108,11 +108,8 @@ impl SubmitPdu {
     /// including headers), it assumes a 2-digit country code (e.g., "86"
     /// for China) is prefixed and strips it by skipping the first BCD byte.
     pub fn phone_number(&self) -> Option<String> {
-        if self.address.len() < 2 {
-            return None;
-        }
-        let bcd_bytes =
-            if self.address.len() == 9 { &self.address[3..] } else { &self.address[2..] };
+        let start = if self.address.len() == 9 { 3 } else { 2 };
+        let bcd_bytes = self.address.get(start..)?;
         Some(bcd::bcd_to_string(bcd_bytes))
     }
 
@@ -405,11 +402,12 @@ pub fn calculate_tpdu_len(pdu: &[u8]) -> usize {
     if let Ok(s) = std::str::from_utf8(pdu) {
         let s = s.trim();
 
-        if s.len() >= 2 && s.len() % 2 == 0 && s.bytes().all(|b| b.is_ascii_hexdigit()) {
-            let mut dst = [0u8; 1];
+        if s.len() % 2 == 0 && s.bytes().all(|b| b.is_ascii_hexdigit()) {
             // Decode only the SCA length byte to avoid allocating a full decoded vector.
-            if hex::decode_to_slice(&s[0..2], &mut dst).is_ok() {
-                let sca_len = dst[0] as usize;
+            if let Some(prefix) = s.get(..2)
+                && let Ok(b0) = u8::from_str_radix(prefix, 16)
+            {
+                let sca_len = b0 as usize;
                 let raw_len = s.len() / 2;
                 if raw_len > 1 + sca_len {
                     return raw_len - 1 - sca_len;
