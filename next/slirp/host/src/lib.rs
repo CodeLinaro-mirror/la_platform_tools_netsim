@@ -158,24 +158,14 @@ impl TokioHost {
                                         return;
                                     }
                                 };
-                            let mut conns = connections.lock();
-                            if let Some(Connection::Connecting(_)) = conns.get(&conn_id) {
-                                register_tcp_connection_locked(
-                                    stream,
-                                    conn_id,
-                                    slirp_request_sender.clone(),
-                                    &mut conns,
-                                );
-                            } else {
-                                debug!("TCP connection {conn_id} was closed while connecting");
-                            }
+                            finish_connecting_tcp(
+                                conn_id,
+                                stream,
+                                slirp_request_sender,
+                                &connections,
+                            );
                         });
-                        let mut conns = self.connections.lock();
-                        if let Some(Connection::Connecting(h)) = conns.get_mut(&conn_id) {
-                            *h = Some(handle);
-                        } else {
-                            handle.abort();
-                        }
+                        attach_connecting_handle(conn_id, handle, &self.connections);
                     }
                     ConnectionArgs::Udp(conn_info) => {
                         if let Err(e) = register_udp_connection(
@@ -433,24 +423,9 @@ async fn start_tcp_hostfwd_listener(
                         .await
                         .ok();
 
-                    let mut conns = task_connections.lock();
-                    if let Some(Connection::Connecting(_)) = conns.get(&conn_id) {
-                        register_tcp_connection_locked(
-                            stream,
-                            conn_id,
-                            slirp_request_sender.clone(),
-                            &mut conns,
-                        );
-                    } else {
-                        debug!("TCP connection {conn_id} was closed while connecting");
-                    }
+                    finish_connecting_tcp(conn_id, stream, slirp_request_sender, &task_connections);
                 });
-                let mut conns = connections.lock();
-                if let Some(Connection::Connecting(h)) = conns.get_mut(&conn_id) {
-                    *h = Some(handle);
-                } else {
-                    handle.abort();
-                }
+                attach_connecting_handle(conn_id, handle, &connections);
             }
             Err(e) => {
                 error!("TCP hostfwd accept error on {}: {}", rule.host_addr, e);
@@ -468,6 +443,33 @@ fn register_tcp_connection(
 ) -> mpsc::Sender<Bytes> {
     let mut conns = connections.lock();
     register_tcp_connection_locked(stream, conn_id, slirp_request_sender, &mut conns)
+}
+
+fn finish_connecting_tcp(
+    conn_id: u64,
+    stream: TcpStream,
+    slirp_request_sender: mpsc::Sender<SlirpRequest>,
+    connections: &Mutex<HashMap<u64, Connection>>,
+) {
+    let mut conns = connections.lock();
+    if let Some(Connection::Connecting(_)) = conns.get(&conn_id) {
+        register_tcp_connection_locked(stream, conn_id, slirp_request_sender, &mut conns);
+    } else {
+        debug!("TCP connection {conn_id} was closed while connecting");
+    }
+}
+
+fn attach_connecting_handle(
+    conn_id: u64,
+    handle: JoinHandle<()>,
+    connections: &Mutex<HashMap<u64, Connection>>,
+) {
+    let mut conns = connections.lock();
+    if let Some(Connection::Connecting(h)) = conns.get_mut(&conn_id) {
+        *h = Some(handle);
+    } else {
+        handle.abort();
+    }
 }
 
 fn register_tcp_connection_locked(
@@ -776,4 +778,73 @@ fn register_icmp_connection(
     );
 
     Ok(tx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_attach_connecting_handle_active() {
+        let connections = Arc::new(Mutex::new(HashMap::new()));
+        let conn_id = 100;
+        connections.lock().insert(conn_id, Connection::Connecting(None));
+
+        let handle = tokio::spawn(async {});
+        attach_connecting_handle(conn_id, handle, &connections);
+
+        let conns = connections.lock();
+        assert!(matches!(conns.get(&conn_id), Some(Connection::Connecting(Some(_)))));
+    }
+
+    #[tokio::test]
+    async fn test_attach_connecting_handle_aborts_when_closed() {
+        let connections = Arc::new(Mutex::new(HashMap::new()));
+        let conn_id = 101;
+        let handle = tokio::spawn(async {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        });
+        let abort_handle = handle.abort_handle();
+        attach_connecting_handle(conn_id, handle, &connections);
+
+        tokio::task::yield_now().await;
+        assert!(abort_handle.is_finished());
+    }
+
+    #[tokio::test]
+    async fn test_finish_connecting_tcp_when_closed() {
+        let connections = Arc::new(Mutex::new(HashMap::new()));
+        let (slirp_tx, _slirp_rx) = mpsc::channel(10);
+        let conn_id = 102;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+        let stream = TcpStream::connect(addr).await.expect("connect tcp");
+
+        finish_connecting_tcp(conn_id, stream, slirp_tx, &connections);
+
+        assert!(!connections.lock().contains_key(&conn_id));
+    }
+
+    #[tokio::test]
+    async fn test_finish_connecting_tcp_when_connecting() {
+        let connections = Arc::new(Mutex::new(HashMap::new()));
+        let (slirp_tx, _slirp_rx) = mpsc::channel(10);
+        let conn_id = 103;
+        connections.lock().insert(conn_id, Connection::Connecting(None));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+        let client_task = tokio::spawn(async move {
+            let (server_stream, _) = listener.accept().await.expect("accept");
+            server_stream
+        });
+        let client_stream = TcpStream::connect(addr).await.expect("connect");
+        let _server_stream = client_task.await.expect("task join");
+
+        finish_connecting_tcp(conn_id, client_stream, slirp_tx, &connections);
+
+        let conns = connections.lock();
+        assert!(matches!(conns.get(&conn_id), Some(Connection::Tcp(_))));
+    }
 }
