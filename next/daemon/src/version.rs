@@ -5,7 +5,7 @@
 
 /// Version library.
 
-const VERSION: &str = "1.0.26";
+const VERSION: &str = "1.0.27";
 
 pub(crate) fn get_version() -> String {
     VERSION.to_owned()
