@@ -177,6 +177,8 @@ def main():
   if args.buildbot:
     cfg = ServerConfig(presubmit, args)
     env = cfg.get_env()
+    if args.build_id:
+      env["BUILD_NUMBER"] = args.build_id
 
   # Set Environment Variables
   os.environ["GIT_DISCOVERY_ACROSS_FILESYSTEM"] = "1"

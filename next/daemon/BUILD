@@ -39,6 +39,10 @@ netsim_rust_library(
     crate_name = "daemon",
     edition = "2024",
     proc_macro_deps = [],
+    rustc_env = {
+        "NETSIM_VERSION_SUFFIX": "{STABLE_NETSIM_VERSION_SUFFIX}",
+    },
+    stamp = 1,
     test_deps = [
         "//proto",
         "@bytes",
