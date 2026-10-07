@@ -132,9 +132,9 @@ async fn test_ranging_between_chip_and_anchor() {
 
     let m = world.then_single_ranging_measurement_is_received(chip_a).await;
     assert_eq!(m.distance, 500);
-    assert_eq!(m.aoa_azimuth, 90);
+    assert_eq!(m.aoa_azimuth, (90i16 << 7) as u16);
     assert_eq!(m.aoa_elevation, 53);
-    assert_eq!(m.aoa_destination_azimuth, (-90i16) as u16);
+    assert_eq!(m.aoa_destination_azimuth, (-90i16 << 7) as u16);
     assert_eq!(m.aoa_destination_elevation, (-53i16) as u16);
 
     world
@@ -158,7 +158,7 @@ async fn test_ranging_between_chip_and_anchor() {
     assert_eq!(m2.distance, 1000);
     assert_eq!(m2.aoa_azimuth, 0);
     assert_eq!(m2.aoa_elevation, 0);
-    assert_eq!(m2.aoa_destination_azimuth, 180);
+    assert_eq!(m2.aoa_destination_azimuth, (180i16 << 7) as u16);
     assert_eq!(m2.aoa_destination_elevation, 0);
 
     world.client.delete(ChipId(anchor_id)).await.unwrap();

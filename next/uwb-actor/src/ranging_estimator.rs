@@ -42,7 +42,9 @@ impl RangingEstimator for UwbRangingEstimator {
         match compute_range_azimuth_elevation(&a_pose, &b_pose) {
             Ok((range, azimuth, elevation)) => {
                 // TODO(b/484364478): sampled ranging support
-                Some(RangingMeasurement { range: range as u16, azimuth, elevation })
+                // Pica forwards RangingMeasurement::azimuth (i16) unscaled into the UCI
+                // Q9.7 aoa_azimuth field; elevation (i8) is too narrow to hold Q9.7.
+                Some(RangingMeasurement { range: range as u16, azimuth: azimuth << 7, elevation })
             }
             Err(e) => {
                 warn!("Failed to estimate ranging measurement: {}", e);
@@ -151,7 +153,7 @@ mod tests {
 
         let measurement = estimator.estimate(&handle_a, &handle_b).expect("ranging succeeds");
         assert_eq!(measurement.range, 1000);
-        assert_eq!(measurement.azimuth, 90);
+        assert_eq!(measurement.azimuth, 90 << 7);
         assert_eq!(measurement.elevation, 0);
     }
 
@@ -201,7 +203,7 @@ mod tests {
         // Direction vectors are opposite
         assert_eq!(m_a_to_b.azimuth, 0);
         assert_eq!(m_a_to_b.elevation, 0);
-        assert_eq!(m_b_to_a.azimuth, 180);
+        assert_eq!(m_b_to_a.azimuth, 180 << 7);
         assert_eq!(m_b_to_a.elevation, 0);
     }
 }
