@@ -195,7 +195,6 @@ Options:
         - `--receiver <ID>`: Identifier for the receiver chip
         - `-s, --sender-name <NAME>`: Name of the sender device
         - `-r, --receiver-name <NAME>`: Name of the receiver device
-- ### `gui`: Open netsim Web UI
 - ### `artifact`: Open netsim artifacts directory (log, pcaps)
 - ### `bumble`: Open Bumble Hive Web Page
 - ### `help`: Print this message or the help of the given subcommand(s)

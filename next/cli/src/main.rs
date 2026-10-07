@@ -236,11 +236,6 @@ fn main() -> ExitCode {
 fn run(args: NetsimArgs) -> Result<()> {
     let verbose = args.verbose;
     match &args.command {
-        args::Command::Gui => {
-            println!("Opening netsim web UI on default web browser");
-            browser::open("http://localhost:7681/");
-            return Ok(());
-        }
         args::Command::Artifact => {
             let artifact_dir = common::system::netsimd_temp_dir();
             println!("netsim artifact directory: {}", artifact_dir.display());
