@@ -7,7 +7,7 @@ use crate::ffi;
 
 /// SAE Finite Field Cryptography (FFC) or Elliptic Curve Cryptography (ECC)
 /// Group
-pub(crate) enum SaeGroup {
+enum SaeGroup {
     EccP256 = 19,
 }
 
@@ -20,11 +20,11 @@ pub struct SaeStateMachine {
     password: Vec<u8>,
 
     // State
-    pub state: SaeState,
-    pub pwe: Vec<u8>, // Password Element
-    pub pmk: Vec<u8>, // Pairwise Master Key
-    pub kck: Vec<u8>, // Key Confirmation Key
-    pub pmkid: Vec<u8>,
+    state: SaeState,
+    pwe: Vec<u8>, // Password Element
+    pmk: Vec<u8>, // Pairwise Master Key
+    kck: Vec<u8>, // Key Confirmation Key
+    pmkid: Vec<u8>,
 
     // Commit Exchange
     rand: Vec<u8>, // Private scalar for Commit
@@ -34,15 +34,15 @@ pub struct SaeStateMachine {
     peer_commit_element: Vec<u8>,
 
     // Verification
-    pub k_pair: Vec<u8>, // Shared key
-    scounter: u16,       // Send Counter
-    rcounter: u16,       // Receive Counter
+    scounter: u16, // Send Counter
+    rcounter: u16, // Receive Counter
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum SaeState {
+enum SaeState {
     Nothing,
     Committed,
+    #[allow(dead_code)]
     Confirmed,
 }
 
@@ -62,7 +62,6 @@ impl SaeStateMachine {
             own_commit_element: Vec::new(),
             peer_commit_scalar: Vec::new(),
             peer_commit_element: Vec::new(),
-            k_pair: Vec::new(),
             scounter: 0, // 802.11-2016 12.4.8.2: Initialize to 0 or 1
             rcounter: 0,
         }

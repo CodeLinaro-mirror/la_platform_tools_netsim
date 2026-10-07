@@ -20,15 +20,13 @@ use actor_framework::ResourceActor;
 
 pub use crate::{
     ap_actor::{
-        ApActor, ApConfig, ApReq, ApResponse, ApState, ApUpdate, DEFAULT_AP_BSSID,
+        ApActor, ApActorUpdate, ApConfig, ApReq, ApResponse, ApState, ApUpdate, DEFAULT_AP_BSSID,
         EXPECTED_DEFAULT_AP_BSSID, expected_default_ap_bssid,
     },
     ap_client::ApClient,
-    eap_auth::{EapAuthenticator, EapOutput},
     error::ApError,
-    sae::{SaeState, SaeStateMachine},
-    shared::{SessionKeys, SharedKeyStore},
-    wpa_auth::{WpaAuthenticator, WpaOutput},
+    sae::SaeStateMachine,
+    shared::SharedKeyStore,
 };
 
 /// Creates a new ApActor and returns the runner and a client.

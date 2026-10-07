@@ -19,9 +19,9 @@ use crate::ffi::{AesCcmDecrypt, AesCcmEncrypt};
 const CCMP_HDR_LEN: usize = 8;
 
 #[derive(Debug)]
-pub struct SessionKeys {
-    pub tk: Vec<u8>,
-    pub tx_pn: AtomicU64,
+pub(crate) struct SessionKeys {
+    tk: Vec<u8>,
+    tx_pn: AtomicU64,
 }
 
 impl Default for SessionKeys {
@@ -35,11 +35,11 @@ pub struct SharedKeyStore {
     // Set of all active AP BSSIDs
     pub bssids: Arc<RwLock<std::collections::HashSet<MacAddress>>>,
     // Map of Station Address -> Connected BSSID
-    pub station_bssids: Arc<RwLock<HashMap<MacAddress, MacAddress>>>,
+    pub(crate) station_bssids: Arc<RwLock<HashMap<MacAddress, MacAddress>>>,
     // Map of Station Address -> SessionKeys
-    pub sessions: Arc<RwLock<HashMap<MacAddress, Arc<SessionKeys>>>>,
-    pub gtks: Arc<RwLock<HashMap<MacAddress, [u8; 16]>>>,
-    pub gtk_tx_pn: Arc<AtomicU64>,
+    pub(crate) sessions: Arc<RwLock<HashMap<MacAddress, Arc<SessionKeys>>>>,
+    pub(crate) gtks: Arc<RwLock<HashMap<MacAddress, [u8; 16]>>>,
+    gtk_tx_pn: Arc<AtomicU64>,
 }
 
 impl Default for SharedKeyStore {
@@ -84,16 +84,16 @@ impl SharedKeyStore {
         self.gtks.read().get(bssid).copied()
     }
 
-    pub fn set_gtk(&self, bssid: MacAddress, gtk: [u8; 16]) {
+    pub(crate) fn set_gtk(&self, bssid: MacAddress, gtk: [u8; 16]) {
         self.gtks.write().insert(bssid, gtk);
     }
 
-    pub fn remove_session(&self, sta_addr: &MacAddress) {
+    pub(crate) fn remove_session(&self, sta_addr: &MacAddress) {
         let mut sessions = self.sessions.write();
         sessions.remove(sta_addr);
     }
 
-    pub fn remove_station_bssid(&self, sta_addr: &MacAddress) {
+    pub(crate) fn remove_station_bssid(&self, sta_addr: &MacAddress) {
         self.station_bssids.write().remove(sta_addr);
     }
 
