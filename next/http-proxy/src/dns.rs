@@ -76,7 +76,7 @@ impl CursorExt for Cursor<&[u8]> {
 
 // REGION MESSAGE
 
-/// '''
+/// ```text
 ///  +---------------------+
 ///  |        Header       |
 ///  +---------------------+
@@ -88,14 +88,10 @@ impl CursorExt for Cursor<&[u8]> {
 ///  +---------------------+
 ///  |      Additional     | RRs holding additional information
 ///  +---------------------+
-/// '''
-
-#[derive(Debug)]
+/// ```
+#[derive(Debug, PartialEq, Eq)]
 struct Message {
-    answers: Vec<ResourceRecord>,
-    // Other types not needed
-    // Authority
-    // Additional
+    answers: Vec<(IpAddr, String)>,
 }
 
 impl Message {
@@ -123,7 +119,7 @@ impl Message {
         let mut answers = Vec::with_capacity(header.answer_count);
         for _i in 0..header.answer_count {
             let answer = ResourceRecord::split_once(cursor)?;
-            answers.push(answer);
+            answers.push((answer.resource_data.into(), answer.name));
         }
         Ok(Message { answers })
     }
@@ -131,12 +127,7 @@ impl Message {
 
 pub(crate) fn parse_answers(bytes: &[u8]) -> Result<Vec<(IpAddr, String)>> {
     let mut cursor = Cursor::new(bytes);
-    let msg = Message::parse(&mut cursor)?;
-    let mut responses = Vec::with_capacity(msg.answers.len());
-    for answer in msg.answers {
-        responses.push((answer.resource_data.into(), answer.name));
-    }
-    Ok(responses)
+    Message::parse(&mut cursor).map(|msg| msg.answers)
 }
 
 // END REGION MESSAGE
@@ -145,7 +136,7 @@ pub(crate) fn parse_answers(bytes: &[u8]) -> Result<Vec<(IpAddr, String)>> {
 
 /// Represents parsed header of the packet.
 /// The header contains the following fields:
-/// '''
+/// ```text
 ///                                  1  1  1  1  1  1
 ///    0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
 ///  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -161,7 +152,7 @@ pub(crate) fn parse_answers(bytes: &[u8]) -> Result<Vec<(IpAddr, String)>> {
 ///  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 ///  |                    ARCOUNT                    |
 ///  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-/// '''
+/// ```
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Header {
     /// A 16 bit identifier assigned by the program that
@@ -291,7 +282,7 @@ impl Header {
 /// The question section is used to carry the "question" in most queries,
 /// i.e., the parameters that define what is being asked.  The section
 /// contains QDCOUNT (usually 1) entries, each of the following format:
-/// '''
+/// ```text
 ///                               1  1  1  1  1  1
 /// 0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
 /// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -303,8 +294,7 @@ impl Header {
 /// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 /// |                     QCLASS                    |
 /// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-/// '''
-
+/// ```
 #[derive(Debug)]
 struct Question {}
 
@@ -321,9 +311,53 @@ impl Question {
 
 // REGION RESOURCE RECORD
 
+// DNS resource record classes.
+//
+// The only one we care about is Internet
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u16)]
+enum ResourceClass {
+    Internet = 1,
+}
+
+impl TryFrom<u16> for ResourceClass {
+    type Error = DnsError;
+
+    fn try_from(value: u16) -> Result<Self> {
+        match value {
+            1 => Ok(ResourceClass::Internet),
+            _ => Err(DnsError::InvalidResourceClass),
+        }
+    }
+}
+
+// Type fields in resource records.
+//
+// The only ones we care about are A and AAAA
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u16)]
+enum ResourceType {
+    // IPv4 address.
+    A = 1,
+    // IPv6 address, see RFC 3596.
+    Aaaa = 28,
+}
+
+impl TryFrom<u16> for ResourceType {
+    type Error = DnsError;
+
+    fn try_from(value: u16) -> Result<Self> {
+        match value {
+            1 => Ok(ResourceType::A),
+            28 => Ok(ResourceType::Aaaa),
+            _ => Err(DnsError::InvalidResourceType),
+        }
+    }
+}
+
 /// All RRs have the same top level format shown below:
 ///
-/// '''
+/// ```text
 ///                                1  1  1  1  1  1
 ///  0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
 ///  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -344,31 +378,10 @@ impl Question {
 ///  /                     RDATA                     /
 ///  /                                               /
 ///  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-/// '''
-
-// DNS resource record classes.
-//
-// The only one we care about is Internet
-#[derive(Debug)]
-enum ResourceClass {
-    Internet = 1,
-}
-
-// Type fields in resource records.
-//
-// The only ones we care about are A and AAAA
-#[derive(Debug)]
-enum ResourceType {
-    // IPv4 address.
-    A = 1,
-    // IPv6 address, see RFC 3596.
-    Aaaa = 28,
-}
-
+/// ```
 #[derive(Debug)]
 struct ResourceRecord {
     name: String,
-
     resource_data: ResourceData,
 }
 
@@ -376,19 +389,20 @@ impl ResourceRecord {
     fn split_once(cursor: &mut impl CursorExt) -> Result<ResourceRecord> {
         let name = Name::to_string(cursor)?;
         let rtype = cursor.read_u16()?;
-        let resource_type = match rtype {
-            x if x == ResourceType::A as u16 => ResourceType::A,
-            x if x == ResourceType::Aaaa as u16 => ResourceType::Aaaa,
-            _ => return Err(DnsError::InvalidResourceType),
-        };
+        let resource_type = ResourceType::try_from(rtype)?;
         let rclass = cursor.read_u16()?;
-        let _resource_class = match rclass {
-            x if x == ResourceClass::Internet as u16 => ResourceClass::Internet,
-            _ => return Err(DnsError::InvalidResourceClass),
-        };
+        let _resource_class = ResourceClass::try_from(rclass)?;
         let _ttl = cursor.read_u32()?;
-        let _ = cursor.read_u16()?;
+        let rdlength = cursor.read_u16()? as usize;
+        let pos_before = cursor.position();
         let resource_data = ResourceData::split_once(cursor, &resource_type)?;
+        let bytes_consumed = (cursor.position() - pos_before) as usize;
+        if bytes_consumed > rdlength {
+            return Err(DnsError::InvalidLength);
+        }
+        if bytes_consumed < rdlength {
+            cursor.seek(SeekFrom::Current((rdlength - bytes_consumed) as i64))?;
+        }
         Ok(ResourceRecord { name, resource_data })
     }
 }
@@ -465,34 +479,34 @@ pub(crate) enum DnsError {
 ///
 /// The pointer takes the form of a two octet sequence:
 ///
-/// '''
+/// ```text
 ///  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 ///  | 1  1|                OFFSET                   |
 ///  +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-/// '''
+/// ```
 enum NamePart {
     Label(String),
     Pointer(u64),
     Root,
 }
 
-const PTR_MASK: u8 = 0b11000000;
+const PTR_MASK: u8 = 0b1100_0000;
+const MAX_LABEL_LENGTH: u8 = 63;
+const MAX_DOMAIN_NAME_LENGTH: usize = 255;
+const MAX_POINTER_JUMPS: usize = 2;
 
 impl NamePart {
-    /// Domain name labels have a maximum length of 63 octets.
-    const MAX: u8 = 63;
-
     fn split_once(cursor: &mut impl CursorExt) -> Result<NamePart> {
         let size = cursor.read_u8()?;
         if size & PTR_MASK == PTR_MASK {
-            let two = cursor.read_u8()?;
-            let offset: u64 = u16::from_be_bytes([size & !PTR_MASK, two]).into();
+            let second_byte = cursor.read_u8()?;
+            let offset: u64 = u16::from_be_bytes([size & !PTR_MASK, second_byte]).into();
             return Ok(NamePart::Pointer(offset));
         }
         if size == 0 {
             return Ok(NamePart::Root);
         }
-        if size > Self::MAX {
+        if size > MAX_LABEL_LENGTH {
             return Err(DnsError::InvalidLength);
         }
         let end = size as usize;
@@ -505,7 +519,7 @@ impl NamePart {
     }
 }
 
-/// The Fully Qualitifed Domain Name from ANSWER and RR records
+/// The Fully Qualified Domain Name from ANSWER and RR records
 struct Name();
 
 impl Name {
@@ -524,10 +538,10 @@ impl Name {
     }
 
     fn to_string_guard(cursor: &mut impl CursorExt, jumps: usize) -> Result<String> {
-        if jumps > 2 {
+        if jumps > MAX_POINTER_JUMPS {
             return Err(DnsError::PointerLoop);
         }
-        let mut name = String::with_capacity(255);
+        let mut name = String::with_capacity(MAX_DOMAIN_NAME_LENGTH);
         loop {
             match NamePart::split_once(cursor)? {
                 NamePart::Root => return Ok(name),
@@ -535,10 +549,23 @@ impl Name {
                     let mut pointer_cursor = cursor.clone();
                     pointer_cursor.set_position(offset);
                     let pointer_name = Name::to_string_guard(&mut pointer_cursor, jumps + 1)?;
+                    let has_separator = !name.is_empty() && !pointer_name.is_empty();
+                    let needed =
+                        if has_separator { pointer_name.len() + 1 } else { pointer_name.len() };
+                    if name.len() + needed > MAX_DOMAIN_NAME_LENGTH {
+                        return Err(DnsError::InvalidLength);
+                    }
+                    if has_separator {
+                        name.push('.');
+                    }
                     name.push_str(&pointer_name);
                     return Ok(name);
                 }
                 NamePart::Label(label) => {
+                    let needed = if name.is_empty() { label.len() } else { label.len() + 1 };
+                    if name.len() + needed > MAX_DOMAIN_NAME_LENGTH {
+                        return Err(DnsError::InvalidLength);
+                    }
                     if !name.is_empty() {
                         name.push('.');
                     }
@@ -577,6 +604,48 @@ mod test_message {
             *answers.get(1).unwrap(),
             (Ipv6Addr::from_str("2600:1406:5e00:2aa::3831")?.into(), "ibm.com".to_string())
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resource_type_try_from() {
+        assert_eq!(ResourceType::try_from(1).unwrap(), ResourceType::A);
+        assert_eq!(ResourceType::try_from(28).unwrap(), ResourceType::Aaaa);
+        assert!(ResourceType::try_from(99).is_err());
+    }
+
+    #[test]
+    fn test_resource_class_try_from() {
+        assert_eq!(ResourceClass::try_from(1).unwrap(), ResourceClass::Internet);
+        assert!(ResourceClass::try_from(99).is_err());
+    }
+
+    #[test]
+    fn test_name_pointer_with_prefix_label() -> Result<()> {
+        // Wire bytes containing:
+        // offset 0..13: \x07example\x03com\x00 ("example.com")
+        // offset 13..19: \x03sub\xc0\x00 ("sub" followed by pointer to offset 0)
+        let bytes: [u8; 19] = [
+            0x07, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 0x03, b'c', b'o', b'm', 0x00, 0x03,
+            b's', b'u', b'b', 0xc0, 0x00,
+        ];
+        let mut cursor = Cursor::new(&bytes[..]);
+        cursor.set_position(13);
+        let name = Name::to_string(&mut cursor)?;
+        assert_eq!(name, "sub.example.com");
+        Ok(())
+    }
+
+    #[test]
+    fn test_name_pointer_to_root() -> Result<()> {
+        // Wire bytes containing:
+        // offset 0: 0x00 (root)
+        // offset 1..6: 0x03, "sub", 0xc0, 0x00 ("sub" followed by pointer to root at offset 0)
+        let bytes = [0x00, 0x03, b's', b'u', b'b', 0xc0, 0x00];
+        let mut cursor = Cursor::new(&bytes[..]);
+        cursor.set_position(1);
+        let name = Name::to_string(&mut cursor)?;
+        assert_eq!(name, "sub");
         Ok(())
     }
 }
