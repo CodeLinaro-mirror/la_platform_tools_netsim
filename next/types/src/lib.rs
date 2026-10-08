@@ -13,6 +13,15 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Default manufacturer string for virtual chips.
+const DEFAULT_MANUFACTURER: &str = "Netsim";
+
+/// Default product name for virtual chips.
+const DEFAULT_PRODUCT_NAME: &str = "Virtual Chip";
+
+/// Default fallback name for devices when device information is unavailable.
+const UNKNOWN_DEVICE_NAME: &str = "Unknown";
+
 /// Information about the chip and device provided during connection setup.
 ///
 /// This struct is used during the handshake phase to identify the connecting
@@ -38,9 +47,17 @@ impl ChipInfo {
         }
     }
 
-    /// Get the device name from the device_info, or a default value.
+    /// Returns the device name from the device_info, or a default value.
     pub fn device_name(&self) -> String {
-        self.device_info.as_ref().map_or_else(|| "Unknown".to_string(), |d| d.name.clone())
+        self.device_info
+            .as_ref()
+            .map_or_else(|| UNKNOWN_DEVICE_NAME.to_string(), |d| d.name.clone())
+    }
+
+    /// Returns the kind of the chip, or `ChipKind::UNSPECIFIED` if not
+    /// configured.
+    pub fn chip_kind(&self) -> ChipKind {
+        self.chip.as_ref().map_or(ChipKind::UNSPECIFIED, |c| c.kind)
     }
 }
 
@@ -68,15 +85,16 @@ pub struct Chip {
 }
 
 impl Chip {
+    /// Creates a new chip with default virtual metadata.
     pub fn new<S: Into<String>>(kind: ChipKind, name: S) -> Self {
         let name = name.into();
         Chip {
             kind,
             id: name.clone(),
             name,
-            manufacturer: "Netsim".to_string(),
-            product_name: "Virtual Chip".to_string(),
-            address: "".to_string(),
+            manufacturer: DEFAULT_MANUFACTURER.to_string(),
+            product_name: DEFAULT_PRODUCT_NAME.to_string(),
+            address: String::new(),
             sim_type: None,
             sim_profile: None,
         }
@@ -109,6 +127,7 @@ pub struct DeviceInfo {
 }
 
 impl DeviceInfo {
+    /// Creates a new `DeviceInfo` with specified name and identifier.
     pub fn new<S1: Into<String>, S2: Into<String>>(name: S1, id: S2) -> Self {
         DeviceInfo { name: name.into(), id: id.into(), ..Default::default() }
     }
@@ -132,6 +151,33 @@ pub enum ChipKind {
     ETHERNET,
 }
 
+impl ChipKind {
+    /// Returns the canonical uppercase string representation.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            ChipKind::UNSPECIFIED => "UNSPECIFIED",
+            ChipKind::BLUETOOTH => "BLUETOOTH",
+            ChipKind::WIFI => "WIFI",
+            ChipKind::UWB => "UWB",
+            ChipKind::NFC => "NFC",
+            ChipKind::CELLULAR => "CELLULAR",
+            ChipKind::CELLULAR_DATA => "CELLULAR_DATA",
+            ChipKind::ETHERNET => "ETHERNET",
+        }
+    }
+
+    /// Returns `true` if this radio technology supports wireless peer-to-peer
+    /// or broadcast medium.
+    pub const fn is_wireless(&self) -> bool {
+        matches!(self, ChipKind::BLUETOOTH | ChipKind::WIFI | ChipKind::UWB | ChipKind::NFC)
+    }
+
+    /// Returns `true` if this radio technology is cellular/telephony.
+    pub const fn is_cellular(&self) -> bool {
+        matches!(self, ChipKind::CELLULAR | ChipKind::CELLULAR_DATA)
+    }
+}
+
 impl std::str::FromStr for ChipKind {
     type Err = String;
 
@@ -152,13 +198,12 @@ impl std::str::FromStr for ChipKind {
 
 impl std::fmt::Display for ChipKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        f.write_str(self.as_str())
     }
 }
 
 impl std::fmt::Display for ChipInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let chip_kind = self.chip.as_ref().map_or(ChipKind::UNSPECIFIED, |c| c.kind);
-        write!(f, "{chip_kind} on device {}", self.device_name())
+        write!(f, "{} on device {}", self.chip_kind(), self.device_name())
     }
 }
