@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-pub use netsim_types::ChipKind;
+pub(crate) use netsim_types::ChipKind;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
@@ -69,7 +69,7 @@ impl From<u32> for ChipId {
     }
 }
 /// A reply channel for sending the result of an operation back to the caller.
-pub type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
+pub(crate) type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
 
 /// Defines the message protocol for the chip service actor.
 ///
@@ -152,11 +152,11 @@ impl fmt::Debug for ChipCreate {
     }
 }
 
-pub use crate::{
+pub(crate) use crate::{
     bluetooth::{BeaconParams, BluetoothCreate, BluetoothMode, beacon::BleBeacon},
     cell::CellCreate,
     nfc::{Nfc, NfcUpdate},
-    uwb::{Uwb, UwbCreate},
+    uwb::{Uwb, UwbCreate, UwbMode},
     wifi::WifiCreate,
 };
 
@@ -238,7 +238,7 @@ impl Chip {
     pub fn is_uwb_enabled(&self) -> bool {
         matches!(
             self.variant,
-            Some(ChipVariant::Uwb(Uwb { radio: Radio { state: Some(true) | None, .. } }))
+            Some(ChipVariant::Uwb(Uwb { radio: Radio { state: Some(true) | None, .. }, .. }))
         )
     }
 
@@ -259,6 +259,21 @@ impl Chip {
             manufacturer: "Google".into(),
             product_name: "Netsim UWB".into(),
             variant: Some(ChipVariant::from(ChipKind::UWB)),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_test_uwb_anchor(name: impl Into<String>, address: Option<String>) -> Self {
+        Self {
+            kind: ChipKind::UWB,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim UWB Anchor".into(),
+            variant: Some(ChipVariant::Uwb(Uwb {
+                radio: Default::default(),
+                address: address.unwrap_or_default(),
+                mode: UwbMode::Anchor,
+            })),
             ..Default::default()
         }
     }

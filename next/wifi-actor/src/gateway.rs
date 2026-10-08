@@ -8,7 +8,7 @@ use netsim_packets::Ieee80211;
 
 use crate::{error::WifiError, medium::Medium, wifi_actor::WifiActor};
 
-pub const ETHERNET_HEADER_LEN: usize = 14;
+pub(crate) const ETHERNET_HEADER_LEN: usize = 14;
 
 /// Abstract interface for different network backends (e.g. TAP vs Slirp).
 ///

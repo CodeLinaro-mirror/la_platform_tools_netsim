@@ -13,7 +13,7 @@ load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
-NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
+NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies", "-Dunreachable_pub"]
 NETSIM_CLIPPY_FLAGS = [
     "-Dwarnings",
     # Async / Concurrency
@@ -39,6 +39,12 @@ NETSIM_CLIPPY_FLAGS = [
     "-Dclippy::match_wild_err_arm",
     "-Dclippy::unwrap_in_result",
     "-Dclippy::unwrap_used",
+    "-Dclippy::indexing_slicing",
+    "-Dclippy::panic",
+    "-Dclippy::todo",
+    "-Dclippy::unimplemented",
+    "-Dclippy::unreachable",
+    "-Dclippy::panic_in_result_fn",
 ]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.
@@ -219,6 +225,9 @@ def _netsim_clippy_test_impl(ctx):
         depth = len(segments) - 1
         target_out_dir = "/".join([".."] * depth) if depth > 0 else "."
         srcs = info.srcs.to_list()
+        pkg_dir = root_file.dirname.rsplit("/", 1)[0]
+        if any([not s.is_source and s.dirname == pkg_dir for s in srcs]):
+            target_out_dir = ".."
 
         # Collect dependencies for THIS target t!
         t_rlibs = []
@@ -268,12 +277,19 @@ def _netsim_clippy_test_impl(ctx):
             # In test targets, allow idiomatic test patterns:
             # - unwrap_in_result: tests returning Result often assert via .unwrap()
             # - unwrap_used: tests and test fixtures commonly use .unwrap()
+            # - indexing_slicing: tests commonly index directly into slices/vecs in assertions
             # - field_reassign_with_default: initializing mock structs in tests
             # - module_inception: tests/tests.rs having mod tests
             t_args.add("-Aclippy::unwrap_in_result")
             t_args.add("-Aclippy::unwrap_used")
+            t_args.add("-Aclippy::indexing_slicing")
             t_args.add("-Aclippy::field_reassign_with_default")
             t_args.add("-Aclippy::module_inception")
+            t_args.add("-Aclippy::panic")
+            t_args.add("-Aclippy::unreachable")
+            t_args.add("-Aclippy::unimplemented")
+            t_args.add("-Aclippy::todo")
+            t_args.add("-Aclippy::panic_in_result_fn")
         else:
             t_args.add("--crate-type=rlib")
         t_args.add("--crate-name=%s" % info.name)
@@ -458,8 +474,8 @@ def netsim_rust_library(
     # 3. Automatic Unit Test
     if enable_unit_test:
         # There can be integ test deps that are not used in unit tests,
-        # so disable unused_crate_dependencies.
-        test_flags = [f for f in rustc_flags if f != "-Dunused_crate_dependencies"]
+        # so disable unused_crate_dependencies and unreachable_pub.
+        test_flags = [f for f in rustc_flags if f not in ["-Dunused_crate_dependencies", "-Dunreachable_pub"]]
 
         rust_test(
             name = "test",
@@ -489,8 +505,8 @@ def netsim_rust_library(
 
     if has_integration_test:
         # Integration tests receive all library dependencies for convenience,
-        # so disable unused_crate_dependencies.
-        test_flags = [f for f in rustc_flags if f != "-Dunused_crate_dependencies"]
+        # so disable unused_crate_dependencies and unreachable_pub.
+        test_flags = [f for f in rustc_flags if f not in ["-Dunused_crate_dependencies", "-Dunreachable_pub"]]
 
         # If there's a mod.rs, it's typically the root.
         # Else it's likely a single-file setup.

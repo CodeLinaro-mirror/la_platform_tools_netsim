@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use bytes::Bytes;
 use device_actor::DeviceClient;
 use netsim_model::{
-    Chip, ChipClient, ChipCreate, ChipError, ChipId, ChipUpdate, ClientError, DeviceId,
+    Chip, ChipClient, ChipCreate, ChipError, ChipId, ChipUpdate, ClientError, DeviceId, Position,
 };
-use netsim_testing::mocks::{mock_sink, mock_stream};
+use netsim_testing::{mock_sink, mock_stream};
 use pdl_runtime::Packet;
-use pica::packets::uci;
+use pica::packets::uci::{self, ShortAddressTwoWayRangingMeasurement};
 use tokio::sync::mpsc::{Receiver, Sender};
 use uwb_actor::{UwbActor, UwbClient};
 
@@ -317,5 +317,52 @@ impl World {
         assert_eq!(ntf.two_way_ranging_measurements.len(), 1, "Expected exactly one measurement");
         // TODO(b/484364478) this won't match exactly with sampled ranging
         assert_eq!(ntf.two_way_ranging_measurements[0].distance, expected_range);
+    }
+
+    pub async fn when_create_anchor(
+        &mut self,
+        chip_id: u32,
+        address: Option<&str>,
+        pos: Position,
+    ) -> Result<(), ClientError> {
+        let id = ChipId(chip_id);
+        let mut chip =
+            Chip::new_test_uwb_anchor(format!("uwb_anchor_{id}"), address.map(str::to_owned));
+        chip.id = id.0;
+        chip.device_id = DeviceId(1);
+        chip.pose.position = pos;
+
+        let params = ChipCreate { packet_stream: None, packet_sink: None, chip };
+        self.client.create(id, params).await
+    }
+
+    pub async fn given_an_anchor_at(&mut self, chip_id: u32, address: Option<&str>, pos: Position) {
+        self.when_create_anchor(chip_id, address, pos)
+            .await
+            .expect("GIVEN: Failed to create anchor");
+    }
+
+    pub async fn then_single_ranging_measurement_is_received(
+        &mut self,
+        chip_id: u32,
+    ) -> ShortAddressTwoWayRangingMeasurement {
+        let packet = self.then_packet_is_received(chip_id).await;
+        let (ntf, _) =
+            uci::ShortMacTwoWaySessionInfoNtf::decode(&packet).expect("ranging info notification");
+
+        assert_eq!(ntf.two_way_ranging_measurements.len(), 1, "Expected exactly one measurement");
+        ntf.two_way_ranging_measurements[0].clone()
+    }
+
+    pub async fn then_no_ranging_measurement_is_received(&mut self, chip_id: u32) {
+        let packet = self.then_packet_is_received(chip_id).await;
+        let (ntf, _) =
+            uci::ShortMacTwoWaySessionInfoNtf::decode(&packet).expect("ranging info notification");
+
+        assert!(
+            ntf.two_way_ranging_measurements.is_empty(),
+            "Expected no ranging measurements, found {}",
+            ntf.two_way_ranging_measurements.len()
+        );
     }
 }

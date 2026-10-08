@@ -140,7 +140,7 @@ impl<'a> RouterAdvertisementBuilder<'a> {
         pio.prefix = prefix;
 
         if let Some(dns_addr) = dns_server {
-            let rdnss = RdnssOption::mut_from_bytes(&mut rdnss_slice[..24]).ok()?;
+            let rdnss = RdnssOption::mut_from_bytes(rdnss_slice.get_mut(..24)?).ok()?;
             rdnss.option_type = ndp_option::RDNSS;
             rdnss.length = 3;
             rdnss.reserved = U16::new(0);

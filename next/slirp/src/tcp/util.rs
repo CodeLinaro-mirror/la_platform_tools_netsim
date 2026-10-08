@@ -11,75 +11,63 @@ pub(super) fn parse_tcp_options(
     let mut window_scale = None;
     let mut sack_blocks = Vec::new();
     let data_offset = tcp_header.header_length();
-    if data_offset <= std::mem::size_of::<TcpHeader>() {
+    let tcp_header_len = std::mem::size_of::<TcpHeader>();
+    if data_offset <= tcp_header_len {
         return (mss, window_scale, sack_blocks);
     }
 
-    let mut options = &packet[std::mem::size_of::<TcpHeader>()..data_offset];
+    let Some(mut options) = packet.get(tcp_header_len..data_offset) else {
+        return (mss, window_scale, sack_blocks);
+    };
     while !options.is_empty() {
-        let kind = options[0];
-        match kind {
-            0 => break,                   // End of options
-            1 => options = &options[1..], // NOP
-            2 => {
-                // MSS
-                if options.len() >= 4 && options[1] == 4 {
-                    mss = Some(u16::from_be_bytes([options[2], options[3]]));
-                    options = &options[4..];
-                } else {
+        match *options {
+            // End of options
+            [0, ..] => break,
+            // NOP
+            [1, ref rest @ ..] => options = rest,
+            // MSS
+            [2, 4, m0, m1, ref rest @ ..] => {
+                mss = Some(u16::from_be_bytes([m0, m1]));
+                options = rest;
+            }
+            [2, ..] => break,
+            // Window Scale
+            [3, 3, shift, ref rest @ ..] => {
+                window_scale = Some(shift);
+                options = rest;
+            }
+            [3, ..] => break,
+            // SACK
+            [5, len, ref rest @ ..] => {
+                let len = len as usize;
+                if len < 2 || !(len - 2).is_multiple_of(8) {
                     break;
                 }
+                let data_len = len - 2;
+                let Some((data, next_options)) = rest.split_at_checked(data_len) else {
+                    break;
+                };
+                let (chunks, _) = data.as_chunks::<8>();
+                for chunk in chunks {
+                    let &[l0, l1, l2, l3, r0, r1, r2, r3] = chunk;
+                    sack_blocks.push((
+                        u32::from_be_bytes([l0, l1, l2, l3]),
+                        u32::from_be_bytes([r0, r1, r2, r3]),
+                    ));
+                }
+                options = next_options;
             }
-            3 => {
-                // Window Scale
-                if options.len() >= 3 && options[1] == 3 {
-                    window_scale = Some(options[2]);
-                    options = &options[3..];
-                } else {
+            [_, len, ref rest @ ..] => {
+                let len = len as usize;
+                if len < 2 {
                     break;
                 }
-            }
-            5 => {
-                // SACK
-                if options.len() >= 2 {
-                    let len = options[1] as usize;
-                    if len >= 2 && (len - 2).is_multiple_of(8) {
-                        let mut i = 2;
-                        while i < len {
-                            let left = u32::from_be_bytes([
-                                options[i],
-                                options[i + 1],
-                                options[i + 2],
-                                options[i + 3],
-                            ]);
-                            let right = u32::from_be_bytes([
-                                options[i + 4],
-                                options[i + 5],
-                                options[i + 6],
-                                options[i + 7],
-                            ]);
-                            sack_blocks.push((left, right));
-                            i += 8;
-                        }
-                        options = &options[len..];
-                    } else {
-                        break;
-                    }
-                } else {
+                let Some(next_options) = rest.get(len - 2..) else {
                     break;
-                }
+                };
+                options = next_options;
             }
-            _ => {
-                if options.len() >= 2 {
-                    let len = options[1] as usize;
-                    if len < 2 || len > options.len() {
-                        break;
-                    }
-                    options = &options[len..];
-                } else {
-                    break;
-                }
-            }
+            _ => break,
         }
     }
     (mss, window_scale, sack_blocks)

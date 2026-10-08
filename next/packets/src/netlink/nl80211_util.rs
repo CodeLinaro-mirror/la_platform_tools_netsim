@@ -192,22 +192,10 @@ impl<'a> Iterator for NlAttrIter<'a> {
         };
 
         let nla_len = hdr_ref.length() as usize;
-
-        // Validate nla_len: must be at least header size and not exceed current buffer.
-        if nla_len < NLA_HDR_SIZE || nla_len > self.buffer.len() {
-            return None; // Invalid length
-        }
-
-        let payload = &self.buffer[NLA_HDR_SIZE..nla_len];
+        let payload = self.buffer.get(NLA_HDR_SIZE..nla_len)?;
 
         let total_aligned_len = nla_align(nla_len);
-
-        // Ensure the buffer is large enough for the aligned attribute
-        if total_aligned_len > self.buffer.len() {
-            return None; // Truncated attribute or padding
-        }
-
-        self.buffer = &self.buffer[total_aligned_len..];
+        self.buffer = self.buffer.get(total_aligned_len..).unwrap_or(&[]);
 
         Some((hdr_ref, payload))
     }
@@ -271,10 +259,8 @@ pub fn create_string_attr_payload(s: &str) -> Vec<u8> {
 /// fails.
 pub fn parse_string_from_payload(payload: &[u8]) -> Result<String, NetlinkError> {
     if let Some(null_pos) = payload.iter().position(|&b| b == 0) {
-        std::str::from_utf8(&payload[..null_pos]).map(String::from).map_err(|err| {
-            let _ = err;
-            NetlinkError::InvalidString
-        })
+        let str_bytes = payload.get(..null_pos).ok_or(NetlinkError::InvalidString)?;
+        std::str::from_utf8(str_bytes).map(String::from).map_err(|_err| NetlinkError::InvalidString)
     } else {
         Err(NetlinkError::InvalidString) // No null terminator
     }
@@ -513,9 +499,10 @@ mod tests {
         // Attr1: len=7. Aligned len=8. Buffer is only 7 bytes (missing padding).
         let data: [u8; 7] = [0x07, 0x00, 0x01, 0x00, 0x01, 0x02, 0x03];
         let mut iter = iter_nl_attrs(&data);
-        // The iterator should return None because the full aligned attribute cannot be
-        // read.
-        assert!(iter.next().is_none(), "Should fail as total_aligned_len > buffer length");
+        let (hdr, payload) = iter.next().expect("Should succeed despite missing padding");
+        assert_eq!(hdr.length(), 7);
+        assert_eq!(payload, &[0x01, 0x02, 0x03]);
+        assert!(iter.next().is_none());
     }
 
     #[test]

@@ -48,8 +48,7 @@ mod manager;
 mod rewriter;
 mod util;
 
-pub use connector::*;
-pub use dns_manager::*;
+pub use connector::Connector;
+pub use dns_manager::DnsManager;
 pub use error::{Error, Result};
-pub use manager::*;
-pub use util::ProxyConfig;
+pub use manager::Manager;

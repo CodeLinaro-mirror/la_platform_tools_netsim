@@ -22,7 +22,7 @@ use crate::{
     modem_pcap::ModemPcapWriter,
     nci_pcap::NciPcapWriter,
     uwb_pcap::UwbPcapWriter,
-    writer::{CaptureWriter, DLT_USER0, PcapWriter},
+    writer::{CaptureWriter, DataLinkType, PcapWriter},
 };
 
 /// Entity representing a packet capture for a specific chip.
@@ -50,7 +50,7 @@ pub(crate) struct InternalCaptureInfo {
 }
 
 impl InternalCaptureInfo {
-    pub fn from_create_params(id: ChipId, params: CaptureCreate) -> Result<Self, CaptureError> {
+    fn from_create_params(id: ChipId, params: CaptureCreate) -> Result<Self, CaptureError> {
         let enabled = params.enabled_flag.load(Ordering::SeqCst);
         let (seconds, nanos) = if enabled {
             let d = std::time::SystemTime::now()
@@ -188,8 +188,10 @@ impl CaptureActor {
             }
             ChipKind::NFC => NciPcapWriter::new(&filepath).await?,
             ChipKind::CELLULAR => ModemPcapWriter::new(&filepath).await?,
-            // Fallback for custom/unregistered protocols (use DLT_USER0)
-            ChipKind::UNSPECIFIED => Box::new(PcapWriter::new(&filepath, DLT_USER0).await?),
+            // Fallback for custom/unregistered protocols (use DataLinkType::User0)
+            ChipKind::UNSPECIFIED => {
+                Box::new(PcapWriter::new(&filepath, DataLinkType::User0).await?)
+            }
         };
         Ok(writer)
     }

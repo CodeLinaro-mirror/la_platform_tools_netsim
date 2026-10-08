@@ -6,7 +6,7 @@ use futures::FutureExt;
 use netsim_model::ChipId;
 use pica::PicaEvent;
 use tokio::sync::broadcast::error::TryRecvError;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::uwb_actor::UwbActor;
 
@@ -21,7 +21,7 @@ impl ActorLifecycle for UwbActor {
             PICA_SENTINEL_CHIP_ID,
             async move {
                 if let Err(err) = pica.run().await {
-                    panic!("Pica run loop failed: {err}");
+                    error!("Pica run loop failed: {err}");
                 }
                 PICA_SENTINEL_CHIP_ID
             }

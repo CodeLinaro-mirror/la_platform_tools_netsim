@@ -266,23 +266,18 @@ impl Plmn {
     pub fn from_mcc_mnc(mcc: &str, mnc: &str) -> Result<Self, PlmnError> {
         let mcc = mcc.trim();
         let mnc = mnc.trim();
-        if mcc.len() != 3 || !mcc.bytes().all(|b| b.is_ascii_digit()) {
+        let &[c0, c1, c2] = mcc.as_bytes() else {
+            return Err(PlmnError::InvalidMcc(mcc.to_string()));
+        };
+        if !c0.is_ascii_digit() || !c1.is_ascii_digit() || !c2.is_ascii_digit() {
             return Err(PlmnError::InvalidMcc(mcc.to_string()));
         }
-        let mcc_bytes = mcc.as_bytes();
-        let mnc_bytes = mnc.as_bytes();
-        match mnc.len() {
-            2 if mnc.bytes().all(|b| b.is_ascii_digit()) => {
-                let mut bytes = [0u8; 5];
-                bytes[..3].copy_from_slice(mcc_bytes);
-                bytes[3..].copy_from_slice(mnc_bytes);
-                Ok(Self::TwoDigitMnc(bytes))
+        match *mnc.as_bytes() {
+            [n0, n1] if n0.is_ascii_digit() && n1.is_ascii_digit() => {
+                Ok(Self::TwoDigitMnc([c0, c1, c2, n0, n1]))
             }
-            3 if mnc.bytes().all(|b| b.is_ascii_digit()) => {
-                let mut bytes = [0u8; 6];
-                bytes[..3].copy_from_slice(mcc_bytes);
-                bytes[3..].copy_from_slice(mnc_bytes);
-                Ok(Self::ThreeDigitMnc(bytes))
+            [n0, n1, n2] if n0.is_ascii_digit() && n1.is_ascii_digit() && n2.is_ascii_digit() => {
+                Ok(Self::ThreeDigitMnc([c0, c1, c2, n0, n1, n2]))
             }
             _ => Err(PlmnError::InvalidMnc(mnc.to_string())),
         }
@@ -296,31 +291,16 @@ impl Plmn {
     /// shorter than 5 digits or non-numeric.
     pub fn from_imsi(imsi: &str, mnc_len: Option<usize>) -> Option<Self> {
         let digits = imsi.trim().as_bytes();
-        if digits.len() < 5 || !digits.iter().all(u8::is_ascii_digit) {
+        if !digits.iter().all(u8::is_ascii_digit) {
             return None;
         }
         match mnc_len {
-            Some(2) => {
-                let mut b = [0u8; 5];
-                b.copy_from_slice(&digits[..5]);
-                Some(Self::TwoDigitMnc(b))
-            }
-            Some(3) if digits.len() >= 6 => {
-                let mut b = [0u8; 6];
-                b.copy_from_slice(&digits[..6]);
-                Some(Self::ThreeDigitMnc(b))
-            }
-            _ => {
-                if digits.len() >= 6 {
-                    let mut b = [0u8; 6];
-                    b.copy_from_slice(&digits[..6]);
-                    Some(Self::ThreeDigitMnc(b))
-                } else {
-                    let mut b = [0u8; 5];
-                    b.copy_from_slice(&digits[..5]);
-                    Some(Self::TwoDigitMnc(b))
-                }
-            }
+            Some(2) => digits.first_chunk::<5>().copied().map(Self::TwoDigitMnc),
+            _ => digits
+                .first_chunk::<6>()
+                .copied()
+                .map(Self::ThreeDigitMnc)
+                .or_else(|| digits.first_chunk::<5>().copied().map(Self::TwoDigitMnc)),
         }
     }
 
@@ -339,12 +319,16 @@ impl Plmn {
 
     /// Returns the 3-digit Mobile Country Code (MCC).
     pub fn mcc(&self) -> &str {
-        &self.as_str()[..3]
+        let (Self::TwoDigitMnc([mcc @ .., _, _]) | Self::ThreeDigitMnc([mcc @ .., _, _, _])) = self;
+        str::from_utf8(mcc).unwrap_or("")
     }
 
     /// Returns the 2- or 3-digit Mobile Network Code (MNC).
     pub fn mnc(&self) -> &str {
-        &self.as_str()[3..]
+        match self {
+            Self::TwoDigitMnc([_, _, _, mnc @ ..]) => str::from_utf8(mnc).unwrap_or(""),
+            Self::ThreeDigitMnc([_, _, _, mnc @ ..]) => str::from_utf8(mnc).unwrap_or(""),
+        }
     }
 
     /// Returns the length of the Mobile Network Code (2 or 3).
@@ -511,26 +495,26 @@ impl AdnRecord {
     /// Returns None if the record is empty (all 0xFF) or malformed (< 14
     /// bytes).
     pub fn decode(record: &[u8]) -> Option<Self> {
-        if record.len() < ADN_FOOTER_LEN {
-            return None;
-        }
         if record.iter().all(|&b| b == 0xFF) {
             return None;
         }
 
-        let alpha_len = record.len() - ADN_FOOTER_LEN;
-        let alpha_bytes = &record[..alpha_len];
-        let trimmed_alpha = match alpha_bytes.iter().rposition(|&b| b != 0xFF) {
-            Some(last) => &alpha_bytes[..=last],
-            None => &[],
-        };
-        let alpha_tag = if !trimmed_alpha.is_empty() {
-            Some(String::from_utf8_lossy(trimmed_alpha).into_owned())
+        let alpha_len = record.len().checked_sub(ADN_FOOTER_LEN)?;
+        let (alpha_bytes, after_alpha) = record.split_at_checked(alpha_len)?;
+        let trimmed = alpha_bytes
+            .iter()
+            .rposition(|&b| b != 0xFF)
+            .and_then(|last| alpha_bytes.get(..=last))
+            .unwrap_or_default();
+        let alpha_tag = if !trimmed.is_empty() {
+            Some(String::from_utf8_lossy(trimmed).into_owned())
         } else {
             None
         };
 
-        let len_byte = record[alpha_len];
+        let &[len_byte, ton_npi, ref rest @ ..] = after_alpha else {
+            return None;
+        };
         if len_byte <= 1 || len_byte == 0xFF {
             return Some(Self { alpha_tag, number: None });
         }
@@ -540,11 +524,10 @@ impl AdnRecord {
             return Some(Self { alpha_tag, number: None });
         }
 
-        let ton_npi = record[alpha_len + 1];
         let is_international = (ton_npi & 0xF0) == 0x90 || (ton_npi & 0x70) == 0x10;
 
         let bcd_digits_len = bcd_content_len - 1;
-        let bcd_bytes = &record[alpha_len + 2..alpha_len + 2 + bcd_digits_len];
+        let bcd_bytes = rest.get(..bcd_digits_len)?;
         let mut digits = crate::pdu::bcd::bcd_to_string(bcd_bytes);
 
         if is_international && !digits.is_empty() && !digits.starts_with('+') {
@@ -558,17 +541,19 @@ impl AdnRecord {
     /// Encodes this record into a linear-fixed ADN record of `record_len`
     /// bytes.
     pub fn encode(&self, record_len: usize) -> Vec<u8> {
-        if record_len < ADN_FOOTER_LEN {
+        let Some(alpha_len) = record_len.checked_sub(ADN_FOOTER_LEN) else {
             return vec![0xFF; record_len];
-        }
-        let alpha_len = record_len - ADN_FOOTER_LEN;
+        };
         let mut out = vec![0xFF; record_len];
+        let Some((alpha_part, footer_part)) = out.split_at_mut_checked(alpha_len) else {
+            return out;
+        };
 
         // 1. Encode Alpha Identifier
         if let Some(ref tag) = self.alpha_tag {
-            let tag_bytes = tag.as_bytes();
-            let copy_len = tag_bytes.len().min(alpha_len);
-            out[..copy_len].copy_from_slice(&tag_bytes[..copy_len]);
+            for (dst, &src) in alpha_part.iter_mut().zip(tag.as_bytes()) {
+                *dst = src;
+            }
         }
 
         // 2. Encode Dialing Number
@@ -587,17 +572,21 @@ impl AdnRecord {
 
                 let bcd = crate::pdu::bcd::string_to_bcd(&clean_digits);
                 let dialing_copy = bcd.len().min(ADN_DIALING_NUMBER_LEN);
-                let bcd_len = (1 + dialing_copy) as u8;
-                out[alpha_len] = bcd_len;
-                out[alpha_len + 1] = ton_npi.as_u8();
-                out[alpha_len + 2..alpha_len + 2 + dialing_copy]
-                    .copy_from_slice(&bcd[..dialing_copy]);
+                if let [len_slot, ton_slot, digits @ .., _, _] = footer_part {
+                    *len_slot = (1 + dialing_copy) as u8;
+                    *ton_slot = ton_npi.as_u8();
+                    for (dst, &src) in digits.iter_mut().zip(&bcd) {
+                        *dst = src;
+                    }
+                }
             }
         }
 
         // 3. Capability Configuration & Extension Record IDs (bytes 13 and 14 of
         //    footer)
-        out[record_len - 2..record_len].copy_from_slice(&ADN_CAPABILITY_EXT_BYTES);
+        if let Some(ext) = footer_part.get_mut(ADN_FOOTER_LEN - 2..) {
+            ext.copy_from_slice(&ADN_CAPABILITY_EXT_BYTES);
+        }
 
         out
     }
@@ -2215,10 +2204,10 @@ impl CtecTechnology {
 
     pub const fn all_mask() -> u8 {
         let mut mask = 0u8;
-        let mut i = 0;
-        while i < Self::ALL.len() {
-            mask |= Self::ALL[i] as u8;
-            i += 1;
+        let mut slice = Self::ALL;
+        while let [tech, rest @ ..] = slice {
+            mask |= *tech as u8;
+            slice = rest;
         }
         mask
     }

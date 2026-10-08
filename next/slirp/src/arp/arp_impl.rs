@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 /// Handles Address Resolution Protocol (ARP).
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ArpEntry {
+pub(crate) struct ArpEntry {
     pub mac: MacAddr,
     #[serde(skip)]
     pub last_accessed_tick: u64,

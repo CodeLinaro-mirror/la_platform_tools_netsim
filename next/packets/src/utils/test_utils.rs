@@ -1,6 +1,9 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+// Test assertion utilities re-exported for integration tests.
+#![allow(clippy::panic)]
+
 use std::{
     net::{Ipv4Addr, Ipv6Addr},
     path::Path,
@@ -73,8 +76,7 @@ pub fn validate_pcap_json(pcap_bytes: &'static [u8], json_str: &'static str, fie
                 zerocopy::Ref::<&[u8], RadiotapHeader>::from_prefix(&packet_data)
             {
                 let len = header.len as usize;
-                if len <= packet_data.len() {
-                    let inner_data = &packet_data[len..];
+                if let Some(inner_data) = packet_data.get(len..) {
                     // Assume inner is 802.11
                     let packet = crate::ieee80211::Ieee80211::decode(inner_data)
                         .expect("Failed to parse inner 802.11 packet from Radiotap");
@@ -97,8 +99,14 @@ pub fn validate_pcap_json(pcap_bytes: &'static [u8], json_str: &'static str, fie
         _ => panic!("Unsupported LinkType: {}", link_type),
     };
 
-    let netsim_source = &netsim_json[0]["_source"]["layers"];
-    let tshark_source = &tshark_json[0]["_source"]["layers"];
+    let Some(netsim_source) = netsim_json.pointer("/0/_source/layers") else {
+        panic!("netsim_json missing _source.layers");
+    };
+    let Some(tshark_source) =
+        tshark_json.get(0).and_then(|v| v.get("_source")).and_then(|v| v.get("layers"))
+    else {
+        panic!("tshark_json missing _source.layers");
+    };
 
     // Compare specific fields
     for field in fields {
@@ -182,8 +190,8 @@ fn compare_json_objects(netsim: &serde_json::Value, tshark: &serde_json::Value, 
             // If we have an array, we try to match by index.
             if let serde_json::Value::Array(t_arr) = tshark {
                 assert_eq!(arr.len(), t_arr.len(), "Array length mismatch at {:?}", path);
-                for (i, val) in arr.iter().enumerate() {
-                    compare_json_objects(val, &t_arr[i], path);
+                for (val, t_val) in arr.iter().zip(t_arr) {
+                    compare_json_objects(val, t_val, path);
                 }
             } else {
                 // Tshark might represent single-element array as object or vice versa?
@@ -325,7 +333,10 @@ impl PacketBuilder {
     pub fn hop_limit(mut self, hop_limit: u8) -> Self {
         let (offset, ..) = self.ipv6.expect("hop_limit() requires an IPv6 header");
         // hop_limit is the 8th byte of the IPv6 header.
-        self.buffer[offset + 7] = hop_limit;
+        let Some(byte) = self.buffer.get_mut(offset + 7) else {
+            panic!("PacketBuilder buffer out of bounds");
+        };
+        *byte = hop_limit;
         self
     }
 
@@ -413,6 +424,13 @@ impl PacketBuilder {
         self
     }
 
+    fn write_u16_be(&mut self, offset: usize, val: u16) {
+        let Some(dest) = self.buffer.get_mut(offset..offset + 2) else {
+            panic!("PacketBuilder buffer out of bounds");
+        };
+        dest.copy_from_slice(&val.to_be_bytes());
+    }
+
     /// Appends `payload` and finalizes the packet, deriving every length and
     /// checksum field from the bytes that were actually written.
     pub fn payload(mut self, payload: &[u8]) -> Vec<u8> {
@@ -424,45 +442,58 @@ impl PacketBuilder {
         // so the IP headers have to be patched last.
         if let Some(offset) = self.udp {
             let length = (total - offset) as u16;
-            self.buffer[offset + 4..offset + 6].copy_from_slice(&length.to_be_bytes());
+            self.write_u16_be(offset + 4, length);
+
+            let Some(udp_buf) = self.buffer.get(offset..) else {
+                panic!("PacketBuilder buffer out of bounds");
+            };
             let checksum = match (self.ipv4, self.ipv6) {
-                (Some((_, src, dst)), _) => Some(udp_checksum(&self.buffer[offset..], src, dst)),
-                (_, Some((_, src, dst))) => Some(udp_checksum_v6(&self.buffer[offset..], src, dst)),
+                (Some((_, src, dst)), _) => Some(udp_checksum(udp_buf, src, dst)),
+                (_, Some((_, src, dst))) => Some(udp_checksum_v6(udp_buf, src, dst)),
                 _ => None,
             };
             if let Some(checksum) = checksum {
-                self.buffer[offset + 6..offset + 8].copy_from_slice(&checksum.to_be_bytes());
+                self.write_u16_be(offset + 6, checksum);
             }
         }
 
         if let Some(offset) = self.tcp {
+            let Some(tcp_buf) = self.buffer.get(offset..) else {
+                panic!("PacketBuilder buffer out of bounds");
+            };
             let checksum = match (self.ipv4, self.ipv6) {
-                (Some((_, src, dst)), _) => Some(tcp_checksum(&self.buffer[offset..], src, dst)),
-                (_, Some((_, src, dst))) => Some(tcp_checksum_v6(&self.buffer[offset..], src, dst)),
+                (Some((_, src, dst)), _) => Some(tcp_checksum(tcp_buf, src, dst)),
+                (_, Some((_, src, dst))) => Some(tcp_checksum_v6(tcp_buf, src, dst)),
                 _ => None,
             };
             if let Some(checksum) = checksum {
-                self.buffer[offset + 16..offset + 18].copy_from_slice(&checksum.to_be_bytes());
+                self.write_u16_be(offset + 16, checksum);
             }
         }
 
         if let Some(offset) = self.icmpv6 {
             // ICMPv6 checksums are mandatory; a zero one is silently dropped.
             let (_, src, dst) = self.ipv6.expect("icmpv6() requires an IPv6 header");
-            let checksum = icmpv6_checksum(&self.buffer[offset..], src, dst);
-            self.buffer[offset + 2..offset + 4].copy_from_slice(&checksum.to_be_bytes());
+            let Some(icmpv6_buf) = self.buffer.get(offset..) else {
+                panic!("PacketBuilder buffer out of bounds");
+            };
+            let checksum = icmpv6_checksum(icmpv6_buf, src, dst);
+            self.write_u16_be(offset + 2, checksum);
         }
 
         if let Some((offset, ..)) = self.ipv4 {
             let total_length = (total - offset) as u16;
-            self.buffer[offset + 2..offset + 4].copy_from_slice(&total_length.to_be_bytes());
-            let checksum = ipv4_checksum(&self.buffer[offset..offset + IPV4_HEADER_LEN]);
-            self.buffer[offset + 10..offset + 12].copy_from_slice(&checksum.to_be_bytes());
+            self.write_u16_be(offset + 2, total_length);
+            let Some(hdr_buf) = self.buffer.get(offset..offset + IPV4_HEADER_LEN) else {
+                panic!("PacketBuilder buffer out of bounds");
+            };
+            let checksum = ipv4_checksum(hdr_buf);
+            self.write_u16_be(offset + 10, checksum);
         }
 
         if let Some((offset, ..)) = self.ipv6 {
             let payload_length = (total - offset - IPV6_HEADER_LEN) as u16;
-            self.buffer[offset + 4..offset + 6].copy_from_slice(&payload_length.to_be_bytes());
+            self.write_u16_be(offset + 4, payload_length);
         }
 
         self.buffer

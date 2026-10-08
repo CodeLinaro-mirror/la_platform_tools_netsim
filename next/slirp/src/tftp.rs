@@ -12,7 +12,7 @@ use std::{
 use bytes::Bytes;
 use log::{debug, error, info, warn};
 use netsim_packets::MacAddr;
-use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, U16, byteorder::NetworkEndian};
+use zerocopy::FromBytes;
 
 use crate::api::{Config, SlirpResponse};
 
@@ -29,12 +29,6 @@ const ERR_NOT_FOUND: u16 = 1;
 const ERR_ACCESS_VIOLATION: u16 = 2;
 const ERR_ILLEGAL_OP: u16 = 4;
 const ERR_UNKNOWN_TID: u16 = 5;
-
-#[derive(FromBytes, IntoBytes, KnownLayout, Immutable, Copy, Clone)]
-#[repr(C, packed)]
-struct TftpHeader {
-    opcode: U16<NetworkEndian>,
-}
 
 struct TftpSession {
     client_addr: SocketAddr,
@@ -73,21 +67,11 @@ impl TftpManager {
         local_port: u16,
         guest_mac: MacAddr,
     ) {
-        if packet.len() < 2 {
+        let Some((&op_bytes, payload)) = packet.split_first_chunk::<2>() else {
             warn!("TFTP: Packet too short");
             return;
-        }
-
-        let header = match TftpHeader::read_from_bytes(&packet[..2]) {
-            Ok(h) => h,
-            Err(_) => {
-                warn!("TFTP: Failed to parse header");
-                return;
-            }
         };
-
-        let opcode = header.opcode.get();
-        let payload = &packet[2..];
+        let opcode = u16::from_be_bytes(op_bytes);
 
         match opcode {
             OP_RRQ => self.handle_rrq(responses, config, payload, src_addr, guest_mac),
@@ -281,12 +265,11 @@ impl TftpManager {
             return;
         }
 
-        if payload.len() < 2 {
+        let Some(&chunk) = payload.first_chunk::<2>() else {
             warn!("TFTP: Malformed ACK payload");
             return;
-        }
-
-        let block_num = u16::from_be_bytes([payload[0], payload[1]]);
+        };
+        let block_num = u16::from_be_bytes(chunk);
         debug!("TFTP: Received ACK for block {block_num} from {src_addr} on tid={local_port}");
 
         // If the ACK matches the last block we sent
@@ -360,12 +343,12 @@ impl TftpManager {
     }
 
     fn handle_error(&mut self, payload: &[u8], src_addr: SocketAddr) {
-        if payload.len() < 2 {
+        let Some((&err_bytes, msg)) = payload.split_first_chunk::<2>() else {
             warn!("TFTP: ERROR packet too short");
             return;
-        }
-        let err_code = u16::from_be_bytes([payload[0], payload[1]]);
-        let (err_msg, _) = parse_null_terminated_string(&payload[2..]).unwrap_or(("unknown", &[]));
+        };
+        let err_code = u16::from_be_bytes(err_bytes);
+        let (err_msg, _) = parse_null_terminated_string(msg).unwrap_or(("unknown", &[]));
         warn!("TFTP: Received ERROR from client {src_addr}: code={err_code}, msg='{err_msg}'");
 
         // Terminate the session if it matches client's TID
@@ -397,14 +380,11 @@ impl TftpManager {
         data: &[u8],
         guest_mac: MacAddr,
     ) {
-        let mut packet = vec![0u8; 4 + data.len()];
-        packet[0..2].copy_from_slice(&OP_DATA.to_be_bytes());
-        packet[2..4].copy_from_slice(&block_num.to_be_bytes());
-        packet[4..].copy_from_slice(data);
-
-        responses.push(SlirpResponse::Packet(Bytes::from(build_udp_packet(
-            config, dest_addr, src_port, &packet, guest_mac,
-        ))));
+        let packet = [&OP_DATA.to_be_bytes()[..], &block_num.to_be_bytes(), data].concat();
+        let udp_packet = build_udp_packet(config, dest_addr, src_port, &packet, guest_mac);
+        if !udp_packet.is_empty() {
+            responses.push(SlirpResponse::Packet(Bytes::from(udp_packet)));
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -418,23 +398,20 @@ impl TftpManager {
         err_msg: &str,
         guest_mac: MacAddr,
     ) {
-        let err_msg_bytes = err_msg.as_bytes();
-        let mut packet = vec![0u8; 4 + err_msg_bytes.len() + 1];
-        packet[0..2].copy_from_slice(&OP_ERROR.to_be_bytes());
-        packet[2..4].copy_from_slice(&err_code.to_be_bytes());
-        packet[4..4 + err_msg_bytes.len()].copy_from_slice(err_msg_bytes);
-        packet[4 + err_msg_bytes.len()] = 0; // null terminator
-
-        responses.push(SlirpResponse::Packet(Bytes::from(build_udp_packet(
-            config, dest_addr, src_port, &packet, guest_mac,
-        ))));
+        let packet =
+            [&OP_ERROR.to_be_bytes()[..], &err_code.to_be_bytes(), err_msg.as_bytes(), &[0]]
+                .concat();
+        let udp_packet = build_udp_packet(config, dest_addr, src_port, &packet, guest_mac);
+        if !udp_packet.is_empty() {
+            responses.push(SlirpResponse::Packet(Bytes::from(udp_packet)));
+        }
     }
 }
 
 fn parse_null_terminated_string(payload: &[u8]) -> Option<(&str, &[u8])> {
     let null_idx = payload.iter().position(|&b| b == 0)?;
-    let s = std::str::from_utf8(&payload[..null_idx]).ok()?;
-    Some((s, &payload[null_idx + 1..]))
+    let s = std::str::from_utf8(payload.get(..null_idx)?).ok()?;
+    Some((s, payload.get(null_idx + 1..)?))
 }
 
 fn validate_and_resolve_path(root: &Path, filename: &str) -> Result<PathBuf, String> {
@@ -502,8 +479,8 @@ fn build_udp_packet(
 
     // 2. Build IP Header
     let (ip_header_slice, ip_payload) = eth_payload.split_at_mut(ip_header_len);
-    match (dest_addr.ip(), is_ipv6) {
-        (IpAddr::V4(guest_ip), false) => {
+    match dest_addr.ip() {
+        IpAddr::V4(guest_ip) => {
             let mut ipv4_builder = Ipv4Builder::new(
                 ip_header_slice,
                 netsim_packets::IP_P_UDP,
@@ -514,7 +491,7 @@ fn build_udp_packet(
             ipv4_builder.payload_len(udp_header_len + payload.len());
             ipv4_builder.build();
         }
-        (IpAddr::V6(guest_ip), true) => {
+        IpAddr::V6(guest_ip) => {
             let mut ipv6_builder = Ipv6Builder::new(
                 ip_header_slice,
                 netsim_packets::IP_P_UDP,
@@ -525,12 +502,11 @@ fn build_udp_packet(
             ipv6_builder.payload_len(udp_header_len + payload.len());
             ipv6_builder.build();
         }
-        _ => unreachable!(),
     }
 
     // 3. Build UDP Header and Payload
     let mut udp_builder = UdpPacketBuilder::new(ip_payload, src_port, dest_addr.port()).unwrap();
-    udp_builder.payload_mut()[..payload.len()].copy_from_slice(payload);
+    udp_builder.payload_mut().copy_from_slice(payload);
     udp_builder.build();
 
     buffer

@@ -1,20 +1,66 @@
 # Copyright 2026 The Android Open Source Project
 # SPDX-License-Identifier: Apache-2.0
 
-load("//next:defs.bzl", "netsim_rust_library")
+load("//next:defs.bzl", "netsim_rust_binary", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
+netsim_rust_binary(
+    name = "gen_api",
+    srcs = [
+        "src/bin/gen_api.rs",
+        "src/openapi.rs",
+        "src/openapi/cpp_gen.rs",
+        "src/openapi/py_gen.rs",
+        "src/openapi/rust_gen.rs",
+        "src/openapi/spec.rs",
+    ],
+    compile_data = ["src/openapi/reserved_idents.inc"],
+    crate_root = "src/bin/gen_api.rs",
+    edition = "2024",
+    rustc_flags = [
+        "-Aunreachable_pub",
+    ],
+    deps = [
+        "@hyper",
+        "@serde_json",
+        "@serde_yaml",
+    ],
+)
+
+genrule(
+    name = "openapi_rust_gen",
+    srcs = ["openapi.yaml"],
+    outs = ["openapi_generated.rs"],
+    cmd = "$(execpath :gen_api) --rust $(SRCS) > $(OUTS)",
+    tools = [":gen_api"],
+)
+
 netsim_rust_library(
     name = "rest-api",
-    srcs = glob(["src/**/*.rs"]),
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/bin/**"],
+    ) + [
+        ":openapi_rust_gen",
+    ],
+    compile_data = [
+        "src/openapi/reserved_idents.inc",
+        "tests/openapi.yaml",
+    ],
     crate_name = "netsim_rest_api",
+    crate_root = "src/lib.rs",
     edition = "2024",
+    enable_doc_test = False,
     proc_macro_test_deps = [
         "@async-trait",
     ],
+    rustc_env = {
+        "OUT_DIR": "..",
+    },
     test_deps = [
         "//next/actor-framework",
+        "@serde_yaml",
     ],
     deps = [
         "//next/ap-actor",

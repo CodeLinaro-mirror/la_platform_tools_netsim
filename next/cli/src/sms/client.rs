@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// Executes an SMS subcommand against the simulated cellular client.
-pub fn execute(cmd: SmsCommand, client: &impl CellClient, verbose: bool) -> Result<()> {
+pub(crate) fn execute(cmd: SmsCommand, client: &impl CellClient, verbose: bool) -> Result<()> {
     match cmd {
         SmsCommand::Send(args) => {
             let id = resolve_cell_id(args.id, client)?;

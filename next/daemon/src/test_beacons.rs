@@ -9,7 +9,7 @@ use tracing::warn;
 const DEFAULT_BEACON_INTERVAL_MS: u64 = 1000;
 
 /// Creates test beacons for dev mode.
-pub async fn create_test_beacons(device_client: &DeviceClient) {
+pub(crate) async fn create_test_beacons(device_client: &DeviceClient) {
     spawn_beacon(1, DEFAULT_BEACON_INTERVAL_MS, device_client).await;
     spawn_beacon(2, DEFAULT_BEACON_INTERVAL_MS, device_client).await;
 }

@@ -4,7 +4,7 @@
 use clap::{Args, Subcommand};
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub enum ApCommand {
+pub(crate) enum ApCommand {
     /// List all current Access Points
     List(ApList),
     /// Create a new Access Point
@@ -19,14 +19,14 @@ pub enum ApCommand {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub struct ApList {
+pub(crate) struct ApList {
     /// Continuously print AP information every second
     #[arg(short, long)]
     pub continuous: bool,
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct ApCreate {
+pub(crate) struct ApCreate {
     /// Name (SSID) of the Access Point
     #[arg(long)]
     pub ssid: Option<String>,
@@ -46,7 +46,7 @@ pub struct ApCreate {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct ApPatch {
+pub(crate) struct ApPatch {
     /// ID of the Access Point
     pub id: u32,
     /// New Name (SSID)
@@ -58,13 +58,13 @@ pub struct ApPatch {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct ApRemove {
+pub(crate) struct ApRemove {
     /// ID of the Access Point to remove
     pub id: u32,
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct ApDisconnect {
+pub(crate) struct ApDisconnect {
     /// ID of the Access Point
     pub id: u32,
     /// MAC Address of the client to disconnect

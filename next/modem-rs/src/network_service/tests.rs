@@ -176,3 +176,66 @@ fn test_emergency_registration_wire_status_quirk_gating() {
         modern_service.set_registration(RegistrationType::Voice, RegistrationStatus::Emergency);
     assert_eq!(modern_urc, Some("+CREG: 8\r\n".to_string()));
 }
+
+#[test]
+fn test_operator_validation_and_selection() {
+    use crate::tests::test_utils::MockCardState;
+
+    let mut service = NetworkService::new(
+        Quirks::default(),
+        Some(Plmn::parse("310260").expect("valid test PLMN")),
+    );
+    let sim = MockCardState::default();
+
+    // Verify is_valid_operator helper matching PLMN and standard long/short operator names
+    assert!(service.is_valid_operator("310260"));
+    assert!(service.is_valid_operator(crate::constants::DEFAULT_OPERATOR_NAME_LONG));
+    assert!(service.is_valid_operator(crate::constants::DEFAULT_OPERATOR_NAME_SHORT));
+    assert!(!service.is_valid_operator("999999"));
+
+    // Test CopsMode::Automatic attaches and returns URCs
+    let auto_res = service
+        .handle_set_operator(CopsMode::Automatic, Some(CopsFormat::Numeric), None, None, &sim)
+        .unwrap();
+    assert!(auto_res.is_some());
+    assert!(service.is_attached);
+    assert_eq!(service.cops_mode, CopsMode::Automatic);
+    assert_eq!(service.cops_format, CopsFormat::Numeric);
+
+    // Test CopsMode::Manual with valid operator
+    let manual_valid_res = service
+        .handle_set_operator(
+            CopsMode::Manual,
+            Some(CopsFormat::LongAlphanumeric),
+            Some("310260"),
+            None,
+            &sim,
+        )
+        .unwrap();
+    assert_eq!(service.cops_mode, CopsMode::Manual);
+    assert_eq!(service.cops_format, CopsFormat::LongAlphanumeric);
+    // Already attached without tech change, so no new URCs emitted
+    assert_eq!(manual_valid_res, None);
+
+    // Test CopsMode::Manual with invalid operator denies registration
+    let manual_invalid_res =
+        service.handle_set_operator(CopsMode::Manual, None, Some("InvalidOp"), None, &sim);
+    assert!(manual_invalid_res.is_err());
+    assert!(!service.is_attached);
+    assert_eq!(service.voice_registration, RegistrationStatus::Denied);
+    assert_eq!(service.data_registration, RegistrationStatus::Denied);
+
+    // Test CopsMode::ManualAutomatic with invalid operator falls back to Automatic
+    let manual_auto_res = service
+        .handle_set_operator(
+            CopsMode::ManualAutomatic,
+            Some(CopsFormat::Numeric),
+            Some("NonExistentOp"),
+            None,
+            &sim,
+        )
+        .unwrap();
+    assert_eq!(service.cops_mode, CopsMode::Automatic);
+    assert!(service.is_attached);
+    assert!(manual_auto_res.is_some());
+}

@@ -85,10 +85,7 @@ impl TcpHeader {
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, TcpHeader>> {
         let (header, _) = Ref::<&[u8], TcpHeader>::from_prefix(bytes).ok()?;
         let header_len = header.header_length();
-        if bytes.len() < header_len {
-            return None;
-        }
-        Some((header, &bytes[header_len..]))
+        Some((header, bytes.get(header_len..)?))
     }
 
     /// Returns the Data Offset, which is the size of the TCP header in 32-bit
@@ -144,11 +141,13 @@ impl TcpHeader {
 
         // Pseudo-header
         // Source IP
-        sum += u16::from_be_bytes([src_ip[0], src_ip[1]]) as u32;
-        sum += u16::from_be_bytes([src_ip[2], src_ip[3]]) as u32;
+        for &chunk in src_ip.as_chunks::<2>().0 {
+            sum += u32::from(u16::from_be_bytes(chunk));
+        }
         // Dest IP
-        sum += u16::from_be_bytes([dst_ip[0], dst_ip[1]]) as u32;
-        sum += u16::from_be_bytes([dst_ip[2], dst_ip[3]]) as u32;
+        for &chunk in dst_ip.as_chunks::<2>().0 {
+            sum += u32::from(u16::from_be_bytes(chunk));
+        }
         // Zero + Protocol (6 for TCP)
         sum += 6;
         // TCP Length (Header + Data)
@@ -157,21 +156,21 @@ impl TcpHeader {
 
         // TCP Header
         let header_bytes = self.as_bytes();
-        for chunk in header_bytes.chunks(2) {
-            if chunk.len() == 2 {
-                sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
-            } else {
-                sum += (chunk[0] as u32) << 8;
-            }
+        let (header_chunks, header_remainder) = header_bytes.as_chunks::<2>();
+        for &chunk in header_chunks {
+            sum += u32::from(u16::from_be_bytes(chunk));
+        }
+        if let &[last] = header_remainder {
+            sum += (last as u32) << 8;
         }
 
         // Payload
-        for chunk in payload.chunks(2) {
-            if chunk.len() == 2 {
-                sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
-            } else {
-                sum += (chunk[0] as u32) << 8;
-            }
+        let (payload_chunks, payload_remainder) = payload.as_chunks::<2>();
+        for &chunk in payload_chunks {
+            sum += u32::from(u16::from_be_bytes(chunk));
+        }
+        if let &[last] = payload_remainder {
+            sum += (last as u32) << 8;
         }
 
         while (sum >> 16) != 0 {

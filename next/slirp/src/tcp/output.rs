@@ -95,7 +95,10 @@ impl TcpManager {
             _ => return,
         }
 
-        let tcp_segment_slice = &mut ip_payload[..tcp_header_len + args.payload.len()];
+        let Some(tcp_segment_slice) = ip_payload.get_mut(..tcp_header_len + args.payload.len())
+        else {
+            return;
+        };
         let mut tcp_builder = match (args.host_addr.ip(), args.guest_addr.ip()) {
             (IpAddr::V4(host_ip), IpAddr::V4(guest_ip)) => {
                 TcpBuilder::new(tcp_segment_slice, host_ip, guest_ip).unwrap()
@@ -147,7 +150,10 @@ impl TcpManager {
 
         tcp_builder.build();
         let total_len = eth_header_len + ip_header_len + tcp_header_len + args.payload.len();
-        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer[..total_len])));
+        let Some(packet_slice) = buffer.get(..total_len) else {
+            return;
+        };
+        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(packet_slice)));
 
         if let Some((conn_id, conn)) = args
             .conn_id

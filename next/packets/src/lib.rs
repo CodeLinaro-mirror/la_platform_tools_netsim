@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::unwrap_used)]
+#![allow(unreachable_pub)]
 
 //! `packets` is a crate for zero-copy parsing and handling of network packets.
 //!
@@ -277,7 +278,13 @@ pub use utils::checksum::{
 };
 
 pub mod link_layer {
-    #[allow(warnings, clippy::all, clippy::unwrap_in_result, clippy::map_err_ignore)]
+    #[allow(
+        warnings,
+        clippy::all,
+        clippy::unwrap_in_result,
+        clippy::map_err_ignore,
+        clippy::indexing_slicing
+    )]
     mod pdl_generated {
         include!(concat!(env!("OUT_DIR"), "/link_layer_packets.rs"));
     }
@@ -287,10 +294,10 @@ pub mod link_layer {
     /// deserialization overhead. Uses hardcoded offsets derived from
     /// `link_layer_packets.pdl`.
     pub fn fast_inspect_p2p_payload(data_slice: &[u8]) -> bool {
-        if data_slice.len() < 13 {
+        let Some(&first) = data_slice.first() else {
             return false;
-        }
-        let Ok(packet_type) = PacketType::try_from(data_slice[0]) else {
+        };
+        let Ok(packet_type) = PacketType::try_from(first) else {
             return false;
         };
         match packet_type {
