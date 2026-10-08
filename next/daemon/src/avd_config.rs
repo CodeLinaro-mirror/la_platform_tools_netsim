@@ -4,6 +4,7 @@
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
+    fmt::Write as _,
     fs,
     path::{Path, PathBuf},
 };
@@ -26,7 +27,7 @@ fn parse_avd_ini(content: &str) -> Result<HashMap<String, String>, String> {
 fn serialize_ini(config: &NetsimConfig) -> String {
     let mut content = String::new();
     if let Some(address) = &config.bluetooth_address {
-        content.push_str(&format!("bluetooth.address = {address}\n"));
+        let _ = writeln!(content, "bluetooth.address = {address}");
     }
     content
 }

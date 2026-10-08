@@ -35,6 +35,7 @@ NETSIM_CLIPPY_FLAGS = [
     # Code Hygiene
     "-Dclippy::cloned_instead_of_copied",
     "-Dclippy::dbg_macro",
+    "-Dclippy::format_push_string",
     "-Dclippy::map_err_ignore",
     "-Dclippy::match_wild_err_arm",
     "-Dclippy::unwrap_in_result",
