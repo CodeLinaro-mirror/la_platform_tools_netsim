@@ -32,7 +32,7 @@ async fn test_percent_encoded_query_parameters() {
 
     // Plain unencoded values (such as Bumble's) remain unchanged
     let client_c = world
-        .given_a_websocket_client_connected(Some("bumble&loopback=1"), Some("00:11:22:33:44:55"))
+        .given_a_websocket_client_connected(Some("bumble&loopback=0"), Some("00:11:22:33:44:55"))
         .await;
     world.then_backend_receives_add_chip_request(client_c, "bumble", "00:11:22:33:44:55");
 }

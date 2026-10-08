@@ -312,6 +312,22 @@ impl TestWorld {
         let deleted_id = self.delete_chip_rx.recv().await.expect("Delete channel closed");
         assert_eq!(deleted_id, expected_id);
     }
+
+    /// Connects a client with `?loopback=1`. No add_chip request is expected,
+    /// so the client is returned directly instead of being tracked.
+    pub async fn given_a_loopback_client_connected(&mut self) -> ManualWebSocketClient {
+        ManualWebSocketClient::connect("127.0.0.1", self.port, "/v1/websocket/bt?loopback=1")
+            .await
+            .expect("Failed to connect loopback client")
+    }
+
+    pub fn then_backend_receives_no_add_chip_request(&mut self) {
+        assert!(self.add_chip_rx.try_recv().is_err(), "loopback must not add a chip");
+    }
+
+    pub fn then_backend_deletes_nothing(&mut self) {
+        assert!(self.delete_chip_rx.try_recv().is_err(), "loopback must not delete a device");
+    }
 }
 
 fn build_path(name: Option<&str>, address: Option<&str>) -> String {

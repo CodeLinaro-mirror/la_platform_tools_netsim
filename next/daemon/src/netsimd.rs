@@ -78,6 +78,18 @@ pub enum StartUpMode {
     Client(NetsimConfig),
 }
 
+/// Echoes every packet back to its sender (`startup.Chip.loopback`).
+///
+/// No device or chip is created, so transport tests and benchmarks measure
+/// only the packet-stream path: transport framing plus stream plumbing.
+async fn run_loopback(stream: PacketStream, sink: PacketSink, device_name: &str) {
+    info!("Loopback packet stream for {device_name}");
+    if let Err(e) = stream.forward(sink).await {
+        warn!("Loopback packet stream for {device_name} failed: {e}");
+    }
+    info!("Loopback packet stream for {device_name} closed");
+}
+
 async fn handle_new_connection(
     device_client: DeviceClient,
     _capture_client: CaptureClient,
@@ -104,6 +116,11 @@ async fn handle_new_connection(
             return;
         }
     };
+
+    if chip.loopback {
+        run_loopback(stream, sink, &device_name).await;
+        return;
+    }
 
     if chip.kind == ChipKind::BLUETOOTH
         && let Some(device_info) = chip_info.device_info.as_ref().filter(|d| !d.avd_path.is_empty())
