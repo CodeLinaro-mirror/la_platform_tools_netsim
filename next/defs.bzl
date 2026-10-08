@@ -38,6 +38,8 @@ NETSIM_CLIPPY_FLAGS = [
     "-Dclippy::format_push_string",
     "-Dclippy::map_err_ignore",
     "-Dclippy::match_wild_err_arm",
+    "-Dclippy::print_stderr",
+    "-Dclippy::print_stdout",
     "-Dclippy::unwrap_in_result",
     "-Dclippy::unwrap_used",
     "-Dclippy::indexing_slicing",
@@ -291,6 +293,8 @@ def _netsim_clippy_test_impl(ctx):
             t_args.add("-Aclippy::unimplemented")
             t_args.add("-Aclippy::todo")
             t_args.add("-Aclippy::panic_in_result_fn")
+            t_args.add("-Aclippy::print_stdout")
+            t_args.add("-Aclippy::print_stderr")
         else:
             t_args.add("--crate-type=rlib")
         t_args.add("--crate-name=%s" % info.name)

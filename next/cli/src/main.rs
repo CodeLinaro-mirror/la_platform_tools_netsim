@@ -3,6 +3,8 @@
 
 //! Command Line Interface for Netsim
 
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 mod ap;
 mod args;
 mod ble;

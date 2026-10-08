@@ -14,7 +14,7 @@ use packet_stream::{
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::packet_stream_converter;
 
@@ -44,7 +44,7 @@ async fn handle_grpc_initial_info(
     let initial_info_req = match stream.next().await {
         Some(Ok(req)) => req,
         Some(Err(e)) => {
-            eprintln!("gRPC stream error on initial info: {e}");
+            error!("gRPC stream error on initial info: {e}");
             let _ = sink
                 .fail(grpcio::RpcStatus::with_message(
                     grpcio::RpcStatusCode::INVALID_ARGUMENT,
@@ -54,7 +54,7 @@ async fn handle_grpc_initial_info(
             return Err(grpc_error_to_packet_error(e));
         }
         None => {
-            eprintln!("gRPC stream closed before initial info");
+            error!("gRPC stream closed before initial info");
             let _ = sink
                 .fail(grpcio::RpcStatus::with_message(
                     grpcio::RpcStatusCode::INVALID_ARGUMENT,
@@ -70,7 +70,7 @@ async fn handle_grpc_initial_info(
             Ok((packet_stream_converter::proto_to_chip_info(info), stream, sink))
         }
         _ => {
-            eprintln!("First message was not InitialInfo");
+            error!("First message was not InitialInfo");
             let _ = sink
                 .fail(grpcio::RpcStatus::with_message(
                     grpcio::RpcStatusCode::INVALID_ARGUMENT,
