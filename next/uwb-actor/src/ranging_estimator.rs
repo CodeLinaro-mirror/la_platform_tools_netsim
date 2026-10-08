@@ -75,6 +75,8 @@ mod tests {
         };
         UwbChipState {
             chip,
+            tx_count: Arc::new(AtomicU64::new(0)),
+            rx_count: Arc::new(AtomicU64::new(0)),
             p2p_tx_count: Arc::new(AtomicU64::new(0)),
             p2p_rx_count: Arc::new(AtomicU64::new(0)),
             mac_address: MacAddress::Short(mac),

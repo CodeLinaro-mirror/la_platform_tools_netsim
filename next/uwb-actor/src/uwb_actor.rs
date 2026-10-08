@@ -17,6 +17,8 @@ use tokio::sync::{broadcast, mpsc};
 pub(crate) struct UwbChipState {
     /// The chip model.
     pub(crate) chip: Chip,
+    pub(crate) tx_count: Arc<AtomicU64>,
+    pub(crate) rx_count: Arc<AtomicU64>,
     pub(crate) p2p_tx_count: Arc<AtomicU64>,
     pub(crate) p2p_rx_count: Arc<AtomicU64>,
     pub(crate) mac_address: MacAddress,
