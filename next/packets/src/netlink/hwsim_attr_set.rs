@@ -299,15 +299,24 @@ impl HwsimAttrSet {
         let mut index: usize = 0;
         let mut builder = HwsimAttrSet::builder();
         while index < attributes.len() {
-            let nla_hdr = NlAttrHdr::decode_full(&attributes[index..index + 4]).map_err(|err| {
+            let hdr_bytes = attributes
+                .get(index..index + 4)
+                .ok_or_else(|| HwsimError::Frame("Buffer too short for NlAttrHdr".into()))?;
+            let nla_hdr = NlAttrHdr::decode_full(hdr_bytes).map_err(|err| {
                 HwsimError::ParseError("Failed to decode NlAttrHdr", Box::from(err))
             })?;
             let nla_len = nla_hdr.nla_len.get() as usize;
+            let attr_bytes = attributes
+                .get(index..index + nla_len)
+                .ok_or_else(|| HwsimError::Frame("Attribute length exceeds buffer".into()))?;
+            let Some((_, attr_payload)) = attr_bytes.split_first_chunk::<4>() else {
+                return Err(HwsimError::Frame("Invalid NlAttrHdr length".to_string()));
+            };
             let attr_type = num_traits::FromPrimitive::from_u16(nla_hdr.type_());
 
             match attr_type {
                 Some(HwsimAttrEnum::AddrTransmitter) => {
-                    let attr = zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrAddrTransmitter>::from_prefix(&attributes[index..index+nla_len]).map_err(|err| {
+                    let attr = zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrAddrTransmitter>::from_prefix(attr_bytes).map_err(|err| {
                         HwsimError::ParseError("Failed to read AddrTransmitter", Box::from(err.to_string()))
                     })?.0;
                     builder.transmitter(&attr.address);
@@ -315,7 +324,7 @@ impl HwsimAttrSet {
                 Some(HwsimAttrEnum::AddrReceiver) => {
                     let attr =
                         zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrAddrReceiver>::from_prefix(
-                            &attributes[index..index + nla_len],
+                            attr_bytes,
                         )
                         .map_err(|err| {
                             HwsimError::ParseError(
@@ -327,13 +336,13 @@ impl HwsimAttrSet {
                     builder.receiver(&attr.address);
                 }
                 Some(HwsimAttrEnum::Frame) => {
-                    if nla_len > 4 {
-                        builder.frame(&attributes[index + 4..index + nla_len]);
+                    if !attr_payload.is_empty() {
+                        builder.frame(attr_payload);
                     }
                 }
                 Some(HwsimAttrEnum::Flags) => {
                     let attr = zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrFlags>::from_prefix(
-                        &attributes[index..index + nla_len],
+                        attr_bytes,
                     )
                     .map_err(|err| {
                         HwsimError::ParseError("Failed to read Flags", Box::from(err.to_string()))
@@ -344,7 +353,7 @@ impl HwsimAttrSet {
                 Some(HwsimAttrEnum::RxRate) => {
                     let attr =
                         zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrRxRate>::from_prefix(
-                            &attributes[index..index + nla_len],
+                            attr_bytes,
                         )
                         .map_err(|err| {
                             HwsimError::ParseError(
@@ -358,7 +367,7 @@ impl HwsimAttrSet {
                 Some(HwsimAttrEnum::Signal) => {
                     let attr =
                         zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrSignal>::from_prefix(
-                            &attributes[index..index + nla_len],
+                            attr_bytes,
                         )
                         .map_err(|err| {
                             HwsimError::ParseError(
@@ -372,7 +381,7 @@ impl HwsimAttrSet {
                 Some(HwsimAttrEnum::Cookie) => {
                     let attr =
                         zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrCookie>::from_prefix(
-                            &attributes[index..index + nla_len],
+                            attr_bytes,
                         )
                         .map_err(|err| {
                             HwsimError::ParseError(
@@ -385,7 +394,7 @@ impl HwsimAttrSet {
                 }
                 Some(HwsimAttrEnum::Freq) => {
                     let attr = zerocopy::Ref::<&[u8], mac80211_hwsim::HwsimAttrFreq>::from_prefix(
-                        &attributes[index..index + nla_len],
+                        attr_bytes,
                     )
                     .map_err(|err| {
                         HwsimError::ParseError("Failed to read Freq", Box::from(err.to_string()))
@@ -394,41 +403,14 @@ impl HwsimAttrSet {
                     builder.freq(attr.freq);
                 }
                 Some(HwsimAttrEnum::TxInfo) => {
-                    let data = &attributes[index + 4..index + nla_len];
-                    if data.len().is_multiple_of(2) {
-                        let count = data.len() / 2;
-                        let mut rates = Vec::with_capacity(count);
-                        for i in 0..count {
-                            let rate = zerocopy::Ref::<&[u8], TxRate>::from_prefix(&data[i * 2..])
-                                .map_err(|err| {
-                                    HwsimError::ParseError(
-                                        "Failed to read TxRate",
-                                        Box::from(err.to_string()),
-                                    )
-                                })?
-                                .0;
-                            rates.push(*rate);
-                        }
+                    if let Ok(rates) = zerocopy::Ref::<&[u8], [TxRate]>::from_bytes(attr_payload) {
                         builder.tx_info(&rates);
                     }
                 }
                 Some(HwsimAttrEnum::TxInfoFlags) => {
-                    let data = &attributes[index + 4..index + nla_len];
-                    if data.len().is_multiple_of(3) {
-                        let count = data.len() / 3;
-                        let mut flags = Vec::with_capacity(count);
-                        for i in 0..count {
-                            let flag =
-                                zerocopy::Ref::<&[u8], TxRateFlag>::from_prefix(&data[i * 3..])
-                                    .map_err(|err| {
-                                        HwsimError::ParseError(
-                                            "Failed to read TxRateFlag",
-                                            Box::from(err.to_string()),
-                                        )
-                                    })?
-                                    .0;
-                            flags.push(*flag);
-                        }
+                    if let Ok(flags) =
+                        zerocopy::Ref::<&[u8], [TxRateFlag]>::from_bytes(attr_payload)
+                    {
                         builder.tx_info_flags(&flags);
                     }
                 }

@@ -20,8 +20,25 @@ pub fn ipv4_checksum(data: &[u8]) -> u16 {
 /// so a calculated one's complement checksum of `0` is transmitted as all
 /// ones (`u16::MAX`, which is equivalent to `0` in one's complement arithmetic).
 #[inline]
-fn normalize_udp_checksum(cksum: u16) -> u16 {
+pub(crate) fn normalize_udp_checksum(cksum: u16) -> u16 {
     if cksum == 0 { u16::MAX } else { cksum }
+}
+
+pub(crate) fn pseudo_header_checksum_parts(
+    header: &[u8],
+    payload: &[u8],
+    src_octets: &[u8],
+    dst_octets: &[u8],
+    protocol: u16,
+) -> u16 {
+    let total_len = (header.len() + payload.len()) as u32;
+    let sum = sum_slice(src_octets)
+        + sum_slice(dst_octets)
+        + u64::from(protocol)
+        + sum_slice(&total_len.to_be_bytes())
+        + sum_slice(header)
+        + sum_slice(payload);
+    fold_checksum(sum)
 }
 
 fn pseudo_header_checksum(
@@ -30,12 +47,7 @@ fn pseudo_header_checksum(
     dst_octets: &[u8],
     protocol: u16,
 ) -> u16 {
-    let sum = sum_slice(src_octets)
-        + sum_slice(dst_octets)
-        + u64::from(protocol)
-        + sum_slice(&(packet.len() as u32).to_be_bytes())
-        + sum_slice(packet);
-    fold_checksum(sum)
+    pseudo_header_checksum_parts(packet, &[], src_octets, dst_octets, protocol)
 }
 
 /// Calculates the TCP checksum for IPv4.
@@ -75,13 +87,12 @@ pub fn icmpv6_checksum(icmpv6_packet: &[u8], src_addr: Ipv6Addr, dst_addr: Ipv6A
 
 fn sum_slice(data: &[u8]) -> u64 {
     let mut sum = 0u64;
-    for chunk in data.chunks(2) {
-        let word = if chunk.len() == 2 {
-            u16::from_be_bytes([chunk[0], chunk[1]])
-        } else {
-            u16::from_be_bytes([chunk[0], 0])
-        };
-        sum += u64::from(word);
+    let (chunks, remainder) = data.as_chunks::<2>();
+    for &chunk in chunks {
+        sum += u64::from(u16::from_be_bytes(chunk));
+    }
+    if let &[last] = remainder {
+        sum += u64::from(u16::from_be_bytes([last, 0]));
     }
     sum
 }

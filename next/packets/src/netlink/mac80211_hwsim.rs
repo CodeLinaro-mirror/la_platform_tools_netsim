@@ -69,12 +69,9 @@ impl HwsimMsgHdr {
     }
 
     pub fn parse(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 4 {
-            return None;
-        }
-        let hwsim_cmd = num_traits::FromPrimitive::from_u8(bytes[0])?;
-        let hwsim_version = bytes[1];
-        let reserved = u16::from_le_bytes([bytes[2], bytes[3]]);
+        let &[cmd, hwsim_version, ref res @ ..] = bytes.first_chunk::<4>()?;
+        let hwsim_cmd = num_traits::FromPrimitive::from_u8(cmd)?;
+        let reserved = u16::from_le_bytes(*res);
         Some(Self { hwsim_cmd, hwsim_version, reserved })
     }
 
@@ -102,7 +99,7 @@ impl HwsimMsg {
         let (nl_hdr, rest) = Ref::<&[u8], NlMsgHdr>::from_prefix(bytes)
             .map_err(|err| format!("Failed to read NlMsgHdr: {}", err))?;
         let hwsim_hdr = HwsimMsgHdr::parse(rest).ok_or("Failed to read HwsimMsgHdr")?;
-        let attributes = rest[4..].to_vec();
+        let attributes = rest.get(4..).ok_or("Failed to read attributes")?.to_vec();
         Ok(Self { nl_hdr: *nl_hdr, hwsim_hdr, attributes })
     }
 

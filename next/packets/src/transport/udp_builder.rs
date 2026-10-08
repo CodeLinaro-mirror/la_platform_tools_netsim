@@ -5,13 +5,14 @@
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use zerocopy::FromBytes;
+use zerocopy::{FromBytes, IntoBytes};
 
 use super::udp::UdpHeader;
 
 /// A builder for a UDP packet.
 pub struct UdpBuilder<'a> {
-    buffer: &'a mut [u8],
+    header: &'a mut UdpHeader,
+    payload: &'a mut [u8],
     src_addr: IpAddr,
     dst_addr: IpAddr,
     payload_len: usize,
@@ -25,15 +26,12 @@ impl<'a> UdpBuilder<'a> {
         src_port: u16,
         dst_port: u16,
     ) -> Option<Self> {
-        if buffer.len() < std::mem::size_of::<UdpHeader>() {
-            return None;
-        }
-        let mut builder = Self { buffer, src_addr, dst_addr, payload_len: 0 };
-        builder.header_mut().source_port.set(src_port);
-        builder.header_mut().dest_port.set(dst_port);
-        builder.header_mut().length.set(std::mem::size_of::<UdpHeader>() as u16);
-        builder.header_mut().checksum.set(0);
-        Some(builder)
+        let (header, payload) = UdpHeader::mut_from_prefix(buffer).ok()?;
+        header.source_port.set(src_port);
+        header.dest_port.set(dst_port);
+        header.length.set(std::mem::size_of::<UdpHeader>() as u16);
+        header.checksum.set(0);
+        Some(Self { header, payload, src_addr, dst_addr, payload_len: 0 })
     }
 
     /// Creates a new `UdpBuilder` for IPv4.
@@ -58,23 +56,19 @@ impl<'a> UdpBuilder<'a> {
         Self::new_generic(buffer, IpAddr::V6(src_addr), IpAddr::V6(dst_addr), src_port, dst_port)
     }
 
-    fn header_mut(&mut self) -> &mut UdpHeader {
-        UdpHeader::mut_from_bytes(&mut self.buffer[..std::mem::size_of::<UdpHeader>()]).unwrap()
-    }
-
     /// Returns a mutable reference to the payload.
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.buffer[std::mem::size_of::<UdpHeader>()..]
+        self.payload
     }
 
     /// Sets the payload data.
     pub fn payload<'b>(&'b mut self, payload: &[u8]) -> Option<&'b mut Self> {
         let total_len = std::mem::size_of::<UdpHeader>() + payload.len();
-        if total_len > self.buffer.len() || total_len > u16::MAX as usize {
+        if total_len > u16::MAX as usize {
             return None;
         }
+        self.payload.get_mut(..payload.len())?.copy_from_slice(payload);
         self.payload_len = payload.len();
-        self.payload_mut()[..payload.len()].copy_from_slice(payload);
         Some(self)
     }
 
@@ -85,24 +79,36 @@ impl<'a> UdpBuilder<'a> {
     }
 
     /// Builds the UDP packet.
-    pub fn build(mut self) -> Option<usize> {
-        self.header_mut().checksum.set(0);
+    pub fn build(self) -> Option<usize> {
+        self.header.checksum.set(0);
         let total_len = std::mem::size_of::<UdpHeader>() + self.payload_len;
-        if total_len > self.buffer.len() || total_len > u16::MAX as usize {
+        if total_len > u16::MAX as usize || self.payload_len > self.payload.len() {
             return None;
         }
-        self.header_mut().length.set(total_len as u16);
-        let udp_segment = &self.buffer[..total_len];
+        self.header.length.set(total_len as u16);
+        let payload_slice = self.payload.get(..self.payload_len)?;
         let checksum = match (self.src_addr, self.dst_addr) {
-            (IpAddr::V4(src), IpAddr::V4(dst)) => {
-                crate::utils::checksum::udp_checksum(udp_segment, src, dst)
-            }
-            (IpAddr::V6(src), IpAddr::V6(dst)) => {
-                crate::utils::checksum::udp_checksum_v6(udp_segment, src, dst)
-            }
+            (IpAddr::V4(src), IpAddr::V4(dst)) => crate::utils::checksum::normalize_udp_checksum(
+                crate::utils::checksum::pseudo_header_checksum_parts(
+                    self.header.as_bytes(),
+                    payload_slice,
+                    &src.octets(),
+                    &dst.octets(),
+                    17,
+                ),
+            ),
+            (IpAddr::V6(src), IpAddr::V6(dst)) => crate::utils::checksum::normalize_udp_checksum(
+                crate::utils::checksum::pseudo_header_checksum_parts(
+                    self.header.as_bytes(),
+                    payload_slice,
+                    &src.octets(),
+                    &dst.octets(),
+                    17,
+                ),
+            ),
             _ => return None,
         };
-        self.header_mut().checksum.set(checksum);
+        self.header.checksum.set(checksum);
         Some(total_len)
     }
 }
