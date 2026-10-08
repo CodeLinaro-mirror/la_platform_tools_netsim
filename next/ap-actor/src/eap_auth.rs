@@ -17,26 +17,27 @@ enum EapState {
 }
 
 #[derive(Debug, Clone)]
-pub struct EapAuthenticator {
+pub(crate) struct EapAuthenticator {
     state: EapState,
     identifier: u8,
 }
 
 #[derive(Debug, Clone)]
-pub enum EapOutput {
+pub(crate) enum EapOutput {
     Frame(Vec<u8>),
     Success,
+    #[allow(dead_code)]
     Failure,
 }
 
 impl EapAuthenticator {
-    pub fn new(bssid: MacAddr, sta_addr: MacAddr) -> Self {
+    pub(crate) fn new(bssid: MacAddr, sta_addr: MacAddr) -> Self {
         let _bssid = bssid;
         let _sta_addr = sta_addr;
         Self { state: EapState::Idle, identifier: 0 }
     }
 
-    pub fn start(&mut self) -> Result<Vec<EapOutput>, ApError> {
+    pub(crate) fn start(&mut self) -> Result<Vec<EapOutput>, ApError> {
         self.state = EapState::IdentityReqSent;
         self.identifier = self.identifier.wrapping_add(1);
 
@@ -49,7 +50,7 @@ impl EapAuthenticator {
         Ok(vec![EapOutput::Frame(self.wrap_eap(body))])
     }
 
-    pub fn handle_eap(&mut self, packet: &[u8]) -> Result<Vec<EapOutput>, ApError> {
+    pub(crate) fn handle_eap(&mut self, packet: &[u8]) -> Result<Vec<EapOutput>, ApError> {
         // Packet contains EAPOL Header + EAP Header + Data
         if packet.len() < 4 {
             return Ok(vec![]);
