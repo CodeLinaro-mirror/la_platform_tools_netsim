@@ -136,7 +136,7 @@ impl Default for SlirpConfig {
 
 /// Struct to hold a "C" `SlirpConfig` and the Rust storage that is
 /// referenced by `SlirpConfig`.
-pub struct SlirpConfigs {
+pub(crate) struct SlirpConfigs {
     /// The "C" representation of the Slirp configuration.
     pub c_slirp_config: libslirp_sys::SlirpConfig,
 
@@ -249,8 +249,8 @@ fn to_socketaddr_storage(dns: &[SocketAddr]) -> [libslirp_sys::sockaddr_storage;
     if dns.len() > MAX_DNS_SERVERS {
         warn!("Too many DNS servers, only keeping the first {} ones", MAX_DNS_SERVERS);
     }
-    for i in 0..usize::min(dns.len(), MAX_DNS_SERVERS) {
-        result[i] = dns[i].into();
+    for (dest, src) in result.iter_mut().zip(dns.iter()) {
+        *dest = (*src).into();
     }
     result
 }
@@ -265,7 +265,7 @@ impl SlirpConfigs {
     /// # Arguments
     ///
     /// * `config` - A reference to the Rust `SlirpConfig`.
-    pub fn new(config: &SlirpConfig) -> SlirpConfigs {
+    pub(crate) fn new(config: &SlirpConfig) -> SlirpConfigs {
         let as_cstring =
             |s: &Option<String>| s.as_ref().and_then(|s| CString::new(s.as_bytes()).ok());
         let c_tftp_path = config
@@ -440,7 +440,8 @@ mod tests {
         let result = to_socketaddr_storage(&dns);
         assert_eq!(result.len(), MAX_DNS_SERVERS);
         for entry in result {
-            // Assuming `sockaddr_storage::default()` initializes all fields to 0
+            // Assuming `sockaddr_storage::default()` initializes all fields to
+            // 0
             assert_eq!(entry.ss_family, 0);
         }
     }

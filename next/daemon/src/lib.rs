@@ -23,5 +23,6 @@ pub(crate) mod test_beacons;
 pub(crate) mod version;
 
 pub use args::{Args, ClapWifiMode};
+pub use avd_config::{is_valid_mac_address, resolve_bluetooth_mac};
 pub use ini_file::{IniFile, IniFileAccess, IniFileInitialized};
 pub use netsimd::{NetsimDaemon, RunResult, StartUpMode, run};

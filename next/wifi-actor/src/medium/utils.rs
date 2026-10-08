@@ -8,14 +8,15 @@ use netsim_packets::{
 
 use crate::{error::WifiError, medium::WifiResult};
 
-pub const RX_RATE: u32 = 1;
-pub const SIGNAL: u32 = 4294967246; // -50
+const RX_RATE: u32 = 1;
+const DEFAULT_SIGNAL_DBM: i32 = -50;
+const SIGNAL: u32 = DEFAULT_SIGNAL_DBM as u32;
 const NL_MSG_HDR_LEN: usize = 16;
 const NLMSG_MIN_TYPE: u16 = 0x10;
 const NL_AUTO_SEQ: u16 = 0;
 const NL_AUTO_PORT: u32 = 0;
 
-pub fn create_hwsim_msg_with_attrs(
+pub(crate) fn create_hwsim_msg_with_attrs(
     frame: &HwsimFrame,
     ieee80211: &Ieee80211,
     dest_hwsim_addr: &MacAddress,
@@ -40,7 +41,7 @@ pub fn create_hwsim_msg_with_attrs(
     Ok(hwsim_msg)
 }
 
-pub fn parse_hwsim_frame(packet: &bytes::Bytes, client_id: u32) -> WifiResult<HwsimFrame> {
+pub(crate) fn parse_hwsim_frame(packet: &bytes::Bytes, client_id: u32) -> WifiResult<HwsimFrame> {
     let hwsim_msg =
         HwsimMsg::decode_full(packet).map_err(|e| WifiError::Internal(Box::from(e.to_string())))?;
     match hwsim_msg.hwsim_hdr.hwsim_cmd {
@@ -153,7 +154,7 @@ fn construct_hwsim_msg(
     Ok(HwsimMsg { nl_hdr, hwsim_hdr, attributes })
 }
 
-pub fn build_tx_info(hwsim_msg: &HwsimMsg) -> WifiResult<HwsimMsg> {
+pub(crate) fn build_tx_info(hwsim_msg: &HwsimMsg) -> WifiResult<HwsimMsg> {
     let attrs = HwsimAttrSet::parse(&hwsim_msg.attributes)
         .map_err(|e| WifiError::Internal(Box::from(e.to_string())))?;
 

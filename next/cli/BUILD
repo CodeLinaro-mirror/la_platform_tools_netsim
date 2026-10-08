@@ -17,7 +17,9 @@ netsim_rust_binary(
     tags = ["no-sandbox"],
     deps = [
         "//next/common",
+        "//next/model",
         "//next/packets",
+        "//next/rest-api",
         "//proto",
         "@clap",
         "@futures",
@@ -39,7 +41,9 @@ rust_test(
     edition = "2024",
     deps = [
         "//next/common",
+        "//next/model",
         "//next/packets",
+        "//next/rest-api",
         "//proto",
         "@clap",
         "@futures",

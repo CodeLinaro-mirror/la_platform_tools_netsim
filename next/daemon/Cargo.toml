@@ -30,6 +30,7 @@ hci-server = { path = "../hci-server" }
 link-actor = { path = "../link-actor" }
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
+netsim-rest-api = { path = "../rest-api" }
 packet-stream = { path = "../packet-stream" }
 rootcanal-server = { path = "../rootcanal-server", optional = true }
 serde = { version = "1.0", features = ["derive"] }

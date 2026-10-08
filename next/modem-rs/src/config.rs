@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 use crate::{
     apdu,
     constants::{SW_INCORRECT_PARAMS, SW_REFERENCED_DATA_NOT_FOUND, SW_WRONG_LENGTH, UiccFileId},
-    types::{PhoneNumber, Plmn},
+    types::{Parsable, PhoneNumber, Plmn},
 };
 
 fn deserialize_hex_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
@@ -25,9 +25,10 @@ where
 {
     let opt: Option<String> = Option::deserialize(deserializer)?;
     match opt {
-        Some(s) if !s.trim().is_empty() => {
-            s.parse::<PhoneNumber>().map(Some).map_err(serde::de::Error::custom)
-        }
+        Some(s) if !s.trim().is_empty() => match PhoneNumber::parse(s.trim().as_bytes()) {
+            Ok(([], phone)) => Ok(Some(phone)),
+            _ => Err(serde::de::Error::custom("invalid phone number")),
+        },
         _ => Ok(None),
     }
 }
@@ -476,14 +477,15 @@ impl ElementaryFile {
     /// `record_len` is not set, or the record index exceeds the current
     /// file buffer.
     pub fn record(&self, record_number: usize) -> Option<&[u8]> {
-        self.record_range(record_number).map(|r| &self.data[r])
+        self.record_range(record_number).and_then(|r| self.data.get(r))
     }
 
     /// Returns a mutable 1-based record slice, or `None` if `record_number ==
     /// 0`, `record_len` is not set, or the record index exceeds the current
     /// file buffer.
     pub fn record_mut(&mut self, record_number: usize) -> Option<&mut [u8]> {
-        self.record_range(record_number).map(|r| &mut self.data[r])
+        let r = self.record_range(record_number)?;
+        self.data.get_mut(r)
     }
 
     /// Returns an iterator yielding each record in this linear-fixed file.
@@ -549,7 +551,10 @@ impl ElementaryFile {
                 if offset + new_bytes.len() > self.data.len() {
                     self.data.resize(offset + new_bytes.len(), 0xFF);
                 }
-                self.data[offset..offset + new_bytes.len()].copy_from_slice(&new_bytes);
+                let Some(dest) = self.data.get_mut(offset..offset + new_bytes.len()) else {
+                    return Err(SW_INCORRECT_PARAMS);
+                };
+                dest.copy_from_slice(&new_bytes);
                 Ok(())
             }
             apdu::Instruction::UpdateRecord => {

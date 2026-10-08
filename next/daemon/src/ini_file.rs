@@ -17,7 +17,7 @@
 use std::{
     collections::HashMap,
     fs::{self, File, OpenOptions, TryLockError},
-    io::{self, BufWriter, Write},
+    io::{self, Write},
     path::PathBuf,
     str::FromStr,
 };
@@ -38,56 +38,50 @@ pub struct NetsimConfig {
 /// Held while initializing. Can only be used to write the INI file once.
 #[derive(Debug)]
 pub struct IniFileUninitialized {
-    ini_file: File,
     init_lock_file: Option<File>,
     lock_file: Option<File>,
     path: PathBuf,
     init_lock_path: PathBuf,
-    lock_path: PathBuf,
 }
 
 impl IniFileUninitialized {
-    pub fn new(
-        path: PathBuf,
-        lock_path: PathBuf,
-        init_lock_path: PathBuf,
-        locked_lock_file: File,
-    ) -> io::Result<Self> {
+    pub fn new(path: PathBuf, init_lock_path: PathBuf, locked_lock_file: File) -> io::Result<Self> {
+        // Unlink any leftover INI file BEFORE creating/locking init_lock so
+        // concurrent readers can never observe a stale INI file from a crashed run.
+        let _ = fs::remove_file(&path);
         let init_lock = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(false)
             .open(&init_lock_path)?;
-        init_lock.try_lock()?; // Should succeed as we are owner
-        let ini_file = OpenOptions::new().write(true).create(true).truncate(true).open(&path)?;
+        init_lock.lock()?;
 
         Ok(IniFileUninitialized {
-            ini_file,
             init_lock_file: Some(init_lock),
             lock_file: Some(locked_lock_file),
             path,
             init_lock_path,
-            lock_path,
         })
     }
 
+    /// Publishes `netsim.ini` atomically via an exclusive temporary file (`O_EXCL`)
+    /// and `rename()` so external readers never observe a partially written configuration.
     pub fn write(mut self, data: &HashMap<String, String>) -> io::Result<IniFileInitialized> {
-        let mut writer = BufWriter::new(&mut self.ini_file);
-        for (key, value) in data {
-            writeln!(writer, "{key}={value}")?;
-        }
-        writer.flush()?;
+        let tmp_path = self.path.with_extension("ini.tmp");
+        let _ = fs::remove_file(&tmp_path);
+        let content: String = data.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)?
+            .write_all(content.as_bytes())?;
+        fs::rename(&tmp_path, &self.path)?;
 
-        // Init lock should be released but left on disk.
-        let _released_init_lock = self.init_lock_file.take();
+        // Release init_lock so readers know initialization is complete.
+        self.init_lock_file.take();
 
-        Ok(IniFileInitialized {
-            path: self.path.clone(),
-            lock_path: self.lock_path.clone(),
-            lock_file: self.lock_file.take(),
-            init_lock_path: self.init_lock_path.clone(),
-        })
+        Ok(IniFileInitialized { path: self.path.clone(), lock_file: self.lock_file.take() })
     }
 
     pub fn path(&self) -> &PathBuf {
@@ -105,14 +99,9 @@ impl Drop for IniFileUninitialized {
                 warn!("Failed to remove {}: {err}", self.init_lock_path.display());
             }
         }
-        if let Some(file) = self.lock_file.take() {
-            drop(file);
-            if let Err(err) = fs::remove_file(&self.lock_path)
-                && err.kind() != io::ErrorKind::NotFound
-            {
-                warn!("Failed to remove {}: {err}", self.lock_path.display());
-            }
-        }
+        // Release `.lock` last while keeping the `.lock` file on disk so
+        // concurrent processes always contend on the same inode.
+        drop(self.lock_file.take());
     }
 }
 
@@ -121,25 +110,34 @@ impl Drop for IniFileUninitialized {
 pub struct IniFileInitialized {
     lock_file: Option<File>,
     path: PathBuf,
-    lock_path: PathBuf,
-    init_lock_path: PathBuf,
 }
 
 impl IniFileInitialized {
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
+
+    /// Unlinks `netsim.ini` and `netsim.ini.init.lock` while the caller holds
+    /// `netsim.ini.lock` so concurrent readers immediately observe
+    /// `IniFileAccess::Initializing`.
+    pub fn unlink_discovery_files(ini_path: &std::path::Path) {
+        for path in [ini_path, &ini_path.with_extension("ini.init.lock")] {
+            if let Err(err) = fs::remove_file(path)
+                && err.kind() != io::ErrorKind::NotFound
+            {
+                warn!("Failed to remove {}: {err}", path.display());
+            }
+        }
+    }
 }
 
 impl Drop for IniFileInitialized {
     fn drop(&mut self) {
         if let Some(file) = self.lock_file.take() {
+            // Unlink netsim.ini and init.lock while still holding `.lock` so no
+            // concurrent reader can observe a stale port after lock release.
+            Self::unlink_discovery_files(&self.path);
             drop(file);
-            for path in [&self.path, &self.lock_path, &self.init_lock_path] {
-                if let Err(err) = fs::remove_file(path) {
-                    warn!("Failed to remove {}: {err}", path.display());
-                }
-            }
         }
     }
 }
@@ -156,7 +154,6 @@ pub enum IniFileAccess {
 /// configuration.
 pub struct IniFile {
     path: PathBuf,
-    lock_path: PathBuf,
     init_lock_path: PathBuf,
     unlocked_lock_file: File,
 }
@@ -170,12 +167,9 @@ impl IniFile {
     pub fn new_for_dir(dir: PathBuf, instance_num: u16) -> io::Result<Self> {
         fs::create_dir_all(&dir)?;
         let ini_filename = common::util::ini_file::get_ini_filename(instance_num);
-        let lock_filename = format!("{ini_filename}.lock");
-        let init_lock_filename = format!("{ini_filename}.init.lock");
-
+        let lock_path = dir.join(format!("{ini_filename}.lock"));
+        let init_lock_path = dir.join(format!("{ini_filename}.init.lock"));
         let path = dir.join(ini_filename);
-        let lock_path = dir.join(lock_filename);
-        let init_lock_path = dir.join(init_lock_filename);
 
         let unlocked_lock_file = OpenOptions::new()
             .read(true)
@@ -184,7 +178,7 @@ impl IniFile {
             .truncate(false)
             .open(&lock_path)?;
 
-        Ok(IniFile { path, lock_path, init_lock_path, unlocked_lock_file })
+        Ok(IniFile { path, init_lock_path, unlocked_lock_file })
     }
 
     /// Attempts to acquire the lock and determine the access level.
@@ -192,7 +186,6 @@ impl IniFile {
         match self.unlocked_lock_file.try_lock() {
             Ok(()) => Ok(IniFileAccess::Writer(IniFileUninitialized::new(
                 self.path,
-                self.lock_path,
                 self.init_lock_path,
                 self.unlocked_lock_file,
             )?)),
@@ -206,9 +199,22 @@ impl IniFile {
                 match init_lock_result {
                     Ok(init_lock) => match init_lock.try_lock() {
                         Ok(()) => {
-                            // Initialization done, we can read
+                            // Either initialization is complete, or the previous
+                            // owner unlinked netsim.ini at the start of teardown
+                            // while still holding `.lock`. Treat missing/zero-port
+                            // INI as `Initializing` so a newly spawned daemon
+                            // waits for `.lock` release and becomes `Writer`.
                             drop(init_lock);
-                            self.read_config().map(IniFileAccess::Reader)
+                            match self.read_config() {
+                                Ok(config) if config.grpc_port != 0 => {
+                                    Ok(IniFileAccess::Reader(config))
+                                }
+                                Ok(_) => Ok(IniFileAccess::Initializing),
+                                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                                    Ok(IniFileAccess::Initializing)
+                                }
+                                Err(e) => Err(e),
+                            }
                         }
                         Err(TryLockError::WouldBlock) => Ok(IniFileAccess::Initializing),
                         Err(TryLockError::Error(e)) => Err(e),
@@ -320,6 +326,26 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf(), 2).unwrap();
         assert_eq!(ini_file.path.file_name().unwrap(), "netsim_2.ini");
-        assert_eq!(ini_file.lock_path.file_name().unwrap(), "netsim_2.ini.lock");
+        assert!(temp_dir.path().join("netsim_2.ini.lock").exists());
+    }
+
+    #[test]
+    fn test_ini_file_draining_and_zero_port() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf(), 1).unwrap();
+        let IniFileAccess::Writer(guard) = ini_file.try_acquire().unwrap() else {
+            panic!("Expected Writer access");
+        };
+
+        let mut data = HashMap::new();
+        data.insert("grpc.port".to_string(), "0".to_string());
+        let initialized_guard = guard.write(&data).unwrap();
+
+        let ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf(), 1).unwrap();
+        assert!(matches!(ini_file2.try_acquire(), Ok(IniFileAccess::Initializing)));
+
+        IniFileInitialized::unlink_discovery_files(initialized_guard.path());
+        let ini_file3 = IniFile::new_for_dir(temp_dir.path().to_path_buf(), 1).unwrap();
+        assert!(matches!(ini_file3.try_acquire(), Ok(IniFileAccess::Initializing)));
     }
 }

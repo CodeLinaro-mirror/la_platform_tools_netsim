@@ -62,6 +62,7 @@ netsim_rust_library(
         "//next/model",
         "//next/nfc-actor",
         "//next/packet-stream",
+        "//next/rest-api",
         "//next/slirp-actor",
         "//next/uwb-actor",
         "//next/websocket-server",

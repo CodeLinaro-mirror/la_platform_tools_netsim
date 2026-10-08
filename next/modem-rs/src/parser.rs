@@ -57,11 +57,11 @@ mod tests {
         data_service::Qos,
         sms_service::{MessageStatus, MessageStorage},
         types::{
-            CallForwardingMode, CallForwardingReason, CallMode, CallWaitingMode, CharacterSet,
-            ClirMode, CopsFormat, CopsMode, CtecPreferredMask, CtecTechnology, DialArgs, DtmfArgs,
-            DtmfTone, PacketEventReportingMode, Parsable, PdpContextActivateArgs, PdpType,
-            PhoneNumber, ProductSerialNumberType, RadioPowerLevel, SendSmsArgs, ServiceClass,
-            TypeOfAddress,
+            CallForwardNumberType, CallForwardTime, CallForwardTon, CallForwardingMode,
+            CallForwardingReason, CallMode, CallWaitingMode, CharacterSet, ClirMode, CopsFormat,
+            CopsMode, CtecPreferredMask, DialArgs, DtmfArgs, DtmfTone, PacketEventReportingMode,
+            Parsable, PdpContextActivateArgs, PdpType, PhoneNumber, ProductSerialNumberType,
+            RadioPowerLevel, SendSmsArgs, ServiceClass, TypeOfAddress,
         },
     };
 
@@ -206,10 +206,6 @@ mod tests {
 
     #[test]
     fn test_parse_cgdata() {
-        let (rem, cmd) = Command::parse(b"AT+CGDATA=1").unwrap();
-        assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(None, Some(1))));
-
         let (rem, cmd) = Command::parse(b"AT+CGDATA=\"PPP\",1").unwrap();
         assert!(rem.is_empty());
         assert_eq!(
@@ -217,9 +213,19 @@ mod tests {
             Command::Data(DataCommand::EnterDataState(Some(QuotedString("PPP")), Some(1)))
         );
 
+        // Spec-shaped omission of <L2P>: explicit empty slot before comma
+        let (rem, cmd) = Command::parse(b"AT+CGDATA=,1").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(None, Some(1))));
+
         let (rem, cmd) = Command::parse(b"AT+CGDATA=").unwrap();
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::Data(DataCommand::EnterDataState(None, None)));
+
+        // Bare AT+CGDATA=1 is rejected: <L2P> is a string parameter
+        let (rem, cmd) = Command::parse(b"AT+CGDATA=1").unwrap();
+        assert!(!rem.is_empty());
+        assert!(!matches!(cmd, Command::Data(DataCommand::EnterDataState(..))));
     }
 
     #[test]
@@ -253,24 +259,39 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_stk() {
-        let (rem, cmd) = Command::parse(b"AT+STK=1").unwrap();
+    fn test_parse_cusatd_query() {
+        let (rem, cmd) = Command::parse(b"AT+CUSATD?").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStk(true)));
+        assert_eq!(cmd, Command::Stk(StkCommand::QueryStkReady));
     }
 
     #[test]
-    fn test_parse_stken() {
-        let (rem, cmd) = Command::parse(b"AT+STKEN=1").unwrap();
+    fn test_parse_cusatd_set() {
+        let (rem, cmd) = Command::parse(b"AT+CUSATD=1,\"010203\"").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStkEnabled(true)));
+        assert_eq!(cmd, Command::Stk(StkCommand::SetStkReady(true, Some(QuotedString("010203")))));
     }
 
     #[test]
-    fn test_parse_stkur() {
-        let (rem, cmd) = Command::parse(b"AT+STKUR=1").unwrap();
+    fn test_parse_cusate() {
+        let (rem, cmd) = Command::parse(b"AT+CUSATE=\"D30782028281100150\"").unwrap();
         assert!(rem.is_empty());
-        assert_eq!(cmd, Command::Stk(StkCommand::SetStkUnsolicitedResult(true)));
+        assert_eq!(
+            cmd,
+            Command::Stk(StkCommand::SendStkEnvelope(QuotedString("D30782028281100150")))
+        );
+    }
+
+    #[test]
+    fn test_parse_cusatt() {
+        let (rem, cmd) = Command::parse(b"AT+CUSATT=\"81030124008202828183020001\"").unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Stk(StkCommand::SendStkTerminalResponse(QuotedString(
+                "81030124008202828183020001"
+            )))
+        );
     }
 
     #[test]
@@ -367,6 +388,46 @@ mod tests {
                 number: None,
                 toa: None,
                 class: None,
+                subaddr: None,
+                satype: None,
+                time: None,
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_ccfcu() {
+        let (rem, cmd) =
+            Command::parse(br#"AT+CCFCU=0,3,2,145,"+1234567890",1,"","",,20"#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sup(SupCommand::CallForwardUtility {
+                reason: CallForwardingReason::Unconditional,
+                mode: CallForwardingMode::Registration,
+                number_type: Some(CallForwardNumberType::Number),
+                ton: Some(CallForwardTon(145)),
+                number: Some(QuotedString("+1234567890")),
+                class: Some(ServiceClass::VOICE),
+                ruleset: Some(QuotedString("")),
+                subaddr: Some(QuotedString("")),
+                satype: None,
+                time: Some(CallForwardTime(20)),
+            })
+        );
+
+        let (rem, cmd) = Command::parse(br#"AT+CCFCU=0,2,2,129,"",1"#).unwrap();
+        assert!(rem.is_empty());
+        assert_eq!(
+            cmd,
+            Command::Sup(SupCommand::CallForwardUtility {
+                reason: CallForwardingReason::Unconditional,
+                mode: CallForwardingMode::Query,
+                number_type: Some(CallForwardNumberType::Number),
+                ton: Some(CallForwardTon(129)),
+                number: Some(QuotedString("")),
+                class: Some(ServiceClass::VOICE),
+                ruleset: None,
                 subaddr: None,
                 satype: None,
                 time: None,
@@ -507,15 +568,10 @@ mod tests {
         assert!(rem.is_empty());
         assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, Some(MessageStatus::StoredSent))));
 
-        // Out-of-range stat values fail to parse into MessageStatus, leaving trailing
-        // unparsed bytes
+        // Out-of-range stat values must not parse as StoreSms.
         let (rem, cmd) = Command::parse(b"AT+CMGW=16,4").unwrap();
         assert!(!rem.is_empty());
-        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
-
-        let (rem, cmd) = Command::parse(b"AT+CMGW=16,99").unwrap();
-        assert!(!rem.is_empty());
-        assert_eq!(cmd, Command::Sms(SmsCommand::StoreSms(16, None)));
+        assert!(!matches!(cmd, Command::Sms(SmsCommand::StoreSms(..))));
     }
 
     #[test]
@@ -630,7 +686,7 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Network(NetworkCommand::SetNetworkTechnology(
-                CtecTechnology::Lte,
+                32,
                 Some(CtecPreferredMask(0x63))
             ))
         );
@@ -641,13 +697,13 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Network(NetworkCommand::SetNetworkTechnology(
-                CtecTechnology::Lte,
+                32,
                 Some(CtecPreferredMask(0x63))
             ))
         );
 
-        // Invalid unsupported technology bit rejection upfront
-        assert!(CtecPreferredMask::parse(b"0x04").is_err());
+        assert_eq!(CtecPreferredMask::parse(b"0x04").unwrap().1, CtecPreferredMask(0x04));
+        assert!(CtecPreferredMask::parse(b"0x80").is_err());
     }
 
     #[test]
@@ -696,8 +752,8 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Sms(SmsCommand::SendSms(SendSmsArgs::Text {
-                da: QuotedString("+1234567890"),
-                toda: None,
+                destination_address: QuotedString("+1234567890"),
+                type_of_destination_address: None,
             }))
         );
 
@@ -707,8 +763,8 @@ mod tests {
         assert_eq!(
             cmd,
             Command::Sms(SmsCommand::SendSms(SendSmsArgs::Text {
-                da: QuotedString("+1234567890"),
-                toda: Some(TypeOfAddress::International),
+                destination_address: QuotedString("+1234567890"),
+                type_of_destination_address: Some(TypeOfAddress::International),
             }))
         );
     }

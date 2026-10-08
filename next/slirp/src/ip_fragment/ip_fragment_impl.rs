@@ -26,7 +26,10 @@ pub fn fragment(packet: &[u8]) -> Vec<Vec<u8>> {
         let fragment_ipv4_header = Ipv4Header::mut_from_bytes(fragment_ipv4_header_slice).unwrap();
 
         fragment_ipv4_header.as_mut_bytes().copy_from_slice(ipv4_header.as_bytes());
-        fragment_payload.copy_from_slice(&payload[offset..offset + fragment_len]);
+        let Some(payload_slice) = payload.get(offset..offset + fragment_len) else {
+            break;
+        };
+        fragment_payload.copy_from_slice(payload_slice);
 
         let mut flags_fragment_offset = ipv4_header.flags_fragment_offset.get();
         if offset + fragment_len < payload.len() {
@@ -50,11 +53,17 @@ struct FragmentCache {
     fragments: Vec<Vec<u8>>,
     total_len: usize,
     last_fragment_received: bool,
+    last_accessed_tick: u64,
 }
 
 impl FragmentCache {
     fn new() -> Self {
-        Self { fragments: Vec::new(), total_len: 0, last_fragment_received: false }
+        Self {
+            fragments: Vec::new(),
+            total_len: 0,
+            last_fragment_received: false,
+            last_accessed_tick: 0,
+        }
     }
 
     fn is_complete(&self) -> bool {
@@ -88,6 +97,7 @@ impl FragmentCache {
 #[derive(Default)]
 pub struct Reassembler {
     cache: HashMap<u16, FragmentCache>,
+    access_counter: u64,
 }
 
 impl Reassembler {
@@ -100,7 +110,32 @@ impl Reassembler {
         let identification = ipv4_header.identification.get();
         let more_fragments = ipv4_header.flags_fragment_offset.get() & 0x2000 != 0;
 
+        self.access_counter = self.access_counter.wrapping_add(1);
+        let current_tick = self.access_counter;
+
+        const MAX_REASSEMBLY_ENTRIES: usize = 64;
+        const MAX_FRAGMENTS_PER_PACKET: usize = 128;
+
+        let limit_exceeded = self
+            .cache
+            .get(&identification)
+            .map(|entry| entry.fragments.len() >= MAX_FRAGMENTS_PER_PACKET)
+            .unwrap_or(false);
+
+        if limit_exceeded {
+            self.cache.remove(&identification);
+            return None;
+        }
+
+        crate::utils::lru::evict_lru(
+            &mut self.cache,
+            MAX_REASSEMBLY_ENTRIES,
+            &identification,
+            |entry| entry.last_accessed_tick,
+        );
+
         let cache_entry = self.cache.entry(identification).or_insert_with(FragmentCache::new);
+        cache_entry.last_accessed_tick = current_tick;
         cache_entry.fragments.push(fragment.to_vec());
 
         if !more_fragments {
@@ -118,22 +153,23 @@ impl Reassembler {
                 h.flags_fragment_offset.get() & 0x1FFF
             });
 
-            let (first_header, _) = Ipv4Header::parse(&fragments[0])?;
+            let first_frag = fragments.first()?;
+            let (first_header, _) = Ipv4Header::parse(first_frag)?;
             let header_len = first_header.header_length();
             let total_len = header_len + cache_entry.total_len;
             let mut reassembled = vec![0u8; total_len];
 
-            reassembled[..header_len].copy_from_slice(&fragments[0][..header_len]);
+            reassembled.get_mut(..header_len)?.copy_from_slice(first_frag.get(..header_len)?);
 
             for frag in &fragments {
                 let (header, payload) = Ipv4Header::parse(frag)?;
                 let offset = (header.flags_fragment_offset.get() & 0x1FFF) * 8;
                 let start = header_len + offset as usize;
-                reassembled[start..start + payload.len()].copy_from_slice(payload);
+                reassembled.get_mut(start..start + payload.len())?.copy_from_slice(payload);
             }
 
             let reassembled_header =
-                Ipv4Header::mut_from_bytes(&mut reassembled[..header_len]).unwrap();
+                Ipv4Header::mut_from_bytes(reassembled.get_mut(..header_len)?).ok()?;
             reassembled_header.total_length.set(total_len as u16);
             reassembled_header.flags_fragment_offset.set(0);
             reassembled_header.header_checksum.set(0);

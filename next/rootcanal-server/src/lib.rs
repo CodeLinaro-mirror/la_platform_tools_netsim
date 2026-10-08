@@ -270,13 +270,12 @@ async fn handle_client(mut stream: TcpStream, device_client: DeviceClient) -> io
 /// Retrieves the list of all active simulated devices and their radio states,
 /// formatting it to match the classic Rootcanal console output.
 async fn handle_list(device_client: &DeviceClient) -> Result<String, String> {
-    let list_resp =
-        device_client.list().await.map_err(|e| format!("Failed to list devices: {e}"))?;
+    let devices = device_client.list().await.map_err(|e| format!("Failed to list devices: {e}"))?;
 
     let mut le_ids: Vec<u32> = Vec::new();
     let mut classic_ids: Vec<u32> = Vec::new();
 
-    for device in &list_resp.devices {
+    for device in &devices {
         if device
             .chips
             .iter()
@@ -292,8 +291,7 @@ async fn handle_list(device_client: &DeviceClient) -> Result<String, String> {
         }
     }
 
-    let devices_section: String = list_resp
-        .devices
+    let devices_section: String = devices
         .iter()
         .map(|device| format!("  {}:hci_device_{}\n", device.id, device.id))
         .collect();

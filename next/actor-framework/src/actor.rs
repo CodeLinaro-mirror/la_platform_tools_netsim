@@ -8,13 +8,14 @@
 //! Actor Model, processing messages sequentially and ensuring exclusive access
 //! to the resource store.
 
+use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
 use tracing::error;
 
 use crate::{
-    ActorLifecycle, ActorService, DynContext, StreamMessage, client::ResourceClient,
-    context::FrameworkContext, message::ResourceRequest,
+    ActorLifecycle, ActorService, DynContext, client::ResourceClient, context::FrameworkContext,
+    message::ResourceRequest,
 };
 
 /// The generic actor that manages a collection of resources.
@@ -241,7 +242,7 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
     async fn handle_stream_event(
         actor: &mut T,
         id: T::Id,
-        msg_opt: Option<StreamMessage>,
+        msg_opt: Option<Bytes>,
         ctx: &mut DynContext<T>,
     ) {
         match msg_opt {

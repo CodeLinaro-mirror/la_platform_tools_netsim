@@ -316,21 +316,18 @@ impl<'a> ParsedApdu<'a> {
             }
             [cla, ins, p1, p2, lc, ref rest @ ..] => {
                 let len = lc as usize;
-                if rest.len() == len {
-                    (cla, ins, p1, p2, ApduCase::DataOnly { data: Cow::Borrowed(rest) })
-                } else if rest.len() == len + 1 {
-                    (
+                match rest.split_at_checked(len) {
+                    Some((data, [])) => {
+                        (cla, ins, p1, p2, ApduCase::DataOnly { data: Cow::Borrowed(data) })
+                    }
+                    Some((data, &[expected_length])) => (
                         cla,
                         ins,
                         p1,
                         p2,
-                        ApduCase::DataAndResponse {
-                            data: Cow::Borrowed(&rest[..len]),
-                            expected_length: rest[len],
-                        },
-                    )
-                } else {
-                    return Err(SW_WRONG_LENGTH);
+                        ApduCase::DataAndResponse { data: Cow::Borrowed(data), expected_length },
+                    ),
+                    _ => return Err(SW_WRONG_LENGTH),
                 }
             }
             _ => return Err(SW_WRONG_LENGTH),
@@ -391,60 +388,57 @@ impl ParsedApdu<'static> {
         let cleaned = s.trim();
         let cleaned = if let Some(start) = cleaned.find('"')
             && let Some(end) = cleaned.rfind('"')
-            && start < end
+            && let Some(sub) = cleaned.get(start + 1..end)
         {
-            &cleaned[start + 1..end]
+            sub
         } else {
             cleaned
         };
 
         let bytes = hex::decode(cleaned).map_err(|e| e.to_string())?;
 
-        if bytes.is_empty() {
+        let Some(&first_byte) = bytes.first() else {
             return Err("Empty APDU command".to_string());
-        }
-
-        let first_byte = bytes[0];
+        };
         let class = Class(first_byte);
 
         // Heuristic: Check if first byte is a likely CLA in XML commands.
         let has_cla = class.is_likely_mapped_cla();
 
         let (cla, ins, p1, p2, rest) = if has_cla {
-            if bytes.len() < 4 {
+            let &[cla, ins, p1, p2, ref rest @ ..] = bytes.as_slice() else {
                 return Err(
                     "APDU command too short (expected at least 4 bytes for header)".to_string()
                 );
-            }
-            (class.0, bytes[1], bytes[2], bytes[3], &bytes[4..])
+            };
+            (cla, ins, p1, p2, rest)
         } else {
-            if bytes.len() < 3 {
+            let &[ins, p1, p2, ref rest @ ..] = bytes.as_slice() else {
                 return Err(
                     "CLA-less APDU command too short (expected at least 3 bytes for header)"
                         .to_string(),
                 );
-            }
-            (0x00, bytes[0], bytes[1], bytes[2], &bytes[3..]) // Assume CLA 00 (normalized)
+            };
+            (0x00, ins, p1, p2, rest) // Assume CLA 00 (normalized)
         };
 
-        let case = match rest.len() {
-            0 => ApduCase::CommandOnly,
-            1 => ApduCase::ResponseExpected { expected_length: rest[0] },
-            _ => {
-                let lc = rest[0] as usize;
-                if rest.len() == 1 + lc {
-                    ApduCase::DataOnly { data: Cow::Owned(rest[1..].to_vec()) }
-                } else if rest.len() == 2 + lc {
-                    ApduCase::DataAndResponse {
-                        data: Cow::Owned(rest[1..1 + lc].to_vec()),
-                        expected_length: rest[1 + lc],
+        let case = match *rest {
+            [] => ApduCase::CommandOnly,
+            [expected_length] => ApduCase::ResponseExpected { expected_length },
+            [lc, ref data_rest @ ..] => {
+                let lc_len = lc as usize;
+                match data_rest.split_at_checked(lc_len) {
+                    Some((data, [])) => ApduCase::DataOnly { data: Cow::Owned(data.to_vec()) },
+                    Some((data, &[expected_length])) => ApduCase::DataAndResponse {
+                        data: Cow::Owned(data.to_vec()),
+                        expected_length,
+                    },
+                    _ => {
+                        return Err(format!(
+                            "Invalid APDU length: Lc is {lc_len}, but remaining bytes length is {}",
+                            data_rest.len()
+                        ));
                     }
-                } else {
-                    return Err(format!(
-                        "Invalid APDU length: Lc is {}, but remaining bytes length is {}",
-                        lc,
-                        rest.len() - 1
-                    ));
                 }
             }
         };

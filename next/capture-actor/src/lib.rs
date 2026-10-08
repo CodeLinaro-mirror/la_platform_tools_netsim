@@ -25,12 +25,9 @@ pub use capture_api::{
     CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo, CaptureSender, Direction,
 };
 pub use error::CaptureError;
-pub use modem_pcap::ModemPcapWriter;
-pub use writer::{
-    DLT_BLUETOOTH_H4, DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO, DLT_NFC_NCI, DLT_USER0,
-};
+pub use writer::DataLinkType;
 
-pub mod client;
+mod client;
 pub use client::CaptureClient;
 
 /// Creates a new Capture actor and its client.
@@ -52,7 +49,10 @@ mod tests {
 
     use capture_api::Direction;
 
-    use crate::{bt_pcap::BluetoothH4Writer, modem_pcap::ModemPcapWriter, nci_pcap::NciPcapWriter};
+    use crate::{
+        DataLinkType, bt_pcap::BluetoothH4Writer, modem_pcap::ModemPcapWriter,
+        nci_pcap::NciPcapWriter,
+    };
 
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -128,7 +128,7 @@ mod tests {
         assert_eq!(magic, 0xa1b2c3d4);
         assert_eq!(version_major, 2);
         assert_eq!(version_minor, 4);
-        assert_eq!(network, 147); // DLT_USER0
+        assert_eq!(network, DataLinkType::User0.as_u32());
 
         // 2. Verify PCAP Record Header (16 bytes starting at index 24)
         assert!(pcap_bytes.len() >= 24 + 16);

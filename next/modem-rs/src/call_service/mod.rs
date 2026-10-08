@@ -5,11 +5,10 @@ use modem_rs_derive::CommandParser;
 use tracing::debug;
 
 use crate::{
-    data_service::DataService,
-    sim_service::SimService,
+    CardState, RadioAdmission,
     types::{
         CallHoldAction, CallHoldParam, ClirMode, CmeError, CommandAction, DialArgs, DtmfArgs,
-        ExecutionResult, ModemId, NumberPresentation, Parsable, PhoneNumber,
+        ExecutionResult, HangupReason, ModemId, NumberPresentation, Parsable, PhoneNumber,
     },
 };
 
@@ -32,18 +31,10 @@ pub enum CallCommand {
     QueryMute,
     #[command(tag = "AT+VTS=")]
     SendDtmf(DtmfArgs),
-    /// VENDOR: Set emergency mode
     #[command(tag = "AT+WSOS=")]
     SetEmergencyMode(bool),
-    /// VENDOR: Query emergency mode
     #[command(tag = "AT+WSOS?")]
     QueryEmergencyMode,
-    /// VENDOR: Remote call
-    #[command(tag = "AT+REMOTECALL=")]
-    RemoteCall(PhoneNumber),
-    /// VENDOR: Ring indication
-    #[command(tag = "RING")]
-    Ring,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -76,6 +67,10 @@ impl CallState {
 
     fn is_inbound(self) -> bool {
         matches!(self, CallState::Incoming | CallState::Waiting)
+    }
+
+    pub fn release_reason(self) -> HangupReason {
+        if self.is_inbound() { HangupReason::Busy } else { HangupReason::Normal }
     }
 
     fn is_foreground(self) -> bool {
@@ -130,7 +125,7 @@ impl std::fmt::Display for CallResponse {
                         call.state as u8,
                         if call.is_voice_mode { 0 } else { 1 },
                         call.is_multi_party as u8,
-                        val.number.strip_prefix('+').unwrap_or(val.number),
+                        val.number,
                         val.toa,
                     )?;
                 }
@@ -153,12 +148,46 @@ type CallResult = Result<Option<CallResponse>, ExecutionResult>;
 // Holds all state related to the call service.
 #[derive(Default)]
 pub struct CallService {
-    pub calls: Vec<CallStatus>,
+    calls: Vec<CallStatus>,
     mute: bool,
     emergency_mode: bool,
 }
 
 impl CallService {
+    pub(crate) fn calls(&self) -> &[CallStatus] {
+        &self.calls
+    }
+
+    pub(crate) fn has_calls(&self) -> bool {
+        !self.calls.is_empty()
+    }
+
+    pub(crate) fn clear_calls(&mut self) {
+        self.calls.clear();
+    }
+
+    pub(crate) fn has_outbound_to_peer(&self, peer_id: ModemId) -> bool {
+        self.calls.iter().any(|c| c.state.is_outbound() && c.peer_id == Some(peer_id))
+    }
+
+    pub(crate) fn set_outbound_peer_id(&mut self, peer_id: ModemId) -> bool {
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state.is_outbound()) {
+            call.peer_id = Some(peer_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn fail_outbound_call(&mut self) -> bool {
+        if let Some(pos) = self.calls.iter().position(|c| c.state.is_outbound()) {
+            self.calls.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
     fn has_call_in_state(&self, state: CallState) -> bool {
         self.calls.iter().any(|c| c.state == state)
     }
@@ -212,11 +241,25 @@ impl CallService {
     // --- Helper methods for external services ---
 
     pub fn receive_hangup(&mut self) {
-        self.calls.clear();
+        let has_foreground = self.has_foreground();
+        let has_inbound = self.has_inbound();
+
+        self.calls.retain(|call| {
+            let should_drop = if has_foreground {
+                call.state.is_foreground()
+            } else if has_inbound {
+                call.state.is_inbound()
+            } else {
+                call.state == CallState::Held
+            };
+            !should_drop
+        });
     }
 
-    pub fn receive_hangup_from_peer_id(&mut self, peer_id: ModemId) {
+    pub fn receive_hangup_from_peer_id(&mut self, peer_id: ModemId) -> bool {
+        let prev_len = self.calls.len();
         self.calls.retain(|c| c.peer_id != Some(peer_id));
+        self.calls.len() < prev_len
     }
 
     pub fn hangup_all(&mut self, id: ModemId) -> Vec<CommandAction> {
@@ -227,6 +270,7 @@ impl CallService {
                 call.peer_id.map(|peer_id| CommandAction::HangupCall {
                     initiator: id,
                     target_peer: peer_id,
+                    reason: call.state.release_reason(),
                 })
             })
             .collect();
@@ -239,7 +283,11 @@ impl CallService {
         self.calls.retain(|call| {
             if call.state.is_inbound() {
                 if let Some(peer_id) = call.peer_id {
-                    actions.push(CommandAction::HangupCall { initiator: id, target_peer: peer_id });
+                    actions.push(CommandAction::HangupCall {
+                        initiator: id,
+                        target_peer: peer_id,
+                        reason: HangupReason::NoAnswer,
+                    });
                 }
                 false
             } else {
@@ -290,7 +338,7 @@ impl CallService {
         }
     }
 
-    pub fn remote_answer(&mut self) -> bool {
+    pub(crate) fn remote_answer(&mut self) -> bool {
         if let Some(call) = self.calls.iter_mut().find(|c| c.state.is_outbound()) {
             call.state = CallState::Active;
             return true;
@@ -306,12 +354,16 @@ impl CallService {
         self.has_call_in_state(CallState::Alerting)
     }
 
-    pub fn has_outbound(&self) -> bool {
+    pub(crate) fn has_outbound(&self) -> bool {
         self.calls.iter().any(|c| c.state.is_outbound())
     }
 
     fn has_inbound(&self) -> bool {
         self.calls.iter().any(|c| c.state.is_inbound())
+    }
+
+    fn has_foreground(&self) -> bool {
+        self.calls.iter().any(|c| c.state.is_foreground())
     }
 
     fn has_active(&self) -> bool {
@@ -355,18 +407,12 @@ impl CallService {
         &mut self,
         args: DialArgs,
         id: ModemId,
-        data_service: &mut DataService,
-        sim_service: &SimService,
-        clir_mode: ClirMode,
+        clir_default: ClirMode,
+        sim_service: &impl CardState,
+        radio_service: &impl RadioAdmission,
     ) -> ExecutionResult {
         debug!("[CallService] Dialing number: {}", args.number.as_str());
-        // GPRS dial commands (e.g. ATD*99#) are GPRS packet-data requests and are
-        // handled by DataService.
-        if args.number.is_gprs_dial() {
-            return data_service.handle_gprs_dial(args.number.as_str()).into();
-        }
-
-        let result = self.handle_voice_dial(id, args, sim_service, clir_mode);
+        let result = self.handle_voice_dial(id, args, clir_default, sim_service, radio_service);
         result.into()
     }
 
@@ -374,16 +420,20 @@ impl CallService {
         &mut self,
         id: ModemId,
         args: DialArgs,
-        sim_service: &SimService,
-        clir_mode: ClirMode,
+        clir_default: ClirMode,
+        sim_service: &impl CardState,
+        radio_service: &impl RadioAdmission,
     ) -> CallResult {
-        if args.is_emergency {
-            return Ok(Some(CallResponse::WithActions(vec![CommandAction::InitiateEmergencyCall])));
+        let is_emergency = args.is_emergency;
+
+        if self.emergency_mode && !is_emergency {
+            return Err(ExecutionResult::cme_error(CmeError::NetworkNotAllowedEmergencyCallsOnly));
         }
 
-        if !sim_service.is_fdn_allowed(&args.number) {
-            return Err(ExecutionResult::cme_error(CmeError::FixedDialNumberOnlyAllowed));
-        }
+        // Locked SIMs attach in Emergency-only registration (CME 32), so SIM gating runs
+        // first to report CME 10/11/12 (SIM absent/PIN/PUK) on non-emergency dials.
+        sim_service.validate_call(&args.number, is_emergency)?;
+        radio_service.can_originate_voice_call(is_emergency)?;
 
         debug!("[CallService] Calls before dial: {:?}", self.calls);
         if self.has_outbound() {
@@ -415,12 +465,12 @@ impl CallService {
         debug!("[CallService] Calls after dial: {:?}", self.calls);
 
         let call_clir =
-            if args.clir == ClirMode::SubscriptionDefault { clir_mode } else { args.clir };
+            if args.clir == ClirMode::SubscriptionDefault { clir_default } else { args.clir };
 
         actions.push(CommandAction::InitiateCall(DialArgs {
             number: args.number,
             clir: call_clir,
-            is_emergency: false,
+            is_emergency,
         }));
 
         Ok(Some(CallResponse::WithActions(actions)))
@@ -429,19 +479,64 @@ impl CallService {
     fn handle_answer(&mut self, id: ModemId) -> CallResult {
         debug!("[CallService modem={id}] Answering call");
         debug!("[CallService modem={id}] Calls before answer: {:?}", self.calls);
-        if let Some(call) = self.calls.iter_mut().find(|c| c.state.is_answerable()) {
-            call.state = CallState::Active;
+        if let Some(answerable_id) =
+            self.calls.iter().find(|c| c.state.is_answerable()).map(|c| c.id)
+        {
+            let mut actions = Vec::new();
+            // Under 3GPP TS 22.030 / 24.083, answering an incoming/waiting call
+            // automatically places any existing active call on hold.
+            for call in self.calls.iter_mut() {
+                if call.id == answerable_id {
+                    call.state = CallState::Active;
+                } else if call.state == CallState::Active {
+                    call.state = CallState::Held;
+                    if let Some(peer_id) = call.peer_id {
+                        actions.push(CommandAction::HoldCall { holder: id, target: peer_id });
+                    }
+                }
+            }
+
+            actions.push(CommandAction::AnswerCall(id));
             debug!("[CallService modem={id}] Calls after answer: {:?}", self.calls);
-            return Ok(Some(CallResponse::WithActions(vec![CommandAction::AnswerCall(id)])));
+            return Ok(Some(CallResponse::WithActions(actions)));
         }
         Err(ExecutionResult::error())
     }
 
     fn handle_hangup(&mut self, id: ModemId) -> CallResult {
         if self.is_idle() {
-            return Err(ExecutionResult::error());
+            return Ok(None);
         }
-        Ok(Some(CallResponse::WithActions(self.hangup_all(id))))
+
+        // 3GPP TS 22.030 priority: inbound/waiting (UDUB) -> foreground -> held
+        let has_inbound = self.has_inbound();
+        let has_foreground = self.has_foreground();
+
+        let mut actions = Vec::new();
+        self.calls.retain(|call| {
+            let should_drop = if has_inbound {
+                call.state.is_inbound()
+            } else if has_foreground {
+                call.state.is_foreground()
+            } else {
+                call.state == CallState::Held
+            };
+
+            if should_drop {
+                if let Some(peer_id) = call.peer_id {
+                    actions.push(CommandAction::HangupCall {
+                        initiator: id,
+                        target_peer: peer_id,
+                        reason: call.state.release_reason(),
+                    });
+                }
+                false
+            } else {
+                true
+            }
+        });
+
+        Ok(Some(CallResponse::WithActions(actions)))
     }
 
     fn handle_call_hold(&mut self, chld: CallHoldParam, id: ModemId) -> CallResult {
@@ -479,6 +574,7 @@ impl CallService {
                             actions.push(CommandAction::HangupCall {
                                 initiator: id,
                                 target_peer: peer_id,
+                                reason: call.state.release_reason(),
                             });
                         }
                         false
@@ -497,6 +593,7 @@ impl CallService {
                         actions.push(CommandAction::HangupCall {
                             initiator: id,
                             target_peer: peer_id,
+                            reason: call.state.release_reason(),
                         });
                     }
                     self.remove_call(idx);
@@ -508,6 +605,7 @@ impl CallService {
                                 actions.push(CommandAction::HangupCall {
                                     initiator: id,
                                     target_peer: peer,
+                                    reason: c.state.release_reason(),
                                 });
                             }
                             false
@@ -641,22 +739,6 @@ impl CallService {
         }
     }
 
-    fn handle_remote_call(&mut self, number: PhoneNumber) -> CallResult {
-        if self
-            .add_call(
-                CallState::Dialing,
-                CallDirection::Outgoing,
-                Some(number.clone()),
-                NumberPresentation::Allowed,
-                None,
-            )
-            .is_none()
-        {
-            return Err(ExecutionResult::error());
-        }
-        Ok(Some(CallResponse::WithActions(vec![CommandAction::InitiateRemoteCall(number)])))
-    }
-
     fn handle_set_mute(&mut self, mute: bool) -> CallResult {
         self.mute = mute;
         Ok(None)
@@ -671,37 +753,44 @@ impl CallService {
         Ok(None)
     }
 
-    fn handle_set_emergency_mode(&mut self, mode: bool) -> CallResult {
+    pub fn set_emergency_mode(&mut self, mode: bool) -> CallResponse {
         self.emergency_mode = mode;
-        Ok(None)
+        CallResponse::EmergencyMode(mode)
     }
 
     fn handle_query_emergency_mode(&self) -> CallResult {
         Ok(Some(CallResponse::EmergencyMode(self.emergency_mode)))
     }
 
-    pub fn execute(
+    pub(crate) fn execute(
         &mut self,
         command: &CallCommand,
         id: ModemId,
-        data_service: &mut DataService,
-        sim_service: &SimService,
-        clir_mode: ClirMode,
+        clir_default: ClirMode,
+        sim_service: &impl CardState,
+        radio_service: &impl RadioAdmission,
     ) -> ExecutionResult {
         let res = match command {
             CallCommand::Dial(args) => {
-                return self.handle_dial(args.clone(), id, data_service, sim_service, clir_mode);
+                return self.handle_dial(
+                    args.clone(),
+                    id,
+                    clir_default,
+                    sim_service,
+                    radio_service,
+                );
             }
             CallCommand::Answer => self.handle_answer(id),
             CallCommand::Hangup => self.handle_hangup(id),
             CallCommand::CallHold(op) => self.handle_call_hold(*op, id),
             CallCommand::QueryCurrentCalls => self.handle_query_current_calls(),
-            CallCommand::Ring => self.ring(None, NumberPresentation::Allowed, None),
-            CallCommand::RemoteCall(number) => self.handle_remote_call(number.clone()),
             CallCommand::SetMute(mute) => self.handle_set_mute(*mute),
             CallCommand::QueryMute => self.handle_query_mute(),
             CallCommand::SendDtmf(dtmf) => self.handle_send_dtmf(dtmf),
-            CallCommand::SetEmergencyMode(mode) => self.handle_set_emergency_mode(*mode),
+            CallCommand::SetEmergencyMode(mode) => {
+                self.set_emergency_mode(*mode);
+                Ok(None)
+            }
             CallCommand::QueryEmergencyMode => self.handle_query_emergency_mode(),
         };
         res.into()
@@ -709,24 +798,4 @@ impl CallService {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{CallDirection, CallService, CallState};
-    use crate::types::{NumberPresentation, PhoneNumber};
-
-    #[test]
-    fn test_clcc_not_available() {
-        let mut service = CallService::default();
-        service.add_call(
-            CallState::Incoming,
-            CallDirection::Incoming,
-            Some(PhoneNumber::new_for_test("123456")),
-            NumberPresentation::NotAvailable,
-            None,
-        );
-
-        let calls_res = service.handle_query_current_calls().unwrap().unwrap();
-        let formatted = calls_res.to_string();
-
-        assert_eq!(formatted, "+CLCC: 1,1,4,0,0,,129\r\n");
-    }
-}
+mod tests;

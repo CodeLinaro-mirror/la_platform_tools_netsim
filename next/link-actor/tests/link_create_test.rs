@@ -49,10 +49,10 @@ async fn test_create_link_fails_mismatch() {
     assert!(result.is_err());
 }
 
-// Scenario: Fail to create link with non-existent chip
+// Scenario: Fail to create link with non-existent receiver chip
 //
 //   Given the link actor is running
-//   When request to create a link involving a non-existent chip ID
+//   When request to create a link involving a non-existent receiver chip ID
 //   Then the creation fails
 #[tokio::test]
 async fn test_create_link_fails_missing() {
@@ -61,6 +61,23 @@ async fn test_create_link_fails_missing() {
     world.given_default_chips().await;
     // Chip 99 does not exist
     let result = world.when_create_link(ChipId(1), ChipId(99), -50).await;
+
+    // Then
+    assert!(result.is_err());
+}
+
+// Scenario: Fail to create link with non-existent sender chip
+//
+//   Given the link actor is running
+//   When request to create a link involving a non-existent sender chip ID
+//   Then the creation fails
+#[tokio::test]
+async fn test_create_link_fails_missing_sender() {
+    // Given
+    let world = World::new().await;
+    world.given_default_chips().await;
+    // Chip 99 does not exist as sender
+    let result = world.when_create_link(ChipId(99), ChipId(2), -50).await;
 
     // Then
     assert!(result.is_err());

@@ -19,7 +19,7 @@ pub const CSQ_SIGNAL_UNKNOWN: u8 = 99;
 
 /// List of CTEC technologies supported by this simulator.
 pub const SUPPORTED_CTEC_TECHS: &[CtecTechnology] =
-    &[CtecTechnology::Gsm, CtecTechnology::Wcdma, CtecTechnology::Lte, CtecTechnology::Nr];
+    &[CtecTechnology::Gsm, CtecTechnology::Wcdma, CtecTechnology::Lte];
 
 /// Standard UICC File Identifiers (ISO/IEC 7816-4 §5.3 / 3GPP TS 51.011 / TS
 /// 31.102).

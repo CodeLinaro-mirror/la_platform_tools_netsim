@@ -50,7 +50,8 @@ rust_test(
 
 rust_test(
     name = "tests",
-    srcs = ["tests/integration_tests.rs"],
+    srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/mod.rs",
     edition = "2024",
     deps = [
         ":packets",

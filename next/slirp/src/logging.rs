@@ -20,26 +20,42 @@ pub enum Topic {
 static ENABLED_TOPICS: AtomicU32 = AtomicU32::new(0);
 static INITIALIZED: std::sync::Once = std::sync::Once::new();
 
+impl Topic {
+    /// Parses a single topic name (case-insensitive).
+    fn from_name(name: &str) -> Option<Self> {
+        match name.trim().to_lowercase().as_str() {
+            "tcp" => Some(Self::Tcp),
+            "udp" => Some(Self::Udp),
+            "icmp" => Some(Self::Icmp),
+            "dhcp" => Some(Self::Dhcp),
+            "dns" => Some(Self::Dns),
+            "tftp" => Some(Self::Tftp),
+            "arp" => Some(Self::Arp),
+            _ => None,
+        }
+    }
+
+    /// Parses a comma-separated list of debug topics into a bitmask of enabled topics.
+    fn parse_debug_topics(val: &str) -> u32 {
+        let mut flags = 0;
+        for part in val.split(',') {
+            let trimmed = part.trim();
+            if trimmed.eq_ignore_ascii_case("all") {
+                flags = u32::MAX;
+            } else if let Some(topic) = Self::from_name(trimmed) {
+                flags |= topic as u32;
+            }
+        }
+        flags
+    }
+}
+
 /// Initializes the logging system by reading the SLIRP_DEBUG environment
 /// variable. This is called automatically on the first log check.
 pub fn init() {
     INITIALIZED.call_once(|| {
-        let mut flags = 0;
-        if let Ok(val) = std::env::var("SLIRP_DEBUG") {
-            for part in val.split(',') {
-                match part.trim().to_lowercase().as_str() {
-                    "tcp" => flags |= Topic::Tcp as u32,
-                    "udp" => flags |= Topic::Udp as u32,
-                    "icmp" => flags |= Topic::Icmp as u32,
-                    "dhcp" => flags |= Topic::Dhcp as u32,
-                    "dns" => flags |= Topic::Dns as u32,
-                    "tftp" => flags |= Topic::Tftp as u32,
-                    "arp" => flags |= Topic::Arp as u32,
-                    "all" => flags = 0xffffffff,
-                    _ => {}
-                }
-            }
-        }
+        let flags =
+            std::env::var("SLIRP_DEBUG").map(|val| Topic::parse_debug_topics(&val)).unwrap_or(0);
         ENABLED_TOPICS.store(flags, Ordering::Relaxed);
     });
 }
@@ -62,22 +78,7 @@ macro_rules! slirp_debug {
 #[cfg(test)]
 pub fn reset_for_testing(val: Option<&str>) {
     init(); // Ensure Once is marked as run!
-    let mut flags = 0;
-    if let Some(v) = val {
-        for part in v.split(',') {
-            match part.trim().to_lowercase().as_str() {
-                "tcp" => flags |= Topic::Tcp as u32,
-                "udp" => flags |= Topic::Udp as u32,
-                "icmp" => flags |= Topic::Icmp as u32,
-                "dhcp" => flags |= Topic::Dhcp as u32,
-                "dns" => flags |= Topic::Dns as u32,
-                "tftp" => flags |= Topic::Tftp as u32,
-                "arp" => flags |= Topic::Arp as u32,
-                "all" => flags = 0xffffffff,
-                _ => {}
-            }
-        }
-    }
+    let flags = val.map(Topic::parse_debug_topics).unwrap_or(0);
     ENABLED_TOPICS.store(flags, Ordering::Relaxed);
 }
 

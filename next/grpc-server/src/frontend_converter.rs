@@ -9,7 +9,7 @@ use link_api::Link as ApiLink;
 use netsim_model::{
     AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, BluetoothCreate,
     BluetoothMode, BluetoothUpdate, ChipId, ChipKind as ApiChipKind, ChipUpdate, ChipVariantUpdate,
-    Interval, RadioUpdate, TxPower,
+    Interval, RadioUpdate, TxPower, UwbCreate,
 };
 use netsim_proto::{
     common::ChipKind as ProtoChipKind,
@@ -20,7 +20,7 @@ use netsim_proto::{
     protobuf::{EnumOrUnknown, MessageField},
 };
 
-pub fn to_proto_position(p: ApiPosition) -> ProtoPosition {
+pub(crate) fn to_proto_position(p: ApiPosition) -> ProtoPosition {
     let mut pos = ProtoPosition::new();
     pos.x = p.x;
     pos.y = p.y;
@@ -28,7 +28,7 @@ pub fn to_proto_position(p: ApiPosition) -> ProtoPosition {
     pos
 }
 
-pub fn to_proto_orientation(o: ApiOrientation) -> ProtoOrientation {
+pub(crate) fn to_proto_orientation(o: ApiOrientation) -> ProtoOrientation {
     let mut orient = ProtoOrientation::new();
     orient.yaw = o.yaw;
     orient.pitch = o.pitch;
@@ -36,7 +36,7 @@ pub fn to_proto_orientation(o: ApiOrientation) -> ProtoOrientation {
     orient
 }
 
-pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
+pub(crate) fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
     match k {
         ApiChipKind::BLUETOOTH => ProtoChipKind::BLUETOOTH,
         ApiChipKind::WIFI => ProtoChipKind::WIFI,
@@ -50,7 +50,7 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
     }
 }
 
-pub fn to_proto_chip(c: netsim_model::Chip) -> ProtoChip {
+pub(crate) fn to_proto_chip(c: netsim_model::Chip) -> ProtoChip {
     let mut chip = ProtoChip::new();
     chip.id = c.id;
     chip.kind = EnumOrUnknown::new(to_proto_chip_kind(c.kind));
@@ -107,7 +107,7 @@ fn to_proto_radio(r: &netsim_model::Radio) -> netsim_proto::model::chip::Radio {
     radio
 }
 
-pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
+pub(crate) fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     let mut device = ProtoDevice::new();
     device.id = d.id;
     device.name = d.name;
@@ -120,8 +120,8 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     device
 }
 
-pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
-    // Currently only supports BLE Beacon
+pub(crate) fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
+    // Supports BLE beacons, Bluetooth devices, and UWB anchors.
     if c.has_ble_beacon() {
         let beacon_create = c.ble_beacon();
         let settings = beacon_create.settings.as_ref().map(from_proto_advertise_settings);
@@ -148,6 +148,16 @@ pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
             manufacturer: c.manufacturer,
             product_name: c.product_name,
             chip: ChipCreateVariant::Bluetooth(bt_create),
+        })
+    } else if c.kind.enum_value_or_default() == ProtoChipKind::UWB {
+        // Proto ChipCreate reuses the top-level address field for UWB anchor short MAC.
+        let uwb_create =
+            UwbCreate::Anchor { address: (!c.address.is_empty()).then_some(c.address) };
+        Some(DeviceChipCreate {
+            name: c.name,
+            manufacturer: c.manufacturer,
+            product_name: c.product_name,
+            chip: ChipCreateVariant::Uwb(uwb_create),
         })
     } else {
         None
@@ -216,15 +226,15 @@ fn from_proto_advertise_data(
     }
 }
 
-pub fn from_proto_position(p: ProtoPosition) -> ApiPosition {
+pub(crate) fn from_proto_position(p: ProtoPosition) -> ApiPosition {
     ApiPosition { x: p.x, y: p.y, z: p.z }
 }
 
-pub fn from_proto_orientation(o: ProtoOrientation) -> ApiOrientation {
+pub(crate) fn from_proto_orientation(o: ProtoOrientation) -> ApiOrientation {
     ApiOrientation { yaw: o.yaw, pitch: o.pitch, roll: o.roll }
 }
 
-pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
+pub(crate) fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
     match k {
         ProtoChipKind::BLUETOOTH => Some(ApiChipKind::BLUETOOTH),
         ProtoChipKind::WIFI => Some(ApiChipKind::WIFI),
@@ -238,7 +248,7 @@ pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
     }
 }
 
-pub fn to_proto_link(l: ApiLink) -> ProtoLink {
+pub(crate) fn to_proto_link(l: ApiLink) -> ProtoLink {
     let mut link = ProtoLink::new();
     link.id = l.id.0;
     link.sender_id = l.sender.0;
@@ -254,7 +264,7 @@ pub fn to_proto_link(l: ApiLink) -> ProtoLink {
     link
 }
 
-pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
+pub(crate) fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
     let variant = if let Some(chip_oneof) = c.chip {
         match chip_oneof {
             netsim_proto::model::chip::Chip::Bt(bt) => {
@@ -318,14 +328,14 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
     }
 }
 
-pub fn from_proto_radio_update(r: Option<netsim_proto::model::chip::Radio>) -> RadioUpdate {
+fn from_proto_radio_update(r: Option<netsim_proto::model::chip::Radio>) -> RadioUpdate {
     match r {
         Some(r) => RadioUpdate { state: r.state },
         None => RadioUpdate { state: None },
     }
 }
 
-pub fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
+pub(crate) fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
     let sender = netsim_model::ChipId(proto.sender_id);
     let receiver = netsim_model::ChipId(proto.receiver_id);
     let rssi = proto.rssi as i8;
@@ -347,5 +357,34 @@ pub fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
         Some(ApiLink { id: netsim_model::LinkId(proto.id), sender, receiver, kind, rssi })
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_proto_chip_create_uwb_default_address() {
+        let mut chip = ChipCreate::new();
+        chip.name = "uwb-anchor".to_string();
+        chip.kind = EnumOrUnknown::new(ProtoChipKind::UWB);
+        let device_chip = from_proto_chip_create(chip).unwrap();
+        assert_eq!(device_chip.name, "uwb-anchor");
+        assert_eq!(device_chip.chip, ChipCreateVariant::Uwb(UwbCreate::Anchor { address: None }));
+    }
+
+    #[test]
+    fn test_from_proto_chip_create_uwb_custom_address() {
+        let mut chip = ChipCreate::new();
+        chip.name = "uwb-anchor".to_string();
+        chip.address = "00:01".to_string();
+        chip.kind = EnumOrUnknown::new(ProtoChipKind::UWB);
+        let device_chip = from_proto_chip_create(chip).unwrap();
+        assert_eq!(device_chip.name, "uwb-anchor");
+        assert_eq!(
+            device_chip.chip,
+            ChipCreateVariant::Uwb(UwbCreate::Anchor { address: Some("00:01".to_string()) })
+        );
     }
 }

@@ -24,7 +24,7 @@ fn test_add_modem_to_manager() {
 #[test]
 fn test_metrics_counters() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_modem_with_number(&mut world, "A", "12345");
 
     // Check initial state
     then_metrics_are(&world, 0, 0);

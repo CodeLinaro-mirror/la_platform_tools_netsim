@@ -6,7 +6,7 @@ use modem_rs::{
     DedicatedFile, ElementaryFile, FileSystem, PhoneNumber, PinState, SimFile, SimIo, SimProfile,
     config::PinProfile, constants::UiccFileId, test_utils::MockModemHandler,
 };
-use netsim_model::{CellNetworkConfig, Quirks};
+use netsim_model::{CellNetworkConfig, Quirks, RegistrationStatus};
 
 use crate::{common::constants::*, world::World};
 
@@ -16,6 +16,13 @@ pub fn create_default_test_network_config() -> CellNetworkConfig {
         prefixlen: 24,
         gateway: TEST_GATEWAY_IPV4.into(),
         dns: TEST_DNS_IPV4.into(),
+    }
+}
+
+fn set_registered_home(world: &mut World, id: u32) {
+    if let Some(modem) = world.manager.get_modem_mut(id) {
+        modem.set_voice_registration(RegistrationStatus::RegisteredHome);
+        modem.set_data_registration(RegistrationStatus::RegisteredHome);
     }
 }
 
@@ -36,13 +43,38 @@ pub fn given_modem_with_network_config(
         .new_modem(id, sink, None, None, Quirks::default(), vec![network_config])
         .expect("Failed to create new modem with network config");
     world.modems.insert(name.to_string(), (id, handler));
+    set_registered_home(world, id);
 }
 
 pub fn given_data_modem(world: &mut World, name: &str) {
-    given_modem_with_network_config(world, name, create_default_test_network_config());
+    given_data_modem_with_quirks(world, name, Quirks::default());
 }
 
-/// Creates a modem with the given name.
+pub fn given_data_modem_with_quirks(world: &mut World, name: &str, quirks: Quirks) {
+    if world.modems.contains_key(name) {
+        panic!("Modem with name '{name}' already exists");
+    }
+
+    let id = world.next_modem_id();
+    let (handler, sink) = MockModemHandler::new(quirks.goldfish_ril_37_or_earlier);
+
+    world
+        .manager
+        .new_modem(id, sink, None, None, quirks, vec![create_default_test_network_config()])
+        .expect("Failed to create new modem with network config");
+    world.modems.insert(name.to_string(), (id, handler));
+    set_registered_home(world, id);
+}
+
+pub fn given_goldfish_37_data_modem(world: &mut World, name: &str) {
+    given_data_modem_with_quirks(
+        world,
+        name,
+        Quirks { goldfish_ril_37_or_earlier: true, ..Default::default() },
+    );
+}
+
+/// Creates a modem with the given name, leaving registration NotRegistered by default (unlike given_modem_with_number).
 ///
 /// # Panics
 ///
@@ -140,6 +172,7 @@ pub fn given_modem_with_number(world: &mut World, name: &str, number: &str) {
     } else {
         panic!("Failed to retrieve modem '{name}' after creation");
     }
+    set_registered_home(world, id);
 }
 
 /// Creates a modem with the default test SIM profile (legacy behavior).
@@ -482,6 +515,8 @@ pub fn create_fdn_sim_profile() -> SimProfile {
 /// Creates a modem with a SIM profile that has FDN records.
 pub fn given_modem_with_fdn_sim_profile(world: &mut World, name: &str) {
     world.given_modem_with_profile(name, create_fdn_sim_profile());
+    let (id, _) = world.get_modem(name);
+    set_registered_home(world, id);
 }
 
 /// Creates a 2G GSM SIM profile with MF (0x3F00) and DF_TELECOM (0x7F10)

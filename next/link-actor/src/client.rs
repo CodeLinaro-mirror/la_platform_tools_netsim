@@ -13,7 +13,7 @@ use actor_framework::ResourceClient;
 use futures::TryFutureExt;
 use netsim_model::{ChipId, ChipKind, ClientError};
 
-use crate::{LinkActor, LinkError};
+use crate::LinkActor;
 
 /// A client for interacting with the Link Actor.
 ///
@@ -52,50 +52,6 @@ pub struct LinkClient {
 impl LinkClient {
     pub fn new(inner: ResourceClient<LinkActor>) -> Self {
         Self { inner }
-    }
-
-    /// Helper to find a link ID by sender and receiver.
-    ///
-    /// This performs a `list()` and linear search.
-    /// TODO: Optimize this with a custom action or lookup map in the actor.
-    pub async fn get_link_id(
-        &self,
-        sender: ChipId,
-        receiver: ChipId,
-    ) -> Result<Option<link_api::LinkId>, actor_framework::FrameworkError<LinkError>> {
-        let links = self.list().await?;
-        for link in links {
-            if link.sender == sender && link.receiver == receiver {
-                return Ok(Some(link.id));
-            }
-        }
-        Ok(None)
-    }
-
-    /// Sends a custom action to the actor.
-    pub async fn action(
-        &self,
-        id: Option<link_api::LinkId>,
-        action: link_api::LinkAction,
-    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
-        self.inner.perform_action(id, action).await
-    }
-
-    /// Notifies the link actor that a chip has been added.
-    pub async fn notify_chip_added(
-        &self,
-        chip_id: ChipId,
-        kind: ChipKind,
-    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
-        self.action(None, link_api::LinkAction::NotifyChipAdded(chip_id, kind)).await
-    }
-
-    /// Notifies the link actor that a chip has been removed.
-    pub async fn notify_chip_removed(
-        &self,
-        chip_id: ChipId,
-    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
-        self.action(None, link_api::LinkAction::NotifyChipRemoved(chip_id)).await
     }
 }
 

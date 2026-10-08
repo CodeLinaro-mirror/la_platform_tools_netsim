@@ -49,8 +49,6 @@ EXACT_DEP_MAPPING = {
     ":ap_actor_cxx": "libnetsim_next_ap_actor_cxx",
     ":hostap_crypto_shim": "libnetsim_next_ap_actor_cxx",
     "@boringssl//:crypto": "libcrypto",
-    "//next/slirp/host:slirp-host": "libnetsim_slirp_host",
-    "//next/slirp/host:slirp-host_testing": "libnetsim_slirp_host_testing",
 }
 
 IGNORED_DEPS = {
@@ -157,8 +155,30 @@ def netsim_cc_library_static(*args, **kwargs):
   pass
 
 
-def genrule(*args, **kwargs):
-  pass
+def genrule(name=None, srcs=None, outs=None, cmd=None, tools=None, **kwargs):
+  if not name:
+    return
+  soong_name = f"netsim_next_{name.replace('-', '_')}"
+  soong_tools = []
+  soong_cmd = cmd or ""
+  for t in tools or []:
+    if t.startswith(":"):
+      t_soong = f"netsim_next_{t[1:].replace('-', '_')}"
+      soong_tools.append(t_soong)
+      soong_cmd = soong_cmd.replace(
+          f"$(execpath {t})", f"$(location {t_soong})"
+      )
+    else:
+      soong_tools.append(t)
+  soong_cmd = soong_cmd.replace("$(SRCS)", "$(in)").replace("$(OUTS)", "$(out)")
+  soong_targets.append({
+      "type": "genrule",
+      "name": soong_name,
+      "tools": soong_tools,
+      "cmd": soong_cmd,
+      "srcs": list(srcs or []),
+      "out": list(outs or []),
+  })
 
 
 def rust_library(*args, **kwargs):
@@ -230,6 +250,7 @@ IGNORED_TARGETS = {
     "http-proxy",
 }
 ALLOWED_TESTING_TARGETS = {
+    "rest-api",
     "nfc-actor",
     "device-actor",
     "actor-framework",
@@ -286,7 +307,12 @@ def rust_test(*args, **kwargs):
 
   crate_root = kwargs.get("crate_root")
   if not crate_root:
-    for opt in ["tests/mod.rs", "tests/integration_tests.rs"]:
+    # Keep in sync with crate_root_opts in next/defs.bzl.
+    for opt in [
+        "tests/mod.rs",
+        "tests/integration_test.rs",
+        "tests/integration_tests.rs",
+    ]:
       if opt in srcs:
         crate_root = opt
         break
@@ -423,8 +449,6 @@ def netsim_rust_library(
     **kwargs,
 ):
   prefix = "libnetsim_next_"
-  if name == "slirp-host":
-    prefix = "libnetsim_"
   if name in IGNORED_TARGETS:
     return
   if deps is None:
@@ -528,12 +552,18 @@ def netsim_rust_library(
     for lib in PLATFORM_RUSTLIBS[name]:
       if lib.startswith("libnetsim_next_") and not lib.endswith("_testing"):
         pkg_base = lib.replace("libnetsim_next_", "").replace("_", "-")
-        if pkg_base in ALLOWED_TESTING_TARGETS:
-          testing_rustlibs.append(lib + "_testing")
+        target_lib = lib + "_testing"
+        if target_lib in EXACT_DEP_MAPPING:
+          testing_rustlibs.append(EXACT_DEP_MAPPING[target_lib])
+        elif pkg_base in ALLOWED_TESTING_TARGETS:
+          testing_rustlibs.append(target_lib)
         else:
           testing_rustlibs.append(lib)
       else:
-        testing_rustlibs.append(lib)
+        if lib in EXACT_DEP_MAPPING:
+          testing_rustlibs.append(EXACT_DEP_MAPPING[lib])
+        else:
+          testing_rustlibs.append(lib)
   testing_rustlibs = sorted(list(set(testing_rustlibs)))
   testing_shared_libs = sorted(list(set(testing_shared_libs)))
   testing_static_libs = sorted(list(set(testing_static_libs)))
@@ -691,12 +721,14 @@ def netsim_rust_library(
       if is_test_package_allowed(package_name):
         integ_dict = {
             "type": "rust_test_host",
-            "name": (
-                f"{prefix}{name.replace('-', '_')}_integration_tests"
-            ),
+            "name": f"{prefix}{name.replace('-', '_')}_integration_tests",
             "crate_name": f"{crate_name}_tests",
             "crate_root": crate_root,
-            "srcs": sorted(list(set(integration_test_srcs))),
+            "srcs": sorted(
+                list(
+                    set(integration_test_srcs + resolve_rust_data(compile_data))
+                )
+            ),
             "rustlibs": integration_test_rustlibs,
             "shared_libs": integration_test_shared_libs,
             "proc_macros": integration_test_proc_macros,
@@ -734,11 +766,13 @@ def resolve_rust_srcs(srcs, default_file):
   for src in srcs:
     if src in EXACT_DEP_MAPPING:
       mapped_srcs.append(":" + EXACT_DEP_MAPPING[src])
+    elif src.startswith(":"):
+      mapped_srcs.append(f":netsim_next_{src[1:].replace('-', '_')}")
     elif "**/*.rs" in src:
       mapped_srcs.append(src.replace("**/*.rs", default_file))
     elif "*.rs" in src:
       mapped_srcs.append(src.replace("*.rs", default_file))
-    elif src.endswith(".rs") or src.startswith(":"):
+    elif src.endswith(".rs"):
       mapped_srcs.append(src)
   return sorted(list(set(mapped_srcs)))
 
@@ -777,7 +811,7 @@ def netsim_rust_binary(name, srcs=None, deps=None, **kwargs):
   )
   srcs_content = resolve_rust_srcs(srcs, "main.rs")
   data_content = resolve_rust_data(all_inputs)
-  crate_root_mapped = resolve_crate_root(
+  crate_root_mapped = kwargs.get("crate_root") or resolve_crate_root(
       srcs_content, ["src/main.rs", "src/lib.rs"]
   )
 

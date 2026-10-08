@@ -185,18 +185,21 @@ impl ControllerImpl {
     /// Receives an HCI packet from the host.
     pub(crate) fn receive_hci(&self, data: Bytes) {
         self.hci_commands_in.fetch_add(1, Ordering::Relaxed);
+        let (&first, payload) = match data.as_ref() {
+            [first, rest @ ..] => (first, rest),
+            [] => return,
+        };
         let controller = self.controller.lock();
-        let idc = data[0] as c_int;
-        let data: &[u8] = &data[1..];
+        let idc = first as c_int;
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
-        // as long as `self` exists. `data` is a valid slice, and we provide its
+        // as long as `self` exists. `payload` is a valid slice, and we provide its
         // length to ensure the C++ side does not read out of bounds.
         unsafe {
             ffi::ffi_controller_receive_hci(
                 controller.0,
                 idc,
-                data.as_ptr(),
-                data.len() as ffi::size_t,
+                payload.as_ptr(),
+                payload.len() as ffi::size_t,
             )
         };
     }
@@ -418,12 +421,19 @@ extern "C" fn send_ll_trampoline(
     // `cookie`.
     let context = unsafe { context_from_cookie(cookie) };
     if let Some(controller) = context.upgrade() {
+        let phy = match Phy::try_from(phy) {
+            Ok(phy) => phy,
+            Err(err) => {
+                warn!("Unknown PHY {err}");
+                return;
+            }
+        };
         // SAFETY: The FFI contract guarantees that `data` points to a buffer of at
         // least `data_len` bytes that is valid for the duration of this call.
         let data_slice = unsafe { std::slice::from_raw_parts(data, data_len as ffi::size_t) };
         controller.ll_packets_out.fetch_add(1, Ordering::Relaxed);
         let is_p2p = netsim_packets::link_layer::fast_inspect_p2p_payload(data_slice);
-        match Phy::from(phy) {
+        match phy {
             Phy::LowEnergy => {
                 controller.ll_packets_out_ble.fetch_add(1, Ordering::Relaxed);
                 if is_p2p {
@@ -441,7 +451,7 @@ extern "C" fn send_ll_trampoline(
         controller.bt_ops.broadcast_rootcanal_ll_packet(
             controller.get_id(),
             data_slice,
-            Phy::from(phy),
+            phy,
             tx_power,
         );
     }

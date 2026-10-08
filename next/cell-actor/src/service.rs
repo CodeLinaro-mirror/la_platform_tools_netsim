@@ -5,9 +5,9 @@ use actor_framework::{ActorService, DynContext};
 use futures::SinkExt;
 use modem_rs::ModemSink;
 use netsim_model::{
-    Cell, Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipUpdate, ChipVariant,
-    ChipVariantUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING, ModemAction,
-    Quirks, Radio,
+    Cell, CellNetworkConfig, Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipUpdate,
+    ChipVariant, ChipVariantUpdate, MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING,
+    ModemAction, Quirks, Radio,
 };
 use tracing::{debug, error, info};
 
@@ -16,6 +16,26 @@ use crate::{
     cell_actor::{CellActor, ChipState},
     error::CellError,
 };
+
+impl CellActor {
+    fn lease_to_network_configs(lease: &slirp_actor::SlirpLease) -> Vec<CellNetworkConfig> {
+        let mut network_configs = vec![CellNetworkConfig {
+            ip_address: std::net::IpAddr::V4(lease.v4.ip_address),
+            prefixlen: lease.v4.prefixlen,
+            gateway: std::net::IpAddr::V4(lease.v4.gateway),
+            dns: std::net::IpAddr::V4(lease.v4.dns),
+        }];
+        if let Some(v6) = lease.v6 {
+            network_configs.push(CellNetworkConfig {
+                ip_address: std::net::IpAddr::V6(v6.ip_address),
+                prefixlen: v6.prefixlen,
+                gateway: std::net::IpAddr::V6(v6.gateway),
+                dns: std::net::IpAddr::V6(v6.dns),
+            });
+        }
+        network_configs
+    }
+}
 
 impl ActorService for CellActor {
     type Id = ChipId;
@@ -40,7 +60,39 @@ impl ActorService for CellActor {
             return Err(CellError::Chip(ChipError::ChipExists(chip_id.0)));
         }
 
+        let (sim_type, sim_profile, quirks, mut network_configs) = match params
+            .chip
+            .variant
+            .as_ref()
+        {
+            Some(ChipVariant::Cell(cell)) => {
+                (cell.sim_type, cell.sim_profile.clone(), cell.quirks, cell.network_configs.clone())
+            }
+            _ => (None, None, Quirks::default(), Vec::new()),
+        };
+
         let mut sink = params.packet_sink.take().ok_or(CellError::MissingStreamSink)?;
+        let stream = params.packet_stream.take().ok_or(CellError::MissingStreamSink)?;
+
+        let mut slirp_allocated = false;
+        if quirks.dynamic_slirp_lease && network_configs.is_empty() {
+            match self.slirp_client.allocate_lease(chip_id).await {
+                Ok(Some(lease)) => {
+                    network_configs.extend(Self::lease_to_network_configs(&lease));
+                    slirp_allocated = true;
+                }
+                Ok(None) => {
+                    return Err(CellError::Chip(ChipError::Internal(
+                        format!("Slirp static IP pool exhausted for chip {chip_id}").into(),
+                    )));
+                }
+                Err(e) => {
+                    return Err(CellError::Chip(ChipError::Internal(
+                        format!("Slirp allocate_lease failed for chip {chip_id}: {e}").into(),
+                    )));
+                }
+            }
+        }
 
         // Bridge Async PacketSink to Sync ModemSink
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
@@ -69,16 +121,9 @@ impl ActorService for CellActor {
         );
 
         // 1. Add Stream
-        let stream = params.packet_stream.take().ok_or(CellError::MissingStreamSink)?;
         ctx.add_stream(chip_id, Box::pin(stream));
 
         // 2. Add to Controller directly (Sync)
-        let (sim_type, sim_profile, quirks, network_configs) = match params.chip.variant.as_ref() {
-            Some(ChipVariant::Cell(cell)) => {
-                (cell.sim_type, cell.sim_profile.clone(), cell.quirks, cell.network_configs.clone())
-            }
-            _ => (None, None, Quirks::default(), Vec::new()),
-        };
         if let Err(e) = self.controller.add_modem(
             chip_id.0,
             modem_sink,
@@ -87,6 +132,9 @@ impl ActorService for CellActor {
             quirks,
             network_configs,
         ) {
+            if slirp_allocated {
+                let _ = self.slirp_client.release_lease(chip_id).await;
+            }
             return Err(CellError::ModemError(e));
         }
 
@@ -103,6 +151,7 @@ impl ActorService for CellActor {
         // Remove from local state
         if let Some(state) = self.active_chips.remove(&id) {
             info!("Deleting chip {}", id);
+            let _ = self.slirp_client.release_lease(id).await;
             // Remove from controller
             if let Err(e) = self.controller.remove_modem(id.0) {
                 error!("Failed to remove modem: {:?}", e);
@@ -205,34 +254,18 @@ impl ActorService for CellActor {
             return Err(CellError::Chip(ChipError::ChipNotFound(chip_id)));
         }
 
+        action.validate().map_err(CellError::Chip)?;
+
         let modem_action = match action {
             CellAction::IncomingCall { number } => {
-                if !is_valid_phone_number(&number) {
-                    return Err(CellError::Chip(ChipError::InvalidArguments(
-                        format!("Invalid phone number: {number}").into(),
-                    )));
-                }
                 ModemAction::IncomingCall { target_id: chip_id, number }
             }
             CellAction::UpdateCall => ModemAction::UpdatePhysicalChannelConfigs { id: chip_id },
             CellAction::EndCall => ModemAction::RemoteHangup { id: chip_id },
             CellAction::ReceiveSms { sender, text } => {
-                if !is_valid_sms_sender(&sender) {
-                    return Err(CellError::Chip(ChipError::InvalidArguments(
-                        format!("Invalid SMS sender: {sender}").into(),
-                    )));
-                }
                 ModemAction::IncomingSms { id: chip_id, sender, text }
             }
-            CellAction::ReceivePdu { pdu } => {
-                if !is_valid_hex_pdu(&pdu) {
-                    return Err(CellError::Chip(ChipError::InvalidArguments(
-                        format!("Invalid PDU format (must be even-length hex string): {pdu}")
-                            .into(),
-                    )));
-                }
-                ModemAction::IncomingPdu { id: chip_id, pdu }
-            }
+            CellAction::ReceivePdu { pdu } => ModemAction::IncomingPdu { id: chip_id, pdu },
             CellAction::SetSignalStrength { rssi, ber } => {
                 let rssi_u8 = u8::try_from(rssi).map_err(|e| {
                     CellError::Chip(ChipError::InvalidArguments(
@@ -308,29 +341,4 @@ impl ActorService for CellActor {
         }
         Ok(chips)
     }
-}
-
-fn is_valid_phone_number(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars().all(|c| {
-            c.is_ascii_digit()
-                || c == '+'
-                || c == '-'
-                || c == ' '
-                || c == '('
-                || c == ')'
-                || c == '*'
-                || c == '#'
-        })
-}
-
-fn is_valid_sms_sender(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars().all(|c| {
-            c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == ' ' || c == '(' || c == ')'
-        })
-}
-
-fn is_valid_hex_pdu(s: &str) -> bool {
-    !s.is_empty() && s.len().is_multiple_of(2) && s.chars().all(|c| c.is_ascii_hexdigit())
 }

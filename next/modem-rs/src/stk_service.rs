@@ -4,9 +4,9 @@
 use modem_rs_derive::CommandParser;
 
 use crate::{
+    CardState,
     config::{Stk, StkMenuItem},
     parser::QuotedString,
-    sim_service::SimService,
     types::{ExecutionResult, HandledCommand, Parsable},
 };
 
@@ -27,13 +27,10 @@ const RESULT_BACKWARD_MOVE: u8 = 0x11;
 const HEX_TAG_SMS_PP_DOWNLOAD: &str = "D1";
 const HEX_TAG_MENU_SELECTION: &str = "D3";
 
-const HEX_TAG_LEN: usize = 2;
-
 // TLV Structure Constants
 const TLV_HEADER_LEN: usize = 2; // 1 byte tag + 1 byte length
 
 // Simplified Envelope Fallback Constants (used in tests)
-const SIMPLIFIED_ENVELOPE_MIN_LEN: usize = 4;
 const SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX: usize = 3;
 
 /// SIM Toolkit (USAT / STK) proactive command type.
@@ -80,12 +77,6 @@ pub enum StkCommand<'a> {
     SendStkEnvelope(QuotedString<'a>),
     #[command(tag = "AT+CUSATT=")]
     SendStkTerminalResponse(QuotedString<'a>),
-    #[command(tag = "AT+STKEN=")]
-    SetStkEnabled(bool),
-    #[command(tag = "AT+STKUR=")]
-    SetStkUnsolicitedResult(bool),
-    #[command(tag = "AT+STK=")]
-    SetStk(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,7 +136,6 @@ pub struct StkService {
     // Path of selected menu_ids from root. Empty means main menu.
     current_path: Vec<u8>,
     stk_enabled: bool,
-    stk_reporting: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -166,12 +156,7 @@ impl Default for StkService {
 impl StkService {
     pub fn new(stk_config: Stk) -> Self {
         let has_menu = !stk_config.setup_menu.text.is_empty();
-        Self {
-            stk_config,
-            current_path: Vec::new(),
-            stk_enabled: has_menu,
-            stk_reporting: true, // Default to true to match legacy mock/tests
-        }
+        Self { stk_config, current_path: Vec::new(), stk_enabled: has_menu }
     }
 
     fn get_current_items(&self) -> &[StkMenuItem] {
@@ -203,7 +188,7 @@ impl StkService {
     fn parse_menu_selection(command: &str) -> Option<u8> {
         let bytes = hex::decode(command).ok()?;
 
-        if bytes.is_empty() || bytes[0] != TAG_MENU_SELECTION {
+        if bytes.first() != Some(&TAG_MENU_SELECTION) {
             return None;
         }
         let length = *bytes.get(1)? as usize;
@@ -222,8 +207,8 @@ impl StkService {
 
             match *tag {
                 TAG_ITEM_IDENTIFIER_1 | TAG_ITEM_IDENTIFIER_2 => {
-                    if value.len() == 1 {
-                        item_id = Some(value[0]);
+                    if let [id] = value {
+                        item_id = Some(*id);
                     }
                 }
                 _ => {}
@@ -237,7 +222,7 @@ impl StkService {
     fn parse_terminal_response(command: &str) -> Option<TerminalResponseAction> {
         let bytes = hex::decode(command).ok()?;
 
-        let mut remaining = &bytes[..];
+        let mut remaining = bytes.as_slice();
         let mut command_type = None;
         let mut general_result = None;
         let mut additional_info = None;
@@ -283,19 +268,12 @@ impl StkService {
     }
 
     fn handle_envelope_command(&mut self, command: &str) -> StkResult {
-        if command.len() < HEX_TAG_LEN {
-            return Err(ExecutionResult::error());
-        }
-
-        let tag = &command[0..HEX_TAG_LEN];
-
-        if tag == HEX_TAG_SMS_PP_DOWNLOAD {
+        if command.starts_with(HEX_TAG_SMS_PP_DOWNLOAD) {
             // Fallback for Terminal Response simulation in tests (e.g. Display Text, Get
             // Input)
             let bytes = hex::decode(command).map_err(|_err| ExecutionResult::error())?;
-            if bytes.len() >= SIMPLIFIED_ENVELOPE_MIN_LEN {
-                let cmd_type =
-                    ProactiveCommandType::try_from(bytes[SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX]);
+            if let Some(&raw_cmd_type) = bytes.get(SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX) {
+                let cmd_type = ProactiveCommandType::try_from(raw_cmd_type);
                 if matches!(
                     cmd_type,
                     Ok(ProactiveCommandType::DisplayText | ProactiveCommandType::GetInput)
@@ -309,7 +287,7 @@ impl StkService {
             return Err(ExecutionResult::error());
         }
 
-        if tag == HEX_TAG_MENU_SELECTION {
+        if command.starts_with(HEX_TAG_MENU_SELECTION) {
             // Envelope resets path to main menu
             self.current_path.clear();
 
@@ -323,10 +301,7 @@ impl StkService {
                     self.current_path.push(item_id);
                 }
 
-                let mut urcs = Vec::new();
-                if self.stk_reporting {
-                    urcs.push(StkResponse::UsatProactiveCommand(proactive_cmd));
-                }
+                let urcs = vec![StkResponse::UsatProactiveCommand(proactive_cmd)];
 
                 return Ok(StkExecutionResult {
                     response: Some(StkResponse::UsatEnvelopeResponse("0".to_string())),
@@ -341,7 +316,7 @@ impl StkService {
 
     fn sync_stk_menu_urc(&self) -> StkExecutionResult {
         let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
+        if self.stk_enabled && !self.stk_config.setup_menu.text.is_empty() {
             urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
         }
         StkExecutionResult { response: None, urcs }
@@ -349,14 +324,11 @@ impl StkService {
 
     fn handle_query_stk_ready(&self) -> StkResult {
         let mut urcs = Vec::new();
-        if self.stk_enabled && self.stk_reporting && !self.stk_config.setup_menu.text.is_empty() {
+        if self.stk_enabled && !self.stk_config.setup_menu.text.is_empty() {
             urcs.push(StkResponse::UsatProactiveCommand(self.stk_config.setup_menu.text.clone()));
         }
         Ok(StkExecutionResult {
-            response: Some(StkResponse::StkReady {
-                ready: self.stk_enabled as u8,
-                support: self.stk_reporting as u8,
-            }),
+            response: Some(StkResponse::StkReady { ready: self.stk_enabled as u8, support: 1 }),
             urcs,
         })
     }
@@ -378,34 +350,24 @@ impl StkService {
 
                     if let Some(cmd) = proactive_cmd {
                         self.current_path.push(item_id);
-
-                        if self.stk_reporting {
-                            urcs.push(StkResponse::UsatProactiveCommand(cmd));
-                        }
+                        urcs.push(StkResponse::UsatProactiveCommand(cmd));
                     }
                 }
                 TerminalResponseAction::Terminate => {
                     self.current_path.clear();
-                    if self.stk_reporting {
-                        urcs.push(StkResponse::UsatSessionEnd);
-                    }
+                    urcs.push(StkResponse::UsatSessionEnd);
                 }
                 TerminalResponseAction::Back => {
                     self.current_path.pop();
-                    if self.stk_reporting {
-                        if self.current_path.is_empty() {
-                            urcs.push(StkResponse::UsatSessionEnd);
-                        } else if let Some(parent_item) = self.get_item_at_path(&self.current_path)
-                        {
-                            urcs.push(StkResponse::UsatProactiveCommand(parent_item.text.clone()));
-                        }
+                    if self.current_path.is_empty() {
+                        urcs.push(StkResponse::UsatSessionEnd);
+                    } else if let Some(parent_item) = self.get_item_at_path(&self.current_path) {
+                        urcs.push(StkResponse::UsatProactiveCommand(parent_item.text.clone()));
                     }
                 }
                 TerminalResponseAction::EndSession => {
                     self.current_path.clear();
-                    if self.stk_reporting {
-                        urcs.push(StkResponse::UsatSessionEnd);
-                    }
+                    urcs.push(StkResponse::UsatSessionEnd);
                 }
                 TerminalResponseAction::None => {}
             }
@@ -414,12 +376,12 @@ impl StkService {
         Ok(StkExecutionResult { response: Some(StkResponse::UsatTerminalResponse(0)), urcs })
     }
 
-    pub fn execute<'a>(
+    pub(crate) fn execute<'a>(
         &mut self,
         command: &StkCommand<'a>,
-        sim_service: &mut SimService,
+        sim: &impl CardState,
     ) -> ExecutionResult {
-        if !sim_service.is_present() {
+        if !sim.is_present() {
             return ExecutionResult::error();
         }
         let res = match command {
@@ -433,15 +395,6 @@ impl StkService {
             }
             StkCommand::SendStkTerminalResponse(response) => {
                 self.handle_send_stk_terminal_response(*response)
-            }
-            StkCommand::SetStk(_) => Ok(StkExecutionResult::default()),
-            StkCommand::SetStkEnabled(enabled) => {
-                self.stk_enabled = *enabled;
-                Ok(self.sync_stk_menu_urc())
-            }
-            StkCommand::SetStkUnsolicitedResult(reporting) => {
-                self.stk_reporting = *reporting;
-                Ok(self.sync_stk_menu_urc())
             }
         };
         res.map_or_else(|e| e, ExecutionResult::from)
@@ -733,5 +686,19 @@ mod tests {
 
         assert_eq!(u8::from(ProactiveCommandType::SelectItem), 0x24);
         assert_eq!(u8::from(ProactiveCommandType::DisplayText), 0x21);
+    }
+
+    #[test]
+    fn test_stk_service_sim_not_present_early_return() {
+        use crate::tests::test_utils::MockCardState;
+
+        let mut service = StkService::default();
+        let sim_absent = MockCardState { is_present: false, ..Default::default() };
+        let res = service.execute(&StkCommand::QueryStkReady, &sim_absent);
+        assert_eq!(res, ExecutionResult::error());
+
+        let sim_present = MockCardState::default();
+        let res = service.execute(&StkCommand::QueryStkReady, &sim_present);
+        assert!(matches!(res, ExecutionResult::Success(_)));
     }
 }

@@ -99,7 +99,7 @@ impl<R: Read> LegacyPcapReader<R> {
     pub fn new(mut reader: R) -> io::Result<Self> {
         let mut header_buf = [0; std::mem::size_of::<PcapHeader>()];
         reader.read_exact(&mut header_buf)?;
-        let header = PcapHeader::read_from_bytes(&header_buf[..])
+        let header = PcapHeader::read_from_bytes(header_buf.as_slice())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
         // The magic number check is already done in PcapReader::new
         Ok(Self { reader, header })
@@ -110,7 +110,7 @@ impl<R: Read> LegacyPcapReader<R> {
         if self.reader.read_exact(&mut header_buf).is_err() {
             return Ok(None);
         }
-        let header = PcapRecordHeader::read_from_bytes(&header_buf[..])
+        let header = PcapRecordHeader::read_from_bytes(header_buf.as_slice())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
         let mut data = vec![0; header.incl_len.get() as usize];
         self.reader.read_exact(&mut data)?;
@@ -128,7 +128,7 @@ impl<R: Read> PcapngReader<R> {
     pub fn new(mut reader: R) -> io::Result<Self> {
         let mut shb_buf = [0; std::mem::size_of::<SectionHeaderBlock>()];
         reader.read_exact(&mut shb_buf)?;
-        let shb = SectionHeaderBlock::read_from_bytes(&shb_buf[..])
+        let shb = SectionHeaderBlock::read_from_bytes(shb_buf.as_slice())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
         let swap_bytes = shb.byte_order_magic.get() == PCAPNG_MAGIC_NUMBER_SWAPPED;
         let block_total_length = if swap_bytes {
@@ -156,18 +156,9 @@ impl<R: Read> PcapngReader<R> {
                 return Ok(None);
             }
 
-            let block_type_raw = u32::from_le_bytes([
-                block_header_buf[0],
-                block_header_buf[1],
-                block_header_buf[2],
-                block_header_buf[3],
-            ]);
-            let block_len_raw = u32::from_le_bytes([
-                block_header_buf[4],
-                block_header_buf[5],
-                block_header_buf[6],
-                block_header_buf[7],
-            ]);
+            let [b0, b1, b2, b3, b4, b5, b6, b7] = block_header_buf;
+            let block_type_raw = u32::from_le_bytes([b0, b1, b2, b3]);
+            let block_len_raw = u32::from_le_bytes([b4, b5, b6, b7]);
 
             let block_type =
                 if self.swap_bytes { block_type_raw.swap_bytes() } else { block_type_raw };
@@ -183,11 +174,9 @@ impl<R: Read> PcapngReader<R> {
 
                 // Reconstruct full buffer to parse (or just parse fields manually, but using
                 // zerocopy is safer)
-                let mut full_epb_buf = Vec::new();
-                full_epb_buf.extend_from_slice(&block_header_buf);
-                full_epb_buf.extend_from_slice(&rest_of_epb);
+                let full_epb_buf = [&block_header_buf[..], &rest_of_epb].concat();
 
-                let epb = EnhancedPacketBlock::read_from_bytes(&full_epb_buf[..])
+                let epb = EnhancedPacketBlock::read_from_bytes(full_epb_buf.as_slice())
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
 
                 let captured_len = if self.swap_bytes {
@@ -234,11 +223,9 @@ impl<R: Read> PcapngReader<R> {
                 let mut rest_of_idb = vec![0; idb_size - 8];
                 self.reader.read_exact(&mut rest_of_idb)?;
 
-                let mut full_idb_buf = Vec::new();
-                full_idb_buf.extend_from_slice(&block_header_buf);
-                full_idb_buf.extend_from_slice(&rest_of_idb);
+                let full_idb_buf = [&block_header_buf[..], &rest_of_idb].concat();
 
-                let idb = InterfaceDescriptionBlock::read_from_bytes(&full_idb_buf[..])
+                let idb = InterfaceDescriptionBlock::read_from_bytes(full_idb_buf.as_slice())
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
                 let link_type = if self.swap_bytes {
                     idb.link_type.get().swap_bytes()

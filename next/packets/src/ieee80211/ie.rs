@@ -52,11 +52,12 @@ pub mod tags {
 /// Resizes vec if needed.
 pub fn set_ext_cap(body: &mut Vec<u8>, bit: u8) {
     let byte_idx = (bit / 8) as usize;
-    let bit_idx = bit % 8;
     if byte_idx >= body.len() {
         body.resize(byte_idx + 1, 0);
     }
-    body[byte_idx] |= 1 << bit_idx;
+    if let Some(b) = body.get_mut(byte_idx) {
+        *b |= 1 << (bit % 8);
+    }
 }
 
 /// Represents a parsed Information Element.
@@ -93,26 +94,10 @@ impl<'a> Iterator for IeIterator<'a> {
     type Item = InformationElement<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.offset + 2 > self.data.len() {
-            return None;
-        }
-
-        let id = self.data[self.offset];
-        let len = self.data[self.offset + 1] as usize;
-
-        let start = self.offset + 2;
-        let end = start + len;
-
-        if end > self.data.len() {
-            // Malformed IE or end of buffer truncated?
-            // We'll stop iteration to be safe.
-            return None;
-        }
-
-        let ie = InformationElement { id, length: len as u8, body: &self.data[start..end] };
-
-        self.offset = end;
-        Some(ie)
+        let (&[id, len], rest) = self.data.get(self.offset..)?.split_first_chunk::<2>()?;
+        let body = rest.get(..len as usize)?;
+        self.offset += 2 + len as usize;
+        Some(InformationElement { id, length: len, body })
     }
 }
 

@@ -5,17 +5,18 @@ use std::fmt;
 
 use netsim_proto::{
     cell::{Cell, RegistrationStatus},
-    frontend::{ListDeviceResponse, ListLinkResponse},
+    frontend::ListDeviceResponse,
     model::{
         self,
         chip::ble_beacon::{AdvertiseData, AdvertiseSettings, advertise_settings},
     },
 };
+use netsim_rest_api::ListLinkResponse;
 use protobuf::MessageField;
 
 const INDENT_WIDTH: usize = 2;
 
-pub fn format_registration_status(status: RegistrationStatus) -> &'static str {
+pub(crate) fn format_registration_status(status: RegistrationStatus) -> &'static str {
     match status {
         RegistrationStatus::NOT_REGISTERED => "unregistered",
         RegistrationStatus::REGISTERED_HOME => "home",
@@ -29,7 +30,7 @@ pub fn format_registration_status(status: RegistrationStatus) -> &'static str {
     }
 }
 
-pub fn format_call_state(state: netsim_proto::cell::call::State) -> &'static str {
+pub(crate) fn format_call_state(state: netsim_proto::cell::call::State) -> &'static str {
     match state {
         netsim_proto::cell::call::State::UNKNOWN => "unknown",
         netsim_proto::cell::call::State::ACTIVE => "active",
@@ -41,7 +42,9 @@ pub fn format_call_state(state: netsim_proto::cell::call::State) -> &'static str
     }
 }
 
-pub fn format_call_direction(direction: netsim_proto::cell::call::Direction) -> &'static str {
+pub(crate) fn format_call_direction(
+    direction: netsim_proto::cell::call::Direction,
+) -> &'static str {
     match direction {
         netsim_proto::cell::call::Direction::DIR_UNKNOWN => "unknown",
         netsim_proto::cell::call::Direction::MOBILE_ORIGINATED => "outgoing",
@@ -51,7 +54,7 @@ pub fn format_call_direction(direction: netsim_proto::cell::call::Direction) -> 
 
 /// # Invariants
 /// Displayed values **do not** end in a newline.
-pub struct Displayer<'a, T> {
+pub(crate) struct Displayer<'a, T> {
     pub(crate) value: T,
     pub(crate) verbose: bool,
     pub(crate) indent: usize,
@@ -60,20 +63,31 @@ pub struct Displayer<'a, T> {
 
 impl<'a, T> Displayer<'a, T> {
     /// Returns a new displayer for values of the provided type.
-    pub fn new(value: T, verbose: bool) -> Self {
+    pub(crate) fn new(value: T, verbose: bool) -> Self {
         Displayer { value, verbose, indent: 0, cells: None }
     }
 
-    pub fn with_cells(mut self, cells: &'a [Cell]) -> Self {
+    pub(crate) fn with_cells(mut self, cells: &'a [Cell]) -> Self {
         self.cells = Some(cells);
         self
     }
 
-    pub fn indent(&mut self, current_indent: usize) -> &Self {
+    pub(crate) fn indent(&mut self, current_indent: usize) -> &Self {
         self.indent = current_indent + INDENT_WIDTH;
         self
     }
 }
+
+/// Adds `.display(verbose)` to types that have a `Displayer`, like
+/// [`std::path::Path::display`]. Bounded so it never shadows other `display()`
+/// methods (e.g. `PathBuf` still reaches `Path::display`).
+pub(crate) trait DisplayExt {
+    fn display(&self, verbose: bool) -> Displayer<'_, &Self> {
+        Displayer::new(self, verbose)
+    }
+}
+
+impl<T: ?Sized> DisplayExt for T where for<'a> Displayer<'a, &'a T>: fmt::Display {}
 
 impl fmt::Display for Displayer<'_, &ListDeviceResponse> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -460,20 +474,11 @@ impl fmt::Display for Displayer<'_, &Option<bool>> {
 }
 
 // Helper struct to display link's chip IDs, showing "ALL" for ID 0.
-pub struct LinkChipIdDisplay(pub u32);
+pub(crate) struct LinkChipIdDisplay(pub u32);
 
 impl fmt::Display for LinkChipIdDisplay {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0 == 0 { write!(f, "ALL") } else { write!(f, "{}", self.0) }
-    }
-}
-
-// Helper to format PhyKind for display, mapping BLUETOOTH variants to BLUETOOTH
-fn format_phy_kind(kind: netsim_proto::model::PhyKind) -> String {
-    match kind {
-        netsim_proto::model::PhyKind::BLUETOOTH_CLASSIC
-        | netsim_proto::model::PhyKind::BLUETOOTH_LOW_ENERGY => "BLUETOOTH".to_string(),
-        _ => format!("{:?}", kind),
     }
 }
 
@@ -508,10 +513,10 @@ impl fmt::Display for Displayer<'_, &ListLinkResponse> {
                         f,
                         "{:indent$}{:<id_width$} | {:<chip_width$} | {:<chip_width$} | {:<phykind_width$} | {:<rssi_width$}",
                         "",
-                        link.id,
-                        format!("{}", LinkChipIdDisplay(link.sender_id)),
-                        format!("{}", LinkChipIdDisplay(link.receiver_id)),
-                        format_phy_kind(link.link_kind.enum_value_or_default()),
+                        link.id.0,
+                        format!("{}", LinkChipIdDisplay(link.sender.0)),
+                        format!("{}", LinkChipIdDisplay(link.receiver.0)),
+                        format!("{:?}", link.kind),
                         link.rssi,
                     )?;
                 }
@@ -534,9 +539,9 @@ impl fmt::Display for Displayer<'_, &ListLinkResponse> {
                         f,
                         "{:indent$}{:<chip_width$} | {:<chip_width$} | {:<phykind_width$} | {:<rssi_width$}",
                         "",
-                        format!("{}", LinkChipIdDisplay(link.sender_id)),
-                        format!("{}", LinkChipIdDisplay(link.receiver_id)),
-                        format_phy_kind(link.link_kind.enum_value_or_default()),
+                        format!("{}", LinkChipIdDisplay(link.sender.0)),
+                        format!("{}", LinkChipIdDisplay(link.receiver.0)),
+                        format!("{:?}", link.kind),
                         link.rssi,
                     )?;
                 }
@@ -691,6 +696,27 @@ mod tests {
         let output = format!("{}", displayer);
 
         let expected = "\n  cellular-data: up       | rx_count:       100 | tx_count:       200";
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_display_rest_list_link_response() {
+        let resp = ListLinkResponse {
+            links: vec![netsim_model::Link {
+                id: netsim_model::LinkId(1),
+                sender: netsim_model::ChipId(1000),
+                receiver: netsim_model::ChipId(1001),
+                kind: netsim_model::ChipKind::BLUETOOTH,
+                rssi: -65,
+            }],
+        };
+
+        let output = format!("{}", Displayer::new(&resp, false));
+        let expected = concat!(
+            "Sender     | Receiver   | Type         | RSSI  \n",
+            "-----------+------------+--------------+-------\n",
+            "1000       | 1001       | BLUETOOTH    | -65   "
+        );
         assert_eq!(output, expected);
     }
 }

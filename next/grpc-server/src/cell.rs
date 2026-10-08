@@ -12,12 +12,12 @@ use protobuf::well_known_types::empty::Empty;
 use tracing::error;
 
 #[derive(Clone)]
-pub struct CellServiceImpl {
+pub(crate) struct CellServiceImpl {
     client: CellClient,
 }
 
 impl CellServiceImpl {
-    pub fn new(client: CellClient) -> Self {
+    pub(crate) fn new(client: CellClient) -> Self {
         Self { client }
     }
 }

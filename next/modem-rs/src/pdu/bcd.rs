@@ -19,8 +19,7 @@ pub fn bcd_to_string(bytes: &[u8]) -> String {
             12 => s.push('a'),
             13 => s.push('b'),
             14 => s.push('c'),
-            0x0F => break,
-            _ => unreachable!(),
+            _ => break,
         }
 
         match high {
@@ -30,8 +29,7 @@ pub fn bcd_to_string(bytes: &[u8]) -> String {
             12 => s.push('a'),
             13 => s.push('b'),
             14 => s.push('c'),
-            0x0F => break,
-            _ => unreachable!(),
+            _ => break,
         }
     }
     s
@@ -93,7 +91,7 @@ pub fn encode_imsi(imsi: &str) -> Option<Vec<u8>> {
     let first_digit = imsi.chars().next()?.to_digit(10).unwrap_or(0) as u8;
     let byte_2 = (first_digit << 4) | flags;
 
-    let remaining_digits = &imsi[1..];
+    let remaining_digits = imsi.get(1..)?;
     let swapped_bytes = string_to_bcd(remaining_digits);
 
     let len_byte = (1 + swapped_bytes.len()) as u8;

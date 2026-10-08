@@ -158,24 +158,14 @@ impl TokioHost {
                                         return;
                                     }
                                 };
-                            let mut conns = connections.lock();
-                            if let Some(Connection::Connecting(_)) = conns.get(&conn_id) {
-                                register_tcp_connection_locked(
-                                    stream,
-                                    conn_id,
-                                    slirp_request_sender.clone(),
-                                    &mut conns,
-                                );
-                            } else {
-                                debug!("TCP connection {conn_id} was closed while connecting");
-                            }
+                            finish_connecting_tcp(
+                                conn_id,
+                                stream,
+                                slirp_request_sender,
+                                &connections,
+                            );
                         });
-                        let mut conns = self.connections.lock();
-                        if let Some(Connection::Connecting(h)) = conns.get_mut(&conn_id) {
-                            *h = Some(handle);
-                        } else {
-                            handle.abort();
-                        }
+                        attach_connecting_handle(conn_id, handle, &self.connections);
                     }
                     ConnectionArgs::Udp(conn_info) => {
                         if let Err(e) = register_udp_connection(
@@ -433,24 +423,9 @@ async fn start_tcp_hostfwd_listener(
                         .await
                         .ok();
 
-                    let mut conns = task_connections.lock();
-                    if let Some(Connection::Connecting(_)) = conns.get(&conn_id) {
-                        register_tcp_connection_locked(
-                            stream,
-                            conn_id,
-                            slirp_request_sender.clone(),
-                            &mut conns,
-                        );
-                    } else {
-                        debug!("TCP connection {conn_id} was closed while connecting");
-                    }
+                    finish_connecting_tcp(conn_id, stream, slirp_request_sender, &task_connections);
                 });
-                let mut conns = connections.lock();
-                if let Some(Connection::Connecting(h)) = conns.get_mut(&conn_id) {
-                    *h = Some(handle);
-                } else {
-                    handle.abort();
-                }
+                attach_connecting_handle(conn_id, handle, &connections);
             }
             Err(e) => {
                 error!("TCP hostfwd accept error on {}: {}", rule.host_addr, e);
@@ -468,6 +443,33 @@ fn register_tcp_connection(
 ) -> mpsc::Sender<Bytes> {
     let mut conns = connections.lock();
     register_tcp_connection_locked(stream, conn_id, slirp_request_sender, &mut conns)
+}
+
+fn finish_connecting_tcp(
+    conn_id: u64,
+    stream: TcpStream,
+    slirp_request_sender: mpsc::Sender<SlirpRequest>,
+    connections: &Mutex<HashMap<u64, Connection>>,
+) {
+    let mut conns = connections.lock();
+    if let Some(Connection::Connecting(_)) = conns.get(&conn_id) {
+        register_tcp_connection_locked(stream, conn_id, slirp_request_sender, &mut conns);
+    } else {
+        debug!("TCP connection {conn_id} was closed while connecting");
+    }
+}
+
+fn attach_connecting_handle(
+    conn_id: u64,
+    handle: JoinHandle<()>,
+    connections: &Mutex<HashMap<u64, Connection>>,
+) {
+    let mut conns = connections.lock();
+    if let Some(Connection::Connecting(h)) = conns.get_mut(&conn_id) {
+        *h = Some(handle);
+    } else {
+        handle.abort();
+    }
 }
 
 fn register_tcp_connection_locked(
@@ -493,10 +495,12 @@ fn register_tcp_connection_locked(
                     break;
                 }
                 Ok(n) => {
-                    reader_slirp_request_sender
-                        .send(SlirpRequest::Data(conn_id, Bytes::copy_from_slice(&buf[..n])))
-                        .await
-                        .ok();
+                    if let Some(slice) = buf.get(..n) {
+                        reader_slirp_request_sender
+                            .send(SlirpRequest::Data(conn_id, Bytes::copy_from_slice(slice)))
+                            .await
+                            .ok();
+                    }
                 }
                 Err(_) => {
                     reader_slirp_request_sender
@@ -556,7 +560,8 @@ async fn perform_socks5_handshake(
     // 2. Read greeting response
     let mut greeting_resp = [0u8; 2];
     stream.read_exact(&mut greeting_resp).await?;
-    if greeting_resp[0] != 5 || greeting_resp[1] != 0 {
+    let [ver, method] = greeting_resp;
+    if ver != 5 || method != 0 {
         return Err(std::io::Error::other("SOCKS5 authentication negotiation failed"));
     }
 
@@ -580,15 +585,14 @@ async fn perform_socks5_handshake(
     // 4. Read response
     let mut resp_header = [0u8; 4];
     stream.read_exact(&mut resp_header).await?;
-    if resp_header[0] != 5 || resp_header[1] != 0 {
+    let [ver, status, _rsv, atyp] = resp_header;
+    if ver != 5 || status != 0 {
         return Err(std::io::Error::other(format!(
-            "SOCKS5 connection failed with error code: {}",
-            resp_header[1]
+            "SOCKS5 connection failed with error code: {status}"
         )));
     }
 
     // Skip bound address and port in the response
-    let atyp = resp_header[3];
     match atyp {
         1 => {
             let mut buf = [0u8; 6];
@@ -601,7 +605,8 @@ async fn perform_socks5_handshake(
         3 => {
             let mut len_buf = [0u8; 1];
             stream.read_exact(&mut len_buf).await?;
-            let len = len_buf[0] as usize;
+            let [len_u8] = len_buf;
+            let len = len_u8 as usize;
             let mut buf = vec![0u8; len + 2];
             stream.read_exact(&mut buf).await?;
         }
@@ -647,10 +652,12 @@ fn register_udp_connection(
         loop {
             match reader_socket.recv(&mut buf).await {
                 Ok(n) => {
-                    slirp_sender
-                        .send(SlirpRequest::Data(conn_id, Bytes::copy_from_slice(&buf[..n])))
-                        .await
-                        .ok();
+                    if let Some(slice) = buf.get(..n) {
+                        slirp_sender
+                            .send(SlirpRequest::Data(conn_id, Bytes::copy_from_slice(slice)))
+                            .await
+                            .ok();
+                    }
                 }
                 Err(_) => {
                     slirp_sender.send(SlirpRequest::ConnectionClosed(conn_id)).await.ok();
@@ -724,30 +731,31 @@ fn register_icmp_connection(
         loop {
             match reader_socket.recv_from(&mut buf).await {
                 Ok((n, src_addr)) => {
-                    let mut packet_data = buf[..n].to_vec();
+                    let Some(slice) = buf.get(..n) else {
+                        continue;
+                    };
+                    let mut packet_data = slice.to_vec();
                     // Rewrite the ICMP ID back to the guest's original ID only for Echo
                     // Reply/Request!
-                    if !is_ipv6
-                        && packet_data.len() >= 8
-                        && (packet_data[0] == 0 || packet_data[0] == 8)
+                    if let [icmp_type, _, c0, c1, id0, id1, _, _, ..] = packet_data.as_mut_slice()
+                        && ((!is_ipv6 && matches!(*icmp_type, 0 | 8))
+                            || (is_ipv6 && matches!(*icmp_type, 128 | 129)))
                     {
-                        packet_data[4..6].copy_from_slice(&guest_id.to_be_bytes());
-                        // Recalculate IPv4 ICMP checksum
-                        packet_data[2..4].copy_from_slice(&[0, 0]);
-                        let checksum = netsim_packets::ipv4_checksum(&packet_data);
-                        packet_data[2..4].copy_from_slice(&checksum.to_be_bytes());
-                    } else if is_ipv6
-                        && packet_data.len() >= 8
-                        && (packet_data[0] == 128 || packet_data[0] == 129)
-                    {
-                        packet_data[4..6].copy_from_slice(&guest_id.to_be_bytes());
-                        // Recalculate ICMPv6 checksum
-                        packet_data[2..4].copy_from_slice(&[0, 0]);
-                        if let (IpAddr::V6(src_v6), IpAddr::V6(dst_v6)) = (src_addr.ip(), guest_ip)
+                        [*id0, *id1] = guest_id.to_be_bytes();
+                        [*c0, *c1] = [0, 0];
+                        let checksum = if !is_ipv6 {
+                            Some(netsim_packets::ipv4_checksum(&packet_data))
+                        } else if let (IpAddr::V6(src_v6), IpAddr::V6(dst_v6)) =
+                            (src_addr.ip(), guest_ip)
                         {
-                            let checksum =
-                                netsim_packets::icmpv6_checksum(&packet_data, src_v6, dst_v6);
-                            packet_data[2..4].copy_from_slice(&checksum.to_be_bytes());
+                            Some(netsim_packets::icmpv6_checksum(&packet_data, src_v6, dst_v6))
+                        } else {
+                            None
+                        };
+                        if let (Some(csum), [_, _, c0, c1, ..]) =
+                            (checksum, packet_data.as_mut_slice())
+                        {
+                            [*c0, *c1] = csum.to_be_bytes();
                         }
                     }
 
@@ -770,4 +778,73 @@ fn register_icmp_connection(
     );
 
     Ok(tx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_attach_connecting_handle_active() {
+        let connections = Arc::new(Mutex::new(HashMap::new()));
+        let conn_id = 100;
+        connections.lock().insert(conn_id, Connection::Connecting(None));
+
+        let handle = tokio::spawn(async {});
+        attach_connecting_handle(conn_id, handle, &connections);
+
+        let conns = connections.lock();
+        assert!(matches!(conns.get(&conn_id), Some(Connection::Connecting(Some(_)))));
+    }
+
+    #[tokio::test]
+    async fn test_attach_connecting_handle_aborts_when_closed() {
+        let connections = Arc::new(Mutex::new(HashMap::new()));
+        let conn_id = 101;
+        let handle = tokio::spawn(async {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        });
+        let abort_handle = handle.abort_handle();
+        attach_connecting_handle(conn_id, handle, &connections);
+
+        tokio::task::yield_now().await;
+        assert!(abort_handle.is_finished());
+    }
+
+    #[tokio::test]
+    async fn test_finish_connecting_tcp_when_closed() {
+        let connections = Arc::new(Mutex::new(HashMap::new()));
+        let (slirp_tx, _slirp_rx) = mpsc::channel(10);
+        let conn_id = 102;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+        let stream = TcpStream::connect(addr).await.expect("connect tcp");
+
+        finish_connecting_tcp(conn_id, stream, slirp_tx, &connections);
+
+        assert!(!connections.lock().contains_key(&conn_id));
+    }
+
+    #[tokio::test]
+    async fn test_finish_connecting_tcp_when_connecting() {
+        let connections = Arc::new(Mutex::new(HashMap::new()));
+        let (slirp_tx, _slirp_rx) = mpsc::channel(10);
+        let conn_id = 103;
+        connections.lock().insert(conn_id, Connection::Connecting(None));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+        let client_task = tokio::spawn(async move {
+            let (server_stream, _) = listener.accept().await.expect("accept");
+            server_stream
+        });
+        let client_stream = TcpStream::connect(addr).await.expect("connect");
+        let _server_stream = client_task.await.expect("task join");
+
+        finish_connecting_tcp(conn_id, client_stream, slirp_tx, &connections);
+
+        let conns = connections.lock();
+        assert!(matches!(conns.get(&conn_id), Some(Connection::Tcp(_))));
+    }
 }
