@@ -67,7 +67,7 @@ impl Ord for ScheduledEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PendingStatusReport {
     sender_id: ModemId,
-    report_response: Vec<u8>,
+    report: crate::pdu::StatusReport,
 }
 
 #[derive(Debug, Clone)]
@@ -606,13 +606,8 @@ impl ModemNetworkSimulator {
                     response.extend_from_slice(b"\r\n");
                     response.extend_from_slice(&pdu);
                     response.extend_from_slice(b"\r\n");
-                    let status_report_pending = status_report.map(|report_pdu| {
-                        let report_tpdu_len = crate::pdu::calculate_tpdu_len(&report_pdu);
-                        let report_str = std::str::from_utf8(&report_pdu).unwrap_or_default();
-                        let report_response =
-                            format!("+CDS: {report_tpdu_len}\r\n{report_str}\r\n").into_bytes();
-                        PendingStatusReport { sender_id: id, report_response }
-                    });
+                    let status_report_pending =
+                        status_report.map(|report| PendingStatusReport { sender_id: id, report });
 
                     let queue = self.incoming_sms.entry(peer_id).or_default();
                     if let Some(deliver_response) = queue.enqueue(response, status_report_pending) {
@@ -626,9 +621,15 @@ impl ModemNetworkSimulator {
                     if let Some(ack_sms) = queue.acknowledge() {
                         if let Some(pending) = ack_sms.status_report {
                             if ack.is_success() {
+                                let report_pdu = pending.report.to_pdu_hex(&self.clock.now_zoned());
+                                let report_tpdu_len =
+                                    crate::pdu::calculate_tpdu_len(report_pdu.as_bytes());
+                                let report_response =
+                                    format!("+CDS: {report_tpdu_len}\r\n{report_pdu}\r\n")
+                                        .into_bytes();
                                 effects.push((
                                     pending.sender_id,
-                                    ModemEffect::Response(pending.report_response),
+                                    ModemEffect::Response(report_response),
                                 ));
                             } else {
                                 debug!(
@@ -1117,16 +1118,21 @@ mod tests {
         let queue = simulator.incoming_sms.entry(recipient_id).or_default();
         assert!(queue.is_empty());
 
+        let dummy_report = crate::pdu::StatusReport {
+            message_reference: 1,
+            recipient_address: vec![0x0B, 0x91, 0x51, 0x55, 0x25, 0x51, 0x55, 0xF4],
+            scts_bcd: [0x26, 0x06, 0x15, 0x19, 0x30, 0x45, 0x00],
+        };
         let immediate = queue.enqueue(
             b"+CMT: 1\r\n...".to_vec(),
-            Some(PendingStatusReport { sender_id, report_response: b"+CDS: 25\r\n...".to_vec() }),
+            Some(PendingStatusReport { sender_id, report: dummy_report.clone() }),
         );
         assert_eq!(immediate, Some(b"+CMT: 1\r\n...".to_vec()));
         assert!(!queue.is_empty());
 
         let queued = queue.enqueue(
             b"+CMT: 2\r\n...".to_vec(),
-            Some(PendingStatusReport { sender_id, report_response: b"+CDS: 25\r\n...".to_vec() }),
+            Some(PendingStatusReport { sender_id, report: dummy_report }),
         );
         assert_eq!(queued, None);
 

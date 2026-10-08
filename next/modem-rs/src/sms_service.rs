@@ -1,7 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt};
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 use modem_rs_derive::CommandParser;
 use netsim_model::Quirks;
@@ -11,6 +11,7 @@ use crate::{
     RadioAdmission, SmsStore,
     parser::QuotedString,
     pdu::SubmitPdu,
+    time::{Clock, SystemClock},
     types::{
         BroadcastConfig, CmsError, CommandAction, ExecutionResult, HandledCommand, Parsable,
         PhoneNumber, Response, SendSmsArgs, SimSmsMessage, SmsAck, SmsBroadcastMode,
@@ -228,6 +229,7 @@ const MAX_ME_SMS_CAPACITY: usize = 255;
 
 pub struct SmsService {
     quirks: Quirks,
+    clock: Arc<dyn Clock>,
     message_reference: u8,
     messages: BTreeMap<usize, SimSmsMessage>,
     storage1: MessageStorage,
@@ -245,6 +247,7 @@ impl Default for SmsService {
         Self {
             message_reference: 1,
             quirks: Default::default(),
+            clock: Arc::new(SystemClock),
             messages: Default::default(),
             storage1: Default::default(),
             storage2: Default::default(),
@@ -259,8 +262,8 @@ impl Default for SmsService {
 }
 
 impl SmsService {
-    pub fn new(quirks: Quirks) -> Self {
-        Self { quirks, ..Default::default() }
+    pub fn new(quirks: Quirks, clock: Arc<dyn Clock>) -> Self {
+        Self { quirks, clock, ..Default::default() }
     }
     // --- Pure command handlers ---
 
@@ -325,7 +328,8 @@ impl SmsService {
         // TS 27.005 § 3.5.1 reports <mr> only on success; allocate reference once
         // accepted.
         let mr = self.next_message_reference();
-        let processed = crate::pdu::process_outgoing_sms(&raw_pdu, sender, mr);
+        let processed =
+            crate::pdu::process_outgoing_sms(&raw_pdu, sender, mr, &self.clock.now_zoned());
         Ok((
             mr,
             vec![CommandAction::ReceiveSms {
