@@ -67,3 +67,7 @@ pub enum ResourceType {
 pub enum ResourceClass {
     Internet = 1,
 }
+
+#[cfg(test)]
+#[path = "dns_tests.rs"]
+mod tests;
