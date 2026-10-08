@@ -47,8 +47,6 @@ pub(crate) enum Command {
     Devices(Devices),
     /// Reset Netsim device scene
     Reset,
-    /// Open netsim Web UI
-    Gui,
     /// Control the packet capture functionalities with commands: list, patch,
     /// get
     #[command(subcommand, visible_alias("pcap"))]
