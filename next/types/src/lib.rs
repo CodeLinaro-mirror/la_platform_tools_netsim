@@ -82,6 +82,10 @@ pub struct Chip {
     /// XML SIM ICC profile content.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sim_profile: Option<String>,
+    /// Echo every packet back to the sender instead of attaching a chip.
+    /// For transport tests and benchmarks (`startup.Chip.loopback`).
+    #[serde(default)]
+    pub loopback: bool,
 }
 
 impl Chip {
@@ -97,6 +101,7 @@ impl Chip {
             address: String::new(),
             sim_type: None,
             sim_profile: None,
+            loopback: false,
         }
     }
 }

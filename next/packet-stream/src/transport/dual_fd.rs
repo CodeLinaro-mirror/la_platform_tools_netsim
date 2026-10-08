@@ -267,6 +267,7 @@ fn create_stream_and_sink(
             address: "".to_string(),
             sim_type,
             sim_profile,
+            loopback: false,
         }),
         name: String::new(),
     };
