@@ -26,12 +26,29 @@ pub mod nfc_service;
 pub mod nfc_service_grpc;
 pub mod packet_streamer;
 pub mod packet_streamer_grpc;
+pub mod reflection;
+pub mod reflection_grpc;
 pub mod startup;
 pub mod stats;
 pub mod wifi_service;
 pub mod wifi_service_grpc;
 
 pub use casimir_control as casimircontrolserver;
+pub use reflection as grpc_reflection;
+
+/// gRPC reflection v1alpha hierarchy for gRPC compatibility
+#[allow(missing_docs)]
+pub mod grpc {
+    /// gRPC reflection service
+    #[allow(missing_docs)]
+    pub mod reflection {
+        /// v1alpha reflection protocol
+        #[allow(missing_docs)]
+        pub mod v1alpha {
+            pub use crate::reflection::*;
+        }
+    }
+}
 
 /// Google protobuf well-known types wrapper for gRPC compatibility
 #[allow(missing_docs)]

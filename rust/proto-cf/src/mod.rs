@@ -15,6 +15,7 @@ pub mod hci_packet;
 pub mod model;
 pub mod nfc_service;
 pub mod packet_streamer;
+pub mod reflection;
 pub mod startup;
 pub mod stats;
 pub mod wifi_service;

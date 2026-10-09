@@ -1,9 +1,10 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
-use std::env;
-use std::fs;
-use std::path::Path;
-use std::process::{Command, exit};
+use std::{
+    env, fs,
+    path::Path,
+    process::{Command, exit},
+};
 fn main() {
     // Entry point for build_proto
 
@@ -63,8 +64,11 @@ fn main() {
         if src.ends_with("_grpc.rs") {
             let path = Path::new(src);
             if let Some(name) = path.file_name() {
-                let dst = out_path.join(name);
-                fs::copy(path, &dst).expect("Failed to copy grpc file");
+                let dst = out_path.join("netsim").join(name);
+                if path != dst {
+                    let _ = fs::remove_file(&dst);
+                    fs::copy(path, &dst).expect("Failed to copy gRPC file");
+                }
             }
         }
     }
@@ -138,6 +142,7 @@ fn main() {
     // Write lib.rs
     let lib_rs = out_path.join("lib.rs");
     let content = r#"
+#![allow(ambiguous_glob_reexports)]
 pub mod netsim {
   pub mod common;
   pub mod config;
@@ -153,6 +158,7 @@ pub mod netsim {
   pub mod stats;
   pub mod casimir_control;
   pub mod wifi_service;
+  pub mod reflection;
   pub use crate::rootcanal::configuration;
   pub mod packet {
       pub use super::hci_packet::*;
@@ -166,6 +172,13 @@ pub mod google {
     pub mod protobuf {
         pub use crate::protobuf::well_known_types::empty::Empty;
         pub use crate::protobuf::well_known_types::timestamp::Timestamp;
+    }
+}
+pub mod grpc {
+    pub mod reflection {
+        pub mod v1alpha {
+            pub use crate::netsim::reflection::*;
+        }
     }
 }
 pub use netsim::common;
@@ -182,6 +195,8 @@ pub use netsim::startup;
 pub use netsim::stats;
 pub use netsim::casimir_control;
 pub use netsim::wifi_service;
+pub use netsim::reflection;
+pub use netsim::reflection as grpc_reflection;
 pub use netsim::casimir_control as casimircontrolserver;
 pub use rootcanal::configuration;
 #[path = "netsim/frontend_grpc.rs"]
@@ -200,6 +215,8 @@ pub mod casimir_control_grpc;
 pub mod nfc_service_grpc;
 #[path = "netsim/wifi_service_grpc.rs"]
 pub mod wifi_service_grpc;
+#[path = "netsim/reflection_grpc.rs"]
+pub mod reflection_grpc;
 
 pub use protobuf;
 pub use protobuf::well_known_types::empty;
