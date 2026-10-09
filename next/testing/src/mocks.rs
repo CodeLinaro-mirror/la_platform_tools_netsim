@@ -11,8 +11,15 @@ use futures::{
     task::{Context, Poll},
 };
 use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
-/// A mock Sink that captures packets into an mpsc channel.
+/// Default buffer capacity for captured packets in [`mock_sink`].
+const DEFAULT_SINK_BUFFER_CAPACITY: usize = 100;
+
+/// Default buffer capacity for injected packets in [`mock_stream`].
+const DEFAULT_STREAM_BUFFER_CAPACITY: usize = 10;
+
+/// A mock [`Sink`] that captures packets into an `mpsc` channel.
 ///
 /// # Note
 /// This sink uses `try_send` which may drop packets if the channel is full.
@@ -28,16 +35,14 @@ impl Sink<Bytes> for MockSink {
     fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         let mut pinned = std::pin::pin!(self.get_mut().tx.reserve());
         pinned.as_mut().poll(cx).map(|result| {
-            result
-                .map(|_| ())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::BrokenPipe, e.to_string()))
+            result.map(|_| ()).map_err(|e| std::io::Error::new(std::io::ErrorKind::BrokenPipe, e))
         })
     }
 
     fn start_send(self: Pin<&mut Self>, item: Bytes) -> Result<(), Self::Error> {
         self.tx
             .try_send(item.to_vec())
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::BrokenPipe, e.to_string()))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::BrokenPipe, e))
     }
 
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -52,16 +57,49 @@ impl Sink<Bytes> for MockSink {
 /// Creates a mock packet sink and a receiver to check the captured packets.
 pub fn mock_sink()
 -> (Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send + Sync>>, mpsc::Receiver<Vec<u8>>) {
-    let (packet_tx, packet_rx) = mpsc::channel(100);
+    let (packet_tx, packet_rx) = mpsc::channel(DEFAULT_SINK_BUFFER_CAPACITY);
     let sink = Box::pin(MockSink { tx: packet_tx });
     (sink, packet_rx)
 }
 
-use tokio_stream::wrappers::ReceiverStream;
-
 /// Creates a mock packet stream and a sender to inject packets into it.
 pub fn mock_stream() -> (Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>, mpsc::Sender<Bytes>) {
-    let (packet_tx, packet_rx) = mpsc::channel(10);
+    let (packet_tx, packet_rx) = mpsc::channel(DEFAULT_STREAM_BUFFER_CAPACITY);
     let stream = Box::new(ReceiverStream::new(packet_rx));
     (stream, packet_tx)
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::{SinkExt, StreamExt};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_mock_sink_captures_packets() {
+        let (mut sink, mut rx) = mock_sink();
+
+        let packet1 = Bytes::from_static(b"hello");
+        let packet2 = Bytes::from_static(b"world");
+
+        sink.send(packet1).await.expect("Failed to send packet1");
+        sink.send(packet2).await.expect("Failed to send packet2");
+
+        assert_eq!(rx.recv().await.unwrap(), b"hello".to_vec());
+        assert_eq!(rx.recv().await.unwrap(), b"world".to_vec());
+    }
+
+    #[tokio::test]
+    async fn test_mock_stream_delivers_injected_packets() {
+        let (mut stream, tx) = mock_stream();
+
+        let packet1 = Bytes::from_static(b"foo");
+        let packet2 = Bytes::from_static(b"bar");
+
+        tx.send(packet1).await.expect("Failed to inject packet1");
+        tx.send(packet2).await.expect("Failed to inject packet2");
+
+        assert_eq!(stream.next().await.unwrap(), Bytes::from_static(b"foo"));
+        assert_eq!(stream.next().await.unwrap(), Bytes::from_static(b"bar"));
+    }
 }
