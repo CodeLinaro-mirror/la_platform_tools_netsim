@@ -16,6 +16,6 @@ mod libslirp_config;
 // auto-generated FFI bindings.
 pub mod libslirp_sys;
 
-pub use libslirp::LibSlirp;
+pub use libslirp::{LibSlirp, LibSlirpInputHandle, PacketSender};
 pub use libslirp_config::{SlirpConfig, lookup_host_dns};
 pub use slirp::{ProxyConnect, ProxyManager};

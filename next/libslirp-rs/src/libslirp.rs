@@ -377,7 +377,7 @@ impl Slirp {
         //   functions by libslirp.
         let slirp = unsafe {
             libslirp_sys::slirp_new(
-                &configs.c_slirp_config,
+                configs.c_slirp_config(),
                 &*callbacks,
                 &*callback_context as *const CallbackContext as *mut c_void,
             )
