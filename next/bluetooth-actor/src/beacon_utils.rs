@@ -241,4 +241,107 @@ mod tests {
         assert_eq!(&data[2..4], &[0x00, 0x18]);
         assert_eq!(&data[28..30], &[0x0D, 0x18]);
     }
+
+    #[test]
+    fn test_construct_data_with_32bit_service_uuid() {
+        let mut adv_data = netsim_model::AdvertiseData::default();
+        adv_data.services.push(netsim_model::Service {
+            uuid: "180D1122".to_string(), // 32-bit UUID (4 bytes)
+            data: vec![],
+        });
+        let data = construct_data(&adv_data, &None);
+        // 1 len + 1 type (0x05 for complete 32-bit UUID) + 4 reversed uuid bytes (22, 11, 0D, 18)
+        assert_eq!(data, vec![0x05, 0x05, 0x22, 0x11, 0x0D, 0x18]);
+    }
+
+    #[test]
+    fn test_construct_data_with_128bit_service_uuid() {
+        let mut adv_data = netsim_model::AdvertiseData::default();
+        adv_data.services.push(netsim_model::Service {
+            uuid: "0000180D-0000-1000-8000-00805F9B34FB".to_string(), // 128-bit UUID (16 bytes)
+            data: vec![],
+        });
+        let data = construct_data(&adv_data, &None);
+        // 1 len + 1 type (0x07 for complete 128-bit UUID) + 16 reversed uuid bytes
+        assert_eq!(data.len(), 18);
+        assert_eq!(data[0], 17);
+        assert_eq!(data[1], 0x07);
+        assert_eq!(
+            &data[2..],
+            &[
+                0xFB, 0x34, 0x9B, 0x5F, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x0D, 0x18,
+                0x00, 0x00,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_construct_data_with_tx_power_near_limit() {
+        let mut adv_data = netsim_model::AdvertiseData::default();
+        adv_data.manufacturer_data = vec![0x42; 26]; // 28 bytes with header (1 len + 1 type + 26 data)
+        adv_data.include_tx_power_level = true;
+        let data = construct_data(&adv_data, &None);
+        // 28 bytes mfg data + 3 bytes tx power = 31 bytes (exactly MAX_AD_PAYLOAD_LEN)
+        assert_eq!(data.len(), 31);
+        assert_eq!(data[0], 27);
+        assert_eq!(data[1], AD_TYPE_MANUFACTURER_SPECIFIC);
+        assert_eq!(&data[28..], &[2, AD_TYPE_TX_POWER_LEVEL, 20]);
+
+        // If manufacturer data exceeds space, tx power is omitted
+        let mut adv_data_overflow = netsim_model::AdvertiseData::default();
+        adv_data_overflow.manufacturer_data = vec![0x42; 27]; // 29 bytes with header
+        adv_data_overflow.include_tx_power_level = true;
+        let data_overflow = construct_data(&adv_data_overflow, &None);
+        assert_eq!(data_overflow.len(), 29);
+    }
+
+    #[test]
+    fn test_generate_legacy_address() {
+        assert_eq!(generate_legacy_address(0), "00:00:00:00:00:00");
+        assert_eq!(generate_legacy_address(1), "00:00:00:00:00:01");
+        assert_eq!(generate_legacy_address(255), "00:00:00:00:00:ff");
+        assert_eq!(generate_legacy_address(256), "00:00:00:00:01:00");
+        assert_eq!(generate_legacy_address(1000), "00:00:00:00:03:e8");
+        assert_eq!(generate_legacy_address(0xABCD), "00:00:00:00:ab:cd");
+        // Upper 16 bits are masked out
+        assert_eq!(generate_legacy_address(0x12345678), "00:00:00:00:56:78");
+    }
+
+    #[test]
+    fn test_generate_default_name() {
+        assert_eq!(generate_default_name(0), "Beacon-0");
+        assert_eq!(generate_default_name(1000), "Beacon-1000");
+        assert_eq!(generate_default_name(42), "Beacon-42");
+    }
+
+    #[test]
+    fn test_is_le_advertising_report() {
+        // Valid LE Advertising Report (at least 5 bytes with valid headers)
+        let valid_report =
+            [0x04, 0x3E, 0x0C, 0x02, 0x01, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xCE];
+        assert!(is_le_advertising_report(&valid_report));
+
+        // Minimum length matching slice pattern (5 bytes)
+        let min_report = [0x04, 0x3E, 0x02, 0x02, 0x01];
+        assert!(is_le_advertising_report(&min_report));
+
+        // Incomplete / short packets
+        assert!(!is_le_advertising_report(&[]));
+        assert!(!is_le_advertising_report(&[0x04]));
+        assert!(!is_le_advertising_report(&[0x04, 0x3E]));
+        assert!(!is_le_advertising_report(&[0x04, 0x3E, 0x02]));
+        assert!(!is_le_advertising_report(&[0x04, 0x3E, 0x02, 0x02]));
+
+        // Mismatched packet type (e.g. 0x01 Command packet)
+        let wrong_pkt_type = [0x01, 0x3E, 0x02, 0x02, 0x01];
+        assert!(!is_le_advertising_report(&wrong_pkt_type));
+
+        // Mismatched event code (e.g. 0x0E Command Complete)
+        let wrong_event = [0x04, 0x0E, 0x02, 0x02, 0x01];
+        assert!(!is_le_advertising_report(&wrong_event));
+
+        // Mismatched subevent code (e.g. 0x01 LE Connection Complete)
+        let wrong_subevent = [0x04, 0x3E, 0x02, 0x01, 0x01];
+        assert!(!is_le_advertising_report(&wrong_subevent));
+    }
 }
