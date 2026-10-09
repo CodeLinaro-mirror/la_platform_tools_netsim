@@ -55,7 +55,7 @@ use crate::{
     args::Args,
     ini_file::{IniFile, IniFileAccess, IniFileInitialized, IniFileUninitialized, NetsimConfig},
     logger,
-    version::get_version,
+    version::{get_version, strip_version_suffix},
 };
 
 const MAX_INIT_RETRIES: i32 = 100;
@@ -834,7 +834,7 @@ impl NetsimDaemon {
             Box::new(link_client.clone()),
             startup_timeout,
             idle_timeout,
-            get_version(),
+            strip_version_suffix(&get_version()).to_owned(),
             stats_path,
             None,
             frontend_stats.clone(),
