@@ -1,15 +1,14 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) mod client;
-pub(crate) mod error;
-pub(crate) mod ethernet_actor;
-pub(crate) mod lifecycle;
+mod client;
+mod error;
+mod ethernet_actor;
+mod lifecycle;
 
 use actor_framework::ResourceActor;
 pub use client::EthernetClient;
-pub use error::EthernetError;
-pub use ethernet_actor::{EthernetActor, EthernetReq, EthernetResponse};
+pub use ethernet_actor::EthernetActor;
 
 /// Creates a new EthernetActor runner and client.
 pub fn new() -> (ResourceActor<EthernetActor>, EthernetClient) {
