@@ -49,6 +49,23 @@ pub(crate) struct SendTcpPacketArgs<'a> {
     pub(super) payload: &'a [u8],
 }
 
+impl<'a> SendTcpPacketArgs<'a> {
+    pub(super) fn ack(conn_id: u64, conn: &TcpConnection) -> SendTcpPacketArgs<'static> {
+        SendTcpPacketArgs {
+            conn_id: Some(conn_id),
+            sequence_num: conn.send.nxt,
+            ack_num: conn.recv.nxt,
+            guest_addr: conn.guest_addr,
+            host_addr: conn.host_addr,
+            ack: true,
+            fin: false,
+            syn: false,
+            rst: false,
+            payload: &[],
+        }
+    }
+}
+
 impl TcpManager {
     pub fn new(gateway_ip: Ipv4Addr) -> Self {
         let mut buffer_pool = Vec::with_capacity(BUFFER_POOL_CAPACITY);
