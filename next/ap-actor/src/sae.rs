@@ -1,7 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::ffi;
 
@@ -221,25 +221,23 @@ impl SaeStateMachine {
     }
 
     fn process_commit(&mut self) -> Option<()> {
-        println!("DEBUG: process_commit started");
+        debug!("SAE: process_commit started");
         // K = scalar-op(rand, (elem-op(scalar-op(peer-commit-scalar, PWE),
         // PEER-COMMIT-ELEMENT)))
         // 1. tmp1 = peer_scalar * PWE
         let tmp1 = ffi::EcP256PointMul(&self.pwe, &self.peer_commit_scalar);
         if tmp1.is_empty() {
-            println!(
-                "DEBUG: Failed to compute peer_scalar * PWE. PWE len: {}, Scalar len: {}",
+            error!(
+                "SAE: Failed to compute peer_scalar * PWE. PWE len: {}, Scalar len: {}",
                 self.pwe.len(),
                 self.peer_commit_scalar.len()
             );
-            error!("SAE: Failed to compute peer_scalar * PWE");
             return None;
         }
 
         // 2. tmp2 = tmp1 + peer_element
         let tmp2 = ffi::EcP256PointAdd(&tmp1, &self.peer_commit_element);
         if tmp2.is_empty() {
-            println!("DEBUG: Failed to compute tmp1 + peer_element");
             error!("SAE: Failed to compute tmp1 + peer_element");
             return None;
         }
@@ -247,7 +245,6 @@ impl SaeStateMachine {
         // 3. K_point = rand * tmp2
         let k_point = ffi::EcP256PointMul(&tmp2, &self.rand);
         if k_point.is_empty() {
-            println!("DEBUG: Failed to compute K");
             error!("SAE: Failed to compute K");
             return None;
         }

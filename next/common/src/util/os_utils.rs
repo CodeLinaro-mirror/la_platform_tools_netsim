@@ -11,6 +11,7 @@ use std::os::windows::io::AsRawHandle;
 use std::{
     env,
     ffi::{CString, NulError},
+    fmt::Write as _,
     path::PathBuf,
 };
 
@@ -107,7 +108,7 @@ where
     let mut instance_name = String::new();
     let instance = get_instance_with_env(get_env, instance_num);
     if instance > 1 {
-        instance_name.push_str(&format!("{instance}_"));
+        let _ = write!(instance_name, "{instance}_");
     }
     // Note: This does not differentiate multiple connectors to the same instance.
     if connector_instance.is_some() {

@@ -413,7 +413,10 @@ impl NetsimDaemon {
     ) -> Result<StartUpMode, RunResult> {
         args.sanitize();
         if args.version {
-            println!("Netsim version: {}", get_version());
+            #[allow(clippy::print_stdout)]
+            {
+                println!("Netsim version: {}", get_version());
+            }
             return Err(RunResult::ExitedNormally);
         }
 

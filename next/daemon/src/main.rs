@@ -7,6 +7,7 @@ use std::process;
 use command_fds::inherited::init_inherited_fds;
 use daemon::{RunResult, run};
 
+#[allow(clippy::print_stderr)]
 fn main() {
     // SAFETY: This is the first line of the main function before anything opens
     // files or otherwise, takes ownership of any file descriptors.

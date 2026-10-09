@@ -6,6 +6,7 @@
 
 #![allow(unreachable_pub)]
 #![allow(clippy::indexing_slicing)]
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::{env, fs, process::ExitCode};
 
