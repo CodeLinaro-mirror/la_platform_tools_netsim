@@ -60,6 +60,19 @@ pub fn start(
     let wifi_service = create_wifi_service(WifiServiceImpl::new(wifi_client));
 
     let ble_service = create_ble_service(BleServiceImpl::new(device_client.clone()));
+    let reflection_service = netsim_proto::reflection_grpc::create_server_reflection(
+        crate::reflection::ServerReflectionImpl::from_descriptors(&[
+            netsim_proto::casimir_control::file_descriptor(),
+            netsim_proto::nfc_service::file_descriptor(),
+            netsim_proto::ble_service::file_descriptor(),
+            netsim_proto::access_point::file_descriptor(),
+            netsim_proto::cell::file_descriptor(),
+            netsim_proto::wifi_service::file_descriptor(),
+            netsim_proto::frontend::file_descriptor(),
+            netsim_proto::packet_streamer::file_descriptor(),
+            netsim_proto::reflection::file_descriptor(),
+        ]),
+    );
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
     let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
     let mut server_builder = ServerBuilder::new(env)
@@ -68,7 +81,8 @@ pub fn start(
         .register_service(cell_service)
         .register_service(casimir_service)
         .register_service(nfc_service)
-        .register_service(wifi_service);
+        .register_service(wifi_service)
+        .register_service(reflection_service);
 
     server_builder = server_builder.register_service(access_point_service);
 
@@ -91,7 +105,15 @@ pub fn start(
         let unix_addr = format!("unix:{uds_path}");
         match server.add_listening_port(&unix_addr, ServerCredentials::insecure()) {
             Ok(0) | Err(_) => warn!("Failed to bind Rust gRPC on UDS {unix_addr}"),
-            Ok(_) => info!("Rust gRPC listening on UDS {unix_addr}"),
+            Ok(_) => {
+                info!("Rust gRPC listening on UDS {unix_addr}");
+                if let Err(e) = std::fs::set_permissions(
+                    uds_path,
+                    std::os::unix::fs::PermissionsExt::from_mode(0o777),
+                ) {
+                    warn!("Failed to set permissions on UDS {unix_addr}: {e}");
+                }
+            }
         }
     }
 
