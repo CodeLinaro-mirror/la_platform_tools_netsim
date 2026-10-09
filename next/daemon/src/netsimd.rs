@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     env, io,
     path::PathBuf,
-    sync::{Arc, atomic::AtomicU32},
+    sync::{Arc, OnceLock, atomic::AtomicU32},
     time::Duration,
 };
 
@@ -40,7 +40,7 @@ use tokio::{
     sync::mpsc,
     task::JoinSet,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 #[cfg(feature = "cuttlefish")]
 use {
     packet_stream::{
@@ -53,13 +53,20 @@ use {
 
 use crate::{
     args::Args,
-    ini_file::{IniFile, IniFileAccess, IniFileInitialized, IniFileUninitialized, NetsimConfig},
+    ini_file::{
+        FileIdentity, IniFile, IniFileAccess, IniFileInitialized, IniFileUninitialized,
+        NetsimConfig,
+    },
     logger,
     version::{get_version, strip_version_suffix},
 };
 
 const MAX_INIT_RETRIES: i32 = 100;
 const RETRY_DELAY: Duration = Duration::from_millis(100);
+/// Number of gRPC connection attempts before treating a lock owner as unresponsive.
+const LIVENESS_PROBE_ATTEMPTS: u32 = 2;
+/// Per-attempt deadline for [`is_netsimd_alive`] gRPC connection probes.
+const LIVENESS_PROBE_TIMEOUT: Duration = Duration::from_millis(400);
 
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
@@ -260,6 +267,26 @@ where
     arg_port.or_else(|| get_env_port_impl(env_var, get_var))
 }
 
+/// Checks whether the netsimd gRPC server on `grpc_port` is responsive,
+/// matching legacy `rust_main.rs::is_netsimd_alive`.
+async fn is_netsimd_alive(grpc_port: u16) -> bool {
+    static PROBE_ENV: OnceLock<Arc<grpcio::Environment>> = OnceLock::new();
+    if grpc_port == 0 {
+        return false;
+    }
+    let addr = format!("localhost:{grpc_port}");
+    let env = PROBE_ENV.get_or_init(|| Arc::new(grpcio::Environment::new(1))).clone();
+    for attempt in 1..=LIVENESS_PROBE_ATTEMPTS {
+        let channel = grpcio::ChannelBuilder::new(env.clone()).connect(&addr);
+        let deadline = grpcio::Deadline::from(LIVENESS_PROBE_TIMEOUT);
+        if channel.wait_for_connected(deadline).await {
+            return true;
+        }
+        debug!("is_netsimd_alive attempt {attempt}/{LIVENESS_PROBE_ATTEMPTS} failed for {addr}");
+    }
+    false
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn setup_grpc_listener(
     streams: &mut Streams,
@@ -342,6 +369,8 @@ pub struct NetsimDaemon {
     streams: Streams,
     /// Path to the discovery INI file.
     ini_path: PathBuf,
+    /// The platform file identity of the `.lock` file held by this daemon.
+    ini_lock_inode: Option<FileIdentity>,
     /// Client for interacting with the Device Service.
     device_client: DeviceClient,
     /// Client for interacting with the Capture Service.
@@ -467,6 +496,7 @@ impl NetsimDaemon {
         );
 
         let mut attempts = 0;
+        let mut stale_eviction_attempted = false;
         // Support Cuttlefish multi-instance by using instance-specific INI
         // files.
         let instance_num = get_instance(args.instance);
@@ -485,17 +515,45 @@ impl NetsimDaemon {
                 }
                 // This instance is a Reader, another daemon is already running.
                 IniFileAccess::Reader(config) => {
-                    info!("Lock held by another process. Reading config: {:?}", config);
-                    return Ok(StartUpMode::Client(config));
-                }
-                IniFileAccess::Initializing => {
-                    if attempts >= MAX_INIT_RETRIES {
-                        return Err(init_error("Timed out waiting for daemon to initialize"));
+                    if is_netsimd_alive(config.grpc_port).await {
+                        info!("Lock held by another process. Reading config: {:?}", config);
+                        return Ok(StartUpMode::Client(config));
                     }
-                    attempts += 1;
-                    tokio::time::sleep(RETRY_DELAY).await;
+                    if stale_eviction_attempted {
+                        return Err(init_error(format!(
+                            "Existing netsimd (pid {:?}) on port {} is unresponsive and stale lock could not be evicted",
+                            config.pid, config.grpc_port
+                        )));
+                    }
+                    warn!(
+                        "Existing netsimd (pid {:?}) on port {} is unresponsive; removing stale netsim.ini and starting new daemon",
+                        config.pid, config.grpc_port
+                    );
+                    if IniFile::evict_stale_lock(&discovery_dir, instance_num, &config)
+                        .map_err(init_error)?
+                    {
+                        stale_eviction_attempted = true;
+                        continue;
+                    }
+                    // Nothing was evicted: another process holds
+                    // `netsim.ini.init.lock` (evicting the same owner,
+                    // initializing as the new owner, or briefly inspecting
+                    // the discovery files) or the files changed since
+                    // `try_acquire`. Re-observe after the `Initializing`
+                    // back-off instead of spending the single eviction
+                    // attempt on a no-op.
+                    info!("Stale lock eviction skipped; re-checking discovery files");
                 }
+                // Another process holds `netsim.ini.init.lock` or has not
+                // published `netsim.ini` yet.
+                IniFileAccess::Initializing => {}
             }
+
+            if attempts >= MAX_INIT_RETRIES {
+                return Err(init_error("Timed out waiting for daemon to initialize"));
+            }
+            attempts += 1;
+            tokio::time::sleep(RETRY_DELAY).await;
         }
     }
 
@@ -899,6 +957,7 @@ impl NetsimDaemon {
         // are running so external launchers cannot connect before actors are ready.
         let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
         let ini_path = initialized_guard.path().to_path_buf();
+        let ini_lock_inode = initialized_guard.lock_inode();
         info!("Wrote to INI file {}", ini_path.display());
 
         // Clone chip_clients for NetsimDaemon
@@ -928,6 +987,7 @@ impl NetsimDaemon {
                 capture_task,
                 artifact_dir,
                 ini_path,
+                ini_lock_inode,
                 link_client: Box::new(link_client),
                 slirp_client,
                 chip_clients: daemon_chip_clients,
@@ -1105,7 +1165,7 @@ impl NetsimDaemon {
                 }
             }
         }
-        IniFileInitialized::unlink_discovery_files(&self.ini_path);
+        IniFileInitialized::unlink_discovery_file_if_owner(&self.ini_path, self.ini_lock_inode);
         let grpc_shutdown = self._grpc_server.as_mut().map(|s| {
             let fut = s.shutdown();
             s.cancel_all_calls();
@@ -1493,5 +1553,20 @@ mod tests {
             "guid-3".to_string(),
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn test_is_netsimd_alive_rejects_unresponsive_port() {
+        assert!(!is_netsimd_alive(0).await);
+
+        // A listener that never completes the HTTP/2 handshake models a
+        // wedged netsimd that still holds its port open.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let dead_port = listener.local_addr().unwrap().port();
+
+        let probe_start = std::time::Instant::now();
+        assert!(!is_netsimd_alive(dead_port).await);
+        // Two 400ms attempts must stay well below the Initializing retry budget.
+        assert!(probe_start.elapsed() < Duration::from_secs(3));
     }
 }

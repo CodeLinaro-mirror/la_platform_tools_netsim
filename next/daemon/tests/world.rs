@@ -73,24 +73,22 @@ impl World {
         Self::new_with_args(args).await
     }
 
-    pub async fn new_with_args(mut args: daemon::Args) -> Self {
+    pub async fn new_with_args(args: daemon::Args) -> Self {
+        let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
+        std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+        Self::new_with_args_in_dir(temp_dir, args).await
+    }
+
+    /// Given a running Netsim Daemon started in an existing discovery
+    /// directory, which lets scenarios pre-seed `netsim.ini` and its locks.
+    pub async fn new_with_args_in_dir(temp_dir: PathBuf, args: daemon::Args) -> Self {
         static LOG_INIT: std::sync::Once = std::sync::Once::new();
         LOG_INIT.call_once(common::util::netsim_logger::init_for_test);
 
-        if args.hci_port.is_none() {
-            args.hci_port = Some(0); // Let the OS assign a random available
-            // port
-        }
-        #[cfg(feature = "cuttlefish")]
-        if args.test_port.is_none() {
-            args.test_port = Some(0);
-        }
-        let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
-        std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
-
-        let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), args)
-            .await
-            .expect("Failed to create daemon");
+        let startup_mode =
+            NetsimDaemon::new_with_dirs(temp_dir.clone(), Self::with_test_ports(args))
+                .await
+                .expect("Failed to create daemon");
 
         let (daemon, ini_guard) = match startup_mode {
             StartUpMode::Owner(daemon, ini_guard) => (daemon, ini_guard),
@@ -131,6 +129,34 @@ impl World {
 
     pub fn get_temp_dir(&self) -> &std::path::Path {
         &self._temp_dir
+    }
+
+    /// Lets the OS assign random available ports unless a scenario set them.
+    fn with_test_ports(mut args: daemon::Args) -> daemon::Args {
+        if args.hci_port.is_none() {
+            args.hci_port = Some(0);
+        }
+        #[cfg(feature = "cuttlefish")]
+        if args.test_port.is_none() {
+            args.test_port = Some(0);
+        }
+        args
+    }
+
+    /// When another netsimd starts in this World's discovery directory
+    pub async fn when_start_daemon_in_same_dir(&mut self, args: daemon::Args) -> StartUpMode {
+        NetsimDaemon::new_with_dirs(self._temp_dir.clone(), Self::with_test_ports(args))
+            .await
+            .expect("Failed to start another daemon")
+    }
+
+    /// Then netsim.ini advertises `grpc_port` and netsim.ini.lock is still held
+    pub fn then_discovery_file_advertises_port(&self, grpc_port: u16) {
+        let ini_file = daemon::IniFile::new_for_dir(self._temp_dir.clone(), 1).unwrap();
+        match ini_file.try_acquire() {
+            Ok(daemon::IniFileAccess::Reader(config)) => assert_eq!(config.grpc_port, grpc_port),
+            other => panic!("Expected Reader({grpc_port}), got {other:?}"),
+        }
     }
 
     /// When I request the version
