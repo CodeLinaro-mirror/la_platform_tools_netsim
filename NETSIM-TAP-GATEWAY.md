@@ -1,7 +1,6 @@
 ## Design Document: TAP Networking for Goldfish Emulator on gLinux via netsimd Gateway
 
-**Go Link:** go/goldfish-netsim-tap-gateway **Status:** Draft **Author:**
-schilit@ (via Duckie) **Last Updated:** 2026-02-07
+**Status:** Draft **Author:** schilit@ **Last Updated:** 2026-02-07
 
 **1. Objective**
 
@@ -28,7 +27,7 @@ have direct layer 2 network presence on the host.
 - **Goldfish Networking:** The Goldfish emulator traditionally uses a user-space
   "slirp" network stack, which requires no special privileges but has
   performance limitations and doesn't provide true layer 2 presence.
-- **Netsim Daemon (`netsimd`):** The `netsimd` (go/betosim) provides network
+- **Netsim Daemon (`netsimd`):** `netsimd` provides network
   simulation for both Cuttlefish and Goldfish. For Goldfish, it currently uses a
   gRPC transport to `libslirp-rs` within `netsimd` for external network access.
 - **Internal Use Case:** Many internal Android developers have `cuttlefish-base`
@@ -262,7 +261,7 @@ workstation:
     `sudo systemctl start cuttlefish-host-resources.service`, but a reboot is
     more thorough.
 
-_See go/cuttlefish-glinux for more details._
+_See [Cuttlefish Get Started](https://source.android.com/docs/devices/cuttlefish/get-started) for more details._
 
 **Appendix B: Verifying the Setup**
 
@@ -310,32 +309,3 @@ devices are set up on your gLinux machine:
     systemctl status cuttlefish-host-resources.service
     ```
     Look for `Active: active (running)`.
-
----
-
-References: [8.2.1]:
-[//depot/google3/third_party/android_cuttlefish/base/debian/cuttlefish-base.cuttlefish-host-resources.init](https://source.corp.google.com/piper///depot/google3/third_party/android_cuttlefish/base/debian/cuttlefish-base.cuttlefish-host-resources.init)
-[22.3.1]:
-[Better Together Network Simulator - Betosim](https://g3doc.corp.google.com/ambient/d2di/sim/g3doc/index.md)
-[22.8.1]:
-[TDD: Wi-Fi for Android Virtual Devices 2025 Update](https://drive.google.com/open?id=1zDHHYM_-NB5eT7DZoBvchg1_KEHRryQjRGMf7yaOXyk)
-[26.1.1]:
-[Netsim-next: A New Architecture for Emulated Chips - Betosim](https://g3doc.corp.google.com/ambient/d2di/sim/g3doc/guide/netsim_next.md)
-[14.15.1]:
-[Building and running the Android Emulator - ChromeOS Filesystem](https://g3doc.corp.google.com/company/teams/chromeos-filesystem/g3doc/android/emulator.md)
-[4.3.1]:
-[Cuttlefish launcher architecture](https://drive.google.com/open?id=1UfFQYWNE4GUDem7h037dlWUgTXGSWz5dr82hy4kJPG8)
-[6.7.1]:
-[Setup tap network with android emulator](https://drive.google.com/open?id=1xbrtoOy9zCKuGJWLth8mKqiWBjFNDlp0IQT8biqDk7w)
-[18.15.1]:
-[Emulators for Wear - Watch SW](https://g3doc.corp.google.com/company/teams/android-wearos/development/emulator/overview.md)
-[6.6.1]:
-[Get started](https://preview.source.android.com/docs/devices/cuttlefish/get-started)
-[1.2.1]:
-[Cuttlefish Survival Guide](https://drive.google.com/open?id=1zIW4oTcXdkV5zK5iwjOFipON7-XDyVfDaTF_PZSnFaQ)
-[6.13.1]:
-[Cuttlefish Host Packages - Cloud Android](https://g3doc.corp.google.com/cloud/android/sites/team-members/g3doc/build-host-packages.md)
-[1.1.1]:
-[Get started](https://source.android.com/docs/devices/cuttlefish/get-started)
-[6.15.2]:
-[Virtual Device for Android host-side utilities - Android Cuttlefish Debian](https://g3doc.corp.google.com/third_party/android_cuttlefish/README.md)

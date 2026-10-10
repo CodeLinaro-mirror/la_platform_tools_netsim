@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 # Copyright 2026 The Android Open Source Project
-# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import os
 import re
@@ -12,6 +23,48 @@ pat_license = re.compile(
     r" 2\.0.*?limitations under.*?the License\.",
     re.DOTALL | re.MULTILINE,
 )
+
+# The literal is split so license scanners don't mistake this code for the
+# file's own license declaration.
+SPDX_TAG = "-".join(("SPDX", "License", "Identifier"))
+SPDX_APACHE = f"{SPDX_TAG}: Apache-2.0"
+
+# Headers are normalized through the SPDX form, then expanded to the full
+# Apache 2.0 notice, which OSPO Cross (go/cross) requires for open source.
+APACHE_NOTICE = (
+    "",
+    'Licensed under the Apache License, Version 2.0 (the "License");',
+    "you may not use this file except in compliance with the License.",
+    "You may obtain a copy of the License at",
+    "",
+    "    http://www.apache.org/licenses/LICENSE-2.0",
+    "",
+    "Unless required by applicable law or agreed to in writing, software",
+    'distributed under the License is distributed on an "AS IS" BASIS,',
+    "WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.",
+    "See the License for the specific language governing permissions and",
+    "limitations under the License.",
+)
+
+pat_spdx_header = re.compile(
+    r"^(?P<prefix>[ \t]*(?://|#|\*|REM)?[ \t]*)"
+    rf"{SPDX_TAG}: Apache-2\.0[ \t]*$",
+    re.MULTILINE,
+)
+
+
+def expand_spdx_header(content):
+  """Replaces the SPDX header line with the full Apache 2.0 notice."""
+  match = pat_spdx_header.search(content)
+  if not match or content.count("\n", 0, match.start()) > 10:
+    return content
+  prefix = match.group("prefix")
+  bare = prefix.rstrip()
+  lines = [f"{prefix}{text}" if text else bare for text in APACHE_NOTICE]
+  preceding = content[: match.start()].removesuffix("\n").rsplit("\n", 1)[-1]
+  if preceding.rstrip() == bare:
+    lines = lines[1:]
+  return content[: match.start()] + "\n".join(lines) + content[match.end() :]
 
 
 def process_file(filepath):
@@ -35,18 +88,19 @@ def process_file(filepath):
       content,
   )
 
-  # Standard Apache 2.0 conversion
-  content = pat_license.sub(
-      r"\1\2 SPDX-License-Identifier: Apache-2.0", content
-  )
+  # Standard Apache 2.0 conversion, limited to the file header so that
+  # license text inside code (e.g. generator templates) is left alone.
+  match = pat_license.search(content)
+  if match and content.count("\n", 0, match.start()) <= 10:
+    content = pat_license.sub(rf"\1\2 {SPDX_APACHE}", content, count=1)
 
   # Tightly pack the headers
   content = re.sub(
-      r"^([ \t]*(?://|#|\*|/\*) Copyright.*?(?:The Android Open Source"
-      r" Project|Google"
+      r"^([ \t]*(?://|#|\*|/\*)[ \t]+Copyright.*?(?:The Android Open"
+      r" Source Project|Google"
       r" LLC|Google, Inc\.))"
       r"\n(?:[ \t]*(?://|#|\*|/\*)[ \t]*\n)+"
-      r"([ \t]*(?://|#|\*|/\*) SPDX-License)",
+      rf"([ \t]*(?://|#|\*|/\*) {SPDX_TAG})",
       lambda m: f"{m.group(1)}\n{m.group(2)}",
       content,
       flags=re.MULTILINE,
@@ -63,19 +117,20 @@ def process_file(filepath):
       r"Copyright \1 The Android Open Source Project",
       content,
   )
+  content = re.sub(
+      r"Copyright (\d{4}(?:-\d{4})?)\s*-\s*The Android Open Source Project",
+      r"Copyright \1 The Android Open Source Project",
+      content,
+  )
 
   # Remove awkward top-level spacer if trailing whitespace
   content = re.sub(r"^\s*(//|#)\n([ \t]*\1 Copyright)", r"\2", content)
 
   # Auto-inject missing SPDX identifier if Copyright exists
-  if "Copyright" in content and "SPDX-License-Identifier" not in content:
-    if re.search(r"Licensed under the Apache License", content, re.IGNORECASE):
-      print(
-          "format_licenses: WARNING - Unstripped boilerplate anomaly in"
-          f" {filepath}. Skipping injection.",
-          file=sys.stderr,
-      )
-    else:
+  if "Copyright" in content and SPDX_TAG not in content:
+    if not re.search(
+        r"Licensed under the Apache License", content, re.IGNORECASE
+    ):
       match = re.search(
           r"^(?P<prefix>[ \t]*(?://|#|\*|/\*)[ \t]*)Copyright",
           content,
@@ -83,7 +138,7 @@ def process_file(filepath):
       )
       if match:
         prefix = match.group("prefix")
-        spdx_line = f"{prefix}SPDX-License-Identifier: Apache-2.0"
+        spdx_line = f"{prefix}{SPDX_APACHE}"
         content = re.sub(
             r"^([ \t]*(?://|#|\*|/\*)[ \t]*Copyright[^\n]*)$",
             lambda m: m.group(1) + "\n" + spdx_line,
@@ -97,7 +152,7 @@ def process_file(filepath):
   block_match = re.search(
       r"^([ \t]*((?://|#|\*|/\*)[ \t]*Copyright.*?\n(?:["
       r" \t]*(?://|#|\*|/\*).*?\n)*?[ \t]*(?://|#|\*|/\*)["
-      r" \t]*SPDX-License-Identifier:[^\n]*\n))",
+      rf" \t]*{SPDX_TAG}:[^\n]*\n))",
       content,
       re.MULTILINE,
   )
@@ -137,17 +192,15 @@ def process_file(filepath):
   # false positives in generated binary data, while allowing for shebangs.
   top_lines = content.split("\n", 3)[:3]
   has_copyright = any(
-      re.search(r"^[ \t]*(#|//|\*|/\*)[ \t]*Copyright", line)
+      re.search(r"^[ \t]*(#|//|\*|/\*|REM)?[ \t]*Copyright", line)
       for line in top_lines
   )
-  if not has_copyright and not any(
-      "SPDX-License-Identifier" in line for line in top_lines
-  ):
+  if not has_copyright and not any(SPDX_TAG in line for line in top_lines):
     basename = os.path.basename(filepath)
     ext = os.path.splitext(filepath)[1]
     if ext in [".rs", ".java", ".ts", ".cc", ".h", ".kt", ".proto"]:
       prefix = "//"
-    elif ext in [".py", ".toml", ".sh", ".bzl", ".yaml", ".yml"]:
+    elif ext in [".py", ".toml", ".sh", ".bzl", ".bazel", ".yaml", ".yml"]:
       prefix = "#"
     elif basename.startswith("BUILD") or basename == "CMakeLists.txt":
       prefix = "#"
@@ -156,7 +209,7 @@ def process_file(filepath):
 
     header = (
         f"{prefix} Copyright 2026 The Android Open Source Project\n{prefix}"
-        " SPDX-License-Identifier: Apache-2.0\n\n"
+        f" {SPDX_APACHE}\n\n"
     )
     content = content.lstrip("\n")  # Remove extra newlines at start
     if content.startswith("#!"):
@@ -167,6 +220,8 @@ def process_file(filepath):
         content = parts[0] + "\n" + header
     else:
       content = header + content
+
+  content = expand_spdx_header(content)
 
   if content != orig:
     with open(filepath, "w", encoding="utf-8") as file:
