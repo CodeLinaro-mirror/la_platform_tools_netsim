@@ -39,19 +39,33 @@ impl ActorService for BluetoothActor {
             .ok_or_else(|| BluetoothError::invalid_arg("Missing chip variant"))?;
         let bluetooth = match variant {
             ChipVariant::Bluetooth(b) => b,
-            _ => return Err(BluetoothError::invalid_arg("Expected Bluetooth variant")),
+            _ => {
+                return Err(BluetoothError::invalid_arg("Expected Bluetooth variant"));
+            }
         };
 
         // Validate Scanner constraints: No PacketStream, Must have PacketSink.
         if let BluetoothMode::Scanner(_) = &bluetooth.mode {
-            assert!(params.packet_stream.is_none(), "Scanner chip cannot have a packet stream");
-            assert!(params.packet_sink.is_some(), "Scanner chip must have a packet sink");
+            if params.packet_stream.is_some() {
+                return Err(BluetoothError::invalid_arg(
+                    "Scanner chip cannot have a packet stream",
+                ));
+            }
+            if params.packet_sink.is_none() {
+                return Err(BluetoothError::invalid_arg("Scanner chip must have a packet sink"));
+            }
         }
 
         // Validate Sniffer constraints: No PacketStream, Must have PacketSink.
         if let BluetoothMode::Sniffer(_) = &bluetooth.mode {
-            assert!(params.packet_stream.is_none(), "Sniffer chip cannot have a packet stream");
-            assert!(params.packet_sink.is_some(), "Sniffer chip must have a packet sink");
+            if params.packet_stream.is_some() {
+                return Err(BluetoothError::invalid_arg(
+                    "Sniffer chip cannot have a packet stream",
+                ));
+            }
+            if params.packet_sink.is_none() {
+                return Err(BluetoothError::invalid_arg("Sniffer chip must have a packet sink"));
+            }
         }
 
         let name =

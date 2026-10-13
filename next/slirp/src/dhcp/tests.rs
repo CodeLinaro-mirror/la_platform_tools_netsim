@@ -447,8 +447,8 @@ fn test_dhcp_unsupported_message_type() {
     let clock = MockClock::new();
     let mut responses = Vec::new();
 
-    // Create an ACK packet (which is a server-to-client packet, the server should
-    // ignore it)
+    // Create an ACK packet (which is a server-to-client packet, the server
+    // should ignore it)
     let mut options = [0; 308];
     options[0] = 53;
     options[1] = 1;
@@ -710,14 +710,14 @@ fn test_dhcp_parse_option_edge_cases() {
     send_custom_opt53(&mut dhcp_manager, &[6], &mut responses);
     assert!(responses.is_empty());
 
-    // Case 3: Option 53 value is unknown (9) -> get_message_type returns None ->
-    // falls back to BOOTP!
+    // Case 3: Option 53 value is unknown (9) -> get_message_type returns None
+    // -> falls back to BOOTP!
     send_custom_opt53(&mut dhcp_manager, &[9], &mut responses);
     assert_eq!(responses.len(), 1);
     responses.clear();
 
-    // Case 4: Option 53 length is not 1 (length 2) -> get_message_type returns None
-    // -> falls back to BOOTP!
+    // Case 4: Option 53 length is not 1 (length 2) -> get_message_type returns
+    // None -> falls back to BOOTP!
     send_custom_opt53(&mut dhcp_manager, &[1, 2], &mut responses);
     assert_eq!(responses.len(), 1);
     responses.clear();

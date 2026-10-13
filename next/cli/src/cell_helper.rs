@@ -11,7 +11,7 @@ use crate::error::{Error, Result};
 
 /// Trait abstracting the `CellService` gRPC client, enabling mocking in unit
 /// tests.
-pub trait CellClient {
+pub(crate) trait CellClient {
     fn list(&self, req: &ListCellsRequest) -> ::grpcio::Result<ListCellsResponse>;
     fn get(&self, req: &GetCellRequest) -> ::grpcio::Result<Cell>;
     fn execute(&self, req: &ExecuteCellRequest) -> ::grpcio::Result<Empty>;
@@ -36,23 +36,23 @@ impl CellClient for CellServiceClient {
 /// - If exactly one device exists, its ID is automatically returned.
 /// - If no devices or multiple devices exist, an error is returned prompting
 ///   the user to specify an ID.
-pub fn resolve_cell_id(id: Option<u32>, client: &impl CellClient) -> Result<u32> {
+pub(crate) fn resolve_cell_id(id: Option<u32>, client: &impl CellClient) -> Result<u32> {
     if let Some(id_val) = id {
         return Ok(id_val);
     }
     let req = ListCellsRequest::new();
     let response = client.list(&req)?;
-    if response.cells.is_empty() {
-        return Err(Error::Message("No simulated cellular devices found.".to_string()));
+    match response.cells.as_slice() {
+        [] => Err(Error::Message("No simulated cellular devices found.".to_string())),
+        [cell] => Ok(cell.id),
+        cells => {
+            let ids: Vec<String> = cells.iter().map(|c| c.id.to_string()).collect();
+            Err(Error::Message(format!(
+                "Multiple simulated cellular devices found: {}. Please specify device ID.",
+                ids.join(", ")
+            )))
+        }
     }
-    if response.cells.len() == 1 {
-        return Ok(response.cells[0].id);
-    }
-    let ids: Vec<String> = response.cells.iter().map(|c| c.id.to_string()).collect();
-    Err(Error::Message(format!(
-        "Multiple simulated cellular devices found: {}. Please specify device ID.",
-        ids.join(", ")
-    )))
 }
 
 #[cfg(test)]

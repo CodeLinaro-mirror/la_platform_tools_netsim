@@ -45,10 +45,22 @@ pub trait CaptureWriter: Send + Sync {
     fn get_stats(&self) -> (u64, u64); // (records, bytes)
 }
 
+/// PCAP Global Header magic number (microsecond timestamps, standard byte order).
+const PCAP_MAGIC_NUMBER: u32 = 0xa1b2c3d4;
+
+/// PCAP major version (version 2.4).
+const PCAP_VERSION_MAJOR: u16 = 2;
+
+/// PCAP minor version (version 2.4).
+const PCAP_VERSION_MINOR: u16 = 4;
+
+/// Default maximum captured packet snapshot length (65,535 bytes).
+const DEFAULT_SNAPLEN: u32 = u16::MAX as u32;
+
 /// Generic PCAP writer.
 ///
 /// Handles writing the PCAP global header and record headers.
-pub struct PcapWriter {
+pub(crate) struct PcapWriter {
     writer: BufWriter<File>,
     records_written: u64,
     bytes_written: u64,
@@ -61,18 +73,18 @@ impl PcapWriter {
     ///
     /// * `path` - The path to the output file.
     /// * `network` - The Link-Layer Header Type (DLT).
-    pub async fn new<P: AsRef<Path>>(path: P, network: u32) -> io::Result<Self> {
+    pub(crate) async fn new<P: AsRef<Path>>(path: P, network: DataLinkType) -> io::Result<Self> {
         let file = File::create(path).await?;
         let mut writer = BufWriter::new(file);
 
         let header = PcapHeader {
-            magic_number: U32::new(0xa1b2c3d4),
-            version_major: U16::new(2),
-            version_minor: U16::new(4),
+            magic_number: U32::new(PCAP_MAGIC_NUMBER),
+            version_major: U16::new(PCAP_VERSION_MAJOR),
+            version_minor: U16::new(PCAP_VERSION_MINOR),
             thiszone: I32::new(0),
             sigfigs: U32::new(0),
-            snaplen: U32::new(65535),
-            network: U32::new(network),
+            snaplen: U32::new(DEFAULT_SNAPLEN),
+            network: U32::new(network.as_u32()),
         };
 
         writer.write_all(header.as_bytes()).await?;
@@ -120,15 +132,47 @@ impl CaptureWriter for PcapWriter {
     }
 }
 
-// Bluetooth H4 DLT is 187
-pub const DLT_BLUETOOTH_H4: u32 = 187;
-// FiRa UCI DLT is 299
-pub const DLT_FIRA_UCI: u32 = 299;
-// IEEE 802.11 Radiotap DLT is 127
-pub const DLT_IEEE802_11_RADIO: u32 = 127;
-// Ethernet DLT is 1
-pub const DLT_ETHERNET: u32 = 1;
-// NFC Controller Interface (NCI) uses DLT 147 (USER0) for Wireshark support
-pub const DLT_NFC_NCI: u32 = 147;
-// User defined 0 DLT is 147 (for custom protocols like AT commands)
-pub const DLT_USER0: u32 = 147;
+/// Link-Layer Header Type (DLT / Data Link Type) identifying the encapsulation protocol.
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataLinkType {
+    /// IEEE 802.3 Ethernet.
+    Ethernet = 1,
+    /// IEEE 802.11 plus Radiotap radio header.
+    Ieee80211Radio = 127,
+    /// User defined 0 (DLT_USER0, often used for custom protocols like AT commands and NCI).
+    User0 = 147,
+    /// Bluetooth HCI H4 with direction flag.
+    BluetoothH4 = 187,
+    /// FiRa Ultra-Wideband Command Interface (UCI).
+    FiraUci = 299,
+}
+
+impl DataLinkType {
+    /// Returns the raw u32 numeric identifier for this Data Link Type.
+    pub const fn as_u32(self) -> u32 {
+        self as u32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_data_link_type_values() {
+        assert_eq!(DataLinkType::Ethernet.as_u32(), 1);
+        assert_eq!(DataLinkType::Ieee80211Radio.as_u32(), 127);
+        assert_eq!(DataLinkType::User0.as_u32(), 147);
+        assert_eq!(DataLinkType::BluetoothH4.as_u32(), 187);
+        assert_eq!(DataLinkType::FiraUci.as_u32(), 299);
+    }
+
+    #[test]
+    fn test_pcap_header_constants() {
+        assert_eq!(PCAP_MAGIC_NUMBER, 0xa1b2c3d4);
+        assert_eq!(PCAP_VERSION_MAJOR, 2);
+        assert_eq!(PCAP_VERSION_MINOR, 4);
+        assert_eq!(DEFAULT_SNAPLEN, 65535);
+    }
+}

@@ -27,14 +27,18 @@ impl TimeDisplay {
         TimeDisplay { secs, nsecs }
     }
 
+    /// Resolves the UTC DateTime if seconds and nanoseconds form a valid timestamp.
+    fn utc_datetime(&self) -> Option<DateTime<Utc>> {
+        DateTime::from_timestamp(self.secs, self.nsecs)
+    }
+
     /// Displays date & time in UTC with a format YYYY-MM-DD-HH:MM:SS
     ///
     /// # Returns
     ///
     /// `String` display of utc time.
     pub fn utc_display(&self) -> String {
-        if let Some(datetime) = DateTime::from_timestamp(self.secs, self.nsecs) {
-            let current_datetime = datetime.with_timezone(&Utc);
+        if let Some(current_datetime) = self.utc_datetime() {
             return format!(
                 "{}-{:02}-{:02}-{:02}-{:02}-{:02}",
                 current_datetime.year(),
@@ -54,8 +58,7 @@ impl TimeDisplay {
     ///
     /// `Ok(String)` if the display was successful, `Error` otherwise.
     pub fn utc_display_hms(&self) -> String {
-        if let Some(datetime) = DateTime::from_timestamp(self.secs, self.nsecs) {
-            let current_datetime = datetime.with_timezone(&Utc);
+        if let Some(current_datetime) = self.utc_datetime() {
             return format!(
                 "{:02}:{:02}:{:02}",
                 current_datetime.hour(),
@@ -68,8 +71,7 @@ impl TimeDisplay {
 
     /// Displays time in UTC for logs
     fn utc_display_log(&self) -> String {
-        if let Some(datetime) = DateTime::from_timestamp(self.secs, self.nsecs) {
-            let current_datetime = datetime.with_timezone(&Utc);
+        if let Some(current_datetime) = self.utc_datetime() {
             return format!(
                 "{:02}-{:02} {:02}:{:02}:{:02}.{:.3}",
                 current_datetime.month(),

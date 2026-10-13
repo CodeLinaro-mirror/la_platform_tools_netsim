@@ -148,6 +148,11 @@ pub fn get_tcp_server_address(instance_num: u16) -> Option<String> {
     get_address_by_key(instance_num, "tcp.port")
 }
 
+/// Get the HTTP server address for netsim REST API
+pub fn get_http_server_address(instance_num: u16) -> Option<String> {
+    get_address_by_key(instance_num, "http.port")
+}
+
 pub(crate) fn get_ini_filepath_with_env<F>(get_env: F, instance_num: u16) -> PathBuf
 where
     F: Fn(&str) -> Result<String, env::VarError>,

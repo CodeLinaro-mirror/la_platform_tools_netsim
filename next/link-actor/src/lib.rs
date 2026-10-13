@@ -7,7 +7,6 @@ mod link_actor;
 mod service;
 
 use actor_framework::ResourceActor;
-pub use error::LinkError;
 pub use link_actor::LinkActor;
 
 // # Link Actor
@@ -73,7 +72,7 @@ pub use link_actor::LinkActor;
 //     4. *Result*: Subsequent `create` calls for this chip will pass
 //        validation.
 
-pub mod client;
+mod client;
 pub use client::LinkClient;
 
 /// Creates a new LinkActor and returns the runner and a client.

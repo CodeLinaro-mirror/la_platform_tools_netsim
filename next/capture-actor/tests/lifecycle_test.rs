@@ -75,3 +75,31 @@ async fn test_capture_directory() {
     // Then: a file is created in the temp directory
     world.then_capture_file_exists().await;
 }
+
+// Scenario: List and patch captures
+#[tokio::test]
+async fn test_list_and_patch_captures() {
+    let world = World::new().await;
+
+    // Given: two captures created with different initial states
+    world.when_create_capture(11, ChipKind::BLUETOOTH, "bt_device", false).await.unwrap();
+    world.when_create_capture(12, ChipKind::NFC, "nfc_device", true).await.unwrap();
+
+    // When: listing captures
+    let captures = world.client.list_captures().await.unwrap();
+
+    // Then: both captures are present with matching initial states
+    assert_eq!(captures.len(), 2);
+    let bt_cap = captures.iter().find(|c| c.chip_id == netsim_model::ChipId(11)).unwrap();
+    assert!(!bt_cap.enabled);
+    let nfc_cap = captures.iter().find(|c| c.chip_id == netsim_model::ChipId(12)).unwrap();
+    assert!(nfc_cap.enabled);
+
+    // When: patching capture state via patch_capture
+    world.client.patch_capture(netsim_model::ChipId(11), true).await.unwrap();
+    world.client.patch_capture(netsim_model::ChipId(12), false).await.unwrap();
+
+    // Then: states are updated accordingly
+    world.then_capture_is_enabled(11, true).await;
+    world.then_capture_is_enabled(12, false).await;
+}

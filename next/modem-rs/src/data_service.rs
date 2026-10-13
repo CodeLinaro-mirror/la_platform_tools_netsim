@@ -6,11 +6,11 @@
 use std::{collections::BTreeMap, net::IpAddr};
 
 use modem_rs_derive::CommandParser;
-use netsim_model::CellNetworkConfig;
+use netsim_model::{CellNetworkConfig, Quirks};
 use nom::IResult;
 
 use crate::{
-    modem::ModemImpl,
+    RadioAdmission,
     parser::QuotedString,
     types::{
         CmeError, ExecutionResult, Layer2Protocol, PacketEventReportingMode, Parsable,
@@ -159,6 +159,7 @@ pub enum DataResponse {
         prefix: u8,
         gateway: IpAddr,
         dns: IpAddr,
+        goldfish_compat: bool,
     },
 }
 
@@ -232,10 +233,22 @@ impl std::fmt::Display for DataResponse {
             DataResponse::PdpAddress { cid, ip_address } => {
                 write!(f, "+CGPADDR: {cid},\"{ip_address}\"\r\n")
             }
-            DataResponse::DynamicParam { cid, apn, ip_address, prefix, gateway, dns } => {
+            DataResponse::DynamicParam {
+                cid,
+                apn,
+                ip_address,
+                prefix,
+                gateway,
+                dns,
+                goldfish_compat,
+            } => {
+                // TODO(b/563454581): Goldfish RIL AtResponse::CGCONTRDP::parse
+                // fails to strip 3GPP TS 27.007 § 10.1.23
+                // quotes around IP, gateway, and DNS tokens.
+                let q = if *goldfish_compat { "" } else { "\"" };
                 write!(
                     f,
-                    "+CGCONTRDP: {cid},5,\"{apn}\",\"{ip_address}/{prefix}\",\"{gateway}\",\"{dns}\"\r\n"
+                    "+CGCONTRDP: {cid},5,\"{apn}\",{q}{ip_address}/{prefix}{q},{q}{gateway}{q},{q}{dns}{q}\r\n"
                 )
             }
         }
@@ -248,11 +261,12 @@ pub struct DataService {
     pdp_contexts: BTreeMap<u8, PdpContext>,
     network_configs: Vec<CellNetworkConfig>,
     ps_attached: bool,
+    quirks: Quirks,
 }
 
 impl DataService {
-    pub fn new(network_configs: Vec<CellNetworkConfig>) -> Self {
-        Self { pdp_contexts: BTreeMap::new(), network_configs, ps_attached: true }
+    pub fn new(quirks: Quirks, network_configs: Vec<CellNetworkConfig>) -> Self {
+        Self { pdp_contexts: BTreeMap::new(), network_configs, ps_attached: true, quirks }
     }
 
     /// Selects the configuration to use for a PDP type.
@@ -261,10 +275,19 @@ impl DataService {
     pub fn find_network_config(&self, pdp_type: &PdpType) -> Option<&CellNetworkConfig> {
         match pdp_type {
             PdpType::Ip => self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv4()),
-            PdpType::Ipv6 => self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv6()),
+            PdpType::Ipv6 => {
+                self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv6()).or_else(|| {
+                    if self.quirks.allow_ipv4_for_ipv6 {
+                        self.network_configs.iter().find(|cfg| cfg.ip_address.is_ipv4())
+                    } else {
+                        None
+                    }
+                })
+            }
             PdpType::Ipv4v6 => {
-                // TODO(b/542980136): Radio HAL only accepts a single IP in +CGCONTRDP;
-                // return the first config to respect the configurator's preference order.
+                // TODO(b/542980136): Radio HAL only accepts a single IP in
+                // +CGCONTRDP; return the first config to
+                // respect the configurator's preference order.
                 self.network_configs.first()
             }
             PdpType::Ppp | PdpType::NonIp | PdpType::Cell => None,
@@ -287,17 +310,14 @@ impl DataService {
 
 impl Default for DataService {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new(Quirks::default(), Vec::new())
     }
 }
 
 impl DataService {
     // --- Helper methods for external services ---
 
-    pub fn on_update_physical_channel_configs(
-        &self,
-        _context: &ModemImpl,
-    ) -> Vec<crate::modem::ModemEffect> {
+    pub fn on_update_physical_channel_configs(&self) -> Vec<crate::modem::ModemEffect> {
         vec![crate::modem::ModemEffect::Response(b"+CGEV: NW PDN DEACT 1\r\n".to_vec())]
     }
 
@@ -364,7 +384,23 @@ impl DataService {
         }
     }
 
-    pub fn handle_set_pdp_context_activate(&mut self, cid: u8, state: bool) -> DataResult {
+    fn check_data_admission(&self, radio: &impl RadioAdmission) -> Result<(), CmeError> {
+        radio.can_originate_data()?;
+        if !self.ps_attached {
+            return Err(CmeError::NetworkNotAttachedDueToMTFunctionalRestrictions);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn handle_set_pdp_context_activate(
+        &mut self,
+        cid: u8,
+        state: bool,
+        radio: &impl RadioAdmission,
+    ) -> DataResult {
+        if state {
+            self.check_data_admission(radio)?;
+        }
         if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.active = state;
             Ok(None)
@@ -407,11 +443,13 @@ impl DataService {
         if self.pdp_contexts.contains_key(&cid) { Ok(None) } else { Err(ExecutionResult::error()) }
     }
 
-    pub fn handle_enter_data_state(
+    pub(crate) fn handle_enter_data_state(
         &self,
         l2p: Option<QuotedString<'_>>,
         cid: Option<u8>,
+        radio: &impl RadioAdmission,
     ) -> DataResult {
+        self.check_data_admission(radio)?;
         if l2p.is_some_and(|l| l.as_str().parse::<Layer2Protocol>().is_err()) {
             return Err(ExecutionResult::error());
         }
@@ -457,8 +495,9 @@ impl DataService {
         if let Some(context) = self.pdp_contexts.get(&cid) {
             if context.active {
                 let apn = context.apn.clone();
-                // TODO(b/542980136): Support true dual-stack (IPV4V6) by returning both IPv4
-                // and IPv6 parameters. Currently, we only enable IPv6 if it is
+                // TODO(b/542980136): Support true dual-stack (IPV4V6) by
+                // returning both IPv4 and IPv6 parameters.
+                // Currently, we only enable IPv6 if it is
                 // purely IPV6 to avoid breaking IPv4 compatibility on IPV4V6.
                 let is_ipv6 = context.pdp_type == PdpType::Ipv6;
                 let requested_type = if is_ipv6 { PdpType::Ipv6 } else { PdpType::Ip };
@@ -473,6 +512,7 @@ impl DataService {
                     prefix: cfg.prefixlen,
                     gateway: cfg.gateway,
                     dns: cfg.dns,
+                    goldfish_compat: self.quirks.goldfish_ril_37_or_earlier,
                 }))
             } else {
                 Err(ExecutionResult::cme_error(CmeError::InvalidIndex))
@@ -482,7 +522,12 @@ impl DataService {
         }
     }
 
-    pub fn handle_gprs_dial(&mut self, number: &str) -> DataResult {
+    pub(crate) fn handle_gprs_dial(
+        &mut self,
+        number: &str,
+        radio: &impl RadioAdmission,
+    ) -> DataResult {
+        self.check_data_admission(radio)?;
         if let Some(context) =
             parse_cid_from_gprs_dial(number).and_then(|cid| self.pdp_contexts.get_mut(&cid))
         {
@@ -492,7 +537,11 @@ impl DataService {
         Err(ExecutionResult::error())
     }
 
-    pub fn execute<'a>(&mut self, command: &DataCommand<'a>) -> ExecutionResult {
+    pub(crate) fn execute<'a>(
+        &mut self,
+        command: &DataCommand<'a>,
+        radio_service: &impl RadioAdmission,
+    ) -> ExecutionResult {
         let result: DataResult = match command {
             DataCommand::DefinePdpContext(cid, pdp_type, apn, ..) => {
                 self.handle_define_pdp_context(*cid, *pdp_type, *apn)
@@ -521,13 +570,15 @@ impl DataService {
                 self.handle_query_qos(QosType::RequestedGprs)
             }
             DataCommand::SetPdpContextActivate(args) => {
-                self.handle_set_pdp_context_activate(args.cid, args.state)
+                self.handle_set_pdp_context_activate(args.cid, args.state, radio_service)
             }
             DataCommand::QueryPdpContextActivate => self.handle_query_pdp_context_activate(),
             DataCommand::SetPsAttach(state) => self.handle_set_ps_attach(*state),
             DataCommand::QueryPsAttach => self.handle_query_ps_attach(),
             DataCommand::SetPdpContextModify(cid) => self.handle_set_pdp_context_modify(*cid),
-            DataCommand::EnterDataState(l2p, cid) => self.handle_enter_data_state(*l2p, *cid),
+            DataCommand::EnterDataState(l2p, cid) => {
+                self.handle_enter_data_state(*l2p, *cid, radio_service)
+            }
             DataCommand::SetPacketEventReporting(_, _) => self.handle_set_packet_event_reporting(),
             DataCommand::ShowPdpAddress(cid) => self.handle_show_pdp_address(*cid),
             DataCommand::ReadDynamicParam(cid) => self.handle_read_dynamic_param(*cid),
@@ -540,22 +591,17 @@ fn parse_cid_from_gprs_dial(number: &str) -> Option<u8> {
     let trimmed = number.strip_suffix('#')?;
     let parts: Vec<&str> = trimmed.split('*').collect();
 
-    // Expecting a format like *99, *99*<cid>, or *99***<cid> (at most 5 segments)
-    if parts.len() < 2 || parts.len() > 5 || !parts[0].is_empty() || parts[1] != "99" {
+    // Expecting a format like *99, *99*<cid>, or *99***<cid> (at most 5
+    // segments)
+    if parts.len() > 5 {
         return None;
     }
 
-    // Case 1: *99# (parts are ["", "99"])
-    if parts.len() == 2 {
-        return Some(1);
+    match parts.as_slice() {
+        ["", "99"] => Some(1),
+        ["", "99", .., last_part] if !last_part.is_empty() => last_part.parse::<u8>().ok(),
+        _ => None,
     }
-
-    // Case 2: *99*<cid># or *99***<cid># (parts.len() > 2)
-    let last_part = parts.last()?;
-    if last_part.is_empty() {
-        return None;
-    }
-    last_part.parse::<u8>().ok()
 }
 
 #[cfg(test)]
@@ -563,7 +609,7 @@ mod tests {
     use std::net::{Ipv4Addr, Ipv6Addr};
 
     use super::*;
-    use crate::{parser::QuotedString, types::Response};
+    use crate::{parser::QuotedString, tests::test_utils::MockRadioAdmission, types::Response};
 
     #[test]
     fn test_data_service_dial_direct() {
@@ -572,7 +618,8 @@ mod tests {
         assert!(res.is_ok());
 
         // Dial
-        let res: ExecutionResult = service.handle_gprs_dial("*99***1#").into();
+        let res: ExecutionResult =
+            service.handle_gprs_dial("*99***1#", &MockRadioAdmission::default()).into();
         if let ExecutionResult::Success(handled) = res {
             assert_eq!(handled.responses, vec![Response::Data(DataResponse::Connect)]);
         } else {
@@ -587,11 +634,13 @@ mod tests {
         assert!(res.is_ok());
 
         // Dial malformed alphanumeric CID
-        let res: ExecutionResult = service.handle_gprs_dial("*99*abc#").into();
+        let res: ExecutionResult =
+            service.handle_gprs_dial("*99*abc#", &MockRadioAdmission::default()).into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
 
         // Dial empty trailing CID
-        let res: ExecutionResult = service.handle_gprs_dial("*99*#").into();
+        let res: ExecutionResult =
+            service.handle_gprs_dial("*99*#", &MockRadioAdmission::default()).into();
         assert!(matches!(res, ExecutionResult::Error { .. }));
     }
 
@@ -619,7 +668,7 @@ mod tests {
             dns: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
         };
 
-        let service = DataService::new(vec![network_config.clone()]);
+        let service = DataService::new(Quirks::default(), vec![network_config.clone()]);
 
         assert_eq!(
             service.get_ip_address(&PdpType::Ip),
@@ -639,7 +688,8 @@ mod tests {
             gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
             dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
         };
-        let dual_stack_service = DataService::new(vec![network_config.clone(), v6_config.clone()]);
+        let dual_stack_service =
+            DataService::new(Quirks::default(), vec![network_config.clone(), v6_config.clone()]);
         assert_eq!(
             dual_stack_service.get_ip_address(&PdpType::Ip),
             Some(IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)))
@@ -669,13 +719,34 @@ mod tests {
     }
 
     #[test]
+    fn test_ipv6_fallback_to_ipv4() {
+        let v4_cfg = CellNetworkConfig {
+            ip_address: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 2)),
+            prefixlen: 30,
+            gateway: IpAddr::V4(Ipv4Addr::new(192, 168, 97, 1)),
+            dns: IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+        };
+        let fallback_service = DataService::new(
+            Quirks { allow_ipv4_for_ipv6: true, ..Default::default() },
+            vec![v4_cfg.clone()],
+        );
+        assert_eq!(fallback_service.find_network_config(&PdpType::Ipv6), Some(&v4_cfg));
+
+        let default_service = DataService::new(Quirks::default(), vec![v4_cfg]);
+        assert_eq!(default_service.find_network_config(&PdpType::Ipv6), None);
+    }
+
+    #[test]
     fn test_dynamic_param_prefix_passthrough() {
-        let mut service_v6 = DataService::new(vec![CellNetworkConfig {
-            ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
-            prefixlen: 64,
-            gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
-            dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
-        }]);
+        let mut service_v6 = DataService::new(
+            Quirks::default(),
+            vec![CellNetworkConfig {
+                ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
+                prefixlen: 64,
+                gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
+                dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
+            }],
+        );
         service_v6.pdp_contexts.insert(
             1,
             PdpContext {
@@ -698,12 +769,15 @@ mod tests {
         }
 
         // Prefix is passed through verbatim without validation.
-        let mut service_zero = DataService::new(vec![CellNetworkConfig {
-            ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
-            prefixlen: 0,
-            gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
-            dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
-        }]);
+        let mut service_zero = DataService::new(
+            Quirks::default(),
+            vec![CellNetworkConfig {
+                ip_address: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0x15)),
+                prefixlen: 0,
+                gateway: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2)),
+                dns: IpAddr::V6(Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3)),
+            }],
+        );
         service_zero.pdp_contexts.insert(
             1,
             PdpContext {
@@ -720,5 +794,36 @@ mod tests {
             Some(DataResponse::DynamicParam { prefix, .. }) => assert_eq!(prefix, 0),
             _ => panic!("Expected DynamicParam response"),
         }
+    }
+
+    #[test]
+    fn test_dynamic_param_display() {
+        let resp_quoted = DataResponse::DynamicParam {
+            cid: 1,
+            apn: "epc.tmobile.com".to_string(),
+            ip_address: IpAddr::V4(Ipv4Addr::new(10, 0, 2, 15)),
+            prefix: 24,
+            gateway: IpAddr::V4(Ipv4Addr::new(10, 0, 2, 2)),
+            dns: IpAddr::V4(Ipv4Addr::new(10, 0, 2, 3)),
+            goldfish_compat: false,
+        };
+        assert_eq!(
+            resp_quoted.to_string(),
+            "+CGCONTRDP: 1,5,\"epc.tmobile.com\",\"10.0.2.15/24\",\"10.0.2.2\",\"10.0.2.3\"\r\n"
+        );
+
+        let resp_unquoted = DataResponse::DynamicParam {
+            cid: 1,
+            apn: "epc.tmobile.com".to_string(),
+            ip_address: IpAddr::V4(Ipv4Addr::new(10, 0, 2, 15)),
+            prefix: 24,
+            gateway: IpAddr::V4(Ipv4Addr::new(10, 0, 2, 2)),
+            dns: IpAddr::V4(Ipv4Addr::new(10, 0, 2, 3)),
+            goldfish_compat: true,
+        };
+        assert_eq!(
+            resp_unquoted.to_string(),
+            "+CGCONTRDP: 1,5,\"epc.tmobile.com\",10.0.2.15/24,10.0.2.2,10.0.2.3\r\n"
+        );
     }
 }

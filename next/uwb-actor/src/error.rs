@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use netsim_model::ChipError;
+use pica::PicaCommandError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -11,6 +12,9 @@ pub enum UwbError {
 
     #[error("Pica shutdown unexpectedly")]
     PicaShutdown(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("{0}")]
+    PicaCommand(#[from] PicaCommandError),
 
     #[error("Invalid azimuth: {0} (expected -180.0 to 180.0)")]
     InvalidAzimuth(f32),

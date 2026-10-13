@@ -4,7 +4,7 @@
 use clap::{Args, Subcommand};
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub enum BleCommand {
+pub(crate) enum BleCommand {
     /// Start a Bluetooth Low Energy scan
     Scan(BleScan),
     /// Start a baseband packet sniffer
@@ -13,7 +13,7 @@ pub enum BleCommand {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct BleScan {
+pub(crate) struct BleScan {
     /// X position of the scanner
     #[arg(long, default_value = "0.0")]
     pub x: f32,
@@ -33,7 +33,7 @@ pub struct BleScan {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct BleSniff {
+pub(crate) struct BleSniff {
     /// X position of the sniffer
     #[arg(long, default_value = "0.0")]
     pub x: f32,
@@ -52,7 +52,7 @@ pub struct BleSniff {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub enum LinkTypeOption {
+pub(crate) enum LinkTypeOption {
     /// Classic Bluetooth Baseband (LINKTYPE_BLUETOOTH_BREDR_BB)
     Bredr,
     /// Low Energy Link Layer (LINKTYPE_BLUETOOTH_LE_LL)

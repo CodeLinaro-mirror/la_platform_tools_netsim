@@ -76,7 +76,8 @@ impl Icmpv6Manager {
                     icmpv6_payload,
                 );
             } else {
-                // External IPv6 ping! Forward to host driver via Icmp connection flow.
+                // External IPv6 ping! Forward to host driver via Icmp
+                // connection flow.
                 if let Some((guest_id, _seq)) = icmpv6_header.echo_fields() {
                     let flow_key = (guest_ip, dest_ip, guest_id);
                     let (conn_id, _) = self.flows.entry(flow_key).or_insert_with(|| {
@@ -142,7 +143,10 @@ impl Icmpv6Manager {
         ipv6_builder.hop_limit(64);
 
         // 3. Copy ICMPv6 reply
-        ipv6_payload[..icmp_len].copy_from_slice(icmp_reply);
+        let Some(dest) = ipv6_payload.get_mut(..icmp_len) else {
+            return;
+        };
+        dest.copy_from_slice(icmp_reply);
 
         // 4. Finalize IPv6 Header
         ipv6_builder.payload_len(icmp_len);
@@ -195,13 +199,20 @@ impl Icmpv6Manager {
         icmpv6_header.rest = echo_request.rest; // Copy ID and Seq
 
         // Copy payload
-        icmpv6_payload_slice[..echo_payload_len].copy_from_slice(echo_payload);
+        let Some(dest) = icmpv6_payload_slice.get_mut(..echo_payload_len) else {
+            return;
+        };
+        dest.copy_from_slice(echo_payload);
 
         // 4. Calculate ICMPv6 Checksum
-        let full_icmpv6_slice = &mut ipv6_payload[..total_icmpv6_len];
+        let Some(full_icmpv6_slice) = ipv6_payload.get_mut(..total_icmpv6_len) else {
+            return;
+        };
         let checksum = netsim_packets::icmpv6_checksum(full_icmpv6_slice, src_ip, dest_ip);
-        let mut_icmpv6_header =
-            Icmpv6Header::mut_from_bytes(&mut full_icmpv6_slice[..icmpv6_header_len]).unwrap();
+        let Some(header_slice) = full_icmpv6_slice.get_mut(..icmpv6_header_len) else {
+            return;
+        };
+        let mut_icmpv6_header = Icmpv6Header::mut_from_bytes(header_slice).unwrap();
         mut_icmpv6_header.icmpv6_checksum.set(checksum);
 
         // 5. Finalize IPv6 Header
@@ -276,7 +287,8 @@ impl Icmpv6Manager {
         let icmpv6_header_len = 8;
 
         let max_payload_len = max_total_len - eth_header_len - ipv6_header_len - icmpv6_header_len;
-        let payload_len = std::cmp::min(offending_packet.len(), max_payload_len);
+        let offending_slice = offending_packet.get(..max_payload_len).unwrap_or(offending_packet);
+        let payload_len = offending_slice.len();
 
         let total_icmpv6_len = icmpv6_header_len + payload_len;
         let total_ipv6_len = ipv6_header_len + total_icmpv6_len;
@@ -294,7 +306,8 @@ impl Icmpv6Manager {
         let (eth_slice, eth_payload) = buffer.split_at_mut(eth_header_len);
         let eth_frame = EthernetFrame::mut_from_bytes(eth_slice).unwrap();
         eth_frame.dst_addr = config.guest_mac;
-        // Use a generic QEMU/Slirp gateway MAC for error messages to match ICMPv4
+        // Use a generic QEMU/Slirp gateway MAC for error messages to match
+        // ICMPv4
         eth_frame.src_addr = MacAddr { bytes: [0x52, 0x54, 0x00, 0x12, 0x34, 0x56] };
         eth_frame.ethertype = 0x86DD.into(); // IPv6
 
@@ -310,22 +323,21 @@ impl Icmpv6Manager {
         icmpv6_header.icmpv6_type = error_type as u8;
         icmpv6_header.icmpv6_code = code;
         icmpv6_header.icmpv6_checksum = 0.into();
-        icmpv6_header.rest.copy_from_slice(&rest_val.to_be_bytes());
+        icmpv6_header.rest = rest_val.to_be_bytes();
 
         // Copy offending packet as payload
-        icmpv6_payload_slice[..payload_len].copy_from_slice(&offending_packet[..payload_len]);
+        icmpv6_payload_slice.copy_from_slice(offending_slice);
 
         // 4. Calculate ICMPv6 Checksum
-        let full_icmpv6_slice = &mut ipv6_payload[..total_icmpv6_len];
-        let checksum = netsim_packets::icmpv6_checksum(full_icmpv6_slice, src_ip, dest_ip);
-        let mut_icmpv6_header =
-            Icmpv6Header::mut_from_bytes(&mut full_icmpv6_slice[..icmpv6_header_len]).unwrap();
+        let checksum = netsim_packets::icmpv6_checksum(ipv6_payload, src_ip, dest_ip);
+        let (header_slice, _) = ipv6_payload.split_at_mut(icmpv6_header_len);
+        let mut_icmpv6_header = Icmpv6Header::mut_from_bytes(header_slice).unwrap();
         mut_icmpv6_header.icmpv6_checksum.set(checksum);
 
         // 5. Finalize IPv6 Header
         ipv6_builder.payload_len(total_icmpv6_len);
         ipv6_builder.build();
 
-        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer)));
+        responses.push(SlirpResponse::Packet(Bytes::from(buffer)));
     }
 }

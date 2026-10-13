@@ -110,30 +110,7 @@ pub fn parse(data: &[u8]) -> Option<Packet<'_>> {
 
         let transport = if let Some(ip_packet) = &ip {
             match ip_packet {
-                IpPacket::V4(header, payload) => match header.protocol {
-                    IP_P_ICMP => {
-                        if let Some((icmp_header, icmp_payload)) = IcmpHeader::parse(payload) {
-                            Some(TransportPacket::Icmp(icmp_header, icmp_payload))
-                        } else {
-                            None
-                        }
-                    }
-                    IP_P_TCP => {
-                        if let Some((tcp_header, tcp_payload)) = TcpHeader::parse(payload) {
-                            Some(TransportPacket::Tcp(tcp_header, tcp_payload))
-                        } else {
-                            None
-                        }
-                    }
-                    IP_P_UDP => {
-                        if let Some((udp_header, udp_payload)) = UdpHeader::parse(payload) {
-                            Some(TransportPacket::Udp(udp_header, udp_payload))
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
-                },
+                IpPacket::V4(header, payload) => parse_transport(header.protocol, payload, false),
                 IpPacket::V6(header, payload) => {
                     let mut next_header = header.next_header;
                     let mut current_payload = *payload;
@@ -148,36 +125,7 @@ pub fn parse(data: &[u8]) -> Option<Packet<'_>> {
                             return Some(Packet { ethernet, llc, ip, transport: None });
                         }
                     }
-                    match next_header {
-                        IP_P_ICMPV6 => {
-                            if let Some((icmpv6_header, icmpv6_payload)) =
-                                Icmpv6Header::parse(current_payload)
-                            {
-                                Some(TransportPacket::Icmpv6(icmpv6_header, icmpv6_payload))
-                            } else {
-                                None
-                            }
-                        }
-                        IP_P_TCP => {
-                            if let Some((tcp_header, tcp_payload)) =
-                                TcpHeader::parse(current_payload)
-                            {
-                                Some(TransportPacket::Tcp(tcp_header, tcp_payload))
-                            } else {
-                                None
-                            }
-                        }
-                        IP_P_UDP => {
-                            if let Some((udp_header, udp_payload)) =
-                                UdpHeader::parse(current_payload)
-                            {
-                                Some(TransportPacket::Udp(udp_header, udp_payload))
-                            } else {
-                                None
-                            }
-                        }
-                        _ => None,
-                    }
+                    parse_transport(next_header, current_payload, true)
                 }
             }
         } else {
@@ -187,6 +135,26 @@ pub fn parse(data: &[u8]) -> Option<Packet<'_>> {
         Some(Packet { ethernet, llc, ip, transport })
     } else {
         None
+    }
+}
+
+/// Parses the transport layer for the given IP protocol number.
+///
+/// ICMP (RFC 792) is only accepted over IPv4 and ICMPv6 (RFC 4443) only over
+/// IPv6; `is_ipv6` selects which one applies.
+fn parse_transport(protocol: u8, payload: &[u8], is_ipv6: bool) -> Option<TransportPacket<'_>> {
+    match protocol {
+        IP_P_ICMP if !is_ipv6 => IcmpHeader::parse(payload)
+            .map(|(header, payload)| TransportPacket::Icmp(header, payload)),
+        IP_P_ICMPV6 if is_ipv6 => Icmpv6Header::parse(payload)
+            .map(|(header, payload)| TransportPacket::Icmpv6(header, payload)),
+        IP_P_TCP => {
+            TcpHeader::parse(payload).map(|(header, payload)| TransportPacket::Tcp(header, payload))
+        }
+        IP_P_UDP => {
+            UdpHeader::parse(payload).map(|(header, payload)| TransportPacket::Udp(header, payload))
+        }
+        _ => None,
     }
 }
 
@@ -387,5 +355,91 @@ mod tests {
         } else {
             panic!("Expected UDP packet");
         }
+    }
+
+    #[test]
+    fn test_parse_ipv6_tcp() {
+        let mut bytes = Vec::new();
+        // Ethernet
+        bytes.extend_from_slice(&[0x00, 0x11, 0x22, 0x33, 0x44, 0x55]);
+        bytes.extend_from_slice(&[0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB]);
+        bytes.extend_from_slice(&ether_type::IPV6.to_be_bytes());
+        // IPv6
+        bytes.extend_from_slice(&0x60000000u32.to_be_bytes());
+        bytes.extend_from_slice(&20u16.to_be_bytes()); // Payload Length (20 TCP)
+        bytes.extend_from_slice(&[IP_P_TCP, 64]); // Next Header, Hop Limit
+        bytes.extend_from_slice(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        bytes.extend_from_slice(&[0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        // TCP
+        bytes.extend_from_slice(&1234u16.to_be_bytes()); // Src Port
+        bytes.extend_from_slice(&80u16.to_be_bytes()); // Dst Port
+        bytes.extend_from_slice(&0u32.to_be_bytes()); // Seq
+        bytes.extend_from_slice(&0u32.to_be_bytes()); // Ack
+        bytes.extend_from_slice(&[0x50, 0x02]); // Offset (5), Flags (SYN)
+        bytes.extend_from_slice(&0u16.to_be_bytes()); // Window
+        bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
+        bytes.extend_from_slice(&0u16.to_be_bytes()); // Urgent Pointer
+
+        let packet = parse(&bytes).expect("Failed to parse packet");
+        let transport = packet.transport.expect("No transport packet found");
+        if let TransportPacket::Tcp(header, payload) = transport {
+            assert_eq!(header.source_port.get(), 1234);
+            assert_eq!(header.dest_port.get(), 80);
+            assert_eq!(payload.len(), 0);
+        } else {
+            panic!("Expected TCP packet");
+        }
+    }
+
+    #[test]
+    fn test_parse_ipv6_udp() {
+        let mut bytes = Vec::new();
+        // Ethernet
+        bytes.extend_from_slice(&[0x00, 0x11, 0x22, 0x33, 0x44, 0x55]);
+        bytes.extend_from_slice(&[0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB]);
+        bytes.extend_from_slice(&ether_type::IPV6.to_be_bytes());
+        // IPv6
+        bytes.extend_from_slice(&0x60000000u32.to_be_bytes());
+        bytes.extend_from_slice(&8u16.to_be_bytes()); // Payload Length (8 UDP)
+        bytes.extend_from_slice(&[IP_P_UDP, 64]); // Next Header, Hop Limit
+        bytes.extend_from_slice(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        bytes.extend_from_slice(&[0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        // UDP
+        bytes.extend_from_slice(&1234u16.to_be_bytes()); // Src Port
+        bytes.extend_from_slice(&53u16.to_be_bytes()); // Dst Port
+        bytes.extend_from_slice(&8u16.to_be_bytes()); // Length
+        bytes.extend_from_slice(&0u16.to_be_bytes()); // Checksum
+
+        let packet = parse(&bytes).expect("Failed to parse packet");
+        let transport = packet.transport.expect("No transport packet found");
+        if let TransportPacket::Udp(header, payload) = transport {
+            assert_eq!(header.source_port.get(), 1234);
+            assert_eq!(header.dest_port.get(), 53);
+            assert_eq!(payload.len(), 0);
+        } else {
+            panic!("Expected UDP packet");
+        }
+    }
+
+    #[test]
+    fn test_parse_ipv4_rejects_icmpv6() {
+        let mut bytes = build_ipv4_icmp_packet();
+        // Rewrite the IPv4 protocol field (Ethernet 14 + offset 9) to ICMPv6.
+        bytes[14 + 9] = IP_P_ICMPV6;
+
+        let packet = parse(&bytes).expect("Failed to parse packet");
+        assert!(matches!(packet.ip, Some(IpPacket::V4(..))));
+        assert!(packet.transport.is_none());
+    }
+
+    #[test]
+    fn test_parse_ipv6_rejects_icmp() {
+        let mut bytes = build_ipv6_icmpv6_packet();
+        // Rewrite the IPv6 next header field (Ethernet 14 + offset 6) to ICMP.
+        bytes[14 + 6] = IP_P_ICMP;
+
+        let packet = parse(&bytes).expect("Failed to parse packet");
+        assert!(matches!(packet.ip, Some(IpPacket::V6(..))));
+        assert!(packet.transport.is_none());
     }
 }

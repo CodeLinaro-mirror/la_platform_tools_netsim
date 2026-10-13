@@ -9,28 +9,27 @@ use protobuf::well_known_types::empty;
 use crate::error::Result;
 
 /// Wrapper struct for application defined ClientResponseReader
-pub struct ClientResponseReader {
+pub(crate) struct ClientResponseReader {
     /// Delegated handler for reading responses
     pub handler: Box<dyn ClientResponseReadable>,
 }
 
 /// Delegating functions to handler
 impl ClientResponseReader {
-    fn handle_chunk(&self, chunk: &[u8]) {
-        self.handler.handle_chunk(chunk);
+    fn handle_chunk(&mut self, chunk: &[u8]) -> Result<()> {
+        self.handler.handle_chunk(chunk)
     }
 }
 
 /// Trait for ClientResponseReader handler functions
-pub trait ClientResponseReadable {
+pub(crate) trait ClientResponseReadable {
     /// Process each chunk of streaming response
-    fn handle_chunk(&self, chunk: &[u8]);
+    fn handle_chunk(&mut self, chunk: &[u8]) -> Result<()>;
 }
 
 // Enum of Grpc Requests holding the request proto as applicable
 #[derive(Debug, PartialEq)]
-pub enum GrpcRequest {
-    GetVersion,
+pub(crate) enum GrpcRequest {
     ListDevice,
     Reset,
     ListCapture,
@@ -48,8 +47,7 @@ pub enum GrpcRequest {
 
 // Enum of Grpc Responses holding the response proto as applicable
 #[derive(Debug, PartialEq)]
-pub enum GrpcResponse {
-    GetVersion(frontend::VersionResponse),
+pub(crate) enum GrpcResponse {
     ListDevice(frontend::ListDeviceResponse),
     Reset,
     ListCapture(frontend::ListCaptureResponse),
@@ -65,7 +63,7 @@ pub enum GrpcResponse {
     Unknown,
 }
 
-pub fn get_capture(
+pub(crate) fn get_capture(
     client: &FrontendServiceClient,
     req: &frontend::GetCaptureRequest,
     client_reader: &mut ClientResponseReader,
@@ -73,26 +71,22 @@ pub fn get_capture(
     let mut stream = client.get_capture(req)?;
     // Use block_on to run the async block handling all chunks
     futures::executor::block_on(async {
-        // Read every available chunk from gRPC stream
-        while let Some(Ok(chunk)) = stream.next().await {
+        while let Some(chunk_res) = stream.next().await {
+            let chunk = chunk_res?;
             let bytes = chunk.capture_stream;
-            client_reader.handle_chunk(&bytes);
+            client_reader.handle_chunk(&bytes)?;
         }
-    });
-
-    Ok(())
+        Ok(())
+    })
 }
 
-pub trait GrpcMethodExecutor {
+pub(crate) trait GrpcMethodExecutor {
     fn send_grpc(&self, grpc_request: &GrpcRequest) -> Result<GrpcResponse>;
 }
 
 impl GrpcMethodExecutor for FrontendServiceClient {
     fn send_grpc(&self, grpc_request: &GrpcRequest) -> Result<GrpcResponse> {
         match grpc_request {
-            GrpcRequest::GetVersion => {
-                Ok(GrpcResponse::GetVersion(self.get_version(&empty::Empty::new())?))
-            }
             GrpcRequest::ListDevice => {
                 Ok(GrpcResponse::ListDevice(self.list_device(&empty::Empty::new())?))
             }
@@ -142,7 +136,7 @@ impl GrpcMethodExecutor for FrontendServiceClient {
     }
 }
 
-pub fn send_grpc(
+pub(crate) fn send_grpc(
     client: &FrontendServiceClient,
     grpc_request: &GrpcRequest,
 ) -> Result<GrpcResponse> {

@@ -129,14 +129,16 @@ impl SharedKeyStore {
         // active. We must calculate the AAD against the final physical MAC byte
         // sequence!
         let mut final_fc_bytes = ieee80211.as_bytes().to_vec();
-        final_fc_bytes[1] |= 0x40; // Force Protected Bit inside the temporary buffer
+        let fc_byte = final_fc_bytes.get_mut(1)?;
+        *fc_byte |= 0x40; // Force Protected Bit inside the temporary buffer
         let final_ieee = Ieee80211::decode(&final_fc_bytes).ok()?;
         let aad = final_ieee.get_aad();
 
         let payload = ieee80211.get_payload();
 
         let mut ciphertext = Vec::with_capacity(payload.len() + 8);
-        let success = AesCcmEncrypt(&tk[..16], &nonce, &aad, &payload, &mut ciphertext, 8);
+        let tk_slice = tk.get(..16)?;
+        let success = AesCcmEncrypt(tk_slice, &nonce, &aad, &payload, &mut ciphertext, 8);
         if !success {
             return None;
         }
@@ -144,7 +146,7 @@ impl SharedKeyStore {
         // Reconstruct Frame
         let mut new_packet =
             Vec::with_capacity(ieee80211.hdr_length() + CCMP_HDR_LEN + ciphertext.len());
-        new_packet.extend_from_slice(&ieee80211.as_bytes()[..ieee80211.hdr_length()]);
+        new_packet.extend_from_slice(ieee80211.as_bytes().get(..ieee80211.hdr_length())?);
 
         // CCMP Header
         // PN0, PN1, Rsvd, KeyID_ExtIV, PN2, PN3, PN4, PN5
@@ -155,7 +157,8 @@ impl SharedKeyStore {
         new_packet.extend_from_slice(&ciphertext);
 
         // Set Protected Bit
-        new_packet[1] |= 0x40;
+        let prot_byte = new_packet.get_mut(1)?;
+        *prot_byte |= 0x40;
 
         Some(new_packet)
     }
@@ -176,7 +179,7 @@ impl SharedKeyStore {
         // Extract Nonce from Frame (CCMP Header: PN0, PN1, Rsvd, KeyID, PN2..PN5)
         // Frame: Header || CCMP Header || Data || MIC
         let hdr_len = ieee80211.hdr_length();
-        let &[pn0, pn1, _, _, pn2, pn3, pn4, pn5, ..] = &ieee80211.as_bytes()[hdr_len..] else {
+        let &[pn0, pn1, _, _, pn2, pn3, pn4, pn5, ..] = ieee80211.as_bytes().get(hdr_len..)? else {
             return None;
         };
 
@@ -185,14 +188,15 @@ impl SharedKeyStore {
         let nonce = [0 /* Priority */, a0, a1, a2, a3, a4, a5, pn5, pn4, pn3, pn2, pn1, pn0];
 
         // Payload
-        let data = &ieee80211.as_bytes()[hdr_len + CCMP_HDR_LEN..];
+        let data = ieee80211.as_bytes().get(hdr_len + CCMP_HDR_LEN..)?;
         let aad = ieee80211.get_aad();
 
         if data.len() < 8 {
             return None;
         }
         let mut out_plain = Vec::with_capacity(data.len() - 8);
-        let success = AesCcmDecrypt(&session.tk[..16], &nonce, &aad, data, &mut out_plain, 8);
+        let tk_slice = session.tk.get(..16)?;
+        let success = AesCcmDecrypt(tk_slice, &nonce, &aad, data, &mut out_plain, 8);
         if !success {
             error!(
                 "CCMP DECRYPT FAILED! hdr_len: {}, msg_len: {}, aad_len: {}",
@@ -206,10 +210,11 @@ impl SharedKeyStore {
         let plaintext = out_plain;
 
         let mut new_packet = Vec::new();
-        new_packet.extend_from_slice(&ieee80211.as_bytes()[..hdr_len]);
+        new_packet.extend_from_slice(ieee80211.as_bytes().get(..hdr_len)?);
         new_packet.extend_from_slice(&plaintext);
 
-        new_packet[1] &= !0x40; // Clear protected bit
+        let prot_byte = new_packet.get_mut(1)?;
+        *prot_byte &= !0x40; // Clear protected bit
         Some(new_packet)
     }
 }

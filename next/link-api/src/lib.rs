@@ -29,13 +29,11 @@
 //! ```
 
 pub(crate) mod action;
-pub(crate) mod create;
 pub(crate) mod error;
 pub use action::LinkAction;
-pub use create::LinkCreate;
 pub use error::LinkError;
 use netsim_model::ClientError;
-pub use netsim_model::{ChipId, ChipKind, Link, LinkId, LinkUpdate};
+pub use netsim_model::{ChipId, ChipKind, Link, LinkCreate, LinkId, LinkUpdate};
 
 #[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]

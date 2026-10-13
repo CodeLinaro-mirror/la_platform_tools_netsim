@@ -147,7 +147,7 @@ def process_file(filepath):
     ext = os.path.splitext(filepath)[1]
     if ext in [".rs", ".java", ".ts", ".cc", ".h", ".kt", ".proto"]:
       prefix = "//"
-    elif ext in [".py", ".toml", ".sh", ".bzl"]:
+    elif ext in [".py", ".toml", ".sh", ".bzl", ".yaml", ".yml"]:
       prefix = "#"
     elif basename.startswith("BUILD") or basename == "CMakeLists.txt":
       prefix = "#"

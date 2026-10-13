@@ -5,7 +5,7 @@ use http::header::{HeaderName, ToStrError};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum ServerError {
+pub(crate) enum ServerError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("HTTP parse error: {0}")]

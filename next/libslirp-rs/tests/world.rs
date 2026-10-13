@@ -12,12 +12,12 @@ use std::{
 };
 
 use bytes::Bytes;
-use etherparse::{
-    ArpHardwareId, ArpOperation, ArpPacket, EtherType, Ethernet2Header, Icmpv6Header, Icmpv6Type,
-    Ipv6Header, LinkHeader::Ethernet2, NetHeaders, PacketBuilder, PacketHeaders, PayloadSlice,
-    TransportHeader, icmpv6::NeighborAdvertisementHeader,
-};
 use libslirp_rs::{LibSlirp, SlirpConfig};
+use netsim_packets::{
+    ArpPacket, EthernetPacket, IP_P_ICMPV6, IP_P_UDP, Icmpv6Header, Icmpv6Type, IpPacket,
+    Ipv6Header, MacAddr, NDP_HOP_LIMIT, PacketBuilder, TransportPacket, arp_op, ether_type,
+    na_flags, ndp_option, parse,
+};
 
 pub const PAYLOAD: &[u8; 23] = b"Hello, UDP echo server!";
 pub const PAYLOAD_PONG: &[u8; 23] = b"Hello, UDP echo client!";
@@ -265,11 +265,10 @@ impl World {
         dst_port: u16,
         payload: &[u8],
     ) {
-        let builder = PacketBuilder::ethernet2(Self::GUEST_MAC, Self::VHOST_MAC)
-            .ipv4(Self::GUEST_IPV4.octets(), dst_ip.octets(), 20)
-            .udp(src_port, dst_port);
-        let mut pkt = Vec::with_capacity(builder.size(payload.len()));
-        builder.write(&mut pkt, payload).unwrap();
+        let pkt = PacketBuilder::new(Self::VHOST_MAC, Self::GUEST_MAC, ether_type::IPV4)
+            .ipv4(Self::GUEST_IPV4.octets(), dst_ip.octets(), IP_P_UDP)
+            .udp(src_port, dst_port)
+            .payload(payload);
         self.send_packet(pkt);
     }
 
@@ -281,11 +280,10 @@ impl World {
         dst_port: u16,
         payload: &[u8],
     ) {
-        let builder = PacketBuilder::ethernet2(Self::GUEST_MAC, Self::VHOST_MAC)
-            .ipv6(Self::GUEST_IPV6.octets(), dst_ip.octets(), 20)
-            .udp(src_port, dst_port);
-        let mut pkt = Vec::with_capacity(builder.size(payload.len()));
-        builder.write(&mut pkt, payload).unwrap();
+        let pkt = PacketBuilder::new(Self::VHOST_MAC, Self::GUEST_MAC, ether_type::IPV6)
+            .ipv6(Self::GUEST_IPV6.octets(), dst_ip.octets(), IP_P_UDP)
+            .udp(src_port, dst_port)
+            .payload(payload);
         self.send_packet(pkt);
     }
 
@@ -318,57 +316,65 @@ impl World {
 
             match rx.recv_timeout(remaining.min(Duration::from_millis(500))) {
                 Ok(bytes) => {
-                    let headers = PacketHeaders::from_ethernet_slice(&bytes).unwrap();
-                    match headers.net {
-                        Some(NetHeaders::Arp(arp_packet)) => {
+                    if let Some(packet) = parse(&bytes) {
+                        if let EthernetPacket::Untagged { frame, payload } = &packet.ethernet
+                            && frame.ethertype.get() == ether_type::ARP
+                            && let Some(arp_packet) = ArpPacket::parse(payload)
+                        {
                             self.handle_arp_request(&arp_packet);
                         }
-                        Some(NetHeaders::Ipv4(ipv4_header, _)) => {
-                            if let Some(TransportHeader::Udp(udp_header)) = headers.transport {
-                                let payload = match headers.payload {
-                                    PayloadSlice::Udp(p) => p.to_vec(),
-                                    _ => Vec::new(),
-                                };
-                                self.replies.push(UdpReply {
-                                    source_ip: IpAddr::V4(Ipv4Addr::from(ipv4_header.source)),
-                                    destination_ip: IpAddr::V4(Ipv4Addr::from(
-                                        ipv4_header.destination,
-                                    )),
-                                    source_port: udp_header.source_port,
-                                    destination_port: udp_header.destination_port,
-                                    payload,
-                                });
+
+                        if let Some(ip) = &packet.ip {
+                            match ip {
+                                IpPacket::V4(ipv4_header, _) => {
+                                    if let Some(TransportPacket::Udp(udp_header, udp_payload)) =
+                                        &packet.transport
+                                    {
+                                        self.replies.push(UdpReply {
+                                            source_ip: IpAddr::V4(Ipv4Addr::from(
+                                                ipv4_header.source_addr,
+                                            )),
+                                            destination_ip: IpAddr::V4(Ipv4Addr::from(
+                                                ipv4_header.dest_addr,
+                                            )),
+                                            source_port: udp_header.source_port.get(),
+                                            destination_port: udp_header.dest_port.get(),
+                                            payload: udp_payload.to_vec(),
+                                        });
+                                    }
+                                }
+                                IpPacket::V6(ipv6_header, _) => {
+                                    if let Some(TransportPacket::Udp(udp_header, udp_payload)) =
+                                        &packet.transport
+                                    {
+                                        self.replies.push(UdpReply {
+                                            source_ip: IpAddr::V6(Ipv6Addr::from(
+                                                ipv6_header.source_addr,
+                                            )),
+                                            destination_ip: IpAddr::V6(Ipv6Addr::from(
+                                                ipv6_header.dest_addr,
+                                            )),
+                                            source_port: udp_header.source_port.get(),
+                                            destination_port: udp_header.dest_port.get(),
+                                            payload: udp_payload.to_vec(),
+                                        });
+                                    } else if let Some(TransportPacket::Icmpv6(
+                                        icmpv6_header,
+                                        icmpv6_payload,
+                                    )) = &packet.transport
+                                        && let EthernetPacket::Untagged { frame, .. } =
+                                            &packet.ethernet
+                                    {
+                                        self.handle_ndp_request(
+                                            frame.src_addr,
+                                            ipv6_header,
+                                            icmpv6_header,
+                                            icmpv6_payload,
+                                        );
+                                    }
+                                }
                             }
                         }
-                        Some(NetHeaders::Ipv6(ipv6_header, _)) => {
-                            if let Some(TransportHeader::Udp(udp_header)) = headers.transport {
-                                let payload = match headers.payload {
-                                    PayloadSlice::Udp(p) => p.to_vec(),
-                                    _ => Vec::new(),
-                                };
-                                self.replies.push(UdpReply {
-                                    source_ip: IpAddr::V6(Ipv6Addr::from(ipv6_header.source)),
-                                    destination_ip: IpAddr::V6(Ipv6Addr::from(
-                                        ipv6_header.destination,
-                                    )),
-                                    source_port: udp_header.source_port,
-                                    destination_port: udp_header.destination_port,
-                                    payload,
-                                });
-                            } else if let (
-                                Some(TransportHeader::Icmpv6(icmpv6_header)),
-                                Some(Ethernet2(ether_header)),
-                            ) = (headers.transport, headers.link)
-                            {
-                                self.handle_ndp_request(
-                                    ether_header.source,
-                                    &ipv6_header,
-                                    &icmpv6_header,
-                                    headers.payload.slice(),
-                                );
-                            }
-                        }
-                        _ => {}
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -385,67 +391,60 @@ impl World {
     }
 
     fn handle_arp_request(&self, arp_packet: &ArpPacket) {
-        if arp_packet.operation == ArpOperation::REQUEST
-            && arp_packet.target_protocol_addr() == Self::GUEST_IPV4.octets()
+        if arp_packet.opcode.get() == arp_op::REQUEST
+            && arp_packet.target_protocol_addr == Self::GUEST_IPV4.octets()
         {
-            let sender_mac = arp_packet.sender_hw_addr();
-            let sender_ip = arp_packet.sender_protocol_addr();
-            let mut dst_mac = [0u8; 6];
-            dst_mac.copy_from_slice(sender_mac);
-
-            let eth_reply = Ethernet2Header {
-                source: Self::GUEST_MAC,
-                destination: dst_mac,
-                ether_type: EtherType::ARP,
-            };
-            let arp_reply = ArpPacket::new(
-                ArpHardwareId::ETHERNET,
-                EtherType::IPV4,
-                ArpOperation::REPLY,
-                &Self::GUEST_MAC,
-                &Self::GUEST_IPV4.octets(),
-                sender_mac,
-                sender_ip,
-            )
-            .unwrap();
-
-            let mut reply_bytes = Vec::new();
-            eth_reply.write(&mut reply_bytes).unwrap();
-            arp_reply.write(&mut reply_bytes).unwrap();
-            self.send_packet(reply_bytes);
+            let sender_mac = arp_packet.sender_hardware_addr;
+            let reply = PacketBuilder::new(sender_mac.bytes, Self::GUEST_MAC, ether_type::ARP)
+                .arp(
+                    arp_op::REPLY,
+                    Self::GUEST_MAC,
+                    Self::GUEST_IPV4.octets(),
+                    sender_mac.bytes,
+                    arp_packet.sender_protocol_addr,
+                )
+                .build();
+            self.send_packet(reply);
         }
     }
 
     fn handle_ndp_request(
         &self,
-        source_mac: [u8; 6],
+        source_mac: MacAddr,
         ipv6_header: &Ipv6Header,
         icmpv6_header: &Icmpv6Header,
-        payload: &[u8],
+        icmpv6_payload: &[u8],
     ) {
-        if icmpv6_header.icmp_type == Icmpv6Type::NeighborSolicitation && payload.len() >= 16 {
-            let target_ip_bytes: [u8; 16] = payload[..16].try_into().unwrap();
-            let target_ip = Ipv6Addr::from(target_ip_bytes);
-            if target_ip == Self::GUEST_IPV6 {
-                let na_header = NeighborAdvertisementHeader {
-                    router: false,
-                    solicited: true,
-                    r#override: true,
-                };
+        if icmpv6_header.icmpv6_type != Icmpv6Type::NeighborSolicitation as u8 {
+            return;
+        }
+        // `Icmpv6Header` already consumed the solicitation's 4 reserved bytes as
+        // its `rest` field, so the target address starts the payload. A short
+        // solicitation is simply ignored.
+        let Some(target_addr) =
+            icmpv6_payload.get(..16).and_then(|addr| <[u8; 16]>::try_from(addr).ok())
+        else {
+            return;
+        };
+        if Ipv6Addr::from(target_addr) == Self::GUEST_IPV6 {
+            // The advertisement body is the target address followed by the
+            // Target Link-Layer Address option, which is what lets the peer
+            // populate its neighbor cache without a second round trip.
+            let mut advertisement = Vec::with_capacity(24);
+            advertisement.extend_from_slice(&Self::GUEST_IPV6.octets());
+            advertisement.extend_from_slice(&[ndp_option::TARGET_LINK_LAYER_ADDR, 1]);
+            advertisement.extend_from_slice(&Self::GUEST_MAC);
 
-                let builder = PacketBuilder::ethernet2(Self::GUEST_MAC, source_mac)
-                    .ipv6(Self::GUEST_IPV6.octets(), ipv6_header.source, 255)
-                    .icmpv6(Icmpv6Type::NeighborAdvertisement(na_header));
-
-                let mut na_payload = Vec::new();
-                na_payload.extend_from_slice(&Self::GUEST_IPV6.octets());
-                na_payload.extend_from_slice(&[2, 1]);
-                na_payload.extend_from_slice(&Self::GUEST_MAC);
-
-                let mut reply_bytes = Vec::with_capacity(builder.size(na_payload.len()));
-                builder.write(&mut reply_bytes, &na_payload).unwrap();
-                self.send_packet(reply_bytes);
-            }
+            let reply = PacketBuilder::new(source_mac.bytes, Self::GUEST_MAC, ether_type::IPV6)
+                .ipv6(Self::GUEST_IPV6.octets(), ipv6_header.source_addr, IP_P_ICMPV6)
+                .hop_limit(NDP_HOP_LIMIT)
+                .icmpv6(
+                    Icmpv6Type::NeighborAdvertisement as u8,
+                    0,
+                    [na_flags::SOLICITED | na_flags::OVERRIDE, 0, 0, 0],
+                )
+                .payload(&advertisement);
+            self.send_packet(reply);
         }
     }
 

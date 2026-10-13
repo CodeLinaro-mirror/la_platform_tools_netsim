@@ -12,7 +12,7 @@ use std::{
 
 use actor_framework::FrameworkError;
 use bytes::Bytes;
-use capture_actor::{CaptureActor, CaptureClient, CaptureError};
+use capture_actor::{CaptureActor, CaptureClient, CaptureError, DataLinkType};
 use capture_api::{CaptureCreate, CaptureInfo, CaptureSender, Direction};
 use netsim_model::{ChipId, ChipKind, ClientError};
 use netsim_packets::PcapHeader;
@@ -158,7 +158,7 @@ impl World {
         .await;
     }
 
-    pub async fn then_capture_file_has_dlt(&self, expected_dlt: u32) {
+    pub async fn then_capture_file_has_dlt(&self, expected_dlt: DataLinkType) {
         self.poll_until(|| async {
             // Safely open directory, retry if not created yet
             let dir_entries = std::fs::read_dir(&self.temp_dir).ok()?;
@@ -183,7 +183,9 @@ impl World {
             use zerocopy::FromBytes;
             let (header, _) = PcapHeader::read_from_prefix(&bytes).ok()?;
 
-            if header.magic_number.get() == 0xa1b2c3d4 && header.network.get() == expected_dlt {
+            if header.magic_number.get() == 0xa1b2c3d4
+                && header.network.get() == expected_dlt.as_u32()
+            {
                 Some(())
             } else {
                 None

@@ -11,7 +11,8 @@ use std::{
 
 use bytes::Bytes;
 use log::{debug, error, info, warn};
-use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, U16, byteorder::NetworkEndian};
+use netsim_packets::MacAddr;
+use zerocopy::FromBytes;
 
 use crate::api::{Config, SlirpResponse};
 
@@ -28,12 +29,6 @@ const ERR_NOT_FOUND: u16 = 1;
 const ERR_ACCESS_VIOLATION: u16 = 2;
 const ERR_ILLEGAL_OP: u16 = 4;
 const ERR_UNKNOWN_TID: u16 = 5;
-
-#[derive(FromBytes, IntoBytes, KnownLayout, Immutable, Copy, Clone)]
-#[repr(C, packed)]
-struct TftpHeader {
-    opcode: U16<NetworkEndian>,
-}
 
 struct TftpSession {
     client_addr: SocketAddr,
@@ -70,25 +65,16 @@ impl TftpManager {
         packet: &[u8],
         src_addr: SocketAddr,
         local_port: u16,
+        guest_mac: MacAddr,
     ) {
-        if packet.len() < 2 {
+        let Some((&op_bytes, payload)) = packet.split_first_chunk::<2>() else {
             warn!("TFTP: Packet too short");
             return;
-        }
-
-        let header = match TftpHeader::read_from_bytes(&packet[..2]) {
-            Ok(h) => h,
-            Err(_) => {
-                warn!("TFTP: Failed to parse header");
-                return;
-            }
         };
-
-        let opcode = header.opcode.get();
-        let payload = &packet[2..];
+        let opcode = u16::from_be_bytes(op_bytes);
 
         match opcode {
-            OP_RRQ => self.handle_rrq(responses, config, payload, src_addr),
+            OP_RRQ => self.handle_rrq(responses, config, payload, src_addr, guest_mac),
             OP_WRQ => self.send_error(
                 responses,
                 config,
@@ -96,8 +82,9 @@ impl TftpManager {
                 TFTP_PORT,
                 ERR_ACCESS_VIOLATION,
                 "Write not supported",
+                guest_mac,
             ),
-            OP_ACK => self.handle_ack(responses, config, payload, src_addr, local_port),
+            OP_ACK => self.handle_ack(responses, config, payload, src_addr, local_port, guest_mac),
             OP_ERROR => self.handle_error(payload, src_addr),
             _ => self.send_error(
                 responses,
@@ -106,6 +93,7 @@ impl TftpManager {
                 TFTP_PORT,
                 ERR_ILLEGAL_OP,
                 "Illegal TFTP operation",
+                guest_mac,
             ),
         }
     }
@@ -116,6 +104,7 @@ impl TftpManager {
         config: &Config,
         payload: &[u8],
         src_addr: SocketAddr,
+        guest_mac: MacAddr,
     ) {
         let Some(tftp_root) = &config.tftp_root else {
             warn!("TFTP: Received RRQ but tftp_root is not configured");
@@ -126,6 +115,7 @@ impl TftpManager {
                 TFTP_PORT,
                 ERR_ACCESS_VIOLATION,
                 "TFTP server disabled",
+                guest_mac,
             );
             return;
         };
@@ -139,6 +129,7 @@ impl TftpManager {
                 TFTP_PORT,
                 ERR_ILLEGAL_OP,
                 "Malformed RRQ",
+                guest_mac,
             );
             return;
         };
@@ -150,6 +141,7 @@ impl TftpManager {
                 TFTP_PORT,
                 ERR_ILLEGAL_OP,
                 "Malformed RRQ",
+                guest_mac,
             );
             return;
         };
@@ -168,6 +160,7 @@ impl TftpManager {
                     TFTP_PORT,
                     ERR_ACCESS_VIOLATION,
                     "Access violation",
+                    guest_mac,
                 );
                 return;
             }
@@ -185,6 +178,7 @@ impl TftpManager {
                     TFTP_PORT,
                     ERR_NOT_FOUND,
                     "File not found",
+                    guest_mac,
                 );
                 return;
             }
@@ -206,6 +200,7 @@ impl TftpManager {
                     TFTP_PORT,
                     ERR_ACCESS_VIOLATION,
                     "Read error",
+                    guest_mac,
                 );
                 return;
             }
@@ -227,7 +222,7 @@ impl TftpManager {
         info!("TFTP: Started session tid={tid} for file='{filename}' to {src_addr}");
 
         // Send DATA block 1
-        self.send_data(responses, config, src_addr, tid, 1, &block_data);
+        self.send_data(responses, config, src_addr, tid, 1, &block_data, guest_mac);
     }
 
     fn handle_ack(
@@ -237,6 +232,7 @@ impl TftpManager {
         payload: &[u8],
         src_addr: SocketAddr,
         local_port: u16,
+        guest_mac: MacAddr,
     ) {
         let Some(session) = self.sessions.get_mut(&local_port) else {
             warn!("TFTP: Received ACK for unknown TID {local_port}");
@@ -247,6 +243,7 @@ impl TftpManager {
                 local_port,
                 ERR_UNKNOWN_TID,
                 "Unknown TID",
+                guest_mac,
             );
             return;
         };
@@ -263,16 +260,16 @@ impl TftpManager {
                 local_port,
                 ERR_UNKNOWN_TID,
                 "Unexpected client",
+                guest_mac,
             );
             return;
         }
 
-        if payload.len() < 2 {
+        let Some(&chunk) = payload.first_chunk::<2>() else {
             warn!("TFTP: Malformed ACK payload");
             return;
-        }
-
-        let block_num = u16::from_be_bytes([payload[0], payload[1]]);
+        };
+        let block_num = u16::from_be_bytes(chunk);
         debug!("TFTP: Received ACK for block {block_num} from {src_addr} on tid={local_port}");
 
         // If the ACK matches the last block we sent
@@ -296,6 +293,7 @@ impl TftpManager {
                         local_port,
                         ERR_ACCESS_VIOLATION,
                         "Read error",
+                        guest_mac,
                     );
                     self.sessions.remove(&local_port);
                     return;
@@ -309,7 +307,15 @@ impl TftpManager {
 
             let next_block_num = session.block_num;
             // Send next DATA block
-            self.send_data(responses, config, src_addr, local_port, next_block_num, &block_data);
+            self.send_data(
+                responses,
+                config,
+                src_addr,
+                local_port,
+                next_block_num,
+                &block_data,
+                guest_mac,
+            );
         } else if block_num == session.block_num.wrapping_sub(1) {
             // Duplicate ACK for the previous block, indicating packet loss!
             // Retransmit the last sent block!
@@ -319,7 +325,15 @@ impl TftpManager {
             );
             let last_block = session.last_block_sent.clone();
             let last_block_num = session.block_num;
-            self.send_data(responses, config, src_addr, local_port, last_block_num, &last_block);
+            self.send_data(
+                responses,
+                config,
+                src_addr,
+                local_port,
+                last_block_num,
+                &last_block,
+                guest_mac,
+            );
         } else {
             warn!(
                 "TFTP: Received ACK for unexpected block {}; expected {}",
@@ -329,12 +343,12 @@ impl TftpManager {
     }
 
     fn handle_error(&mut self, payload: &[u8], src_addr: SocketAddr) {
-        if payload.len() < 2 {
+        let Some((&err_bytes, msg)) = payload.split_first_chunk::<2>() else {
             warn!("TFTP: ERROR packet too short");
             return;
-        }
-        let err_code = u16::from_be_bytes([payload[0], payload[1]]);
-        let (err_msg, _) = parse_null_terminated_string(&payload[2..]).unwrap_or(("unknown", &[]));
+        };
+        let err_code = u16::from_be_bytes(err_bytes);
+        let (err_msg, _) = parse_null_terminated_string(msg).unwrap_or(("unknown", &[]));
         warn!("TFTP: Received ERROR from client {src_addr}: code={err_code}, msg='{err_msg}'");
 
         // Terminate the session if it matches client's TID
@@ -353,6 +367,9 @@ impl TftpManager {
         tid
     }
 
+    // Addressing params (config/dest_addr/src_port/guest_mac) are threaded
+    // through from the caller; bundling them would churn all 14 call sites.
+    #[allow(clippy::too_many_arguments)]
     fn send_data(
         &self,
         responses: &mut Vec<SlirpResponse>,
@@ -361,17 +378,16 @@ impl TftpManager {
         src_port: u16,
         block_num: u16,
         data: &[u8],
+        guest_mac: MacAddr,
     ) {
-        let mut packet = vec![0u8; 4 + data.len()];
-        packet[0..2].copy_from_slice(&OP_DATA.to_be_bytes());
-        packet[2..4].copy_from_slice(&block_num.to_be_bytes());
-        packet[4..].copy_from_slice(data);
-
-        responses.push(SlirpResponse::Packet(Bytes::from(build_udp_packet(
-            config, dest_addr, src_port, &packet,
-        ))));
+        let packet = [&OP_DATA.to_be_bytes()[..], &block_num.to_be_bytes(), data].concat();
+        let udp_packet = build_udp_packet(config, dest_addr, src_port, &packet, guest_mac);
+        if !udp_packet.is_empty() {
+            responses.push(SlirpResponse::Packet(Bytes::from(udp_packet)));
+        }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn send_error(
         &self,
         responses: &mut Vec<SlirpResponse>,
@@ -380,24 +396,22 @@ impl TftpManager {
         src_port: u16,
         err_code: u16,
         err_msg: &str,
+        guest_mac: MacAddr,
     ) {
-        let err_msg_bytes = err_msg.as_bytes();
-        let mut packet = vec![0u8; 4 + err_msg_bytes.len() + 1];
-        packet[0..2].copy_from_slice(&OP_ERROR.to_be_bytes());
-        packet[2..4].copy_from_slice(&err_code.to_be_bytes());
-        packet[4..4 + err_msg_bytes.len()].copy_from_slice(err_msg_bytes);
-        packet[4 + err_msg_bytes.len()] = 0; // null terminator
-
-        responses.push(SlirpResponse::Packet(Bytes::from(build_udp_packet(
-            config, dest_addr, src_port, &packet,
-        ))));
+        let packet =
+            [&OP_ERROR.to_be_bytes()[..], &err_code.to_be_bytes(), err_msg.as_bytes(), &[0]]
+                .concat();
+        let udp_packet = build_udp_packet(config, dest_addr, src_port, &packet, guest_mac);
+        if !udp_packet.is_empty() {
+            responses.push(SlirpResponse::Packet(Bytes::from(udp_packet)));
+        }
     }
 }
 
 fn parse_null_terminated_string(payload: &[u8]) -> Option<(&str, &[u8])> {
     let null_idx = payload.iter().position(|&b| b == 0)?;
-    let s = std::str::from_utf8(&payload[..null_idx]).ok()?;
-    Some((s, &payload[null_idx + 1..]))
+    let s = std::str::from_utf8(payload.get(..null_idx)?).ok()?;
+    Some((s, payload.get(null_idx + 1..)?))
 }
 
 fn validate_and_resolve_path(root: &Path, filename: &str) -> Result<PathBuf, String> {
@@ -444,6 +458,7 @@ fn build_udp_packet(
     dest_addr: SocketAddr,
     src_port: u16,
     payload: &[u8],
+    guest_mac: MacAddr,
 ) -> Vec<u8> {
     use netsim_packets::{EthernetFrame, Ipv4Builder, Ipv6Builder, UdpPacketBuilder};
 
@@ -458,14 +473,14 @@ fn build_udp_packet(
     // 1. Build Ethernet Header
     let (eth_header, eth_payload) = buffer.split_at_mut(eth_header_len);
     let eth_frame = EthernetFrame::mut_from_bytes(eth_header).unwrap();
-    eth_frame.dst_addr = config.guest_mac;
+    eth_frame.dst_addr = guest_mac;
     eth_frame.src_addr = config.gateway_mac;
     eth_frame.ethertype = if is_ipv6 { 0x86DD } else { 0x0800 }.into();
 
     // 2. Build IP Header
     let (ip_header_slice, ip_payload) = eth_payload.split_at_mut(ip_header_len);
-    match (dest_addr.ip(), is_ipv6) {
-        (IpAddr::V4(guest_ip), false) => {
+    match dest_addr.ip() {
+        IpAddr::V4(guest_ip) => {
             let mut ipv4_builder = Ipv4Builder::new(
                 ip_header_slice,
                 netsim_packets::IP_P_UDP,
@@ -476,7 +491,7 @@ fn build_udp_packet(
             ipv4_builder.payload_len(udp_header_len + payload.len());
             ipv4_builder.build();
         }
-        (IpAddr::V6(guest_ip), true) => {
+        IpAddr::V6(guest_ip) => {
             let mut ipv6_builder = Ipv6Builder::new(
                 ip_header_slice,
                 netsim_packets::IP_P_UDP,
@@ -487,12 +502,11 @@ fn build_udp_packet(
             ipv6_builder.payload_len(udp_header_len + payload.len());
             ipv6_builder.build();
         }
-        _ => unreachable!(),
     }
 
     // 3. Build UDP Header and Payload
     let mut udp_builder = UdpPacketBuilder::new(ip_payload, src_port, dest_addr.port()).unwrap();
-    udp_builder.payload_mut()[..payload.len()].copy_from_slice(payload);
+    udp_builder.payload_mut().copy_from_slice(payload);
     udp_builder.build();
 
     buffer

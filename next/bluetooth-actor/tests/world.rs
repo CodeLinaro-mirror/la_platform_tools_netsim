@@ -13,7 +13,6 @@ use netsim_model::{
     ScannerParams, TxPower,
 };
 use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
-use netsim_testing::logger;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{info, warn};
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
@@ -41,7 +40,7 @@ pub struct World {
 impl World {
     /// Creates a new World instance.
     pub fn new() -> Self {
-        logger::setup(None);
+        netsim_testing::setup(None);
         let (device_tx, mut _device_rx) = mpsc::channel(10);
         // Use real DeviceClient for integration testing.
         let resource_client = DeviceClient::new(Box::new(ResourceClient::new(device_tx)));

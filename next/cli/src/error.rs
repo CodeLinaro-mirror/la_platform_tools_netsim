@@ -4,7 +4,7 @@
 use std::fmt;
 
 #[derive(Debug)]
-pub enum Error {
+pub(crate) enum Error {
     Grpc(grpcio::Error),
     Io(std::io::Error),
     Hex(hex::FromHexError),
@@ -69,4 +69,10 @@ impl From<String> for Error {
     }
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+impl From<netsim_rest_api::RestError> for Error {
+    fn from(err: netsim_rest_api::RestError) -> Self {
+        Error::Message(err.to_string())
+    }
+}
+
+pub(crate) type Result<T> = std::result::Result<T, Error>;

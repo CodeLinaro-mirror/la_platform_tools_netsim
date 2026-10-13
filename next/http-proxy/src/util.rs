@@ -30,18 +30,22 @@ use percent_encoding::percent_decode_str;
 use tokio::net::TcpStream;
 use url::Url;
 
-use crate::{Error, Result};
+use crate::{Connector, Error, Result};
 
-pub type RawDescriptor = i32;
+type RawDescriptor = i32;
 
 /// Proxy configuration
-pub struct ProxyConfig {
-    pub addr: SocketAddr,
-    pub username: Option<String>,
-    pub password: Option<String>,
+pub(crate) struct ProxyConfig {
+    addr: SocketAddr,
+    username: Option<String>,
+    password: Option<String>,
 }
 
 impl ProxyConfig {
+    /// Converts this configuration into a `Connector`.
+    pub(crate) fn into_connector(self) -> Connector {
+        Connector::new(self.addr, self.username, self.password)
+    }
     /// Parses a proxy configuration string and returns a `ProxyConfig` struct.
     ///
     /// The function expects the proxy configuration string to be in the
@@ -65,7 +69,7 @@ impl ProxyConfig {
     /// # Errors
     /// Returns an [Error] if the input string is not in a
     /// valid format or if the hostname/port resolution fails.
-    pub fn from_string(config_string: &str) -> Result<ProxyConfig> {
+    pub(crate) fn from_string(config_string: &str) -> Result<ProxyConfig> {
         let normalized = if !config_string.contains("://") {
             format!("http://{config_string}")
         } else {
@@ -113,7 +117,7 @@ impl ProxyConfig {
 }
 
 /// Convert TcpStream to RawDescriptor (i32)
-pub fn into_raw_descriptor(stream: TcpStream) -> Result<RawDescriptor> {
+pub(crate) fn into_raw_descriptor(stream: TcpStream) -> Result<RawDescriptor> {
     let std_stream = stream.into_std()?;
     std_stream.set_nonblocking(false)?;
 
@@ -264,7 +268,8 @@ mod tests {
             ),
         ];
 
-        // TODO: Mock DNS server to to test hostname. e.g. "proxy.example.com:3000".
+        // TODO: Mock DNS server to to test hostname. e.g.
+        // "proxy.example.com:3000".
         for (input, expected) in data {
             let result = ProxyConfig::from_string(input);
             assert!(

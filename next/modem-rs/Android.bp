@@ -125,6 +125,9 @@ rust_test_host {
         "general_tests",
     ],
     srcs: [
+        "src/profiles/iccprofile_for_sim0.xml",
+        "src/profiles/iccprofile_for_sim0_for_CtsCarrierApiTestCases.xml",
+        "src/profiles/iccprofile_for_sim_tel_alaska.xml",
         "tests/boot_test.rs",
         "tests/call_service_test.rs",
         "tests/cellular_network_test.rs",

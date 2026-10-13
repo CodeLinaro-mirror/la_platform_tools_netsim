@@ -11,7 +11,15 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ethernet::{EthernetFrame, EthernetPacket, MacAddr};
+use crate::ethernet::{EthernetFrame, EthernetPacket, MacAddr, VlanHeader};
+
+#[derive(Serialize)]
+struct EthernetOutput<'a> {
+    #[serde(flatten)]
+    header: Ethernet,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vlan: Option<&'a VlanHeader>,
+}
 
 /// Converts an `EthernetPacket` to a JSON `Value` compatible with tshark
 /// output.
@@ -23,15 +31,12 @@ use crate::ethernet::{EthernetFrame, EthernetPacket, MacAddr};
 /// * `ethernet_packet` - The parsed Ethernet packet.
 /// * `n` - The stream index (used for `eth.stream` field).
 pub fn to_json(ethernet_packet: &EthernetPacket, n: usize) -> Value {
-    let (frame, maybe_vlan) = match ethernet_packet {
+    let (frame, vlan) = match ethernet_packet {
         EthernetPacket::Untagged { frame, .. } => (frame, None),
-        EthernetPacket::Vlan { frame, vlan_header, .. } => (frame, Some(vlan_header)),
+        EthernetPacket::Vlan { frame, vlan_header, .. } => (frame, Some(&**vlan_header)),
     };
-    let mut eth = serde_json::to_value(parse_ethernet_header(frame, n)).unwrap();
-    if let Some(vlan_header) = maybe_vlan {
-        eth["vlan"] = serde_json::to_value(**vlan_header).unwrap();
-    }
-    eth
+
+    serde_json::to_value(EthernetOutput { header: parse_ethernet_header(frame, n), vlan }).unwrap()
 }
 
 #[derive(Debug)]
