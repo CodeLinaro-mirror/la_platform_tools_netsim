@@ -79,8 +79,8 @@ impl ActorLifecycle for ApActor {
         // to prevent stale state.
         if !dest.is_broadcast()
             && ieee_frame.stype() == management_subtype::AUTHENTICATION
-            && msg.len() >= 24 + 6
-            && let Ok((auth_fields, _)) = AuthenticationFixedFields::read_from_prefix(&msg[24..])
+            && let Some(auth_payload) = msg.get(24..)
+            && let Ok((auth_fields, _)) = AuthenticationFixedFields::read_from_prefix(auth_payload)
             && auth_fields.sequence.get() == 1
         {
             let src = ieee_frame.get_source();

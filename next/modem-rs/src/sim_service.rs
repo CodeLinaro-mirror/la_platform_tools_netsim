@@ -103,7 +103,7 @@ const EF_FPLMN_DATA_FALLBACK: &[u8] = &[0xFF; 12];
 const STATUS_FCP_HEX: &str = "62338202782183023F00A50C80016187010183040007DBF08A01058B062F0601020002C60C90016083010183010A83010D8102FFFF";
 /// Pre-decoded byte representation of `STATUS_FCP_HEX` for compile-time safety
 /// in `generate_df_fcp`.
-const STATUS_FCP_BYTES: &[u8] = &[
+const STATUS_FCP_BYTES: [u8; 53] = [
     0x62, 0x33, 0x82, 0x02, 0x78, 0x21, 0x83, 0x02, 0x3F, 0x00, 0xA5, 0x0C, 0x80, 0x01, 0x61, 0x87,
     0x01, 0x01, 0x83, 0x04, 0x00, 0x07, 0xDB, 0xF0, 0x8A, 0x01, 0x05, 0x8B, 0x06, 0x2F, 0x06, 0x01,
     0x02, 0x00, 0x02, 0xC6, 0x0C, 0x90, 0x01, 0x60, 0x83, 0x01, 0x01, 0x83, 0x01, 0x0A, 0x83, 0x01,
@@ -569,6 +569,34 @@ impl PinEntry {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct LogicalChannel {
+    open: bool,
+    selected_aid: Option<String>,
+    selected_file: Option<u16>,
+    response_buffer: Vec<u8>,
+}
+
+impl LogicalChannel {
+    fn reset(&mut self, clear_buffer: bool) {
+        self.open = false;
+        self.selected_aid = None;
+        self.selected_file = None;
+        if clear_buffer {
+            self.response_buffer.clear();
+        }
+    }
+}
+
+fn default_channels() -> [LogicalChannel; 4] {
+    [
+        LogicalChannel { open: true, ..Default::default() },
+        LogicalChannel::default(),
+        LogicalChannel::default(),
+        LogicalChannel::default(),
+    ]
+}
+
 // Holds all state related to the SIM card.
 pub struct SimService {
     provisioned: bool,
@@ -581,10 +609,7 @@ pub struct SimService {
     fdn_enabled: bool,
     fs: FileSystem,
     sms_messages: BTreeMap<u8, SimSmsMessage>,
-    logical_channels: [bool; 4],
-    selected_aids: [Option<String>; 4],
-    selected_files: [Option<u16>; 4],
-    response_buffer: [Vec<u8>; 4],
+    channels: [LogicalChannel; 4],
     cdma_subscription_source: CdmaSubscriptionSource,
     cdma_roaming_preference: CdmaRoamingPreference,
     adfs: Vec<crate::config::ApplicationDedicatedFile>,
@@ -611,10 +636,7 @@ impl Default for SimService {
             fs: FileSystem::default(),
             sms_messages: BTreeMap::new(),
             // Channel 0 is the basic channel and is always open by default.
-            logical_channels: [true, false, false, false],
-            selected_aids: [const { None }; 4],
-            selected_files: [None; 4],
-            response_buffer: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
+            channels: default_channels(),
             cdma_subscription_source: CdmaSubscriptionSource::default(),
             cdma_roaming_preference: CdmaRoamingPreference::default(),
             adfs: Vec::new(),
@@ -698,10 +720,7 @@ impl SimService {
         self.fdn_enabled = false;
         self.sms_messages.clear();
         self.fs = profile.sim_io.file_system.clone();
-        self.logical_channels = [true, false, false, false];
-        self.selected_aids = [const { None }; 4];
-        self.selected_files = [None; 4];
-        self.response_buffer = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+        self.channels = default_channels();
         self.adfs = profile.adfs.clone();
         self.eid = profile.eid.clone();
         self.atr = profile.atr.clone();
@@ -828,9 +847,9 @@ impl SimService {
 
         if apdu.ins == apdu::Instruction::Select
             && (apdu.p1 == 0x00 || apdu.p1 == 0x08)
-            && apdu.data().len() >= 2
+            && let Some(&chunk) = apdu.data().first_chunk::<2>()
         {
-            let target_fid = u16::from_be_bytes([apdu.data()[0], apdu.data()[1]]);
+            let target_fid = u16::from_be_bytes(chunk);
             if let Some(file_mock) = adf.files.iter().find(|f| f.id == target_fid)
                 && let Some(m) = file_mock.cgla.iter().find(|m| m.cmd.matches(apdu))
             {
@@ -891,6 +910,7 @@ impl SimService {
         let Ok(p1) = apdu::SelectP1::try_from(apdu.p1) else {
             return Err(SW_INCORRECT_PARAMS);
         };
+        let channel = self.channels.get_mut(idx).ok_or(SW_INCORRECT_PARAMS)?;
         match p1 {
             apdu::SelectP1::ByDfName => {
                 if apdu.data().is_empty() {
@@ -898,20 +918,21 @@ impl SimService {
                 }
                 let aid_upper = hex::encode_upper(apdu.data());
                 if self.adfs.iter().any(|am| am.aid == aid_upper) {
-                    self.selected_aids[idx] = Some(aid_upper);
-                    self.selected_files[idx] = None;
+                    channel.selected_aid = Some(aid_upper);
+                    channel.selected_file = None;
                     Ok(())
                 } else {
                     Err(SW_FILE_NOT_FOUND)
                 }
             }
             apdu::SelectP1::ByFid | apdu::SelectP1::ByPathFromMf => {
-                if apdu.data().len() != 2 {
+                let Ok(&chunk) = <&[u8; 2]>::try_from(apdu.data()) else {
                     return Err(SW_WRONG_LENGTH);
-                }
-                let fid = u16::from_be_bytes([apdu.data()[0], apdu.data()[1]]);
-                let is_file_in_active_adf = if let Some(active_aid) = &self.selected_aids[idx]
-                    && let Some(adf) = self.adfs.iter().find(|a| a.aid == *active_aid)
+                };
+                let fid = u16::from_be_bytes(chunk);
+                let is_file_in_active_adf = if let Some(active_aid) =
+                    channel.selected_aid.as_deref()
+                    && let Some(adf) = self.adfs.iter().find(|a| a.aid == active_aid)
                 {
                     let in_overrides = adf.files.iter().any(|f| f.id == fid);
                     let in_fs_subtree =
@@ -929,9 +950,9 @@ impl SimService {
                     || is_file_in_active_adf
                     || UiccFileId::is_virtual_fallback_id(fid)
                 {
-                    self.selected_files[idx] = Some(fid);
+                    channel.selected_file = Some(fid);
                     if !is_file_in_active_adf {
-                        self.selected_aids[idx] = None;
+                        channel.selected_aid = None;
                     }
                     Ok(())
                 } else {
@@ -971,10 +992,7 @@ impl SimService {
             }
         } else {
             self.state = SimState::Absent;
-            self.logical_channels = [true, false, false, false];
-            self.selected_aids = [const { None }; 4];
-            self.selected_files = [None; 4];
-            self.response_buffer = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+            self.channels = default_channels();
         }
         self.state != old_state
     }
@@ -1004,7 +1022,9 @@ impl SimService {
 
     fn handle_get_sim_status(&self) -> SimResult {
         let status = match self.state {
-            SimState::Absent => unreachable!("Absent state handled in execute"),
+            SimState::Absent => {
+                return Err(ExecutionResult::cme_error(CmeError::SimNotInserted));
+            }
             SimState::Ready => RequiredPin::None,
             SimState::PinRequired => RequiredPin::SimPin,
             SimState::PukRequired => RequiredPin::SimPuk,
@@ -1026,7 +1046,7 @@ impl SimService {
         let pin_or_puk_len = input.len();
         let new_pin_str = new_pin.as_ref().map(|p| p.as_str());
         match (self.state, new_pin_str) {
-            (SimState::Absent, _) => unreachable!("Absent state handled in execute"),
+            (SimState::Absent, _) => Err(ExecutionResult::cme_error(CmeError::SimNotInserted)),
             (SimState::PermBlocked, _) => {
                 Err(ExecutionResult::cme_error(CmeError::OperationNotAllowed))
             }
@@ -1139,7 +1159,7 @@ impl SimService {
                 return Err(RESP_WRONG_LENGTH);
             }
             let end = std::cmp::min(offset + length, ef.data.len());
-            let sliced = if offset < ef.data.len() { &ef.data[offset..end] } else { &[] };
+            let sliced = ef.data.get(offset..end).unwrap_or(&[]);
             Ok(hex::encode_upper(sliced))
         } else {
             Err(RESP_FILE_NOT_FOUND)
@@ -1161,11 +1181,9 @@ impl SimService {
             if let Some(ef) = self.fs.find_ef(file_id) {
                 if let Some(record) = ef.record(record_num as usize) {
                     let p3_usize = p3 as usize;
-                    if p3_usize > record.len() {
-                        return Err(RESP_WRONG_LENGTH);
-                    }
                     let length = if p3_usize == 0 { record.len() } else { p3_usize };
-                    return Ok(hex::encode_upper(&record[..length]));
+                    let slice = record.get(..length).ok_or(RESP_WRONG_LENGTH)?;
+                    return Ok(hex::encode_upper(slice));
                 }
                 Err(RESP_REFERENCED_DATA_NOT_FOUND)
             } else {
@@ -1253,7 +1271,7 @@ impl SimService {
             if let Some(header) = header_opt {
                 let header_bytes = header.to_bytes();
                 let end = if p3 == 0 { header_bytes.len() } else { p3 as usize };
-                let resp_data = header_bytes.get(..end).unwrap_or(&header_bytes[..]);
+                let resp_data = header_bytes.get(..end).unwrap_or(header_bytes.as_slice());
                 return Ok(Some(SimResponse::RestrictedSimAccess {
                     sw: SW_SUCCESS,
                     data: Some(hex::encode_upper(resp_data)),
@@ -1275,26 +1293,36 @@ impl SimService {
             }
         }
 
-        if let Some(channel_idx) = self.logical_channels.iter().position(|&open| !open) {
-            self.logical_channels[channel_idx] = true;
-            self.selected_aids[channel_idx] = Some(aid_clean);
+        if let Some((channel_idx, channel)) =
+            self.channels.iter_mut().enumerate().skip(1).find(|(_, ch)| !ch.open)
+        {
+            channel.open = true;
+            channel.selected_aid = Some(aid_clean);
             Ok(Some(SimResponse::OpenLogicalChannel(channel_idx as u8)))
         } else {
             Err(ExecutionResult::cme_error(CmeError::NoResources))
         }
     }
 
+    fn reset_channel(&mut self, idx: usize, clear_buffer: bool) {
+        if let Some(channel) = self.channels.get_mut(idx) {
+            channel.reset(clear_buffer);
+        }
+    }
+
     fn handle_close_logical_channel(&mut self, channel_id: u8) -> SimResult {
         let idx = channel_id as usize;
-        if idx == 0 || idx >= self.logical_channels.len() {
+        if idx == 0 {
             return Err(ExecutionResult::cme_error(CmeError::InvalidIndex));
         }
-        if !self.logical_channels[idx] {
+        let channel = self
+            .channels
+            .get_mut(idx)
+            .ok_or_else(|| ExecutionResult::cme_error(CmeError::InvalidIndex))?;
+        if !channel.open {
             return Err(ExecutionResult::cme_error(CmeError::NotFound));
         }
-        self.logical_channels[idx] = false;
-        self.selected_aids[idx] = None;
-        self.selected_files[idx] = None;
+        channel.reset(false);
 
         // Non-standard: AOSP Goldfish RIL requires "+CCHC" response on channel
         // close to prevent serialization locks.
@@ -1312,12 +1340,16 @@ impl SimService {
             return format_sim_payload_status(SW_CLASS_NOT_SUPPORTED);
         }
 
-        let active_aid = self.selected_aids[idx].as_deref();
-        let selected_fid = self.selected_files[idx];
-
-        if apdu.ins != apdu::Instruction::GetResponse {
-            self.response_buffer[idx].clear();
+        if apdu.ins != apdu::Instruction::GetResponse
+            && let Some(channel) = self.channels.get_mut(idx)
+        {
+            channel.response_buffer.clear();
         }
+
+        let (active_aid, selected_fid) = match self.channels.get(idx) {
+            Some(ch) => (ch.selected_aid.as_deref().unwrap_or(""), ch.selected_file),
+            None => ("", None),
+        };
 
         // 2. Immediate validation check for invalid SELECT P2 parameter
         if apdu.ins == apdu::Instruction::Select && apdu.p2 == P2_INVALID_SELECT {
@@ -1326,7 +1358,7 @@ impl SimService {
 
         // 3. Honor explicit APDU mappings defined in the XML profile
         let profile_response = match access_type {
-            SimAccessType::Cgla => self.lookup_cgla(active_aid.unwrap_or(""), selected_fid, apdu),
+            SimAccessType::Cgla => self.lookup_cgla(active_aid, selected_fid, apdu),
             SimAccessType::Csim => self.lookup_csim(apdu),
         };
         if let Some(resp) = profile_response {
@@ -1345,24 +1377,22 @@ impl SimService {
             {
                 match action {
                     apdu::ManageChannelAction::Open => {
-                        if let Some(channel_idx) = get_channel_idx_from_open_response(&resp)
-                            && channel_idx < self.logical_channels.len()
-                        {
-                            self.logical_channels[channel_idx] = true;
-                            self.selected_files[channel_idx] =
-                                Some(UiccFileId::MasterFile.as_u16());
-                            if access_type == SimAccessType::Csim {
-                                self.selected_aids[channel_idx] = Some("CSIM".to_string());
+                        if let Some(channel_idx) = get_channel_idx_from_open_response(&resp) {
+                            if let Some(channel) = self.channels.get_mut(channel_idx) {
+                                channel.open = true;
+                                channel.selected_file = Some(UiccFileId::MasterFile.as_u16());
+                                if access_type == SimAccessType::Csim {
+                                    channel.selected_aid = Some("CSIM".to_string());
+                                }
+                            } else {
+                                return format_sim_payload_status(SW_INCORRECT_PARAMS);
                             }
                         }
                     }
                     apdu::ManageChannelAction::Close => {
                         let target_idx = if apdu.p2 == 0 { idx } else { apdu.p2 as usize };
-                        if target_idx != 0 && target_idx < self.logical_channels.len() {
-                            self.logical_channels[target_idx] = false;
-                            self.selected_aids[target_idx] = None;
-                            self.selected_files[target_idx] = None;
-                            self.response_buffer[target_idx].clear();
+                        if target_idx != 0 {
+                            self.reset_channel(target_idx, true);
                         }
                     }
                 }
@@ -1465,13 +1495,20 @@ impl SimService {
                         match self.select_sim_file(idx, apdu) {
                             Ok(()) => {
                                 if p2 == apdu::SelectP2::ReturnFcp {
-                                    let fid = self.selected_files[idx]
-                                        .unwrap_or(UiccFileId::AdfDefault.as_u16());
-                                    let fcp_hex =
-                                        generate_df_fcp(fid, self.selected_aids[idx].as_deref());
+                                    let (fid, aid) = match self.channels.get(idx) {
+                                        Some(ch) => (
+                                            ch.selected_file
+                                                .unwrap_or(UiccFileId::AdfDefault.as_u16()),
+                                            ch.selected_aid.as_deref(),
+                                        ),
+                                        None => (UiccFileId::AdfDefault.as_u16(), None),
+                                    };
+                                    let fcp_hex = generate_df_fcp(fid, aid);
                                     if let Ok(fcp_bytes) = hex::decode(&fcp_hex) {
                                         let len = fcp_bytes.len();
-                                        self.response_buffer[idx] = fcp_bytes;
+                                        if let Some(channel) = self.channels.get_mut(idx) {
+                                            channel.response_buffer = fcp_bytes;
+                                        }
                                         let sw_low = if len >= 256 { 0 } else { len as u8 };
                                         let sw = ((SW_BYTES_REMAINING_PREFIX as u16) << 8)
                                             | (sw_low as u16);
@@ -1493,10 +1530,14 @@ impl SimService {
                     };
                     match action {
                         apdu::ManageChannelAction::Open => {
-                            if let Some(channel_idx) =
-                                self.logical_channels.iter().position(|&open| !open)
+                            if let Some((channel_idx, channel)) = self
+                                .channels
+                                .iter_mut()
+                                .enumerate()
+                                .skip(1)
+                                .find(|(_, ch)| !ch.open)
                             {
-                                self.logical_channels[channel_idx] = true;
+                                channel.open = true;
                                 let channel_hex = format!("{channel_idx:02X}");
                                 format_sim_payload_data(&channel_hex, SW_SUCCESS)
                             } else {
@@ -1507,16 +1548,14 @@ impl SimService {
                             let target_idx = if apdu.p2 == 0 { idx } else { apdu.p2 as usize };
                             if target_idx == 0 {
                                 format_sim_payload_status(SW_INCORRECT_PARAMS) // 6A86
-                            } else if target_idx >= self.logical_channels.len()
-                                || !self.logical_channels[target_idx]
-                            {
-                                format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND) // 6A88
                             } else {
-                                self.logical_channels[target_idx] = false;
-                                self.selected_aids[target_idx] = None;
-                                self.selected_files[target_idx] = None;
-                                self.response_buffer[target_idx].clear();
-                                format_sim_payload_status(SW_SUCCESS)
+                                match self.channels.get_mut(target_idx) {
+                                    Some(ch) if ch.open => {
+                                        ch.reset(true);
+                                        format_sim_payload_status(SW_SUCCESS)
+                                    }
+                                    _ => format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND), // 6A88
+                                }
                             }
                         }
                     }
@@ -1535,11 +1574,10 @@ impl SimService {
 
     fn handle_transmit_logical_channel(&mut self, channel_id: u8, data: ApduData) -> SimResult {
         let idx = channel_id as usize;
-        if idx >= self.logical_channels.len() {
-            return Err(ExecutionResult::cme_error(CmeError::InvalidIndex));
-        }
-        if !self.logical_channels[idx] {
-            return Err(ExecutionResult::cme_error(CmeError::NotFound));
+        match self.channels.get(idx) {
+            Some(ch) if ch.open => {}
+            Some(_) => return Err(ExecutionResult::cme_error(CmeError::NotFound)),
+            None => return Err(ExecutionResult::cme_error(CmeError::InvalidIndex)),
         }
 
         let apdu_bytes = match data.decode_hex() {
@@ -1580,9 +1618,11 @@ impl SimService {
         };
         match action {
             apdu::ManageChannelAction::Open => {
-                if let Some(channel_idx) = self.logical_channels.iter().position(|&open| !open) {
-                    self.logical_channels[channel_idx] = true;
-                    self.selected_aids[channel_idx] = Some("CSIM".to_string()); // CSIM channel
+                if let Some((channel_idx, channel)) =
+                    self.channels.iter_mut().enumerate().skip(1).find(|(_, ch)| !ch.open)
+                {
+                    channel.open = true;
+                    channel.selected_aid = Some("CSIM".to_string()); // CSIM channel
                     let resp_hex = format!("{channel_idx:02X}{SW_SUCCESS:04X}");
                     Ok(Some(SimResponse::GenericSimAccess(format!(
                         "{},{resp_hex}",
@@ -1600,16 +1640,17 @@ impl SimService {
                 if target_idx == 0 {
                     let status = SW_INCORRECT_PARAMS;
                     Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
-                } else if target_idx >= self.logical_channels.len()
-                    || !self.logical_channels[target_idx]
-                {
-                    let status = SW_REFERENCED_DATA_NOT_FOUND;
-                    Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
                 } else {
-                    self.logical_channels[target_idx] = false;
-                    self.selected_aids[target_idx] = None;
-                    self.selected_files[target_idx] = None;
-                    Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_SUCCESS:04X}"))))
+                    match self.channels.get_mut(target_idx) {
+                        Some(ch) if ch.open => {
+                            ch.reset(false);
+                            Ok(Some(SimResponse::GenericSimAccess(format!("4,{SW_SUCCESS:04X}"))))
+                        }
+                        _ => {
+                            let status = SW_REFERENCED_DATA_NOT_FOUND;
+                            Ok(Some(SimResponse::GenericSimAccess(format!("4,{status:04X}"))))
+                        }
+                    }
                 }
             }
         }
@@ -1630,10 +1671,8 @@ impl SimService {
         };
 
         let channel_idx = parsed.class.channel();
-        if !parsed.class.is_supported()
-            || channel_idx >= self.logical_channels.len()
-            || !self.logical_channels[channel_idx]
-        {
+        let channel_open = self.channels.get(channel_idx).is_some_and(|ch| ch.open);
+        if !parsed.class.is_supported() || !channel_open {
             return Ok(Some(SimResponse::GenericSimAccess(format_sim_payload_status(
                 SW_CLASS_NOT_SUPPORTED,
             ))));
@@ -1917,20 +1956,24 @@ impl SimService {
         if apdu.p1 != 0x00 || apdu.p2 != 0x00 {
             return format_sim_payload_status(SW_INCORRECT_PARAMS);
         }
-        if self.response_buffer[idx].is_empty() {
+        let Some(channel) = self.channels.get_mut(idx) else {
+            return format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND);
+        };
+        let buf = &mut channel.response_buffer;
+        if buf.is_empty() {
             return format_sim_payload_status(SW_REFERENCED_DATA_NOT_FOUND);
         }
 
         let req_len = if let Some(le) = apdu.expected_length() {
             if le == 0 { 256 } else { le as usize }
         } else {
-            self.response_buffer[idx].len()
+            buf.len()
         };
 
-        let available = self.response_buffer[idx].len();
+        let available = buf.len();
         let take_len = req_len.min(available);
-        let chunk: Vec<u8> = self.response_buffer[idx].drain(..take_len).collect();
-        let remaining = self.response_buffer[idx].len();
+        let chunk: Vec<u8> = buf.drain(..take_len).collect();
+        let remaining = buf.len();
         let hex_data = hex::encode_upper(&chunk);
 
         if remaining > 0 {
@@ -2008,10 +2051,10 @@ impl SmsStore for SimService {
 }
 
 fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
-    let mut fcp_bytes = STATUS_FCP_BYTES.to_vec();
-    // Overwrite File ID in FCP template (Tag '83' at index 6: 83 02 3F 00)
-    fcp_bytes[8] = ((df_id >> 8) & 0xFF) as u8;
-    fcp_bytes[9] = (df_id & 0xFF) as u8;
+    let mut fcp_arr = STATUS_FCP_BYTES;
+    let [_, _, _, _, _, _, _, _, fid0, fid1, ..] = &mut fcp_arr;
+    [*fid0, *fid1] = df_id.to_be_bytes();
+    let mut fcp_bytes = Vec::from(fcp_arr);
 
     if df_id == UiccFileId::AdfDefault.as_u16()
         && let Some(aid) = active_aid
@@ -2022,7 +2065,10 @@ fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
         fcp_bytes.push(aid_bytes.len() as u8);
         fcp_bytes.extend(aid_bytes);
         // Update Tag '62' length at index 1
-        fcp_bytes[1] = (fcp_bytes.len() - 2) as u8;
+        let fcp_len = (fcp_bytes.len() - 2) as u8;
+        if let [_, len_byte, ..] = fcp_bytes.as_mut_slice() {
+            *len_byte = fcp_len;
+        }
     }
     hex::encode_upper(fcp_bytes)
 }
@@ -2030,10 +2076,7 @@ fn generate_df_fcp(df_id: u16, active_aid: Option<&str>) -> String {
 fn decode_imsi(bytes: &[u8]) -> Option<String> {
     let (&len_byte, rest) = bytes.split_first()?;
     let len = len_byte as usize;
-    if len == 0 || rest.len() < len {
-        return None;
-    }
-    let (&first_byte, content) = rest[..len].split_first()?;
+    let (&first_byte, content) = rest.get(..len)?.split_first()?;
 
     let mut imsi = String::new();
     let digit_1 = first_byte >> 4;
@@ -2075,10 +2118,8 @@ fn format_sim_payload_status(status_word: u16) -> String {
 // Helper functions for state synchronization and status word parsing
 fn get_status_word_from_payload(payload: &str) -> Option<u16> {
     let part2 = payload.split(',').nth(1)?;
-    if part2.len() < 4 {
-        return None;
-    }
-    let sw_str = &part2[part2.len() - 4..];
+    let start = part2.len().checked_sub(4)?;
+    let sw_str = part2.get(start..)?;
     u16::from_str_radix(sw_str, 16).ok()
 }
 
@@ -2092,7 +2133,7 @@ fn get_channel_idx_from_open_response(payload: &str) -> Option<usize> {
     if part2.len() < 6 {
         return None;
     }
-    let channel_hex = &part2[0..2];
+    let channel_hex = part2.get(..2)?;
     usize::from_str_radix(channel_hex, 16).ok()
 }
 
@@ -2509,17 +2550,17 @@ mod tests {
         // Open logical channel 1
         let res = service.handle_open_logical_channel(ApplicationId("")).unwrap();
         assert_eq!(res, Some(SimResponse::OpenLogicalChannel(1)));
-        assert!(service.logical_channels[1]);
+        assert!(service.channels[1].open);
 
         // Load new profile
         let cts_prof = crate::profiles::get_builtin_profile(crate::profiles::SIM_TYPE_CTS).unwrap();
         service.load_profile(&cts_prof);
 
         // Logical channel 1 should be closed, channel 0 open
-        assert!(service.logical_channels[0]);
-        assert!(!service.logical_channels[1]);
-        assert_eq!(service.selected_aids[1], None);
-        assert_eq!(service.selected_files[1], None);
+        assert!(service.channels[0].open);
+        assert!(!service.channels[1].open);
+        assert_eq!(service.channels[1].selected_aid, None);
+        assert_eq!(service.channels[1].selected_file, None);
     }
 
     #[test]
@@ -2581,17 +2622,15 @@ mod tests {
         // Open logical channel 1 and buffer response data
         let res = service.handle_open_logical_channel(ApplicationId("")).unwrap();
         assert_eq!(res, Some(SimResponse::OpenLogicalChannel(1)));
-        assert!(service.logical_channels[1]);
-        service.response_buffer[1] = vec![0x12, 0x34];
+        assert!(service.channels[1].open);
+        service.channels[1].response_buffer = vec![0x12, 0x34];
 
         // Toggling SIM presence to false must tear down logical channels, reset
         // selected files, and clear buffers
         assert!(service.set_present(false));
         assert!(!service.is_present());
-        assert_eq!(service.logical_channels, [true, false, false, false]);
-        assert_eq!(service.selected_aids, [const { None }; 4]);
-        assert_eq!(service.selected_files, [None; 4]);
-        assert!(service.response_buffer[1].is_empty());
+        assert_eq!(service.channels, default_channels());
+        assert!(service.channels[1].response_buffer.is_empty());
     }
 
     #[test]

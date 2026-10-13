@@ -23,8 +23,8 @@ impl FromStr for Address {
             return Err(Error::MalformedAddress(s.to_string()));
         }
         let mut address = [0; 6];
-        for (i, part) in parts.iter().enumerate() {
-            address[i] = u8::from_str_radix(part, 16)?;
+        for (dest, part) in address.iter_mut().zip(&parts) {
+            *dest = u8::from_str_radix(part, 16)?;
         }
         Ok(Self { address })
     }
@@ -77,12 +77,13 @@ pub enum Phy {
     BrEdr = 1,
 }
 
-impl From<c_int> for Phy {
-    fn from(item: c_int) -> Self {
+impl TryFrom<c_int> for Phy {
+    type Error = c_int;
+    fn try_from(item: c_int) -> std::result::Result<Self, Self::Error> {
         match item {
-            0 => Phy::LowEnergy,
-            1 => Phy::BrEdr,
-            _ => panic!("Unknown PHY value"),
+            0 => Ok(Phy::LowEnergy),
+            1 => Ok(Phy::BrEdr),
+            unknown => Err(unknown),
         }
     }
 }

@@ -12,6 +12,7 @@ base64 = "0.22"
 bytes = "1.4"
 device-actor = { path = "../device-actor" }
 device-api = { path = "../device-api" }
+form_urlencoded = "1.2"
 futures = "0.3.30"
 http = "0.2"
 httparse = "1.9"

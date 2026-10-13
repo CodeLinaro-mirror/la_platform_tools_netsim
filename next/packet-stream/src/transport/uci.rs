@@ -16,18 +16,18 @@ impl Decoder for UciCodec {
         const UCI_MT_SHIFT: u8 = 5;
         const UCI_MT_DATA: u8 = 0;
 
-        if src.len() < UCI_HEADER_SIZE {
+        let &[b0, _, b2, b3, ..] = src.as_ref() else {
             return Ok(None);
-        }
+        };
 
-        let mt = (src[0] & UCI_MT_MASK) >> UCI_MT_SHIFT;
+        let mt = (b0 & UCI_MT_MASK) >> UCI_MT_SHIFT;
 
         let payload_len = if mt == UCI_MT_DATA {
             // Data Packet: 2-byte payload length at index 2 and 3
-            u16::from_le_bytes([src[2], src[3]]) as usize
+            u16::from_le_bytes([b2, b3]) as usize
         } else {
             // Control Packet: 1-byte payload length at index 3
-            src[3] as usize
+            b3 as usize
         };
 
         let total_len = UCI_HEADER_SIZE + payload_len;

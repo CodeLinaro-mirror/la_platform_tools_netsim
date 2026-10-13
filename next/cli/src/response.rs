@@ -15,7 +15,7 @@ use crate::{
 };
 
 impl args::Command {
-    pub fn print_response(
+    pub(crate) fn print_response(
         &self,
         response: &GrpcResponse,
         cells: Option<&[netsim_proto::cell::Cell]>,
@@ -97,7 +97,7 @@ impl args::Command {
 
             Command::Beacon(action) => match action {
                 Beacon::Create(kind) => match kind {
-                    BeaconCreate::Ble(_) => {
+                    BeaconCreate::Ble(_) | BeaconCreate::Uwb(_) => {
                         if !verbose {
                             return Ok(());
                         }
@@ -108,13 +108,20 @@ impl args::Command {
                             .into());
                         };
                         let device = &res.device;
-                        if device.chips.len() == 1 {
-                            println!(
-                                "Created device '{}' with ble beacon chip '{}'",
-                                device.name, device.chips[0].name
-                            );
-                        } else {
-                            return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
+                        match device.chips.as_slice() {
+                            [chip] => {
+                                let kind_str = match kind {
+                                    BeaconCreate::Ble(_) => "ble beacon",
+                                    BeaconCreate::Uwb(_) => "uwb anchor",
+                                };
+                                println!(
+                                    "Created device '{}' with {kind_str} chip '{}'",
+                                    device.name, chip.name
+                                );
+                            }
+                            _ => {
+                                return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
+                            }
                         }
                     }
                 },
@@ -193,7 +200,7 @@ impl args::Command {
                     }
                 }
                 Link::List => {
-                    unimplemented!("Link::List uses the REST API and is handled in main.rs.")
+                    return Err("Link::List uses the REST API and is handled in main.rs.".into());
                 }
                 Link::Patch(args) => {
                     if let Some(rssi) = args.rssi
@@ -245,7 +252,7 @@ impl args::Command {
             },
             // These commands are intercepted early in main.rs and have no direct gRPC pipeline.
             _ => {
-                unimplemented!("No Grpc Response for this Command.");
+                return Err("No Grpc Response for this Command.".into());
             }
         }
         Ok(())
@@ -374,7 +381,7 @@ impl args::Command {
         }
     }
 
-    pub fn chip_kind_to_string(chip_kind: ChipKind) -> String {
+    pub(crate) fn chip_kind_to_string(chip_kind: ChipKind) -> String {
         match chip_kind {
             ChipKind::UNSPECIFIED => "UNSPECIFIED",
             ChipKind::BLUETOOTH => "BLUETOOTH",
@@ -389,7 +396,7 @@ impl args::Command {
         .into()
     }
 
-    pub fn filter_captures(captures: &mut Vec<model::Capture>, keys: &[String]) {
+    pub(crate) fn filter_captures(captures: &mut Vec<model::Capture>, keys: &[String]) {
         // Filter out list of captures with matching pattern
         captures.retain(|capture| {
             keys.iter().map(|key| key.to_uppercase()).all(|key| {

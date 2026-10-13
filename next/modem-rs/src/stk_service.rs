@@ -27,13 +27,10 @@ const RESULT_BACKWARD_MOVE: u8 = 0x11;
 const HEX_TAG_SMS_PP_DOWNLOAD: &str = "D1";
 const HEX_TAG_MENU_SELECTION: &str = "D3";
 
-const HEX_TAG_LEN: usize = 2;
-
 // TLV Structure Constants
 const TLV_HEADER_LEN: usize = 2; // 1 byte tag + 1 byte length
 
 // Simplified Envelope Fallback Constants (used in tests)
-const SIMPLIFIED_ENVELOPE_MIN_LEN: usize = 4;
 const SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX: usize = 3;
 
 /// SIM Toolkit (USAT / STK) proactive command type.
@@ -191,7 +188,7 @@ impl StkService {
     fn parse_menu_selection(command: &str) -> Option<u8> {
         let bytes = hex::decode(command).ok()?;
 
-        if bytes.is_empty() || bytes[0] != TAG_MENU_SELECTION {
+        if bytes.first() != Some(&TAG_MENU_SELECTION) {
             return None;
         }
         let length = *bytes.get(1)? as usize;
@@ -210,8 +207,8 @@ impl StkService {
 
             match *tag {
                 TAG_ITEM_IDENTIFIER_1 | TAG_ITEM_IDENTIFIER_2 => {
-                    if value.len() == 1 {
-                        item_id = Some(value[0]);
+                    if let [id] = value {
+                        item_id = Some(*id);
                     }
                 }
                 _ => {}
@@ -225,7 +222,7 @@ impl StkService {
     fn parse_terminal_response(command: &str) -> Option<TerminalResponseAction> {
         let bytes = hex::decode(command).ok()?;
 
-        let mut remaining = &bytes[..];
+        let mut remaining = bytes.as_slice();
         let mut command_type = None;
         let mut general_result = None;
         let mut additional_info = None;
@@ -271,19 +268,12 @@ impl StkService {
     }
 
     fn handle_envelope_command(&mut self, command: &str) -> StkResult {
-        if command.len() < HEX_TAG_LEN {
-            return Err(ExecutionResult::error());
-        }
-
-        let tag = &command[0..HEX_TAG_LEN];
-
-        if tag == HEX_TAG_SMS_PP_DOWNLOAD {
+        if command.starts_with(HEX_TAG_SMS_PP_DOWNLOAD) {
             // Fallback for Terminal Response simulation in tests (e.g. Display Text, Get
             // Input)
             let bytes = hex::decode(command).map_err(|_err| ExecutionResult::error())?;
-            if bytes.len() >= SIMPLIFIED_ENVELOPE_MIN_LEN {
-                let cmd_type =
-                    ProactiveCommandType::try_from(bytes[SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX]);
+            if let Some(&raw_cmd_type) = bytes.get(SIMPLIFIED_ENVELOPE_CMD_TYPE_INDEX) {
+                let cmd_type = ProactiveCommandType::try_from(raw_cmd_type);
                 if matches!(
                     cmd_type,
                     Ok(ProactiveCommandType::DisplayText | ProactiveCommandType::GetInput)
@@ -297,7 +287,7 @@ impl StkService {
             return Err(ExecutionResult::error());
         }
 
-        if tag == HEX_TAG_MENU_SELECTION {
+        if command.starts_with(HEX_TAG_MENU_SELECTION) {
             // Envelope resets path to main menu
             self.current_path.clear();
 

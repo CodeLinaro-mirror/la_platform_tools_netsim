@@ -477,14 +477,15 @@ impl ElementaryFile {
     /// `record_len` is not set, or the record index exceeds the current
     /// file buffer.
     pub fn record(&self, record_number: usize) -> Option<&[u8]> {
-        self.record_range(record_number).map(|r| &self.data[r])
+        self.record_range(record_number).and_then(|r| self.data.get(r))
     }
 
     /// Returns a mutable 1-based record slice, or `None` if `record_number ==
     /// 0`, `record_len` is not set, or the record index exceeds the current
     /// file buffer.
     pub fn record_mut(&mut self, record_number: usize) -> Option<&mut [u8]> {
-        self.record_range(record_number).map(|r| &mut self.data[r])
+        let r = self.record_range(record_number)?;
+        self.data.get_mut(r)
     }
 
     /// Returns an iterator yielding each record in this linear-fixed file.
@@ -550,7 +551,10 @@ impl ElementaryFile {
                 if offset + new_bytes.len() > self.data.len() {
                     self.data.resize(offset + new_bytes.len(), 0xFF);
                 }
-                self.data[offset..offset + new_bytes.len()].copy_from_slice(&new_bytes);
+                let Some(dest) = self.data.get_mut(offset..offset + new_bytes.len()) else {
+                    return Err(SW_INCORRECT_PARAMS);
+                };
+                dest.copy_from_slice(&new_bytes);
                 Ok(())
             }
             apdu::Instruction::UpdateRecord => {

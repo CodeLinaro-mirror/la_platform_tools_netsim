@@ -7,12 +7,11 @@ use std::net::Ipv6Addr;
 
 use bytes::Bytes;
 use netsim_packets::{
-    DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, Dhcpv6Header, Dhcpv6OptionHeader, Dhcpv6OptionIterator,
-    EthernetFrame, EthernetPacket, Ipv6Builder, MSG_INFORMATION_REQUEST, MSG_REPLY, MacAddr,
-    OPTION_CLIENTID, OPTION_DNS_SERVERS, OPTION_DOMAIN_LIST, OPTION_SERVERID, UdpHeader,
-    UdpPacketBuilder,
+    DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, Dhcpv6Header, Dhcpv6OptionIterator, EthernetFrame,
+    EthernetPacket, Ipv6Builder, MSG_INFORMATION_REQUEST, MSG_REPLY, MacAddr, OPTION_CLIENTID,
+    OPTION_DNS_SERVERS, OPTION_DOMAIN_LIST, OPTION_SERVERID, UdpHeader, UdpPacketBuilder,
 };
-use zerocopy::{FromBytes, U16};
+use zerocopy::FromBytes;
 
 use crate::{Config, SlirpResponse, dns::encode_dns_search_list, packet::ParsedPacket};
 
@@ -141,46 +140,32 @@ impl Dhcpv6Manager {
         dhcpv6_hdr.transaction_id = transaction_id;
 
         // 5. Fill Options
-        let mut offset = 0;
-
-        // 5.1. Server Identifier (DUID-LL based on gateway MAC)
-        let srv_id_hdr =
-            Dhcpv6OptionHeader::mut_from_bytes(&mut options_slice[offset..offset + 4]).unwrap();
-        srv_id_hdr.code = U16::new(OPTION_SERVERID);
-        srv_id_hdr.len = U16::new(10); // DUID type (2) + HW type (2) + MAC (6) = 10 bytes
-        offset += 4;
-        options_slice[offset..offset + 2].copy_from_slice(&3u16.to_be_bytes());
-        options_slice[offset + 2..offset + 4].copy_from_slice(&1u16.to_be_bytes());
-        options_slice[offset + 4..offset + 10].copy_from_slice(&config.gateway_mac.bytes);
-        offset += 10;
-
-        // 5.2. Client Identifier (copy from request)
-        let cli_id_hdr =
-            Dhcpv6OptionHeader::mut_from_bytes(&mut options_slice[offset..offset + 4]).unwrap();
-        cli_id_hdr.code = U16::new(OPTION_CLIENTID);
-        cli_id_hdr.len = U16::new(client_id.len() as u16);
-        offset += 4;
-        options_slice[offset..offset + client_id.len()].copy_from_slice(client_id);
-        offset += client_id.len();
-
-        // 5.3. DNS Servers Option
-        let dns_hdr =
-            Dhcpv6OptionHeader::mut_from_bytes(&mut options_slice[offset..offset + 4]).unwrap();
-        dns_hdr.code = U16::new(OPTION_DNS_SERVERS);
-        dns_hdr.len = U16::new(16); // 1 IPv6 address = 16 bytes
-        offset += 4;
-        options_slice[offset..offset + 16].copy_from_slice(&config.host_ipv6.octets());
-        offset += 16;
+        let mut options = [
+            &OPTION_SERVERID.to_be_bytes()[..],
+            &10u16.to_be_bytes(), // length: 2 + 2 + 6 = 10
+            &3u16.to_be_bytes(),  // DUID type 3 (DUID-LL)
+            &1u16.to_be_bytes(),  // HW type 1 (Ethernet)
+            &config.gateway_mac.bytes,
+            &OPTION_CLIENTID.to_be_bytes(),
+            &(client_id.len() as u16).to_be_bytes(),
+            client_id,
+            &OPTION_DNS_SERVERS.to_be_bytes(),
+            &16u16.to_be_bytes(),
+            &config.host_ipv6.octets(),
+        ]
+        .concat();
 
         // 5.4. Domain Search List Option (optional)
-        if let Some(bytes) = domain_list_bytes {
-            let dom_hdr =
-                Dhcpv6OptionHeader::mut_from_bytes(&mut options_slice[offset..offset + 4]).unwrap();
-            dom_hdr.code = U16::new(OPTION_DOMAIN_LIST);
-            dom_hdr.len = U16::new(bytes.len() as u16);
-            offset += 4;
-            options_slice[offset..offset + bytes.len()].copy_from_slice(&bytes);
+        if let Some(bytes) = &domain_list_bytes {
+            options.extend_from_slice(&OPTION_DOMAIN_LIST.to_be_bytes());
+            options.extend_from_slice(&(bytes.len() as u16).to_be_bytes());
+            options.extend_from_slice(bytes);
         }
+
+        let Some(dest) = options_slice.get_mut(..options.len()) else {
+            return;
+        };
+        dest.copy_from_slice(&options);
 
         // 6. Finalize UDP and IPv6
         udp_builder.payload_len(total_dhcpv6_len);

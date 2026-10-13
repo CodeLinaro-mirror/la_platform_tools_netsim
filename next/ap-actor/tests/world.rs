@@ -32,7 +32,7 @@ pub struct ApWorld {
 
 impl ApWorld {
     pub async fn new() -> Self {
-        netsim_testing::logger::setup(None);
+        netsim_testing::setup(None);
         let shared_keys = std::sync::Arc::new(SharedKeyStore::new());
         let ap_actor_impl = ApActor::new(shared_keys.clone());
         let (runner, client_base) = ResourceActor::new(32);

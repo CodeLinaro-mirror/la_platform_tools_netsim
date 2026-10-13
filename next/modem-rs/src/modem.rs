@@ -186,9 +186,9 @@ impl ModemImpl {
         // Calculate TPDU length
         let mut effects = Vec::new();
         if let Ok(bytes) = hex::decode(pdu)
-            && !bytes.is_empty()
+            && let Some(&sca_len_byte) = bytes.first()
         {
-            let sca_len = bytes[0] as usize;
+            let sca_len = sca_len_byte as usize;
             if bytes.len() > 1 + sca_len {
                 let tpdu_len = bytes.len() - 1 - sca_len;
                 let omit_cmt_leading_comma = self.quirks.goldfish_ril_37_or_earlier;
@@ -488,11 +488,12 @@ impl ModemImpl {
             return effects;
         }
 
-        let mut len = command_bytes.len();
-        while len > 0 && (command_bytes[len - 1] == b'\r' || command_bytes[len - 1] == b'\n') {
-            len -= 1;
+        let mut command_clean = command_bytes;
+        while let Some(rest) =
+            command_clean.strip_suffix(b"\r").or_else(|| command_clean.strip_suffix(b"\n"))
+        {
+            command_clean = rest;
         }
-        let command_clean = &command_bytes[..len];
         let sub_commands = split_chained_commands(command_clean);
         if sub_commands.is_empty() {
             return Vec::new();
@@ -779,20 +780,12 @@ fn split_chained_commands(input: &[u8]) -> Vec<Vec<u8>> {
 
 /// Trims leading and trailing ASCII whitespace from a byte slice.
 fn trim_slice(s: &[u8]) -> &[u8] {
-    let mut start = 0;
-    while start < s.len() && s[start].is_ascii_whitespace() {
-        start += 1;
-    }
-    let mut end = s.len();
-    while end > start && s[end - 1].is_ascii_whitespace() {
-        end -= 1;
-    }
-    &s[start..end]
+    s.trim_ascii()
 }
 
 /// Checks if a byte slice starts with a prefix, ignoring ASCII case.
 fn starts_with_ignore_case(s: &[u8], prefix: &[u8]) -> bool {
-    s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
+    s.get(..prefix.len()).is_some_and(|sub| sub.eq_ignore_ascii_case(prefix))
 }
 
 #[cfg(test)]

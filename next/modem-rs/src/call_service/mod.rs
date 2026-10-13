@@ -479,13 +479,16 @@ impl CallService {
     fn handle_answer(&mut self, id: ModemId) -> CallResult {
         debug!("[CallService modem={id}] Answering call");
         debug!("[CallService modem={id}] Calls before answer: {:?}", self.calls);
-        let answerable_idx = self.calls.iter().position(|c| c.state.is_answerable());
-        if let Some(idx) = answerable_idx {
+        if let Some(answerable_id) =
+            self.calls.iter().find(|c| c.state.is_answerable()).map(|c| c.id)
+        {
             let mut actions = Vec::new();
             // Under 3GPP TS 22.030 / 24.083, answering an incoming/waiting call
             // automatically places any existing active call on hold.
-            for (i, call) in self.calls.iter_mut().enumerate() {
-                if i != idx && call.state == CallState::Active {
+            for call in self.calls.iter_mut() {
+                if call.id == answerable_id {
+                    call.state = CallState::Active;
+                } else if call.state == CallState::Active {
                     call.state = CallState::Held;
                     if let Some(peer_id) = call.peer_id {
                         actions.push(CommandAction::HoldCall { holder: id, target: peer_id });
@@ -493,7 +496,6 @@ impl CallService {
                 }
             }
 
-            self.calls[idx].state = CallState::Active;
             actions.push(CommandAction::AnswerCall(id));
             debug!("[CallService modem={id}] Calls after answer: {:?}", self.calls);
             return Ok(Some(CallResponse::WithActions(actions)));

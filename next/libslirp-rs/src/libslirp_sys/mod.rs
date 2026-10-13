@@ -44,6 +44,7 @@ mod bindings {
     #![allow(clippy::too_many_arguments)]
     #![allow(clippy::unnecessary_cast)]
     #![allow(clippy::undocumented_unsafe_blocks)]
+    #![allow(clippy::indexing_slicing)]
     // TODO(b/203002625) - since rustc 1.53, bindgen causes UB warnings
     // Remove this once bindgen figures out how to do this correctly
     #![allow(deref_nullptr)]
@@ -111,24 +112,13 @@ pub type SlirpPollType = _bindgen_ty_1;
 #[cfg(target_os = "windows")]
 pub type SlirpPollType = _bindgen_ty_5;
 
-impl From<sockaddr_storage> for SocketAddr {
-    /// Converts a `sockaddr_storage` to a `SocketAddr`.
-    ///
-    /// This function safely converts a `sockaddr_storage` from the
-    /// `libslirp_sys` crate into a `std::net::SocketAddr`. It handles
-    /// both IPv4 and IPv6 addresses by checking the `ss_family` field
-    /// and casting the `sockaddr_storage` to the appropriate address
-    /// type (`sockaddr_in` or `sockaddr_in6`).
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if the `ss_family` field of the
-    /// `sockaddr_storage` is not `AF_INET` or `AF_INET6`.
-    fn from(storage: sockaddr_storage) -> Self {
+impl TryFrom<sockaddr_storage> for SocketAddr {
+    type Error = &'static str;
+    fn try_from(storage: sockaddr_storage) -> Result<Self, Self::Error> {
         match storage.ss_family as u32 {
-            AF_INET => SocketAddr::V4((*v4_ref(&storage)).into()),
-            AF_INET6 => SocketAddr::V6((*v6_ref(&storage)).into()),
-            _ => panic!("Unsupported address family"),
+            AF_INET => Ok(SocketAddr::V4((*v4_ref(&storage)).into())),
+            AF_INET6 => Ok(SocketAddr::V6((*v6_ref(&storage)).into())),
+            _ => Err("Unsupported address family"),
         }
     }
 }
@@ -171,25 +161,25 @@ impl From<in_addr> for u32 {
 mod net {
     /// Converts a value from host byte order to network byte order.
     #[inline]
-    pub fn htonl(hostlong: u32) -> u32 {
+    pub(super) fn htonl(hostlong: u32) -> u32 {
         hostlong.to_be()
     }
 
     /// Converts a value from network byte order to host byte order.
     #[inline]
-    pub fn ntohl(netlong: u32) -> u32 {
+    pub(super) fn ntohl(netlong: u32) -> u32 {
         u32::from_be(netlong)
     }
 
     /// Converts a value from host byte order to network byte order.
     #[inline]
-    pub fn htons(hostshort: u16) -> u16 {
+    pub(super) fn htons(hostshort: u16) -> u16 {
         hostshort.to_be()
     }
 
     /// Converts a value from network byte order to host byte order.
     #[inline]
-    pub fn ntohs(netshort: u16) -> u16 {
+    pub(super) fn ntohs(netshort: u16) -> u16 {
         u16::from_be(netshort)
     }
 }
@@ -341,7 +331,7 @@ mod tests {
         let sockaddr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
         let storage: sockaddr_storage = sockaddr.into();
 
-        let sockaddr_from_storage: SocketAddr = storage.into();
+        let sockaddr_from_storage: SocketAddr = storage.try_into().unwrap();
 
         assert_eq!(sockaddr, sockaddr_from_storage);
     }
@@ -351,7 +341,7 @@ mod tests {
         let sockaddr = SocketAddr::new(Ipv6Addr::new(1, 2, 3, 4, 5, 6, 7, 8).into(), 8080);
         let storage: sockaddr_storage = sockaddr.into();
 
-        let sockaddr_from_storage: SocketAddr = storage.into();
+        let sockaddr_from_storage: SocketAddr = storage.try_into().unwrap();
 
         assert_eq!(sockaddr, sockaddr_from_storage);
     }

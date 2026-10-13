@@ -4,7 +4,7 @@
 use clap::{Args, Subcommand};
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub enum SmsCommand {
+pub(crate) enum SmsCommand {
     /// Send an SMS message (sms send <sender> <text>)
     Send(SmsSend),
     /// Send a PDU SMS message (sms pdu <hex_pdu>)
@@ -12,7 +12,7 @@ pub enum SmsCommand {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct SmsSend {
+pub(crate) struct SmsSend {
     /// Sender's phone number (digits, optional leading '+', max 15 digits)
     pub sender: String,
     /// SMS text content (options like --id must precede the text)
@@ -24,7 +24,7 @@ pub struct SmsSend {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct SmsPdu {
+pub(crate) struct SmsPdu {
     /// Hex-encoded PDU data
     pub pdu: String,
     /// ID of the cellular device

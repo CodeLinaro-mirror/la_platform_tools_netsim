@@ -3,6 +3,6 @@
 
 //! GSM commands compatible with the Android Emulator console gsm commands.
 
-pub mod args;
-pub mod client;
-pub mod display;
+pub(crate) mod args;
+pub(crate) mod client;
+pub(crate) mod display;

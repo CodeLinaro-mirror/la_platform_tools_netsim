@@ -14,12 +14,12 @@ use packet_stream::{
 };
 use protobuf::Enum;
 
-pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
+fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
     crate::frontend_converter::from_proto_chip_kind(proto.enum_value_or_default())
         .unwrap_or(ChipKind::UNSPECIFIED)
 }
 
-pub fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
+fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
     Chip {
         kind: proto_to_chip_kind(proto.kind),
         id: proto.id,
@@ -32,7 +32,7 @@ pub fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
     }
 }
 
-pub fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
+fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
     DeviceInfo {
         name: proto.name,
         id: String::new(), // Not available in proto DeviceInfo
@@ -46,7 +46,7 @@ pub fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
     }
 }
 
-pub fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
+pub(crate) fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
     ChipInfo {
         name: proto.name,
         chip: proto.chip.into_option().map(proto_to_chip),
@@ -55,7 +55,7 @@ pub fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
 }
 
 /// Converts incoming bytes into a `PacketResponse` protobuf message.
-pub fn bytes_to_packet_response(bytes: Bytes, is_bt: bool) -> Result<PacketResponse> {
+pub(crate) fn bytes_to_packet_response(bytes: Bytes, is_bt: bool) -> Result<PacketResponse> {
     let (&type_byte, packet) = bytes
         .split_first()
         .ok_or_else(|| PacketStreamError::InvalidConfig("Empty bytes".to_string()))?;
@@ -78,7 +78,7 @@ pub fn bytes_to_packet_response(bytes: Bytes, is_bt: bool) -> Result<PacketRespo
 }
 
 // Convert PacketRequest to Bytes
-pub fn packet_request_to_bytes(value: PacketRequest) -> Result<Bytes> {
+pub(crate) fn packet_request_to_bytes(value: PacketRequest) -> Result<Bytes> {
     match value.request_type {
         Some(packet_streamer::packet_request::Request_type::HciPacket(hci)) => {
             let mut h4_packet = BytesMut::new();

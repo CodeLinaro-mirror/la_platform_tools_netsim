@@ -34,23 +34,23 @@ use crate::{gateway::GatewayTrait, medium::Medium, wifi_actor::WifiActor};
 /// interfaces).
 ///
 /// Flag to indicate TAP stream ID (High bit set)
-pub const TAP_FLAG: u32 = 0x8000_0000;
+const TAP_FLAG: u32 = 0x8000_0000;
 
 /// A wrapper around a TAP interface file descriptor.
 #[cfg(target_os = "linux")]
 #[derive(Debug)]
-pub struct TapInterface {
+struct TapInterface {
     name: String,
     poll_fd: AsyncFd<std::fs::File>,
 }
 
 #[cfg(target_os = "linux")]
 impl TapInterface {
-    pub fn name(&self) -> &str {
+    fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn new(if_name: &str) -> WifiResult<Self> {
+    fn new(if_name: &str) -> WifiResult<Self> {
         // Open /dev/net/tun
         // O_RDWR is required. O_NONBLOCK is set later.
         let fd = nix::fcntl::open(
@@ -71,8 +71,8 @@ impl TapInterface {
         if bytes.len() >= libc::IFNAMSIZ {
             return Err(WifiError::Internal(Box::from("Interface name too long")));
         }
-        for (i, b) in bytes.iter().enumerate() {
-            if_req.ifr_name[i] = *b as libc::c_char;
+        for (dest, &b) in if_req.ifr_name.iter_mut().zip(bytes) {
+            *dest = b as libc::c_char;
         }
 
         // Set flags
@@ -114,7 +114,7 @@ impl TapInterface {
         info!("Opened TAP interface: {}", if_name);
         Ok(Self { name: if_name.to_string(), poll_fd })
     }
-    pub async fn read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
+    async fn read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
         loop {
             let mut guard = self.poll_fd.readable().await?;
             match guard.try_io(|inner| match std::io::Read::read(&mut inner.get_ref(), buf) {
@@ -130,7 +130,7 @@ impl TapInterface {
         }
     }
 
-    pub async fn write(&self, buf: &[u8]) -> std::io::Result<usize> {
+    async fn write(&self, buf: &[u8]) -> std::io::Result<usize> {
         loop {
             let mut guard = self.poll_fd.writable().await?;
             match guard.try_io(|inner| match std::io::Write::write(&mut inner.get_ref(), buf) {
@@ -418,8 +418,10 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
             loop {
                 match tap.read(&mut buf).await {
                     Ok(n) => {
-                        if n > 0 {
-                            let packet = bytes::Bytes::copy_from_slice(&buf[..n]);
+                        if let Some(slice) = buf.get(..n)
+                            && !slice.is_empty()
+                        {
+                            let packet = bytes::Bytes::copy_from_slice(slice);
                             if tx.send(packet).is_err() {
                                 // Receiver closed
                                 break;
@@ -451,7 +453,6 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
             }
             Err(e) => {
                 error!("Failed to attach TAP for chip {}: {}", chip_id, e);
-                panic!("Failed to attach TAP for chip {}: {}", chip_id, e);
             }
         }
         #[cfg(not(target_os = "linux"))]
@@ -502,7 +503,7 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
 
 /// Converts an 802.3 packet (from TAP) to 802.11 for the Medium.
 #[allow(clippy::collapsible_if)]
-pub fn convert_8023_to_80211(
+fn convert_8023_to_80211(
     packet: bytes::Bytes,
     bssid: Option<netsim_packets::MacAddress>,
     seq: u16,

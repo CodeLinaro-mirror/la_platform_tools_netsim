@@ -9,7 +9,7 @@ use netsim_packets::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NdpEntry {
+pub(crate) struct NdpEntry {
     pub mac: MacAddr,
     #[serde(skip)]
     pub last_accessed_tick: u64,

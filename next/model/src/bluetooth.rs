@@ -129,7 +129,7 @@ impl Default for Controller {
     }
 }
 
-pub mod beacon {
+pub(crate) mod beacon {
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

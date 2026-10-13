@@ -31,7 +31,7 @@ fn map_registration_status(opt: RegistrationStatusOption) -> RegistrationStatus 
 }
 
 /// Executes a GSM subcommand against the simulated cellular client.
-pub fn execute(cmd: GsmCommand, client: &impl CellClient, verbose: bool) -> Result<()> {
+pub(crate) fn execute(cmd: GsmCommand, client: &impl CellClient, verbose: bool) -> Result<()> {
     match cmd {
         GsmCommand::Status(args) => {
             let id = resolve_cell_id(args.id, client)?;

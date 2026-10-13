@@ -1,9 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use capture_actor::{
-    DLT_BLUETOOTH_H4, DLT_ETHERNET, DLT_FIRA_UCI, DLT_IEEE802_11_RADIO, DLT_NFC_NCI, DLT_USER0,
-};
+use capture_actor::DataLinkType;
 use netsim_model::ChipKind;
 
 use crate::world::World;
@@ -30,7 +28,7 @@ async fn test_uwb_capture() {
     world.then_capture_stats_are(chip_id, 1, 4).await;
 
     // And: the PCAP file header has correct UWB DLT
-    world.then_capture_file_has_dlt(DLT_FIRA_UCI).await;
+    world.then_capture_file_has_dlt(DataLinkType::FiraUci).await;
 }
 
 // Scenario: Wi-Fi packet handles Hwsim formatting
@@ -54,7 +52,7 @@ async fn test_wifi_capture() {
         world.then_capture_stats_are(chip_id, 0, 0).await;
 
         // And: the PCAP file header has correct Wi-Fi DLT
-        world.then_capture_file_has_dlt(DLT_IEEE802_11_RADIO).await;
+        world.then_capture_file_has_dlt(DataLinkType::Ieee80211Radio).await;
 
         // Cleanup for next iteration
         world.when_delete_capture(chip_id).await.unwrap();
@@ -80,7 +78,7 @@ async fn test_ethernet_capture() {
     world.then_capture_stats_are(chip_id, 1, 4).await;
 
     // And: the PCAP file header has correct Ethernet DLT
-    world.then_capture_file_has_dlt(DLT_ETHERNET).await;
+    world.then_capture_file_has_dlt(DataLinkType::Ethernet).await;
 }
 
 // Scenario: Cellular Data packet is captured correctly (as Ethernet)
@@ -102,7 +100,7 @@ async fn test_cellular_data_capture() {
     world.then_capture_stats_are(chip_id, 1, 4).await;
 
     // And: the PCAP file header has correct Ethernet DLT
-    world.then_capture_file_has_dlt(DLT_ETHERNET).await;
+    world.then_capture_file_has_dlt(DataLinkType::Ethernet).await;
 }
 
 // Scenario: Cellular Modem AT packet is captured correctly
@@ -125,7 +123,7 @@ async fn test_cellular_modem_capture() {
     world.then_capture_stats_are(chip_id, 1, 12).await;
 
     // And: the PCAP file header has correct USER0 DLT (147)
-    world.then_capture_file_has_dlt(DLT_USER0).await;
+    world.then_capture_file_has_dlt(DataLinkType::User0).await;
 }
 
 // Scenario: Bluetooth H4 packet is captured correctly
@@ -147,7 +145,7 @@ async fn test_bluetooth_h4_capture() {
     world.then_capture_stats_are(chip_id, 1, 4).await;
 
     // And: the PCAP file header has correct Bluetooth H4 DLT (187)
-    world.then_capture_file_has_dlt(DLT_BLUETOOTH_H4).await;
+    world.then_capture_file_has_dlt(DataLinkType::BluetoothH4).await;
 }
 
 // Scenario: NFC NCI packet is captured correctly
@@ -166,5 +164,5 @@ async fn test_nfc_nci_capture() {
     world.then_capture_stats_are(chip_id, 1, 4).await;
 
     // And: the PCAP file header has correct NFC NCI DLT (147)
-    world.then_capture_file_has_dlt(DLT_NFC_NCI).await;
+    world.then_capture_file_has_dlt(DataLinkType::User0).await;
 }

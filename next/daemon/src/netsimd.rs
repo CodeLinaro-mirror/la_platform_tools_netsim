@@ -125,9 +125,7 @@ async fn handle_new_connection(
                 ..Default::default()
             })))
         }
-        ChipKind::UWB => {
-            Some(netsim_model::ChipVariant::Uwb(netsim_model::Uwb { radio: Default::default() }))
-        }
+        ChipKind::UWB => Some(netsim_model::ChipVariant::Uwb(netsim_model::Uwb::default())),
         ChipKind::WIFI => {
             Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
         }
@@ -661,7 +659,7 @@ impl NetsimDaemon {
         match bind_tcp_loopback(resolved_hci_port) {
             Ok(listener) => {
                 actual_hci_port = Some(listener.local_addr().map_err(init_error)?.port());
-                tokio::spawn(hci_server::server::run(listener, device_client.clone()));
+                tokio::spawn(hci_server::run(listener, device_client.clone()));
             }
             Err(e) => {
                 if is_explicit_hci {
@@ -869,7 +867,11 @@ impl NetsimDaemon {
             (true, false) => true,
             (false, true) => false,
             (false, false) => cfg!(feature = "cuttlefish"),
-            (true, true) => panic!("unexpected flag combination"),
+            (true, true) => {
+                return Err(init_error(
+                    "unexpected flag combination: cannot set both --test-beacons and --no-test-beacons",
+                ));
+            }
         };
 
         if test_beacons {

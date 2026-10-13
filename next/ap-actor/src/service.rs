@@ -175,7 +175,9 @@ impl ActorService for ApActor {
         match action {
             ApReq::Register { stream, sink, shared_keys, beacon_interval } => {
                 if self.sink.is_some() {
-                    panic!("ApActor: Register called more than once!");
+                    return Err(ApError::Internal(
+                        "ApActor: Register called more than once!".into(),
+                    ));
                 }
                 info!("Registering AP singleton stream/sink with interval: {:?}", beacon_interval);
                 self.sink = Some(sink);
