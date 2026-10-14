@@ -1,8 +1,20 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     collections::HashMap,
+    future::ready,
     io,
     net::{SocketAddr, TcpStream},
 };
@@ -10,62 +22,65 @@ use std::{
 use bytes::Bytes;
 use device_actor::DeviceClient;
 use device_api::DeviceId;
-use futures::StreamExt;
+use futures::{StreamExt, sink::unfold};
 use netsim_model::{
-    BluetoothCreate, BluetoothMode, Controller, DeviceParams, PacketSink, PacketStream,
+    Bluetooth, BluetoothMode, Cell, CellularData, Chip, ChipKind, ChipVariant, Controller,
+    DeviceInfo, DeviceParams, Ethernet, Nfc, PacketSink, PacketStream, Quirks, Uwb, Wifi,
 };
 use tokio::{sync::mpsc, task::JoinSet};
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 use tungstenite::{Message, WebSocket};
 
 use crate::error::ServerError;
 
-/// Configures and adds a virtual Bluetooth chip to the simulation.
+/// Configures and adds a virtual radio chip to the simulation.
 pub(crate) async fn setup_virtual_chip(
     device_client: &DeviceClient,
+    chip_kind: ChipKind,
     mut query_params: HashMap<String, String>,
     addr: SocketAddr,
     stream_rx: mpsc::Receiver<Result<Bytes, io::Error>>,
     sink_tx: mpsc::Sender<Bytes>,
 ) -> Result<DeviceId, ServerError> {
-    let device_guid = addr.port().to_string();
-    let device_name =
-        query_params.remove("name").unwrap_or_else(|| format!("websocket-device-{addr}"));
-    let chip_name = format!("websocket-{addr}");
-    let address = query_params.remove("address").unwrap_or_default();
+    let device_guid = query_params
+        .remove("device_guid")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| addr.port().to_string());
+    let device_name = query_params
+        .remove("name")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("websocket-device-{addr}"));
+    let device_info = extract_device_info(&device_name, &mut query_params);
 
-    let chip_create_params = BluetoothCreate {
-        address,
-        bt_properties: Controller::default(),
-        mode: BluetoothMode::Device(DeviceParams {}),
-    };
+    let chip_id = query_params.remove("chip_id").filter(|s| !s.is_empty());
+    let chip_name = chip_id.clone().unwrap_or_else(|| format!("websocket-{addr}"));
+    let manufacturer = query_params
+        .remove("manufacturer")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "Google".to_string());
+    let product_name = query_params
+        .remove("product_name")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "Google".to_string());
+    let address = query_params
+        .remove("address")
+        .filter(|s| !s.is_empty())
+        .or_else(|| chip_id.filter(|id| id.len() == 17))
+        .unwrap_or_default();
 
-    let chip = netsim_model::Chip {
+    let variant = build_chip_variant(chip_kind, address, device_info.as_ref());
+
+    let chip = Chip {
         name: chip_name,
-        manufacturer: "Google".to_string(),
-        product_name: "Google".to_string(),
-        kind: netsim_model::ChipKind::BLUETOOTH,
-        variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
-            address: chip_create_params.address.clone(),
-            mode: chip_create_params.mode.clone(),
-            bt_properties: chip_create_params.bt_properties.clone(),
-            ..Default::default()
-        }))),
+        manufacturer,
+        product_name,
+        kind: chip_kind,
+        variant: Some(variant),
         ..Default::default()
     };
 
-    let packet_stream: PacketStream = Box::new(
-        tokio_stream::wrappers::ReceiverStream::new(stream_rx)
-            .filter_map(|res| std::future::ready(res.ok())),
-    );
-    let packet_sink: PacketSink = Box::pin(futures::sink::unfold(
-        sink_tx,
-        |tx: mpsc::Sender<Bytes>, item: Bytes| async move {
-            tx.send(item).await.map_err(|err| io::Error::new(io::ErrorKind::BrokenPipe, err))?;
-            Ok(tx)
-        },
-    ));
-
+    let (packet_stream, packet_sink) = packet_stream_and_sink(stream_rx, sink_tx);
     let request = device_api::DeviceAddChip {
         device_guid,
         packet_stream: Some(packet_stream),
@@ -75,7 +90,7 @@ pub(crate) async fn setup_virtual_chip(
             visible: true,
             pose: Default::default(),
             builtin: false,
-            device_info: None,
+            device_info,
         },
         chip,
     };
@@ -83,15 +98,107 @@ pub(crate) async fn setup_virtual_chip(
     device_client.add_chip(request).await.map_err(ServerError::DeviceActor)
 }
 
+fn extract_device_info(
+    device_name: &str,
+    query_params: &mut HashMap<String, String>,
+) -> Option<DeviceInfo> {
+    let mut info = DeviceInfo { name: device_name.to_string(), ..Default::default() };
+    let mut has_device_info = false;
+    for (key, field) in [
+        ("device_kind", &mut info.kind),
+        ("version", &mut info.version),
+        ("sdk_version", &mut info.sdk_version),
+        ("build_id", &mut info.build_id),
+        ("variant", &mut info.variant),
+        ("arch", &mut info.arch),
+        ("avd_path", &mut info.avd_path),
+    ] {
+        if let Some(val) = query_params.remove(key).filter(|s| !s.is_empty()) {
+            *field = val;
+            has_device_info = true;
+        }
+    }
+
+    has_device_info.then_some(info)
+}
+
+fn build_chip_variant(
+    chip_kind: ChipKind,
+    address: String,
+    device_info: Option<&DeviceInfo>,
+) -> ChipVariant {
+    match chip_kind {
+        ChipKind::BLUETOOTH => ChipVariant::Bluetooth(Box::new(Bluetooth {
+            address,
+            mode: BluetoothMode::Device(DeviceParams {}),
+            bt_properties: Controller::default(),
+            ..Default::default()
+        })),
+        ChipKind::WIFI => ChipVariant::Wifi(Wifi::default()),
+        ChipKind::UWB => ChipVariant::Uwb(Uwb { address, ..Default::default() }),
+        ChipKind::NFC => ChipVariant::Nfc(Nfc::default()),
+        ChipKind::CELLULAR => {
+            let quirks = device_info
+                .map(|info| {
+                    let is_cuttlefish = info.kind.eq_ignore_ascii_case("CUTTLEFISH");
+                    let is_emulator = info.kind.eq_ignore_ascii_case("EMULATOR");
+                    let sdk_version = info.sdk_version.parse::<i32>().unwrap_or(0);
+                    Quirks {
+                        goldfish_ril_37_or_earlier: is_emulator && sdk_version < 38,
+                        is_cuttlefish,
+                        auto_ctzv: is_cuttlefish || is_emulator,
+                        allow_ipv4_for_ipv6: is_cuttlefish || is_emulator,
+                        dynamic_slirp_lease: is_emulator,
+                    }
+                })
+                .unwrap_or_default();
+            ChipVariant::Cell(Cell { quirks, ..Default::default() })
+        }
+        ChipKind::CELLULAR_DATA => ChipVariant::CellularData(CellularData::default()),
+        ChipKind::ETHERNET | ChipKind::UNSPECIFIED => ChipVariant::Ethernet(Ethernet::default()),
+    }
+}
+
+/// Echoes every packet back to the client until either side closes.
+///
+/// Uses the same stream/sink adapters as a registered chip, so a loopback
+/// stream exercises the same plumbing without creating a device.
+pub(crate) async fn run_loopback(
+    addr: SocketAddr,
+    stream_rx: mpsc::Receiver<Result<Bytes, io::Error>>,
+    sink_tx: mpsc::Sender<Bytes>,
+) {
+    let (packet_stream, packet_sink) = packet_stream_and_sink(stream_rx, sink_tx);
+    if let Err(e) = packet_stream.map(Ok).forward(packet_sink).await {
+        warn!("WebSocket loopback stream for {addr} failed: {e}");
+    }
+}
+
+/// Adapts the WebSocket transport channels to the device actor's packet types.
+fn packet_stream_and_sink(
+    stream_rx: mpsc::Receiver<Result<Bytes, io::Error>>,
+    sink_tx: mpsc::Sender<Bytes>,
+) -> (PacketStream, PacketSink) {
+    let packet_stream: PacketStream =
+        Box::new(ReceiverStream::new(stream_rx).filter_map(|res| ready(res.ok())));
+    let packet_sink: PacketSink =
+        Box::pin(unfold(sink_tx, |tx: mpsc::Sender<Bytes>, item: Bytes| async move {
+            tx.send(item).await.map_err(|err| io::Error::new(io::ErrorKind::BrokenPipe, err))?;
+            Ok(tx)
+        }));
+    (packet_stream, packet_sink)
+}
+
 /// Spawns threads and tasks to manage WebSocket traffic and chip lifecycle.
+///
+/// `device` is the registered device to delete on close; `None` for loopback.
 pub(crate) async fn run_websocket_transport(
     mut websocket_reader: WebSocket<TcpStream>,
     mut websocket_writer: WebSocket<TcpStream>,
     addr: SocketAddr,
     stream_tx: mpsc::Sender<Result<Bytes, io::Error>>,
     mut sink_rx: mpsc::Receiver<Bytes>,
-    device_id: DeviceId,
-    device_client: DeviceClient,
+    device: Option<(DeviceId, DeviceClient)>,
 ) {
     let (outbound_msg_tx, mut outbound_msg_rx) = mpsc::unbounded_channel::<Message>();
 
@@ -150,6 +257,10 @@ pub(crate) async fn run_websocket_transport(
 
     // 4. Cleanup Task: Triggered when WebSocket reader or writer closes
     JoinSet::from_iter([reader_task, writer_task]).join_next().await;
+    let Some((device_id, device_client)) = device else {
+        info!("WebSocket loopback stream for {addr} closed");
+        return;
+    };
     info!("Cleaning up WebSocket device {device_id} for {addr}");
     if let Err(e) = device_client.delete(device_id).await {
         warn!("Failed to delete virtual WebSocket device {device_id}: {e}");

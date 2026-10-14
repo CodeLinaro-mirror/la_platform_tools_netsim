@@ -1,5 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Chip model and management.
 //!
@@ -258,7 +269,7 @@ impl Chip {
             name: name.into(),
             manufacturer: "Google".into(),
             product_name: "Netsim UWB".into(),
-            variant: Some(ChipVariant::from(ChipKind::UWB)),
+            variant: ChipVariant::try_from(ChipKind::UWB).ok(),
             ..Default::default()
         }
     }
@@ -284,7 +295,7 @@ impl Chip {
             name: name.into(),
             manufacturer: "Google".into(),
             product_name: "Netsim BLE".into(),
-            variant: Some(ChipVariant::from(ChipKind::BLUETOOTH)),
+            variant: ChipVariant::try_from(ChipKind::BLUETOOTH).ok(),
             ..Default::default()
         }
     }
@@ -295,7 +306,7 @@ impl Chip {
             name: name.into(),
             manufacturer: "Google".into(),
             product_name: "Netsim Cell".into(),
-            variant: Some(ChipVariant::from(ChipKind::CELLULAR)),
+            variant: ChipVariant::try_from(ChipKind::CELLULAR).ok(),
             ..Default::default()
         }
     }
@@ -306,7 +317,7 @@ impl Chip {
             name: name.into(),
             manufacturer: "Google".into(),
             product_name: "Netsim NFC".into(),
-            variant: Some(ChipVariant::from(ChipKind::NFC)),
+            variant: ChipVariant::try_from(ChipKind::NFC).ok(),
             ..Default::default()
         }
     }
@@ -338,9 +349,15 @@ pub enum ChipVariant {
     Nfc(Nfc),
 }
 
-impl From<ChipKind> for ChipVariant {
-    fn from(kind: ChipKind) -> Self {
-        match kind {
+/// Builds the default variant for a chip kind.
+///
+/// The match is exhaustive so that adding a `ChipKind` without a radio
+/// implementation fails to compile rather than silently picking another radio.
+impl TryFrom<ChipKind> for ChipVariant {
+    type Error = ChipError;
+
+    fn try_from(kind: ChipKind) -> Result<Self, Self::Error> {
+        let variant = match kind {
             ChipKind::BLUETOOTH => ChipVariant::Bluetooth(Box::new(crate::bluetooth::Bluetooth {
                 low_energy: Default::default(),
                 classic: Default::default(),
@@ -361,11 +378,9 @@ impl From<ChipKind> for ChipVariant {
             ChipKind::CELLULAR_DATA => ChipVariant::CellularData(Default::default()),
             ChipKind::ETHERNET => ChipVariant::Ethernet(Default::default()),
             ChipKind::NFC => ChipVariant::Nfc(Default::default()),
-            // Use Bluetooth as fallback for generic/unknown types if necessary,
-            // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
-            // types.
-            _ => ChipVariant::Bluetooth(Box::default()),
-        }
+            ChipKind::UNSPECIFIED => return Err(ChipError::UnsupportedChipKind(kind)),
+        };
+        Ok(variant)
     }
 }
 
@@ -638,5 +653,33 @@ mod tests {
     fn test_chip_default_enabled() {
         let chip = Chip::default();
         assert!(chip.enabled);
+    }
+
+    #[test]
+    fn test_chip_variant_try_from_unspecified_is_rejected() {
+        let err = ChipVariant::try_from(ChipKind::UNSPECIFIED).unwrap_err();
+        assert!(matches!(err, ChipError::UnsupportedChipKind(ChipKind::UNSPECIFIED)));
+        assert_eq!(err.to_string(), "Unsupported chip kind: UNSPECIFIED");
+    }
+
+    #[test]
+    fn test_chip_variant_try_from_maps_each_kind_to_its_own_radio() {
+        let cases = [
+            (ChipKind::BLUETOOTH, ChipVariant::Bluetooth(Box::default())),
+            (ChipKind::WIFI, ChipVariant::Wifi(Default::default())),
+            (ChipKind::UWB, ChipVariant::Uwb(Default::default())),
+            (ChipKind::CELLULAR, ChipVariant::Cell(Default::default())),
+            (ChipKind::CELLULAR_DATA, ChipVariant::CellularData(Default::default())),
+            (ChipKind::ETHERNET, ChipVariant::Ethernet(Default::default())),
+            (ChipKind::NFC, ChipVariant::Nfc(Default::default())),
+        ];
+        for (kind, expected) in cases {
+            let actual = ChipVariant::try_from(kind).unwrap();
+            assert_eq!(
+                std::mem::discriminant(&actual),
+                std::mem::discriminant(&expected),
+                "{kind} built {actual:?}"
+            );
+        }
     }
 }

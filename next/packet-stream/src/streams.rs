@@ -1,5 +1,16 @@
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //=============================================================================
 // src/streams.rs - Multi-transport connection manager
 //=============================================================================
@@ -13,6 +24,7 @@ use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
+use tracing::{error, info, warn};
 
 use crate::{
     error::{PacketStreamError, Result},
@@ -79,7 +91,7 @@ impl Streams {
 
         let mut listener = transport_type.create_listener().await?;
         let addr = listener.local_addr()?;
-        println!("Starting {name} listener on {addr}");
+        info!("Starting {name} listener on {addr}");
 
         self.listener_addresses.insert(name.clone(), addr.clone());
 
@@ -91,7 +103,7 @@ impl Streams {
             loop {
                 tokio::select! {
                     _ = shutdown_rx.recv() => {
-                        println!("Shutting down {listener_name} listener");
+                        info!("Shutting down {listener_name} listener");
                         let _ = listener.shutdown().await;
                         break;
                     }
@@ -103,7 +115,7 @@ impl Streams {
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Listener {listener_name} accept error: {e}");
+                                error!("Listener {listener_name} accept error: {e}");
                             }
                         }
                     }
@@ -122,7 +134,7 @@ impl Streams {
     ) -> Result<()> {
         let name = name.into();
         let addr = listener.local_addr()?;
-        println!("Adding {name} listener on {addr}");
+        info!("Adding {name} listener on {addr}");
 
         self.listener_addresses.insert(name.clone(), addr.clone());
 
@@ -134,7 +146,7 @@ impl Streams {
             loop {
                 tokio::select! {
                     _ = shutdown_rx.recv() => {
-                        println!("Shutting down {listener_name} listener");
+                        info!("Shutting down {listener_name} listener");
                         let _ = listener.shutdown().await;
                         break;
                     }
@@ -146,7 +158,7 @@ impl Streams {
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Listener {listener_name} accept error: {e}");
+                                error!("Listener {listener_name} accept error: {e}");
                             }
                         }
                     }
@@ -182,24 +194,24 @@ impl Streams {
         self.listener_tasks.contains_key(name.as_ref())
     }
 
-    pub async fn stop_listener(&mut self, name: impl AsRef<str>) -> Result<()> {
+    pub fn stop_listener(&mut self, name: impl AsRef<str>) -> Result<()> {
         let name = name.as_ref();
         if let Some(task) = self.listener_tasks.remove(name) {
             task.abort();
-            println!("Stopped {name} listener");
+            info!("Stopped {name} listener");
         }
         Ok(())
     }
 
     pub async fn shutdown_all(&mut self) -> Result<()> {
-        println!("Shutting down all listeners...");
+        info!("Shutting down all listeners...");
         let _ = self.shutdown_tx.send(());
         let tasks: Vec<_> = self.listener_tasks.drain().collect();
         for (name, task) in tasks {
             match tokio::time::timeout(std::time::Duration::from_secs(5), task).await {
-                Ok(_) => println!("Listener {name} shutdown complete"),
+                Ok(_) => info!("Listener {name} shutdown complete"),
                 Err(_) => {
-                    println!("Listener {name} shutdown timed out, aborting");
+                    warn!("Listener {name} shutdown timed out, aborting");
                 }
             }
         }

@@ -1,5 +1,16 @@
 // Copyright 2025-2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
 
@@ -236,22 +247,22 @@ pub struct ApActor {
     pub(crate) sink: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
     pub(crate) aps: HashMap<ApId, ApState>,
     pub(crate) manager: Ieee80211Manager,
-    pub shared_keys: std::sync::Arc<shared::SharedKeyStore>,
-    pub next_ap_id: u32,
-    pub beacon_interval: Option<u16>, // In TUs (1024us)
+    pub(crate) shared_keys: std::sync::Arc<shared::SharedKeyStore>,
+    pub(crate) next_ap_id: u32,
+    pub(crate) beacon_interval: Option<u16>, // In TUs (1024us)
 }
 
 #[derive(Clone, Debug)]
 pub struct ApState {
     pub id: ApId,
     pub config: ApConfig,
-    pub wpa: Option<wpa_auth::WpaAuthenticator>,
-    pub sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
-    pub eap_sessions: HashMap<MacAddr, crate::eap_auth::EapAuthenticator>,
+    pub(crate) wpa: Option<wpa_auth::WpaAuthenticator>,
+    pub(crate) sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
+    pub(crate) eap_sessions: HashMap<MacAddr, crate::eap_auth::EapAuthenticator>,
     pub associations: std::collections::HashSet<MacAddr>,
-    pub delayed_frames: std::collections::VecDeque<(std::time::Instant, bytes::Bytes)>,
-    pub enabled: bool,
-    pub tx_sequence: u16,
+    pub(crate) delayed_frames: std::collections::VecDeque<(std::time::Instant, bytes::Bytes)>,
+    pub(crate) enabled: bool,
+    tx_sequence: u16,
 }
 
 impl ApActor {
@@ -268,7 +279,7 @@ impl ApActor {
 }
 
 impl ApState {
-    pub fn new(id: ApId, mut config: ApConfig) -> Self {
+    pub(crate) fn new(id: ApId, mut config: ApConfig) -> Self {
         if config.bssid.bytes == [0; 6] || config.bssid == DEFAULT_AP_BSSID {
             config.bssid = compute_ap_bssid(id);
         }
@@ -290,7 +301,7 @@ impl ApState {
         }
     }
 
-    pub fn clear_station_state(&mut self, sta_mac: &MacAddr) {
+    pub(crate) fn clear_station_state(&mut self, sta_mac: &MacAddr) {
         if self.associations.remove(sta_mac) {
             tracing::info!(
                 "ApActor: Implicit deauth of {} from BSSID {}",
@@ -308,7 +319,7 @@ impl ApState {
     /// Fetches the next monotonic sequence control for 802.11 transmissions
     /// and advances the internal counter (wrapping at 4096).
     /// The Fragment Number is always set to 0.
-    pub fn next_seq_control(&mut self) -> netsim_packets::SequenceControl {
+    pub(crate) fn next_seq_control(&mut self) -> netsim_packets::SequenceControl {
         let sc = netsim_packets::SequenceControl::new(self.tx_sequence << 4);
         self.tx_sequence = (self.tx_sequence + 1) % 4096;
         sc

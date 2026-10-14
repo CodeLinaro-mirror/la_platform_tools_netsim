@@ -1,5 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::world;
 
@@ -112,4 +123,18 @@ async fn test_beacon_advertises_adv_scan_ind() {
     world.given_scanner("Scanner").await;
 
     world.then_scanner_sees_adv_type("Scanner", 0x02).await;
+}
+
+// Scenario: Beacon advertisement includes standard BLE Flags
+// (BR/EDR Not Supported, 0x04)
+#[tokio::test]
+async fn test_beacon_advertises_standard_ble_flags() {
+    let mut world = world::World::new();
+
+    world.given_beacon("Beacon").await;
+    world.given_scanner("Scanner").await;
+
+    let reports = world.receive_scan_report("Scanner").await;
+    assert!(!reports.is_empty(), "Expected at least one scan report");
+    assert_eq!(reports[0].payload, vec![0x02, 0x01, 0x04]);
 }

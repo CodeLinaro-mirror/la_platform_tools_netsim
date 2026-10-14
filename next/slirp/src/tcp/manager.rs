@@ -1,5 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -47,6 +58,23 @@ pub(crate) struct SendTcpPacketArgs<'a> {
     pub(super) syn: bool,
     pub(super) rst: bool,
     pub(super) payload: &'a [u8],
+}
+
+impl<'a> SendTcpPacketArgs<'a> {
+    pub(super) fn ack(conn_id: u64, conn: &TcpConnection) -> SendTcpPacketArgs<'static> {
+        SendTcpPacketArgs {
+            conn_id: Some(conn_id),
+            sequence_num: conn.send.nxt,
+            ack_num: conn.recv.nxt,
+            guest_addr: conn.guest_addr,
+            host_addr: conn.host_addr,
+            ack: true,
+            fin: false,
+            syn: false,
+            rst: false,
+            payload: &[],
+        }
+    }
 }
 
 impl TcpManager {

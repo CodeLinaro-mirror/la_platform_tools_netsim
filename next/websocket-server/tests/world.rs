@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     net::TcpStream as StdTcpStream,
@@ -228,11 +239,23 @@ impl TestWorld {
         address: Option<&str>,
     ) -> usize {
         let path = build_path(name, address);
-        self.connect_internal("127.0.0.1", &path).await.expect("Failed to connect client")
+        self.given_a_websocket_client_connected_at_path(&path).await
+    }
+
+    pub async fn given_a_websocket_client_connected_at_path(&mut self, path: &str) -> usize {
+        self.connect_internal("127.0.0.1", path).await.expect("Failed to connect client")
     }
 
     pub async fn when_client_attempts_to_connect_to_invalid_path(&mut self) {
-        let _ = self.connect_internal("127.0.0.1", "/v1/websocket/invalid").await;
+        self.when_client_attempts_to_connect_to_path("/v1/websocket/invalid").await;
+    }
+
+    pub async fn when_client_attempts_to_connect_to_path(&mut self, path: &str) {
+        let _ = self.connect_internal("127.0.0.1", path).await;
+    }
+
+    pub fn add_request(&self, client_idx: usize) -> &DeviceAddChip {
+        &self.clients[client_idx].add_request
     }
 
     pub fn then_the_connection_fails_with_status(&self, expected_status: u16) {
@@ -311,6 +334,29 @@ impl TestWorld {
         let expected_id = self.clients[client_idx].device_id;
         let deleted_id = self.delete_chip_rx.recv().await.expect("Delete channel closed");
         assert_eq!(deleted_id, expected_id);
+    }
+
+    /// Connects a client with `?loopback=1`. No add_chip request is expected,
+    /// so the client is returned directly instead of being tracked.
+    pub async fn given_a_loopback_client_connected(&mut self) -> ManualWebSocketClient {
+        self.given_a_loopback_client_connected_at_path("/v1/websocket/bt?loopback=1").await
+    }
+
+    pub async fn given_a_loopback_client_connected_at_path(
+        &mut self,
+        path: &str,
+    ) -> ManualWebSocketClient {
+        ManualWebSocketClient::connect("127.0.0.1", self.port, path)
+            .await
+            .expect("Failed to connect loopback client")
+    }
+
+    pub fn then_backend_receives_no_add_chip_request(&mut self) {
+        assert!(self.add_chip_rx.try_recv().is_err(), "loopback must not add a chip");
+    }
+
+    pub fn then_backend_deletes_nothing(&mut self) {
+        assert!(self.delete_chip_rx.try_recv().is_err(), "loopback must not delete a device");
     }
 }
 
