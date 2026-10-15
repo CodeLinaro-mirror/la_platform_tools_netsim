@@ -1,5 +1,16 @@
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This module defines common Bluetooth data types, such as addresses.
 
@@ -52,17 +63,20 @@ impl Address {
     }
 
     /// Returns `true` if the address is resolvable.
-    pub fn is_resolvable(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_resolvable(&self) -> bool {
         (self.address[0] & 0xc0) == 0x40
     }
 
     /// Returns `true` if the address is non-resolvable.
-    pub fn is_non_resolvable(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_non_resolvable(&self) -> bool {
         (self.address[0] & 0xc0) == 0x00
     }
 
     /// Returns `true` if the address is a static identity address.
-    pub fn is_static_identity(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_static_identity(&self) -> bool {
         (self.address[0] & 0xc0) == 0xc0
     }
 }

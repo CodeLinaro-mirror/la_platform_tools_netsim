@@ -1,11 +1,22 @@
 // Copyright 2023-2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     collections::HashMap,
     env, io,
     path::PathBuf,
-    sync::{Arc, atomic::AtomicU32},
+    sync::{Arc, OnceLock, atomic::AtomicU32},
     time::Duration,
 };
 
@@ -40,7 +51,7 @@ use tokio::{
     sync::mpsc,
     task::JoinSet,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 #[cfg(feature = "cuttlefish")]
 use {
     packet_stream::{
@@ -53,13 +64,26 @@ use {
 
 use crate::{
     args::Args,
-    ini_file::{IniFile, IniFileAccess, IniFileInitialized, IniFileUninitialized, NetsimConfig},
+    ini_file::{
+        FileIdentity, IniFile, IniFileAccess, IniFileInitialized, IniFileUninitialized,
+        NetsimConfig,
+    },
     logger,
-    version::get_version,
+    version::{get_version, strip_version_suffix},
 };
 
 const MAX_INIT_RETRIES: i32 = 100;
 const RETRY_DELAY: Duration = Duration::from_millis(100);
+/// Number of gRPC connection attempts before treating a lock owner as unresponsive.
+const LIVENESS_PROBE_ATTEMPTS: u32 = 2;
+/// Per-attempt deadline for [`is_netsimd_alive`] gRPC connection probes.
+const LIVENESS_PROBE_TIMEOUT: Duration = Duration::from_millis(400);
+/// Maximum time to wait for `DeviceActor` and secondary actors to shut down.
+const ACTOR_TEARDOWN_TIMEOUT: Duration = Duration::from_secs(5);
+/// Maximum time to wait for session artifact zipping while `netsim.ini.lock` is held.
+const ARTIFACT_ZIP_TIMEOUT: Duration = Duration::from_secs(3);
+/// Hard deadline for daemon teardown before forcing process exit to release `netsim.ini.lock`.
+const TEARDOWN_WATCHDOG_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
@@ -76,6 +100,18 @@ fn init_error<E: std::fmt::Display>(e: E) -> RunResult {
 pub enum StartUpMode {
     Owner(NetsimDaemon, IniFileInitialized),
     Client(NetsimConfig),
+}
+
+/// Echoes every packet back to its sender (`startup.Chip.loopback`).
+///
+/// No device or chip is created, so transport tests and benchmarks measure
+/// only the packet-stream path: transport framing plus stream plumbing.
+async fn run_loopback(stream: PacketStream, sink: PacketSink, device_name: &str) {
+    info!("Loopback packet stream for {device_name}");
+    if let Err(e) = stream.forward(sink).await {
+        warn!("Loopback packet stream for {device_name} failed: {e}");
+    }
+    info!("Loopback packet stream for {device_name} closed");
 }
 
 async fn handle_new_connection(
@@ -104,6 +140,11 @@ async fn handle_new_connection(
             return;
         }
     };
+
+    if chip.loopback {
+        run_loopback(stream, sink, &device_name).await;
+        return;
+    }
 
     if chip.kind == ChipKind::BLUETOOTH
         && let Some(device_info) = chip_info.device_info.as_ref().filter(|d| !d.avd_path.is_empty())
@@ -243,8 +284,58 @@ where
     arg_port.or_else(|| get_env_port_impl(env_var, get_var))
 }
 
+/// Checks whether the netsimd gRPC server on `grpc_port` is responsive,
+/// matching legacy `rust_main.rs::is_netsimd_alive`.
+async fn is_netsimd_alive(grpc_port: u16) -> bool {
+    static PROBE_ENV: OnceLock<Arc<grpcio::Environment>> = OnceLock::new();
+    if grpc_port == 0 {
+        return false;
+    }
+    let addr = format!("localhost:{grpc_port}");
+    let env = PROBE_ENV.get_or_init(|| Arc::new(grpcio::Environment::new(1))).clone();
+    for attempt in 1..=LIVENESS_PROBE_ATTEMPTS {
+        let channel = grpcio::ChannelBuilder::new(env.clone()).connect(&addr);
+        let deadline = grpcio::Deadline::from(LIVENESS_PROBE_TIMEOUT);
+        if channel.wait_for_connected(deadline).await {
+            return true;
+        }
+        debug!("is_netsimd_alive attempt {attempt}/{LIVENESS_PROBE_ATTEMPTS} failed for {addr}");
+    }
+    false
+}
+
+/// Runs `zip_fn` on Tokio's blocking pool and waits at most `timeout_duration`
+/// for it. Returns `true` when `zip_fn` returned before the deadline (a zip
+/// error is logged but still counts, because the task is finished) and `false`
+/// when it timed out or panicked. On timeout the blocking task is detached via
+/// `runtime.shutdown_background()` as `run()` exits, so callers must not assume
+/// the artifact directory is quiescent afterwards.
+async fn run_zip_with_timeout<F, E>(timeout_duration: Duration, zip_fn: F) -> bool
+where
+    F: FnOnce() -> Result<(), E> + Send + 'static,
+    E: std::fmt::Debug + Send + 'static,
+{
+    let Ok(join_result) =
+        tokio::time::timeout(timeout_duration, tokio::task::spawn_blocking(zip_fn)).await
+    else {
+        warn!("Artifact zip exceeded {timeout_duration:?}; leaving artifacts unzipped");
+        return false;
+    };
+    match join_result {
+        Ok(Ok(())) => true,
+        Ok(Err(err)) => {
+            error!("Failed to zip artifacts: {err:?}");
+            true
+        }
+        Err(err) => {
+            error!("Artifact zip task panicked: {err}");
+            false
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-async fn setup_grpc_listener(
+fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
@@ -325,6 +416,8 @@ pub struct NetsimDaemon {
     streams: Streams,
     /// Path to the discovery INI file.
     ini_path: PathBuf,
+    /// The platform file identity of the `.lock` file held by this daemon.
+    ini_lock_inode: Option<FileIdentity>,
     /// Client for interacting with the Device Service.
     device_client: DeviceClient,
     /// Client for interacting with the Capture Service.
@@ -396,7 +489,10 @@ impl NetsimDaemon {
     ) -> Result<StartUpMode, RunResult> {
         args.sanitize();
         if args.version {
-            println!("Netsim version: {}", get_version());
+            #[allow(clippy::print_stdout)]
+            {
+                println!("Netsim version: {}", get_version());
+            }
             return Err(RunResult::ExitedNormally);
         }
 
@@ -450,6 +546,7 @@ impl NetsimDaemon {
         );
 
         let mut attempts = 0;
+        let mut stale_eviction_attempted = false;
         // Support Cuttlefish multi-instance by using instance-specific INI
         // files.
         let instance_num = get_instance(args.instance);
@@ -468,17 +565,45 @@ impl NetsimDaemon {
                 }
                 // This instance is a Reader, another daemon is already running.
                 IniFileAccess::Reader(config) => {
-                    info!("Lock held by another process. Reading config: {:?}", config);
-                    return Ok(StartUpMode::Client(config));
-                }
-                IniFileAccess::Initializing => {
-                    if attempts >= MAX_INIT_RETRIES {
-                        return Err(init_error("Timed out waiting for daemon to initialize"));
+                    if is_netsimd_alive(config.grpc_port).await {
+                        info!("Lock held by another process. Reading config: {:?}", config);
+                        return Ok(StartUpMode::Client(config));
                     }
-                    attempts += 1;
-                    tokio::time::sleep(RETRY_DELAY).await;
+                    if stale_eviction_attempted {
+                        return Err(init_error(format!(
+                            "Existing netsimd (pid {:?}) on port {} is unresponsive and stale lock could not be evicted",
+                            config.pid, config.grpc_port
+                        )));
+                    }
+                    warn!(
+                        "Existing netsimd (pid {:?}) on port {} is unresponsive; removing stale netsim.ini and starting new daemon",
+                        config.pid, config.grpc_port
+                    );
+                    if IniFile::evict_stale_lock(&discovery_dir, instance_num, &config)
+                        .map_err(init_error)?
+                    {
+                        stale_eviction_attempted = true;
+                        continue;
+                    }
+                    // Nothing was evicted: another process holds
+                    // `netsim.ini.init.lock` (evicting the same owner,
+                    // initializing as the new owner, or briefly inspecting
+                    // the discovery files) or the files changed since
+                    // `try_acquire`. Re-observe after the `Initializing`
+                    // back-off instead of spending the single eviction
+                    // attempt on a no-op.
+                    info!("Stale lock eviction skipped; re-checking discovery files");
                 }
+                // Another process holds `netsim.ini.init.lock` or has not
+                // published `netsim.ini` yet.
+                IniFileAccess::Initializing => {}
             }
+
+            if attempts >= MAX_INIT_RETRIES {
+                return Err(init_error("Timed out waiting for daemon to initialize"));
+            }
+            attempts += 1;
+            tokio::time::sleep(RETRY_DELAY).await;
         }
     }
 
@@ -637,8 +762,7 @@ impl NetsimDaemon {
             capture_client.clone(),
             get_version(),
             frontend_stats.clone(),
-        )
-        .await?;
+        )?;
 
         // HTTP server for the /v1 API
         let resolved_http_port =
@@ -817,7 +941,7 @@ impl NetsimDaemon {
             Box::new(link_client.clone()),
             startup_timeout,
             idle_timeout,
-            get_version(),
+            strip_version_suffix(&get_version()).to_owned(),
             stats_path,
             None,
             frontend_stats.clone(),
@@ -882,6 +1006,7 @@ impl NetsimDaemon {
         // are running so external launchers cannot connect before actors are ready.
         let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
         let ini_path = initialized_guard.path().to_path_buf();
+        let ini_lock_inode = initialized_guard.lock_inode();
         info!("Wrote to INI file {}", ini_path.display());
 
         // Clone chip_clients for NetsimDaemon
@@ -911,6 +1036,7 @@ impl NetsimDaemon {
                 capture_task,
                 artifact_dir,
                 ini_path,
+                ini_lock_inode,
                 link_client: Box::new(link_client),
                 slirp_client,
                 chip_clients: daemon_chip_clients,
@@ -1029,8 +1155,10 @@ impl NetsimDaemon {
         }
     }
 
-    /// Runs the main event loop for the daemon.
-    pub async fn run_daemon(mut self) -> RunResult {
+    /// Runs the main event loop for the daemon, then tears it down while
+    /// `ini_guard` keeps `netsim.ini.lock` held; the guard is released only
+    /// after `self` (actors, gRPC server, C++ FFI state) has been dropped.
+    pub async fn run_daemon(mut self, ini_guard: IniFileInitialized) -> RunResult {
         info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
 
         let shutdown_signal = shutdown_signal();
@@ -1088,7 +1216,26 @@ impl NetsimDaemon {
                 }
             }
         }
-        IniFileInitialized::unlink_discovery_files(&self.ini_path);
+        // Hard watchdog armed with a disarm channel: if actor teardown,
+        // zipping, or a C++ FFI destructor (`Drop` of `NetsimDaemon`) hangs
+        // past `TEARDOWN_WATCHDOG_TIMEOUT` while `netsim.ini.lock` is still
+        // held, force-exit so the OS releases `.lock`. Dropping `watchdog_tx`
+        // at the end of `run_daemon` disconnects the channel so the blocking
+        // task exits immediately on normal shutdown.
+        let (watchdog_tx, watchdog_rx) = std::sync::mpsc::channel::<()>();
+        tokio::task::spawn_blocking(move || {
+            if matches!(
+                watchdog_rx.recv_timeout(TEARDOWN_WATCHDOG_TIMEOUT),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ) {
+                error!(
+                    "Teardown watchdog fired after {TEARDOWN_WATCHDOG_TIMEOUT:?}; exiting without releasing resources gracefully"
+                );
+                std::process::exit(2);
+            }
+        });
+
+        IniFileInitialized::unlink_discovery_file_if_owner(&self.ini_path, self.ini_lock_inode);
         let grpc_shutdown = self._grpc_server.as_mut().map(|s| {
             let fut = s.shutdown();
             s.cancel_all_calls();
@@ -1096,7 +1243,7 @@ impl NetsimDaemon {
         });
         // Shut down DeviceActor sequentially before secondary actors so it can
         // query active chip stats during on_shutdown() without racing against
-        // chip actor termination. Bound entire teardown to 5s.
+        // chip actor termination.
         let teardown = async {
             if !self.device_task.is_finished() {
                 let _ = self.device_client.shutdown().await;
@@ -1105,13 +1252,24 @@ impl NetsimDaemon {
             self.shutdown_actors(grpc_shutdown).await;
             self.join_set.shutdown().await;
         };
-        let _ = tokio::time::timeout(Duration::from_secs(5), teardown).await;
-        info!("NetsimDaemon main loop exited.");
-        // Zip all artifacts synchronously while `.lock` is still held so the next
-        // instance cannot call remove_old_artifacts_in_dir() until zipping completes.
-        if let Err(err) = zip_artifacts_in_dir(&self.artifact_dir) {
-            error!("Failed to zip artifacts: {err:?}");
+        if tokio::time::timeout(ACTOR_TEARDOWN_TIMEOUT, teardown).await.is_err() {
+            warn!(
+                "Actor teardown exceeded {ACTOR_TEARDOWN_TIMEOUT:?} timeout; continuing shutdown"
+            );
         }
+        info!("NetsimDaemon main loop exited.");
+        // Zip session artifacts under `ARTIFACT_ZIP_TIMEOUT` while `.lock` is
+        // still held so a successor cannot call `remove_old_artifacts_in_dir()`
+        // mid-zip.
+        let artifact_dir = self.artifact_dir.clone();
+        let _ =
+            run_zip_with_timeout(ARTIFACT_ZIP_TIMEOUT, move || zip_artifacts_in_dir(&artifact_dir))
+                .await;
+        // Drop `self` (C++ FFI / gRPC destructors) and then the discovery lock
+        // while the teardown watchdog is still armed, then disarm it.
+        drop(self);
+        drop(ini_guard);
+        drop(watchdog_tx);
         RunResult::ExitedNormally
     }
 }
@@ -1180,10 +1338,24 @@ async fn shutdown_signal() {
     }
 }
 
-#[tokio::main]
-pub async fn run() -> RunResult {
+pub fn run() -> RunResult {
+    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            return RunResult::InitializationError(format!("Failed to start Tokio runtime: {err}"));
+        }
+    };
+    let result = runtime.block_on(run_async());
+    // Detach any wedged worker or timed-out `spawn_blocking` task immediately
+    // once `run_async()` returns (`Runtime::drop` would block indefinitely, and
+    // waiting after `ini_guard` is dropped would keep `.lock`-less cleanup alive).
+    runtime.shutdown_background();
+    result
+}
+
+async fn run_async() -> RunResult {
     match NetsimDaemon::new().await {
-        Ok(StartUpMode::Owner(daemon, _ini_guard)) => daemon.run_daemon().await,
+        Ok(StartUpMode::Owner(daemon, ini_guard)) => daemon.run_daemon(ini_guard).await,
         Ok(StartUpMode::Client(config)) => {
             // If we are just a client, we shouldn't necessarily fail, but if
             // the user expected to start a NEW daemon, they might
@@ -1198,104 +1370,176 @@ pub async fn run() -> RunResult {
 }
 
 #[cfg(feature = "cuttlefish")]
+const RETRY_INTERVAL: Duration = Duration::from_secs(1);
+
+#[cfg(feature = "cuttlefish")]
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ConnectorTarget {
+    WebSocket(String),
+    Tcp(String),
+}
+
+#[cfg(feature = "cuttlefish")]
 impl NetsimDaemon {
+    fn resolve_connector_target(
+        ws_addr: Option<String>,
+        tcp_addr: Option<String>,
+    ) -> Option<ConnectorTarget> {
+        ws_addr.map(ConnectorTarget::WebSocket).or_else(|| tcp_addr.map(ConnectorTarget::Tcp))
+    }
+
+    async fn bridge_packets<S, K>(
+        packet_stream: &mut PacketStream,
+        packet_sink: &mut PacketSink,
+        mut remote_stream: S,
+        mut remote_sink: K,
+        chip_id: &str,
+        transport_name: &str,
+    ) -> bool
+    where
+        S: futures::Stream<Item = io::Result<bytes::Bytes>> + Unpin,
+        K: futures::Sink<bytes::Bytes, Error = io::Error> + Unpin,
+    {
+        enum BridgeError {
+            Guest(String),
+            Remote(String),
+        }
+
+        select! {
+            res = async {
+                while let Some(packet) = packet_stream.next().await {
+                    let packet =
+                        packet.map_err(|e| BridgeError::Guest(format!("read error: {e}")))?;
+                    remote_sink
+                        .send(packet)
+                        .await
+                        .map_err(|e| BridgeError::Remote(format!("write error: {e}")))?;
+                }
+                Ok::<(), BridgeError>(())
+            } => {
+                match res {
+                    Err(BridgeError::Guest(msg)) => {
+                        error!("Upstream bridge failed for chip {chip_id} (Guest): {msg}");
+                        true
+                    }
+                    Err(BridgeError::Remote(msg)) => {
+                        error!(
+                            "Upstream bridge failed for chip {chip_id} ({transport_name}): {msg}"
+                        );
+                        false
+                    }
+                    Ok(()) => true, // Guest FD reader hit EOF, break loop permanently!
+                }
+            }
+            res = async {
+                while let Some(packet) = remote_stream.next().await {
+                    let packet =
+                        packet.map_err(|e| BridgeError::Remote(format!("read error: {e}")))?;
+                    packet_sink
+                        .send(packet)
+                        .await
+                        .map_err(|e| BridgeError::Guest(format!("write error: {e}")))?;
+                }
+                Ok::<(), BridgeError>(())
+            } => {
+                match res {
+                    Err(BridgeError::Guest(msg)) => {
+                        error!("Downstream bridge failed for chip {chip_id} (Guest): {msg}");
+                        true
+                    }
+                    Err(BridgeError::Remote(msg)) => {
+                        error!(
+                            "Downstream bridge failed for chip {chip_id} ({transport_name}): {msg}"
+                        );
+                        false
+                    }
+                    Ok(()) => false, // Remote stream disconnected, need to reconnect
+                }
+            }
+        }
+    }
+
     async fn run_chip_bridge(
         mut packet_stream: PacketStream,
         mut packet_sink: PacketSink,
         chip_info: PsChipInfo,
-        server_addr: String,
+        device_guid: String,
+        target: ConnectorTarget,
     ) {
         let chip_id = chip_info.chip.as_ref().map_or("Unknown".to_string(), |c| c.id.clone());
 
         loop {
-            // Connect to TCP port
-            let tcp_stream_raw = match TcpStream::connect(&server_addr).await {
-                Ok(stream) => stream,
-                Err(e) => {
-                    warn!("Failed to connect to primary daemon TCP port, retrying in 1s: {e}");
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    continue;
-                }
-            };
-
-            // Create InitInfo
-            let init_info = PsInitInfo {
-                chip_info: chip_info.clone(),
-                transport_type: "TCP Forwarder".to_string(),
-            };
-
-            // Send InitInfo with LengthDelimitedCodec
-            let mut framed_tcp = Framed::new(tcp_stream_raw, LengthDelimitedCodec::new());
-
-            let init_json = match serde_json::to_vec(&init_info) {
-                Ok(json) => json,
-                Err(e) => {
-                    error!("Failed to serialize InitInfo: {e}");
-                    break;
-                }
-            };
-
-            if let Err(e) = framed_tcp.send(bytes::Bytes::from(init_json)).await {
-                error!("Failed to send InitInfo: {e}");
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                continue;
-            }
-
-            info!("Sent initial ChipInfo to primary daemon for chip {chip_id}");
-
-            let (mut tcp_sink, mut tcp_stream) = framed_tcp.split();
-
-            enum BridgeError {
-                Guest(String),
-                Tcp(String),
-            }
-
-            // Poll both concurrently.
-            let is_guest_disconnected = select! {
-                res = async {
-                    while let Some(packet) = packet_stream.next().await {
-                        let packet = packet.map_err(|e| BridgeError::Guest(format!("read error: {e:?}")))?;
-                        tcp_sink.send(packet).await.map_err(|e| BridgeError::Tcp(format!("write error: {e:?}")))?;
-                    }
-                    Ok::<(), BridgeError>(())
-                } => {
-                    if let Err(e) = res {
-                        match e {
-                            BridgeError::Guest(msg) => {
-                                error!("Upstream bridge failed for chip {chip_id} (Guest): {msg}");
-                                true
-                            }
-                            BridgeError::Tcp(msg) => {
-                                error!("Upstream bridge failed for chip {chip_id} (TCP): {msg}");
-                                false
-                            }
+            let is_guest_disconnected = match &target {
+                ConnectorTarget::WebSocket(server_addr) => {
+                    let path = websocket_server::client::build_packet_stream_path(
+                        &chip_info,
+                        &device_guid,
+                    );
+                    match websocket_server::client::connect(server_addr, &path).await {
+                        Ok((ws_stream, ws_sink)) => {
+                            info!(
+                                "Connected WebSocket forwarder to primary daemon for chip {chip_id}"
+                            );
+                            Self::bridge_packets(
+                                &mut packet_stream,
+                                &mut packet_sink,
+                                ws_stream,
+                                ws_sink,
+                                &chip_id,
+                                "WebSocket",
+                            )
+                            .await
                         }
-                    } else {
-                        true // Guest FD reader hit EOF, break loop permanently!
-                    }
-                }
-                res = async {
-                    while let Some(packet) = tcp_stream.next().await {
-                        let packet = packet.map_err(|e| BridgeError::Tcp(format!("read error: {e:?}")))?;
-                        packet_sink.send(packet.freeze()).await.map_err(|e| BridgeError::Guest(format!("write error: {e:?}")))?;
-                    }
-                    Ok::<(), BridgeError>(())
-                } => {
-                    if let Err(e) = res {
-                        match e {
-                            BridgeError::Guest(msg) => {
-                                error!("Downstream bridge failed for chip {chip_id} (Guest): {msg}");
-                                true
-                            }
-                            BridgeError::Tcp(msg) => {
-                                error!("Downstream bridge failed for chip {chip_id} (TCP): {msg}");
-                                false
-                            }
+                        Err(e) => {
+                            warn!(
+                                "Failed to connect to primary daemon WebSocket {server_addr}{path}: {e}"
+                            );
+                            false
                         }
-                    } else {
-                        false // TCP stream disconnected, need to reconnect
                     }
                 }
+                ConnectorTarget::Tcp(server_addr) => match TcpStream::connect(server_addr).await {
+                    Ok(tcp_stream_raw) => {
+                        let init_info = PsInitInfo {
+                            chip_info: chip_info.clone(),
+                            transport_type: "TCP Forwarder".to_string(),
+                        };
+
+                        let mut framed_tcp =
+                            Framed::new(tcp_stream_raw, LengthDelimitedCodec::new());
+
+                        let init_json = match serde_json::to_vec(&init_info) {
+                            Ok(json) => json,
+                            Err(e) => {
+                                error!("Failed to serialize InitInfo: {e}");
+                                break;
+                            }
+                        };
+
+                        if let Err(e) = framed_tcp.send(bytes::Bytes::from(init_json)).await {
+                            error!("Failed to send InitInfo: {e}");
+                            false
+                        } else {
+                            info!("Sent initial ChipInfo to primary daemon for chip {chip_id}");
+
+                            let (tcp_sink, tcp_stream) = framed_tcp.split();
+                            let tcp_stream = tcp_stream.map(|res| res.map(bytes::BytesMut::freeze));
+                            Self::bridge_packets(
+                                &mut packet_stream,
+                                &mut packet_sink,
+                                tcp_stream,
+                                tcp_sink,
+                                &chip_id,
+                                "TCP",
+                            )
+                            .await
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to connect to primary daemon TCP port: {e}");
+                        false
+                    }
+                },
             };
 
             if is_guest_disconnected {
@@ -1303,8 +1547,10 @@ impl NetsimDaemon {
                 break;
             }
 
-            info!("TCP stream disconnected, re-establishing session in 1s for chip {chip_id}...");
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            info!(
+                "Forwarder stream disconnected, re-establishing session in 1s for chip {chip_id}..."
+            );
+            tokio::time::sleep(RETRY_INTERVAL).await;
         }
         info!("Duplex bridge closed for chip {chip_id}");
     }
@@ -1318,14 +1564,16 @@ impl NetsimDaemon {
         let dual_fd_config: DualFdConfig = serde_json::from_str(&fd_startup_str)
             .map_err(|e| format!("Could not parse startup info JSON: {e}"))?;
 
-        let Some(server_addr) = common::util::ini_file::get_tcp_server_address(connector_instance)
-        else {
+        let Some(target) = Self::resolve_connector_target(
+            common::util::ini_file::get_ws_server_address(connector_instance),
+            common::util::ini_file::get_tcp_server_address(connector_instance),
+        ) else {
             return Err(format!(
-                "No primary netsimd tcp port found for instance {connector_instance}"
+                "No primary netsimd ws or tcp port found for instance {connector_instance}"
             ));
         };
 
-        info!("Starting in Connector mode to {server_addr}");
+        info!("Starting in Connector mode to {target:?}");
 
         let mut join_set = JoinSet::new();
 
@@ -1337,12 +1585,13 @@ impl NetsimDaemon {
             tokio::select! {
                 res = listener.accept() => {
                     match res {
-                        Ok((packet_stream, packet_sink, chip_info, _guid)) => {
+                        Ok((packet_stream, packet_sink, chip_info, guid)) => {
                             join_set.spawn(Self::run_chip_bridge(
                                 packet_stream,
                                 packet_sink,
                                 chip_info,
-                                server_addr.clone(),
+                                guid,
+                                target.clone(),
                             ));
                         }
                         Err(e) => {
@@ -1476,5 +1725,109 @@ mod tests {
             "guid-3".to_string(),
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn test_is_netsimd_alive_rejects_unresponsive_port() {
+        assert!(!is_netsimd_alive(0).await);
+
+        // A listener that never completes the HTTP/2 handshake models a
+        // wedged netsimd that still holds its port open.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let dead_port = listener.local_addr().unwrap().port();
+
+        let probe_start = std::time::Instant::now();
+        assert!(!is_netsimd_alive(dead_port).await);
+        // Two 400ms attempts must stay well below the Initializing retry budget.
+        assert!(probe_start.elapsed() < Duration::from_secs(3));
+    }
+
+    #[tokio::test]
+    async fn test_run_zip_with_timeout_bounds_a_stalled_zip() {
+        assert!(run_zip_with_timeout(Duration::from_secs(1), || Ok::<(), io::Error>(())).await);
+        // A zip error is logged but still counts as finished.
+        assert!(
+            run_zip_with_timeout(Duration::from_secs(1), || Err(io::Error::other("zip failed")))
+                .await
+        );
+        // A panicking blocking task resolves `JoinError` to `false` without aborting teardown.
+        assert!(
+            !run_zip_with_timeout(Duration::from_secs(1), || -> Result<(), io::Error> {
+                panic!("zip panicked");
+            })
+            .await
+        );
+
+        // A zip task that never returns must not block teardown.
+        let (unblock_zip_tx, unblock_zip_rx) = std::sync::mpsc::channel::<()>();
+        let start = std::time::Instant::now();
+        let finished_in_time = run_zip_with_timeout(Duration::from_millis(100), move || {
+            let _ = unblock_zip_rx.recv();
+            Ok::<(), io::Error>(())
+        })
+        .await;
+        assert!(!finished_in_time);
+        assert!(start.elapsed() < Duration::from_secs(1));
+        drop(unblock_zip_tx);
+    }
+
+    #[cfg(feature = "cuttlefish")]
+    #[test]
+    fn test_resolve_connector_target() {
+        assert_eq!(
+            NetsimDaemon::resolve_connector_target(
+                Some("localhost:7681".to_string()),
+                Some("localhost:5678".to_string()),
+            ),
+            Some(ConnectorTarget::WebSocket("localhost:7681".to_string()))
+        );
+        assert_eq!(
+            NetsimDaemon::resolve_connector_target(None, Some("localhost:5678".to_string())),
+            Some(ConnectorTarget::Tcp("localhost:5678".to_string()))
+        );
+        assert_eq!(NetsimDaemon::resolve_connector_target(None, None), None);
+    }
+
+    #[cfg(feature = "cuttlefish")]
+    #[tokio::test]
+    async fn test_run_chip_bridge_websocket_loopback() {
+        let listener = bind_tcp_loopback(0).unwrap();
+        let ws_addr = listener.local_addr().unwrap().to_string();
+        let (_runner, device_client) = device_actor::new();
+        tokio::spawn(websocket_server::server::run(listener, device_client));
+
+        let (guest_in_tx, guest_in_rx) = mpsc::channel(4);
+        let (guest_out_tx, mut guest_out_rx) = mpsc::channel(4);
+        let stream: PacketStream =
+            Box::pin(futures::stream::unfold(guest_in_rx, |mut rx| async move {
+                rx.recv().await.map(|item| (Ok(item), rx))
+            }));
+        let sink: PacketSink =
+            Box::pin(futures::sink::unfold(guest_out_tx, |tx, item: bytes::Bytes| async move {
+                tx.send(item)
+                    .await
+                    .map_err(|e| packet_stream::PacketStreamError::Io(io::Error::other(e)))?;
+                Ok(tx)
+            }));
+
+        let mut chip_info = ChipInfo::new("cvd-1", ChipKind::BLUETOOTH);
+        if let Some(chip) = &mut chip_info.chip {
+            chip.loopback = true;
+        }
+
+        let bridge = tokio::spawn(NetsimDaemon::run_chip_bridge(
+            stream,
+            sink,
+            chip_info,
+            "dualfd-cvd-1".to_string(),
+            ConnectorTarget::WebSocket(ws_addr),
+        ));
+
+        let payload = bytes::Bytes::from_static(&[0x01, 0x03, 0x0c, 0x00]);
+        guest_in_tx.send(payload.clone()).await.unwrap();
+        assert_eq!(guest_out_rx.recv().await.unwrap(), payload);
+
+        drop(guest_in_tx);
+        bridge.await.unwrap();
     }
 }

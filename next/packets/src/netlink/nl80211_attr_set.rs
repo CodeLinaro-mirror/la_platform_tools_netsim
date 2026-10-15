@@ -1,5 +1,16 @@
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Defines structures for parsing `nl80211` attributes.
 #![allow(clippy::empty_line_after_doc_comments)]
@@ -84,139 +95,137 @@ pub struct Nl80211AttrSet {
 
 impl fmt::Display for Nl80211AttrSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut s = String::new();
-        s.push_str("{ ");
+        f.write_str("{ ")?;
         if let Some(v) = self.hw_index {
-            s.push_str(&format!("hw_index: {}, ", v));
+            write!(f, "hw_index: {v}, ")?;
         }
         if let Some(ref v) = self.iface_mac {
-            s.push_str(&format!("iface_mac: {}, ", v));
+            write!(f, "iface_mac: {v}, ")?;
         }
         if let Some(ref v) = self.iface_name {
-            s.push_str(&format!("iface_name: {}, ", v));
+            write!(f, "iface_name: {v}, ")?;
         }
         if let Some(v) = self.iface_type {
-            s.push_str(&format!("iface_type: {}, ", v));
+            write!(f, "iface_type: {v}, ")?;
         }
         if let Some(v) = self.req_iface_num {
-            s.push_str(&format!("req_iface_num: {}, ", v));
+            write!(f, "req_iface_num: {v}, ")?;
         }
         if let Some(v) = self.max_ifaces {
-            s.push_str(&format!("max_ifaces: {}, ", v));
+            write!(f, "max_ifaces: {v}, ")?;
         }
         if let Some(v) = self.reg_dom {
-            s.push_str(&format!("reg_dom: {}, ", v));
+            write!(f, "reg_dom: {v}, ")?;
         }
         if let Some(ref v) = self.reg_alpha2 {
-            s.push_str(&format!("reg_alpha2: {}, ", v));
+            write!(f, "reg_alpha2: {v}, ")?;
         }
         if let Some(v) = self.channel {
-            s.push_str(&format!("channel: {}, ", v));
+            write!(f, "channel: {v}, ")?;
         }
         if let Some(v) = self.frequency {
-            s.push_str(&format!("frequency: {}, ", v));
+            write!(f, "frequency: {v}, ")?;
         }
         if let Some(v) = self.channel_type {
-            s.push_str(&format!("channel_type: {}, ", v));
+            write!(f, "channel_type: {v}, ")?;
         }
         if let Some(v) = self.channel_flags {
-            s.push_str(&format!("channel_flags: {}, ", v));
+            write!(f, "channel_flags: {v}, ")?;
         }
         if let Some(v) = self.max_tx_power {
-            s.push_str(&format!("max_tx_power: {}, ", v));
+            write!(f, "max_tx_power: {v}, ")?;
         }
         if let Some(v) = self.center_freq1 {
-            s.push_str(&format!("center_freq1: {}, ", v));
+            write!(f, "center_freq1: {v}, ")?;
         }
         if let Some(v) = self.center_freq2 {
-            s.push_str(&format!("center_freq2: {}, ", v));
+            write!(f, "center_freq2: {v}, ")?;
         }
         if let Some(v) = self.signal {
-            s.push_str(&format!("signal: {}, ", v));
+            write!(f, "signal: {v}, ")?;
         }
         if let Some(v) = self.noise {
-            s.push_str(&format!("noise: {}, ", v));
+            write!(f, "noise: {v}, ")?;
         }
         if let Some(v) = self.rx_rate {
-            s.push_str(&format!("rx_rate: {}, ", v));
+            write!(f, "rx_rate: {v}, ")?;
         }
         if let Some(ref v) = self.key {
-            s.push_str(&format!("key: {:?}, ", v));
+            write!(f, "key: {v:?}, ")?;
         }
         if let Some(v) = self.key_idx {
-            s.push_str(&format!("key_idx: {}, ", v));
+            write!(f, "key_idx: {v}, ")?;
         }
         if let Some(ref v) = self.key_data {
-            s.push_str(&format!("key_data: {:?}, ", v));
+            write!(f, "key_data: {v:?}, ")?;
         }
         if let Some(ref v) = self.key_seq {
-            s.push_str(&format!("key_seq: {:?}, ", v));
+            write!(f, "key_seq: {v:?}, ")?;
         }
         if let Some(v) = self.key_flags {
-            s.push_str(&format!("key_flags: {}, ", v));
+            write!(f, "key_flags: {v}, ")?;
         }
         if let Some(v) = self.cipher {
-            s.push_str(&format!("cipher: {}, ", v));
+            write!(f, "cipher: {v}, ")?;
         }
         if let Some(v) = self.beacon_interval {
-            s.push_str(&format!("beacon_interval: {}, ", v));
+            write!(f, "beacon_interval: {v}, ")?;
         }
         if let Some(v) = self.dtim_period {
-            s.push_str(&format!("dtim_period: {}, ", v));
+            write!(f, "dtim_period: {v}, ")?;
         }
         if let Some(v) = self.hidden_ssid {
-            s.push_str(&format!("hidden_ssid: {}, ", v));
+            write!(f, "hidden_ssid: {v}, ")?;
         }
         if let Some(ref v) = self.supported_rates {
-            s.push_str(&format!("supported_rates: {:?}, ", v));
+            write!(f, "supported_rates: {v:?}, ")?;
         }
         if let Some(v) = self.short_preamble {
-            s.push_str(&format!("short_preamble: {}, ", v));
+            write!(f, "short_preamble: {v}, ")?;
         }
         if let Some(v) = self.short_slot_time {
-            s.push_str(&format!("short_slot_time: {}, ", v));
+            write!(f, "short_slot_time: {v}, ")?;
         }
         if let Some(ref v) = self.edca_params {
-            s.push_str(&format!("edca_params: {:?}, ", v));
+            write!(f, "edca_params: {v:?}, ")?;
         }
         if let Some(v) = self.wmm_enabled {
-            s.push_str(&format!("wmm_enabled: {}, ", v));
+            write!(f, "wmm_enabled: {v}, ")?;
         }
         if let Some(v) = self.power_constraint {
-            s.push_str(&format!("power_constraint: {}, ", v));
+            write!(f, "power_constraint: {v}, ")?;
         }
         if let Some(v) = self.local_power_constraint {
-            s.push_str(&format!("local_power_constraint: {}, ", v));
+            write!(f, "local_power_constraint: {v}, ")?;
         }
         if let Some(v) = self.txpower {
-            s.push_str(&format!("txpower: {}, ", v));
+            write!(f, "txpower: {v}, ")?;
         }
         if let Some(ref v) = self.supported_channels {
-            s.push_str(&format!("supported_channels: {:?}, ", v));
+            write!(f, "supported_channels: {v:?}, ")?;
         }
         if let Some(ref v) = self.mesh_path {
-            s.push_str(&format!("mesh_path: {:?}, ", v));
+            write!(f, "mesh_path: {v:?}, ")?;
         }
         if let Some(ref v) = self.mesh_id {
-            s.push_str(&format!("mesh_id: {:?}, ", v));
+            write!(f, "mesh_id: {v:?}, ")?;
         }
         if let Some(v) = self.mesh_plink_state {
-            s.push_str(&format!("mesh_plink_state: {}, ", v));
+            write!(f, "mesh_plink_state: {v}, ")?;
         }
         if let Some(ref v) = self.mesh_gate_announcement {
-            s.push_str(&format!("mesh_gate_announcement: {:?}, ", v));
+            write!(f, "mesh_gate_announcement: {v:?}, ")?;
         }
         if let Some(ref v) = self.hwsim_attr_frame_data {
-            s.push_str(&format!("hwsim_attr_frame_data: {:?}, ", v));
+            write!(f, "hwsim_attr_frame_data: {v:?}, ")?;
         }
         if let Some(v) = self.hwsim_attr_cookie {
-            s.push_str(&format!("hwsim_attr_cookie: {}, ", v));
+            write!(f, "hwsim_attr_cookie: {v}, ")?;
         }
         if let Some(v) = self.hwsim_attr_flags {
-            s.push_str(&format!("hwsim_attr_flags: {}, ", v));
+            write!(f, "hwsim_attr_flags: {v}, ")?;
         }
-        s.push_str("}}");
-        write!(f, "{}", s)
+        f.write_str("}}")
     }
 }
 

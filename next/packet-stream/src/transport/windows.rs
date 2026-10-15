@@ -1,5 +1,16 @@
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use tokio::net::windows::named_pipe::{
     ClientOptions, NamedPipeClient, NamedPipeServer, ServerOptions,
@@ -13,7 +24,7 @@ pub struct WindowsListener {
 }
 
 impl WindowsListener {
-    pub async fn bind_named_pipe(pipe_name: &str) -> Result<Self> {
+    pub fn bind_named_pipe(pipe_name: &str) -> Result<Self> {
         let full_name = format!(r"\\.\pipe\{}", pipe_name);
 
         let server = ServerOptions::new().first_pipe_instance(true).create(&full_name)?;
@@ -38,7 +49,7 @@ impl WindowsListener {
     }
 }
 
-pub async fn connect_named_pipe(pipe_name: &str) -> Result<NamedPipeClient> {
+pub fn connect_named_pipe(pipe_name: &str) -> Result<NamedPipeClient> {
     let full_name = format!(r"\\.\pipe\{}", pipe_name);
     let client = ClientOptions::new().open(&full_name)?;
     Ok(client)

@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::time::Duration;
 
@@ -67,6 +78,25 @@ pub fn when_incoming_sms_received(world: &mut World, name: &str, sender: &str, t
 pub fn when_incoming_pdu_received(world: &mut World, name: &str, pdu: &str) {
     let (id, _) = world.get_modem(name);
     let action = ModemAction::IncomingPdu { id: ChipId(id), pdu: pdu.to_string() };
+    world.manager.dispatch(action);
+}
+
+pub fn when_cell_broadcast_received(
+    world: &mut World,
+    name: &str,
+    serial_number: u16,
+    message_id: u16,
+    dcs: u8,
+    text: &str,
+) {
+    let (id, _) = world.get_modem(name);
+    let action = ModemAction::InjectCellBroadcast {
+        id: ChipId(id),
+        serial_number,
+        message_id,
+        dcs,
+        text: text.to_string(),
+    };
     world.manager.dispatch(action);
 }
 

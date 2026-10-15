@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::world::TestWorld;
 
@@ -32,7 +43,7 @@ async fn test_percent_encoded_query_parameters() {
 
     // Plain unencoded values (such as Bumble's) remain unchanged
     let client_c = world
-        .given_a_websocket_client_connected(Some("bumble&loopback=1"), Some("00:11:22:33:44:55"))
+        .given_a_websocket_client_connected(Some("bumble&loopback=0"), Some("00:11:22:33:44:55"))
         .await;
     world.then_backend_receives_add_chip_request(client_c, "bumble", "00:11:22:33:44:55");
 }
@@ -43,6 +54,18 @@ async fn test_invalid_resource_path() {
 
     world.when_client_attempts_to_connect_to_invalid_path().await;
     world.then_the_connection_fails_with_status(404);
+
+    for invalid_path in [
+        "/v1/websocket",
+        "/v1/websocket/",
+        "/v1/websocket/unknown",
+        "/v1/websocket/unspecified",
+        "/v1/websocket/bt/extra",
+        "/v1/websocketbt",
+    ] {
+        world.when_client_attempts_to_connect_to_path(invalid_path).await;
+        world.then_the_connection_fails_with_status(404);
+    }
 }
 
 #[tokio::test]

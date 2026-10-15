@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use serde::Deserialize;
 use serde_xml_rs::{Deserializer, EventReader, ParserConfig};
@@ -71,6 +82,72 @@ fn test_invalid_record_number_fails() {
     let result = parse_xml_profile(overflow_xml);
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), XmlProfileError::Deserialization(_)));
+}
+
+#[test]
+fn test_invalid_addressing_mode_fails() {
+    let bad_xml = r#"<IccProfile>
+        <MF>
+            <EF id="6FC7" structure="linear fixed">
+                <SIMIO cmd="B2" p1="01" p2="00" p3="26">90,00,01020304</SIMIO>
+            </EF>
+        </MF>
+    </IccProfile>"#;
+    let result = parse_xml_profile(bad_xml);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err(),
+        XmlProfileError::InvalidValue {
+            file_id: UiccFileId::MailboxDialingNumbers.as_u16(),
+            field: "SIMIO p2 (addressing mode)".to_string(),
+            value: "00".to_string(),
+            expected: "absolute addressing mode (04)".to_string(),
+        }
+    );
+}
+
+#[test]
+fn test_invalid_update_addressing_mode_fails() {
+    let bad_xml = r#"<IccProfile>
+        <MF>
+            <EF id="6FC7" structure="linear fixed">
+                <SIMIO cmd="DC" p1="01" p2="00" p3="26">144,0</SIMIO>
+            </EF>
+        </MF>
+    </IccProfile>"#;
+    let result = parse_xml_profile(bad_xml);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err(),
+        XmlProfileError::InvalidValue {
+            file_id: UiccFileId::MailboxDialingNumbers.as_u16(),
+            field: "SIMIO p2 (addressing mode)".to_string(),
+            value: "00".to_string(),
+            expected: "absolute addressing mode (04)".to_string(),
+        }
+    );
+}
+
+#[test]
+fn test_invalid_update_record_number_fails() {
+    let bad_xml = r#"<IccProfile>
+        <MF>
+            <EF id="6FC7" structure="linear fixed">
+                <SIMIO cmd="DC" p1="00" p2="04" p3="26">144,0</SIMIO>
+            </EF>
+        </MF>
+    </IccProfile>"#;
+    let result = parse_xml_profile(bad_xml);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err(),
+        XmlProfileError::InvalidValue {
+            file_id: UiccFileId::MailboxDialingNumbers.as_u16(),
+            field: "SIMIO p1 (record number)".to_string(),
+            value: "0".to_string(),
+            expected: "1-indexed record number between 1 and 255".to_string(),
+        }
+    );
 }
 
 #[test]

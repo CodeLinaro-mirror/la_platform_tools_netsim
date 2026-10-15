@@ -1,7 +1,18 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use std::{collections::BTreeMap, fmt};
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 use modem_rs_derive::CommandParser;
 use netsim_model::Quirks;
@@ -11,6 +22,7 @@ use crate::{
     RadioAdmission, SmsStore,
     parser::QuotedString,
     pdu::SubmitPdu,
+    time::{Clock, SystemClock},
     types::{
         BroadcastConfig, CmsError, CommandAction, ExecutionResult, HandledCommand, Parsable,
         PhoneNumber, Response, SendSmsArgs, SimSmsMessage, SmsAck, SmsBroadcastMode,
@@ -49,7 +61,7 @@ pub enum SmsCommand<'a> {
     QueryPreferredMessageStorage,
     /// 3GPP TS 27.005: Set broadcast config
     #[command(tag = "AT+CSCB=")]
-    BroadcastConfig(SmsBroadcastMode, QuotedString<'a>, QuotedString<'a>),
+    BroadcastConfig(SmsBroadcastMode, Option<QuotedString<'a>>, Option<QuotedString<'a>>),
     /// 3GPP TS 27.005: Query broadcast config
     #[command(tag = "AT+CSCB?")]
     QueryBroadcastConfig,
@@ -228,6 +240,7 @@ const MAX_ME_SMS_CAPACITY: usize = 255;
 
 pub struct SmsService {
     quirks: Quirks,
+    clock: Arc<dyn Clock>,
     message_reference: u8,
     messages: BTreeMap<usize, SimSmsMessage>,
     storage1: MessageStorage,
@@ -245,6 +258,7 @@ impl Default for SmsService {
         Self {
             message_reference: 1,
             quirks: Default::default(),
+            clock: Arc::new(SystemClock),
             messages: Default::default(),
             storage1: Default::default(),
             storage2: Default::default(),
@@ -259,8 +273,8 @@ impl Default for SmsService {
 }
 
 impl SmsService {
-    pub fn new(quirks: Quirks) -> Self {
-        Self { quirks, ..Default::default() }
+    pub fn new(quirks: Quirks, clock: Arc<dyn Clock>) -> Self {
+        Self { quirks, clock, ..Default::default() }
     }
     // --- Pure command handlers ---
 
@@ -325,7 +339,8 @@ impl SmsService {
         // TS 27.005 § 3.5.1 reports <mr> only on success; allocate reference once
         // accepted.
         let mr = self.next_message_reference();
-        let processed = crate::pdu::process_outgoing_sms(&raw_pdu, sender, mr);
+        let processed =
+            crate::pdu::process_outgoing_sms(&raw_pdu, sender, mr, &self.clock.now_zoned());
         Ok((
             mr,
             vec![CommandAction::ReceiveSms {
@@ -519,19 +534,23 @@ impl SmsService {
     pub fn handle_broadcast_config(
         &mut self,
         mode: SmsBroadcastMode,
-        mids: QuotedString,
-        dcss: QuotedString,
+        mids: Option<QuotedString>,
+        dcss: Option<QuotedString>,
     ) -> SmsResult {
         self.broadcast_config = BroadcastConfig {
             mode,
-            mids: mids.as_str().to_string(),
-            dcss: dcss.as_str().to_string(),
+            mids: mids.map(|s| s.as_str().to_string()).unwrap_or_default(),
+            dcss: dcss.map(|s| s.as_str().to_string()).unwrap_or_default(),
         };
         Ok(SmsSuccess::new(None))
     }
 
     pub fn handle_query_broadcast_config(&self) -> SmsResult {
         Ok(SmsSuccess::new(Some(SmsResponse::BroadcastConfig(self.broadcast_config.clone()))))
+    }
+
+    pub(crate) fn accepts_broadcast(&self, message_id: u16, dcs: u8) -> bool {
+        self.broadcast_config.accepts(message_id, dcs)
     }
 
     pub fn handle_set_smsc_address(

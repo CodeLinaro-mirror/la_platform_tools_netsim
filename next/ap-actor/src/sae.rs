@@ -1,13 +1,24 @@
 // Copyright 2025-2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::ffi;
 
 /// SAE Finite Field Cryptography (FFC) or Elliptic Curve Cryptography (ECC)
 /// Group
-pub(crate) enum SaeGroup {
+enum SaeGroup {
     EccP256 = 19,
 }
 
@@ -20,11 +31,11 @@ pub struct SaeStateMachine {
     password: Vec<u8>,
 
     // State
-    pub state: SaeState,
-    pub pwe: Vec<u8>, // Password Element
-    pub pmk: Vec<u8>, // Pairwise Master Key
-    pub kck: Vec<u8>, // Key Confirmation Key
-    pub pmkid: Vec<u8>,
+    state: SaeState,
+    pwe: Vec<u8>, // Password Element
+    pmk: Vec<u8>, // Pairwise Master Key
+    kck: Vec<u8>, // Key Confirmation Key
+    pmkid: Vec<u8>,
 
     // Commit Exchange
     rand: Vec<u8>, // Private scalar for Commit
@@ -34,15 +45,15 @@ pub struct SaeStateMachine {
     peer_commit_element: Vec<u8>,
 
     // Verification
-    pub k_pair: Vec<u8>, // Shared key
-    scounter: u16,       // Send Counter
-    rcounter: u16,       // Receive Counter
+    scounter: u16, // Send Counter
+    rcounter: u16, // Receive Counter
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum SaeState {
+enum SaeState {
     Nothing,
     Committed,
+    #[allow(dead_code)]
     Confirmed,
 }
 
@@ -62,7 +73,6 @@ impl SaeStateMachine {
             own_commit_element: Vec::new(),
             peer_commit_scalar: Vec::new(),
             peer_commit_element: Vec::new(),
-            k_pair: Vec::new(),
             scounter: 0, // 802.11-2016 12.4.8.2: Initialize to 0 or 1
             rcounter: 0,
         }
@@ -222,25 +232,23 @@ impl SaeStateMachine {
     }
 
     fn process_commit(&mut self) -> Option<()> {
-        println!("DEBUG: process_commit started");
+        debug!("SAE: process_commit started");
         // K = scalar-op(rand, (elem-op(scalar-op(peer-commit-scalar, PWE),
         // PEER-COMMIT-ELEMENT)))
         // 1. tmp1 = peer_scalar * PWE
         let tmp1 = ffi::EcP256PointMul(&self.pwe, &self.peer_commit_scalar);
         if tmp1.is_empty() {
-            println!(
-                "DEBUG: Failed to compute peer_scalar * PWE. PWE len: {}, Scalar len: {}",
+            error!(
+                "SAE: Failed to compute peer_scalar * PWE. PWE len: {}, Scalar len: {}",
                 self.pwe.len(),
                 self.peer_commit_scalar.len()
             );
-            error!("SAE: Failed to compute peer_scalar * PWE");
             return None;
         }
 
         // 2. tmp2 = tmp1 + peer_element
         let tmp2 = ffi::EcP256PointAdd(&tmp1, &self.peer_commit_element);
         if tmp2.is_empty() {
-            println!("DEBUG: Failed to compute tmp1 + peer_element");
             error!("SAE: Failed to compute tmp1 + peer_element");
             return None;
         }
@@ -248,7 +256,6 @@ impl SaeStateMachine {
         // 3. K_point = rand * tmp2
         let k_point = ffi::EcP256PointMul(&tmp2, &self.rand);
         if k_point.is_empty() {
-            println!("DEBUG: Failed to compute K");
             error!("SAE: Failed to compute K");
             return None;
         }

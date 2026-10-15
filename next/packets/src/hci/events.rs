@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
@@ -163,7 +174,7 @@ pub fn parse_le_advertising_report(mut payload: &[u8]) -> Option<Vec<LeAdvertisi
 
         let (data, after_data) = rest.split_at_checked(data_len)?;
         let (&rssi_u8, next_rest) = after_data.split_first()?;
-        let rssi = rssi_u8 as i8;
+        let rssi = rssi_u8.cast_signed();
 
         reports.push(LeAdvertisingReport {
             event_type: prefix.event_type,

@@ -1,5 +1,16 @@
 # Copyright 2026 The Android Open Source Project
-# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 load("@grpc-java//:java_grpc_library.bzl", "java_grpc_library")
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
@@ -106,6 +117,7 @@ genrule(
         "netsim/casimir_control_grpc.rs",
         "netsim/nfc_service_grpc.rs",
         "netsim/wifi_service_grpc.rs",
+        "netsim/reflection_grpc.rs",
     ],
     cmd = """
         NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(execpath netsim/common.proto)))
@@ -165,6 +177,7 @@ genrule(
         "netsim/casimir_control.rs",
         "netsim/nfc_service.rs",
         "netsim/wifi_service.rs",
+        "netsim/reflection.rs",
         "rootcanal/configuration.rs",
         "lib.rs",
     ],
@@ -227,6 +240,8 @@ rust_library(
         "netsim/nfc_service_grpc.rs",
         "netsim/packet_streamer.rs",
         "netsim/packet_streamer_grpc.rs",
+        "netsim/reflection.rs",
+        "netsim/reflection_grpc.rs",
         "netsim/startup.rs",
         "netsim/stats.rs",
         "netsim/wifi_service.rs",

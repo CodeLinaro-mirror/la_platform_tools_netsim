@@ -1,6 +1,16 @@
 //  Copyright 2021 The Android Open Source Project
 //
-// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! protobuf library for netsim
 #![allow(renamed_and_removed_lints)]
@@ -26,12 +36,29 @@ pub mod nfc_service;
 pub mod nfc_service_grpc;
 pub mod packet_streamer;
 pub mod packet_streamer_grpc;
+pub mod reflection;
+pub mod reflection_grpc;
 pub mod startup;
 pub mod stats;
 pub mod wifi_service;
 pub mod wifi_service_grpc;
 
 pub use casimir_control as casimircontrolserver;
+pub use reflection as grpc_reflection;
+
+/// gRPC reflection v1alpha hierarchy for gRPC compatibility
+#[allow(missing_docs)]
+pub mod grpc {
+    /// gRPC reflection service
+    #[allow(missing_docs)]
+    pub mod reflection {
+        /// v1alpha reflection protocol
+        #[allow(missing_docs)]
+        pub mod v1alpha {
+            pub use crate::reflection::*;
+        }
+    }
+}
 
 /// Google protobuf well-known types wrapper for gRPC compatibility
 #[allow(missing_docs)]

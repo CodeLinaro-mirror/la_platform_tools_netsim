@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     collections::VecDeque,
@@ -267,6 +278,7 @@ fn create_stream_and_sink(
             address: "".to_string(),
             sim_type,
             sim_profile,
+            loopback: false,
         }),
         name: String::new(),
     };
@@ -370,8 +382,8 @@ impl TransportListener for DualFdListener {
     fn local_addr(&self) -> Result<StreamAddress> {
         let total_chips: usize = self.config.devices.iter().map(|d| d.chips.len()).sum();
         Ok(StreamAddress::Fd {
-            in_fd: total_chips as i32,
-            out_fd: Some(self.config.devices.len() as i32),
+            in_fd: i32::try_from(total_chips).unwrap_or(i32::MAX),
+            out_fd: Some(i32::try_from(self.config.devices.len()).unwrap_or(i32::MAX)),
         })
     }
 

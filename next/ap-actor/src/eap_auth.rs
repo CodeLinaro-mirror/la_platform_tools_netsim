@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use netsim_packets::{
     EAP_CODE_REQUEST, EAP_CODE_RESPONSE, EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY, EAPOL_TYPE_PACKET,
@@ -17,26 +28,27 @@ enum EapState {
 }
 
 #[derive(Debug, Clone)]
-pub struct EapAuthenticator {
+pub(crate) struct EapAuthenticator {
     state: EapState,
     identifier: u8,
 }
 
 #[derive(Debug, Clone)]
-pub enum EapOutput {
+pub(crate) enum EapOutput {
     Frame(Vec<u8>),
     Success,
+    #[allow(dead_code)]
     Failure,
 }
 
 impl EapAuthenticator {
-    pub fn new(bssid: MacAddr, sta_addr: MacAddr) -> Self {
+    pub(crate) fn new(bssid: MacAddr, sta_addr: MacAddr) -> Self {
         let _bssid = bssid;
         let _sta_addr = sta_addr;
         Self { state: EapState::Idle, identifier: 0 }
     }
 
-    pub fn start(&mut self) -> Result<Vec<EapOutput>, ApError> {
+    pub(crate) fn start(&mut self) -> Result<Vec<EapOutput>, ApError> {
         self.state = EapState::IdentityReqSent;
         self.identifier = self.identifier.wrapping_add(1);
 
@@ -49,7 +61,7 @@ impl EapAuthenticator {
         Ok(vec![EapOutput::Frame(self.wrap_eap(body))])
     }
 
-    pub fn handle_eap(&mut self, packet: &[u8]) -> Result<Vec<EapOutput>, ApError> {
+    pub(crate) fn handle_eap(&mut self, packet: &[u8]) -> Result<Vec<EapOutput>, ApError> {
         // Packet contains EAPOL Header + EAP Header + Data
         if packet.len() < 4 {
             return Ok(vec![]);

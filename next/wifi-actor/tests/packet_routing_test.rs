@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use bytes::Bytes;
 use netsim_packets::FrameDirection;
@@ -488,7 +499,7 @@ async fn test_open_network_mdns_m2u() {
     }
 }
 
-// Scenario: Verify that non-whitelisted multicast frames (like a placeholder
+// Scenario: Verify that non-allowlisted multicast frames (like a placeholder
 // DHCPOFFER) remain broadcast on an open network.
 #[tokio::test]
 async fn test_open_network_non_mdns_remains_broadcast() {
@@ -512,7 +523,7 @@ async fn test_open_network_non_mdns_remains_broadcast() {
                         let dst_mac = &eth[0..6];
                         tracing::info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
 
-                        // Non-whitelisted multicast must remain broadcast
+                        // Non-allowlisted multicast must remain broadcast
                         if dst_mac == [0xFF; 6] {
                             tracing::info!("CORRECT: Placeholder DHCPOFFER remained BROADCAST on Open Network");
                             return;

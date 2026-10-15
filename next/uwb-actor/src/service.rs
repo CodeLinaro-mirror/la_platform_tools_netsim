@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::sync::{
     Arc,
@@ -22,7 +33,7 @@ use crate::{
     uwb_actor::{MAX_UNICAST_SHORT_MAC, UwbActor, UwbChipState},
 };
 
-const BROADCAST_SHORT_MAC: u16 = 0xFFFF;
+const BROADCAST_SHORT_MAC: u16 = u16::MAX;
 
 impl UwbActor {
     fn is_mac_in_use(&self, mac: MacAddress) -> bool {
@@ -81,21 +92,26 @@ impl UwbActor {
         &mut self,
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
+        tx_count: &Arc<AtomicU64>,
+        rx_count: &Arc<AtomicU64>,
         p2p_tx_count: &Arc<AtomicU64>,
         p2p_rx_count: &Arc<AtomicU64>,
     ) -> Result<(Handle, MacAddress), UwbError> {
         let stats_clone = self.uwb_stats.clone();
+        let tx_stream_clone = tx_count.clone();
         let stream = packet_stream
             .ok_or(UwbError::PacketStreamMissing)?
             .map(move |b| {
                 let v = b.to_vec();
                 parse_and_count_uci_command(&v, &stats_clone);
+                tx_stream_clone.fetch_add(1, Ordering::Relaxed);
                 v
             })
             .boxed();
 
         let tx_clone = p2p_tx_count.clone();
         let rx_clone = p2p_rx_count.clone();
+        let rx_sink_clone = rx_count.clone();
 
         // Pica wants a Sink<Vec<u8>>.
         let stats_clone_sink = self.uwb_stats.clone();
@@ -109,6 +125,7 @@ impl UwbActor {
                     tx_clone.fetch_add(count, Ordering::Relaxed);
                     rx_clone.fetch_add(count, Ordering::Relaxed);
                 }
+                rx_sink_clone.fetch_add(1, Ordering::Relaxed);
                 parse_and_count_uci_data_receive(&v, &stats_clone_sink);
                 async move { Ok(Bytes::from(v)) }
             }));
@@ -170,6 +187,8 @@ impl ActorService for UwbActor {
             return Err(ChipError::InvalidArguments("Missing UWB chip variant".into()).into());
         };
 
+        let tx_count = Arc::new(AtomicU64::new(0));
+        let rx_count = Arc::new(AtomicU64::new(0));
         let p2p_tx_count = Arc::new(AtomicU64::new(0));
         let p2p_rx_count = Arc::new(AtomicU64::new(0));
 
@@ -184,8 +203,15 @@ impl ActorService for UwbActor {
                 self.create_anchor(&uwb.address).await?
             }
             UwbMode::Device => {
-                self.connect_device(packet_stream, packet_sink, &p2p_tx_count, &p2p_rx_count)
-                    .await?
+                self.connect_device(
+                    packet_stream,
+                    packet_sink,
+                    &tx_count,
+                    &rx_count,
+                    &p2p_tx_count,
+                    &p2p_rx_count,
+                )
+                .await?
             }
         };
 
@@ -193,7 +219,14 @@ impl ActorService for UwbActor {
 
         self.chip_states.write().insert(
             handle,
-            UwbChipState { chip: chip.clone(), p2p_tx_count, p2p_rx_count, mac_address },
+            UwbChipState {
+                chip: chip.clone(),
+                tx_count,
+                rx_count,
+                p2p_tx_count,
+                p2p_rx_count,
+                mac_address,
+            },
         );
         self.initial_chips.insert(chip_id, chip);
         self.chip_to_handle.insert(chip_id, handle);
@@ -308,6 +341,10 @@ impl ActorService for UwbActor {
                         radio_stats.id = state.chip.id;
                         radio_stats.name = state.chip.name.clone();
                         radio_stats.kind = netsim_model::RadioKind::Uwb;
+                        radio_stats.tx_count =
+                            state.tx_count.load(std::sync::atomic::Ordering::Relaxed);
+                        radio_stats.rx_count =
+                            state.rx_count.load(std::sync::atomic::Ordering::Relaxed);
                         radio_stats.p2p_tx_count =
                             state.p2p_tx_count.load(std::sync::atomic::Ordering::Relaxed);
                         radio_stats.p2p_rx_count =
@@ -392,6 +429,14 @@ fn count_p2p_ranging_measurements(bytes: &[u8]) -> Result<u64, ()> {
     Err(())
 }
 
+const UCI_MT_SHIFT: u8 = 5;
+const UCI_MT_MASK: u8 = 0x07;
+const UCI_GID_OR_DPF_MASK: u8 = 0x0F;
+const UCI_MT_DATA: u8 = 0;
+const UCI_MT_COMMAND: u8 = 1;
+const UCI_DPF_DATA_MESSAGE_SND: u8 = 1;
+const UCI_DPF_DATA_MESSAGE_RCV: u8 = 2;
+
 fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
     use pica::packets::uci::{
         ControlPacket, ControlPacketChild, DataPacket, DataPacketChild, SessionConfigPacketChild,
@@ -404,10 +449,10 @@ fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
         return;
     };
 
-    let mt = (b0 >> 5) & 0x07;
-    let dpf_or_gid = b0 & 0x0f;
+    let mt = (b0 >> UCI_MT_SHIFT) & UCI_MT_MASK;
+    let dpf_or_gid = b0 & UCI_GID_OR_DPF_MASK;
 
-    if mt == 1 {
+    if mt == UCI_MT_COMMAND {
         if let Ok((packet, _)) = ControlPacket::decode(bytes) {
             match packet.specialize() {
                 Ok(ControlPacketChild::SessionConfigPacket(cfg_pkt)) => {
@@ -453,8 +498,8 @@ fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
                 _ => {}
             }
         }
-    } else if mt == 0
-        && dpf_or_gid == 1
+    } else if mt == UCI_MT_DATA
+        && dpf_or_gid == UCI_DPF_DATA_MESSAGE_SND
         && let Ok((packet, _)) = DataPacket::decode(bytes)
         && let Ok(DataPacketChild::DataMessageSnd(_)) = packet.specialize()
     {
@@ -471,11 +516,11 @@ fn parse_and_count_uci_data_receive(bytes: &[u8], stats: &crate::stats::UwbStats
         return;
     };
 
-    let mt = (b0 >> 5) & 0x07;
-    let dpf = b0 & 0x0f;
+    let mt = (b0 >> UCI_MT_SHIFT) & UCI_MT_MASK;
+    let dpf = b0 & UCI_GID_OR_DPF_MASK;
 
-    if mt == 0
-        && dpf == 2
+    if mt == UCI_MT_DATA
+        && dpf == UCI_DPF_DATA_MESSAGE_RCV
         && let Ok((packet, _)) = DataPacket::decode(bytes)
         && let Ok(DataPacketChild::DataMessageRcv(_)) = packet.specialize()
     {

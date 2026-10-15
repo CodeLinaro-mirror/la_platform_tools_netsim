@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #![allow(unreachable_pub)]
 
@@ -44,7 +55,9 @@ pub use misc_service::NitzTime;
 pub use modem::ModemEvent;
 pub use modem_network_simulator::{ModemNetworkSimulator, NetworkEvent, ScheduledEvent};
 pub use netsim_model::RegistrationStatus;
-pub use pdu::{EncodeError, ParseError, SubmitPdu};
+pub use pdu::{
+    CBS_CONTENT_LEN, CBS_HEADER_LEN, CBS_PDU_LEN, CbsPdu, EncodeError, ParseError, SubmitPdu,
+};
 pub use profiles::{
     SIM_TYPE_CTS, SIM_TYPE_DEFAULT, SIM_TYPE_TEL_ALASKA, XmlProfileError, get_builtin_profile,
     parse_xml_profile,
