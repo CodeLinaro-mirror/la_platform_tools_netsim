@@ -61,8 +61,8 @@ impl RangingEstimator for UwbRangingEstimator {
                     elevation,
                 })
             }
-            Err(e) => {
-                warn!("Failed to estimate ranging measurement: {}", e);
+            Err(error) => {
+                warn!(%error, "Failed to estimate ranging measurement");
                 None
             }
         }
