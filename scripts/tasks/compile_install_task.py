@@ -16,7 +16,6 @@ import stat
 from tasks.task import Task
 from utils import (
     AOSP_ROOT,
-    NETSIM_ROOT,
     binary_extension,
     get_bazel_build_configs,
     get_bazel_path,
@@ -110,15 +109,11 @@ class CompileInstallTask(Task):
         [bazel] + startup_options + ["build"] + targets + build_configs,
         self.env,
         "bazel build",
-        NETSIM_ROOT,
+        AOSP_ROOT,
     )
 
     # Bazel Install
-    search_dir = NETSIM_ROOT / "bazel-bin"
-    if not search_dir.is_dir():
-      legacy_dir = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
-      if legacy_dir.is_dir():
-        search_dir = legacy_dir
+    search_dir = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
     dest_dir = self.out / "distribution" / "emulator"
     logging.info(f"Installing artifacts from {search_dir} to {dest_dir}")
 

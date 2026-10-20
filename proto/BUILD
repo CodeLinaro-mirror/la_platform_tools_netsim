@@ -108,31 +108,17 @@ genrule(
         "netsim/wifi_service_grpc.rs",
     ],
     cmd = """
-        NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(execpath netsim/common.proto)))
-        ROOTCANAL_PROTO_ROOT=$$(dirname $$(dirname $(execpath @rootcanal//:proto/rootcanal/configuration.proto)))
-        # Derive the protobuf root include path dynamically from well-known type protos
-        # by stripping the trailing /google/protobuf/... path, and verify it exists.
-        PROTOBUF_ROOT=""
-        for f in $(execpaths @protobuf//:well_known_type_protos); do
-            case "$$f" in
-                */google/protobuf/*)
-                    PROTOBUF_ROOT="$${f%%/google/protobuf/*}"
-                    break
-                    ;;
-            esac
-        done
-        if [ -z "$$PROTOBUF_ROOT" ] || [ ! -d "$$PROTOBUF_ROOT/google/protobuf" ]; then
-            echo "Error: Unable to resolve valid protobuf root from well-known type protos" >&2
-            exit 1
-        fi
+        NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(location netsim/common.proto)))
+        ROOTCANAL_PROTO_ROOT=$$(dirname $$(dirname $(location @rootcanal//:proto/rootcanal/configuration.proto)))
+        PROTOBUF_ROOT=external/protobuf+/src
 
-        $(execpath @protobuf//:protoc) \\
-            --plugin=protoc-gen-grpc=$(execpath :grpc_rust_plugin) \\
+        $(location @protobuf//:protoc) \\
+            --plugin=protoc-gen-grpc=$(location :grpc_rust_plugin) \\
             --grpc_out=$(@D) \\
             --proto_path=$$NETSIM_PROTO_ROOT \\
             --proto_path=$$ROOTCANAL_PROTO_ROOT \\
             --proto_path=$$PROTOBUF_ROOT \\
-            $(execpaths :netsim_proto_srcs)
+            $(locations :netsim_proto_srcs)
     """,
     tools = [
         ":grpc_rust_plugin",
@@ -169,34 +155,20 @@ genrule(
         "lib.rs",
     ],
     cmd = """
-        NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(execpath netsim/common.proto)))
-        ROOTCANAL_PROTO_ROOT=$$(dirname $$(dirname $(execpath @rootcanal//:proto/rootcanal/configuration.proto)))
-        # Derive the protobuf root include path dynamically from well-known type protos
-        # by stripping the trailing /google/protobuf/... path, and verify it exists.
-        PROTOBUF_ROOT=""
-        for f in $(execpaths @protobuf//:well_known_type_protos); do
-            case "$$f" in
-                */google/protobuf/*)
-                    PROTOBUF_ROOT="$${f%%/google/protobuf/*}"
-                    break
-                    ;;
-            esac
-        done
-        if [ -z "$$PROTOBUF_ROOT" ] || [ ! -d "$$PROTOBUF_ROOT/google/protobuf" ]; then
-            echo "Error: Unable to resolve valid protobuf root from well-known type protos" >&2
-            exit 1
-        fi
+        NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(location netsim/common.proto)))
+        ROOTCANAL_PROTO_ROOT=$$(dirname $$(dirname $(location @rootcanal//:proto/rootcanal/configuration.proto)))
+        PROTOBUF_ROOT=external/protobuf+/src
 
-        $(execpath :build_proto) \\
-            --protoc=$(execpath @protobuf//:protoc) \\
-            --plugin=$(execpath @protobuf-codegen//:protoc-gen-rust) \\
+        $(location :build_proto) \\
+            --protoc=$(location @protobuf//:protoc) \\
+            --plugin=$(location @protobuf-codegen//:protoc-gen-rust) \\
             --out-dir=$(@D) \\
             --proto-path=$$NETSIM_PROTO_ROOT \\
             --proto-path=$$ROOTCANAL_PROTO_ROOT \\
             --proto-path=$$PROTOBUF_ROOT \\
-            $(execpaths :netsim_proto_srcs) \\
-            $(execpath @rootcanal//:proto/rootcanal/configuration.proto) \\
-            --grpc-srcs $(execpaths :netsim_grpc_gen)
+            $(locations :netsim_proto_srcs) \\
+            $(location @rootcanal//:proto/rootcanal/configuration.proto) \\
+            --grpc-srcs $(locations :netsim_grpc_gen)
     """,
     tools = [
         ":build_proto",
@@ -276,30 +248,17 @@ genrule(
 
         # Calculate include paths
         # We need the root of the 'netsim' proto package
-        NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(execpath netsim/common.proto)))
+        NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(location netsim/common.proto)))
 
         # We need the root of 'rootcanal' package
-        ROOTCANAL_PROTO_ROOT=$$(dirname $$(dirname $(execpath @rootcanal//:proto/rootcanal/configuration.proto)))
+        ROOTCANAL_PROTO_ROOT=$$(dirname $$(dirname $(location @rootcanal//:proto/rootcanal/configuration.proto)))
 
-        # Derive the protobuf root include path dynamically from well-known type protos
-        # by stripping the trailing /google/protobuf/... path, and verify it exists.
-        PROTOBUF_ROOT=""
-        for f in $(execpaths @protobuf//:well_known_type_protos); do
-            case "$$f" in
-                */google/protobuf/*)
-                    PROTOBUF_ROOT="$${f%%/google/protobuf/*}"
-                    break
-                    ;;
-            esac
-        done
-        if [ -z "$$PROTOBUF_ROOT" ] || [ ! -d "$$PROTOBUF_ROOT/google/protobuf" ]; then
-            echo "Error: Unable to resolve valid protobuf root from well-known type protos" >&2
-            exit 1
-        fi
+        # Protobuf well known types root
+        PROTOBUF_ROOT="external/protobuf+/src"
 
         for f in $$SRCS; do
-            $(execpath @protobuf//:protoc) \\
-                --plugin=protoc-gen-grpc=$(execpath @grpc//src/compiler:grpc_cpp_plugin) \\
+            $(location @protobuf//:protoc) \\
+                --plugin=protoc-gen-grpc=$(location @grpc//src/compiler:grpc_cpp_plugin) \\
                 --grpc_out=generate_mock_code=true:$(@D) \\
                 --proto_path=$$NETSIM_PROTO_ROOT \\
                 --proto_path=$$ROOTCANAL_PROTO_ROOT \\

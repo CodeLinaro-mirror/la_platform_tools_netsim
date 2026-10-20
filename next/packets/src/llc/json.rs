@@ -95,8 +95,10 @@ impl From<&LlcSnapHeader> for JsonLlc {
             oui: Some(if header.snap.oui == [0, 0, 0] {
                 "0".to_string()
             } else {
-                let [o0, o1, o2] = header.snap.oui;
-                format!("0x{o0:02x}{o1:02x}{o2:02x}")
+                format!(
+                    "0x{:02x}{:02x}{:02x}",
+                    header.snap.oui[0], header.snap.oui[1], header.snap.oui[2]
+                )
             }),
             snap_pid: Some(header.snap.protocol_id.get()),
             snap_pid_str: None,
@@ -136,20 +138,20 @@ impl TryFrom<&JsonLlc> for LlcSnapHeader {
             .snap_pid
             .ok_or_else(|| JsonError::Conversion("Missing llc.type for SNAP".to_string()))?;
 
-        let Some(oui_hex_part) = oui_str.strip_prefix("0x") else {
+        if !oui_str.starts_with("0x") || oui_str.len() != 8 {
             return Err(JsonError::HexParse(format!(
-                "Invalid OUI format: {oui_str}, expected 0xXXXXXX"
-            )));
-        };
-
-        if oui_hex_part.len() != 6 || oui_hex_part.starts_with('+') {
-            return Err(JsonError::HexParse(format!(
-                "Invalid OUI format: {oui_str}, expected 0xXXXXXX"
+                "Invalid OUI format: {}, expected 0xXXXXXX",
+                oui_str
             )));
         }
 
-        let [_, o0, o1, o2] = u32::from_str_radix(oui_hex_part, 16)?.to_be_bytes();
-        let snap_header = SnapHeader::new([o0, o1, o2], snap_pid_val);
+        let mut oui = [0u8; 3];
+        let oui_hex_part = &oui_str[2..]; // Skip "0x"
+        oui[0] = u8::from_str_radix(&oui_hex_part[0..2], 16)?;
+        oui[1] = u8::from_str_radix(&oui_hex_part[2..4], 16)?;
+        oui[2] = u8::from_str_radix(&oui_hex_part[4..6], 16)?;
+
+        let snap_header = SnapHeader::new(oui, snap_pid_val);
 
         Ok(LlcSnapHeader { llc: llc_header, snap: snap_header })
     }

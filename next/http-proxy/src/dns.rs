@@ -33,8 +33,7 @@ impl CursorExt for Cursor<&[u8]> {
     fn read_u8(&mut self) -> std::io::Result<u8> {
         let mut buf = [0; 1];
         self.read_exact(&mut buf)?;
-        let [byte] = buf;
-        Ok(byte)
+        Ok(buf[0])
     }
 
     fn read_u16(&mut self) -> std::io::Result<u16> {
@@ -129,7 +128,7 @@ impl Message {
     }
 }
 
-pub(crate) fn parse_answers(bytes: &[u8]) -> Result<Vec<(IpAddr, String)>> {
+pub fn parse_answers(bytes: &[u8]) -> Result<Vec<(IpAddr, String)>> {
     let mut cursor = Cursor::new(bytes);
     let msg = Message::parse(&mut cursor)?;
     let mut responses = Vec::with_capacity(msg.answers.len());
@@ -422,7 +421,7 @@ impl ResourceData {
 type Result<T> = core::result::Result<T, DnsError>;
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum DnsError {
+pub enum DnsError {
     #[error("Response expected")]
     ResponseExpected,
     #[error("Standard query expected")]
@@ -498,8 +497,7 @@ impl NamePart {
         let end = size as usize;
         let buffer_ref: &[u8] = cursor.get_ref();
         let start = cursor.position() as usize;
-        let label_bytes = buffer_ref.get(start..start + end).ok_or(DnsError::InvalidLength)?;
-        let label = str::from_utf8(label_bytes)?.to_string();
+        let label = str::from_utf8(&buffer_ref[start..start + end])?.to_string();
         cursor.seek(SeekFrom::Current(end as i64))?;
         Ok(NamePart::Label(label))
     }

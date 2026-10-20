@@ -26,7 +26,7 @@ pub enum BluetoothError {
 
 impl BluetoothError {
     /// Helper to create an InvalidArguments error.
-    pub(crate) fn invalid_arg(msg: impl Into<String>) -> Self {
+    pub fn invalid_arg(msg: impl Into<String>) -> Self {
         Self::Chip(ChipError::InvalidArguments(Box::from(msg.into())))
     }
 }

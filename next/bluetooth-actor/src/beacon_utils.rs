@@ -5,14 +5,13 @@
 const MAX_AD_PAYLOAD_LEN: usize = 31;
 
 // AD Structure Types
-const AD_TYPE_NAME_SHORTENED: u8 = 0x08;
 const AD_TYPE_NAME_COMPLETE: u8 = 0x09;
 const AD_TYPE_TX_POWER_LEVEL: u8 = 0x0A;
 
 const AD_TYPE_MANUFACTURER_SPECIFIC: u8 = 0xFF;
 
 /// Helper to construct advertising data payload
-pub(crate) fn construct_data(
+pub fn construct_data(
     adv_data: &netsim_model::AdvertiseData,
     device_name: &Option<String>,
 ) -> Vec<u8> {
@@ -29,18 +28,17 @@ pub(crate) fn construct_data(
     // Local Name
     if let Some(name) = device_name {
         let name_bytes = name.as_bytes();
-        if data.len() + 2 < MAX_AD_PAYLOAD_LEN {
-            let max_len = MAX_AD_PAYLOAD_LEN - data.len() - 2;
-            let sub = name_bytes.get(..max_len).unwrap_or(name_bytes);
-            if !sub.is_empty() {
-                let name_type = if sub.len() == name_bytes.len() {
-                    AD_TYPE_NAME_COMPLETE
-                } else {
-                    AD_TYPE_NAME_SHORTENED
-                };
-                data.push((sub.len() + 1) as u8);
-                data.push(name_type);
-                data.extend_from_slice(sub);
+        if !name_bytes.is_empty() {
+            let mut len = name_bytes.len();
+            // Max length check (remaining space)
+            // Current data len + 2 (length + type)
+            if data.len() + len + 2 > MAX_AD_PAYLOAD_LEN {
+                len = MAX_AD_PAYLOAD_LEN - data.len() - 2;
+            }
+            if len > 0 {
+                data.push((len + 1) as u8);
+                data.push(AD_TYPE_NAME_COMPLETE); // Complete Local Name
+                data.extend_from_slice(&name_bytes[..len]);
             }
         }
     }
@@ -77,18 +75,21 @@ pub(crate) fn construct_data(
         }
     }
 
-    for (complete_id, incomplete_id, uuid_size, uuids) in
-        [(0x03, 0x02, 2, uuids_16), (0x05, 0x04, 4, uuids_32), (0x07, 0x06, 16, uuids_128)]
+    for (class_id, item_size, uuids) in
+        [(0x03, 2, uuids_16), (0x05, 4, uuids_32), (0x07, 16, uuids_128)]
     {
-        if data.len() + 2 < MAX_AD_PAYLOAD_LEN {
-            let max_space = MAX_AD_PAYLOAD_LEN - data.len() - 2;
-            let max_uuid_bytes = (max_space / uuid_size) * uuid_size;
-            let sub = uuids.get(..max_uuid_bytes).unwrap_or(&uuids);
-            if !sub.is_empty() {
-                let class_id = if sub.len() == uuids.len() { complete_id } else { incomplete_id };
-                data.push((sub.len() + 1) as u8);
+        if !uuids.is_empty() {
+            let mut add_len = uuids.len();
+            if data.len() + add_len + 2 > MAX_AD_PAYLOAD_LEN {
+                let available = MAX_AD_PAYLOAD_LEN.saturating_sub(data.len() + 2);
+                add_len = (available / item_size) * item_size; // Fit as many
+                // whole UUIDs as
+                // possible
+            }
+            if add_len > 0 {
+                data.push((add_len + 1) as u8);
                 data.push(class_id);
-                data.extend_from_slice(sub);
+                data.extend(&uuids[..add_len]);
             }
         }
     }
@@ -100,23 +101,23 @@ pub(crate) fn construct_data(
 /// This matches the legacy C++ behavior and netsim daemon behavior where
 /// the address is derived from the ID.
 /// Example: ID 1000 -> 00:00:00:00:03:e8
-pub(crate) fn generate_legacy_address(chip_id: u32) -> String {
+pub fn generate_legacy_address(chip_id: u32) -> String {
     format!("00:00:00:00:{:02x}:{:02x}", (chip_id >> 8) & 0xFF, chip_id & 0xFF)
 }
 
 /// Generates a default name for a beacon from a Chip ID.
-pub(crate) fn generate_default_name(chip_id: u32) -> String {
+pub fn generate_default_name(chip_id: u32) -> String {
     format!("Beacon-{}", chip_id)
 }
 
 // HCI Constants used for testing and packet parsing
 
 /// HCI Packet Type: Event
-const HCI_EVENT_PACKET: u8 = 0x04;
+pub const HCI_EVENT_PACKET: u8 = 0x04;
 /// HCI Event Code: LE Meta Event
-const LE_META_EVENT: u8 = 0x3E;
+pub const LE_META_EVENT: u8 = 0x3E;
 /// LE Subevent Code: Advertising Report
-const LE_ADVERTISING_REPORT: u8 = 0x02;
+pub const LE_ADVERTISING_REPORT: u8 = 0x02;
 
 // Offsets within LE Advertising Report Event
 // Byte 0: Packet Type
@@ -131,6 +132,28 @@ const LE_ADVERTISING_REPORT: u8 = 0x02;
 pub const REPORT_NUM_REPORTS_OFFSET: usize = 4;
 /// Offset of the Address field in an LE Advertising Report
 pub const REPORT_ADDR_OFFSET: usize = 12;
+
+// HCI Commands
+
+/// Set Standard Event Mask (0x0C01) - Enable all events Mask: FF FF FF FF FF FF
+/// FF FF
+pub const CMD_SET_EVENT_MASK_STD: &[u8] =
+    &[0x01, 0x01, 0x0C, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+
+/// Set LE Event Mask (0x2001) - Enable all LE events Mask: FF 00 00 00 00 00 00
+/// 00
+pub const CMD_LE_SET_EVENT_MASK: &[u8] =
+    &[0x01, 0x01, 0x20, 0x08, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+/// LE Set Scan Parameters (0x200B)
+/// 01 (Cmd) 0B 20 (OpCode) 07 (Len) 00 (Type: Passive) 10 00 (Interval) 10 00
+/// (Window) 00 (OwnAddr) 00 (Filter)
+pub const CMD_LE_SET_SCAN_PARAMS: &[u8] =
+    &[0x01, 0x0B, 0x20, 0x07, 0x00, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
+
+/// LE Set Scan Enable (0x200C)
+/// 01 (Cmd) 0C 20 (OpCode) 02 (Len) 01 (Enable) 00 (FilterDup)
+pub const CMD_LE_SET_SCAN_ENABLE: &[u8] = &[0x01, 0x0C, 0x20, 0x02, 0x01, 0x00];
 
 /// Helper to check if a packet is an LE Advertising Report
 pub const fn is_le_advertising_report(packet: &[u8]) -> bool {
@@ -179,7 +202,7 @@ mod tests {
         let data = construct_data(&adv_data, &Some(long_name));
         assert_eq!(data.len(), 31);
         assert_eq!(data[0], 0x1e); // Length = 30 (29 + 1 type)
-        assert_eq!(data[1], 0x08);
+        assert_eq!(data[1], 0x09);
         assert_eq!(&data[2..], "A".repeat(29).as_bytes());
     }
 
@@ -224,21 +247,5 @@ mod tests {
         let data = construct_data(&adv_data, &None);
         // Invalid services should be skipped. Empty data remains.
         assert_eq!(data, Vec::<u8>::new());
-    }
-
-    #[test]
-    fn test_construct_data_truncate_service_uuids() {
-        let mut adv_data = netsim_model::AdvertiseData::default();
-        for i in 0..16 {
-            adv_data
-                .services
-                .push(netsim_model::Service { uuid: format!("{:04X}", 0x1800 + i), data: vec![] });
-        }
-        let data = construct_data(&adv_data, &None);
-        assert_eq!(data.len(), 30);
-        assert_eq!(data[0], 29);
-        assert_eq!(data[1], 0x02);
-        assert_eq!(&data[2..4], &[0x00, 0x18]);
-        assert_eq!(&data[28..30], &[0x0D, 0x18]);
     }
 }

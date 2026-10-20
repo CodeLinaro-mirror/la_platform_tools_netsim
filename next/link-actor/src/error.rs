@@ -1,4 +1,4 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) use link_api::LinkError;
+pub use link_api::LinkError;

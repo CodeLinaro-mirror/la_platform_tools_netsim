@@ -22,7 +22,6 @@ netsim_rust_library(
         "@anyhow",
         "@base64",
         "@bytes",
-        "@form_urlencoded",
         "@futures",
         "@http",
         "@httparse",

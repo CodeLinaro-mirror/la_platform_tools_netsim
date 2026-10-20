@@ -3,15 +3,15 @@
 
 use std::{io, path::Path};
 
-use crate::writer::{CaptureWriter, DataLinkType, PcapWriter};
+use crate::writer::{CaptureWriter, DLT_FIRA_UCI, PcapWriter};
 
 /// PCAP writer for UWB UCI packets.
-pub(crate) struct UwbPcapWriter;
+pub struct UwbPcapWriter;
 
 impl UwbPcapWriter {
-    /// Wraps [`PcapWriter`] with [`DataLinkType::FiraUci`] as the format.
+    /// Wraps [`PcapWriter`] with [`DLT_FIRA_UCI`] as the format.
     #[allow(clippy::new_ret_no_self)]
-    pub(crate) async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
-        Ok(Box::new(PcapWriter::new(path, DataLinkType::FiraUci).await?))
+    pub async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
+        Ok(Box::new(PcapWriter::new(path, DLT_FIRA_UCI).await?))
     }
 }

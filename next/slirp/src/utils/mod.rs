@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod clock;
-pub mod lru;
 pub mod timers;
 
 #[cfg(test)]

@@ -3,7 +3,6 @@
 
 use grpcio::CallOption;
 use netsim_proto::{access_point, access_point_grpc::AccessPointServiceClient};
-use netsim_rest_api::NetsimRestClient;
 use protobuf::MessageField;
 
 use super::{
@@ -12,18 +11,21 @@ use super::{
 };
 use crate::error::Result;
 
-pub(crate) fn execute(
-    cmd: &ApCommand,
-    rest_client: &NetsimRestClient,
-    client: &AccessPointServiceClient,
-    verbose: bool,
-) -> Result<()> {
+pub fn execute(cmd: &ApCommand, client: &AccessPointServiceClient, verbose: bool) -> Result<()> {
     match cmd {
         ApCommand::List(args) => {
-            crate::repeat(args.continuous, || {
-                print_list_ap_response(&rest_client.get_aps().send_blocking()?, verbose);
-                Ok(())
-            })?;
+            if args.continuous {
+                loop {
+                    let req = access_point::ListAccessPointsRequest::new();
+                    let res = client.list_opt(&req, CallOption::default())?;
+                    print_list_ap_response(&res, verbose);
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            } else {
+                let req = access_point::ListAccessPointsRequest::new();
+                let res = client.list_opt(&req, CallOption::default())?;
+                print_list_ap_response(&res, verbose);
+            }
         }
         ApCommand::Create(args) => {
             let mut ap = access_point::AccessPoint::new();

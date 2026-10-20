@@ -3,7 +3,9 @@
 
 use std::time::Duration;
 
-use bluetooth_actor::{REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET, is_le_advertising_report};
+use bluetooth_actor::beacon_utils::{
+    REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET, is_le_advertising_report,
+};
 use netsim_model::Position;
 use netsim_packets::{
     Enable, LeScanType, LeScanningFilterPolicy, LeSetEventMask, LeSetScanEnable,

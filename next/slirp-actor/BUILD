@@ -10,9 +10,14 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "slirp_actor",
     edition = "2024",
-    test_deps = [
-        "@zerocopy",
-    ],
+    select_deps = select({
+        "@platforms//os:windows": [],
+        "//conditions:default": [
+            "@etherparse",
+            "@socket2",
+        ],
+    }),
+    test_deps = [],
     deps = [
         "//next/actor-framework",
         "//next/http-proxy",
@@ -20,7 +25,6 @@ netsim_rust_library(
         "//next/model",
         "//next/packets",
         "//next/slirp",
-        "//next/slirp/host:slirp-host",
         "@bytes",
         "@futures",
         "@thiserror",

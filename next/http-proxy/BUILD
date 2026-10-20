@@ -13,15 +13,13 @@ netsim_rust_library(
     edition = "2024",
     enable_integration_test = False,
     deps = [
-        "//next/packets",
-        "//next/slirp",
+        "//next/libslirp-rs",
         "@base64",
         "@bytes",
-        "@parking_lot",
-        "@percent-encoding",
+        "@etherparse",
+        "@regex",
         "@thiserror",
         "@tokio",
         "@tracing",
-        "@url",
     ],
 )

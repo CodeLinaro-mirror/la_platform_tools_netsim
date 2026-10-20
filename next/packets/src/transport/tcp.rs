@@ -35,41 +35,6 @@ pub struct TcpHeader {
     pub urgent_ptr: U16<NetworkEndian>,
 }
 
-/// TCP Option Kinds.
-pub mod option_kind {
-    pub const EOL: u8 = 0;
-    pub const NOP: u8 = 1;
-    pub const MSS: u8 = 2;
-    pub const WS: u8 = 3;
-    pub const SACK_PERMITTED: u8 = 4;
-}
-
-/// TCP MSS Option.
-#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
-#[repr(C)]
-pub struct TcpOptionMss {
-    pub kind: u8,
-    pub len: u8,
-    pub mss: U16<NetworkEndian>,
-}
-
-/// TCP Window Scale Option.
-#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
-#[repr(C)]
-pub struct TcpOptionWindowScale {
-    pub kind: u8,
-    pub len: u8,
-    pub shift: u8,
-}
-
-/// TCP SACK Permitted Option.
-#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
-#[repr(C)]
-pub struct TcpOptionSackPermitted {
-    pub kind: u8,
-    pub len: u8,
-}
-
 /// TCP flags.
 pub mod flags {
     pub const FIN: u16 = 1;
@@ -85,7 +50,10 @@ impl TcpHeader {
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, TcpHeader>> {
         let (header, _) = Ref::<&[u8], TcpHeader>::from_prefix(bytes).ok()?;
         let header_len = header.header_length();
-        Some((header, bytes.get(header_len..)?))
+        if bytes.len() < header_len {
+            return None;
+        }
+        Some((header, &bytes[header_len..]))
     }
 
     /// Returns the Data Offset, which is the size of the TCP header in 32-bit
@@ -141,13 +109,11 @@ impl TcpHeader {
 
         // Pseudo-header
         // Source IP
-        for &chunk in src_ip.as_chunks::<2>().0 {
-            sum += u32::from(u16::from_be_bytes(chunk));
-        }
+        sum += u16::from_be_bytes([src_ip[0], src_ip[1]]) as u32;
+        sum += u16::from_be_bytes([src_ip[2], src_ip[3]]) as u32;
         // Dest IP
-        for &chunk in dst_ip.as_chunks::<2>().0 {
-            sum += u32::from(u16::from_be_bytes(chunk));
-        }
+        sum += u16::from_be_bytes([dst_ip[0], dst_ip[1]]) as u32;
+        sum += u16::from_be_bytes([dst_ip[2], dst_ip[3]]) as u32;
         // Zero + Protocol (6 for TCP)
         sum += 6;
         // TCP Length (Header + Data)
@@ -156,21 +122,21 @@ impl TcpHeader {
 
         // TCP Header
         let header_bytes = self.as_bytes();
-        let (header_chunks, header_remainder) = header_bytes.as_chunks::<2>();
-        for &chunk in header_chunks {
-            sum += u32::from(u16::from_be_bytes(chunk));
-        }
-        if let &[last] = header_remainder {
-            sum += (last as u32) << 8;
+        for chunk in header_bytes.chunks(2) {
+            if chunk.len() == 2 {
+                sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
+            } else {
+                sum += (chunk[0] as u32) << 8;
+            }
         }
 
         // Payload
-        let (payload_chunks, payload_remainder) = payload.as_chunks::<2>();
-        for &chunk in payload_chunks {
-            sum += u32::from(u16::from_be_bytes(chunk));
-        }
-        if let &[last] = payload_remainder {
-            sum += (last as u32) << 8;
+        for chunk in payload.chunks(2) {
+            if chunk.len() == 2 {
+                sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
+            } else {
+                sum += (chunk[0] as u32) << 8;
+            }
         }
 
         while (sum >> 16) != 0 {

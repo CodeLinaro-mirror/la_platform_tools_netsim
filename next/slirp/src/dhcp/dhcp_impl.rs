@@ -16,13 +16,13 @@ use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned};
 
 use crate::{Config, SlirpResponse, clock::Clock, dns::create_dns_search_option};
 
-pub(crate) const DHCP_MAGIC_COOKIE: [u8; 4] = [99, 130, 83, 99];
+pub const DHCP_MAGIC_COOKIE: [u8; 4] = [99, 130, 83, 99];
 const LEASE_TIME: Duration = Duration::from_secs(24 * 3600);
 const MAX_LEASES: usize = 16;
 
 #[derive(FromBytes, KnownLayout, Unaligned, Immutable, IntoBytes)]
 #[repr(C)]
-pub(crate) struct DhcpPacket {
+pub struct DhcpPacket {
     pub op: u8,
     pub htype: u8,
     pub hlen: u8,
@@ -41,16 +41,16 @@ pub(crate) struct DhcpPacket {
     pub options: [u8; 308],
 }
 
-pub(crate) type DhcpPacketRef<'a> = Ref<&'a [u8], DhcpPacket>;
+pub type DhcpPacketRef<'a> = Ref<&'a [u8], DhcpPacket>;
 
 impl DhcpPacket {
-    pub(crate) fn parse(bytes: &[u8]) -> Option<(DhcpPacketRef<'_>, &[u8])> {
+    pub fn parse(bytes: &[u8]) -> Option<(DhcpPacketRef<'_>, &[u8])> {
         Ref::from_prefix(bytes).ok()
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub(crate) enum DhcpMessageType {
+pub enum DhcpMessageType {
     Discover = 1,
     Offer = 2,
     Request = 3,
@@ -133,16 +133,17 @@ impl DhcpManager {
                     _ => {}
                 }
             } else if dhcp_packet.op == 1 {
-                // Legacy BOOTP request! (op == 1 (BootRequest), but no DHCP
-                // Message Type option!)
+                // Legacy BOOTP request! (op == 1 (BootRequest), but no DHCP Message Type
+                // option!)
                 self.handle_bootp_request(responses, config, clock, &dhcp_packet);
             }
         }
     }
 
     fn get_mac_addr(packet: &DhcpPacket) -> MacAddr {
-        let [a, b, c, d, e, f, ..] = packet.chaddr;
-        MacAddr::from([a, b, c, d, e, f])
+        let mut mac_bytes = [0u8; 6];
+        mac_bytes.copy_from_slice(&packet.chaddr[..6]);
+        MacAddr { bytes: mac_bytes }
     }
 
     pub(super) fn find_lease_by_mac(&self, mac: &MacAddr, clock: &dyn Clock) -> Option<&DhcpLease> {
@@ -262,10 +263,7 @@ impl DhcpManager {
         }
         options.push(255); // End option
 
-        let Some(dest) = ack_packet.options.get_mut(..options.len()) else {
-            return;
-        };
-        dest.copy_from_slice(&options);
+        ack_packet.options[..options.len()].copy_from_slice(&options);
         self.send_packet(responses, config, &ack_packet);
     }
 
@@ -343,61 +341,64 @@ impl DhcpManager {
         }
         options.push(255); // End option
 
-        let Some(dest) = reply_packet.options.get_mut(..options.len()) else {
-            return;
-        };
-        dest.copy_from_slice(&options);
+        reply_packet.options[..options.len()].copy_from_slice(&options);
 
         // Copy boot file and tftp server name to legacy header fields
         if let Some(boot_file) = &config.boot_file {
-            let max_len = reply_packet.file.len().saturating_sub(1);
-            for (dst, &src) in reply_packet.file.iter_mut().take(max_len).zip(boot_file.as_bytes())
-            {
-                *dst = src;
-            }
+            let bytes = boot_file.as_bytes();
+            let len = std::cmp::min(bytes.len(), reply_packet.file.len() - 1);
+            reply_packet.file[..len].copy_from_slice(&bytes[..len]);
         }
-        if let Some(sname) = &config.tftp_server_name {
-            let max_len = reply_packet.sname.len().saturating_sub(1);
-            for (dst, &src) in reply_packet.sname.iter_mut().take(max_len).zip(sname.as_bytes()) {
-                *dst = src;
-            }
+        if let Some(tftp_server_name) = &config.tftp_server_name {
+            let bytes = tftp_server_name.as_bytes();
+            let len = std::cmp::min(bytes.len(), reply_packet.sname.len() - 1);
+            reply_packet.sname[..len].copy_from_slice(&bytes[..len]);
         }
 
         self.send_packet(responses, config, &reply_packet);
     }
 
     fn find_dhcp_option(options: &[u8], code: u8) -> Option<&[u8]> {
-        let mut rem = options;
-        while let Some((&opt_code, rest)) = rem.split_first() {
-            if opt_code == 255 {
+        let mut i = 0;
+        while i < options.len() {
+            let option = options[i];
+            if option == 255 {
                 break;
             }
-            if opt_code == 0 {
-                rem = rest;
+            if option == 0 {
+                i += 1;
                 continue;
             }
-            let (&opt_len, payload) = rest.split_first()?;
-            let opt_len = opt_len as usize;
-            let (opt_val, next_rem) = payload.split_at_checked(opt_len)?;
-            if opt_code == code {
-                return Some(opt_val);
+            if option == code && i + 1 < options.len() {
+                let len = options[i + 1] as usize;
+                if i + 2 + len <= options.len() {
+                    return Some(&options[i + 2..i + 2 + len]);
+                }
             }
-            rem = next_rem;
+            if i + 1 < options.len() {
+                i += options[i + 1] as usize + 2;
+            } else {
+                break;
+            }
         }
         None
     }
 
     fn get_message_type(options: &[u8]) -> Option<DhcpMessageType> {
         let opt = Self::find_dhcp_option(options, 53)?;
-        match *opt {
-            [1] => Some(DhcpMessageType::Discover),
-            [2] => Some(DhcpMessageType::Offer),
-            [3] => Some(DhcpMessageType::Request),
-            [5] => Some(DhcpMessageType::Ack),
-            [6] => Some(DhcpMessageType::Nak),
-            [7] => Some(DhcpMessageType::Release),
-            [8] => Some(DhcpMessageType::Inform),
-            _ => None,
+        if opt.len() == 1 {
+            match opt[0] {
+                1 => Some(DhcpMessageType::Discover),
+                2 => Some(DhcpMessageType::Offer),
+                3 => Some(DhcpMessageType::Request),
+                5 => Some(DhcpMessageType::Ack),
+                6 => Some(DhcpMessageType::Nak),
+                7 => Some(DhcpMessageType::Release),
+                8 => Some(DhcpMessageType::Inform),
+                _ => None,
+            }
+        } else {
+            None
         }
     }
 
@@ -464,10 +465,7 @@ impl DhcpManager {
         }
         options.push(255); // End option
 
-        let Some(dest) = reply_packet.options.get_mut(..options.len()) else {
-            return;
-        };
-        dest.copy_from_slice(&options);
+        reply_packet.options[..options.len()].copy_from_slice(&options);
         self.send_packet(responses, config, &reply_packet);
     }
 
@@ -534,10 +532,7 @@ impl DhcpManager {
         options.extend_from_slice(&[53, 1, DhcpMessageType::Nak as u8]);
         options.push(255); // End option
 
-        let Some(dest) = nak_packet.options.get_mut(..options.len()) else {
-            return;
-        };
-        dest.copy_from_slice(&options);
+        nak_packet.options[..options.len()].copy_from_slice(&options);
         self.send_packet(responses, config, &nak_packet);
     }
 
@@ -563,19 +558,13 @@ impl DhcpManager {
             Ipv4Builder::new(ipv4_header_slice, 17, config.host_ipv4, [255; 4].into()).unwrap();
 
         let mut udp_builder = UdpPacketBuilder::new(ipv4_payload, 67, 68).unwrap();
-        let Some(dest) = udp_builder.payload_mut().get_mut(..dhcp_len) else {
-            return;
-        };
-        dest.copy_from_slice(dhcp_packet.as_bytes());
+        udp_builder.payload_mut()[..dhcp_len].copy_from_slice(dhcp_packet.as_bytes());
         udp_builder.payload_len(dhcp_len);
         let udp_len = udp_builder.build();
         ipv4_builder.payload_len(udp_len);
         ipv4_builder.build();
 
         let packet_len = eth_header_len + ipv4_header_len + udp_len;
-        let Some(packet_bytes) = buffer.get(..packet_len) else {
-            return;
-        };
-        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(packet_bytes)));
+        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer[..packet_len])));
     }
 }

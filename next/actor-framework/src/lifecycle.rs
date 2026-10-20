@@ -12,6 +12,8 @@ use tracing::debug;
 
 use crate::{ActorService, DynContext};
 
+pub type StreamMessage = Bytes;
+
 /// Defines the lifecycle hooks for an actor's shared state (Context).
 ///
 /// This trait corresponds to the **State Holder** layer
@@ -46,7 +48,7 @@ pub trait ActorLifecycle: ActorService {
     fn on_stream(
         &mut self,
         _id: Self::Id,
-        _message: Bytes,
+        _message: StreamMessage,
         _ctx: &mut DynContext<Self>,
     ) -> impl std::future::Future<Output = ()> + Send {
         futures::future::ready(())

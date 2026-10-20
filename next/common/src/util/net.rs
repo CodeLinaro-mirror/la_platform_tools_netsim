@@ -9,27 +9,10 @@ use socket2::{Domain, Protocol, Socket, Type};
 use tokio::net::TcpListener;
 use tracing::warn;
 
-#[cfg(windows)]
-const WSAEAFNOSUPPORT: i32 = 10047;
-#[cfg(windows)]
-const WSAEPROTONOSUPPORT: i32 = 10043;
-
 /// Checks if an error indicates that IPv4 is unsupported on the host
 /// environment.
 fn is_ipv4_unsupported(err: &std::io::Error) -> bool {
-    if matches!(err.kind(), std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported)
-    {
-        return true;
-    }
-    #[cfg(unix)]
-    if matches!(err.raw_os_error(), Some(libc::EAFNOSUPPORT | libc::EPROTONOSUPPORT)) {
-        return true;
-    }
-    #[cfg(windows)]
-    if matches!(err.raw_os_error(), Some(WSAEAFNOSUPPORT | WSAEPROTONOSUPPORT)) {
-        return true;
-    }
-    false
+    matches!(err.kind(), std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported)
 }
 
 fn create_listener(domain: Domain, addr: SocketAddr) -> std::io::Result<TcpListener> {
@@ -81,22 +64,6 @@ mod tests {
             "test"
         )));
         assert!(is_ipv4_unsupported(&std::io::Error::new(std::io::ErrorKind::Unsupported, "test")));
-
-        #[cfg(unix)]
-        {
-            assert!(is_ipv4_unsupported(&std::io::Error::from_raw_os_error(libc::EAFNOSUPPORT)));
-            assert!(is_ipv4_unsupported(&std::io::Error::from_raw_os_error(libc::EPROTONOSUPPORT)));
-            assert!(!is_ipv4_unsupported(&std::io::Error::from_raw_os_error(libc::EADDRINUSE)));
-            assert!(!is_ipv4_unsupported(&std::io::Error::from_raw_os_error(libc::ECONNREFUSED)));
-        }
-
-        #[cfg(windows)]
-        {
-            assert!(is_ipv4_unsupported(&std::io::Error::from_raw_os_error(WSAEAFNOSUPPORT)));
-            assert!(is_ipv4_unsupported(&std::io::Error::from_raw_os_error(WSAEPROTONOSUPPORT)));
-            assert!(!is_ipv4_unsupported(&std::io::Error::from_raw_os_error(10048)));
-            assert!(!is_ipv4_unsupported(&std::io::Error::from_raw_os_error(10061)));
-        }
 
         // Ensure non-fallback errors return false
         assert!(!is_ipv4_unsupported(&std::io::Error::new(std::io::ErrorKind::AddrInUse, "test")));

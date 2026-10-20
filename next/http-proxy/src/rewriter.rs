@@ -88,10 +88,12 @@ async fn rewrite_request_to_absolute_form<R: AsyncRead + Unpin>(
     // --- Rewrite if Host is present, otherwise pass through ---
     let final_request_line = if let Some(host) = host {
         let request_parts: Vec<&str> = request_line.split_whitespace().collect();
-        let [method, path, version] = match request_parts.as_slice() {
-            [m, p, v] => [*m, *p, *v],
-            _ => return Err(Error::MalformedRequestLine(request_line.trim_end().to_string())),
-        };
+        if request_parts.len() != 3 {
+            return Err(Error::MalformedRequestLine(request_line.trim_end().to_string()));
+        }
+        let method = request_parts[0];
+        let path = request_parts[1];
+        let version = request_parts[2];
         let absolute_uri = format!("http://{}{}", host, path);
         format!("{} {} {}\r\n", method, absolute_uri, version)
     } else {
@@ -124,12 +126,12 @@ async fn rewrite_request_to_absolute_form<R: AsyncRead + Unpin>(
 ///
 /// # Arguments
 /// * `destination_addr`: The `SocketAddr` of the final destination server.
-pub(crate) async fn connect_with_header_rewrite(
+pub async fn connect_with_header_rewrite(
     proxy_addr: SocketAddr,
     auth_header: Option<String>,
 ) -> Result<TcpStream> {
-    // If a proxy is specified, connect there. Otherwise, connect to the
-    // original destination.
+    // If a proxy is specified, connect there. Otherwise, connect to the original
+    // destination.
     let connect_addr = proxy_addr;
 
     // 1. Connect to the next hop (either proxy or final destination).
@@ -145,8 +147,7 @@ pub(crate) async fn connect_with_header_rewrite(
             let (pipe_server_stream, _client_addr) = listener.accept().await?;
             let mut reader = BufReader::new(pipe_server_stream);
 
-            // Peek at the buffer to see if there's data to read without
-            // consuming it.
+            // Peek at the buffer to see if there's data to read without consuming it.
             let buffer = reader.fill_buf().await?;
             if buffer.is_empty() {
                 return Ok::<_, Error>(());

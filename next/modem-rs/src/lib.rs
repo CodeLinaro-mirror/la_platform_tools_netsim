@@ -1,15 +1,11 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(unreachable_pub)]
-
 pub mod apdu;
 mod call_service;
-mod capabilities;
 pub mod config;
-
-pub(crate) use capabilities::{CardState, RadioAdmission, SmsStore};
 pub mod constants;
+mod cuttlefish;
 mod data_service;
 mod metrics;
 mod misc_service;
@@ -29,8 +25,6 @@ pub mod time;
 pub mod xml_profile;
 
 pub mod test_utils;
-#[cfg(test)]
-mod tests;
 mod types; // Test utils might need to be public for integration tests
 
 // The Public API
@@ -49,6 +43,4 @@ pub use profiles::{
     SIM_TYPE_CTS, SIM_TYPE_DEFAULT, SIM_TYPE_TEL_ALASKA, XmlProfileError, get_builtin_profile,
     parse_xml_profile,
 };
-pub use types::{
-    AT_ERROR, AT_OK, HostEvent, ModemError, ModemId, ModemSink, PhoneNumber, Plmn, PlmnError,
-};
+pub use types::{AT_ERROR, AT_OK, HostEvent, ModemError, ModemId, ModemSink, Plmn, PlmnError};

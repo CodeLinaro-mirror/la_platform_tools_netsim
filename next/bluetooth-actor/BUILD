@@ -16,7 +16,6 @@ BLUETOOTH_DEPS = [
     "@bytes",
     "@futures",
     "@hex",
-    "@parking_lot",
     "@tracing",
     "@serde",
     "@thiserror",

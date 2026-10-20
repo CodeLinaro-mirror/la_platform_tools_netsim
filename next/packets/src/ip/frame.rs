@@ -59,12 +59,12 @@ impl Ipv4Header {
         self.header_checksum = U16::new(0);
         let bytes = self.as_bytes();
         let mut sum: u32 = 0;
-        let (chunks, remainder) = bytes.as_chunks::<2>();
-        for &chunk in chunks {
-            sum += u32::from(u16::from_be_bytes(chunk));
-        }
-        if let &[last] = remainder {
-            sum += (last as u32) << 8;
+        for chunk in bytes.chunks(2) {
+            if chunk.len() == 2 {
+                sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
+            } else {
+                sum += (chunk[0] as u32) << 8;
+            }
         }
         while (sum >> 16) != 0 {
             sum = (sum & 0xFFFF) + (sum >> 16);
@@ -100,18 +100,6 @@ impl Ipv6Header {
     pub fn header_length(&self) -> usize {
         40
     }
-
-    /// Creates a new Ipv6Header with default values for version, tc, fl, and hop_limit.
-    pub fn new(source_addr: [u8; 16], dest_addr: [u8; 16], next_header: u8) -> Self {
-        Self {
-            version_tc_fl: U32::new(0x6000_0000), // Version 6
-            payload_length: U16::new(0),
-            next_header,
-            hop_limit: 64,
-            source_addr,
-            dest_addr,
-        }
-    }
 }
 
 /// Represents the IPv6 Hop-by-Hop Options extension header.
@@ -128,7 +116,10 @@ impl Ipv6HopByHopHeader {
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, Ipv6HopByHopHeader>> {
         let (header, _) = Ref::<&[u8], Ipv6HopByHopHeader>::from_prefix(bytes).ok()?;
         let header_len = header.header_length();
-        Some((header, bytes.get(header_len..)?))
+        if bytes.len() < header_len {
+            return None;
+        }
+        Some((header, &bytes[header_len..]))
     }
 
     /// Returns the length of the Hop-by-Hop header in bytes.

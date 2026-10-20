@@ -65,7 +65,7 @@ impl EapAuthenticator {
 
         if header.code == EAP_CODE_RESPONSE && self.state == EapState::IdentityReqSent {
             // Expect Type Identity
-            if body.first() == Some(&EAP_TYPE_IDENTITY) {
+            if !body.is_empty() && body[0] == EAP_TYPE_IDENTITY {
                 // Accept ANY Identity -> Send Success
                 self.state = EapState::Authenticated;
                 self.identifier = self.identifier.wrapping_add(1);

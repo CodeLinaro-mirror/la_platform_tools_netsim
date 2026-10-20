@@ -109,8 +109,16 @@ pub struct Address {
 
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let [b0, b1, b2, b3, b4, b5] = self.bytes;
-        write!(f, "{b5:02X}:{b4:02X}:{b3:02X}:{b2:02X}:{b1:02X}:{b0:02X}")
+        write!(
+            f,
+            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            self.bytes[5],
+            self.bytes[4],
+            self.bytes[3],
+            self.bytes[2],
+            self.bytes[1],
+            self.bytes[0]
+        )
     }
 }
 

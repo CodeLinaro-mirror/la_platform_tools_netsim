@@ -3,14 +3,13 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, atomic::AtomicU64},
+    sync::{Arc, RwLock, atomic::AtomicU64},
     time::Duration,
 };
 
 use device_actor::DeviceClient;
-use netsim_model::{Chip, ChipId, ChipVariant, Uwb, UwbMode};
-use parking_lot::RwLock;
-use pica::{Handle, MacAddress, Pica, PicaCommand, PicaEvent};
+use netsim_model::{Chip, ChipId};
+use pica::{Handle, Pica, PicaCommand, PicaEvent};
 use tokio::sync::{broadcast, mpsc};
 
 /// State associated with a single UWB chip.
@@ -19,13 +18,6 @@ pub(crate) struct UwbChipState {
     pub(crate) chip: Chip,
     pub(crate) p2p_tx_count: Arc<AtomicU64>,
     pub(crate) p2p_rx_count: Arc<AtomicU64>,
-    pub(crate) mac_address: MacAddress,
-}
-
-impl UwbChipState {
-    pub(crate) fn is_anchor(&self) -> bool {
-        matches!(self.chip.variant, Some(ChipVariant::Uwb(Uwb { mode: UwbMode::Anchor, .. })))
-    }
 }
 
 /// The UWB Actor responsible for managing UWB chips and their state.
@@ -48,11 +40,7 @@ pub struct UwbActor {
     /// Used to detect when a chip is connected after [`PicaCommand::Connect`].
     pub(super) pica_connect_events: broadcast::Receiver<PicaEvent>,
     pub(crate) uwb_stats: crate::stats::UwbStats,
-    pub(super) next_anchor_mac: u16,
 }
-
-// Allocated downwards from 0xFFFE to avoid collision with Pica's 0-based device handles.
-pub(super) const MAX_UNICAST_SHORT_MAC: u16 = 0xFFFE;
 
 impl UwbActor {
     /// Used to periodically check for stream closures.
@@ -75,7 +63,6 @@ impl UwbActor {
             pica_connect_events: pica.events(),
             pica: Some(pica),
             uwb_stats: crate::stats::UwbStats::new(),
-            next_anchor_mac: MAX_UNICAST_SHORT_MAC,
         }
     }
 }

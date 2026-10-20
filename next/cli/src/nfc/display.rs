@@ -15,7 +15,7 @@ fn get_power_status(chip: &netsim_proto::model::Chip) -> &'static str {
     }
 }
 
-pub(crate) fn print_status(resp: &GetStatusResponse, json: bool) -> Result<()> {
+pub fn print_status(resp: &GetStatusResponse, json: bool) -> Result<()> {
     if json {
         let mut chips_json = Vec::new();
         for chip in &resp.chips {
@@ -36,16 +36,16 @@ pub(crate) fn print_status(resp: &GetStatusResponse, json: bool) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn print_poll(resp: &PollResponse) {
+pub fn print_poll(resp: &PollResponse) {
     println!("Discovered target ID: {}", resp.target_id);
     println!("Tag Data (HEX): {}", hex::encode(&resp.tag_data));
 }
 
-pub(crate) fn print_apdu(resp: &SendApduResponse) {
+pub fn print_apdu(resp: &SendApduResponse) {
     println!("APDU Response (HEX): {}", hex::encode(&resp.response));
 }
 
-pub(crate) fn print_set_power(resp: &SetPowerResponse) {
+pub fn print_set_power(resp: &SetPowerResponse) {
     if let Some(ref chip) = resp.chip.0 {
         println!(
             "Updated NFC chip {} ({}) power to {}",

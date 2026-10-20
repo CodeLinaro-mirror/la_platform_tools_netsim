@@ -6,7 +6,7 @@ use futures::FutureExt;
 use netsim_model::ChipId;
 use pica::PicaEvent;
 use tokio::sync::broadcast::error::TryRecvError;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use crate::uwb_actor::UwbActor;
 
@@ -21,7 +21,7 @@ impl ActorLifecycle for UwbActor {
             PICA_SENTINEL_CHIP_ID,
             async move {
                 if let Err(err) = pica.run().await {
-                    error!("Pica run loop failed: {err}");
+                    panic!("Pica run loop failed: {err}");
                 }
                 PICA_SENTINEL_CHIP_ID
             }
@@ -36,8 +36,12 @@ impl ActorLifecycle for UwbActor {
                 Ok(PicaEvent::Disconnected { handle, .. }) => {
                     // Received in response to either `PicaCommand::Disconnect` or stream/sink
                     // closure.
-                    let id =
-                        self.chip_states.read().get(&handle).map(|state| ChipId(state.chip.id));
+                    let id = self
+                        .chip_states
+                        .read()
+                        .unwrap()
+                        .get(&handle)
+                        .map(|state| ChipId(state.chip.id));
                     if let Some(id) = id {
                         let _ = self.handle_delete(id, ctx).await;
                     }

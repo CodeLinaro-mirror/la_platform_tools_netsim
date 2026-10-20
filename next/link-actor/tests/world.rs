@@ -60,15 +60,9 @@ impl World {
 
     /// BDD Step: Given default chips are added to the actor.
     pub async fn given_default_chips(&self) {
-        link_api::LinkClient::notify_chip_added(&self.client, ChipId(1), ChipKind::BLUETOOTH)
-            .await
-            .unwrap();
-        link_api::LinkClient::notify_chip_added(&self.client, ChipId(2), ChipKind::BLUETOOTH)
-            .await
-            .unwrap();
-        link_api::LinkClient::notify_chip_added(&self.client, ChipId(3), ChipKind::WIFI)
-            .await
-            .unwrap();
+        self.client.notify_chip_added(ChipId(1), ChipKind::BLUETOOTH).await.unwrap();
+        self.client.notify_chip_added(ChipId(2), ChipKind::BLUETOOTH).await.unwrap();
+        self.client.notify_chip_added(ChipId(3), ChipKind::WIFI).await.unwrap();
     }
 
     /// BDD Step: When a link is created.
@@ -84,12 +78,12 @@ impl World {
 
     /// BDD Step: When a chip is added (notification).
     pub async fn when_notify_chip_added(&self, chip_id: ChipId, kind: ChipKind) {
-        link_api::LinkClient::notify_chip_added(&self.client, chip_id, kind).await.unwrap();
+        self.client.notify_chip_added(chip_id, kind).await.unwrap();
     }
 
     /// BDD Step: When a chip is removed (notification).
     pub async fn when_notify_chip_removed(&self, chip_id: ChipId) {
-        link_api::LinkClient::notify_chip_removed(&self.client, chip_id).await.unwrap();
+        self.client.notify_chip_removed(chip_id).await.unwrap();
     }
 
     /// BDD Step: When a link is updated.

@@ -7,8 +7,7 @@ use bytes::Bytes;
 use log::trace;
 use netsim_packets::{
     EthernetFrame, Ipv4Builder, Ipv6Builder, MacAddr, TCP_FLAG_ACK, TCP_FLAG_FIN, TCP_FLAG_RST,
-    TCP_FLAG_SYN, TcpBuilder, TcpOptionMss, TcpOptionSackPermitted, TcpOptionWindowScale,
-    option_kind,
+    TCP_FLAG_SYN, TcpBuilder,
 };
 use zerocopy::FromBytes;
 
@@ -61,8 +60,7 @@ impl TcpManager {
             IpAddr::V4(_) => (20, 0x0800),
             IpAddr::V6(_) => (40, 0x86DD),
         };
-        let has_options = args.syn;
-        let tcp_header_len = if has_options { 32 } else { 20 };
+        let tcp_header_len = 20;
         let header_len = eth_header_len + ip_header_len + tcp_header_len;
         let required_len = header_len + args.payload.len();
 
@@ -95,10 +93,7 @@ impl TcpManager {
             _ => return,
         }
 
-        let Some(tcp_segment_slice) = ip_payload.get_mut(..tcp_header_len + args.payload.len())
-        else {
-            return;
-        };
+        let tcp_segment_slice = &mut ip_payload[..tcp_header_len + args.payload.len()];
         let mut tcp_builder = match (args.host_addr.ip(), args.guest_addr.ip()) {
             (IpAddr::V4(host_ip), IpAddr::V4(guest_ip)) => {
                 TcpBuilder::new(tcp_segment_slice, host_ip, guest_ip).unwrap()
@@ -108,31 +103,6 @@ impl TcpManager {
             }
             _ => return,
         };
-
-        if has_options {
-            tcp_builder.data_offset(8); // 32 bytes header
-            if let Some(opts) = tcp_builder.options_mut().filter(|opts| opts.len() >= 12) {
-                let (mss_buf, rest) = opts.split_at_mut(4);
-                let mss = TcpOptionMss::mut_from_bytes(mss_buf).unwrap();
-                mss.kind = option_kind::MSS;
-                mss.len = 4;
-                mss.mss.set(1460);
-
-                let (ws_buf, rest) = rest.split_at_mut(3);
-                let ws = TcpOptionWindowScale::mut_from_bytes(ws_buf).unwrap();
-                ws.kind = option_kind::WS;
-                ws.len = 3;
-                ws.shift = 7;
-
-                let (sack_buf, rest) = rest.split_at_mut(2);
-                let sack = TcpOptionSackPermitted::mut_from_bytes(sack_buf).unwrap();
-                sack.kind = option_kind::SACK_PERMITTED;
-                sack.len = 2;
-
-                // NOP Padding
-                rest.fill(option_kind::NOP);
-            }
-        }
 
         tcp_builder
             .source_port(args.host_addr.port())
@@ -145,15 +115,12 @@ impl TcpManager {
                     | if args.fin { TCP_FLAG_FIN } else { 0 }
                     | if args.rst { TCP_FLAG_RST } else { 0 },
             )
-            .window_size(65535)
+            .window_size(8192)
             .payload(args.payload);
 
         tcp_builder.build();
         let total_len = eth_header_len + ip_header_len + tcp_header_len + args.payload.len();
-        let Some(packet_slice) = buffer.get(..total_len) else {
-            return;
-        };
-        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(packet_slice)));
+        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer[..total_len])));
 
         if let Some((conn_id, conn)) = args
             .conn_id

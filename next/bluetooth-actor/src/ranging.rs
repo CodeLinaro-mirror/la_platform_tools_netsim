@@ -24,7 +24,7 @@ const PATH_LOSS_AT_1M: f32 = 40.20;
 ///
 /// The rssi that would be measured at that distance, in the
 /// range -120..20 dBm,
-pub(crate) fn distance_to_rssi(tx_power: i8, distance: f32) -> i8 {
+pub fn distance_to_rssi(tx_power: i8, distance: f32) -> i8 {
     // Rootcanal reporting tx_power of 0 or 1 during Nearby Share
     let new_tx_power = match tx_power {
         0 | 1 => -49,
@@ -37,7 +37,7 @@ pub(crate) fn distance_to_rssi(tx_power: i8, distance: f32) -> i8 {
 }
 
 /// Calculate the Euclidean distance between two positions.
-pub(crate) fn distance(p1: &Position, p2: &Position) -> f32 {
+pub fn distance(p1: &Position, p2: &Position) -> f32 {
     let dx = p1.x - p2.x;
     let dy = p1.y - p2.y;
     let dz = p1.z - p2.z;

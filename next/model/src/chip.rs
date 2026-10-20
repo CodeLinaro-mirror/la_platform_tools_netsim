@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-pub(crate) use netsim_types::ChipKind;
+pub use netsim_types::ChipKind;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
@@ -69,7 +69,7 @@ impl From<u32> for ChipId {
     }
 }
 /// A reply channel for sending the result of an operation back to the caller.
-pub(crate) type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
+pub type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
 
 /// Defines the message protocol for the chip service actor.
 ///
@@ -99,7 +99,7 @@ pub enum ChipRequest {
         /// The ID of the chip to patch.
         id: ChipId,
         /// The patch to apply to the chip.
-        patch: Box<ChipUpdate>,
+        patch: ChipUpdate,
         /// The channel to send the updated chip state back on.
         respond_to: Responder<Chip>,
     },
@@ -152,11 +152,11 @@ impl fmt::Debug for ChipCreate {
     }
 }
 
-pub(crate) use crate::{
+pub use crate::{
     bluetooth::{BeaconParams, BluetoothCreate, BluetoothMode, beacon::BleBeacon},
     cell::CellCreate,
     nfc::{Nfc, NfcUpdate},
-    uwb::{Uwb, UwbCreate, UwbMode},
+    uwb::{Uwb, UwbCreate},
     wifi::WifiCreate,
 };
 
@@ -238,7 +238,7 @@ impl Chip {
     pub fn is_uwb_enabled(&self) -> bool {
         matches!(
             self.variant,
-            Some(ChipVariant::Uwb(Uwb { radio: Radio { state: Some(true) | None, .. }, .. }))
+            Some(ChipVariant::Uwb(Uwb { radio: Radio { state: Some(true) | None, .. } }))
         )
     }
 
@@ -259,21 +259,6 @@ impl Chip {
             manufacturer: "Google".into(),
             product_name: "Netsim UWB".into(),
             variant: Some(ChipVariant::from(ChipKind::UWB)),
-            ..Default::default()
-        }
-    }
-
-    pub fn new_test_uwb_anchor(name: impl Into<String>, address: Option<String>) -> Self {
-        Self {
-            kind: ChipKind::UWB,
-            name: name.into(),
-            manufacturer: "Google".into(),
-            product_name: "Netsim UWB Anchor".into(),
-            variant: Some(ChipVariant::Uwb(Uwb {
-                radio: Default::default(),
-                address: address.unwrap_or_default(),
-                mode: UwbMode::Anchor,
-            })),
             ..Default::default()
         }
     }
@@ -542,7 +527,7 @@ impl ChipClient for RadioChipClient {
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send(ChipRequest::Update { id, patch: Box::new(patch), respond_to: tx })
+            .send(ChipRequest::Update { id, patch, respond_to: tx })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)

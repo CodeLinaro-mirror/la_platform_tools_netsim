@@ -30,17 +30,18 @@ impl ActorService for LinkActor {
         });
 
         // Validate chips exist and have matching kinds
-        let sender_kind =
-            self.chip_kind_map.get(&params.sender).copied().ok_or(LinkError::InvalidParam(
-                format!("Sender chip {} not found", &params.sender),
-            ))?;
-        let receiver_kind = self.chip_kind_map.get(&params.receiver).copied().ok_or(
+        let sender_kind = self
+            .chip_kind_map
+            .get(&params.sender)
+            .ok_or(LinkError::InvalidParam(format!("Sender chip {} not found", &params.sender)))?;
+        let receiver_kind = self.chip_kind_map.get(&params.receiver).ok_or(
             LinkError::InvalidParam(format!("Receiver chip {} not found", &params.receiver)),
         )?;
 
         if sender_kind != receiver_kind {
             return Err(LinkError::InvalidParam(format!(
-                "Chip kind mismatch: sender={sender_kind}, receiver={receiver_kind}",
+                "Chip kind mismatch: sender={:?}, receiver={:?}",
+                sender_kind, receiver_kind
             )));
         }
 
@@ -60,7 +61,7 @@ impl ActorService for LinkActor {
             id,
             sender: params.sender,
             receiver: params.receiver,
-            kind: sender_kind,
+            kind: *sender_kind,
             rssi: params.rssi,
         };
 
@@ -70,10 +71,6 @@ impl ActorService for LinkActor {
 
         self.links.insert(id, link);
         self.update_chip_links(sender).await;
-        info!(
-            "LinkActor: Set RSSI between sender {sender} and receiver {receiver} on {sender_kind}: {}",
-            params.rssi
-        );
         Ok(id)
     }
 
@@ -102,11 +99,7 @@ impl ActorService for LinkActor {
             link.clone()
         };
 
-        if let Some(rssi) = update.rssi {
-            info!(
-                "LinkActor: Updated RSSI between sender {} and receiver {} on {}: {}",
-                link_clone.sender, link_clone.receiver, link_clone.kind, rssi
-            );
+        if update.rssi.is_some() {
             self.update_chip_links(link_clone.sender).await;
         }
         Ok(link_clone)
@@ -122,10 +115,6 @@ impl ActorService for LinkActor {
             let receiver = link.receiver;
             self.chip_pairs.remove(&(sender, receiver));
             self.update_chip_links(sender).await;
-            info!(
-                "LinkActor: Deleted RSSI between sender {sender} and receiver {receiver} on {}",
-                link.kind
-            );
             Ok(())
         } else {
             Err(LinkError::NotFound(id.0))
@@ -146,7 +135,6 @@ impl ActorService for LinkActor {
             LinkAction::NotifyChipRemoved(chip_id) => {
                 self.chip_kind_map.remove(&chip_id);
 
-                let initial_count = self.links.len();
                 let mut deleted_senders = std::collections::HashSet::new();
                 let chip_pairs = &mut self.chip_pairs;
                 // Remove all links associated with the removed chip
@@ -160,13 +148,6 @@ impl ActorService for LinkActor {
                     }
                     true
                 });
-
-                let removed_count = initial_count - self.links.len();
-                if removed_count > 0 {
-                    info!(
-                        "LinkActor: Removed {removed_count} RSSI link(s) associated with chip {chip_id}"
-                    );
-                }
 
                 // Update the remaining chips that were connected to the removed chip
                 for sender in deleted_senders {

@@ -13,7 +13,7 @@ use serde::Serialize;
 const H4_EVENT_PACKET_TYPE: u8 = 0x04;
 const SCAN_RSP_KEY_OFFSET: u16 = 0x0100;
 
-pub(crate) struct BleEvent {
+pub struct BleEvent {
     pub timestamp_str: String,
     pub addr_display: String,
     pub event_type_str: String,
@@ -24,13 +24,13 @@ pub(crate) struct BleEvent {
 }
 
 #[derive(Clone)]
-pub(crate) struct AdPayload {
+pub struct AdPayload {
     pub ad_type: u8,
     pub type_str: String,
     pub decoded_val: String,
 }
 
-pub(crate) fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleEvent> {
+pub fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleEvent> {
     let mut events = Vec::new();
     let now =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
@@ -43,12 +43,12 @@ pub(crate) fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleE
         String::new()
     };
 
-    let payload = match packet.as_slice() {
-        [H4_EVENT_PACKET_TYPE, rest @ ..] => rest,
-        other => other,
-    };
+    let mut offset = 0;
+    if !packet.is_empty() && packet[0] == H4_EVENT_PACKET_TYPE {
+        offset += 1;
+    }
 
-    let reports = match parse_hci_event(payload) {
+    let reports = match parse_hci_event(&packet[offset..]) {
         Some(HciEvent::LeMetaEvent(LeMetaEvent::LeAdvertisingReport(reports))) => reports,
         _ => return events,
     };
@@ -88,19 +88,15 @@ pub(crate) fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleE
 }
 
 fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayload> {
-    let mut rest = data;
+    let mut i = 0;
     let mut outputs = BTreeMap::new();
-    while let Some((&len_byte, after_len)) = rest.split_first() {
-        let len = len_byte as usize;
-        if len == 0 {
+    while i < data.len() {
+        let len = data[i] as usize;
+        if len == 0 || i + 1 + len > data.len() {
             break;
         }
-        let Some((struct_bytes, next_rest)) = after_len.split_at_checked(len) else {
-            break;
-        };
-        let Some((&ad_type, ad_data)) = struct_bytes.split_first() else {
-            break;
-        };
+        let ad_type = data[i + 1];
+        let ad_data = &data[i + 2..i + 1 + len];
 
         let type_str = GapDataType(ad_type).to_string();
 
@@ -109,8 +105,8 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 String::from_utf8_lossy(ad_data).to_string()
             }
             GapDataType::TX_POWER_LEVEL => {
-                if let [power] = ad_data {
-                    format!("{} dBm", *power as i8)
+                if ad_data.len() == 1 {
+                    format!("{} dBm", ad_data[0] as i8)
                 } else {
                     format_hex_data(ad_data)
                 }
@@ -119,8 +115,8 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 if ad_data.len().is_multiple_of(2) =>
             {
                 let mut uuids = Vec::new();
-                for &[b0, b1] in ad_data.as_chunks::<2>().0 {
-                    uuids.push(format!("0x{:02x}{:02x}", b1, b0));
+                for chunk in ad_data.chunks(2) {
+                    uuids.push(format!("0x{:02x}{:02x}", chunk[1], chunk[0]));
                 }
                 uuids.join(", ")
             }
@@ -128,8 +124,11 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 if ad_data.len().is_multiple_of(4) =>
             {
                 let mut uuids = Vec::new();
-                for &[b0, b1, b2, b3] in ad_data.as_chunks::<4>().0 {
-                    uuids.push(format!("0x{:02x}{:02x}{:02x}{:02x}", b3, b2, b1, b0));
+                for chunk in ad_data.chunks(4) {
+                    uuids.push(format!(
+                        "0x{:02x}{:02x}{:02x}{:02x}",
+                        chunk[3], chunk[2], chunk[1], chunk[0]
+                    ));
                 }
                 uuids.join(", ")
             }
@@ -137,33 +136,25 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 if ad_data.len().is_multiple_of(16) =>
             {
                 let mut uuids = Vec::new();
-                for chunk in ad_data.as_chunks::<16>().0 {
+                for chunk in ad_data.chunks(16) {
                     uuids.push(format_128bit_uuid(chunk));
                 }
                 uuids.join(", ")
             }
-            GapDataType::SERVICE_DATA_16BIT => {
-                if let [b0, b1, rest_data @ ..] = ad_data {
-                    let uuid = format!("0x{:02x}{:02x}", b1, b0);
-                    format_uuid_service_data(uuid, rest_data)
-                } else {
-                    format_hex_data(ad_data)
-                }
+            GapDataType::SERVICE_DATA_16BIT if ad_data.len() >= 2 => {
+                let uuid = format!("0x{:02x}{:02x}", ad_data[1], ad_data[0]);
+                format_uuid_service_data(uuid, &ad_data[2..])
             }
-            GapDataType::SERVICE_DATA_32BIT => {
-                if let [b0, b1, b2, b3, rest_data @ ..] = ad_data {
-                    let uuid = format!("0x{:02x}{:02x}{:02x}{:02x}", b3, b2, b1, b0);
-                    format_uuid_service_data(uuid, rest_data)
-                } else {
-                    format_hex_data(ad_data)
-                }
+            GapDataType::SERVICE_DATA_32BIT if ad_data.len() >= 4 => {
+                let uuid = format!(
+                    "0x{:02x}{:02x}{:02x}{:02x}",
+                    ad_data[3], ad_data[2], ad_data[1], ad_data[0]
+                );
+                format_uuid_service_data(uuid, &ad_data[4..])
             }
-            GapDataType::SERVICE_DATA_128BIT => {
-                if let Some((uuid_chunk, rest_data)) = ad_data.split_first_chunk::<16>() {
-                    format_uuid_service_data(format_128bit_uuid(uuid_chunk), rest_data)
-                } else {
-                    format_hex_data(ad_data)
-                }
+            GapDataType::SERVICE_DATA_128BIT if ad_data.len() >= 16 => {
+                let uuid = format_128bit_uuid(&ad_data[..16]);
+                format_uuid_service_data(uuid, &ad_data[16..])
             }
             _ => format_hex_data(ad_data),
         };
@@ -173,16 +164,30 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
 
         outputs.insert(map_key, AdPayload { ad_type, type_str, decoded_val });
 
-        rest = next_rest;
+        i += 1 + len;
     }
     outputs
 }
 
-fn format_128bit_uuid(uuid: &[u8; 16]) -> String {
-    let &[b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15] = uuid;
+fn format_128bit_uuid(uuid: &[u8]) -> String {
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        b15, b14, b13, b12, b11, b10, b9, b8, b7, b6, b5, b4, b3, b2, b1, b0
+        uuid[15],
+        uuid[14],
+        uuid[13],
+        uuid[12],
+        uuid[11],
+        uuid[10],
+        uuid[9],
+        uuid[8],
+        uuid[7],
+        uuid[6],
+        uuid[5],
+        uuid[4],
+        uuid[3],
+        uuid[2],
+        uuid[1],
+        uuid[0]
     )
 }
 
@@ -195,7 +200,7 @@ fn format_hex_data(data: &[u8]) -> String {
     data.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")
 }
 
-pub(crate) fn print_json_event(event: &BleEvent, verbose: bool) {
+pub fn print_json_event(event: &BleEvent, verbose: bool) {
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -241,42 +246,43 @@ pub(crate) fn print_json_event(event: &BleEvent, verbose: bool) {
     }
 }
 
-pub(crate) fn print_sniff_response(res: &SniffResponse, _verbose: bool) {
+pub fn print_sniff_response(res: &SniffResponse, _verbose: bool) {
     let duration = std::time::Duration::from_micros(res.timestamp as u64);
     let timestamp =
         TimeDisplay::new(duration.as_secs() as i64, duration.subsec_nanos()).utc_display_hms();
     let hex_packet = res.packet.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join("");
 
-    let packet_type = match res.packet.first() {
-        None => "EMPTY".to_string(),
-        Some(&byte) => {
-            let name: Option<&'static str> = match byte {
-                0x00 => Some("UNKNOWN"),
-                0x01 => Some("ACL"),
-                0x02 => Some("SCO"),
-                0x03 => Some("LE_CONNECTED_ISOCHRONOUS_PDU"),
-                0x04 => Some("LE_BROADCAST_ISOCHRONOUS_PDU"),
-                0x05 => Some("DISCONNECT"),
-                0x06 => Some("INQUIRY"),
-                0x07 => Some("INQUIRY_RESPONSE"),
-                0x0B => Some("LE_LEGACY_ADVERTISING_PDU"),
-                0x37 => Some("LE_EXTENDED_ADVERTISING_PDU"),
-                0x40 => Some("LE_PERIODIC_ADVERTISING_PDU"),
-                0x0C => Some("LE_CONNECT"),
-                0x0D => Some("LE_CONNECT_COMPLETE"),
-                0x0E => Some("LE_SCAN"),
-                0x0F => Some("LE_SCAN_RESPONSE"),
-                0x10 => Some("PAGE"),
-                0x11 => Some("PAGE_RESPONSE"),
-                0x12 => Some("PAGE_REJECT"),
-                0x1D => Some("REMOTE_NAME_REQUEST"),
-                0x1E => Some("REMOTE_NAME_REQUEST_RESPONSE"),
-                0x34 => Some("LMP"),
-                0x41 => Some("LLCP"),
-                _ => None,
-            };
-            name.map(str::to_string).unwrap_or_else(|| format!("0x{byte:02X}"))
-        }
+    let packet_type_str = match res.packet.first().copied() {
+        Some(0x00) => "UNKNOWN",
+        Some(0x01) => "ACL",
+        Some(0x02) => "SCO",
+        Some(0x03) => "LE_CONNECTED_ISOCHRONOUS_PDU",
+        Some(0x04) => "LE_BROADCAST_ISOCHRONOUS_PDU",
+        Some(0x05) => "DISCONNECT",
+        Some(0x06) => "INQUIRY",
+        Some(0x07) => "INQUIRY_RESPONSE",
+        Some(0x0B) => "LE_LEGACY_ADVERTISING_PDU",
+        Some(0x37) => "LE_EXTENDED_ADVERTISING_PDU",
+        Some(0x40) => "LE_PERIODIC_ADVERTISING_PDU",
+        Some(0x0C) => "LE_CONNECT",
+        Some(0x0D) => "LE_CONNECT_COMPLETE",
+        Some(0x0E) => "LE_SCAN",
+        Some(0x0F) => "LE_SCAN_RESPONSE",
+        Some(0x10) => "PAGE",
+        Some(0x11) => "PAGE_RESPONSE",
+        Some(0x12) => "PAGE_REJECT",
+        Some(0x1D) => "REMOTE_NAME_REQUEST",
+        Some(0x1E) => "REMOTE_NAME_REQUEST_RESPONSE",
+        Some(0x34) => "LMP",
+        Some(0x41) => "LLCP",
+        None => "EMPTY",
+        Some(_) => "", // Fallback correctly handled below
+    };
+
+    let packet_type = if packet_type_str.is_empty() {
+        format!("0x{:02X}", res.packet.first().unwrap())
+    } else {
+        packet_type_str.to_string()
     };
 
     #[derive(Serialize)]

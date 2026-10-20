@@ -15,7 +15,6 @@
 
 pub(crate) mod args;
 pub(crate) mod avd_config;
-pub(crate) mod cuttlefish;
 pub(crate) mod ini_file;
 pub(crate) mod logger;
 pub(crate) mod netsimd;
@@ -23,6 +22,5 @@ pub(crate) mod test_beacons;
 pub(crate) mod version;
 
 pub use args::{Args, ClapWifiMode};
-pub use avd_config::{is_valid_mac_address, resolve_bluetooth_mac};
 pub use ini_file::{IniFile, IniFileAccess, IniFileInitialized};
 pub use netsimd::{NetsimDaemon, RunResult, StartUpMode, run};

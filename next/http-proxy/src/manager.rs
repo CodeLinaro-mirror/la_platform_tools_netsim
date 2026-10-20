@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use slirp::{ProxyConnect, ProxyManager};
+use libslirp_rs::{ProxyConnect, ProxyManager};
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 
@@ -20,7 +20,7 @@ use crate::{
 /// # Manager
 ///
 /// The `Manager` struct implements the `ProxyManager` trait from
-/// `slirp`.  It is responsible for managing TCP connections
+/// `libslirp_rs`.  It is responsible for managing TCP connections
 /// through an HTTP proxy using the `Connector` struct.
 ///
 /// The `Manager` uses a `tokio::runtime::Runtime` to spawn tasks for
@@ -38,7 +38,7 @@ use crate::{
 /// ```
 /// use std::net::SocketAddr;
 ///
-/// use slirp::ProxyConnect;
+/// use libslirp_rs::ProxyConnect;
 ///
 /// struct MyProxyConnect;
 ///
@@ -74,13 +74,16 @@ impl Manager {
         });
 
         // We initialize a private, isolated tokio runtime for HTTP proxy tasks.
-        // Sharing the main daemon runtime with high-throughput actors (like
-        // Slirp or Bluetooth) can cause scheduling delays for HTTP
-        // reachability checks, leading to PARTIAL_CONNECTIVITY status.
-        // Isolation ensures consistent performance.
+        // Sharing the main daemon runtime with high-throughput actors (like Slirp or
+        // Bluetooth) can cause scheduling delays for HTTP reachability checks,
+        // leading to PARTIAL_CONNECTIVITY status. Isolation ensures consistent
+        // performance.
         let runtime = Arc::new(Runtime::new()?);
 
-        Ok(Self { runtime, connector: config.into_connector() })
+        Ok(Self {
+            runtime,
+            connector: Connector::new(config.addr, config.username, config.password),
+        })
     }
 }
 
@@ -113,8 +116,8 @@ impl ProxyManager for Manager {
         let connector = self.connector.clone();
 
         self.runtime.handle().spawn(async move {
-            let fd = match connector.connect(sockaddr).await.and_then(into_raw_descriptor) {
-                Ok(fd) => fd,
+            let fd = match connector.connect(sockaddr).await {
+                Ok(tcp_stream) => into_raw_descriptor(tcp_stream),
                 Err(e) => {
                     warn!("Failed to connect to proxy {}. {}", sockaddr, e);
                     -1

@@ -20,12 +20,12 @@ use tracing::{error, warn};
 static SCANNER_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
-pub(crate) struct BleServiceImpl {
+pub struct BleServiceImpl {
     device_client: DeviceClient,
 }
 
 impl BleServiceImpl {
-    pub(crate) fn new(device_client: DeviceClient) -> Self {
+    pub fn new(device_client: DeviceClient) -> Self {
         Self { device_client }
     }
 }

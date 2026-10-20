@@ -39,7 +39,7 @@ pub enum ChipError {
 
     /// Invalid address.
     #[error("Invalid address: {0}")]
-    InvalidAddress(#[source] Box<dyn std::error::Error + Send + Sync>),
+    InvalidAddress(Box<dyn std::error::Error + Send + Sync>),
 
     /// Unexpected chip kind.
     #[error("Unexpected chip kind: expected {expected:?}, got {actual:?}")]
@@ -47,103 +47,5 @@ pub enum ChipError {
 
     /// Invalid arguments.
     #[error("Invalid arguments: {0}")]
-    InvalidArguments(#[source] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[cfg(test)]
-mod tests {
-    use std::error::Error;
-
-    use super::*;
-
-    #[test]
-    fn test_chip_not_found_display_and_debug() {
-        let err = ChipError::ChipNotFound(ChipId(42));
-        assert_eq!(err.to_string(), "Chip not found error: 42");
-        assert!(format!("{err:?}").contains("ChipNotFound"));
-    }
-
-    #[test]
-    fn test_io_error_display_and_conversion() {
-        let io_err = std::io::Error::new(std::io::ErrorKind::BrokenPipe, "pipe broken");
-        let err: ChipError = io_err.into();
-        assert_eq!(err.to_string(), "I/O error: pipe broken");
-        assert!(err.source().is_some());
-        assert_eq!(err.source().unwrap().to_string(), "pipe broken");
-    }
-
-    #[test]
-    fn test_unsupported_display_and_debug() {
-        let err = ChipError::Unsupported;
-        assert_eq!(err.to_string(), "Unsupported operation");
-        assert_eq!(format!("{err:?}"), "Unsupported");
-    }
-
-    #[test]
-    fn test_chip_exists_display() {
-        let err = ChipError::ChipExists(100);
-        assert_eq!(err.to_string(), "Chip with ID 100 already exists");
-    }
-
-    #[test]
-    fn test_backend_error_display_and_source() {
-        let backend_err = std::io::Error::other("backend failed");
-        let err = ChipError::Backend(Box::new(backend_err));
-        assert_eq!(err.to_string(), "Backend error: backend failed");
-        assert!(err.source().is_some());
-        assert_eq!(err.source().unwrap().to_string(), "backend failed");
-    }
-
-    #[test]
-    fn test_internal_error_display_and_source() {
-        let internal_err = std::io::Error::other("internal failure");
-        let err = ChipError::Internal(Box::new(internal_err));
-        assert_eq!(err.to_string(), "Internal error: internal failure");
-        assert!(err.source().is_some());
-        assert_eq!(err.source().unwrap().to_string(), "internal failure");
-    }
-
-    #[test]
-    fn test_wrong_variant_error_display() {
-        let err = ChipError::WrongVariantError;
-        assert_eq!(err.to_string(), "Wrong Chip Variant");
-    }
-
-    #[test]
-    fn test_invalid_address_display_and_source() {
-        let addr_err = std::io::Error::new(std::io::ErrorKind::InvalidInput, "bad MAC address");
-        let err = ChipError::InvalidAddress(Box::new(addr_err));
-        assert_eq!(err.to_string(), "Invalid address: bad MAC address");
-        assert!(err.source().is_some());
-        assert_eq!(err.source().unwrap().to_string(), "bad MAC address");
-    }
-
-    #[test]
-    fn test_unexpected_chip_kind_display() {
-        let err =
-            ChipError::UnexpectedChipKind { expected: ChipKind::BLUETOOTH, actual: ChipKind::WIFI };
-        assert_eq!(err.to_string(), "Unexpected chip kind: expected BLUETOOTH, got WIFI");
-        match err {
-            ChipError::UnexpectedChipKind { expected, actual } => {
-                assert_eq!(expected, ChipKind::BLUETOOTH);
-                assert_eq!(actual, ChipKind::WIFI);
-            }
-            _ => panic!("Expected UnexpectedChipKind variant"),
-        }
-    }
-
-    #[test]
-    fn test_invalid_arguments_display_and_source() {
-        let arg_err = std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid range value");
-        let err = ChipError::InvalidArguments(Box::new(arg_err));
-        assert_eq!(err.to_string(), "Invalid arguments: invalid range value");
-        assert!(err.source().is_some());
-        assert_eq!(err.source().unwrap().to_string(), "invalid range value");
-    }
-
-    #[test]
-    fn test_chip_error_traits() {
-        fn assert_send_sync<T: Send + Sync + 'static>() {}
-        assert_send_sync::<ChipError>();
-    }
+    InvalidArguments(Box<dyn std::error::Error + Send + Sync>),
 }

@@ -141,7 +141,7 @@ impl WpaAuthenticator {
             WpaState::PtKStart | WpaState::Idle => {
                 // ... (M2 logic) ...
                 self.snonce = key_frame.key_nonce;
-                self.calc_ptk()?;
+                self.calc_ptk();
 
                 if !self.verify_mic(frame_data, &key_frame.mic) {
                     warn!("WPA: MIC verification failed for M2 from {}", self.sta_addr);
@@ -194,10 +194,7 @@ impl WpaAuthenticator {
 
                 let mic = self.calc_mic_for_frame(&m3_bytes);
                 let mut final_m3 = m3_bytes;
-                final_m3
-                    .get_mut(MIC_OFFSET..MIC_END)
-                    .ok_or(ApError::InvalidFrame)?
-                    .copy_from_slice(&mic);
+                final_m3[MIC_OFFSET..MIC_END].copy_from_slice(&mic);
 
                 Ok(vec![WpaOutput::Frame(final_m3)])
             }
@@ -222,7 +219,7 @@ impl WpaAuthenticator {
         }
     }
 
-    fn calc_ptk(&mut self) -> Result<(), ApError> {
+    fn calc_ptk(&mut self) {
         // PTK = PRF-384(PMK, "Pairwise key expansion", Min(AA,SA) || Max(AA,SA) ||
         // Min(ANonce,SNonce) || Max(ANonce,SNonce))
         let label = b"Pairwise key expansion";
@@ -247,16 +244,13 @@ impl WpaAuthenticator {
 
         // PRF-384 (48 bytes)
         let ptk_bytes = self.prf(&self.pmk, label, &data, 384);
-        let Some(&[kck, kek, tk]) = ptk_bytes.as_chunks::<16>().0.first_chunk::<3>() else {
-            return Err(ApError::Internal(
-                format!("PTK shorter than 48 bytes: {}", ptk_bytes.len()).into(),
-            ));
-        };
-        self.kck = kck.to_vec();
-        self.kek = kek.to_vec();
-        self.tk = tk.to_vec();
-        self.ptk = ptk_bytes;
-        Ok(())
+        self.ptk = ptk_bytes.clone();
+
+        // Split PTK
+        // KCK (16), KEK (16), TK (16)
+        self.kck = ptk_bytes[0..16].to_vec();
+        self.kek = ptk_bytes[16..32].to_vec();
+        self.tk = ptk_bytes[32..48].to_vec();
     }
 
     fn prf(&self, key: &[u8], label: &[u8], data: &[u8], bit_len: usize) -> Vec<u8> {
@@ -283,9 +277,8 @@ impl WpaAuthenticator {
     fn calc_mic_for_frame(&self, frame: &[u8]) -> Vec<u8> {
         // MIC is calculated over the EAPol frame with MIC field set to 0.
         // Hmac-SHA1-128 (first 16 bytes of SHA1) for CCMP.
-        let mut mic = Hmac(DigestType::SHA1, &self.kck, frame);
-        mic.truncate(16);
-        mic
+        let mic = Hmac(DigestType::SHA1, &self.kck, frame);
+        mic[0..16].to_vec()
     }
 
     fn verify_mic(&self, frame: &[u8], received_mic: &[u8]) -> bool {

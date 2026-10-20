@@ -1,10 +1,9 @@
 // Copyright 2024 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr, sync::Mutex};
 
-use netsim_packets::{Packet, TransportPacket, parse};
-use parking_lot::Mutex;
+use etherparse::{PacketHeaders, PayloadSlice, TransportHeader};
 use tracing::debug;
 
 /// This module provides a reverse-dns function that caches the domain
@@ -38,17 +37,18 @@ impl DnsManager {
     }
 
     /// Add potential DNS entries to the cache.
-    pub fn add_from_packet(&self, packet: &Packet) {
+    pub fn add_from_packet_headers(&self, headers: &PacketHeaders) {
         // Check if the packet contains a UDP header
         // with source port from DNS server
         // and DNS answers with A/AAAA records
-        if let Some(TransportPacket::Udp(udp_header, payload)) = &packet.transport
-            && udp_header.source_port.get() == Self::DNS_PORT
+        if let Some(TransportHeader::Udp(udp_header)) = &headers.transport
+            && udp_header.source_port == Self::DNS_PORT
+            && let PayloadSlice::Udp(payload) = headers.payload
         {
             // Add any A/AAAA domain names
             if let Ok(answers) = dns::parse_answers(payload) {
                 for (ip_addr, name) in answers {
-                    self.map.lock().insert(ip_addr, name.clone());
+                    self.map.lock().unwrap().insert(ip_addr, name.clone());
                     debug!("Added {} ({}) to DNS cache", name, ip_addr);
                 }
             }
@@ -57,23 +57,22 @@ impl DnsManager {
 
     /// Adds potential DNS entries from an Ethernet slice.
     pub fn add_from_ethernet_slice(&self, packet: &[u8]) {
-        if let Some(parsed_packet) = parse(packet) {
-            self.add_from_packet(&parsed_packet);
-        }
+        let headers = PacketHeaders::from_ethernet_slice(packet).unwrap();
+        self.add_from_packet_headers(&headers);
     }
 
     /// Return a FQDN from a prior DNS response for ip address
     pub fn get(&self, ip_addr: &IpAddr) -> Option<String> {
-        self.map.lock().get(ip_addr).cloned()
+        self.map.lock().unwrap().get(ip_addr).cloned()
     }
 
     /// Returns the number of entries in the cache.
     pub fn len(&self) -> usize {
-        self.map.lock().len()
+        self.map.lock().unwrap().len()
     }
 
     /// Checks if the cache is empty.
     pub fn is_empty(&self) -> bool {
-        self.map.lock().is_empty()
+        self.map.lock().unwrap().len() == 0
     }
 }

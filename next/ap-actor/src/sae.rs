@@ -159,10 +159,8 @@ impl SaeStateMachine {
         // 802.11-2016 9.4.1.25: Finite Cyclic Group field.
         // For ECC: "The x-coordinate ... followed by the y-coordinate"
         // So we strip the '04' prefix if present.
-        if let Some((&0x04, rest)) = self.own_commit_element.split_first()
-            && rest.len() == 64
-        {
-            body.extend_from_slice(rest);
+        if self.own_commit_element.len() == 65 && self.own_commit_element[0] == 0x04 {
+            body.extend_from_slice(&self.own_commit_element[1..]);
         } else if self.own_commit_element.len() == 64 {
             body.extend_from_slice(&self.own_commit_element);
         } else {
@@ -183,20 +181,21 @@ impl SaeStateMachine {
             return None;
         }
 
-        let (group_bytes, rest) = body.split_first_chunk::<2>()?;
-        let group = u16::from_le_bytes(*group_bytes);
+        let group_bytes = [body[0], body[1]];
+        let group = u16::from_le_bytes(group_bytes);
         if group != SaeGroup::EccP256 as u16 {
             error!("SAE: Unsupported group {}", group);
             return None;
         }
 
         // Extract Scalar (32 bytes)
-        let (scalar, element_raw) = rest.split_first_chunk::<32>()?;
+        let scalar = &body[2..34];
         self.peer_commit_scalar = scalar.to_vec();
 
         // Extract Element (Remaining bytes, expect 64 or 65? SAE usually sends raw X,Y
         // [64 bytes]) If peer sends 64 bytes, we need to prefix 0x04 for
         // OpenSSL uncompressed format.
+        let element_raw = &body[34..];
         if element_raw.len() == 64 {
             self.peer_commit_element = vec![0x04];
             self.peer_commit_element.extend_from_slice(element_raw);
@@ -255,15 +254,10 @@ impl SaeStateMachine {
 
         // k = K.x (coordinate)
         // EcP256PointMul returns (04 || X || Y) [65 bytes] or uncompressed.
-        let k = if let Some((&0x04, rest)) = k_point.split_first()
-            && rest.len() == 64
-            && let Some((x, _)) = rest.split_first_chunk::<32>()
-        {
-            x.to_vec()
-        } else if let Some((x, rest)) = k_point.split_first_chunk::<32>()
-            && rest.len() == 32
-        {
-            x.to_vec()
+        let k = if k_point.len() == 65 && k_point[0] == 0x04 {
+            k_point[1..33].to_vec()
+        } else if k_point.len() == 64 {
+            k_point[0..32].to_vec()
         } else {
             error!("SAE: K point invalid length {}", k_point.len());
             return None;
@@ -298,20 +292,20 @@ impl SaeStateMachine {
         let context = scalar_sum.clone();
         let kdf_out = self.sha256_kdf(&keyseed, label, &context, 512); // 512 bits
 
-        let Some((kck, pmk)) = kdf_out.split_first_chunk::<32>().filter(|(_, pmk)| pmk.len() == 32)
-        else {
-            error!("SAE: KDF output invalid length {}", kdf_out.len());
+        if kdf_out.len() != 64 {
+            error!("SAE: KDF failed");
             return None;
-        };
-        self.kck = kck.to_vec();
-        self.pmk = pmk.to_vec();
+        }
+
+        self.kck = kdf_out[0..32].to_vec(); // KCK (32 bytes for HMAC-SHA256)
+        self.pmk = kdf_out[32..64].to_vec(); // PMK (32 bytes)
 
         // PMKID = L((own_commit_scalar + peer_commit_scalar) mod q, 0, 128)
         // hostapd says: pmkid = val (scalar_sum) truncated?
         // 802.11-2016 12.4.8.2.4: PMKID = L(val, 0, 128) -> First 16 bytes of val
         // (scalar_sum).
-        if let Some(prefix) = scalar_sum.get(..16) {
-            self.pmkid = prefix.to_vec();
+        if scalar_sum.len() >= 16 {
+            self.pmkid = scalar_sum[0..16].to_vec();
         } else {
             // Pad to 16 bytes to match PMKID/KCK requirements.
             self.pmkid = scalar_sum.clone();
@@ -339,9 +333,9 @@ impl SaeStateMachine {
             let hash = ffi::Hmac(ffi::DigestType::SHA256, key, &data);
 
             let needed = buf_len - pos;
-            let chunk = hash.get(..needed).unwrap_or(&hash);
-            out.extend_from_slice(chunk);
-            pos += chunk.len();
+            let copy = std::cmp::min(needed, hash.len());
+            out.extend_from_slice(&hash[0..copy]);
+            pos += copy;
             counter += 1;
         }
         out
@@ -375,8 +369,7 @@ impl SaeStateMachine {
             return None;
         }
 
-        let (rc_bytes, _) = body.split_first_chunk::<2>()?;
-        let rc = u16::from_le_bytes(*rc_bytes);
+        let rc = u16::from_le_bytes([body[0], body[1]]);
         // let peer_confirm = &body[2..34];
 
         // Verify peer confirm

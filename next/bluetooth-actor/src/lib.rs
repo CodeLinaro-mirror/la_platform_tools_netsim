@@ -126,14 +126,16 @@ mod scanner;
 mod sniffer; // Added
 mod utils;
 
-mod beacon_utils;
-mod client;
+/// Utilities for Bluetooth Beacons and advertising data
+pub mod beacon_utils;
+pub mod client;
 
-pub(crate) use actions::{BluetoothAction, BluetoothActionResult};
-pub use beacon_utils::{REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET, is_le_advertising_report};
+pub use actions::{BluetoothAction, BluetoothActionResult};
 pub use bluetooth_actor::BluetoothActor;
 pub use client::BluetoothClient;
 pub use error::BluetoothError;
+/// The entity type managed by the Bluetooth ResourceActor.
+pub type BluetoothEntity = BluetoothActor;
 
 #[derive(Debug, Clone)]
 /// Events that can be sent to the Bluetooth actor via typed stream.
@@ -154,7 +156,7 @@ pub enum BluetoothEvent {
 use actor_framework::ResourceActor;
 
 /// Creates a new Bluetooth actor and its client.
-pub fn new() -> (ResourceActor<BluetoothActor>, BluetoothClient) {
+pub fn new() -> (ResourceActor<BluetoothEntity>, BluetoothClient) {
     let (actor, resource_client) = ResourceActor::new(32);
     (actor, BluetoothClient(resource_client))
 }

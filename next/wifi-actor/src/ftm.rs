@@ -91,10 +91,8 @@ pub fn handle_ftm_request(
     // Frame 2: FTM Action (With Timestamps)
     let mut body2 = vec![category::PUBLIC, public_action::FINE_TIMING_MEASUREMENT, 0, 0];
     // Timestamps (48-bit usually)
-    let [t1 @ .., _, _] = &t1_bytes;
-    let [t4 @ .., _, _] = &t4_bytes;
-    body2.extend_from_slice(t1); // TOD
-    body2.extend_from_slice(t4); // TOA (using t4 = RTT for simplicity, implying t1=0)
+    body2.extend_from_slice(&t1_bytes[0..6]); // TOD
+    body2.extend_from_slice(&t4_bytes[0..6]); // TOA (using t4 = RTT for simplicity, implying t1=0)
     body2.extend_from_slice(&[0u8; 6]); // Error
 
     responses.push(build_action(&body2));
@@ -111,9 +109,13 @@ fn parse_ftm_request(packet: &Ieee80211) -> Option<(u8, u8, u8)> {
     }
 
     let bytes = packet.as_bytes();
-    let category = *bytes.get(24)?;
-    let action = *bytes.get(25)?;
-    let trigger = *bytes.get(26)?;
+    if bytes.len() < 24 + 3 {
+        return None;
+    }
+
+    let category = bytes[24];
+    let action = bytes[25];
+    let trigger = bytes[26];
 
     Some((category, action, trigger))
 }

@@ -9,17 +9,17 @@ pub(crate) const INITIAL_SSTHRESH: u32 = 65535;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct CongestionControl {
+pub struct CongestionControl {
     pub cwnd: u32,
     pub ssthresh: u32,
 }
 
 impl CongestionControl {
-    pub(crate) fn new(mss: u16) -> Self {
+    pub fn new(mss: u16) -> Self {
         Self { cwnd: INITIAL_CWND_PACKETS * mss as u32, ssthresh: INITIAL_SSTHRESH }
     }
 
-    pub(crate) fn on_ack(&mut self, mss: u16) {
+    pub fn on_ack(&mut self, mss: u16) {
         if self.cwnd < self.ssthresh {
             // Slow start
             self.cwnd += mss as u32;
@@ -29,7 +29,7 @@ impl CongestionControl {
         }
     }
 
-    pub(crate) fn on_retransmission(&mut self, mss: u16) {
+    pub fn on_retransmission(&mut self, mss: u16) {
         self.ssthresh = self.cwnd / 2;
         self.cwnd = mss as u32;
     }

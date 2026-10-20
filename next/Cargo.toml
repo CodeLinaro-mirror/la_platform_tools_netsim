@@ -5,7 +5,6 @@
 resolver = "3"
 members = [
   "actor-framework",
-  "rest-api",
   "ap-actor",
   "slirp-actor",
   "capture-actor",
@@ -29,8 +28,6 @@ members = [
 
   "slirp",
   "slirp/host",
-  "libslirp-rs",
-  "http-proxy",
 
   "rootcanal",
   "rootcanal-server",

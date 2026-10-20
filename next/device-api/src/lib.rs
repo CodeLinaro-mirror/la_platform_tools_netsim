@@ -73,7 +73,7 @@ use std::fmt;
 
 pub use netsim_model::{
     ChipCreateVariant, Device, DeviceAddChip, DeviceChipCreate, DeviceConfig, DeviceCreate,
-    DeviceId, DeviceUpdate, Orientation, PoseUpdate, Position,
+    DeviceId, DeviceUpdate, ListDeviceResponse, Orientation, PoseUpdate, Position,
 };
 use netsim_model::{ChipId, NetsimRadioStats, PacketSink, PacketStream};
 use serde::{Deserialize, Serialize};

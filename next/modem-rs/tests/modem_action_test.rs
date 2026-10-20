@@ -13,7 +13,7 @@ use crate::{common::constants::*, steps::*, world::World};
 #[test]
 fn test_action_incoming_call() {
     let mut world = World::new();
-    given_modem_with_number(&mut world, "A", "123456");
+    given_modem(&mut world, "A");
 
     // Enable CLIP
     when_at_command_sent(&mut world, "A", "AT+CLIP=1");
@@ -34,7 +34,6 @@ fn test_action_incoming_call() {
 fn test_action_incoming_sms() {
     let mut world = World::new();
     given_modem(&mut world, "A");
-    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
 
     // Set to Text Mode first to align with the expected +CMT and text output
     when_at_command_sent(&mut world, "A", "AT+CMGF=1");
@@ -79,7 +78,7 @@ fn test_sim_hot_plugging() {
     // Advance time to allow AttachNetwork to run (10ms delay)
     when_time_advances_ms(&mut world, 15);
     // Consume the initial attachment URC
-    then_response_is(&mut world, "A", "+CREG: 8");
+    then_response_is(&mut world, "A", "+CREG: 1");
     then_wait_for_response_containing(&mut world, "A", "+CSQ:");
 
     // Initial state check: PinRequired
@@ -87,9 +86,9 @@ fn test_sim_hot_plugging() {
     then_response_is(&mut world, "A", "+CPIN: SIM PIN");
     then_response_is(&mut world, "A", "OK");
 
-    // Initial registration check: locked SIM registers for emergency only
+    // Initial registration check: it should be registered because it's present
     when_at_command_sent(&mut world, "A", "AT+CREG?");
-    then_response_is(&mut world, "A", "+CREG: 1,8");
+    then_response_is(&mut world, "A", "+CREG: 1,1");
     then_response_is(&mut world, "A", "OK");
 
     // 1. Remove SIM
@@ -114,7 +113,7 @@ fn test_sim_hot_plugging() {
 
     // Should receive unsolicited CPIN report, CREG report, and CSQ
     then_wait_for_response_containing(&mut world, "A", "+CPIN: SIM PIN");
-    then_wait_for_response_containing(&mut world, "A", "+CREG: 8");
+    then_wait_for_response_containing(&mut world, "A", "+CREG: 1");
     then_wait_for_response_containing(&mut world, "A", "+CSQ:");
 
     // Verify CPIN is back to SIM PIN
@@ -140,7 +139,7 @@ fn test_sim_hot_plugging() {
     when_sim_status_set(&mut world, "A", true);
     when_time_advances_ms(&mut world, 15);
     then_wait_for_response_containing(&mut world, "A", "+CPIN: SIM PIN");
-    then_wait_for_response_containing(&mut world, "A", "+CREG: 8");
+    then_wait_for_response_containing(&mut world, "A", "+CREG: 1");
     then_wait_for_response_containing(&mut world, "A", "+CSQ:");
 
     when_at_command_sent(&mut world, "A", "AT+CPIN?");
@@ -162,14 +161,16 @@ fn test_sim_hot_plugging_goldfish_37() {
 
     // Remove SIM on goldfish_37 modem: should NOT emit +CPIN URC
     when_sim_status_set(&mut world, "A", false);
-    then_response_is(&mut world, "A", "+CREG: 0");
+    then_wait_for_response_containing(&mut world, "A", "+CREG: 0,\"2142\",\"0000B804\",7");
 
     // CPIN status query still works as expected (returns ERROR when CMEE is not
     // enabled)
     when_at_command_sent(&mut world, "A", "AT+CPIN?");
     then_response_is(&mut world, "A", "ERROR");
 
+    // COPS query when unregistered on goldfish_37 returns 6-digit DEFAULT_PLMN
+    // ("310260")
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,2,\"\"");
+    then_response_is(&mut world, "A", "+COPS: 0,2,\"310260\"");
     then_response_is(&mut world, "A", "OK");
 }

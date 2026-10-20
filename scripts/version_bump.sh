@@ -36,13 +36,13 @@ import os
 version_file = os.environ["VERSION_FILE"]
 with open(version_file, "r+") as f:
     lines = f.readlines()
-    next_ver_regex = re.compile(r'^const VERSION:\s&str\s=\s"(\d+)\.(\d+)\.(\d+)";$')
+    next_ver_regex = re.compile(r'^pub const VERSION:\s&str\s=\s"(\d+)\.(\d+)\.(\d+)";$')
     new_version = ""
     for i, line in enumerate(lines):
         m = next_ver_regex.match(line)
         if m:
             new_version = "{0}.{1}.{2}".format(m[1], m[2], int(m[3]) + 1)
-            lines[i] = 'const VERSION: &str = "{}";\n'.format(new_version)
+            lines[i] = 'pub const VERSION: &str = "{}";\n'.format(new_version)
             break
     f.seek(0)
     f.writelines(lines)
@@ -51,11 +51,6 @@ with open(version_file, "r+") as f:
 print(new_version)
 EOF
 )
-
-if [[ -z "$NEW_VERSION" ]]; then
-  echo "Error: Failed to find VERSION in $VERSION_FILE" >&2
-  exit 1
-fi
 
 echo "Bumping Netsim version to $NEW_VERSION"
 

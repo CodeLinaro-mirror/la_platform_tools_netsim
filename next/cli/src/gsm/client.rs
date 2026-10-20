@@ -12,7 +12,7 @@ use super::args::{
 };
 use crate::{
     cell_helper::{CellClient, resolve_cell_id},
-    display::DisplayExt,
+    display::Displayer,
     error::{Error, Result},
 };
 
@@ -31,19 +31,19 @@ fn map_registration_status(opt: RegistrationStatusOption) -> RegistrationStatus 
 }
 
 /// Executes a GSM subcommand against the simulated cellular client.
-pub(crate) fn execute(cmd: GsmCommand, client: &impl CellClient, verbose: bool) -> Result<()> {
+pub fn execute(cmd: GsmCommand, client: &impl CellClient, verbose: bool) -> Result<()> {
     match cmd {
         GsmCommand::Status(args) => {
             let id = resolve_cell_id(args.id, client)?;
             let mut req = GetCellRequest::new();
             req.id = id;
             let response = client.get(&req)?;
-            println!("{}", response.display(verbose));
+            println!("{}", Displayer::new(&response, verbose));
         }
         GsmCommand::List => {
             let req = ListCellsRequest::new();
             let response = client.list(&req)?;
-            println!("{}", response.display(verbose));
+            println!("{}", Displayer::new(&response, verbose));
         }
         GsmCommand::Call(args) => {
             let id = resolve_cell_id(args.id, client)?;

@@ -55,7 +55,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
       "RunVerify": RunVerifyTask(args, env),
   }
 
-  # Enable all tasks for buildbots
+  # Enable all tasks for buidlbots
   if args.buildbot:
     for task_name in [
         "Configure",
@@ -64,6 +64,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
         "ZipArtifact",
         "InstallEmulator",
         "RunPyTest",
+        "RunVerify",
     ]:
       tasks[task_name].enable(True)
     return tasks
@@ -87,6 +88,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
           "Test",
           "InstallEmulator",
           "RunPyTest",
+          "RunVerify",
       ],
   }
 

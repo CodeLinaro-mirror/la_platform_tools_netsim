@@ -9,138 +9,15 @@ use std::sync::{
 use actor_framework::{ActorService, DynContext};
 use bytes::Bytes;
 use futures::{FutureExt, SinkExt, StreamExt};
-use netsim_model::{
-    Chip, ChipCreate, ChipError, ChipId, ChipUpdate, ChipVariant, PacketSink, PacketStream, UwbMode,
-};
+use netsim_model::{Chip, ChipCreate, ChipError, ChipId, ChipUpdate};
 use pdl_runtime::Packet;
-use pica::{Handle, MacAddress, PicaCommand, PicaEvent, packets::uci};
-use tokio::sync::oneshot;
+use pica::{PicaCommand, PicaEvent, packets::uci};
 
 use crate::{
     UwbAction, UwbActionResult,
     error::UwbError,
-    uwb_actor::{MAX_UNICAST_SHORT_MAC, UwbActor, UwbChipState},
+    uwb_actor::{UwbActor, UwbChipState},
 };
-
-const BROADCAST_SHORT_MAC: u16 = 0xFFFF;
-
-impl UwbActor {
-    fn is_mac_in_use(&self, mac: MacAddress) -> bool {
-        self.chip_states.read().values().any(|s| s.mac_address == mac)
-    }
-
-    fn allocate_anchor_mac(&mut self) -> Result<MacAddress, ChipError> {
-        for _ in 0..=MAX_UNICAST_SHORT_MAC {
-            let candidate = self.next_anchor_mac;
-            self.next_anchor_mac = candidate.checked_sub(1).unwrap_or(MAX_UNICAST_SHORT_MAC);
-            let mac = MacAddress::Short(candidate.to_be_bytes());
-            if !self.is_mac_in_use(mac) {
-                return Ok(mac);
-            }
-        }
-        Err(ChipError::InvalidArguments("No available UWB short MAC addresses".into()))
-    }
-
-    async fn create_anchor(&mut self, address: &str) -> Result<(Handle, MacAddress), UwbError> {
-        let mac = if address.is_empty() {
-            self.allocate_anchor_mac()?
-        } else {
-            let parsed = match MacAddress::try_from(address.to_owned()) {
-                Ok(mac @ MacAddress::Short(bytes)) => {
-                    if bytes == BROADCAST_SHORT_MAC.to_be_bytes() {
-                        return Err(ChipError::InvalidArguments(
-                            "Broadcast address 0xFFFF cannot be used as anchor MAC".into(),
-                        )
-                        .into());
-                    }
-                    mac
-                }
-                _ => {
-                    return Err(ChipError::InvalidArguments(
-                        format!("Invalid UWB short anchor address '{address}'").into(),
-                    )
-                    .into());
-                }
-            };
-            if self.is_mac_in_use(parsed) {
-                return Err(ChipError::InvalidArguments(
-                    format!("MAC address '{address}' is already in use").into(),
-                )
-                .into());
-            }
-            parsed
-        };
-
-        let (tx, rx) = oneshot::channel();
-        let _ = self.pica_commands.send(PicaCommand::CreateAnchor(mac, tx)).await;
-        let handle = rx.await.map_err(|err| UwbError::PicaShutdown(Box::new(err)))??;
-        Ok((handle, mac))
-    }
-
-    async fn connect_device(
-        &mut self,
-        packet_stream: Option<PacketStream>,
-        packet_sink: Option<PacketSink>,
-        p2p_tx_count: &Arc<AtomicU64>,
-        p2p_rx_count: &Arc<AtomicU64>,
-    ) -> Result<(Handle, MacAddress), UwbError> {
-        let stats_clone = self.uwb_stats.clone();
-        let stream = packet_stream
-            .ok_or(UwbError::PacketStreamMissing)?
-            .map(move |b| {
-                let v = b.to_vec();
-                parse_and_count_uci_command(&v, &stats_clone);
-                v
-            })
-            .boxed();
-
-        let tx_clone = p2p_tx_count.clone();
-        let rx_clone = p2p_rx_count.clone();
-
-        // Pica wants a Sink<Vec<u8>>.
-        let stats_clone_sink = self.uwb_stats.clone();
-        let sink =
-            Box::pin(packet_sink.ok_or(UwbError::PacketSinkMissing)?.with(move |v: Vec<u8>| {
-                if let Some(count) = count_p2p_ranging_measurements(&v).ok().filter(|&c| c > 0) {
-                    // A single ranging cycle involves multiple packets transmitted and
-                    // received. Incrementing both TX and RX by the same
-                    // cycle count is a reasonable proxy for activity,
-                    // but it's an approximation of P2P activity.
-                    tx_clone.fetch_add(count, Ordering::Relaxed);
-                    rx_clone.fetch_add(count, Ordering::Relaxed);
-                }
-                parse_and_count_uci_data_receive(&v, &stats_clone_sink);
-                async move { Ok(Bytes::from(v)) }
-            }));
-
-        // Clear unrelated events to prevent a lagged error
-        self.pica_connect_events = self.pica_connect_events.resubscribe();
-        let _ = self.pica_commands.send(PicaCommand::Connect(stream, sink)).await;
-
-        // Wait for add to complete. This guarantees the chip exists by the time any
-        // actions are performed on it.
-        let (handle, mac_address) = loop {
-            if let PicaEvent::Connected { handle, mac_address } = self
-                .pica_connect_events
-                .recv()
-                .await
-                .map_err(|err| UwbError::PicaShutdown(Box::new(err)))?
-            {
-                break (handle, mac_address);
-            }
-        };
-
-        Ok((handle, mac_address))
-    }
-
-    #[cfg(any(test, feature = "testing"))]
-    fn check_not_anchor(&self, handle: Handle) -> Result<(), UwbError> {
-        if self.chip_states.read().get(&handle).is_some_and(UwbChipState::is_anchor) {
-            return Err(ChipError::Unsupported.into());
-        }
-        Ok(())
-    }
-}
 
 impl ActorService for UwbActor {
     type Id = ChipId;
@@ -163,38 +40,63 @@ impl ActorService for UwbActor {
             return Err(ChipError::ChipExists(chip_id.0).into());
         }
 
-        let ChipCreate { mut chip, packet_stream, packet_sink } = params;
+        let mut chip = params.chip;
         chip.id = chip_id.0;
 
-        let Some(ChipVariant::Uwb(ref mut uwb)) = chip.variant else {
-            return Err(ChipError::InvalidArguments("Missing UWB chip variant".into()).into());
-        };
+        let stats_clone = self.uwb_stats.clone();
+        let stream = params
+            .packet_stream
+            .ok_or(UwbError::PacketStreamMissing)?
+            .map(move |b| {
+                let v = b.to_vec();
+                parse_and_count_uci_command(&v, &stats_clone);
+                v
+            })
+            .boxed();
 
         let p2p_tx_count = Arc::new(AtomicU64::new(0));
         let p2p_rx_count = Arc::new(AtomicU64::new(0));
+        let tx_clone = p2p_tx_count.clone();
+        let rx_clone = p2p_rx_count.clone();
 
-        let (handle, mac_address) = match uwb.mode {
-            UwbMode::Anchor => {
-                if packet_stream.is_some() || packet_sink.is_some() {
-                    return Err(ChipError::InvalidArguments(
-                        "Anchors cannot have packet stream or sink".into(),
-                    )
-                    .into());
+        // Pica wants a Sink<Vec<u8>>.
+        let stats_clone_sink = self.uwb_stats.clone();
+        let sink = Box::pin(params.packet_sink.ok_or(UwbError::PacketSinkMissing)?.with(
+            move |v: Vec<u8>| {
+                if let Some(count) = count_p2p_ranging_measurements(&v).ok().filter(|&c| c > 0) {
+                    // A single ranging cycle involves multiple packets transmitted and
+                    // received. Incrementing both TX and RX by the same
+                    // cycle count is a reasonable proxy for activity,
+                    // but it's an approximation of P2P activity.
+                    tx_clone.fetch_add(count, Ordering::Relaxed);
+                    rx_clone.fetch_add(count, Ordering::Relaxed);
                 }
-                self.create_anchor(&uwb.address).await?
-            }
-            UwbMode::Device => {
-                self.connect_device(packet_stream, packet_sink, &p2p_tx_count, &p2p_rx_count)
-                    .await?
+                parse_and_count_uci_data_receive(&v, &stats_clone_sink);
+                async move { Ok(Bytes::from(v)) }
+            },
+        ));
+
+        // Clear unrelated events to prevent a lagged error
+        self.pica_connect_events.resubscribe();
+
+        let _ = self.pica_commands.send(PicaCommand::Connect(stream, sink)).await;
+        // Wait for add to complete. This guarantees the chip exists by the time any
+        // actions are performed on it.
+        let handle = loop {
+            if let PicaEvent::Connected { handle, .. } = self
+                .pica_connect_events
+                .recv()
+                .await
+                .map_err(|err| UwbError::PicaShutdown(Box::new(err)))?
+            {
+                break handle;
             }
         };
 
-        uwb.address = mac_address.to_string();
-
-        self.chip_states.write().insert(
-            handle,
-            UwbChipState { chip: chip.clone(), p2p_tx_count, p2p_rx_count, mac_address },
-        );
+        self.chip_states
+            .write()
+            .unwrap()
+            .insert(handle, UwbChipState { chip: chip.clone(), p2p_tx_count, p2p_rx_count });
         self.initial_chips.insert(chip_id, chip);
         self.chip_to_handle.insert(chip_id, handle);
 
@@ -207,7 +109,7 @@ impl ActorService for UwbActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-        Ok(self.chip_states.read().get(handle).map(|state| state.chip.clone()))
+        Ok(self.chip_states.read().unwrap().get(handle).map(|state| state.chip.clone()))
     }
 
     async fn handle_update(
@@ -217,7 +119,7 @@ impl ActorService for UwbActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-        let mut chips = self.chip_states.write();
+        let mut chips = self.chip_states.write().unwrap();
         let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
 
         update.apply(&mut state.chip);
@@ -231,28 +133,11 @@ impl ActorService for UwbActor {
         ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let handle = self.chip_to_handle.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
-        self.initial_chips.remove(&id);
-        let state = self.chip_states.write().remove(&handle).ok_or(ChipError::ChipNotFound(id))?;
+        let state = self.chip_states.write().unwrap().remove(&handle).unwrap();
 
-        if state.is_anchor() {
-            let (tx, rx) = oneshot::channel();
-            let _ =
-                self.pica_commands.send(PicaCommand::DestroyAnchor(state.mac_address, tx)).await;
-            match rx.await {
-                Ok(Ok(_)) => {}
-                Ok(Err(e)) => {
-                    tracing::warn!("Failed to destroy Pica anchor {}: {e}", state.mac_address)
-                }
-                Err(e) => tracing::warn!(
-                    "Failed to receive Pica DestroyAnchor response for {}: {e}",
-                    state.mac_address
-                ),
-            }
-        } else {
-            // Disconnect from Pica. This completes asynchronously as we'll receive a
-            // `PicaEvent::Disconnected` event in the lifecycle `on_tick`.
-            let _ = self.pica_commands.send(PicaCommand::Disconnect(handle)).await;
-        }
+        // Disconnect from Pica. This completes asynchronously as we'll receive a
+        // `PicaEvent::Disconnected` event in the lifecycle `on_tick`.
+        let _ = self.pica_commands.send(PicaCommand::Disconnect(handle)).await;
 
         let device_client = self.device_client.clone();
         let device_id = state.chip.device_id;
@@ -278,23 +163,21 @@ impl ActorService for UwbActor {
                 let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
                 let initial_chip =
                     self.initial_chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-                let (chip, is_anchor) = {
-                    let mut chips = self.chip_states.write();
+                let chip = {
+                    let mut chips = self.chip_states.write().unwrap();
                     let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
                     state.chip = initial_chip.clone();
-                    (state.chip.clone(), state.is_anchor())
+                    state.chip.clone()
                 };
-                if !is_anchor {
-                    let reset_cmd =
-                        uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
-                    let _ = self
-                        .pica_commands
-                        .send(PicaCommand::UciPacket(
-                            *handle,
-                            reset_cmd.encode_to_vec().expect("encoding succeeds"),
-                        ))
-                        .await;
-                }
+                let reset_cmd =
+                    uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
+                let _ = self
+                    .pica_commands
+                    .send(PicaCommand::UciPacket(
+                        *handle,
+                        reset_cmd.encode_to_vec().expect("encoding succeeds"),
+                    ))
+                    .await;
 
                 Ok(UwbActionResult::Chip(Box::new(chip)))
             }
@@ -302,6 +185,7 @@ impl ActorService for UwbActor {
                 let stats = self
                     .chip_states
                     .read()
+                    .unwrap()
                     .values()
                     .map(|state| {
                         let mut radio_stats = netsim_model::NetsimRadioStats::default();
@@ -319,23 +203,24 @@ impl ActorService for UwbActor {
             }
             #[cfg(any(test, feature = "testing"))]
             UwbAction::StartRanging { id, session_id } => {
-                let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-                self.check_not_anchor(*handle)?;
-                let _ = self.pica_commands.send(PicaCommand::Ranging(*handle, session_id)).await;
+                if let Some(handle) = self.chip_to_handle.get(&id) {
+                    let _ =
+                        self.pica_commands.send(PicaCommand::Ranging(*handle, session_id)).await;
+                }
                 Ok(UwbActionResult::Success)
             }
             #[cfg(any(test, feature = "testing"))]
             UwbAction::StopRanging { id, session_id } => {
-                let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-                self.check_not_anchor(*handle)?;
-                let stop_cmd = uci::SessionStopCmd { session_id };
-                let _ = self
-                    .pica_commands
-                    .send(PicaCommand::UciPacket(
-                        *handle,
-                        stop_cmd.encode_to_vec().expect("encoding succeeds"),
-                    ))
-                    .await;
+                if let Some(handle) = self.chip_to_handle.get(&id) {
+                    let stop_cmd = uci::SessionStopCmd { session_id };
+                    let _ = self
+                        .pica_commands
+                        .send(PicaCommand::UciPacket(
+                            *handle,
+                            stop_cmd.encode_to_vec().expect("encoding succeeds"),
+                        ))
+                        .await;
+                }
                 Ok(UwbActionResult::Success)
             }
             UwbAction::GetGlobalStats => {
@@ -353,7 +238,7 @@ impl ActorService for UwbActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(self.chip_states.read().values().map(|state| state.chip.clone()).collect())
+        Ok(self.chip_states.read().unwrap().values().map(|state| state.chip.clone()).collect())
     }
 }
 
@@ -392,6 +277,7 @@ fn count_p2p_ranging_measurements(bytes: &[u8]) -> Result<u64, ()> {
     Err(())
 }
 
+#[allow(clippy::collapsible_if)]
 fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
     use pica::packets::uci::{
         ControlPacket, ControlPacketChild, DataPacket, DataPacketChild, SessionConfigPacketChild,
@@ -400,12 +286,12 @@ fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
 
     use crate::stats::UwbApi;
 
-    let Some(&b0) = bytes.first() else {
+    if bytes.is_empty() {
         return;
-    };
+    }
 
-    let mt = (b0 >> 5) & 0x07;
-    let dpf_or_gid = b0 & 0x0f;
+    let mt = (bytes[0] >> 5) & 0x07;
+    let dpf_or_gid = bytes[0] & 0x0f;
 
     if mt == 1 {
         if let Ok((packet, _)) = ControlPacket::decode(bytes) {
@@ -453,33 +339,34 @@ fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
                 _ => {}
             }
         }
-    } else if mt == 0
-        && dpf_or_gid == 1
-        && let Ok((packet, _)) = DataPacket::decode(bytes)
-        && let Ok(DataPacketChild::DataMessageSnd(_)) = packet.specialize()
-    {
-        stats.incr(UwbApi::SendData);
+    } else if mt == 0 && dpf_or_gid == 1 {
+        if let Ok((packet, _)) = DataPacket::decode(bytes) {
+            if let Ok(DataPacketChild::DataMessageSnd(_)) = packet.specialize() {
+                stats.incr(UwbApi::SendData);
+            }
+        }
     }
 }
 
+#[allow(clippy::collapsible_if)]
 fn parse_and_count_uci_data_receive(bytes: &[u8], stats: &crate::stats::UwbStats) {
     use pica::packets::uci::{DataPacket, DataPacketChild};
 
     use crate::stats::UwbApi;
 
-    let Some(&b0) = bytes.first() else {
+    if bytes.is_empty() {
         return;
-    };
+    }
 
-    let mt = (b0 >> 5) & 0x07;
-    let dpf = b0 & 0x0f;
+    let mt = (bytes[0] >> 5) & 0x07;
+    let dpf = bytes[0] & 0x0f;
 
-    if mt == 0
-        && dpf == 2
-        && let Ok((packet, _)) = DataPacket::decode(bytes)
-        && let Ok(DataPacketChild::DataMessageRcv(_)) = packet.specialize()
-    {
-        stats.incr(UwbApi::OnDataReceived);
+    if mt == 0 && dpf == 2 {
+        if let Ok((packet, _)) = DataPacket::decode(bytes) {
+            if let Ok(DataPacketChild::DataMessageRcv(_)) = packet.specialize() {
+                stats.incr(UwbApi::OnDataReceived);
+            }
+        }
     }
 }
 
@@ -491,15 +378,6 @@ mod tests {
     };
 
     use super::*;
-
-    #[tokio::test]
-    async fn test_allocate_anchor_mac_wraps_after_zero() {
-        let (_device_actor, device_client) = device_actor::new();
-        let mut actor = UwbActor::new(device_client);
-        actor.next_anchor_mac = 0;
-        assert_eq!(actor.allocate_anchor_mac().unwrap(), MacAddress::Short([0x00, 0x00]));
-        assert_eq!(actor.allocate_anchor_mac().unwrap(), MacAddress::Short([0xFF, 0xFE]));
-    }
 
     #[test]
     fn test_parsing_empty() {

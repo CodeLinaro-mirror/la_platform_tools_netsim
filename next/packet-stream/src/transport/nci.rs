@@ -13,11 +13,12 @@ impl Decoder for NciCodec {
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         const NCI_HEADER_SIZE: usize = 3;
 
-        // NCI packets always have the payload length at index 2.
-        let &[_, _, len, ..] = src.as_ref() else {
+        if src.len() < NCI_HEADER_SIZE {
             return Ok(None);
-        };
-        let payload_len = len as usize;
+        }
+
+        // NCI packets always have the payload length at index 2.
+        let payload_len = src[2] as usize;
         // Max payload length is 255, so max total_len is 258.
         let total_len = NCI_HEADER_SIZE + payload_len;
 

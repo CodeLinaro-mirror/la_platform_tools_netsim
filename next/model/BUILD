@@ -25,7 +25,6 @@ netsim_rust_library(
     proc_macro_deps = [
         "@async-trait",
     ],
-    test_deps = ["@serde_json"],
     testing_deps = ["@mockall"],
     deps = NETSIM_API_DEPS,
 )

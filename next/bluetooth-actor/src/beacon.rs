@@ -11,12 +11,13 @@
 //! NOTE: This module is currently missing the complete setup for converting
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
-use netsim_model::{BeaconParams, ChipError, ChipId, Interval, PacketType};
+use netsim_model::{BeaconParams, ChipError, ChipId, Interval};
 use netsim_packets::{
     Address as PacketsAddress, AdvertisingFilterPolicy, AdvertisingType, Enable, HciCommand,
     HciCommandHeader, LeSetAdvertisingData, LeSetAdvertisingEnable, LeSetAdvertisingParameters,
     LeSetScanResponseData, OwnAddressType, PeerAddressType, Reset,
 };
+use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use rootcanal::{Address, Rootcanal};
 use zerocopy::{Immutable, IntoBytes, KnownLayout, U16};
 
@@ -40,7 +41,7 @@ fn send_hci_command<T: HciCommand + IntoBytes + Immutable + KnownLayout>(
         op_code: T::OP_CODE,
         parameter_total_length: payload.as_bytes().len() as u8,
     };
-    let h4_packet = std::iter::once(u8::from(PacketType::Command))
+    let h4_packet = std::iter::once(PacketType::COMMAND.value() as u8)
         .chain(header.as_bytes().iter().copied())
         .chain(payload.as_bytes().iter().copied())
         .collect();
@@ -48,7 +49,7 @@ fn send_hci_command<T: HciCommand + IntoBytes + Immutable + KnownLayout>(
 }
 
 /// Creates a new `BeaconChip`.
-pub(crate) fn create(
+pub fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &BeaconParams,
@@ -110,12 +111,7 @@ pub(crate) fn create(
     };
 
     let mut adv_data_payload = [0u8; 31];
-    let Some(dest) = adv_data_payload.get_mut(..adv_data.len()) else {
-        return Err(ChipError::InvalidArguments(Box::from(
-            "Advertising data exceeds maximum payload size of 31 bytes".to_string(),
-        )));
-    };
-    dest.copy_from_slice(&adv_data);
+    adv_data_payload[..adv_data.len()].copy_from_slice(&adv_data);
 
     send_hci_command(
         rootcanal,
@@ -137,12 +133,7 @@ pub(crate) fn create(
     };
 
     let mut scan_resp_payload = [0u8; 31];
-    let Some(dest) = scan_resp_payload.get_mut(..scan_resp_data.len()) else {
-        return Err(ChipError::InvalidArguments(Box::from(
-            "Scan response data exceeds maximum payload size of 31 bytes".to_string(),
-        )));
-    };
-    dest.copy_from_slice(&scan_resp_data);
+    scan_resp_payload[..scan_resp_data.len()].copy_from_slice(&scan_resp_data);
 
     send_hci_command(
         rootcanal,

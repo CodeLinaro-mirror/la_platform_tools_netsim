@@ -26,10 +26,12 @@ impl Decoder for H4Codec {
     type Error = std::io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        // 1. Peek at the Indicator byte
-        let Some(&h4_type) = src.first() else {
+        if src.is_empty() {
             return Ok(None);
-        };
+        }
+
+        // 1. Peek at the Indicator byte
+        let h4_type = src[0];
 
         // 2. Check for valid H4 type
         let preamble_size = match h4_type {
@@ -54,18 +56,13 @@ impl Decoder for H4Codec {
 
         // 3. Calculate payload length
         // Note: src has NOT been advanced, so indices are 0-based from start of packet
-        let payload_length = match (h4_type, src.as_ref()) {
-            (H4_CMD_TYPE, &[_, _, _, len, ..]) => len as usize,
-            (H4_ACL_TYPE, &[_, _, _, l0, l1, ..]) => u16::from_le_bytes([l0, l1]) as usize,
-            (H4_SCO_TYPE, &[_, _, _, len, ..]) => len as usize,
-            (H4_EVT_TYPE, &[_, _, len, ..]) => len as usize,
-            (H4_ISO_TYPE, &[_, _, _, l0, l1, ..]) => {
-                (usize::from(l1 & 0x0f) << 8) | usize::from(l0)
-            }
-            _ => {
-                warn!("Unexpected H4 type: {h4_type:#x}");
-                return Ok(None);
-            }
+        let payload_length = match h4_type {
+            H4_CMD_TYPE => src[3] as usize,
+            H4_ACL_TYPE => u16::from_le_bytes([src[3], src[4]]) as usize,
+            H4_SCO_TYPE => src[3] as usize,
+            H4_EVT_TYPE => src[2] as usize,
+            H4_ISO_TYPE => (usize::from(src[4] & 0x0f) << 8) | usize::from(src[3]),
+            _ => unreachable!(),
         };
 
         let total_len = 1 + preamble_size + payload_length;
@@ -93,8 +90,7 @@ impl H4Codec {
     fn recover(&mut self, src: &mut BytesMut) -> usize {
         const RESET_COMMAND: [u8; 4] = [0x01, 0x03, 0x0c, 0x00];
 
-        let h4_type = src.first().copied().unwrap_or(0);
-        warn!("Invalid H4 type {h4_type}, entering recovery");
+        warn!("Invalid H4 type {}, entering recovery", src[0]);
 
         if let Some(pos) =
             src.windows(RESET_COMMAND.len()).position(|window| window == RESET_COMMAND)

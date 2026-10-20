@@ -55,6 +55,5 @@ impl ActorLifecycle for CaptureActor {
 
     async fn on_shutdown(&mut self) {
         self.flush_writers().await;
-        self.writers.clear();
     }
 }

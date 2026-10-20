@@ -4,17 +4,15 @@
 use std::{collections::BTreeMap, fmt};
 
 use modem_rs_derive::CommandParser;
-use netsim_model::Quirks;
 use nom::IResult;
 
 use crate::{
-    RadioAdmission, SmsStore,
-    parser::QuotedString,
+    parser::{QuotedString, parse_raw_data},
     pdu::SubmitPdu,
+    sim_service::SimService, // Required for Sim storage
     types::{
-        BroadcastConfig, CmsError, CommandAction, ExecutionResult, HandledCommand, Parsable,
-        PhoneNumber, Response, SendSmsArgs, SimSmsMessage, SmsAck, SmsBroadcastMode,
-        SmsMessageStatus, TypeOfAddress,
+        CmsError, CommandAction, ExecutionResult, HandledCommand, Parsable, Response,
+        SimSmsMessage, SmsAck, SmsBroadcastMode, SmsMessageStatus,
     },
 };
 
@@ -22,7 +20,7 @@ use crate::{
 pub enum SmsCommand<'a> {
     /// 3GPP TS 27.005: Send message
     #[command(tag = "AT+CMGS=")]
-    SendSms(SendSmsArgs<'a>),
+    SendSms(#[parser(parse_raw_data)] &'a [u8]),
     /// 3GPP TS 27.005: Write message to memory
     #[command(tag = "AT+CMGW=")]
     StoreSms(u16, Option<MessageStatus>),
@@ -55,18 +53,23 @@ pub enum SmsCommand<'a> {
     QueryBroadcastConfig,
     /// 3GPP TS 27.005: Set SMSC address
     #[command(tag = "AT+CSCA=")]
-    SetSmscAddress(QuotedString<'a>, Option<TypeOfAddress>),
+    SetSmscAddress(QuotedString<'a>, Option<u8>),
     /// 3GPP TS 27.005: Get SMSC address
     #[command(tag = "AT+CSCA?")]
     GetSmscAddress,
+    /// VENDOR: Remote SMS
+    #[command(tag = "AT+REMOTESMS=")]
+    RemoteSms(QuotedString<'a>),
 }
+
+const TOSCA_INTERNATIONAL: u8 = 145;
+const TOSCA_NATIONAL: u8 = 129;
 
 pub use crate::types::MessageStatus;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageStorage {
     Sim,
-    #[default]
     Me,
 }
 
@@ -77,16 +80,12 @@ impl MessageStorage {
             Self::Me => "ME",
         }
     }
-}
 
-impl std::str::FromStr for MessageStorage {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "SM" => Ok(Self::Sim),
-            "ME" => Ok(Self::Me),
-            _ => Err(()),
+    pub const fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        match bytes {
+            b"SM" => Some(Self::Sim),
+            b"ME" => Some(Self::Me),
+            _ => None,
         }
     }
 }
@@ -100,14 +99,13 @@ impl fmt::Display for MessageStorage {
 impl<'a> Parsable<'a> for MessageStorage {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         let (input, quoted) = QuotedString::parse(input)?;
-        quoted.as_str().parse().map(|s| (input, s)).map_err(|_err| {
+        Self::from_bytes(quoted.as_ref()).map(|s| (input, s)).ok_or_else(|| {
             nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::MapRes))
         })
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageFormat {
-    #[default]
     Pdu,
     Text,
 }
@@ -140,14 +138,16 @@ pub enum SmsResponse {
         storage2: MessageStorage,
         storage3: MessageStorage,
     },
-    BroadcastConfig(BroadcastConfig),
+    BroadcastConfig {
+        mode: SmsBroadcastMode,
+        mids: String,
+        dcss: String,
+    },
     SmscAddress {
-        address: Option<PhoneNumber>,
-        tosca: TypeOfAddress,
+        address: String,
+        tosca: u8,
     },
-    Prompt {
-        goldfish_compat: bool,
-    },
+    Prompt,
 }
 
 impl std::fmt::Display for SmsResponse {
@@ -168,20 +168,13 @@ impl std::fmt::Display for SmsResponse {
                     "+CPMS: \"{storage1}\",0,255,\"{storage2}\",0,255,\"{storage3}\",0,255\r\n"
                 )
             }
-            SmsResponse::BroadcastConfig(BroadcastConfig { mode, mids, dcss }) => {
+            SmsResponse::BroadcastConfig { mode, mids, dcss } => {
                 write!(f, "+CSCB: {mode},\"{mids}\",\"{dcss}\"\r\n")
             }
             SmsResponse::SmscAddress { address, tosca } => {
-                let addr_str = address.as_ref().map(|a| a.as_str()).unwrap_or("");
-                write!(f, "+CSCA: \"{addr_str}\",{tosca}\r\n")
+                write!(f, "+CSCA: \"{address}\",{tosca}\r\n")
             }
-            SmsResponse::Prompt { goldfish_compat } => {
-                if *goldfish_compat {
-                    write!(f, "> \r")
-                } else {
-                    write!(f, "> ")
-                }
-            }
+            SmsResponse::Prompt => write!(f, "> "),
         }
     }
 }
@@ -209,7 +202,7 @@ pub enum SmsTransactionState {
     #[default]
     Idle,
     Sending {
-        destination: Option<PhoneNumber>,
+        destination: Option<String>,
         expected_len: usize,
     },
     Storing {
@@ -227,48 +220,43 @@ impl SmsTransactionState {
 const MAX_ME_SMS_CAPACITY: usize = 255;
 
 pub struct SmsService {
-    quirks: Quirks,
     message_reference: u8,
     messages: BTreeMap<usize, SimSmsMessage>,
     storage1: MessageStorage,
     storage2: MessageStorage,
     storage3: MessageStorage,
-    smsc_address: Option<PhoneNumber>,
-    smsc_tosca: TypeOfAddress,
+    smsc_address: String,
+    smsc_tosca: u8,
     pub(crate) message_format: MessageFormat,
     pub transaction_state: SmsTransactionState,
-    broadcast_config: BroadcastConfig,
+    broadcast_config: (SmsBroadcastMode, String, String),
 }
 
 impl Default for SmsService {
     fn default() -> Self {
         Self {
             message_reference: 1,
-            quirks: Default::default(),
-            messages: Default::default(),
-            storage1: Default::default(),
-            storage2: Default::default(),
-            storage3: Default::default(),
-            smsc_address: Default::default(),
-            smsc_tosca: Default::default(),
-            message_format: Default::default(),
-            transaction_state: Default::default(),
-            broadcast_config: Default::default(),
+            messages: BTreeMap::new(),
+            storage1: MessageStorage::Me,
+            storage2: MessageStorage::Me,
+            storage3: MessageStorage::Me,
+            smsc_address: "".to_string(),
+            smsc_tosca: TOSCA_INTERNATIONAL,
+            message_format: MessageFormat::Pdu,
+            transaction_state: SmsTransactionState::Idle,
+            broadcast_config: (SmsBroadcastMode::Accept, "".to_string(), "".to_string()),
         }
     }
 }
 
 impl SmsService {
-    pub fn new(quirks: Quirks) -> Self {
-        Self { quirks, ..Default::default() }
-    }
     // --- Pure command handlers ---
 
     pub fn get_sms_count(&self) -> usize {
         self.messages.len()
     }
 
-    fn next_message_reference(&mut self) -> u8 {
+    pub fn next_message_reference(&mut self) -> u8 {
         let mr = self.message_reference;
         self.message_reference = self.message_reference.wrapping_add(1);
         mr
@@ -276,6 +264,16 @@ impl SmsService {
 
     pub fn is_waiting_for_prompt(&self) -> bool {
         self.transaction_state.is_active()
+    }
+
+    fn check_sim_ready(sim_service: &SimService) -> Result<(), CmsError> {
+        if !sim_service.is_present() {
+            Err(CmsError::SimNotInserted)
+        } else if !sim_service.is_ready() {
+            Err(CmsError::SimPinRequired)
+        } else {
+            Ok(())
+        }
     }
 
     fn validate_sim_index(index: usize) -> Result<u8, CmsError> {
@@ -286,25 +284,16 @@ impl SmsService {
         &mut self,
         pdu: &[u8],
         sender: Option<&str>,
-        destination: Option<PhoneNumber>,
-        network_service: &impl RadioAdmission,
+        destination: Option<String>,
     ) -> ExecutionResult {
-        // Radio/registration state may drop while the DTE is waiting at the '>' prompt after AT+CMGS.
-        if let Err(err) = network_service.can_originate_sms() {
-            return if self.quirks.goldfish_ril_37_or_earlier {
-                ExecutionResult::cme_error(err.into())
-            } else {
-                ExecutionResult::cms_error(err.into())
-            };
-        }
-        let (message_reference, actions) = if self.message_format == MessageFormat::Text {
-            let to = destination.map(String::from).unwrap_or_default();
+        let message_reference = self.next_message_reference();
+        let actions = if self.message_format == MessageFormat::Text {
+            let to = destination.unwrap_or_default();
             let text = String::from_utf8_lossy(pdu).into_owned();
-            let mr = self.next_message_reference();
-            (mr, vec![CommandAction::ReceiveTextSms { to, text }])
+            vec![CommandAction::ReceiveTextSms { to, text }]
         } else {
-            match self.handle_sms_pdu(pdu, sender) {
-                Ok(result) => result,
+            match self.handle_sms_body(pdu, sender, message_reference) {
+                Ok(actions) => actions,
                 Err(err) => return err,
             }
         };
@@ -314,32 +303,9 @@ impl SmsService {
         ExecutionResult::Success(HandledCommand { responses, actions })
     }
 
-    fn handle_sms_pdu(
+    pub fn handle_prompt_input(
         &mut self,
-        pdu: &[u8],
-        sender: Option<&str>,
-    ) -> Result<(u8, Vec<CommandAction>), ExecutionResult> {
-        let raw_pdu = crate::pdu::decode_hex_pdu(pdu)?;
-        let _parsed = SubmitPdu::parse(&raw_pdu)
-            .map_err(|_err| crate::types::CmsError::InvalidPduParameter)?;
-        // TS 27.005 § 3.5.1 reports <mr> only on success; allocate reference once
-        // accepted.
-        let mr = self.next_message_reference();
-        let processed = crate::pdu::process_outgoing_sms(&raw_pdu, sender, mr);
-        Ok((
-            mr,
-            vec![CommandAction::ReceiveSms {
-                to: processed.to,
-                pdu: processed.pdu,
-                status_report: processed.status_report,
-            }],
-        ))
-    }
-
-    pub(crate) fn handle_prompt_input(
-        &mut self,
-        sim: &mut impl SmsStore,
-        network_service: &impl RadioAdmission,
+        sim_service: &mut SimService,
         command_bytes: &[u8],
         sender: Option<&str>,
     ) -> Option<ExecutionResult> {
@@ -358,18 +324,37 @@ impl SmsService {
 
         let exec_res = match std::mem::take(&mut self.transaction_state) {
             SmsTransactionState::Storing { status, .. } => {
-                self.handle_store_sms(sim, pdu, status).into()
+                self.handle_store_sms(sim_service, pdu, status).into()
             }
             SmsTransactionState::Sending { destination, .. } => {
-                self.handle_send_sms(pdu, sender, destination, network_service)
+                self.handle_send_sms(pdu, sender, destination)
             }
-            SmsTransactionState::Idle => {
-                tracing::warn!("Unexpected SmsTransactionState::Idle in handle_prompt_input");
-                return None;
-            }
+            SmsTransactionState::Idle => unreachable!(),
         };
 
         Some(exec_res)
+    }
+
+    pub fn handle_sms_body(
+        &self,
+        pdu: &[u8],
+        sender: Option<&str>,
+        message_reference: u8,
+    ) -> Result<Vec<CommandAction>, ExecutionResult> {
+        if self.message_format == MessageFormat::Text {
+            let text = std::str::from_utf8(pdu).unwrap_or_default().to_string();
+            Ok(vec![CommandAction::ReceiveTextSms { to: String::new(), text }])
+        } else {
+            let raw_pdu = crate::pdu::decode_hex_pdu(pdu)?;
+            let _parsed = SubmitPdu::parse(&raw_pdu)
+                .map_err(|_err| crate::types::CmsError::InvalidPduParameter)?;
+            let processed = crate::pdu::process_outgoing_sms(&raw_pdu, sender, message_reference);
+            Ok(vec![CommandAction::ReceiveSms {
+                to: processed.to,
+                pdu: processed.pdu,
+                status_report: processed.status_report,
+            }])
+        }
     }
 
     fn allocate_me_slot(&self) -> Option<usize> {
@@ -384,9 +369,9 @@ impl SmsService {
         if slot > MAX_ME_SMS_CAPACITY { None } else { Some(slot) }
     }
 
-    pub(crate) fn handle_store_sms(
+    pub fn handle_store_sms(
         &mut self,
-        sim: &mut impl SmsStore,
+        sim_service: &mut SimService,
         pdu: &[u8],
         status: SmsMessageStatus,
     ) -> SmsResult {
@@ -394,9 +379,13 @@ impl SmsService {
 
         // TS 27.005 §3.2.2: <mem2> (storage2) is for writing and sending messages
         if self.storage2 == MessageStorage::Sim {
+            Self::check_sim_ready(sim_service)?;
             let message = SimSmsMessage { status, pdu: raw_pdu };
-            let index = sim.store_sms(message)?;
-            Ok(SmsSuccess::new(Some(SmsResponse::WriteSms { index: index as usize })))
+            if let Some(index) = sim_service.store_sms(message) {
+                Ok(SmsSuccess::new(Some(SmsResponse::WriteSms { index: index as usize })))
+            } else {
+                Err(CmsError::MemoryFull.into())
+            }
         } else {
             let index = self.allocate_me_slot().ok_or(CmsError::MemoryFull)?;
             self.messages.insert(index, SimSmsMessage { status, pdu: raw_pdu });
@@ -405,11 +394,15 @@ impl SmsService {
     }
 
     // TS 27.005 §3.2.2: <mem1> (storage1) is for reading and deleting messages
-    pub(crate) fn handle_delete_sms(&mut self, sim: &mut impl SmsStore, index: usize) -> SmsResult {
+    pub fn handle_delete_sms(&mut self, sim_service: &mut SimService, index: usize) -> SmsResult {
         if self.storage1 == MessageStorage::Sim {
+            Self::check_sim_ready(sim_service)?;
             let sim_index = Self::validate_sim_index(index)?;
-            sim.delete_sms(sim_index)?;
-            Ok(SmsSuccess::new(None))
+            if sim_service.delete_sms(sim_index) {
+                Ok(SmsSuccess::new(None))
+            } else {
+                Err(CmsError::InvalidMemoryIndex.into())
+            }
         } else if self.messages.remove(&index).is_some() {
             Ok(SmsSuccess::new(None))
         } else {
@@ -418,10 +411,14 @@ impl SmsService {
     }
 
     // TS 27.005 §3.2.2: <mem1> (storage1) is for reading and deleting messages
-    pub(crate) fn handle_read_sms(&mut self, sim: &mut impl SmsStore, index: usize) -> SmsResult {
+    pub fn handle_read_sms(&mut self, sim_service: &mut SimService, index: usize) -> SmsResult {
         if self.storage1 == MessageStorage::Sim {
+            Self::check_sim_ready(sim_service)?;
             let sim_index = Self::validate_sim_index(index)?;
-            let msg = sim.read_sms(sim_index)?;
+            let msg = sim_service
+                .read_sms(sim_index)
+                .map_err(|_err| CmsError::SimNotInserted)?
+                .ok_or(CmsError::InvalidMemoryIndex)?;
             Ok(SmsSuccess::new(Some(SmsResponse::ReadSms { status: msg.status, pdu: msg.pdu })))
         } else {
             let msg = self.messages.get_mut(&index).ok_or(CmsError::InvalidMemoryIndex)?;
@@ -473,47 +470,22 @@ impl SmsService {
         let status = stat.unwrap_or(SmsMessageStatus::StoredUnsent);
         self.transaction_state =
             SmsTransactionState::Storing { expected_len: len as usize, status };
-        Ok(SmsSuccess::new(Some(SmsResponse::Prompt {
-            goldfish_compat: self.quirks.goldfish_ril_37_or_earlier,
-        })))
+        Ok(SmsSuccess::new(Some(SmsResponse::Prompt)))
     }
 
-    pub(crate) fn handle_wait_for_send_sms(
-        &mut self,
-        args: SendSmsArgs,
-        network_service: &impl RadioAdmission,
-    ) -> SmsResult {
-        if !self.quirks.goldfish_ril_37_or_earlier {
-            network_service.can_originate_sms().map_err(CmsError::from)?;
+    pub fn handle_wait_for_send_sms(&mut self, data: &[u8]) -> SmsResult {
+        if self.message_format == MessageFormat::Text {
+            let s = String::from_utf8(data.to_vec()).unwrap_or_default();
+            let number = s.trim_matches('"').to_string();
+            self.transaction_state =
+                SmsTransactionState::Sending { destination: Some(number), expected_len: 160 };
+        } else {
+            let len =
+                String::from_utf8(data.to_vec()).unwrap_or_default().parse::<usize>().unwrap_or(0);
+            self.transaction_state =
+                SmsTransactionState::Sending { destination: None, expected_len: len };
         }
-        match (self.message_format, args) {
-            (MessageFormat::Text, SendSmsArgs::Text { destination_address, .. }) => {
-                let destination =
-                    PhoneNumber::try_from(destination_address.as_str()).map_err(|_err| {
-                        ExecutionResult::cms_error(CmsError::InvalidTextModeParameter)
-                    })?;
-                self.transaction_state = SmsTransactionState::Sending {
-                    destination: Some(destination),
-                    // TODO(b/558794976): Calculate the actual GSM 7-bit packing limit rather
-                    // than assuming 160.
-                    expected_len: 160,
-                };
-            }
-            (MessageFormat::Pdu, SendSmsArgs::Pdu { length }) => {
-                self.transaction_state =
-                    SmsTransactionState::Sending { destination: None, expected_len: length };
-            }
-            // TS 27.005 § 3.5.1: the argument shape must match the active <mode>.
-            (MessageFormat::Text, SendSmsArgs::Pdu { .. }) => {
-                return Err(CmsError::InvalidTextModeParameter.into());
-            }
-            (MessageFormat::Pdu, SendSmsArgs::Text { .. }) => {
-                return Err(CmsError::InvalidPduParameter.into());
-            }
-        }
-        Ok(SmsSuccess::new(Some(SmsResponse::Prompt {
-            goldfish_compat: self.quirks.goldfish_ril_37_or_earlier,
-        })))
+        Ok(SmsSuccess::new(Some(SmsResponse::Prompt)))
     }
 
     pub fn handle_broadcast_config(
@@ -522,32 +494,35 @@ impl SmsService {
         mids: QuotedString,
         dcss: QuotedString,
     ) -> SmsResult {
-        self.broadcast_config = BroadcastConfig {
+        self.broadcast_config = (
             mode,
-            mids: mids.as_str().to_string(),
-            dcss: dcss.as_str().to_string(),
-        };
+            String::from_utf8(mids.to_vec()).unwrap_or_default(),
+            String::from_utf8(dcss.to_vec()).unwrap_or_default(),
+        );
         Ok(SmsSuccess::new(None))
     }
 
     pub fn handle_query_broadcast_config(&self) -> SmsResult {
-        Ok(SmsSuccess::new(Some(SmsResponse::BroadcastConfig(self.broadcast_config.clone()))))
+        let (mode, mids, dcss) = &self.broadcast_config;
+        Ok(SmsSuccess::new(Some(SmsResponse::BroadcastConfig {
+            mode: *mode,
+            mids: mids.clone(),
+            dcss: dcss.clone(),
+        })))
     }
 
     pub fn handle_set_smsc_address(
         &mut self,
         address: QuotedString,
-        tosca: Option<TypeOfAddress>,
+        tosca: Option<u8>,
     ) -> SmsResult {
-        let addr_str = address.as_str();
-        if addr_str.is_empty() {
-            self.smsc_address = None;
-            self.smsc_tosca = tosca.unwrap_or(TypeOfAddress::Unknown);
+        self.smsc_address = String::from_utf8(address.to_vec()).unwrap_or_default();
+        if let Some(t) = tosca {
+            self.smsc_tosca = t;
+        } else if self.smsc_address.starts_with('+') {
+            self.smsc_tosca = TOSCA_INTERNATIONAL;
         } else {
-            let phone = PhoneNumber::try_from(addr_str)
-                .map_err(|_err| ExecutionResult::cms_error(CmsError::InvalidPduParameter))?;
-            self.smsc_tosca = tosca.unwrap_or_else(|| TypeOfAddress::from_number(phone.as_str()));
-            self.smsc_address = Some(phone);
+            self.smsc_tosca = TOSCA_NATIONAL;
         }
         Ok(SmsSuccess::new(None))
     }
@@ -559,18 +534,28 @@ impl SmsService {
         })))
     }
 
+    pub fn handle_remote_sms(&self, pdu: QuotedString) -> SmsResult {
+        let pdu_bytes = pdu.to_vec();
+        let processed = crate::pdu::process_outgoing_sms(&pdu_bytes, None, 0);
+        let actions = vec![CommandAction::ReceiveSms {
+            to: processed.to,
+            pdu: processed.pdu,
+            status_report: processed.status_report,
+        }];
+        Ok(SmsSuccess::with_actions(None, actions))
+    }
+
     // Explicit execute method instead of Trait
-    pub(crate) fn execute<'a>(
+    pub fn execute<'a>(
         &mut self,
         command: &SmsCommand<'a>,
-        sim: &mut impl SmsStore,
-        network_service: &impl RadioAdmission,
+        sim_service: &mut SimService,
     ) -> ExecutionResult {
         let sms_result = match command {
-            SmsCommand::SendSms(args) => self.handle_wait_for_send_sms(*args, network_service),
+            SmsCommand::SendSms(data) => self.handle_wait_for_send_sms(data),
             SmsCommand::StoreSms(len, stat) => self.handle_wait_for_store_sms(*len, *stat),
-            SmsCommand::ReadSms(index) => self.handle_read_sms(sim, *index),
-            SmsCommand::DeleteSms(index) => self.handle_delete_sms(sim, *index),
+            SmsCommand::ReadSms(index) => self.handle_read_sms(sim_service, *index),
+            SmsCommand::DeleteSms(index) => self.handle_delete_sms(sim_service, *index),
             SmsCommand::SendSmsAck => self.handle_send_sms_ack(SmsAck::Success),
             SmsCommand::SendSmsAckWithVal(ack) => self.handle_send_sms_ack(*ack),
             SmsCommand::SetSmsMessageFormat(format) => self.handle_set_sms_message_format(*format),
@@ -588,6 +573,7 @@ impl SmsService {
                 self.handle_set_smsc_address(*address, *tosca)
             }
             SmsCommand::GetSmscAddress => self.handle_get_smsc_address(),
+            SmsCommand::RemoteSms(pdu) => self.handle_remote_sms(*pdu),
         };
         sms_result.into()
     }
@@ -598,7 +584,7 @@ impl From<SmsSuccess> for ExecutionResult {
         let mut responses = Vec::new();
         let mut add_ok = true;
         if let Some(resp) = success.response {
-            if matches!(resp, SmsResponse::Prompt { .. }) {
+            if resp == SmsResponse::Prompt {
                 add_ok = false;
             }
             responses.push(resp.into());
@@ -608,34 +594,5 @@ impl From<SmsSuccess> for ExecutionResult {
         }
         let actions = success.actions;
         ExecutionResult::Success(HandledCommand { responses, actions })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        capabilities::AdmissionDenial,
-        tests::test_utils::{MockCardState, MockRadioAdmission},
-    };
-
-    #[test]
-    fn test_send_sms_radio_admission_gating() {
-        let mut sms = SmsService::default();
-        let mut sim = MockCardState::default();
-        let mut admission =
-            MockRadioAdmission { admission: Err(AdmissionDenial::NoNetworkService) };
-
-        let cmd = SmsCommand::SendSms(SendSmsArgs::Pdu { length: 15 });
-        let res = sms.execute(&cmd, &mut sim, &admission);
-        assert_eq!(res, ExecutionResult::cms_error(CmsError::NoNetworkService));
-
-        admission.admission = Ok(());
-        let res = sms.execute(&cmd, &mut sim, &admission);
-        assert!(matches!(
-            res,
-            ExecutionResult::Success(HandledCommand { responses, .. })
-                if responses == vec![Response::Sms(SmsResponse::Prompt { goldfish_compat: false })]
-        ));
     }
 }

@@ -10,7 +10,7 @@ use std::sync::{
 
 use netsim_proto::stats::{RangingSessionStats, UwbApiStats, UwbManagerStats};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum UwbApi {
+pub enum UwbApi {
     Open,
     Close,
     Start,
@@ -24,7 +24,7 @@ pub(crate) enum UwbApi {
     Count,
 }
 
-pub(crate) const UWB_API_COUNT: usize = UwbApi::Count as usize;
+pub const UWB_API_COUNT: usize = UwbApi::Count as usize;
 
 #[derive(Debug)]
 struct UwbApiArray {
@@ -38,26 +38,24 @@ impl Default for UwbApiArray {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct UwbStats {
+pub struct UwbStats {
     uwb_apis: Arc<UwbApiArray>,
 }
 
 impl UwbStats {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
-    pub(crate) fn incr(&self, api: UwbApi) {
-        if let Some(counter) = self.uwb_apis.data.get(api as usize) {
-            counter.fetch_add(1, Ordering::Relaxed);
-        }
+    pub fn incr(&self, api: UwbApi) {
+        self.uwb_apis.data[api as usize].fetch_add(1, Ordering::Relaxed);
     }
 
-    pub(crate) fn get(&self, api: UwbApi) -> u32 {
-        self.uwb_apis.data.get(api as usize).map_or(0, |counter| counter.load(Ordering::Relaxed))
+    pub fn get(&self, api: UwbApi) -> u32 {
+        self.uwb_apis.data[api as usize].load(Ordering::Relaxed)
     }
 
-    pub(crate) fn to_proto(&self) -> netsim_proto::stats::UwbApiStats {
+    pub fn to_proto(&self) -> netsim_proto::stats::UwbApiStats {
         let saturate = |val: u32| -> i32 { val.try_into().unwrap_or(i32::MAX) };
 
         let mut uwb = UwbApiStats::new();

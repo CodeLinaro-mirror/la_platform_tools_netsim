@@ -132,11 +132,11 @@ impl ActorService for ApActor {
     ) -> Result<(), Self::Error> {
         if let Some(state) = self.aps.remove(&id) {
             let bssid = state.config.bssid;
-            self.shared_keys.bssids.write().remove(&bssid);
-            self.shared_keys.gtks.write().remove(&bssid);
+            self.shared_keys.bssids.write().unwrap().remove(&bssid);
+            self.shared_keys.gtks.write().unwrap().remove(&bssid);
 
             // Find and remove all stations associated with the deleted BSSID
-            let mut station_bssids = self.shared_keys.station_bssids.write();
+            let mut station_bssids = self.shared_keys.station_bssids.write().unwrap();
             let mut stations_to_remove = Vec::new();
             station_bssids.retain(|sta, v| {
                 let matched = *v == bssid;
@@ -147,7 +147,7 @@ impl ActorService for ApActor {
             });
 
             // Remove their session keys
-            let mut sessions = self.shared_keys.sessions.write();
+            let mut sessions = self.shared_keys.sessions.write().unwrap();
             for sta in &stations_to_remove {
                 sessions.remove(sta);
             }
@@ -175,9 +175,7 @@ impl ActorService for ApActor {
         match action {
             ApReq::Register { stream, sink, shared_keys, beacon_interval } => {
                 if self.sink.is_some() {
-                    return Err(ApError::Internal(
-                        "ApActor: Register called more than once!".into(),
-                    ));
+                    panic!("ApActor: Register called more than once!");
                 }
                 info!("Registering AP singleton stream/sink with interval: {:?}", beacon_interval);
                 self.sink = Some(sink);
@@ -195,9 +193,7 @@ impl ActorService for ApActor {
                 Ok(ApResponse::Ok)
             }
             ApReq::Disconnect { mac } => {
-                let id = id.ok_or_else(|| {
-                    ApError::Internal("ApActor: Disconnect requires an ID".into())
-                })?;
+                let id = id.expect("ApActor: Disconnect requires an ID");
                 let ap_state = self.aps.get_mut(&id).ok_or(ApError::ApNotFound(id.0))?;
 
                 if ap_state.associations.remove(&mac) {

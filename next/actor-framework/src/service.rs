@@ -22,7 +22,8 @@ use tokio_stream::Stream;
 
 use crate::DynContext;
 
-pub type BoxStream = Pin<Box<dyn Stream<Item = Bytes> + Send>>;
+pub type StreamMessage = Bytes;
+pub type BoxStream = Pin<Box<dyn Stream<Item = StreamMessage> + Send>>;
 pub type BoxTypedStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
 /// Trait alias for Actor IDs ensuring all required bounds are met.

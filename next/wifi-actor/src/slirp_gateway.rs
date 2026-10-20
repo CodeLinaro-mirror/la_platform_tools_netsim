@@ -96,18 +96,15 @@ impl GatewayTrait for SlirpGateway {
         medium.wifi_stats.incr_network_packets_rx();
 
         // Extract the original destination MAC (which is the station)
-        let Some(dest_mac_bytes) = packet.first_chunk::<6>() else {
-            warn!("SLIRP_PKT: packet too short ({} bytes)", packet.len());
-            return;
-        };
-        let dest_mac = netsim_packets::MacAddress::new(*dest_mac_bytes);
+        let dest_mac_bytes: [u8; 6] = packet[0..6].try_into().unwrap_or([0; 6]);
+        let dest_mac = netsim_packets::MacAddress::new(dest_mac_bytes);
 
         medium.wifi_stats.record_download_bytes(
             packet.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN),
         );
 
         if dest_mac.is_broadcast() || dest_mac.is_multicast() {
-            let bssids = shared_keys.bssids.read().clone();
+            let bssids = shared_keys.bssids.read().unwrap().clone();
             for bssid in bssids {
                 let seq = self.seq.fetch_add(1, Ordering::Relaxed);
                 if let Ok(ieee80211) = netsim_packets::Ieee80211::from_ieee8023_qos(
@@ -175,7 +172,7 @@ impl GatewayTrait for SlirpGateway {
                         Ok(tx)
                     }));
 
-                if let Err(e) = client.register(SLIRP_ID.0, stream, sink, None, false).await {
+                if let Err(e) = client.register(SLIRP_ID.0, stream, sink, None).await {
                     warn!("Failed to register with SlirpActor: {}", e);
                 }
 

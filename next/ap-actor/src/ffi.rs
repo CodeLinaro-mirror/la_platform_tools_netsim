@@ -13,7 +13,6 @@ pub enum DigestType {
 }
 
 #[cxx::bridge(namespace = "netsim::hostap")]
-#[allow(unreachable_pub)]
 mod hostap_ffi {
     // SAFETY:
     // 1. Necessity: We use C++ FFI because the `bssl-crypto` Rust crate (and

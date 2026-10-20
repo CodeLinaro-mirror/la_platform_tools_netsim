@@ -154,13 +154,19 @@ impl NfcStats {
 
     // API increments (Ours)
     pub fn incr(&self, api: NfcApi) {
-        if let Some(counter) = self.nfc_apis.data.get(api as usize) {
-            counter.fetch_add(1, Ordering::Relaxed);
+        let idx = api as usize;
+        if idx < NfcApi::Count as usize {
+            self.nfc_apis.data[idx].fetch_add(1, Ordering::Relaxed);
         }
     }
 
     pub fn get(&self, api: NfcApi) -> u32 {
-        self.nfc_apis.data.get(api as usize).map_or(0, |counter| counter.load(Ordering::Relaxed))
+        let idx = api as usize;
+        if idx < NfcApi::Count as usize {
+            self.nfc_apis.data[idx].load(Ordering::Relaxed)
+        } else {
+            0
+        }
     }
 
     // Export to telemetry proto (Bailey)

@@ -10,7 +10,7 @@ use tracing::{error, info};
 use crate::wifi_actor::WifiActor;
 
 /// ID for the Slirp infrastructure stream
-pub(crate) const SLIRP_ID: ChipId = ChipId(u32::MAX - 1);
+pub const SLIRP_ID: ChipId = ChipId(u32::MAX - 1);
 
 /// Stream ID for AP downlink messages in the typed_stream map
 const AP_SUBSCRIPTION_ID: usize = 0;

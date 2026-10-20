@@ -161,9 +161,12 @@ pub fn parse_le_advertising_report(mut payload: &[u8]) -> Option<Vec<LeAdvertisi
         let (prefix, rest) = LeAdvertisingReportPrefix::read_from_prefix(payload).ok()?;
         let data_len = prefix.data_length as usize;
 
-        let (data, after_data) = rest.split_at_checked(data_len)?;
-        let (&rssi_u8, next_rest) = after_data.split_first()?;
-        let rssi = rssi_u8 as i8;
+        if rest.len() < data_len + 1 {
+            return None;
+        }
+
+        let data = &rest[..data_len];
+        let rssi = rest[data_len] as i8;
 
         reports.push(LeAdvertisingReport {
             event_type: prefix.event_type,
@@ -174,7 +177,7 @@ pub fn parse_le_advertising_report(mut payload: &[u8]) -> Option<Vec<LeAdvertisi
             rssi,
         });
 
-        payload = next_rest;
+        payload = &rest[data_len + 1..];
     }
 
     Some(reports)

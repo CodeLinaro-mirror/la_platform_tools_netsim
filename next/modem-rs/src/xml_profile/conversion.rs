@@ -140,7 +140,6 @@ pub fn convert_xml_dedicated_file(
 /// (SIMIO), we must reconstruct the high-level file structure (record size and
 /// count) by analyzing these commands.
 struct InferredRecords {
-    file_id: u16,
     /// The record data, mapping 1-indexed record number to its byte payload.
     records: Vec<(usize, Vec<u8>)>,
     /// The maximum record number observed (defines the file size in records).
@@ -159,27 +158,10 @@ impl InferredRecords {
         let total_len = self.max_rec_num * self.rec_len;
         let mut data_bytes = vec![0xFF; total_len];
         for (num, rec_data) in self.records {
-            if num == 0 {
-                return Err(XmlProfileError::InvalidValue {
-                    file_id: self.file_id,
-                    field: "SIMIO p1 (record number)".to_string(),
-                    value: "0".to_string(),
-                    expected: "1-indexed record number between 1 and 255".to_string(),
-                });
-            }
             // 1-indexed record number to 0-indexed buffer offset
             let start = (num - 1) * self.rec_len;
-            let record_slot = data_bytes.get_mut(start..start + self.rec_len).ok_or_else(|| {
-                XmlProfileError::InvalidValue {
-                    file_id: self.file_id,
-                    field: "SIMIO record offset".to_string(),
-                    value: format!("start={start}, rec_len={}", self.rec_len),
-                    expected: format!("offset within total file size of {total_len} bytes"),
-                }
-            })?;
-            for (dst, &src) in record_slot.iter_mut().zip(&rec_data) {
-                *dst = src;
-            }
+            let copy_len = std::cmp::min(rec_data.len(), self.rec_len);
+            data_bytes[start..start + copy_len].copy_from_slice(&rec_data[..copy_len]);
         }
         Ok(data_bytes)
     }
@@ -263,7 +245,7 @@ fn infer_records_from_read(
             }
         }
     }
-    Ok(InferredRecords { file_id, records, max_rec_num, rec_len: inferred_rec_len })
+    Ok(InferredRecords { records, max_rec_num, rec_len: inferred_rec_len })
 }
 
 /// Analyzes SIMIO update mappings (command DC) to infer record size and count
@@ -331,46 +313,47 @@ fn parse_fcp_response(response: &str) -> Option<FcpDescriptor> {
     let hex_data = parts.next()?.trim();
     let bytes = hex::decode(hex_data).ok()?;
 
-    let &[0x62, _total_fcp_len, ref rest @ ..] = bytes.as_slice() else {
+    if bytes.len() < 2 || bytes[0] != 0x62 {
         return None;
-    };
-    let mut remaining = rest;
+    }
 
+    let mut idx = 2;
     let mut is_linear_fixed = false;
     let mut record_len = None;
     let mut num_records = None;
     let mut file_size = None;
 
-    while let &[tag, len_u8, ref rest @ ..] = remaining {
-        let Some((val, next)) = rest.split_at_checked(len_u8 as usize) else {
+    while idx + 2 <= bytes.len() {
+        let tag = bytes[idx];
+        let len = bytes[idx + 1] as usize;
+        idx += 2;
+        if idx + len > bytes.len() {
             break;
-        };
-        remaining = next;
-
+        }
+        let val = &bytes[idx..idx + len];
         match tag {
             0x82 => {
-                if let Some(&first) = val.first()
-                    && (first & 0x07) == 0x02
-                {
+                if len >= 1 && (val[0] & 0x07) == 0x02 {
                     is_linear_fixed = true;
                 }
-                if let Some(&chunk) = val.get(2..).and_then(|s| s.first_chunk::<2>()) {
-                    let r_len = u16::from_be_bytes(chunk) as usize;
+                if len >= 4 {
+                    let r_len = u16::from_be_bytes([val[2], val[3]]) as usize;
                     if r_len > 0 {
                         record_len = Some(r_len);
                     }
                 }
-                if let Some(&count) = val.get(4) {
-                    num_records = Some(count as usize);
+                if len >= 5 {
+                    num_records = Some(val[4] as usize);
                 }
             }
             0x80 => {
-                if let Some(&chunk) = val.first_chunk::<2>() {
-                    file_size = Some(u16::from_be_bytes(chunk) as usize);
+                if len >= 2 {
+                    file_size = Some(u16::from_be_bytes([val[0], val[1]]) as usize);
                 }
             }
             _ => {}
         }
+        idx += len;
     }
 
     Some(FcpDescriptor { is_linear_fixed, record_len, num_records, file_size })

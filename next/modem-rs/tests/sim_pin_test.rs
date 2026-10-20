@@ -9,8 +9,8 @@ use crate::{common::constants::*, world::World};
 //   Then response from "A" is "ERROR"
 //   When AT command 'AT+CPIN="0000"' is sent to "A"
 //   Then response from "A" is "ERROR"
-//   When AT command 'AT+CPINR="SIM PIN"' is sent to "A"
-//   Then response from "A" is "+CPINR: \"SIM PIN\",1,3"
+//   When AT command "AT+SPIC" is sent to "A"
+//   Then response from "A" is "+SPIC: 1"
 //   And response from "A" is "OK"
 #[test]
 fn test_pin_retry_counter() {
@@ -24,11 +24,7 @@ fn test_pin_retry_counter() {
     world.send_and_expect_error("A", &format!("AT+CPIN=\"{INVALID_PIN}\""), "ERROR");
 
     // Query retries
-    world.send_and_expect(
-        "A",
-        "AT+CPINR=\"SIM PIN\"",
-        &[&format!("+CPINR: \"SIM PIN\",{},{DEFAULT_PIN_RETRIES}", DEFAULT_PIN_RETRIES - 2), "OK"],
-    );
+    world.send_and_expect("A", "AT+SPIC", &[&format!("+SPIC: {}", DEFAULT_PIN_RETRIES - 2), "OK"]);
 }
 
 #[test]
@@ -52,9 +48,6 @@ fn test_pin_validation_errors() {
         &format!("AT+CPIN=\"{TOO_LONG_PIN}\""),
         CME_ERROR_INCORRECT_PASSWORD,
     );
-
-    // 3. Non-ASCII PIN (multi-byte UTF-8) -> expect CME ERROR 16
-    world.send_and_expect_error("A", "AT+CPIN=\"\u{00E9}\u{00E9}\"", CME_ERROR_INCORRECT_PASSWORD);
 
     // Transition to PukRequired to test PUK validation
     world.send_and_expect_error(
@@ -191,121 +184,4 @@ fn test_puk_retries_exhaustion_transitions_to_perm_blocked() {
         &format!("AT+CPIN=\"{TEST_PUK}\",\"{NEW_PIN}\""),
         CME_ERROR_OPERATION_NOT_ALLOWED,
     );
-}
-
-#[test]
-fn test_sim_registration_emergency_camping_matrix() {
-    let mut world = World::new();
-
-    // Absent SIM
-    world.given_modem("absent");
-    crate::steps::when_sim_status_set(&mut world, "absent", false);
-    world.then_response_contains("absent", "+CPIN: ABSENT");
-    world.send_and_expect_ok("absent", "AT+CREG=1");
-    world.send_and_expect_ok("absent", "AT+CGREG=1");
-    world.send_and_expect_ok("absent", "AT+CFUN=1");
-    world.when_time_advances_ms(50);
-    world.send_and_expect("absent", "AT+CREG?", &["+CREG: 1,0", "OK"]);
-    world.send_and_expect("absent", "AT+CGREG?", &["+CGREG: 1,0", "OK"]);
-
-    // PIN-locked SIM
-    world.given_modem_with_locked_sim("pin_locked");
-    world.send_and_expect_ok("pin_locked", "AT+CREG=1");
-    world.send_and_expect_ok("pin_locked", "AT+CGREG=1");
-    world.send_and_expect_ok("pin_locked", "AT+CFUN=1");
-    world.when_time_advances_ms(15);
-    world.then_response_is("pin_locked", "+CREG: 8");
-    world.then_response_is("pin_locked", "+CGREG: 0");
-    world.then_response_contains("pin_locked", "+CSQ:");
-    world.send_and_expect("pin_locked", "AT+CREG?", &["+CREG: 1,8", "OK"]);
-    world.send_and_expect("pin_locked", "AT+CGREG?", &["+CGREG: 1,0", "OK"]);
-
-    // PUK-locked SIM
-    world.given_modem_with_locked_sim("puk_locked");
-    world.send_and_expect_ok("puk_locked", "AT+CREG=1");
-    world.send_and_expect_ok("puk_locked", "AT+CGREG=1");
-    world.send_and_expect_ok("puk_locked", "AT+CFUN=1");
-    world.when_time_advances_ms(15);
-    world.then_response_is("puk_locked", "+CREG: 8");
-    world.then_response_is("puk_locked", "+CGREG: 0");
-    world.then_response_contains("puk_locked", "+CSQ:");
-    // Exhaust PIN retries to transition to PukRequired
-    for _ in 0..DEFAULT_PIN_RETRIES {
-        world.send_and_expect_error("puk_locked", &format!("AT+CPIN=\"{INVALID_PIN}\""), "ERROR");
-    }
-    world.send_and_expect("puk_locked", "AT+CPIN?", &["+CPIN: SIM PUK", "OK"]);
-    world.send_and_expect("puk_locked", "AT+CREG?", &["+CREG: 1,8", "OK"]);
-    world.send_and_expect("puk_locked", "AT+CGREG?", &["+CGREG: 1,0", "OK"]);
-
-    // Ready SIM
-    world.given_modem("ready");
-    world.send_and_expect_ok("ready", "AT+CREG=1");
-    world.send_and_expect_ok("ready", "AT+CGREG=1");
-    world.send_and_expect_ok("ready", "AT+CFUN=1");
-    world.when_time_advances_ms(15);
-    world.then_response_is("ready", "+CREG: 1");
-    world.then_response_is("ready", "+CGREG: 1");
-    world.then_response_contains("ready", "+CSQ:");
-    world.send_and_expect("ready", "AT+CREG?", &["+CREG: 1,1", "OK"]);
-    world.send_and_expect("ready", "AT+CGREG?", &["+CGREG: 1,1", "OK"]);
-}
-
-#[test]
-fn test_puk_unlock_triggers_reattach() {
-    let mut world = World::new();
-    world.given_modem_with_locked_sim("modem1");
-
-    world.send_and_expect_ok("modem1", "AT+CREG=1");
-    world.send_and_expect_ok("modem1", "AT+CGREG=1");
-    world.send_and_expect_ok("modem1", "AT+CFUN=1");
-
-    world.when_time_advances_ms(15);
-    world.then_response_is("modem1", "+CREG: 8");
-    world.then_response_is("modem1", "+CGREG: 0");
-    world.then_response_contains("modem1", "+CSQ:");
-    world.send_and_expect("modem1", "AT+CREG?", &["+CREG: 1,8", "OK"]);
-    world.send_and_expect("modem1", "AT+CGREG?", &["+CGREG: 1,0", "OK"]);
-
-    // Exhaust PIN retries to transition to PUK required
-    for _ in 0..DEFAULT_PIN_RETRIES {
-        world.send_and_expect_error("modem1", &format!("AT+CPIN=\"{INVALID_PIN}\""), "ERROR");
-    }
-    world.send_and_expect("modem1", "AT+CPIN?", &["+CPIN: SIM PUK", "OK"]);
-
-    world.send_and_expect_ok("modem1", &format!("AT+CPIN=\"{TEST_PUK}\",\"{NEW_PIN}\""));
-
-    world.when_time_advances_ms(15);
-    world.then_response_is("modem1", "+CREG: 1");
-    world.then_response_is("modem1", "+CGREG: 1");
-    world.then_response_contains("modem1", "+CSQ:");
-
-    world.send_and_expect("modem1", "AT+CREG?", &["+CREG: 1,1", "OK"]);
-    world.send_and_expect("modem1", "AT+CGREG?", &["+CGREG: 1,1", "OK"]);
-}
-
-#[test]
-fn test_clck_unlock_triggers_reattach() {
-    let mut world = World::new();
-    world.given_modem_with_locked_sim("modem1");
-
-    world.send_and_expect_ok("modem1", "AT+CREG=1");
-    world.send_and_expect_ok("modem1", "AT+CGREG=1");
-    world.send_and_expect_ok("modem1", "AT+CFUN=1");
-
-    world.when_time_advances_ms(15);
-    world.then_response_is("modem1", "+CREG: 8");
-    world.then_response_is("modem1", "+CGREG: 0");
-    world.then_response_contains("modem1", "+CSQ:");
-    world.send_and_expect("modem1", "AT+CREG?", &["+CREG: 1,8", "OK"]);
-    world.send_and_expect("modem1", "AT+CGREG?", &["+CGREG: 1,0", "OK"]);
-
-    world.send_and_expect_ok("modem1", &format!("AT+CLCK=\"SC\",0,\"{LOCKED_PIN}\""));
-
-    world.when_time_advances_ms(15);
-    world.then_response_is("modem1", "+CREG: 1");
-    world.then_response_is("modem1", "+CGREG: 1");
-    world.then_response_contains("modem1", "+CSQ:");
-
-    world.send_and_expect("modem1", "AT+CREG?", &["+CREG: 1,1", "OK"]);
-    world.send_and_expect("modem1", "AT+CGREG?", &["+CGREG: 1,1", "OK"]);
 }

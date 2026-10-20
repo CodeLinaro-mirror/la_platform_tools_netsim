@@ -49,8 +49,7 @@ impl MacAddr {
     }
 
     pub fn is_multicast(&self) -> bool {
-        let [b0, ..] = self.bytes;
-        (b0 & 1) != 0
+        (self.bytes[0] & 1) != 0
     }
 
     pub fn is_mdns(&self) -> bool {
@@ -83,8 +82,16 @@ impl From<MacAddr> for [u8; 6] {
 
 impl fmt::Display for MacAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let [b0, b1, b2, b3, b4, b5] = self.bytes;
-        write!(f, "{b0:02X}:{b1:02X}:{b2:02X}:{b3:02X}:{b4:02X}:{b5:02X}")
+        write!(
+            f,
+            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            self.bytes[0],
+            self.bytes[1],
+            self.bytes[2],
+            self.bytes[3],
+            self.bytes[4],
+            self.bytes[5]
+        )
     }
 }
 
@@ -97,8 +104,8 @@ impl FromStr for MacAddr {
             return Err("MAC address must have 6 parts".to_string());
         }
         let mut bytes = [0u8; 6];
-        for (byte, part) in bytes.iter_mut().zip(parts) {
-            *byte = u8::from_str_radix(part, 16).map_err(|e| e.to_string())?;
+        for (i, part) in parts.iter().enumerate() {
+            bytes[i] = u8::from_str_radix(part, 16).map_err(|e| e.to_string())?;
         }
         Ok(MacAddr { bytes })
     }
@@ -164,20 +171,6 @@ pub mod ether_type {
     pub const VLAN: u16 = 0x8100;
     /// EtherType for EAPOL (Extensible Authentication Protocol over LAN).
     pub const EAPOL: u16 = 0x888E;
-}
-
-/// ARP operation codes (RFC 826).
-pub mod arp_op {
-    /// Asks which hardware address owns a protocol address.
-    pub const REQUEST: u16 = 1;
-    /// Answers a [`REQUEST`].
-    pub const REPLY: u16 = 2;
-}
-
-/// ARP hardware address space identifiers (RFC 826).
-pub mod arp_hardware {
-    /// 10Mb Ethernet, and by extension every Ethernet-like link.
-    pub const ETHERNET: u16 = 1;
 }
 
 /// Represents an Ethernet II frame header.

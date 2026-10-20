@@ -31,10 +31,10 @@ impl ActorLifecycle for NfcActor {
     }
 
     async fn on_stream(&mut self, id: Self::Id, message: Bytes, _ctx: &mut DynContext<Self>) {
-        let Some(&b0) = message.first() else {
+        if message.is_empty() {
             return;
-        };
-        let mt = b0 >> 5;
+        }
+        let mt = message[0] >> 5;
         if mt == 0 {
             // Data Packet
             if message.len() < 3 {

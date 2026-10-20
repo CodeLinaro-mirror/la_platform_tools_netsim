@@ -32,7 +32,7 @@ Options:
   - Usage: `netsim devices [OPTIONS]`
   - Options:
     - `-c, --continuous`: Continuously print device(s) information every second
-- ### `beacon`: A fixed simulated radio node (BLE beacon or UWB anchor) [aliases: anchor]
+- ### `beacon`: A chip that sends advertisements at a set interval
   - Usage: `netsim beacon <COMMAND>`
   - #### Commands:
     - `create`: Create a beacon
@@ -74,23 +74,6 @@ Options:
                 should be included in the advertise packet
               - `--manufacturer-data <DATA>`: Add manufacturer specific data to
                 the advertise packet
-          - `uwb`: Create an Ultra-wideband anchor
-            - Usage:
-              `netsim beacon create uwb [DEVICE_NAME] [CHIP_NAME] [OPTIONS]`
-            - Arguments:
-              - \[DEVICE_NAME\]: Optional name of the device to create. A
-                default name will be generated if not supplied
-              - \[CHIP_NAME\]: Optional name of the anchor chip to create within
-                the new device. A default name will be generated if not supplied
-            - Options:
-              - `--address <ADDRESS>`: UWB short address of the anchor (e.g.
-                00:01). Will be allocated if not provided
-              - `--x <X>`: x position of device in meters
-              - `--y <Y>`: y position of device in meters
-              - `--z <Z>`: z position of device in meters
-              - `--yaw <YAW>`: Yaw orientation of device in degrees
-              - `--pitch <PITCH>`: Pitch orientation of device in degrees
-              - `--roll <ROLL>`: Roll orientation of device in degrees
     - `patch`: Modify a beacon
       - Usage: `netsim beacon patch <COMMAND>`
         - ##### Commands:

@@ -44,17 +44,14 @@ impl<'a> DnsPacketBuilder<'a> {
             self.offset = original_offset;
             return None;
         }
-        let Some((qtype_dst, qclass_dst)) = self
-            .payload
-            .get_mut(self.offset..self.offset + 4)
-            .and_then(|s| s.split_at_mut_checked(2))
-        else {
+        if self.offset + 4 > self.payload.len() {
             self.offset = original_offset;
             return None;
-        };
-        qtype_dst.copy_from_slice(&qtype.to_be_bytes());
-        qclass_dst.copy_from_slice(&qclass.to_be_bytes());
-        self.offset += 4;
+        }
+        self.payload[self.offset..self.offset + 2].copy_from_slice(&qtype.to_be_bytes());
+        self.offset += 2;
+        self.payload[self.offset..self.offset + 2].copy_from_slice(&qclass.to_be_bytes());
+        self.offset += 2;
         self.header.num_questions = (self.header.num_questions.get() + 1).into();
         Some(())
     }
@@ -63,7 +60,10 @@ impl<'a> DnsPacketBuilder<'a> {
         let name = name.strip_suffix('.').unwrap_or(name);
         if name.is_empty() {
             // Root domain: just write the null terminator (0)
-            *self.payload.get_mut(self.offset)? = 0;
+            if self.offset + 1 > self.payload.len() {
+                return None;
+            }
+            self.payload[self.offset] = 0;
             self.offset += 1;
             return Some(1);
         }
@@ -76,16 +76,19 @@ impl<'a> DnsPacketBuilder<'a> {
             if label_len > 63 {
                 return None; // DNS label limit
             }
-            let (len_slot, label_dst) = self
-                .payload
-                .get_mut(self.offset..self.offset + 1 + label_len)?
-                .split_first_mut()?;
-            *len_slot = label_len as u8;
-            label_dst.copy_from_slice(label.as_bytes());
-            self.offset += 1 + label_len;
+            if self.offset + label_len + 1 > self.payload.len() {
+                return None;
+            }
+            self.payload[self.offset] = label_len as u8;
+            self.offset += 1;
+            self.payload[self.offset..self.offset + label_len].copy_from_slice(label.as_bytes());
+            self.offset += label_len;
             len += label_len + 1;
         }
-        *self.payload.get_mut(self.offset)? = 0;
+        if self.offset + 1 > self.payload.len() {
+            return None;
+        }
+        self.payload[self.offset] = 0;
         self.offset += 1;
         Some(len + 1)
     }

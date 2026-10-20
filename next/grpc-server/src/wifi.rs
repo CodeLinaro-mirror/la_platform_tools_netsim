@@ -13,12 +13,12 @@ use wifi_actor::WifiClient;
 use crate::frontend_converter::to_proto_chip;
 
 #[derive(Clone)]
-pub(crate) struct WifiServiceImpl {
+pub struct WifiServiceImpl {
     client: WifiClient,
 }
 
 impl WifiServiceImpl {
-    pub(crate) fn new(client: WifiClient) -> Self {
+    pub fn new(client: WifiClient) -> Self {
         Self { client }
     }
 }

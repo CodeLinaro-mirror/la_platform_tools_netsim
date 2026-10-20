@@ -4,7 +4,7 @@
 use clap::{Args, Subcommand};
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub(crate) enum GsmCommand {
+pub enum GsmCommand {
     /// Show registration status and signal strength (gsm status)
     Status(GsmStatus),
     /// List all simulated cellular devices (netsim specific)
@@ -32,14 +32,14 @@ pub(crate) enum GsmCommand {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmStatus {
+pub struct GsmStatus {
     /// ID of the cellular device
     #[arg(long)]
     pub id: Option<u32>,
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmCall {
+pub struct GsmCall {
     /// Phone number of the incoming call (digits, optional leading '+', max 15
     /// digits)
     pub number: String,
@@ -49,7 +49,7 @@ pub(crate) struct GsmCall {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmAccept {
+pub struct GsmAccept {
     /// Phone number of the call to accept (digits, optional leading '+', max 15
     /// digits)
     pub number: String,
@@ -59,7 +59,7 @@ pub(crate) struct GsmAccept {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmCancel {
+pub struct GsmCancel {
     /// Phone number of the call to cancel (digits, optional leading '+', max 15
     /// digits)
     pub number: String,
@@ -69,7 +69,7 @@ pub(crate) struct GsmCancel {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmHold {
+pub struct GsmHold {
     /// Phone number of the call (digits, optional leading '+', max 15 digits)
     pub number: String,
     /// Hold state (on/off). If not specified, toggles hold state.
@@ -81,13 +81,13 @@ pub(crate) struct GsmHold {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub(crate) enum HoldStateOption {
+pub enum HoldStateOption {
     On,
     Off,
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmSignal {
+pub struct GsmSignal {
     /// RSSI value (0-31, or 99 for unknown)
     pub rssi: u32,
     /// BER value (0-7, or 99 for unknown)
@@ -99,7 +99,7 @@ pub(crate) struct GsmSignal {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmVoice {
+pub struct GsmVoice {
     /// Registration status
     #[arg(value_enum, ignore_case = true)]
     pub status: RegistrationStatusOption,
@@ -109,7 +109,7 @@ pub(crate) struct GsmVoice {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmData {
+pub struct GsmData {
     /// Registration status
     #[arg(value_enum, ignore_case = true)]
     pub status: RegistrationStatusOption,
@@ -119,7 +119,7 @@ pub(crate) struct GsmData {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub(crate) enum RegistrationStatusOption {
+pub enum RegistrationStatusOption {
     Unregistered,
     Home,
     Searching,
@@ -132,7 +132,7 @@ pub(crate) enum RegistrationStatusOption {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmSim {
+pub struct GsmSim {
     /// SIM status (present/absent)
     #[arg(value_enum, ignore_case = true)]
     pub state: SimStateOption,
@@ -142,13 +142,13 @@ pub(crate) struct GsmSim {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub(crate) enum SimStateOption {
+pub enum SimStateOption {
     Present,
     Absent,
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmTech {
+pub struct GsmTech {
     /// Radio technology
     #[arg(value_enum, ignore_case = true)]
     pub tech: RadioTechnologyOption,
@@ -158,14 +158,14 @@ pub(crate) struct GsmTech {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub(crate) enum RadioTechnologyOption {
+pub enum RadioTechnologyOption {
     Gsm,
     Lte,
     Nr,
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct GsmOperator {
+pub struct GsmOperator {
     /// Operator name or numeric PLMN. Use empty string to reset to automatic.
     pub operator: String,
     /// ID of the cellular device

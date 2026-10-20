@@ -60,12 +60,12 @@ impl fmt::Display for DeviceId {
     }
 }
 
-pub(crate) mod api {
+pub mod api {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        chip::{BleBeacon, BluetoothCreate, CellCreate, Uwb, UwbCreate, UwbMode, WifiCreate},
-        device::{DeviceConfig, Orientation, Position},
+        chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate},
+        device::{Device, DeviceConfig, Orientation, Position},
         nfc::{Nfc, NfcCreate},
     };
 
@@ -87,12 +87,16 @@ pub(crate) mod api {
     }
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+    pub struct ListDeviceResponse {
+        pub devices: Vec<Device>,
+    }
+
+    #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct DeviceUpdate {
         pub id: u32,
         pub name: Option<String>,
         pub visible: Option<bool>,
         //TODO: pub chip_id: Option<ChipId>,
-        #[serde(default)]
         pub pose: PoseUpdate,
         //TODO: pub links: Option<Vec<Link>,
         pub chips: Option<Vec<crate::chip::ChipUpdate>>,
@@ -191,12 +195,13 @@ pub(crate) mod api {
                 ChipCreateVariant::Wifi(wifi) => {
                     crate::chip::ChipVariant::Wifi(crate::wifi::Wifi::from(wifi))
                 }
-                ChipCreateVariant::Uwb(uwb) => crate::chip::ChipVariant::Uwb(Uwb::from(uwb)),
+                ChipCreateVariant::Uwb(_uwb) => {
+                    crate::chip::ChipVariant::Uwb(crate::uwb::Uwb { radio: Default::default() })
+                }
                 ChipCreateVariant::Cell(cell) => {
                     crate::chip::ChipVariant::Cell(crate::cell::Cell {
                         sim_type: cell.sim_type,
                         sim_profile: cell.sim_profile,
-                        network_configs: cell.network_configs,
                         ..Default::default()
                     })
                 }
@@ -245,19 +250,13 @@ pub(crate) mod api {
                     Some(crate::chip::ChipVariant::Wifi(_wifi)) => {
                         ChipCreateVariant::Wifi(crate::chip::WifiCreate::default())
                     }
-                    Some(crate::chip::ChipVariant::Uwb(uwb)) => {
-                        ChipCreateVariant::Uwb(match uwb.mode {
-                            UwbMode::Device => UwbCreate::Device,
-                            UwbMode::Anchor => UwbCreate::Anchor {
-                                address: (!uwb.address.is_empty()).then_some(uwb.address),
-                            },
-                        })
+                    Some(crate::chip::ChipVariant::Uwb(_uwb)) => {
+                        ChipCreateVariant::Uwb(crate::chip::UwbCreate::default())
                     }
                     Some(crate::chip::ChipVariant::Cell(cell)) => {
                         ChipCreateVariant::Cell(crate::chip::CellCreate {
                             sim_type: cell.sim_type,
                             sim_profile: cell.sim_profile,
-                            network_configs: cell.network_configs,
                         })
                     }
                     Some(crate::chip::ChipVariant::CellularData(_cell_data)) => {

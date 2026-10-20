@@ -3,7 +3,9 @@
 
 use std::collections::HashMap;
 
-use netsim_model::{ApCreate, ApUpdate as ModelApUpdate, DEFAULT_WIFI_SSID, Position, WifiMode};
+use netsim_model::{
+    ApCreate, ApUpdate as ModelApUpdate, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID, Position, WifiMode,
+};
 use netsim_packets::MacAddr;
 use serde::{Deserialize, Serialize};
 
@@ -33,7 +35,7 @@ impl From<ApId> for u32 {
 
 /// Shared Stream ID for the singleton packet stream (matching SLIRP_ID
 /// convention)
-pub(crate) const WIFI_STREAM_ID: u32 = u32::MAX - 1;
+pub const WIFI_STREAM_ID: u32 = u32::MAX - 1;
 
 /// Configuration for creating a new Access Point.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -66,26 +68,21 @@ pub struct ApConfig {
     pub position: Position,
 }
 
-/// Base MAC address for simulated Wi-Fi Access Points (02:15:b2:00:00:00).
-pub const DEFAULT_AP_BSSID: MacAddr = MacAddr::new([0x02, 0x15, 0xb2, 0x00, 0x00, 0x00]);
-
-/// Computes the unique BSSID for an AP based on its ID offset.
-const fn compute_ap_bssid(id: ApId) -> MacAddr {
-    let offset_id = (id.0 as u16) + 1;
-    let [b0, b1] = offset_id.to_be_bytes();
-    let mut bytes = DEFAULT_AP_BSSID.bytes;
-    let [.., b4, b5] = &mut bytes;
-    *b4 = b0;
-    *b5 = b1;
-    MacAddr::new(bytes)
+fn default_bssid() -> MacAddr {
+    DEFAULT_WIFI_BSSID.parse().expect("DEFAULT_WIFI_BSSID is a valid MAC address")
 }
 
-/// Precomputed BSSID for the Built-in Default AP (ID 0).
-pub const EXPECTED_DEFAULT_AP_BSSID: MacAddr = compute_ap_bssid(ApId(0));
+/// Computes the unique BSSID for an AP based on its ID offset.
+pub fn compute_ap_bssid(id: ApId) -> MacAddr {
+    let mut mac = default_bssid();
+    let offset_id = (id.0 as u16) + 1;
+    mac.bytes[4..6].copy_from_slice(&offset_id.to_be_bytes());
+    mac
+}
 
 /// Returns the expected BSSID for the Built-in Default AP (ID 0).
-pub const fn expected_default_ap_bssid() -> MacAddr {
-    EXPECTED_DEFAULT_AP_BSSID
+pub fn expected_default_ap_bssid() -> MacAddr {
+    compute_ap_bssid(ApId(0))
 }
 
 fn default_ftm_responder_enabled() -> bool {
@@ -108,7 +105,7 @@ impl Default for ApConfig {
     fn default() -> Self {
         Self {
             ssid: DEFAULT_WIFI_SSID.to_string(),
-            bssid: DEFAULT_AP_BSSID,
+            bssid: default_bssid(),
             channel: 6,
             hw_mode: WifiMode::G,
             wpa_passphrase: None,
@@ -269,7 +266,8 @@ impl ApActor {
 
 impl ApState {
     pub fn new(id: ApId, mut config: ApConfig) -> Self {
-        if config.bssid.bytes == [0; 6] || config.bssid == DEFAULT_AP_BSSID {
+        let default_mac = default_bssid();
+        if config.bssid.bytes == [0; 6] || config.bssid == default_mac {
             config.bssid = compute_ap_bssid(id);
         }
 

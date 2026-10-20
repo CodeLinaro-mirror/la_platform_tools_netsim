@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use modem_rs::{PhoneNumber, RegistrationStatus};
+use modem_rs::RegistrationStatus;
 use netsim_model::{ChipId, ModemAction, RadioTechnology};
 
 use crate::world::World;
@@ -135,8 +135,7 @@ pub fn when_sim_status_set(world: &mut World, name: &str, present: bool) {
 pub fn when_phone_number_set(world: &mut World, name: &str, number: &str) {
     let (id, _) = world.get_modem(name);
     if let Some(modem) = world.manager.get_modem_mut(id) {
-        let phone = PhoneNumber::new_for_test(number);
-        modem.set_phone_number(phone);
+        modem.set_phone_number(number);
     } else {
         panic!("Failed to retrieve modem '{name}'");
     }

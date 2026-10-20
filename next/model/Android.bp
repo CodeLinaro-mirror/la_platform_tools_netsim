@@ -85,7 +85,6 @@ rust_test_host {
         "libnetsim_next_actor_framework_testing",
         "libnetsim_next_types_testing",
         "libserde",
-        "libserde_json",
         "libthiserror",
         "libtokio",
         "libtokio_stream",

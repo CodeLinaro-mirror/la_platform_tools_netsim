@@ -213,9 +213,10 @@ The following code paths exist in the implementation but do not map to a
 specific functional requirement. They are primarily architectural artifacts or
 client-side convenience helpers.
 
-| Code Path                                 | Description                         | Justification                                                          |
-| :---------------------------------------- | :---------------------------------- | :--------------------------------------------------------------------- |
-| [`LinkActor::handle_get`](src/service.rs) | Retrieve a single link by `LinkId`. | Required by `ActorService` trait contract. Not used by business logic. |
+| Code Path                                  | Description                                    | Justification                                                                   |
+| :----------------------------------------- | :--------------------------------------------- | :------------------------------------------------------------------------------ |
+| [`LinkActor::handle_get`](src/service.rs)  | Retrieve a single link by `LinkId`.            | Required by `ActorService` trait contract. Not used by business logic.          |
+| [`LinkClient::get_link_id`](src/client.rs) | Helper to find `LinkId` by (Sender, Receiver). | **Deprecated/Unused**. Client-side linear search helper. Candidate for removal. |
 
 ## Appendix A: BDD Scenarios
 

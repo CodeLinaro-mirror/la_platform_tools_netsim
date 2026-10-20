@@ -64,13 +64,13 @@ impl SceneClient {
 
 /// Netsim wrapper around Casimir's Scene to handle concurrency and dynamic
 /// device addition.
-pub(crate) struct NetsimScene {
+pub struct NetsimScene {
     scene: casimir::Scene,
     cmd_rx: tokio::sync::mpsc::UnboundedReceiver<SceneCommand>,
 }
 
 impl NetsimScene {
-    pub(crate) fn new(cmd_rx: tokio::sync::mpsc::UnboundedReceiver<SceneCommand>) -> Self {
+    pub fn new(cmd_rx: tokio::sync::mpsc::UnboundedReceiver<SceneCommand>) -> Self {
         Self { scene: casimir::Scene::new(), cmd_rx }
     }
 }
@@ -89,7 +89,9 @@ impl Future for NetsimScene {
                     let _ = resp.send(res);
                 }
                 SceneCommand::RemoveDevice { id, resp } => {
-                    if this.scene.devices.get(id as usize).is_some_and(Option::is_some) {
+                    if (id as usize) < this.scene.devices.len()
+                        && this.scene.devices[id as usize].is_some()
+                    {
                         this.scene.disconnect(id as usize);
                     }
                     let _ = resp.send(Ok(()));

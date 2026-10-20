@@ -15,12 +15,12 @@ use netsim_proto::{
 use protobuf::well_known_types::empty::Empty;
 
 #[derive(Clone)]
-pub(crate) struct AccessPointServiceImpl {
+pub struct AccessPointServiceImpl {
     client: ApClient,
 }
 
 impl AccessPointServiceImpl {
-    pub(crate) fn new(client: ApClient) -> Self {
+    pub fn new(client: ApClient) -> Self {
         Self { client }
     }
 }

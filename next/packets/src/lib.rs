@@ -1,9 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::unwrap_used)]
-#![allow(unreachable_pub)]
-
 //! `packets` is a crate for zero-copy parsing and handling of network packets.
 //!
 //! It provides structures and utilities for working with various network
@@ -179,8 +176,7 @@ pub(crate) mod utils;
 
 // Facade
 pub use ethernet::{
-    ArpPacket, ArpPacketBuilder, EthernetFrame, EthernetPacket, MacAddr,
-    frame::{arp_hardware, arp_op, ether_type},
+    ArpPacket, ArpPacketBuilder, EthernetFrame, EthernetPacket, MacAddr, frame::ether_type,
 };
 // hci commands and types
 pub use hci::commands::{
@@ -200,11 +196,10 @@ pub use hci::{
 pub use icmp::{
     IcmpEcho, IcmpHeader, IcmpType, Icmpv4UnreachableCode as UnreachableCode,
     Icmpv4UnreachableCode, Icmpv6Echo, Icmpv6Header, Icmpv6ParameterProblemCode,
-    Icmpv6TimeExceededCode, Icmpv6Type, Icmpv6UnreachableCode, NDP_HOP_LIMIT,
-    NeighborAdvertisement, NeighborAdvertisementBuilder, NeighborSolicitation,
-    NeighborSolicitationBuilder, PrefixInformationOption, RdnssOption, RouterAdvertisement,
-    RouterAdvertisementBuilder, RouterSolicitation, RouterSolicitationBuilder,
-    SourceLinkLayerAddressOption, na_flags, ndp_option,
+    Icmpv6TimeExceededCode, Icmpv6Type, Icmpv6UnreachableCode, NeighborAdvertisement,
+    NeighborAdvertisementBuilder, NeighborSolicitation, NeighborSolicitationBuilder,
+    PrefixInformationOption, RdnssOption, RouterAdvertisement, RouterAdvertisementBuilder,
+    RouterSolicitation, RouterSolicitationBuilder, SourceLinkLayerAddressOption,
 };
 // ieee80211 constants
 pub use ieee80211::{
@@ -278,13 +273,7 @@ pub use utils::checksum::{
 };
 
 pub mod link_layer {
-    #[allow(
-        warnings,
-        clippy::all,
-        clippy::unwrap_in_result,
-        clippy::map_err_ignore,
-        clippy::indexing_slicing
-    )]
+    #[allow(warnings, clippy::all, clippy::unwrap_in_result, clippy::map_err_ignore)]
     mod pdl_generated {
         include!(concat!(env!("OUT_DIR"), "/link_layer_packets.rs"));
     }
@@ -294,10 +283,10 @@ pub mod link_layer {
     /// deserialization overhead. Uses hardcoded offsets derived from
     /// `link_layer_packets.pdl`.
     pub fn fast_inspect_p2p_payload(data_slice: &[u8]) -> bool {
-        let Some(&first) = data_slice.first() else {
+        if data_slice.len() < 13 {
             return false;
-        };
-        let Ok(packet_type) = PacketType::try_from(first) else {
+        }
+        let Ok(packet_type) = PacketType::try_from(data_slice[0]) else {
             return false;
         };
         match packet_type {
@@ -522,14 +511,9 @@ pub use pcap::{
     ng::InterfaceDescriptionBlock, radiotap::create_radiotap_packet,
 };
 // Additional types needed by tests or external consumers
-pub use transport::tcp::{
-    TcpHeader, TcpOptionMss, TcpOptionSackPermitted, TcpOptionWindowScale, option_kind,
-};
+pub use transport::tcp::TcpHeader;
 pub use transport::{
     udp::UdpHeader,
     udp_json::{JsonUdpHeader, to_json},
 };
-pub use utils::{
-    test_utils,
-    test_utils::{PacketBuilder, build_arp_frame, build_icmpv6_ns_frame},
-};
+pub use utils::{test_utils, test_utils::PacketBuilder};

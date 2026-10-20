@@ -1,11 +1,13 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, RwLock},
+};
 
 use device_actor::DeviceClient;
 use netsim_model::{Chip, ChipId};
-use parking_lot::{Mutex, RwLock};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -13,7 +15,7 @@ use tracing::warn;
 use crate::{BluetoothEvent, ranging};
 
 /// A thread-safe map of chip states.
-type ChipMap = Arc<RwLock<HashMap<ChipId, Chip>>>;
+pub type ChipMap = Arc<RwLock<HashMap<ChipId, Chip>>>;
 
 /// Implementation of `RootcanalCallbacks` for the Bluetooth Actor.
 /// We need to wrap this in a Mutex even though Rootcanal runs on
@@ -33,7 +35,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
     ) -> Option<i32> {
         let src_id = source_id.into();
         let dst_id = destination_id.into();
-        let chips = self.chips.read();
+        let chips = self.chips.read().unwrap();
         let src_chip = chips.get(&src_id);
         let dst_chip = chips.get(&dst_id);
 
@@ -72,7 +74,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
     fn estimate_distance(&self, source_id: u32, destination_id: u32) -> u32 {
         let src_id = source_id.into();
         let dst_id = destination_id.into();
-        let chips = self.chips.read();
+        let chips = self.chips.read().unwrap();
         let src_chip = chips.get(&src_id);
         let dst_chip = chips.get(&dst_id);
         if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
@@ -153,8 +155,8 @@ mod tests {
         chip2.id = 2;
         // Position at (0,0,0) - distance 0
 
-        chips.write().insert(chip1_id, chip1.clone());
-        chips.write().insert(chip2_id, chip2.clone());
+        chips.write().unwrap().insert(chip1_id, chip1.clone());
+        chips.write().unwrap().insert(chip2_id, chip2.clone());
 
         // Test without link (should use distance-based RSSI).
         // Distance 0 should result in a valid RSSI value.
@@ -163,7 +165,7 @@ mod tests {
 
         // Add link override
         chip1.links.push((chip2_id, -50));
-        chips.write().insert(chip1_id, chip1);
+        chips.write().unwrap().insert(chip1_id, chip1);
 
         // Test with link
         let rssi_override = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
@@ -196,8 +198,8 @@ mod tests {
             ..Default::default()
         })));
 
-        chips.write().insert(chip1_id, chip1.clone());
-        chips.write().insert(chip2_id, chip2.clone());
+        chips.write().unwrap().insert(chip1_id, chip1.clone());
+        chips.write().unwrap().insert(chip2_id, chip2.clone());
 
         // When the source sends an LE packet
         let rssi = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);

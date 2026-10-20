@@ -48,7 +48,7 @@ impl Icmpv6Header {
 
     /// Sets the echo fields (identifier, sequence number).
     pub fn set_echo_fields(&mut self, id: u16, seq: u16) {
-        if let Ok(echo) = Icmpv6Echo::mut_from_bytes(self.rest.as_mut_slice()) {
+        if let Ok(echo) = Icmpv6Echo::mut_from_bytes(&mut self.rest[..]) {
             echo.identifier.set(id);
             echo.sequence_number.set(seq);
         }

@@ -5,7 +5,7 @@
 //! its protocol by translating console commands into Netsim device actor
 //! updates.
 
-use std::io;
+use std::{fmt::Write as _, io};
 
 use device_actor::DeviceClient;
 use netsim_model::{
@@ -23,9 +23,7 @@ use tracing::{error, info, warn};
 /// Accepts incoming connections from host-side test runners and spawns
 /// a new Tokio task to handle each client session concurrently.
 pub async fn run(listener: TcpListener, device_client: DeviceClient) {
-    let addr =
-        listener.local_addr().map(|a| a.to_string()).unwrap_or_else(|_| "unknown".to_string());
-    info!("Rootcanal test channel server started on {addr}");
+    info!("Rootcanal test channel server started on {}", listener.local_addr().unwrap());
     loop {
         match listener.accept().await {
             Ok((stream, addr)) => {
@@ -270,33 +268,38 @@ async fn handle_client(mut stream: TcpStream, device_client: DeviceClient) -> io
 /// Retrieves the list of all active simulated devices and their radio states,
 /// formatting it to match the classic Rootcanal console output.
 async fn handle_list(device_client: &DeviceClient) -> Result<String, String> {
-    let devices = device_client.list().await.map_err(|e| format!("Failed to list devices: {e}"))?;
+    let mut devices_section = String::new();
+    let mut low_energy_section = String::new();
+    let mut br_edr_section = String::new();
 
-    let mut le_ids: Vec<u32> = Vec::new();
-    let mut classic_ids: Vec<u32> = Vec::new();
+    let list_resp =
+        device_client.list().await.map_err(|e| format!("Failed to list devices: {e}"))?;
 
-    for device in &devices {
-        if device
+    for device in list_resp.devices.iter() {
+        writeln!(devices_section, "  {}:hci_device_{}", device.id, device.id).unwrap();
+
+        let has_le = device
             .chips
             .iter()
-            .any(|chip| chip.kind == ChipKind::BLUETOOTH && chip.enabled && chip.is_le_enabled())
-        {
-            le_ids.push(device.id);
+            .any(|chip| chip.kind == ChipKind::BLUETOOTH && chip.enabled && chip.is_le_enabled());
+        let has_classic = device.chips.iter().any(|chip| {
+            chip.kind == ChipKind::BLUETOOTH && chip.enabled && chip.is_classic_enabled()
+        });
+
+        if has_le {
+            if !low_energy_section.is_empty() {
+                write!(low_energy_section, ",").unwrap();
+            }
+            write!(low_energy_section, "{}", device.id).unwrap();
         }
 
-        if device.chips.iter().any(|chip| {
-            chip.kind == ChipKind::BLUETOOTH && chip.enabled && chip.is_classic_enabled()
-        }) {
-            classic_ids.push(device.id);
+        if has_classic {
+            if !br_edr_section.is_empty() {
+                write!(br_edr_section, ",").unwrap();
+            }
+            write!(br_edr_section, "{}", device.id).unwrap();
         }
     }
-
-    let devices_section: String = devices
-        .iter()
-        .map(|device| format!("  {}:hci_device_{}\n", device.id, device.id))
-        .collect();
-    let low_energy_section = le_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
-    let br_edr_section = classic_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
 
     Ok(format!(
         "Devices:\n{devices_section}Phys:\n  0:LOW_ENERGY:{low_energy_section}\n  1:BR_EDR:{br_edr_section}\n"

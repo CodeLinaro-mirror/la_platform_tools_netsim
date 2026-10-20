@@ -3,15 +3,15 @@
 
 use std::{io, path::Path};
 
-use crate::writer::{CaptureWriter, DataLinkType, PcapWriter};
+use crate::writer::{CaptureWriter, DLT_NFC_NCI, PcapWriter};
 
 /// PCAP writer for NFC NCI packets.
-pub(crate) struct NciPcapWriter;
+pub struct NciPcapWriter;
 
 impl NciPcapWriter {
-    /// Wraps [`PcapWriter`] with [`DataLinkType::User0`] as the format.
+    /// Wraps [`PcapWriter`] with [`DLT_NFC_NCI`] as the format.
     #[allow(clippy::new_ret_no_self)]
-    pub(crate) async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
-        Ok(Box::new(PcapWriter::new(path, DataLinkType::User0).await?))
+    pub async fn new<P: AsRef<Path>>(path: P) -> io::Result<Box<dyn CaptureWriter>> {
+        Ok(Box::new(PcapWriter::new(path, DLT_NFC_NCI).await?))
     }
 }

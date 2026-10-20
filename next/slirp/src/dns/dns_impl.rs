@@ -5,7 +5,7 @@
 
 use std::{
     collections::HashMap,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     time::{Duration, Instant},
 };
 
@@ -115,8 +115,8 @@ impl DnsProxy {
 
         // 1. Parse the question
         let Some((qname, qtype, _, flags)) = parse_dns_query(query_payload) else {
-            // FALLBACK: If we cannot parse it, just forward to the
-            // default/configured server!
+            // FALLBACK: If we cannot parse it, just forward to the default/configured
+            // server!
             debug!("DNS Proxy: Failed to parse query, falling back to direct forwarding");
             return DnsQueryResult::Forward(get_upstream_server(dns_servers));
         };
@@ -134,12 +134,9 @@ impl DnsProxy {
                         "DNS Proxy: Cache hit for '{}' -> {} (TTL={})",
                         qname, entry.ip, remaining_ttl
                     );
-                    let Some(reply_payload) =
-                        synthesize_dns_reply(query_payload, flags, qtype, remaining_ttl, entry.ip)
-                    else {
-                        return DnsQueryResult::Ignore;
-                    };
-                    return DnsQueryResult::Cached(reply_payload);
+                    let reply =
+                        synthesize_dns_reply(query_payload, flags, qtype, remaining_ttl, entry.ip);
+                    return DnsQueryResult::Cached(reply);
                 } else {
                     debug!("DNS Proxy: Cache expired for '{qname}'");
                     self.cache.remove(&key);
@@ -149,8 +146,7 @@ impl DnsProxy {
 
         // 3. Failover logic (reactive)
         if family_servers.is_empty() {
-            // No servers of the correct family configured, use hardcoded
-            // fallback
+            // No servers of the correct family configured, use hardcoded fallback
             return DnsQueryResult::Forward(get_upstream_server(dns_servers));
         }
 
@@ -180,11 +176,7 @@ impl DnsProxy {
             0
         };
 
-        if let Some(&server) = family_servers.get(server_idx) {
-            DnsQueryResult::Forward(server)
-        } else {
-            DnsQueryResult::Forward(get_upstream_server(dns_servers))
-        }
+        DnsQueryResult::Forward(family_servers[server_idx])
     }
 
     pub fn handle_reply(&mut self, reply_payload: &[u8], now: Instant) {
@@ -208,14 +200,18 @@ impl DnsProxy {
 fn parse_dns_name(payload: &[u8], mut offset: usize) -> Option<(String, usize)> {
     let mut name = String::new();
     loop {
-        let &len_byte = payload.get(offset)?;
-        let len = len_byte as usize;
+        if offset >= payload.len() {
+            return None;
+        }
+        let len = payload[offset] as usize;
         offset += 1;
         if len == 0 {
             break;
         }
-        let label_bytes = payload.get(offset..offset + len)?;
-        let label = std::str::from_utf8(label_bytes).ok()?;
+        if offset + len > payload.len() {
+            return None;
+        }
+        let label = std::str::from_utf8(&payload[offset..offset + len]).ok()?;
         if !name.is_empty() {
             name.push('.');
         }
@@ -226,8 +222,10 @@ fn parse_dns_name(payload: &[u8], mut offset: usize) -> Option<(String, usize)> 
 }
 
 fn parse_dns_query(payload: &[u8]) -> Option<(String, u16, u16, u16)> {
-    let header_bytes = payload.get(..12)?;
-    let header = DnsHeader::read_from_bytes(header_bytes).ok()?;
+    if payload.len() < 12 {
+        return None;
+    }
+    let header = DnsHeader::read_from_bytes(&payload[..12]).ok()?;
     let tx_id = header.transaction_id.get();
     let flags = header.flags.get();
     let num_questions = header.num_questions.get();
@@ -237,15 +235,21 @@ fn parse_dns_query(payload: &[u8]) -> Option<(String, u16, u16, u16)> {
     }
 
     let (qname, offset) = parse_dns_name(payload, 12)?;
-    let (&qtype_bytes, _) = payload.get(offset..)?.first_chunk::<4>()?.split_first_chunk::<2>()?;
-    let qtype = u16::from_be_bytes(qtype_bytes);
+    if offset + 4 > payload.len() {
+        return None;
+    }
+    let qtype = u16::from_be_bytes([payload[offset], payload[offset + 1]]);
     Some((qname, qtype, tx_id, flags))
 }
 
 fn parse_dns_name_or_pointer(payload: &[u8], offset: usize) -> Option<(String, usize)> {
-    let &first = payload.get(offset)?;
-    if (first & 0xC0) == 0xC0 {
-        payload.get(offset..offset + 2)?;
+    if offset >= payload.len() {
+        return None;
+    }
+    if (payload[offset] & 0xC0) == 0xC0 {
+        if offset + 2 > payload.len() {
+            return None;
+        }
         Some((String::new(), offset + 2))
     } else {
         parse_dns_name(payload, offset)
@@ -253,8 +257,10 @@ fn parse_dns_name_or_pointer(payload: &[u8], offset: usize) -> Option<(String, u
 }
 
 fn parse_dns_reply(payload: &[u8]) -> Option<(String, u16, IpAddr, u32)> {
-    let header_bytes = payload.get(..12)?;
-    let header = DnsHeader::read_from_bytes(header_bytes).ok()?;
+    if payload.len() < 12 {
+        return None;
+    }
+    let header = DnsHeader::read_from_bytes(&payload[..12]).ok()?;
     let num_questions = header.num_questions.get() as usize;
     let num_answers = header.num_answers.get() as usize;
 
@@ -263,9 +269,10 @@ fn parse_dns_reply(payload: &[u8]) -> Option<(String, u16, IpAddr, u32)> {
     let mut first_question = None;
     for _ in 0..num_questions {
         let (name, next_offset) = parse_dns_name(payload, offset)?;
-        let (&qtype_bytes, _) =
-            payload.get(next_offset..)?.first_chunk::<4>()?.split_first_chunk::<2>()?;
-        let qtype = u16::from_be_bytes(qtype_bytes);
+        if next_offset + 4 > payload.len() {
+            return None;
+        }
+        let qtype = u16::from_be_bytes([payload[next_offset], payload[next_offset + 1]]);
         if first_question.is_none() {
             first_question = Some((name, qtype));
         }
@@ -276,26 +283,36 @@ fn parse_dns_reply(payload: &[u8]) -> Option<(String, u16, IpAddr, u32)> {
 
     for _ in 0..num_answers {
         let (_, next_offset) = parse_dns_name_or_pointer(payload, offset)?;
-        let &[t0, t1, c0, c1, ttl0, ttl1, ttl2, ttl3, l0, l1, ref rest @ ..] =
-            payload.get(next_offset..)?
-        else {
+        if next_offset + 10 > payload.len() {
             return None;
-        };
-        let rtype = u16::from_be_bytes([t0, t1]);
-        let rclass = u16::from_be_bytes([c0, c1]);
-        let ttl = u32::from_be_bytes([ttl0, ttl1, ttl2, ttl3]);
-        let rd_len = u16::from_be_bytes([l0, l1]) as usize;
+        }
+        let rtype = u16::from_be_bytes([payload[next_offset], payload[next_offset + 1]]);
+        let rclass = u16::from_be_bytes([payload[next_offset + 2], payload[next_offset + 3]]);
+        let ttl = u32::from_be_bytes([
+            payload[next_offset + 4],
+            payload[next_offset + 5],
+            payload[next_offset + 6],
+            payload[next_offset + 7],
+        ]);
+        let rd_len =
+            u16::from_be_bytes([payload[next_offset + 8], payload[next_offset + 9]]) as usize;
 
-        let rdata = rest.get(..rd_len)?;
-        offset = next_offset + 10 + rd_len;
+        offset = next_offset + 10;
+        if offset + rd_len > payload.len() {
+            return None;
+        }
+
+        let rdata = &payload[offset..offset + rd_len];
+        offset += rd_len;
 
         if rclass == 1 {
-            let ip = match (rtype, rdata) {
-                (1, &[a, b, c, d]) => Some(IpAddr::V4(Ipv4Addr::new(a, b, c, d))),
-                (28, _) => <[u8; 16]>::try_from(rdata).ok().map(|b| IpAddr::V6(Ipv6Addr::from(b))),
-                _ => None,
-            };
-            if let Some(ip) = ip {
+            if rtype == 1 && rd_len == 4 {
+                let ip = IpAddr::V4(Ipv4Addr::new(rdata[0], rdata[1], rdata[2], rdata[3]));
+                return Some((qname, qtype, ip, ttl));
+            } else if rtype == 28 && rd_len == 16 {
+                let mut ip_bytes = [0u8; 16];
+                ip_bytes.copy_from_slice(rdata);
+                let ip = IpAddr::V6(ip_bytes.into());
                 return Some((qname, qtype, ip, ttl));
             }
         }
@@ -310,35 +327,39 @@ fn synthesize_dns_reply(
     qtype: u16,
     ttl: u32,
     ip: IpAddr,
-) -> Option<Vec<u8>> {
-    let (header, question) = query_payload.split_first_chunk::<12>()?;
-    let mut header_buf = *header;
+) -> Vec<u8> {
+    let mut reply = query_payload.to_vec();
 
-    // flags: Response (0x8000) | copied Opcode/RD | Recursion Available
-    // (0x0080)
+    // flags: Response (0x8000) | copied Opcode/RD | Recursion Available (0x0080)
     let reply_flags = 0x8000 | (query_flags & 0x7F00) | 0x0080;
-    header_buf.get_mut(2..4)?.copy_from_slice(&reply_flags.to_be_bytes());
-    header_buf.get_mut(6..8)?.copy_from_slice(&1u16.to_be_bytes()); // num_answers = 1
+    reply[2..4].copy_from_slice(&reply_flags.to_be_bytes());
+    reply[6..8].copy_from_slice(&1u16.to_be_bytes()); // num_answers = 1
 
-    let rdata_bytes: &[u8] = match ip {
-        IpAddr::V4(ref ipv4) => &ipv4.octets(),
-        IpAddr::V6(ref ipv6) => &ipv6.octets(),
-    };
-    let rd_len = rdata_bytes.len() as u16;
+    // Pointer to question name: 0xC00C
+    reply.extend_from_slice(&[0xC0, 0x0C]);
+    // Type (2 bytes)
+    reply.extend_from_slice(&qtype.to_be_bytes());
+    // Class (2 bytes): IN (1)
+    reply.extend_from_slice(&1u16.to_be_bytes());
+    // TTL (4 bytes)
+    reply.extend_from_slice(&ttl.to_be_bytes());
 
-    Some(
-        [
-            &header_buf[..],
-            question,
-            &[0xC0, 0x0C], // Pointer to question name: 0xC00C
-            &qtype.to_be_bytes(),
-            &1u16.to_be_bytes(), // Class: IN (1)
-            &ttl.to_be_bytes(),
-            &rd_len.to_be_bytes(),
-            rdata_bytes,
-        ]
-        .concat(),
-    )
+    match ip {
+        IpAddr::V4(ipv4) => {
+            // RdLength (2 bytes): 4
+            reply.extend_from_slice(&4u16.to_be_bytes());
+            // RData (4 bytes)
+            reply.extend_from_slice(&ipv4.octets());
+        }
+        IpAddr::V6(ipv6) => {
+            // RdLength (2 bytes): 16
+            reply.extend_from_slice(&16u16.to_be_bytes());
+            // RData (16 bytes)
+            reply.extend_from_slice(&ipv6.octets());
+        }
+    }
+
+    reply
 }
 
 /// Parses resolv.conf format text into a list of valid non-loopback,
@@ -423,8 +444,8 @@ fn discover_host_dns_servers_windows() -> Vec<IpAddr> {
 
     // First call to determine buffer size needed.
     // SAFETY: `buf` is a valid, contiguous byte allocation of `buf_len` bytes.
-    // `GetAdaptersAddresses` writes up to `buf_len` bytes and updates `buf_len`
-    // on overflow.
+    // `GetAdaptersAddresses` writes up to `buf_len` bytes and updates `buf_len` on
+    // overflow.
     let mut ret = unsafe {
         GetAdaptersAddresses(
             AF_UNSPEC as u32,
@@ -437,8 +458,8 @@ fn discover_host_dns_servers_windows() -> Vec<IpAddr> {
 
     if ret == ERROR_BUFFER_OVERFLOW {
         buf.resize(buf_len as usize, 0);
-        // SAFETY: `buf` is resized to the exact capacity requested by the
-        // previous call.
+        // SAFETY: `buf` is resized to the exact capacity requested by the previous
+        // call.
         ret = unsafe {
             GetAdaptersAddresses(
                 AF_UNSPEC as u32,
@@ -457,36 +478,35 @@ fn discover_host_dns_servers_windows() -> Vec<IpAddr> {
 
     let mut adapter = buf.as_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>();
     while !adapter.is_null() {
-        // SAFETY: `ret == ERROR_SUCCESS` guarantees that `buf` contains a
-        // valid, properly aligned linked list of
-        // `IP_ADAPTER_ADDRESSES_LH` terminated by a null pointer.
-        // `adapter` is checked non-null before dereferencing.
+        // SAFETY: `ret == ERROR_SUCCESS` guarantees that `buf` contains a valid,
+        // properly aligned linked list of `IP_ADAPTER_ADDRESSES_LH` terminated
+        // by a null pointer. `adapter` is checked non-null before
+        // dereferencing.
         let (oper_status, mut dns_server, next_adapter) =
             unsafe { ((*adapter).OperStatus, (*adapter).FirstDnsServerAddress, (*adapter).Next) };
 
         if oper_status == IfOperStatusUp {
             while !dns_server.is_null() {
-                // SAFETY: `dns_server` points to a valid
-                // `IP_ADAPTER_DNS_SERVER_ADDRESS_XP` within the
-                // OS-populated adapter structure and is checked non-null.
+                // SAFETY: `dns_server` points to a valid `IP_ADAPTER_DNS_SERVER_ADDRESS_XP`
+                // within the OS-populated adapter structure and is checked non-null.
                 let (sockaddr, next_dns) =
                     unsafe { ((*dns_server).Address.lpSockaddr, (*dns_server).Next) };
 
                 if !sockaddr.is_null() {
-                    // SAFETY: `sockaddr` is checked non-null and points to a
-                    // valid OS-initialized `SOCKADDR`.
+                    // SAFETY: `sockaddr` is checked non-null and points to a valid OS-initialized
+                    // `SOCKADDR`.
                     let family = unsafe { (*sockaddr).sa_family as u32 };
 
                     let ip = if family == AF_INET as u32 {
                         let sin = sockaddr.cast::<SOCKADDR_IN>();
-                        // SAFETY: `family == AF_INET` guarantees `sockaddr` is
-                        // a valid `SOCKADDR_IN`.
+                        // SAFETY: `family == AF_INET` guarantees `sockaddr` is a valid
+                        // `SOCKADDR_IN`.
                         let ip_bytes = unsafe { (*sin).sin_addr.S_un.S_addr.to_ne_bytes() };
                         Some(IpAddr::V4(Ipv4Addr::from(ip_bytes)))
                     } else if family == AF_INET6 as u32 {
                         let sin6 = sockaddr.cast::<SOCKADDR_IN6>();
-                        // SAFETY: `family == AF_INET6` guarantees `sockaddr` is
-                        // a valid `SOCKADDR_IN6`.
+                        // SAFETY: `family == AF_INET6` guarantees `sockaddr` is a valid
+                        // `SOCKADDR_IN6`.
                         let ip_bytes = unsafe { (*sin6).sin6_addr.u.Byte };
                         Some(IpAddr::V6(Ipv6Addr::from(ip_bytes)))
                     } else {

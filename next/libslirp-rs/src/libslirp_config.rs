@@ -102,9 +102,9 @@ impl Default for SlirpConfig {
             vhost: Ipv4Addr::new(10, 0, 2, 2),
             // IPv6 enabled by default
             in6_enabled: true,
-            vprefix_addr6: Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0),
+            vprefix_addr6: "fec0::".parse().unwrap(),
             vprefix_len: 64,
-            vhost6: Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2),
+            vhost6: "fec0::2".parse().unwrap(),
             vhostname: None, // Some("slirp".to_string()),
             tftp_server_name: None,
             tftp_path: None,
@@ -113,7 +113,7 @@ impl Default for SlirpConfig {
             vdhcp_start: Ipv4Addr::new(10, 0, 2, 16),
             // Public DNS server
             vnameserver: Ipv4Addr::new(10, 0, 2, 3),
-            vnameserver6: Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3),
+            vnameserver6: "fec0::3".parse().unwrap(),
             vdnssearch: Vec::new(),
             vdomainname: None,
             // Ethernet MTU
@@ -136,7 +136,7 @@ impl Default for SlirpConfig {
 
 /// Struct to hold a "C" `SlirpConfig` and the Rust storage that is
 /// referenced by `SlirpConfig`.
-pub(crate) struct SlirpConfigs {
+pub struct SlirpConfigs {
     /// The "C" representation of the Slirp configuration.
     pub c_slirp_config: libslirp_sys::SlirpConfig,
 
@@ -249,8 +249,8 @@ fn to_socketaddr_storage(dns: &[SocketAddr]) -> [libslirp_sys::sockaddr_storage;
     if dns.len() > MAX_DNS_SERVERS {
         warn!("Too many DNS servers, only keeping the first {} ones", MAX_DNS_SERVERS);
     }
-    for (dest, src) in result.iter_mut().zip(dns.iter()) {
-        *dest = (*src).into();
+    for i in 0..usize::min(dns.len(), MAX_DNS_SERVERS) {
+        result[i] = dns[i].into();
     }
     result
 }
@@ -265,7 +265,7 @@ impl SlirpConfigs {
     /// # Arguments
     ///
     /// * `config` - A reference to the Rust `SlirpConfig`.
-    pub(crate) fn new(config: &SlirpConfig) -> SlirpConfigs {
+    pub fn new(config: &SlirpConfig) -> SlirpConfigs {
         let as_cstring =
             |s: &Option<String>| s.as_ref().and_then(|s| CString::new(s.as_bytes()).ok());
         let c_tftp_path = config
@@ -440,8 +440,7 @@ mod tests {
         let result = to_socketaddr_storage(&dns);
         assert_eq!(result.len(), MAX_DNS_SERVERS);
         for entry in result {
-            // Assuming `sockaddr_storage::default()` initializes all fields to
-            // 0
+            // Assuming `sockaddr_storage::default()` initializes all fields to 0
             assert_eq!(entry.ss_family, 0);
         }
     }

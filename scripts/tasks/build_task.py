@@ -10,7 +10,7 @@ import shutil
 
 from tasks.task import Task
 from utils import (
-    NETSIM_ROOT,
+    AOSP_ROOT,
     get_bazel_build_configs,
     get_bazel_path,
     get_bazel_startup_options,
@@ -40,6 +40,6 @@ class BuildTask(Task):
         [bazel] + startup_options + ["build"] + targets + build_configs,
         self.env,
         "bazel build",
-        NETSIM_ROOT,
+        AOSP_ROOT,
     )
     return True

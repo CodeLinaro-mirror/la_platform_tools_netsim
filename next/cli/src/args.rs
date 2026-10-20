@@ -17,7 +17,7 @@ use netsim_proto::model::chip::ble_beacon::{
 };
 
 #[derive(Debug, Parser)]
-pub(crate) struct NetsimArgs {
+pub struct NetsimArgs {
     #[command(subcommand)]
     pub command: Command,
     /// Set verbose mode
@@ -36,7 +36,7 @@ pub(crate) struct NetsimArgs {
 
 #[derive(Debug, Subcommand, PartialEq)]
 #[command(infer_subcommands = true)]
-pub(crate) enum Command {
+pub enum Command {
     /// Print Netsim version information
     Version,
     /// Control the radio state of a device
@@ -55,8 +55,8 @@ pub(crate) enum Command {
     Capture(Capture),
     /// Opens netsim artifacts directory (log, pcaps)
     Artifact,
-    /// A fixed simulated radio node (BLE beacon or UWB anchor)
-    #[command(subcommand, visible_alias("anchor"))]
+    /// A chip that sends advertisements at a set interval
+    #[command(subcommand)]
     Beacon(Beacon),
     /// Open Bumble Hive Web Page
     Bumble,
@@ -81,7 +81,7 @@ pub(crate) enum Command {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct Radio {
+pub struct Radio {
     /// Radio type
     #[arg(value_enum, ignore_case = true)]
     pub radio_type: RadioType,
@@ -93,7 +93,7 @@ pub(crate) struct Radio {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub(crate) enum RadioType {
+pub enum RadioType {
     Ble,
     Classic,
     Wifi,
@@ -120,7 +120,7 @@ impl fmt::Display for RadioType {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub(crate) enum ChipKind {
+pub enum ChipKind {
     #[value(alias("bt"))]
     Bluetooth,
     Wifi,
@@ -146,7 +146,7 @@ impl fmt::Display for ChipKind {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub(crate) enum UpDownStatus {
+pub enum UpDownStatus {
     Up,
     Down,
 }
@@ -158,7 +158,7 @@ impl fmt::Display for UpDownStatus {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct Move {
+pub struct Move {
     /// Device name
     pub name: String,
     /// x position of device
@@ -170,7 +170,7 @@ pub(crate) struct Move {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub(crate) struct Devices {
+pub struct Devices {
     /// Continuously print device(s) information every second
     #[arg(short, long)]
     pub continuous: bool,
@@ -180,14 +180,14 @@ pub(crate) struct Devices {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Default)]
-pub(crate) enum OnOffState {
+pub enum OnOffState {
     #[default]
     On,
     Off,
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub(crate) enum Beacon {
+pub enum Beacon {
     /// Create a beacon chip
     #[command(subcommand)]
     Create(BeaconCreate),
@@ -200,44 +200,13 @@ pub(crate) enum Beacon {
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub(crate) enum BeaconCreate {
+pub enum BeaconCreate {
     /// Create a Bluetooth low-energy beacon chip
     Ble(BeaconCreateBle),
-    /// Create an Ultra-wideband anchor chip
-    Uwb(BeaconCreateUwb),
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub(crate) struct BeaconCreateUwb {
-    /// Name of the device to create
-    pub device_name: Option<String>,
-    /// Name of the anchor chip to create within the new device
-    pub chip_name: Option<String>,
-    /// UWB short address of the anchor (e.g. 00:01). Will be allocated if not provided
-    #[arg(long)]
-    pub address: Option<String>,
-    /// x position of device in meters
-    #[arg(long, allow_hyphen_values = true)]
-    pub x: Option<f32>,
-    /// y position of device in meters
-    #[arg(long, allow_hyphen_values = true)]
-    pub y: Option<f32>,
-    /// z position of device in meters
-    #[arg(long, allow_hyphen_values = true)]
-    pub z: Option<f32>,
-    /// Yaw orientation of device in degrees
-    #[arg(long, allow_hyphen_values = true)]
-    pub yaw: Option<f32>,
-    /// Pitch orientation of device in degrees
-    #[arg(long, allow_hyphen_values = true)]
-    pub pitch: Option<f32>,
-    /// Roll orientation of device in degrees
-    #[arg(long, allow_hyphen_values = true)]
-    pub roll: Option<f32>,
-}
-
-#[derive(Debug, Args, PartialEq, Default)]
-pub(crate) struct BeaconCreateBle {
+pub struct BeaconCreateBle {
     /// Name of the device to create
     pub device_name: Option<String>,
     /// Name of the beacon chip to create within the new device. May only be
@@ -256,13 +225,13 @@ pub(crate) struct BeaconCreateBle {
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub(crate) enum BeaconPatch {
+pub enum BeaconPatch {
     /// Modify a Bluetooth low-energy beacon chip
     Ble(BeaconPatchBle),
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub(crate) struct BeaconPatchBle {
+pub struct BeaconPatchBle {
     /// Name of the device that contains the chip
     pub device_name: String,
     /// Name of the beacon chip to modify
@@ -280,7 +249,7 @@ pub(crate) struct BeaconPatchBle {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct BeaconRemove {
+pub struct BeaconRemove {
     /// Name of the device to remove
     pub device_name: String,
 }
@@ -303,7 +272,7 @@ pub struct BeaconBleAdvertiseData {
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub(crate) enum Link {
+pub enum Link {
     /// List all current links and their properties
     List,
     /// Create a new link
@@ -315,7 +284,7 @@ pub(crate) enum Link {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct LinkCreate {
+pub struct LinkCreate {
     /// Chip kind for the link
     #[arg(value_enum, ignore_case = true)]
     pub chip_kind: ChipKind,
@@ -337,7 +306,7 @@ pub(crate) struct LinkCreate {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct LinkPatch {
+pub struct LinkPatch {
     /// Chip kind for the link.
     #[arg(value_enum, ignore_case = true)]
     pub chip_kind: ChipKind,
@@ -359,7 +328,7 @@ pub(crate) struct LinkPatch {
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub(crate) struct LinkDelete {
+pub struct LinkDelete {
     /// Chip kind for the link.
     #[arg(value_enum, ignore_case = true)]
     pub chip_kind: ChipKind,
@@ -456,7 +425,7 @@ impl TypedValueParser for IntervalParser {
 
     fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
         Some(Box::new(
-            AdvertiseMode::value_variants().iter().filter_map(ValueEnum::to_possible_value).chain(
+            AdvertiseMode::value_variants().iter().map(|v| v.to_possible_value().unwrap()).chain(
                 iter::once(
                     PossibleValue::new("<MS>").help("An exact advertise interval in milliseconds"),
                 ),
@@ -494,7 +463,7 @@ impl TypedValueParser for TxPowerParser {
 
     fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
         Some(Box::new(
-            TxPowerLevel::value_variants().iter().filter_map(ValueEnum::to_possible_value).chain(
+            TxPowerLevel::value_variants().iter().map(|v| v.to_possible_value().unwrap()).chain(
                 iter::once(
                     PossibleValue::new("<DBM>").help("An exact transmit power level in dBm"),
                 ),
@@ -526,7 +495,7 @@ pub enum TxPowerLevel {
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub(crate) enum Capture {
+pub enum Capture {
     /// List currently available Captures (packet captures)
     List(ListCapture),
     /// Patch a Capture source to turn packet capture on/off
@@ -536,7 +505,7 @@ pub(crate) enum Capture {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub(crate) struct ListCapture {
+pub struct ListCapture {
     /// Optional strings of pattern for captures to list. Possible filter fields
     /// include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
@@ -546,7 +515,7 @@ pub(crate) struct ListCapture {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub(crate) struct PatchCapture {
+pub struct PatchCapture {
     /// Packet capture state
     #[arg(value_enum, ignore_case = true)]
     pub state: OnOffState,
@@ -556,7 +525,7 @@ pub(crate) struct PatchCapture {
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
-pub(crate) struct GetCapture {
+pub struct GetCapture {
     /// Optional strings of pattern for captures to get. Possible filter fields
     /// include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,

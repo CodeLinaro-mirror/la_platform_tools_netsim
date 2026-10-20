@@ -14,12 +14,12 @@ use packet_stream::{
 };
 use protobuf::Enum;
 
-fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
+pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
     crate::frontend_converter::from_proto_chip_kind(proto.enum_value_or_default())
         .unwrap_or(ChipKind::UNSPECIFIED)
 }
 
-fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
+pub fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
     Chip {
         kind: proto_to_chip_kind(proto.kind),
         id: proto.id,
@@ -32,7 +32,7 @@ fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
     }
 }
 
-fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
+pub fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
     DeviceInfo {
         name: proto.name,
         id: String::new(), // Not available in proto DeviceInfo
@@ -46,7 +46,7 @@ fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
     }
 }
 
-pub(crate) fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
+pub fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
     ChipInfo {
         name: proto.name,
         chip: proto.chip.into_option().map(proto_to_chip),
@@ -54,31 +54,28 @@ pub(crate) fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
     }
 }
 
-/// Converts incoming bytes into a `PacketResponse` protobuf message.
-pub(crate) fn bytes_to_packet_response(bytes: Bytes, is_bt: bool) -> Result<PacketResponse> {
-    let (&type_byte, packet) = bytes
-        .split_first()
-        .ok_or_else(|| PacketStreamError::InvalidConfig("Empty bytes".to_string()))?;
+// Convert Bytes to PacketResponse
+pub fn bytes_to_packet_response(bytes: Bytes, is_bt: bool) -> Result<PacketResponse> {
+    if bytes.is_empty() {
+        return Err(PacketStreamError::InvalidConfig("Empty bytes".to_string()));
+    }
     let mut res = PacketResponse::new();
     if is_bt {
-        let packet_type = PacketType::from_i32(type_byte.into()).ok_or_else(|| {
-            PacketStreamError::InvalidConfig(format!("Invalid HCI packet type: {type_byte}"))
-        })?;
         let hci_packet = HCIPacket {
-            packet_type: packet_type.into(),
-            packet: packet.to_vec(),
+            packet_type: PacketType::from_i32(bytes[0].into()).unwrap().into(),
+            packet: bytes.slice(1..).to_vec(),
             ..Default::default()
         };
         res.set_hci_packet(hci_packet);
     } else {
-        // Non-Bluetooth radios (Wi-Fi, UWB) encapsulate raw packet payloads
+        // Assume raw packet if type byte doesn't match
         res.set_packet(bytes.to_vec());
     }
     Ok(res)
 }
 
 // Convert PacketRequest to Bytes
-pub(crate) fn packet_request_to_bytes(value: PacketRequest) -> Result<Bytes> {
+pub fn packet_request_to_bytes(value: PacketRequest) -> Result<Bytes> {
     match value.request_type {
         Some(packet_streamer::packet_request::Request_type::HciPacket(hci)) => {
             let mut h4_packet = BytesMut::new();

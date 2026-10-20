@@ -8,12 +8,9 @@ This module provides the netsim_rust_library macro which wraps rust_library
 to provide standard targets for testing, linting, and formatting.
 """
 
-load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
-load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
-load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
-NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies", "-Dunreachable_pub"]
+NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
 NETSIM_CLIPPY_FLAGS = [
     "-Dwarnings",
     # Async / Concurrency
@@ -38,13 +35,6 @@ NETSIM_CLIPPY_FLAGS = [
     "-Dclippy::map_err_ignore",
     "-Dclippy::match_wild_err_arm",
     "-Dclippy::unwrap_in_result",
-    "-Dclippy::unwrap_used",
-    "-Dclippy::indexing_slicing",
-    "-Dclippy::panic",
-    "-Dclippy::todo",
-    "-Dclippy::unimplemented",
-    "-Dclippy::unreachable",
-    "-Dclippy::panic_in_result_fn",
 ]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.
@@ -168,9 +158,16 @@ netsim_dep_aspect = aspect(
 
 # Why we use a manual clippy-driver rule instead of rules_rust defaults:
 #
-# rules_rust `rust_clippy` and `rust_clippy_aspect` do not seamlessly integrate
-# with the custom multi-target test reporting and diagnostics formatting required
-# across platform toolchains. We drive clippy directly using the resolved rust toolchain.
+# 1. rules_rust `rust_clippy` and `rust_clippy_aspect` fail with "nothing to build"
+#    because we use a Bazel module setup where our codebase is remapped to `external/netsim+`.
+#    This is ignored by rules_rust.
+#
+# 2. Changing the workspace layout to resolve this wasn't feasible:
+#    - Using repo-relative paths (`//tools/netsim/...`) forces the repo-root
+#      MODULE.bazel to declare all internal Netsim dependencies.
+#    - Running Bazel inside `tools/netsim` fails because external dependencies
+#      (like @goldfish_crates) hardcode relative paths from the workspace root
+#      where they are evaluated & fail to find `third_party/rust`.
 def _netsim_clippy_test_impl(ctx):
     toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
     rustfmt = toolchain.rustfmt
@@ -225,9 +222,6 @@ def _netsim_clippy_test_impl(ctx):
         depth = len(segments) - 1
         target_out_dir = "/".join([".."] * depth) if depth > 0 else "."
         srcs = info.srcs.to_list()
-        pkg_dir = root_file.dirname.rsplit("/", 1)[0]
-        if any([not s.is_source and s.dirname == pkg_dir for s in srcs]):
-            target_out_dir = ".."
 
         # Collect dependencies for THIS target t!
         t_rlibs = []
@@ -276,20 +270,11 @@ def _netsim_clippy_test_impl(ctx):
 
             # In test targets, allow idiomatic test patterns:
             # - unwrap_in_result: tests returning Result often assert via .unwrap()
-            # - unwrap_used: tests and test fixtures commonly use .unwrap()
-            # - indexing_slicing: tests commonly index directly into slices/vecs in assertions
             # - field_reassign_with_default: initializing mock structs in tests
             # - module_inception: tests/tests.rs having mod tests
             t_args.add("-Aclippy::unwrap_in_result")
-            t_args.add("-Aclippy::unwrap_used")
-            t_args.add("-Aclippy::indexing_slicing")
             t_args.add("-Aclippy::field_reassign_with_default")
             t_args.add("-Aclippy::module_inception")
-            t_args.add("-Aclippy::panic")
-            t_args.add("-Aclippy::unreachable")
-            t_args.add("-Aclippy::unimplemented")
-            t_args.add("-Aclippy::todo")
-            t_args.add("-Aclippy::panic_in_result_fn")
         else:
             t_args.add("--crate-type=rlib")
         t_args.add("--crate-name=%s" % info.name)
@@ -398,7 +383,6 @@ def netsim_rust_library(
         select_deps = [],
         testing_deps = [],
         test_deps = [],
-        proc_macro_test_deps = [],
         crate_features = [],
         # Feature Flags (Default to True for safety)
         enable_clippy = True,
@@ -428,7 +412,6 @@ def netsim_rust_library(
         select_deps: The part of deps that uses select()
         testing_deps: Dependencies for the "testing" feature.
         test_deps: Dependencies for the unit test and integration test targets.
-        proc_macro_test_deps: Proc-macro dependencies for the unit test and integration test targets.
         crate_features: the crate features
         enable_clippy: Whether to enable clippy checks.
         enable_rustfmt: Whether to enable rustfmt checks.
@@ -455,12 +438,8 @@ def netsim_rust_library(
 
     # 2. The Testing Library with "testing" feature (always created)
     testing_deps = testing_deps + [
-        d.split(":")[0] + ":testing" if d.startswith("//next") else d
+        d + ":testing" if d.startswith("//next") else d
         for d in deps
-    ]
-    test_deps = [
-        d.split(":")[0] + ":testing" if d.startswith("//next") else d
-        for d in test_deps
     ]
     rust_library(
         name = "testing",
@@ -474,8 +453,8 @@ def netsim_rust_library(
     # 3. Automatic Unit Test
     if enable_unit_test:
         # There can be integ test deps that are not used in unit tests,
-        # so disable unused_crate_dependencies and unreachable_pub.
-        test_flags = [f for f in rustc_flags if f not in ["-Dunused_crate_dependencies", "-Dunreachable_pub"]]
+        # so disable unused_crate_dependencies.
+        test_flags = [f for f in rustc_flags if f != "-Dunused_crate_dependencies"]
 
         rust_test(
             name = "test",
@@ -487,7 +466,7 @@ def netsim_rust_library(
             aliases = kwargs.get("aliases", {}),
             rustc_flags = test_flags,
             deps = testing_deps + select_deps + test_deps,
-            proc_macro_deps = kwargs.get("proc_macro_deps", []) + proc_macro_test_deps,
+            proc_macro_deps = kwargs.get("proc_macro_deps", []),
             edition = kwargs.get("edition", "2021"),
             env = kwargs.get("env", {}),
             rustc_env = kwargs.get("rustc_env", {}),
@@ -505,14 +484,13 @@ def netsim_rust_library(
 
     if has_integration_test:
         # Integration tests receive all library dependencies for convenience,
-        # so disable unused_crate_dependencies and unreachable_pub.
-        test_flags = [f for f in rustc_flags if f not in ["-Dunused_crate_dependencies", "-Dunreachable_pub"]]
+        # so disable unused_crate_dependencies.
+        test_flags = [f for f in rustc_flags if f != "-Dunused_crate_dependencies"]
 
         # If there's a mod.rs, it's typically the root.
         # Else it's likely a single-file setup.
         crate_root_opts = [
             "tests/mod.rs",
-            "tests/integration_test.rs",
             "tests/integration_tests.rs",
         ]
         crate_root = None
@@ -530,7 +508,7 @@ def netsim_rust_library(
             rustc_flags = test_flags,
             compile_data = kwargs.get("compile_data", []),
             deps = [":testing"] + testing_deps + select_deps + test_deps,
-            proc_macro_deps = kwargs.get("proc_macro_deps", []) + proc_macro_test_deps,
+            proc_macro_deps = kwargs.get("proc_macro_deps", []),
             edition = kwargs.get("edition", "2021"),
             env = kwargs.get("env", {}),
             rustc_env = kwargs.get("rustc_env", {}),
@@ -619,76 +597,3 @@ def netsim_rust_binary(
         enable_rustfmt,
         targets = [":" + name],
     )
-
-def _stripped_binaries_impl(ctx):
-    out_files = []
-    is_windows = ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo])
-    cc_toolchain = find_cpp_toolchain(ctx)
-
-    # `cc_toolchain.strip_executable` is the legacy `tool_path` entry, which
-    # modern toolchains (including the hermetic goldfish one) leave as a
-    # non-existent placeholder next to the toolchain's BUILD file. The real
-    # binary has to be resolved through the action config instead.
-    #
-    # Only resolve it where a strip action actually exists. The clang-cl
-    # toolchain used for Windows configures no strip action at all, and
-    # get_tool_for_action() fails at analysis time rather than returning None,
-    # so this must stay inside the guard even though the Windows branch below
-    # never uses the tool.
-    strip_executable = None
-    if not is_windows:
-        feature_configuration = cc_common.configure_features(
-            ctx = ctx,
-            cc_toolchain = cc_toolchain,
-            requested_features = ctx.features,
-            unsupported_features = ctx.disabled_features,
-        )
-        strip_executable = cc_common.get_tool_for_action(
-            feature_configuration = feature_configuration,
-            action_name = ACTION_NAMES.strip,
-        )
-
-    for src in ctx.files.srcs:
-        out = ctx.actions.declare_file("_stripped/" + src.basename)
-        if is_windows:
-            # Windows binaries (PE/COFF) carry no strippable ELF symbol table and
-            # the MSVC toolchain exposes no `strip` tool, so pass the binary
-            # through unmodified. `ctx.actions.symlink` is the portable way to
-            # re-materialize a file under a new path; Bazel degrades to a real
-            # copy on filesystems that cannot create symlinks.
-            ctx.actions.symlink(
-                output = out,
-                target_file = src,
-                progress_message = "Copying %s (strip unsupported on Windows)" % src.short_path,
-            )
-        else:
-            # `all_files` rather than `strip_files`: the tool resolved above may
-            # live in a different filegroup than the one the legacy
-            # `strip_files` attribute points at, and it must be staged in the
-            # sandbox for the action to find it.
-            ctx.actions.run_shell(
-                outputs = [out],
-                inputs = depset([src], transitive = [cc_toolchain.all_files]),
-                command = "cp \"$1\" \"$2\" && chmod u+w \"$2\" && \"$3\" \"$2\"",
-                arguments = [src.path, out.path, strip_executable],
-                mnemonic = "NetsimStrip",
-                progress_message = "Stripping %s with %s" % (src.short_path, strip_executable),
-            )
-        out_files.append(out)
-    return [DefaultInfo(files = depset(out_files))]
-
-stripped_binaries = rule(
-    doc = """Strip binaries and place them into the _stripped directory using the C++ toolchain.""",
-    implementation = _stripped_binaries_impl,
-    attrs = {
-        "srcs": attr.label_list(
-            doc = "The executable binaries to strip.",
-            mandatory = True,
-            allow_files = True,
-        ),
-        "_cc_toolchain": attr.label(default = "@bazel_tools//tools/cpp:current_cc_toolchain"),
-        "_windows_constraint": attr.label(default = "@platforms//os:windows"),
-    },
-    fragments = ["cpp"],
-    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
-)

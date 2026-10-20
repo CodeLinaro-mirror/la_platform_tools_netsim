@@ -4,7 +4,7 @@
 use clap::Subcommand;
 
 #[derive(Debug, Subcommand, PartialEq)]
-pub(crate) enum NfcCommand {
+pub enum NfcCommand {
     /// List all virtual NFC devices and their radio status
     #[command(visible_alias("status"))]
     List {

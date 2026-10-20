@@ -97,15 +97,18 @@ impl Medium {
             return Ok(());
         }
         // Try to determine the destination MacAddress from the Ethernet header
-        let Some(dest_mac_bytes) = packet.first_chunk::<6>() else {
-            return Err(WifiError::Internal(Box::from(
-                "Failed to parse Ethernet Destination MAC: packet too short",
-            )));
-        };
-        let dest_mac = netsim_packets::MacAddress::new(*dest_mac_bytes);
+        let dest_mac_bytes: [u8; 6] = packet[0..6].try_into().map_err(|e| {
+            WifiError::Internal(Box::from(format!("Failed to parse Ethernet Destination MAC: {e}")))
+        })?;
+        let dest_mac = netsim_packets::MacAddress::new(dest_mac_bytes);
 
         if dest_mac.is_broadcast() || dest_mac.is_multicast() {
-            let bssids = self.key_store.bssids.read().clone();
+            let bssids = self
+                .key_store
+                .bssids
+                .read()
+                .map_err(|e| WifiError::Internal(Box::from(format!("BSSIDs lock poisoned: {e}"))))?
+                .clone();
             for bssid in bssids {
                 let seq = self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if let Ok(ieee80211) = netsim_packets::Ieee80211::from_ieee8023_qos(
@@ -430,13 +433,16 @@ impl Medium {
             _ => return false,
         };
 
-        let Some(ies) = payload.get(offset..) else {
+        if payload.len() < offset {
             return false;
-        };
+        }
 
+        let ies = &payload[offset..];
         for ie in IeIterator::new(ies) {
             if ie.id == tags::VENDOR_SPECIFIC
-                && let Some((&p2p::OUI, &[p2p::OUI_TYPE, ..])) = ie.body.split_first_chunk::<3>()
+                && ie.body.len() >= 4
+                && ie.body[0..3] == p2p::OUI
+                && ie.body[3] == p2p::OUI_TYPE
             {
                 return true;
             }
@@ -454,27 +460,35 @@ impl Medium {
             _ => return false,
         };
 
-        let Some(ies) = payload.get(offset..) else {
+        if payload.len() < offset {
             return false;
-        };
+        }
 
+        let ies = &payload[offset..];
         for ie in IeIterator::new(ies) {
             if ie.id == tags::VENDOR_SPECIFIC
-                && let Some((&p2p::OUI, &[p2p::OUI_TYPE, ref rest @ ..])) =
-                    ie.body.split_first_chunk::<3>()
+                && ie.body.len() >= 4
+                && ie.body[0..3] == p2p::OUI
+                && ie.body[3] == p2p::OUI_TYPE
             {
-                let mut attr_bytes = rest;
-                while let &[attr_id, len_l, len_h, ref remaining @ ..] = attr_bytes {
-                    let attr_len = u16::from_le_bytes([len_l, len_h]) as usize;
-                    let Some((attr_val, next)) = remaining.split_at_checked(attr_len) else {
+                let mut attr_bytes = &ie.body[4..];
+                while attr_bytes.len() >= 3 {
+                    let attr_id = attr_bytes[0];
+                    let attr_len = u16::from_le_bytes([attr_bytes[1], attr_bytes[2]]) as usize;
+                    if attr_bytes.len() < 3 + attr_len {
                         break;
-                    };
-                    if attr_id == 2
-                        && attr_val.get(1).is_some_and(|&group_cap| group_cap & 0x01 != 0)
-                    {
-                        return true;
                     }
-                    attr_bytes = next;
+                    let attr_val = &attr_bytes[3..3 + attr_len];
+                    #[allow(clippy::collapsible_if)]
+                    if attr_id == 2 {
+                        if attr_len >= 2 {
+                            let group_cap = attr_val[1];
+                            if group_cap & 0x01 != 0 {
+                                return true;
+                            }
+                        }
+                    }
+                    attr_bytes = &attr_bytes[3 + attr_len..];
                 }
             }
         }

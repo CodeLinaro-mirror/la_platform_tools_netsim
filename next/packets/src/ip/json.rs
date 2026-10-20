@@ -1,16 +1,15 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    net::{Ipv4Addr, Ipv6Addr},
-};
+use std::collections::BTreeMap;
 
 use crate::ip::{Ipv4Header, Ipv6Header};
 
 fn format_ipv4_addr(addr: &[u8; 4]) -> String {
-    Ipv4Addr::from(*addr).to_string()
+    format!("{}.{}.{}.{}", addr[0], addr[1], addr[2], addr[3])
 }
+
+use std::net::Ipv6Addr;
 
 fn format_ipv6_addr(addr: &[u8; 16]) -> String {
     let ipv6 = Ipv6Addr::from(*addr);

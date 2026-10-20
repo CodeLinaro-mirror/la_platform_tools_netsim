@@ -70,11 +70,11 @@ impl<'a> Ipv4Builder<'a> {
     /// Sets the payload data.
     pub fn payload<'b>(&'b mut self, payload: &[u8]) -> Option<&'b mut Self> {
         let total_len = std::mem::size_of::<Ipv4Header>() + payload.len();
-        if total_len > u16::MAX as usize {
+        if total_len > u16::MAX as usize || payload.len() > self.payload.len() {
             return None;
         }
-        self.payload.get_mut(..payload.len())?.copy_from_slice(payload);
         self.payload_len = payload.len();
+        self.payload[..payload.len()].copy_from_slice(payload);
         Some(self)
     }
 
@@ -127,11 +127,11 @@ impl<'a> Ipv6Builder<'a> {
 
     /// Sets the payload data.
     pub fn payload<'b>(&'b mut self, payload: &[u8]) -> Option<&'b mut Self> {
-        if payload.len() > u16::MAX as usize {
+        if payload.len() > u16::MAX as usize || payload.len() > self.payload.len() {
             return None;
         }
-        self.payload.get_mut(..payload.len())?.copy_from_slice(payload);
         self.payload_len = payload.len();
+        self.payload[..payload.len()].copy_from_slice(payload);
         Some(self)
     }
 

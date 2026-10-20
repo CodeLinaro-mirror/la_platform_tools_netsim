@@ -25,7 +25,7 @@ use netsim_proto::protobuf::Enum;
 use tracing::warn;
 
 #[derive(Debug)]
-pub(crate) struct StreamStats {
+pub struct StreamStats {
     /// Total packets transmitted by the chip (RX from transport perspective)
     pub tx_packets: AtomicU64,
     /// Total packets received by the chip (TX from transport perspective)
@@ -59,7 +59,7 @@ impl Default for StreamStats {
     }
 }
 
-pub(crate) async fn create_capture_and_wrap_streams(
+pub async fn create_capture_and_wrap_streams(
     capture_client: Option<Arc<dyn CaptureSender>>,
     chip_id: ChipId,
     chip_kind: ChipKind,
@@ -138,7 +138,7 @@ pub(crate) async fn create_capture_and_wrap_streams(
 /// If the actor reports NO counts (total = 0), we fallback to using StreamStats
 /// for both counts and bytes, distributing them evenly (or to the first entry)
 /// as a best-effort.
-pub(crate) fn distribute_stream_stats(
+pub fn distribute_stream_stats(
     radio_stats_list: &mut [netsim_model::NetsimRadioStats],
     stream_stats: &StreamStats,
 ) {
@@ -205,9 +205,7 @@ fn saturate_cast(val: u64) -> i32 {
 }
 
 /// Converts internal Model stats to Proto stats for persistence/RPC.
-pub(crate) fn to_proto_stats(
-    m: netsim_model::NetsimRadioStats,
-) -> netsim_proto::stats::NetsimRadioStats {
+pub fn to_proto_stats(m: netsim_model::NetsimRadioStats) -> netsim_proto::stats::NetsimRadioStats {
     let mut p = netsim_proto::stats::NetsimRadioStats::new();
     p.set_device_id(m.id);
     // Convert RadioKind to i32 for proto
@@ -230,7 +228,7 @@ pub(crate) fn to_proto_stats(
 
 /// Creates a Proto RadioStats object directly from StreamStats.
 /// Used for fallback when the actor is not reporting stats.
-pub(crate) fn stream_to_proto_stats(
+pub fn stream_to_proto_stats(
     device_id: u32,
     kind: netsim_model::RadioKind,
     duration_secs: u64,
@@ -242,7 +240,7 @@ pub(crate) fn stream_to_proto_stats(
 
 /// Creates a Model RadioStats object directly from StreamStats.
 /// Used for fallback when the actor is not reporting stats.
-pub(crate) fn stream_to_model_stats(
+pub fn stream_to_model_stats(
     device_id: u32,
     kind: netsim_model::RadioKind,
     duration_secs: u64,
@@ -260,7 +258,7 @@ pub(crate) fn stream_to_model_stats(
     stats
 }
 
-pub(crate) fn to_proto_device_stats(
+pub fn to_proto_device_stats(
     device_id: u32,
     info: &netsim_model::DeviceInfo,
 ) -> netsim_proto::stats::NetsimDeviceStats {

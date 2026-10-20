@@ -68,3 +68,5 @@ cargo build --manifest-path $CARGO_MANIFEST
 
 # Undo changed to Cargo.toml
 git checkout $CARGO_MANIFEST
+
+rm $REPO_NETSIM/rust/Cargo.lock

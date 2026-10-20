@@ -39,33 +39,19 @@ impl ActorService for BluetoothActor {
             .ok_or_else(|| BluetoothError::invalid_arg("Missing chip variant"))?;
         let bluetooth = match variant {
             ChipVariant::Bluetooth(b) => b,
-            _ => {
-                return Err(BluetoothError::invalid_arg("Expected Bluetooth variant"));
-            }
+            _ => return Err(BluetoothError::invalid_arg("Expected Bluetooth variant")),
         };
 
         // Validate Scanner constraints: No PacketStream, Must have PacketSink.
         if let BluetoothMode::Scanner(_) = &bluetooth.mode {
-            if params.packet_stream.is_some() {
-                return Err(BluetoothError::invalid_arg(
-                    "Scanner chip cannot have a packet stream",
-                ));
-            }
-            if params.packet_sink.is_none() {
-                return Err(BluetoothError::invalid_arg("Scanner chip must have a packet sink"));
-            }
+            assert!(params.packet_stream.is_none(), "Scanner chip cannot have a packet stream");
+            assert!(params.packet_sink.is_some(), "Scanner chip must have a packet sink");
         }
 
         // Validate Sniffer constraints: No PacketStream, Must have PacketSink.
         if let BluetoothMode::Sniffer(_) = &bluetooth.mode {
-            if params.packet_stream.is_some() {
-                return Err(BluetoothError::invalid_arg(
-                    "Sniffer chip cannot have a packet stream",
-                ));
-            }
-            if params.packet_sink.is_none() {
-                return Err(BluetoothError::invalid_arg("Sniffer chip must have a packet sink"));
-            }
+            assert!(params.packet_stream.is_none(), "Sniffer chip cannot have a packet stream");
+            assert!(params.packet_sink.is_some(), "Sniffer chip must have a packet sink");
         }
 
         let name =
@@ -172,7 +158,7 @@ impl ActorService for BluetoothActor {
                 crate::sniffer::create(&self.rootcanal, chip_id, params)?
             }
         }
-        self.chips.write().insert(chip_id, chip.clone());
+        self.chips.write().unwrap().insert(chip_id, chip.clone());
         self.initial_chips.insert(chip_id, chip);
         Ok(chip_id)
     }
@@ -182,7 +168,7 @@ impl ActorService for BluetoothActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        let chips = self.chips.read();
+        let chips = self.chips.read().unwrap();
         Ok(chips.get(&id).cloned())
     }
 
@@ -215,7 +201,7 @@ impl ActorService for BluetoothActor {
         }
 
         let chip = {
-            let mut chips = self.chips.write();
+            let mut chips = self.chips.write().unwrap();
             let mut chip =
                 chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
@@ -233,7 +219,7 @@ impl ActorService for BluetoothActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let chip_to_delete = {
-            let mut chips = self.chips.write();
+            let mut chips = self.chips.write().unwrap();
             chips.remove(&id)
         };
         if let Some(chip) = chip_to_delete {
@@ -268,7 +254,7 @@ impl ActorService for BluetoothActor {
                 let _ = self.rootcanal.clear_stats(id.0);
 
                 let chip = {
-                    let mut chips = self.chips.write();
+                    let mut chips = self.chips.write().unwrap();
                     let initial_chip = self
                         .initial_chips
                         .get(&id)
@@ -284,7 +270,7 @@ impl ActorService for BluetoothActor {
             BluetoothAction::GetStatistics => {
                 let mut stats_list = Vec::new();
                 let chips_info: Vec<(ChipId, String)> = {
-                    let chips = self.chips.read();
+                    let chips = self.chips.read().unwrap();
                     chips.values().map(|chip| (ChipId(chip.id), chip.name.clone())).collect()
                 };
                 for (id, name) in chips_info {
@@ -315,7 +301,7 @@ impl ActorService for BluetoothActor {
                 Ok(BluetoothActionResult::Statistics(stats_list.into_boxed_slice()))
             }
             BluetoothAction::GetCountForTesting => {
-                let count = self.chips.read().len();
+                let count = self.chips.read().unwrap().len();
                 Ok(BluetoothActionResult::Count(count))
             }
         }
@@ -325,7 +311,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        let chips = self.chips.read();
+        let chips = self.chips.read().unwrap();
         Ok(chips.values().cloned().collect())
     }
 }

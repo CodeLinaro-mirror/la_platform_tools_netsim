@@ -69,7 +69,7 @@ pub use crate::chip::MockChipClient;
 pub use crate::client_error::ClientError;
 // From device::api
 pub use crate::device::api::{
-    ChipCreateVariant, DeviceChipCreate, DeviceCreate, DeviceUpdate, PoseUpdate,
+    ChipCreateVariant, DeviceChipCreate, DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate,
 };
 // From device.rs
 pub use crate::device::{
@@ -80,25 +80,25 @@ pub use crate::device_error::DeviceError;
 // From initial_info.rs
 pub use crate::initial_info::{ChipInfo, ChipKind};
 // From link.rs
-pub use crate::link::{Link, LinkCreate, LinkId, LinkUpdate};
+pub use crate::link::{Link, LinkId, LinkUpdate};
 // From stats.rs
 pub use crate::stats::{
-    FrontendStats, NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind, WifiStats,
+    FrontendStats, NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind,
 };
 pub use crate::{
     ap::{Ap, ApCreate, ApUpdate, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID, WifiMode},
     bluetooth::{
         BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode, BluetoothUpdate, Controller,
-        DeviceParams, PacketType, ScannerParams, SnifferParams,
+        DeviceParams, ScannerParams, SnifferParams,
         beacon::{
             AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, Interval,
             Service, TxPower,
         },
     },
     cell::{
-        Call, CallDirection, CallState, Cell, CellCreate, CellNetworkConfig, CellUpdate,
-        MODEM_STATE_DOWN, MODEM_STATE_IDLE, MODEM_STATE_RINGING, ModemAction, Quirks,
-        RadioTechnology, RegistrationStatus,
+        Call, CallDirection, CallState, Cell, CellCreate, CellUpdate, MODEM_STATE_DOWN,
+        MODEM_STATE_IDLE, MODEM_STATE_RINGING, ModemAction, Quirks, RadioTechnology,
+        RegistrationStatus,
     },
     cellular_data::{CellularData, CellularDataCreate, CellularDataUpdate},
     chip::{
@@ -109,6 +109,6 @@ pub use crate::{
     chip_error::ChipError,
     ethernet::{Ethernet, EthernetCreate, EthernetUpdate},
     nfc::{Nfc, NfcCreate, NfcUpdate},
-    uwb::{Uwb, UwbCreate, UwbMode, UwbUpdate},
+    uwb::{Uwb, UwbCreate, UwbUpdate},
     wifi::{Wifi, WifiCreate, WifiUpdate},
 };

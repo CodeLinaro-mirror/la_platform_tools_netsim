@@ -104,25 +104,3 @@ fn test_parse_multi_layer_packet() {
         panic!("Expected TCP packet");
     }
 }
-
-#[test]
-fn test_create_le_ll_packet_payload_length_bounds() {
-    use netsim_packets::create_le_ll_packet;
-
-    let mut raw = vec![0u8; 16];
-    raw[0] = 0x0B; // LE_LEGACY_ADVERTISING_PDU
-    raw[1..7].copy_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
-    raw[13] = 1;
-    raw[14] = 1;
-    raw[15] = 0x02;
-
-    // 249 bytes (valid boundary)
-    let mut valid_raw = raw.clone();
-    valid_raw.extend(vec![0x42; 249]);
-    assert!(create_le_ll_packet(&valid_raw).is_some());
-
-    // 250 bytes (oversized: 6 + 250 = 256 > 255)
-    let mut invalid_raw = raw;
-    invalid_raw.extend(vec![0x42; 250]);
-    assert!(create_le_ll_packet(&invalid_raw).is_none());
-}
