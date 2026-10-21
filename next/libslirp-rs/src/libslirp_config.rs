@@ -102,9 +102,9 @@ impl Default for SlirpConfig {
             vhost: Ipv4Addr::new(10, 0, 2, 2),
             // IPv6 enabled by default
             in6_enabled: true,
-            vprefix_addr6: "fec0::".parse().unwrap(),
+            vprefix_addr6: Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 0),
             vprefix_len: 64,
-            vhost6: "fec0::2".parse().unwrap(),
+            vhost6: Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 2),
             vhostname: None, // Some("slirp".to_string()),
             tftp_server_name: None,
             tftp_path: None,
@@ -113,7 +113,7 @@ impl Default for SlirpConfig {
             vdhcp_start: Ipv4Addr::new(10, 0, 2, 16),
             // Public DNS server
             vnameserver: Ipv4Addr::new(10, 0, 2, 3),
-            vnameserver6: "fec0::3".parse().unwrap(),
+            vnameserver6: Ipv6Addr::new(0xfec0, 0, 0, 0, 0, 0, 0, 3),
             vdnssearch: Vec::new(),
             vdomainname: None,
             // Ethernet MTU

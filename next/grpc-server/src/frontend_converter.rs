@@ -284,6 +284,7 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
                 Some(ChipVariantUpdate::Cell(netsim_model::CellUpdate {
                     radio: from_proto_radio_update(Some(cell)),
                     state: Some(state),
+                    ..Default::default()
                 }))
             }
             netsim_proto::model::chip::Chip::CellularData(cell_data) => {

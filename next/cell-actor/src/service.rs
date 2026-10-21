@@ -73,13 +73,20 @@ impl ActorService for CellActor {
         ctx.add_stream(chip_id, Box::pin(stream));
 
         // 2. Add to Controller directly (Sync)
-        let (sim_type, sim_profile, quirks) = match params.chip.variant.as_ref() {
-            Some(ChipVariant::Cell(cell)) => (cell.sim_type, cell.sim_profile.clone(), cell.quirks),
-            _ => (None, None, Quirks::default()),
+        let (sim_type, sim_profile, quirks, network_configs) = match params.chip.variant.as_ref() {
+            Some(ChipVariant::Cell(cell)) => {
+                (cell.sim_type, cell.sim_profile.clone(), cell.quirks, cell.network_configs.clone())
+            }
+            _ => (None, None, Quirks::default(), Vec::new()),
         };
-        if let Err(e) =
-            self.controller.add_modem(chip_id.0, modem_sink, sim_type, sim_profile, quirks)
-        {
+        if let Err(e) = self.controller.add_modem(
+            chip_id.0,
+            modem_sink,
+            sim_type,
+            sim_profile,
+            quirks,
+            network_configs,
+        ) {
             return Err(CellError::ModemError(e));
         }
 
@@ -141,6 +148,7 @@ impl ActorService for CellActor {
                     voice_registration: info.voice_registration,
                     data_registration: info.data_registration,
                     active_calls: info.calls,
+                    network_configs: info.network_configs,
                 })),
                 ..Default::default()
             }))
@@ -164,6 +172,12 @@ impl ActorService for CellActor {
             state.enabled = enabled;
         }
         if let Some(ChipVariantUpdate::Cell(cell_update)) = &update.variant {
+            if let Some(configs) = &cell_update.network_configs
+                && let Err(e) = self.controller.update_network_configs(id.0, configs.clone())
+            {
+                error!("Failed to update network configs for chip {id}: {e:?}");
+                return Err(CellError::ModemError(e));
+            }
             if let Some(s) = &cell_update.state {
                 state.enabled = s != "down";
             }
@@ -286,6 +300,7 @@ impl ActorService for CellActor {
                         voice_registration: info.voice_registration,
                         data_registration: info.data_registration,
                         active_calls: info.calls,
+                        network_configs: info.network_configs,
                     })),
                     ..Default::default()
                 });

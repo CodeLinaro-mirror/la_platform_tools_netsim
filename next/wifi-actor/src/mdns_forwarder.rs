@@ -12,22 +12,16 @@ const MDNS_PORT: u16 = 5353;
 
 struct MacAddress(u64);
 
-impl MacAddress {
-    fn to_be_bytes(&self) -> [u8; 6] {
-        self.0.to_le_bytes()[0..6].try_into().unwrap()
-    }
-}
-
 impl From<MacAddress> for [u8; 6] {
     fn from(MacAddress(addr): MacAddress) -> Self {
-        let bytes = u64::to_le_bytes(addr);
-        bytes[0..6].try_into().unwrap()
+        let [bytes @ .., _, _] = addr.to_le_bytes();
+        bytes
     }
 }
 
 impl From<&[u8; 6]> for MacAddress {
-    fn from(bytes: &[u8; 6]) -> Self {
-        Self(u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], 0, 0]))
+    fn from(&[b0, b1, b2, b3, b4, b5]: &[u8; 6]) -> Self {
+        Self(u64::from_le_bytes([b0, b1, b2, b3, b4, b5, 0, 0]))
     }
 }
 
@@ -45,22 +39,26 @@ struct Ipv4Header {
     destination_ip: [u8; 4],
 }
 
-macro_rules! be_vec {
-    ( $( $x:expr ),* ) => {
-         Vec::<u8>::new().iter().copied()
-         $( .chain($x.to_be_bytes()) )*
-         .collect()
-       };
-    }
-
 impl Ipv4Header {
     fn calculate_checksum(&self) -> u16 {
-        let mut sum: u32 = 0;
-        let fixed_bytes: [u8; 20] = self.to_be_bytes();
-        for i in 0..10 {
-            let word = ((fixed_bytes[i * 2] as u16) << 8) | (fixed_bytes[i * 2 + 1] as u16);
-            sum += word as u32;
-        }
+        let [s0, s1, s2, s3] = self.source_ip;
+        let [d0, d1, d2, d3] = self.destination_ip;
+        let mut sum: u32 = [
+            ((self.version_ihl as u16) << 8) | (self.dscp_ecn as u16),
+            self.total_length,
+            self.identification,
+            self.flags_fragment_offset,
+            ((self.time_to_live as u16) << 8) | (self.protocol as u16),
+            self.header_checksum,
+            u16::from_be_bytes([s0, s1]),
+            u16::from_be_bytes([s2, s3]),
+            u16::from_be_bytes([d0, d1]),
+            u16::from_be_bytes([d2, d3]),
+        ]
+        .into_iter()
+        .map(|w| w as u32)
+        .sum();
+
         while (sum >> 16) > 0 {
             sum = (sum & 0xFFFF) + (sum >> 16);
         }
@@ -72,20 +70,16 @@ impl Ipv4Header {
         self.header_checksum = self.calculate_checksum();
     }
 
-    fn to_be_bytes(&self) -> [u8; 20] {
-        let mut v: Vec<u8> = be_vec![
-            self.version_ihl,
-            self.dscp_ecn,
-            self.total_length,
-            self.identification,
-            self.flags_fragment_offset,
-            self.time_to_live,
-            self.protocol,
-            self.header_checksum
-        ];
-        v.extend(Ipv4Addr::from(self.source_ip).octets());
-        v.extend(Ipv4Addr::from(self.destination_ip).octets());
-        v.try_into().unwrap()
+    fn bytes(&self) -> impl Iterator<Item = u8> {
+        [self.version_ihl, self.dscp_ecn]
+            .into_iter()
+            .chain(self.total_length.to_be_bytes())
+            .chain(self.identification.to_be_bytes())
+            .chain(self.flags_fragment_offset.to_be_bytes())
+            .chain([self.time_to_live, self.protocol])
+            .chain(self.header_checksum.to_be_bytes())
+            .chain(self.source_ip)
+            .chain(self.destination_ip)
     }
 }
 
@@ -98,10 +92,13 @@ struct UdpHeader {
 }
 
 impl UdpHeader {
-    fn to_be_bytes(&self) -> [u8; 8] {
-        let v: Vec<u8> =
-            be_vec![self.source_port, self.destination_port, self.length, self.checksum];
-        v.try_into().unwrap()
+    fn bytes(&self) -> impl Iterator<Item = u8> {
+        self.source_port
+            .to_be_bytes()
+            .into_iter()
+            .chain(self.destination_port.to_be_bytes())
+            .chain(self.length.to_be_bytes())
+            .chain(self.checksum.to_be_bytes())
     }
 }
 
@@ -115,19 +112,13 @@ struct EtherHeader {
 const ETHER_TYPE_IP: u16 = 0x0800;
 
 impl EtherHeader {
-    fn to_be_bytes(&self) -> [u8; 14] {
-        let v: Vec<u8> = be_vec![
-            MacAddress::from(&self.ether_dhost),
-            MacAddress::from(&self.ether_shost),
-            self.ether_type
-        ];
-        v.try_into().unwrap()
+    fn bytes(&self) -> impl Iterator<Item = u8> {
+        self.ether_dhost.into_iter().chain(self.ether_shost).chain(self.ether_type.to_be_bytes())
     }
 }
 
 const UDP_HEADER_LEN: usize = std::mem::size_of::<UdpHeader>();
 const IPV4_HEADER_LEN: usize = std::mem::size_of::<Ipv4Header>();
-const ETHER_HEADER_LEN: usize = std::mem::size_of::<EtherHeader>();
 
 fn create_ethernet_frame(packet: &[u8], ip_addr: &Ipv4Addr) -> Result<Vec<u8>, String> {
     let ether_header = EtherHeader {
@@ -157,14 +148,12 @@ fn create_ethernet_frame(packet: &[u8], ip_addr: &Ipv4Addr) -> Result<Vec<u8>, S
     };
     ipv4_header.update_checksum();
 
-    let mut response_packet =
-        Vec::with_capacity(ETHER_HEADER_LEN + IPV4_HEADER_LEN + UDP_HEADER_LEN + packet.len());
-    response_packet.extend_from_slice(&ether_header.to_be_bytes());
-    response_packet.extend_from_slice(&ipv4_header.to_be_bytes());
-    response_packet.extend_from_slice(&udp_header.to_be_bytes());
-    response_packet.extend_from_slice(packet);
-
-    Ok(response_packet)
+    Ok(ether_header
+        .bytes()
+        .chain(ipv4_header.bytes())
+        .chain(udp_header.bytes())
+        .chain(packet.iter().copied())
+        .collect())
 }
 
 pub async fn run_mdns_forwarder(tx: UnboundedSender<Bytes>) -> Result<(), String> {

@@ -158,7 +158,7 @@ impl ActorService for BluetoothActor {
                 crate::sniffer::create(&self.rootcanal, chip_id, params)?
             }
         }
-        self.chips.write().unwrap().insert(chip_id, chip.clone());
+        self.chips.write().insert(chip_id, chip.clone());
         self.initial_chips.insert(chip_id, chip);
         Ok(chip_id)
     }
@@ -168,7 +168,7 @@ impl ActorService for BluetoothActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        let chips = self.chips.read().unwrap();
+        let chips = self.chips.read();
         Ok(chips.get(&id).cloned())
     }
 
@@ -201,7 +201,7 @@ impl ActorService for BluetoothActor {
         }
 
         let chip = {
-            let mut chips = self.chips.write().unwrap();
+            let mut chips = self.chips.write();
             let mut chip =
                 chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
@@ -219,7 +219,7 @@ impl ActorService for BluetoothActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let chip_to_delete = {
-            let mut chips = self.chips.write().unwrap();
+            let mut chips = self.chips.write();
             chips.remove(&id)
         };
         if let Some(chip) = chip_to_delete {
@@ -254,7 +254,7 @@ impl ActorService for BluetoothActor {
                 let _ = self.rootcanal.clear_stats(id.0);
 
                 let chip = {
-                    let mut chips = self.chips.write().unwrap();
+                    let mut chips = self.chips.write();
                     let initial_chip = self
                         .initial_chips
                         .get(&id)
@@ -270,7 +270,7 @@ impl ActorService for BluetoothActor {
             BluetoothAction::GetStatistics => {
                 let mut stats_list = Vec::new();
                 let chips_info: Vec<(ChipId, String)> = {
-                    let chips = self.chips.read().unwrap();
+                    let chips = self.chips.read();
                     chips.values().map(|chip| (ChipId(chip.id), chip.name.clone())).collect()
                 };
                 for (id, name) in chips_info {
@@ -301,7 +301,7 @@ impl ActorService for BluetoothActor {
                 Ok(BluetoothActionResult::Statistics(stats_list.into_boxed_slice()))
             }
             BluetoothAction::GetCountForTesting => {
-                let count = self.chips.read().unwrap().len();
+                let count = self.chips.read().len();
                 Ok(BluetoothActionResult::Count(count))
             }
         }
@@ -311,7 +311,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        let chips = self.chips.read().unwrap();
+        let chips = self.chips.read();
         Ok(chips.values().cloned().collect())
     }
 }

@@ -84,14 +84,14 @@ impl FtmResponder {
         let t4_val = t1_val + (2 * flight_ps) + sifs_ps;
 
         // Encode 48-bit timestamps
-        let t1_bytes = &t1_val.to_le_bytes()[0..6];
-        let t4_bytes = &t4_val.to_le_bytes()[0..6];
+        let [tod @ .., _, _] = t1_val.to_le_bytes();
+        let [toa @ .., _, _] = t4_val.to_le_bytes();
 
         let ftm_body_2 = FineTimingMeasurement {
             dialog_token,
             follow_up_dialog_token: dialog_token, // Reference to previous?
-            tod: t1_bytes.try_into().unwrap(),
-            toa: t4_bytes.try_into().unwrap(),
+            tod,
+            toa,
             tod_error: [0; 6],
         };
 

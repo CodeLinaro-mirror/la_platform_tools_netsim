@@ -94,20 +94,24 @@ where
         write!(writer, "{} {} {} {}:{} - ", self.prefix, level, log_current_time(), file, line)?;
 
         {
-            struct Visitor<'a, 'b>(&'a mut tracing_subscriber::fmt::format::Writer<'b>);
+            struct Visitor<'a, 'b> {
+                writer: &'a mut tracing_subscriber::fmt::format::Writer<'b>,
+                result: std::fmt::Result,
+            }
             impl tracing::field::Visit for Visitor<'_, '_> {
                 fn record_debug(
                     &mut self,
                     field: &tracing::field::Field,
                     value: &dyn std::fmt::Debug,
                 ) {
-                    if field.name() == "message" {
-                        write!(self.0, "{:?}", value).unwrap();
+                    if field.name() == "message" && self.result.is_ok() {
+                        self.result = write!(self.writer, "{:?}", value);
                     }
                 }
             }
-            let mut visitor = Visitor(&mut writer);
+            let mut visitor = Visitor { writer: &mut writer, result: Ok(()) };
             event.record(&mut visitor);
+            visitor.result?;
         }
         writeln!(writer)
     }

@@ -202,6 +202,7 @@ pub mod api {
                     crate::chip::ChipVariant::Cell(crate::cell::Cell {
                         sim_type: cell.sim_type,
                         sim_profile: cell.sim_profile,
+                        network_configs: cell.network_configs,
                         ..Default::default()
                     })
                 }
@@ -257,6 +258,7 @@ pub mod api {
                         ChipCreateVariant::Cell(crate::chip::CellCreate {
                             sim_type: cell.sim_type,
                             sim_profile: cell.sim_profile,
+                            network_configs: cell.network_configs,
                         })
                     }
                     Some(crate::chip::ChipVariant::CellularData(_cell_data)) => {

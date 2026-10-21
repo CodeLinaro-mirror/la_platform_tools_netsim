@@ -169,6 +169,56 @@ impl FrontendStats {
     }
 }
 
+/// Detailed Wi-Fi statistics.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WifiStats {
+    // === Error Counters ===
+    /// Errors related to the hostapd.
+    pub hostapd_errors: u32,
+    /// Errors related to network connectivity (e.g., Slirp/Tap interface).
+    pub network_errors: u32,
+    /// Errors related to client-specific operations or state.
+    pub client_errors: u32,
+    /// Errors encountered while parsing, decoding, or handling IEEE 802.11
+    /// frames.
+    pub frame_errors: u32,
+    /// Errors related to transmission or reception of frame.
+    pub transmission_errors: u32,
+    /// Other uncategorized errors.
+    pub other_errors: u32,
+
+    // === Core Traffic Flow & Type Counters ===
+    /// 802.11 frames received from clients via Hwsim messages.
+    pub hwsim_frames_rx: u32,
+    /// 802.11 frames transmitted to clients via Hwsim messages.
+    pub hwsim_frames_tx: u32,
+    /// L3 packets transmitted to external network (e.g., Slirp).
+    pub network_packets_tx: u32,
+    /// L3 packets received from external network.
+    pub network_packets_rx: u32,
+    /// 802.11 frames transmitted to hostapd process.
+    pub hostapd_frames_tx: u32,
+    /// 802.11 frames received from hostapd process.
+    pub hostapd_frames_rx: u32,
+    /// Station-to-station 802.11 frames transmitted via medium.
+    pub wmedium_frames_tx: u32,
+    /// Unicast 802.11 frames transmitted to another station via medium.
+    pub wmedium_unicast_frames_tx: u32,
+    /// 802.11 Management frames received by medium.
+    pub mgmt_frames_rx: u32,
+
+    // === Specific Protocol Counters ===
+    /// mDNS frames count.
+    pub mdns_count: u32,
+
+    // === Performance Statistics ===
+    /// Max throughput from Internet to device(s) in Mbits per second.
+    pub max_download_throughput: f32,
+    /// Max throughput from device(s) to Internet in Mbits per second.
+    pub max_upload_throughput: f32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,5 +239,23 @@ mod tests {
             stats.invalid_packets[NetsimRadioStats::MAX_INVALID_PACKETS - 1].reason,
             format!("reason {}", NetsimRadioStats::MAX_INVALID_PACKETS + overflow - 1)
         );
+    }
+
+    #[test]
+    fn test_wifi_stats_default_and_mutation() {
+        let mut stats = WifiStats::default();
+        assert_eq!(stats.hostapd_errors, 0);
+        assert_eq!(stats.hwsim_frames_rx, 0);
+        assert_eq!(stats.max_download_throughput, 0.0);
+
+        stats.hostapd_errors = 3;
+        stats.hwsim_frames_rx = 42;
+        stats.max_download_throughput = 150.5;
+
+        let cloned = stats.clone();
+        assert_eq!(cloned, stats);
+        assert_eq!(cloned.hostapd_errors, 3);
+        assert_eq!(cloned.hwsim_frames_rx, 42);
+        assert_eq!(cloned.max_download_throughput, 150.5);
     }
 }

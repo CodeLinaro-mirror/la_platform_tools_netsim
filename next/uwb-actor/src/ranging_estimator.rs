@@ -3,11 +3,9 @@
 
 //! Implementation of [RangingEstimator] for use with [pica].
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::{collections::HashMap, sync::Arc};
 
+use parking_lot::RwLock;
 use pica::{Handle, RangingEstimator, RangingMeasurement};
 use tracing::warn;
 
@@ -30,7 +28,7 @@ impl UwbRangingEstimator {
 
 impl RangingEstimator for UwbRangingEstimator {
     fn estimate(&self, a_handle: &Handle, b_handle: &Handle) -> Option<RangingMeasurement> {
-        let chips = self.shared_chips.read().unwrap();
+        let chips = self.shared_chips.read();
         let a_state = chips.get(a_handle)?;
         let b_state = chips.get(b_handle)?;
 

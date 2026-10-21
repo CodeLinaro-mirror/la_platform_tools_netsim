@@ -5,13 +5,14 @@
 
 use std::{
     sync::{
-        Arc, RwLock,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
 
 use jiff::Zoned;
+use parking_lot::RwLock;
 
 /// A trait that abstracts away the concept of "now" for testability.
 pub trait Clock: Send + Sync {
@@ -63,7 +64,7 @@ impl MockClock {
     }
 
     pub fn set_zoned(&self, zoned: Zoned) {
-        *self.zoned.write().unwrap() = Some(zoned);
+        *self.zoned.write() = Some(zoned);
     }
 }
 
@@ -73,7 +74,7 @@ impl Clock for MockClock {
     }
 
     fn now_zoned(&self) -> Zoned {
-        if let Some(ref z) = *self.zoned.read().unwrap() { z.clone() } else { Zoned::now() }
+        if let Some(ref z) = *self.zoned.read() { z.clone() } else { Zoned::now() }
     }
 
     fn clone_box(&self) -> Arc<dyn Clock> {

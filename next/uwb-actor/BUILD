@@ -14,6 +14,7 @@ DEPS = [
     "@thiserror",
     "@futures",
     "@tracing",
+    "@parking_lot",
     "@pdl-runtime",
     "@pica",
     "@tokio",

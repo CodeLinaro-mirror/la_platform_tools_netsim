@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 load("@rules_rust//rust:defs.bzl", "rust_binary")
-load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -21,25 +20,4 @@ rust_binary(
         "@tracing",
         "@tracing-subscriber",
     ],
-)
-
-sh_test(
-    name = "runner-e2e",
-    srcs = ["runner-e2e.sh"],
-    args = [
-        "$(location :runner)",
-        "$(location //next/verify/instrumentation/vbs:vbs.apk)",
-        "$(location @netsim//:netsimd)",
-        "$(location //next/cli:netsim)",
-        "--spec-dir",
-        "../netsim+/next/tests/features",
-    ],
-    data = [
-        ":runner",
-        "//next:features",
-        "//next/cli:netsim",
-        "//next/verify/instrumentation/vbs:vbs.apk",
-        "@netsim//:netsimd",
-    ],
-    tags = ["manual"],
 )

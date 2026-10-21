@@ -36,12 +36,8 @@ impl ActorLifecycle for UwbActor {
                 Ok(PicaEvent::Disconnected { handle, .. }) => {
                     // Received in response to either `PicaCommand::Disconnect` or stream/sink
                     // closure.
-                    let id = self
-                        .chip_states
-                        .read()
-                        .unwrap()
-                        .get(&handle)
-                        .map(|state| ChipId(state.chip.id));
+                    let id =
+                        self.chip_states.read().get(&handle).map(|state| ChipId(state.chip.id));
                     if let Some(id) = id {
                         let _ = self.handle_delete(id, ctx).await;
                     }

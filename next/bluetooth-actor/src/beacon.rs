@@ -11,13 +11,12 @@
 //! NOTE: This module is currently missing the complete setup for converting
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
-use netsim_model::{BeaconParams, ChipError, ChipId, Interval};
+use netsim_model::{BeaconParams, ChipError, ChipId, Interval, PacketType};
 use netsim_packets::{
     Address as PacketsAddress, AdvertisingFilterPolicy, AdvertisingType, Enable, HciCommand,
     HciCommandHeader, LeSetAdvertisingData, LeSetAdvertisingEnable, LeSetAdvertisingParameters,
     LeSetScanResponseData, OwnAddressType, PeerAddressType, Reset,
 };
-use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use rootcanal::{Address, Rootcanal};
 use zerocopy::{Immutable, IntoBytes, KnownLayout, U16};
 
@@ -41,7 +40,7 @@ fn send_hci_command<T: HciCommand + IntoBytes + Immutable + KnownLayout>(
         op_code: T::OP_CODE,
         parameter_total_length: payload.as_bytes().len() as u8,
     };
-    let h4_packet = std::iter::once(PacketType::COMMAND.value() as u8)
+    let h4_packet = std::iter::once(u8::from(PacketType::Command))
         .chain(header.as_bytes().iter().copied())
         .chain(payload.as_bytes().iter().copied())
         .collect();

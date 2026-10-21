@@ -15,8 +15,8 @@ use crate::{
     parser::QuotedString,
     time::{Clock, SystemClock},
     types::{
-        CallMode, CmeeMode, ExecutionResult, FlowControlMode, IcfFormat, IcfParity, Parsable,
-        ProductSerialNumberType, SpeakerMuteMode,
+        CallMode, CharacterSet, CmeeMode, ExecutionResult, FlowControlMode, IcfFormat, IcfParity,
+        Parsable, ProductSerialNumberType, SpeakerMuteMode, SpeakerVolume,
     },
 };
 
@@ -26,7 +26,7 @@ const DEFAULT_INFO: &str = "modem simulator";
 
 /// Miscellaneous modem service AT commands.
 #[derive(Debug, PartialEq, Clone, Copy, CommandParser)]
-pub enum MiscCommand<'a> {
+pub enum MiscCommand {
     #[command(tag = "AT+CMEE=?")]
     QuerySupportedReportMobileEquipmentError,
     #[command(tag = "AT+CMEE?")]
@@ -39,7 +39,7 @@ pub enum MiscCommand<'a> {
     #[command(tag = "ATE")]
     SetEcho(bool),
     #[command(tag = "ATL")]
-    SetSpeakerVolume(u8),
+    SetSpeakerVolume(SpeakerVolume),
     #[command(tag = "ATM")]
     SetSpeakerMute(SpeakerMuteMode),
     #[command(tag = "ATQ")]
@@ -103,7 +103,7 @@ pub enum MiscCommand<'a> {
     #[command(tag = "AT+CMOD=")]
     SetCallMode(CallMode),
     #[command(tag = "AT+CSCS=")]
-    SetCharacterSet(QuotedString<'a>),
+    SetCharacterSet(CharacterSet),
     #[command(tag = "AT")]
     Test,
 }
@@ -200,10 +200,7 @@ impl FromStr for CclkTime {
 impl<'a> Parsable<'a> for CclkTime {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
         let (rem, quoted) = QuotedString::parse(input)?;
-        let s = std::str::from_utf8(quoted.0).map_err(|_e| {
-            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
-        })?;
-        let cclk = s.parse::<Self>().map_err(|_e| {
+        let cclk = quoted.as_str().parse::<Self>().map_err(|_e| {
             nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Verify))
         })?;
         Ok((rem, cclk))
@@ -222,7 +219,7 @@ pub enum MiscResponse {
     ErrorReportingMode(CmeeMode),
     ErrorReportingSupported,
     ActiveConfiguration {
-        speaker_volume: u8,
+        speaker_volume: SpeakerVolume,
         speaker_mute: SpeakerMuteMode,
         quiet_mode: bool,
         verbose_mode: bool,
@@ -288,7 +285,7 @@ pub struct MiscService {
     ctzv_mode: bool,
     cclk: Option<CclkTime>,
     cmee_mode: CmeeMode,
-    speaker_volume: u8,
+    speaker_volume: SpeakerVolume,
     speaker_mute: SpeakerMuteMode,
     quiet_mode: bool,
     verbose_mode: bool,
@@ -311,14 +308,14 @@ impl MiscService {
             ctzv_mode: false,
             cclk: None,
             cmee_mode: CmeeMode::default(),
-            speaker_volume: 1,
-            speaker_mute: SpeakerMuteMode::OnAndOffOnCarrier,
+            speaker_volume: SpeakerVolume::default(),
+            speaker_mute: SpeakerMuteMode::default(),
             quiet_mode: false,
             verbose_mode: true,
-            icf_format: IcfFormat::Data8Stop1,
-            icf_parity: IcfParity::Space,
-            ifc_dce: FlowControlMode::Hardware,
-            ifc_dte: FlowControlMode::Hardware,
+            icf_format: IcfFormat::default(),
+            icf_parity: IcfParity::default(),
+            ifc_dce: FlowControlMode::default(),
+            ifc_dte: FlowControlMode::default(),
         }
     }
 
@@ -426,14 +423,14 @@ impl MiscService {
 
     fn handle_reset_to_factory_defaults(&mut self) -> MiscResult {
         self.cmee_mode = CmeeMode::default();
-        self.speaker_volume = 1;
-        self.speaker_mute = SpeakerMuteMode::OnAndOffOnCarrier;
+        self.speaker_volume = SpeakerVolume::default();
+        self.speaker_mute = SpeakerMuteMode::default();
         self.quiet_mode = false;
         self.verbose_mode = true;
-        self.icf_format = IcfFormat::Data8Stop1;
-        self.icf_parity = IcfParity::Space;
-        self.ifc_dce = FlowControlMode::Hardware;
-        self.ifc_dte = FlowControlMode::Hardware;
+        self.icf_format = IcfFormat::default();
+        self.icf_parity = IcfParity::default();
+        self.ifc_dce = FlowControlMode::default();
+        self.ifc_dte = FlowControlMode::default();
         Ok(None)
     }
 
@@ -458,7 +455,7 @@ impl MiscService {
         Ok(Some(MiscResponse::Capabilities))
     }
 
-    pub fn execute<'a>(&mut self, command: &MiscCommand<'a>) -> ExecutionResult {
+    pub fn execute(&mut self, command: &MiscCommand) -> ExecutionResult {
         let misc_result = match command {
             MiscCommand::GetManufacturerIdentification => {
                 self.handle_get_manufacturer_identification()
@@ -679,5 +676,27 @@ mod tests {
         let nitz = NitzTime::from(zoned);
         let cclk = CclkTime::from(nitz);
         assert_eq!(cclk.to_string(), "26/06/15,19:30:45-28");
+    }
+
+    #[test]
+    fn test_reset_to_factory_defaults() {
+        let mut service = MiscService::default();
+        service.cmee_mode = CmeeMode::Verbose;
+        service.speaker_volume = SpeakerVolume::High;
+        service.speaker_mute = SpeakerMuteMode::AlwaysOn;
+        service.icf_format = IcfFormat::Data7Stop1;
+        service.icf_parity = IcfParity::Odd;
+        service.ifc_dce = FlowControlMode::None;
+        service.ifc_dte = FlowControlMode::None;
+
+        service.execute(&MiscCommand::ResetToFactoryDefaults);
+
+        assert_eq!(service.cmee_mode, CmeeMode::default());
+        assert_eq!(service.speaker_volume, SpeakerVolume::default());
+        assert_eq!(service.speaker_mute, SpeakerMuteMode::default());
+        assert_eq!(service.icf_format, IcfFormat::default());
+        assert_eq!(service.icf_parity, IcfParity::default());
+        assert_eq!(service.ifc_dce, FlowControlMode::default());
+        assert_eq!(service.ifc_dte, FlowControlMode::default());
     }
 }

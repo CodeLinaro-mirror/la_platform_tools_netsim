@@ -19,6 +19,7 @@ DEPS = [
     "@tokio",
     "@tokio-util",
     "@casimir//:casimir_lib",
+    "@parking_lot",
     "@pdl-runtime",
 ]
 

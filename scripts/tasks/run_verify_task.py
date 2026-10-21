@@ -27,16 +27,19 @@ class RunVerifyTask(Task):
     self.out = Path(args.out_dir)
 
   def do_run(self) -> bool:
-    if self.args.buildbot and platform.system() != "Linux":
-      print("RunVerify task is only supported on Linux buildbots. Skipping.")
-      return True
+    # TODO(b/557273666): RunVerify is temporarily disabled due to the removal
+    # of guest Android instrumentation APKs during the standalone Bazel
+    # workspace migration. Re-enable or restore verification once guest test
+    # artifacts are decoupled or integrated into the new standalone test runner.
+    logging.info("RunVerify task is disabled.")
+    return True
 
-    manager = VerifyManager(self.args, self.env)
-    return manager.process()
 
-
+# NOTE(b/557273666): Inactive / dormant class.
+# VerifyManager is currently unused while RunVerifyTask.do_run() is disabled.
+# Retained for reactivation when guest test orchestration is reinstated.
 class VerifyManager:
-  """Handles the heavy lifting of orchestration for verification.
+  """[DORMANT] Handles the heavy lifting of orchestration for verification.
 
   This class orchestrates the end-to-end verification process by performing
   the following steps:

@@ -132,11 +132,11 @@ impl ActorService for ApActor {
     ) -> Result<(), Self::Error> {
         if let Some(state) = self.aps.remove(&id) {
             let bssid = state.config.bssid;
-            self.shared_keys.bssids.write().unwrap().remove(&bssid);
-            self.shared_keys.gtks.write().unwrap().remove(&bssid);
+            self.shared_keys.bssids.write().remove(&bssid);
+            self.shared_keys.gtks.write().remove(&bssid);
 
             // Find and remove all stations associated with the deleted BSSID
-            let mut station_bssids = self.shared_keys.station_bssids.write().unwrap();
+            let mut station_bssids = self.shared_keys.station_bssids.write();
             let mut stations_to_remove = Vec::new();
             station_bssids.retain(|sta, v| {
                 let matched = *v == bssid;
@@ -147,7 +147,7 @@ impl ActorService for ApActor {
             });
 
             // Remove their session keys
-            let mut sessions = self.shared_keys.sessions.write().unwrap();
+            let mut sessions = self.shared_keys.sessions.write();
             for sta in &stations_to_remove {
                 sessions.remove(sta);
             }
@@ -193,7 +193,9 @@ impl ActorService for ApActor {
                 Ok(ApResponse::Ok)
             }
             ApReq::Disconnect { mac } => {
-                let id = id.expect("ApActor: Disconnect requires an ID");
+                let id = id.ok_or_else(|| {
+                    ApError::Internal("ApActor: Disconnect requires an ID".into())
+                })?;
                 let ap_state = self.aps.get_mut(&id).ok_or(ApError::ApNotFound(id.0))?;
 
                 if ap_state.associations.remove(&mac) {

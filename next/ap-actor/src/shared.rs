@@ -4,12 +4,13 @@
 use std::{
     collections::HashMap,
     sync::{
-        Arc, RwLock,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
 };
 
 use netsim_packets::{CcmpHeader, Ieee80211, MacAddress};
+use parking_lot::RwLock;
 use tracing::error;
 use zerocopy::IntoBytes;
 
@@ -59,41 +60,41 @@ impl SharedKeyStore {
     }
 
     pub fn add_bssid(&self, bssid: MacAddress) {
-        self.bssids.write().unwrap().insert(bssid);
+        self.bssids.write().insert(bssid);
     }
 
     pub fn has_bssid(&self, bssid: &MacAddress) -> bool {
-        self.bssids.read().unwrap().contains(bssid)
+        self.bssids.read().contains(bssid)
     }
 
     pub fn set_station_bssid(&self, sta_addr: MacAddress, bssid: MacAddress) {
-        self.station_bssids.write().unwrap().insert(sta_addr, bssid);
+        self.station_bssids.write().insert(sta_addr, bssid);
     }
 
     pub fn get_station_bssid(&self, sta_addr: &MacAddress) -> Option<MacAddress> {
-        self.station_bssids.read().unwrap().get(sta_addr).copied()
+        self.station_bssids.read().get(sta_addr).copied()
     }
 
     pub fn add_session(&self, sta_addr: MacAddress, tk: Vec<u8>) {
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self.sessions.write();
         sessions.insert(sta_addr, Arc::new(SessionKeys { tk, tx_pn: AtomicU64::new(1) }));
     }
 
     pub fn get_gtk(&self, bssid: &MacAddress) -> Option<[u8; 16]> {
-        self.gtks.read().unwrap().get(bssid).copied()
+        self.gtks.read().get(bssid).copied()
     }
 
     pub fn set_gtk(&self, bssid: MacAddress, gtk: [u8; 16]) {
-        self.gtks.write().unwrap().insert(bssid, gtk);
+        self.gtks.write().insert(bssid, gtk);
     }
 
     pub fn remove_session(&self, sta_addr: &MacAddress) {
-        let mut sessions = self.sessions.write().unwrap();
+        let mut sessions = self.sessions.write();
         sessions.remove(sta_addr);
     }
 
     pub fn remove_station_bssid(&self, sta_addr: &MacAddress) {
-        self.station_bssids.write().unwrap().remove(sta_addr);
+        self.station_bssids.write().remove(sta_addr);
     }
 
     pub fn try_encrypt(&self, ieee80211: &Ieee80211) -> Option<Vec<u8>> {
@@ -102,12 +103,12 @@ impl SharedKeyStore {
 
         let (tk, pn, key_id) = if is_group {
             let bssid = ieee80211.get_bssid()?;
-            let gtks = self.gtks.read().ok()?;
+            let gtks = self.gtks.read();
             let gtk = gtks.get(&bssid)?;
             let pn = self.gtk_tx_pn.fetch_add(1, Ordering::SeqCst);
             (gtk.to_vec(), pn, 1) // KeyID 1
         } else {
-            let sessions = self.sessions.read().ok()?;
+            let sessions = self.sessions.read();
             let session = sessions.get(&dest)?;
             let pn = session.tx_pn.fetch_add(1, Ordering::SeqCst);
             (session.tk.clone(), pn, 0) // KeyID 0
@@ -117,29 +118,19 @@ impl SharedKeyStore {
             return None;
         }
 
-        let mut nonce = [0u8; 13];
-        nonce[0] = 0; // Priority (0)
-        nonce[1..7].copy_from_slice(&ieee80211.get_addr2().bytes); // A2 (Src/BSSID)
-        // PN (6 bytes)
-        let pn_bytes = pn.to_le_bytes();
-        // CCMP Nonce: Priority(1) || A2(6) || PN(6)
-
-        // Hostapd-rs way:
-        nonce[7] = pn_bytes[5];
-        nonce[8] = pn_bytes[4];
-        nonce[9] = pn_bytes[3];
-        nonce[10] = pn_bytes[2];
-        nonce[11] = pn_bytes[1];
-        nonce[12] = pn_bytes[0];
-        // PN is Little Endian from to_le_bytes (LSB at index 0).
-        // We map to Nonce bytes [7..13] matching legacy hostapd logic.
+        // CCMP Nonce (13 bytes): Priority(1: 0) || A2(6: Src/BSSID) || PN(6: MSB-first)
+        // Note: pn.to_le_bytes() yields LSB at pn0; Nonce maps PN in big-endian order
+        // [pn5..pn0] matching IEEE 802.11 CCMP / hostapd logic.
+        let [pn0, pn1, pn2, pn3, pn4, pn5, ..] = pn.to_le_bytes();
+        let [a0, a1, a2, a3, a4, a5] = ieee80211.get_addr2().bytes; // A2 (Src/BSSID)
+        let nonce = [0 /* Priority */, a0, a1, a2, a3, a4, a5, pn5, pn4, pn3, pn2, pn1, pn0];
 
         // The CCMP AAD explicitly requires the 'Protected' frame control bit to be
         // active. We must calculate the AAD against the final physical MAC byte
         // sequence!
         let mut final_fc_bytes = ieee80211.as_bytes().to_vec();
         final_fc_bytes[1] |= 0x40; // Force Protected Bit inside the temporary buffer
-        let final_ieee = Ieee80211::decode(&final_fc_bytes).unwrap();
+        let final_ieee = Ieee80211::decode(&final_fc_bytes).ok()?;
         let aad = final_ieee.get_aad();
 
         let payload = ieee80211.get_payload();
@@ -158,16 +149,7 @@ impl SharedKeyStore {
         // CCMP Header
         // PN0, PN1, Rsvd, KeyID_ExtIV, PN2, PN3, PN4, PN5
         let ccmp_key_id = 0x20 | (key_id << 6);
-        let ccmp_header = CcmpHeader {
-            pn0: pn_bytes[0],
-            pn1: pn_bytes[1],
-            rsvd: 0,
-            key_id: ccmp_key_id,
-            pn2: pn_bytes[2],
-            pn3: pn_bytes[3],
-            pn4: pn_bytes[4],
-            pn5: pn_bytes[5],
-        };
+        let ccmp_header = CcmpHeader { pn0, pn1, rsvd: 0, key_id: ccmp_key_id, pn2, pn3, pn4, pn5 };
         new_packet.extend_from_slice(ccmp_header.as_bytes());
 
         new_packet.extend_from_slice(&ciphertext);
@@ -181,7 +163,7 @@ impl SharedKeyStore {
     pub fn try_decrypt(&self, ieee80211: &Ieee80211) -> Option<Vec<u8>> {
         // Decrypt if source is in sessions (Unicast from Station)
         let src = ieee80211.get_source();
-        let sessions = self.sessions.read().ok()?;
+        let sessions = self.sessions.read();
         let session = sessions.get(&src)?;
         if session.tk.len() < 16 {
             return None;
@@ -191,26 +173,16 @@ impl SharedKeyStore {
             return None;
         }
 
-        // Extract Nonce from Frame (CCMP Header)
+        // Extract Nonce from Frame (CCMP Header: PN0, PN1, Rsvd, KeyID, PN2..PN5)
         // Frame: Header || CCMP Header || Data || MIC
         let hdr_len = ieee80211.hdr_length();
-        let ccmp_hdr = &ieee80211.as_bytes()[hdr_len..hdr_len + 8];
-        let pn0 = ccmp_hdr[0];
-        let pn1 = ccmp_hdr[1];
-        let pn2 = ccmp_hdr[4];
-        let pn3 = ccmp_hdr[5];
-        let pn4 = ccmp_hdr[6];
-        let pn5 = ccmp_hdr[7];
+        let &[pn0, pn1, _, _, pn2, pn3, pn4, pn5, ..] = &ieee80211.as_bytes()[hdr_len..] else {
+            return None;
+        };
 
-        let mut nonce = [0u8; 13];
-        nonce[0] = 0; // Priority
-        nonce[1..7].copy_from_slice(&ieee80211.get_addr2().bytes); // A2 (Src/STA)
-        nonce[7] = pn5;
-        nonce[8] = pn4;
-        nonce[9] = pn3;
-        nonce[10] = pn2;
-        nonce[11] = pn1;
-        nonce[12] = pn0;
+        // CCMP Nonce: Priority(0) || A2(Src/STA) || PN(pn5..pn0)
+        let [a0, a1, a2, a3, a4, a5] = ieee80211.get_addr2().bytes; // A2 (Src/STA)
+        let nonce = [0 /* Priority */, a0, a1, a2, a3, a4, a5, pn5, pn4, pn3, pn2, pn1, pn0];
 
         // Payload
         let data = &ieee80211.as_bytes()[hdr_len + CCMP_HDR_LEN..];

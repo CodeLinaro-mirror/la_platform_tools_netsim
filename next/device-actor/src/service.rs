@@ -468,10 +468,9 @@ impl DeviceActor {
         };
 
         // Notify Link Actor
-        self.link_client
-            .notify_chip_removed(chip_id)
-            .await
-            .expect("Failed to notify LinkActor of chip remove");
+        if let Err(e) = self.link_client.notify_chip_removed(chip_id).await {
+            warn!("DeviceActor: Failed to notify LinkActor of chip remove: {e}");
+        }
 
         if should_delete {
             info!("DeviceActor: Device {} is empty, auto-deleting", device_id);
@@ -615,10 +614,9 @@ impl DeviceActor {
         chip_client.create(chip_id, chip_create_params).await?;
         entity.device.chips.push(chip);
 
-        link_client
-            .notify_chip_added(chip_id, chip_kind)
-            .await
-            .expect("Failed to notify LinkActor of chip add");
+        if let Err(e) = link_client.notify_chip_added(chip_id, chip_kind).await {
+            warn!("DeviceActor: Failed to notify LinkActor of chip add: {e}");
+        }
 
         Ok(chip_id)
     }

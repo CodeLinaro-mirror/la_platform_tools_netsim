@@ -31,6 +31,7 @@ netsim_rust_library(
         "//next/modem-rs-derive",
     ],
     test_deps = [
+        "@serde_json",
         "@tempfile",
         "@tracing-subscriber",
     ],
@@ -41,9 +42,9 @@ netsim_rust_library(
         "@hex",
         "@jiff",
         "@nom",
+        "@parking_lot",
         "@serde",
         "@serde-xml-rs",
-        "@serde_json",
         "@tokio",
         "@tracing",
     ],

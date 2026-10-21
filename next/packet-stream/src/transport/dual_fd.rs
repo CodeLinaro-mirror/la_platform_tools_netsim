@@ -35,8 +35,11 @@ use crate::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceConfig {
-    pub name: String,
+    #[serde(default)]
+    pub name: Option<String>,
     pub chips: Vec<ChipConfig>,
+    #[serde(default)]
+    pub device_info: Option<DeviceInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,8 +161,8 @@ pub struct DualFdListener {
     /// Streams established from pre-existing FDs (e.g., inherited pipes) that
     /// do not need to accept connections dynamically.
     pending_static_streams:
-        VecDeque<(String, String, Option<i32>, Option<String>, (OwnedFd, OwnedFd))>,
-    listening_sockets: Vec<(String, String, Option<i32>, Option<String>, AsyncFd<OwnedFd>)>,
+        VecDeque<(DeviceInfo, String, Option<i32>, Option<String>, (OwnedFd, OwnedFd))>,
+    listening_sockets: Vec<(DeviceInfo, String, Option<i32>, Option<String>, AsyncFd<OwnedFd>)>,
 }
 
 impl DualFdListener {
@@ -174,6 +177,16 @@ impl DualFdListener {
         self.pending_static_streams.clear();
         self.listening_sockets.clear();
         for device in &self.config.devices {
+            let mut device_info = device.device_info.clone().unwrap_or_default();
+            if device_info.name.is_empty() {
+                if let Some(name) = &device.name {
+                    device_info.name.clone_from(name);
+                }
+            }
+            if device_info.id.is_empty() {
+                device_info.id.clone_from(&device_info.name);
+            }
+
             for chip in &device.chips {
                 let in_fd = claim_fd(chip.fd_in)?;
 
@@ -185,7 +198,7 @@ impl DualFdListener {
                         ))
                     })?;
                     self.listening_sockets.push((
-                        device.name.clone(),
+                        device_info.clone(),
                         chip.kind.clone(),
                         chip.sim_type,
                         chip.sim_profile.clone(),
@@ -198,7 +211,7 @@ impl DualFdListener {
                     };
 
                     self.pending_static_streams.push_back((
-                        device.name.clone(),
+                        device_info.clone(),
                         chip.kind.clone(),
                         chip.sim_type,
                         chip.sim_profile.clone(),
@@ -233,22 +246,18 @@ async fn accept_one_connection(async_fd: &AsyncFd<OwnedFd>) -> Result<(OwnedFd, 
 }
 
 fn create_stream_and_sink(
-    device_name: String,
+    device_info: DeviceInfo,
     chip_kind: String,
     sim_type: Option<i32>,
     sim_profile: Option<String>,
     in_fd: OwnedFd,
     out_fd: OwnedFd,
 ) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
-    let guid = format!("dualfd-{}", device_name);
+    let guid = format!("dualfd-{}", device_info.name);
     let kind = ChipKind::from_str(&chip_kind).unwrap_or(ChipKind::UNSPECIFIED);
 
     let chip_info = ChipInfo {
-        device_info: Some(DeviceInfo {
-            name: device_name.clone(),
-            id: device_name,
-            ..Default::default()
-        }),
+        device_info: Some(device_info),
         chip: Some(Chip {
             name: chip_kind.clone(),
             kind,
@@ -304,17 +313,10 @@ fn create_stream_and_sink(
 #[async_trait]
 impl TransportListener for DualFdListener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
-        while let Some((device_name, chip_kind, sim_type, sim_profile, (in_fd, out_fd))) =
+        while let Some((device, chip_kind, sim_type, sim_profile, (in_fd, out_fd))) =
             self.pending_static_streams.pop_front()
         {
-            match create_stream_and_sink(
-                device_name,
-                chip_kind,
-                sim_type,
-                sim_profile,
-                in_fd,
-                out_fd,
-            ) {
+            match create_stream_and_sink(device, chip_kind, sim_type, sim_profile, in_fd, out_fd) {
                 Ok(res) => return Ok(res),
                 Err(e) => {
                     tracing::warn!("Failed to create transport for static FD: {e}, skipping");
@@ -330,21 +332,20 @@ impl TransportListener for DualFdListener {
         // loop on transient accept errors, which are rare. This is not a hot path.
         loop {
             let mut accept_futures = Vec::new();
-            for (device_name, chip_kind, sim_type, sim_profile, async_fd) in &self.listening_sockets
-            {
+            for (device, chip_kind, sim_type, sim_profile, async_fd) in &self.listening_sockets {
                 accept_futures.push(Box::pin(async move {
                     let res = accept_one_connection(async_fd).await;
-                    (device_name, chip_kind, *sim_type, sim_profile, res)
+                    (device, chip_kind, *sim_type, sim_profile, res)
                 }));
             }
 
             let (result, _, _remaining) = futures::future::select_all(accept_futures).await;
-            let (device_name, chip_kind, sim_type, sim_profile, res) = result;
+            let (device, chip_kind, sim_type, sim_profile, res) = result;
 
             match res {
                 Ok((connected_fd, cloned_fd)) => {
                     match create_stream_and_sink(
-                        device_name.clone(),
+                        device.clone(),
                         chip_kind.clone(),
                         sim_type,
                         sim_profile.clone(),
@@ -392,22 +393,23 @@ mod tests {
         use futures::{SinkExt, StreamExt};
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-        // 1. Create a listening Unix socket
         let socket_path =
-            std::env::temp_dir().join(format!("test_vsock_{}.sock", std::process::id()));
+            std::env::temp_dir().join(format!("test_vsock_comm_{}.sock", std::process::id()));
         if socket_path.exists() {
             let _ = std::fs::remove_file(&socket_path);
         }
         let std_listener = UnixListener::bind(&socket_path).unwrap();
         let listener_fd = std_listener.into_raw_fd();
 
-        // 2. Prepare DualFdConfig with this FD as vsockFd (which maps to fd_in)
         let json_config = format!(
             r#"
             {{
                 "devices": [
                     {{
-                        "name": "cvd-1",
+                        "device_info": {{
+                            "name": "cvd-1",
+                            "kind": "CUTTLEFISH"
+                        }},
                         "chips": [
                             {{
                                 "kind": "CELLULAR",
@@ -422,11 +424,8 @@ mod tests {
         );
 
         let config: DualFdConfig = serde_json::from_str(&json_config).unwrap();
-
-        // 3. Create DualFdListener
         let mut listener = DualFdListener::new(config).await.unwrap();
 
-        // 4. Start a task to connect to the socket
         let client_path = socket_path.clone();
         let client_task = tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -438,13 +437,12 @@ mod tests {
             assert_eq!(&buf, b"hello from server\n");
         });
 
-        // 5. Accept connection in listener
         let (mut stream, mut sink, chip_info, _guid) = listener.accept().await.unwrap();
-
-        assert_eq!(chip_info.device_info.unwrap().name, "cvd-1");
+        let dev_info = chip_info.device_info.unwrap();
+        assert_eq!(dev_info.name, "cvd-1");
+        assert_eq!(dev_info.kind, "CUTTLEFISH");
         assert_eq!(chip_info.chip.unwrap().name, "CELLULAR");
 
-        // 6. Verify communication
         let bytes = stream.next().await.unwrap().unwrap();
         assert_eq!(bytes.as_ref(), b"hello from client");
 
@@ -452,5 +450,106 @@ mod tests {
 
         client_task.await.unwrap();
         let _ = std::fs::remove_file(&socket_path);
+    }
+
+    #[tokio::test]
+    async fn test_dual_fd_listener_device_info_resolution() {
+        use std::os::unix::io::IntoRawFd;
+
+        use nix::unistd::pipe;
+
+        struct TestCase {
+            name: &'static str,
+            extra_json: &'static str,
+            expected_device_info: DeviceInfo,
+        }
+
+        let test_cases = [
+            TestCase {
+                name: "explicit device_info with kind",
+                extra_json: r#""device_info": {"name": "cvd-2", "kind": "CUSTOM_KIND"}"#,
+                expected_device_info: DeviceInfo {
+                    name: "cvd-2".into(),
+                    id: "cvd-2".into(),
+                    kind: "CUSTOM_KIND".into(),
+                    ..Default::default()
+                },
+            },
+            TestCase {
+                name: "missing device_info defaults to outer legacy name",
+                extra_json: r#""name": "generic-dev""#,
+                expected_device_info: DeviceInfo {
+                    name: "generic-dev".into(),
+                    id: "generic-dev".into(),
+                    ..Default::default()
+                },
+            },
+            TestCase {
+                name: "device_info without name falls back to outer legacy name",
+                extra_json: r#""name": "legacy-dev", "device_info": {"kind": "CUTTLEFISH", "variant": "userdebug"}"#,
+                expected_device_info: DeviceInfo {
+                    name: "legacy-dev".into(),
+                    id: "legacy-dev".into(),
+                    kind: "CUTTLEFISH".into(),
+                    variant: "userdebug".into(),
+                    ..Default::default()
+                },
+            },
+            TestCase {
+                name: "device_info name takes precedence over legacy outer name",
+                extra_json: r#""name": "legacy-dev", "device_info": {"name": "primary-dev", "kind": "CUTTLEFISH"}"#,
+                expected_device_info: DeviceInfo {
+                    name: "primary-dev".into(),
+                    id: "primary-dev".into(),
+                    kind: "CUTTLEFISH".into(),
+                    ..Default::default()
+                },
+            },
+            TestCase {
+                name: "full metadata fields preserved",
+                extra_json: r#""device_info": {
+                    "name": "cvd-3",
+                    "kind": "CUTTLEFISH",
+                    "version": "1.0",
+                    "sdk_version": "34",
+                    "build_id": "AP1A.240305.019",
+                    "variant": "userdebug",
+                    "arch": "x86_64"
+                }"#,
+                expected_device_info: DeviceInfo {
+                    name: "cvd-3".into(),
+                    id: "cvd-3".into(),
+                    kind: "CUTTLEFISH".into(),
+                    version: "1.0".into(),
+                    sdk_version: "34".into(),
+                    build_id: "AP1A.240305.019".into(),
+                    variant: "userdebug".into(),
+                    arch: "x86_64".into(),
+                    ..Default::default()
+                },
+            },
+        ];
+
+        for tc in test_cases {
+            let (r_fd, w_fd) = pipe().unwrap();
+            let json_config = format!(
+                r#"{{"devices": [{{"chips": [{{"kind": "CELLULAR", "fdIn": {}, "fdOut": {}}}], {} }}]}}"#,
+                r_fd.into_raw_fd(),
+                w_fd.into_raw_fd(),
+                tc.extra_json
+            );
+
+            let config: DualFdConfig = serde_json::from_str(&json_config)
+                .unwrap_or_else(|e| panic!("Failed to parse config for test '{}': {e}", tc.name));
+            let mut listener = DualFdListener::new(config).await.unwrap();
+
+            let (_stream, _sink, chip_info, _guid) = listener.accept().await.unwrap();
+            let dev_info = chip_info.device_info.unwrap_or_default();
+            assert_eq!(
+                dev_info, tc.expected_device_info,
+                "Failed assertion for case '{}'",
+                tc.name
+            );
+        }
     }
 }

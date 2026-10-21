@@ -1,9 +1,10 @@
 // Copyright 2024 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, net::IpAddr, sync::Mutex};
+use std::{collections::HashMap, net::IpAddr};
 
 use etherparse::{PacketHeaders, PayloadSlice, TransportHeader};
+use parking_lot::Mutex;
 use tracing::debug;
 
 /// This module provides a reverse-dns function that caches the domain
@@ -48,7 +49,7 @@ impl DnsManager {
             // Add any A/AAAA domain names
             if let Ok(answers) = dns::parse_answers(payload) {
                 for (ip_addr, name) in answers {
-                    self.map.lock().unwrap().insert(ip_addr, name.clone());
+                    self.map.lock().insert(ip_addr, name.clone());
                     debug!("Added {} ({}) to DNS cache", name, ip_addr);
                 }
             }
@@ -57,22 +58,23 @@ impl DnsManager {
 
     /// Adds potential DNS entries from an Ethernet slice.
     pub fn add_from_ethernet_slice(&self, packet: &[u8]) {
-        let headers = PacketHeaders::from_ethernet_slice(packet).unwrap();
-        self.add_from_packet_headers(&headers);
+        if let Ok(headers) = PacketHeaders::from_ethernet_slice(packet) {
+            self.add_from_packet_headers(&headers);
+        }
     }
 
     /// Return a FQDN from a prior DNS response for ip address
     pub fn get(&self, ip_addr: &IpAddr) -> Option<String> {
-        self.map.lock().unwrap().get(ip_addr).cloned()
+        self.map.lock().get(ip_addr).cloned()
     }
 
     /// Returns the number of entries in the cache.
     pub fn len(&self) -> usize {
-        self.map.lock().unwrap().len()
+        self.map.lock().len()
     }
 
     /// Checks if the cache is empty.
     pub fn is_empty(&self) -> bool {
-        self.map.lock().unwrap().len() == 0
+        self.map.lock().is_empty()
     }
 }

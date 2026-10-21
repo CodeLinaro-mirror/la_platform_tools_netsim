@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use modem_rs::PhoneNumber;
+
 use crate::{common::constants::*, steps::*, world::World};
 
 // Scenario: Send SMS PDU Mode
@@ -519,10 +521,10 @@ fn test_legacy_sms() {
 
     // Set phone numbers
     if let Some(modem) = world.manager.get_modem_mut(id_a) {
-        modem.set_phone_number("98765");
+        modem.set_phone_number(PhoneNumber::new_for_test("98765"));
     }
     if let Some(modem) = world.manager.get_modem_mut(id_b) {
-        modem.set_phone_number("12345");
+        modem.set_phone_number(PhoneNumber::new_for_test("12345"));
     }
 
     // 1. Text Mode SMS Reception (B receives from A)
@@ -719,6 +721,10 @@ fn test_cms_errors() {
         world.then_prompt("A");
         world.when_hex_bytes("A", "1A");
         world.then_response_is("A", invalid_pdu_err);
+
+        // Sending invalid text mode destination via AT+CMGS
+        world.send_and_expect_ok("A", "AT+CMGF=1");
+        world.send_and_expect_error("A", "AT+CMGS=\"invalid#phone\"", invalid_pdu_err);
     }
 }
 
@@ -824,4 +830,13 @@ fn test_sms_slot_recycling() {
     world.when_hex_bytes("A", TEST_SMS_PDU_WITH_CTRL_Z);
     world.then_response_contains("A", "+CMGW: 4");
     world.then_response_is("A", "OK");
+}
+
+#[test]
+fn test_sms_prompt_with_goldfish_quirk() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+
+    world.when_at_command("A", "AT+CMGS=15");
+    world.then_prompt_is("A", "> \r");
 }

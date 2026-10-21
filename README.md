@@ -41,7 +41,7 @@ After this one-time setup, the formatting script will run automatically before e
 
 # Lockfile Maintenance
 
-For details on `MODULE.bazel.lock` behavior, specifically regarding `rules_python` and the `source.json` checksum, see [proto/GEMINI.md](proto/GEMINI.md).
+`MODULE.bazel.lock` pins resolved external dependencies and extension evaluations to ensure reproducible, hermetic builds across platforms and CI environments without re-resolving against external registries. When modifying dependencies in `MODULE.bazel`, update the lockfile and verify builds across Linux, macOS, and Windows.
 
 ## TAP Networking
 

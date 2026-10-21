@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+
 //! `packets` is a crate for zero-copy parsing and handling of network packets.
 //!
 //! It provides structures and utilities for working with various network

@@ -3,16 +3,12 @@
 
 #[cfg(not(target_os = "windows"))]
 use std::net::IpAddr;
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use bytes::Bytes;
 #[cfg(not(target_os = "windows"))]
 use etherparse::{Icmpv4Header, Icmpv4Type, Icmpv6Header, Icmpv6Type};
+use parking_lot::Mutex;
 #[cfg(not(target_os = "windows"))]
 use socket2::{Domain, Protocol, Socket, Type};
 use tokio::{
@@ -73,12 +69,12 @@ pub(crate) async fn run_native_slirp_loop(
                     );
                 }
                 slirp::SlirpResponse::WriteToConnection(conn_id, data) => {
-                    if let Some(tx) = conn_writers.lock().unwrap().get(&conn_id) {
+                    if let Some(tx) = conn_writers.lock().get(&conn_id) {
                         let _ = tx.send(data);
                     }
                 }
                 slirp::SlirpResponse::CloseConnection { conn_id, .. } => {
-                    conn_writers.lock().unwrap().remove(&conn_id);
+                    conn_writers.lock().remove(&conn_id);
                 }
                 slirp::SlirpResponse::SetTimer(dur) => {
                     next_timer.as_mut().reset(tokio::time::Instant::now() + dur);
@@ -299,7 +295,7 @@ fn handle_native_establish_connection(
     conn_writers: Arc<Mutex<HashMap<u64, mpsc::UnboundedSender<Bytes>>>>,
 ) {
     let (writer_tx, writer_rx) = mpsc::unbounded_channel::<Bytes>();
-    conn_writers.lock().unwrap().insert(conn_id, writer_tx);
+    conn_writers.lock().insert(conn_id, writer_tx);
 
     match args {
         slirp::ConnectionArgs::Tcp(tcp_args) => {
@@ -357,7 +353,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         let writer_tx = {
-            let guard = conn_writers.lock().unwrap();
+            let guard = conn_writers.lock();
             guard.get(&conn_id).cloned()
         };
         assert!(writer_tx.is_some());
@@ -366,7 +362,7 @@ mod tests {
         let icmp_payload = vec![8u8, 0, 0, 0, 0x12, 0x34, 0x00, 0x01, 1, 2, 3, 4];
         let _ = writer_tx.send(Bytes::from(icmp_payload));
 
-        conn_writers.lock().unwrap().remove(&conn_id);
+        conn_writers.lock().remove(&conn_id);
     }
 
     #[cfg(target_os = "linux")]
@@ -390,7 +386,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         let writer_tx = {
-            let guard = conn_writers.lock().unwrap();
+            let guard = conn_writers.lock();
             guard.get(&conn_id).cloned()
         };
         assert!(writer_tx.is_some());
@@ -399,7 +395,7 @@ mod tests {
         let icmp_payload = vec![128u8, 0, 0, 0, 0x56, 0x78, 0x00, 0x01, 1, 2, 3, 4];
         let _ = writer_tx.send(Bytes::from(icmp_payload));
 
-        conn_writers.lock().unwrap().remove(&conn_id);
+        conn_writers.lock().remove(&conn_id);
     }
 
     #[tokio::test]
@@ -426,7 +422,7 @@ mod tests {
         let writer_tx = {
             let mut found = None;
             for _ in 0..50 {
-                if let Some(tx) = conn_writers.lock().unwrap().get(&conn_id).cloned() {
+                if let Some(tx) = conn_writers.lock().get(&conn_id).cloned() {
                     found = Some(tx);
                     break;
                 }
@@ -452,7 +448,7 @@ mod tests {
             _ => panic!("Expected SlirpRequest::Data, got {:?}", req),
         }
 
-        conn_writers.lock().unwrap().remove(&conn_id);
+        conn_writers.lock().remove(&conn_id);
     }
 
     #[tokio::test]
@@ -480,7 +476,7 @@ mod tests {
         let writer_tx = {
             let mut found = None;
             for _ in 0..50 {
-                if let Some(tx) = conn_writers.lock().unwrap().get(&conn_id).cloned() {
+                if let Some(tx) = conn_writers.lock().get(&conn_id).cloned() {
                     found = Some(tx);
                     break;
                 }
@@ -514,7 +510,7 @@ mod tests {
             _ => panic!("Expected RemoteClosed or ConnectionClosed, got {:?}", req),
         }
 
-        conn_writers.lock().unwrap().remove(&conn_id);
+        conn_writers.lock().remove(&conn_id);
     }
 
     #[tokio::test]

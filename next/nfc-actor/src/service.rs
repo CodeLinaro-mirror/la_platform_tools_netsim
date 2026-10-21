@@ -4,7 +4,7 @@
 use std::{
     collections::HashMap,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
@@ -14,6 +14,7 @@ use bytes::{Bytes, BytesMut};
 use device_actor::DeviceClient;
 use futures::{SinkExt, StreamExt};
 use netsim_model::{ChipCreate, ChipError, ChipId, ChipUpdate, DeviceId};
+use parking_lot::Mutex;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio_util::codec::{Decoder, FramedRead};
 use tracing::{error, info};
@@ -77,7 +78,7 @@ async fn is_within_nfc_proximity(
     casimir_to_device: &Arc<Mutex<HashMap<u16, DeviceId>>>,
     device_client: &DeviceClient,
 ) -> bool {
-    let sender_dev_id = casimir_to_device.lock().unwrap().get(&sender_casimir_id).copied();
+    let sender_dev_id = casimir_to_device.lock().get(&sender_casimir_id).copied();
     let Some(src_dev) = sender_dev_id else {
         return true; // Fallback: intentionally allow unmapped control/external test devices
     };
@@ -135,7 +136,7 @@ impl ActorService for NfcActor {
         let device_client = self.device_client.clone();
         let casimir_device_id = scene_client
             .add_device(move |id, rf_tx| {
-                casimir_to_device.lock().unwrap().insert(id, device_id);
+                casimir_to_device.lock().insert(id, device_id);
                 let mut device = casimir::Device::nci(id, casimir_rx, casimir_tx, rf_tx);
                 let (my_rf_tx, mut my_rf_rx) = unbounded_channel();
                 let original_device_rf_tx = device.rf_tx;
@@ -284,7 +285,7 @@ impl ActorService for NfcActor {
             ctx.remove_stream(id);
 
             // Remove device mapping and Casimir scene device
-            self.casimir_to_device.lock().unwrap().remove(&state.casimir_device_id);
+            self.casimir_to_device.lock().remove(&state.casimir_device_id);
             if let Some(ref scene_client) = self.scene_client
                 && let Err(e) = scene_client.remove_device(state.casimir_device_id).await
             {
