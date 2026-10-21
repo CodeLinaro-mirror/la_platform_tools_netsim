@@ -109,6 +109,8 @@ impl BtOps for BtOpsWrapper {
 
 extern "C" fn rootcanal_log_callback(
     level: std::os::raw::c_int,
+    _file: *const std::os::raw::c_char,
+    _line: std::os::raw::c_int,
     message: *const std::os::raw::c_char,
 ) {
     if message.is_null() {
@@ -260,7 +262,8 @@ impl Rootcanal {
     }
 
     /// Returns a vector of the current controller IDs.
-    pub fn get_controller_ids(&self) -> Vec<ControllerId> {
+    #[cfg(test)]
+    fn get_controller_ids(&self) -> Vec<ControllerId> {
         let mut keys: Vec<ControllerId> = self.controllers.lock().keys().copied().collect();
         keys.sort();
         keys

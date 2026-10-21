@@ -33,7 +33,7 @@ use crate::{
     uwb_actor::{MAX_UNICAST_SHORT_MAC, UwbActor, UwbChipState},
 };
 
-const BROADCAST_SHORT_MAC: u16 = 0xFFFF;
+const BROADCAST_SHORT_MAC: u16 = u16::MAX;
 
 impl UwbActor {
     fn is_mac_in_use(&self, mac: MacAddress) -> bool {
@@ -116,19 +116,22 @@ impl UwbActor {
         // Pica wants a Sink<Vec<u8>>.
         let stats_clone_sink = self.uwb_stats.clone();
         let sink =
-            Box::pin(packet_sink.ok_or(UwbError::PacketSinkMissing)?.with(move |v: Vec<u8>| {
-                if let Some(count) = count_p2p_ranging_measurements(&v).ok().filter(|&c| c > 0) {
-                    // A single ranging cycle involves multiple packets transmitted and
-                    // received. Incrementing both TX and RX by the same
-                    // cycle count is a reasonable proxy for activity,
-                    // but it's an approximation of P2P activity.
-                    tx_clone.fetch_add(count, Ordering::Relaxed);
-                    rx_clone.fetch_add(count, Ordering::Relaxed);
-                }
-                rx_sink_clone.fetch_add(1, Ordering::Relaxed);
-                parse_and_count_uci_data_receive(&v, &stats_clone_sink);
-                async move { Ok(Bytes::from(v)) }
-            }));
+            Box::pin(packet_sink.ok_or(UwbError::PacketSinkMissing)?.sink_map_err(|_| ()).with(
+                move |v: Vec<u8>| {
+                    if let Some(count) = count_p2p_ranging_measurements(&v).ok().filter(|&c| c > 0)
+                    {
+                        // A single ranging cycle involves multiple packets transmitted and
+                        // received. Incrementing both TX and RX by the same
+                        // cycle count is a reasonable proxy for activity,
+                        // but it's an approximation of P2P activity.
+                        tx_clone.fetch_add(count, Ordering::Relaxed);
+                        rx_clone.fetch_add(count, Ordering::Relaxed);
+                    }
+                    rx_sink_clone.fetch_add(1, Ordering::Relaxed);
+                    parse_and_count_uci_data_receive(&v, &stats_clone_sink);
+                    async move { Ok(Bytes::from(v)) }
+                },
+            ));
 
         // Clear unrelated events to prevent a lagged error
         self.pica_connect_events = self.pica_connect_events.resubscribe();
@@ -273,11 +276,16 @@ impl ActorService for UwbActor {
                 self.pica_commands.send(PicaCommand::DestroyAnchor(state.mac_address, tx)).await;
             match rx.await {
                 Ok(Ok(_)) => {}
-                Ok(Err(e)) => {
-                    tracing::warn!("Failed to destroy Pica anchor {}: {e}", state.mac_address)
+                Ok(Err(error)) => {
+                    tracing::warn!(
+                        %error,
+                        "Failed to destroy Pica anchor {}",
+                        state.mac_address
+                    )
                 }
-                Err(e) => tracing::warn!(
-                    "Failed to receive Pica DestroyAnchor response for {}: {e}",
+                Err(error) => tracing::warn!(
+                    %error,
+                    "Failed to receive Pica DestroyAnchor response for {}",
                     state.mac_address
                 ),
             }
@@ -429,6 +437,14 @@ fn count_p2p_ranging_measurements(bytes: &[u8]) -> Result<u64, ()> {
     Err(())
 }
 
+const UCI_MT_SHIFT: u8 = 5;
+const UCI_MT_MASK: u8 = 0x07;
+const UCI_GID_OR_DPF_MASK: u8 = 0x0F;
+const UCI_MT_DATA: u8 = 0;
+const UCI_MT_COMMAND: u8 = 1;
+const UCI_DPF_DATA_MESSAGE_SND: u8 = 1;
+const UCI_DPF_DATA_MESSAGE_RCV: u8 = 2;
+
 fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
     use pica::packets::uci::{
         ControlPacket, ControlPacketChild, DataPacket, DataPacketChild, SessionConfigPacketChild,
@@ -441,10 +457,10 @@ fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
         return;
     };
 
-    let mt = (b0 >> 5) & 0x07;
-    let dpf_or_gid = b0 & 0x0f;
+    let mt = (b0 >> UCI_MT_SHIFT) & UCI_MT_MASK;
+    let dpf_or_gid = b0 & UCI_GID_OR_DPF_MASK;
 
-    if mt == 1 {
+    if mt == UCI_MT_COMMAND {
         if let Ok((packet, _)) = ControlPacket::decode(bytes) {
             match packet.specialize() {
                 Ok(ControlPacketChild::SessionConfigPacket(cfg_pkt)) => {
@@ -490,8 +506,8 @@ fn parse_and_count_uci_command(bytes: &[u8], stats: &crate::stats::UwbStats) {
                 _ => {}
             }
         }
-    } else if mt == 0
-        && dpf_or_gid == 1
+    } else if mt == UCI_MT_DATA
+        && dpf_or_gid == UCI_DPF_DATA_MESSAGE_SND
         && let Ok((packet, _)) = DataPacket::decode(bytes)
         && let Ok(DataPacketChild::DataMessageSnd(_)) = packet.specialize()
     {
@@ -508,11 +524,11 @@ fn parse_and_count_uci_data_receive(bytes: &[u8], stats: &crate::stats::UwbStats
         return;
     };
 
-    let mt = (b0 >> 5) & 0x07;
-    let dpf = b0 & 0x0f;
+    let mt = (b0 >> UCI_MT_SHIFT) & UCI_MT_MASK;
+    let dpf = b0 & UCI_GID_OR_DPF_MASK;
 
-    if mt == 0
-        && dpf == 2
+    if mt == UCI_MT_DATA
+        && dpf == UCI_DPF_DATA_MESSAGE_RCV
         && let Ok((packet, _)) = DataPacket::decode(bytes)
         && let Ok(DataPacketChild::DataMessageRcv(_)) = packet.specialize()
     {

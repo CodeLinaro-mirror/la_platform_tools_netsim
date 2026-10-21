@@ -32,7 +32,7 @@ use tracing::{error, info};
 
 use crate::{
     error::NfcError,
-    nfc_actor::{ChipState, NfcAction, NfcActor},
+    nfc_actor::{ChipState, NciMessageType, NfcAction, NfcActor, NfcMode},
     stats::NfcApi,
 };
 
@@ -59,12 +59,6 @@ impl Decoder for NciCodec {
 
 /// Maximum physical proximity threshold (in meters) for peer-to-peer NFC interactions.
 const PROXIMITY_THRESHOLD_METERS: f32 = 0.04;
-
-/// NCI Message Types (MT) encoded in bits 7-5 of Octet 0.
-const NCI_MT_DATA: u8 = 0;
-const NCI_MT_CMD: u8 = 1;
-const NCI_MT_RSP: u8 = 2;
-const NCI_MT_NTF: u8 = 3;
 
 impl From<&ChipState> for netsim_model::Chip {
     fn from(state: &ChipState) -> Self {
@@ -148,16 +142,27 @@ impl ActorService for NfcActor {
         let (casimir_rx, casimir_tx) = tokio::io::split(casimir_io);
         let casimir_to_device = self.casimir_to_device.clone();
         let device_client = self.device_client.clone();
+        let nfc_stats_rf = self.nfc_stats.clone();
         let casimir_device_id = scene_client
-            .add_device(move |id, rf_tx| {
+            .add_device(move |id, scene_rf_tx| {
                 casimir_to_device.lock().insert(id, device_id);
-                let mut device = casimir::Device::nci(id, casimir_rx, casimir_tx, rf_tx);
-                let (my_rf_tx, mut my_rf_rx) = unbounded_channel();
-                let original_device_rf_tx = device.rf_tx;
-                device.rf_tx = my_rf_tx;
+                let (egress_rf_tx, mut egress_rf_rx) = unbounded_channel();
+                let mut device = casimir::Device::nci(id, casimir_rx, casimir_tx, egress_rf_tx);
+                let nfc_stats_rf_tx = nfc_stats_rf.clone();
+                tokio::spawn(async move {
+                    while let Some(packet) = egress_rf_rx.recv().await {
+                        nfc_stats_rf_tx.incr_rf_taps_tx();
+                        if scene_rf_tx.send(packet).is_err() {
+                            nfc_stats_rf_tx.incr_rf_error();
+                            break;
+                        }
+                    }
+                });
+                let (ingress_rf_tx, mut ingress_rf_rx) = unbounded_channel();
+                let controller_ingress_rf_tx = std::mem::replace(&mut device.rf_tx, ingress_rf_tx);
                 let map_clone = casimir_to_device.clone();
                 tokio::spawn(async move {
-                    while let Some(packet) = my_rf_rx.recv().await {
+                    while let Some(packet) = ingress_rf_rx.recv().await {
                         if packet.sender() == id
                             || is_within_nfc_proximity(
                                 packet.sender(),
@@ -167,14 +172,23 @@ impl ActorService for NfcActor {
                             )
                             .await
                         {
-                            let _ = original_device_rf_tx.send(packet);
+                            if packet.sender() != id {
+                                nfc_stats_rf.incr_rf_taps_rx();
+                            }
+                            if controller_ingress_rf_tx.send(packet).is_err() {
+                                nfc_stats_rf.incr_rf_error();
+                                break;
+                            }
                         }
                     }
                 });
                 device
             })
             .await
-            .map_err(|e| NfcError::IoError(std::io::Error::other(e)))?;
+            .map_err(|e| {
+                self.nfc_stats.incr_casimir_error();
+                NfcError::IoError(std::io::Error::other(e))
+            })?;
 
         info!("Added NFC device to Casimir scene with ID {}", casimir_device_id);
 
@@ -189,7 +203,7 @@ impl ActorService for NfcActor {
         let rx_count = Arc::new(AtomicU64::new(0));
         let tx_count_clone = tx_count.clone();
         let rx_count_clone = rx_count.clone();
-        let mode = Arc::new(std::sync::atomic::AtomicU8::new(crate::nfc_actor::NFC_MODE_IDLE));
+        let mode = Arc::new(std::sync::atomic::AtomicU8::new(NfcMode::Idle.as_u8()));
         let mode_clone = mode.clone();
 
         let task_1 = Box::pin(async move {
@@ -200,35 +214,40 @@ impl ActorService for NfcActor {
                             continue;
                         }
                         if let &[b0, _, _, ..] = bytes.as_ref() {
-                            match (b0 >> 5) & 0x07 {
-                                NCI_MT_DATA => {
+                            match NciMessageType::from_header_byte(b0) {
+                                Some(NciMessageType::Data) => {
                                     nfc_stats_clone.incr_nci_data_tx();
-                                    if mode_clone.load(Ordering::Relaxed)
-                                        == crate::nfc_actor::NfcMode::Listen.as_u8()
-                                    {
-                                        nfc_stats_clone
-                                            .incr(NfcApi::CardEmulationProcessCommandApdu);
+                                    match NfcMode::try_from(mode_clone.load(Ordering::Relaxed)) {
+                                        Ok(NfcMode::Listen) => {
+                                            nfc_stats_clone
+                                                .incr(NfcApi::CardEmulationProcessCommandApdu);
+                                            nfc_stats_clone.incr_card_emulation_count();
+                                        }
+                                        Ok(NfcMode::Poll) => {
+                                            nfc_stats_clone.incr_tag_emulation_count();
+                                        }
+                                        _ => {}
                                     }
                                     rx_count_clone.fetch_add(1, Ordering::Relaxed);
                                 }
-                                NCI_MT_RSP => {
+                                Some(NciMessageType::Response) => {
                                     nfc_stats_clone.incr_nci_responses_tx();
                                     rx_count_clone.fetch_add(1, Ordering::Relaxed);
                                 }
-                                NCI_MT_NTF => {
+                                Some(NciMessageType::Notification) => {
                                     nfc_stats_clone.incr_nci_notifications_tx();
                                     rx_count_clone.fetch_add(1, Ordering::Relaxed);
                                 }
                                 _ => {}
                             }
                         }
-                        if let Err(e) = packet_sink.send(bytes).await {
-                            error!("Failed to send packet to guest: {:?}", e);
+                        if let Err(error) = packet_sink.send(bytes).await {
+                            error!(?error, "Failed to send packet to guest");
                             break;
                         }
                     }
-                    Err(e) => {
-                        error!("NFC reader error: {:?}", e);
+                    Err(error) => {
+                        error!(?error, "NFC reader error");
                         nfc_stats_clone.incr_nci_error();
                         break;
                     }
@@ -243,12 +262,12 @@ impl ActorService for NfcActor {
         let nfc_stats_rx = self.nfc_stats.clone();
         let packet_stream = packet_stream.inspect(move |bytes| {
             if let &[b0, _, _, ..] = bytes.as_ref() {
-                match (b0 >> 5) & 0x07 {
-                    NCI_MT_DATA => {
+                match NciMessageType::from_header_byte(b0) {
+                    Some(NciMessageType::Data) => {
                         nfc_stats_rx.incr_nci_data_rx();
                         tx_count_clone.fetch_add(1, Ordering::Relaxed);
                     }
-                    NCI_MT_CMD => {
+                    Some(NciMessageType::Command) => {
                         nfc_stats_rx.incr_nci_commands_rx();
                         tx_count_clone.fetch_add(1, Ordering::Relaxed);
                     }
@@ -301,11 +320,11 @@ impl ActorService for NfcActor {
             // Remove device mapping and Casimir scene device
             self.casimir_to_device.lock().remove(&state.casimir_device_id);
             if let Some(ref scene_client) = self.scene_client
-                && let Err(e) = scene_client.remove_device(state.casimir_device_id).await
+                && let Err(error) = scene_client.remove_device(state.casimir_device_id).await
             {
                 error!(
-                    "Failed to remove device {} from Casimir scene: {:?}",
-                    state.casimir_device_id, e
+                    ?error,
+                    "Failed to remove device {} from Casimir scene", state.casimir_device_id
                 );
             }
         }
@@ -328,27 +347,21 @@ impl ActorService for NfcActor {
     ) -> Result<Self::Entity, Self::Error> {
         let (should_disable_adapter_base, should_disable_adapter_variant) = {
             let state = self
-                .active_chips
-                .get_mut(&id)
+                .get_chip_mut(&id)
                 .ok_or_else(|| NfcError::Chip(ChipError::ChipNotFound(id)))?;
 
-            let disable_base = if let Some(enabled) = update.enabled {
-                let prev = state.enabled.swap(enabled, Ordering::AcqRel);
-                prev && !enabled
-            } else {
-                false
-            };
+            let disable_base = update
+                .enabled
+                .is_some_and(|enabled| state.enabled.swap(enabled, Ordering::AcqRel) && !enabled);
 
-            let disable_variant =
-                if let Some(netsim_model::ChipVariantUpdate::Nfc(netsim_model::NfcUpdate {
-                    radio: netsim_model::RadioUpdate { state: Some(enabled), .. },
-                })) = &update.variant
-                {
-                    let prev = state.enabled.swap(*enabled, Ordering::AcqRel);
-                    prev && !*enabled
-                } else {
-                    false
-                };
+            let variant_enabled = match &update.variant {
+                Some(netsim_model::ChipVariantUpdate::Nfc(netsim_model::NfcUpdate {
+                    radio: netsim_model::RadioUpdate { state, .. },
+                })) => *state,
+                _ => None,
+            };
+            let disable_variant = variant_enabled
+                .is_some_and(|enabled| state.enabled.swap(enabled, Ordering::AcqRel) && !enabled);
 
             (disable_base, disable_variant)
         };
@@ -369,17 +382,20 @@ impl ActorService for NfcActor {
         match action {
             NfcAction::Generic(_req) => Ok(crate::nfc_actor::NfcActionResult::Ok),
             NfcAction::GetStatistics => {
-                let mut stats = Vec::new();
-                for (id, state) in &self.active_chips {
-                    let mut radio_stats = netsim_model::NetsimRadioStats::default();
-                    radio_stats.id = id.0;
-                    radio_stats.name = format!("nfc-{}", id.0);
-                    radio_stats.kind = netsim_model::RadioKind::Nfc;
-                    radio_stats.tx_count = state.tx_count.load(Ordering::Relaxed);
-                    radio_stats.rx_count = state.rx_count.load(Ordering::Relaxed);
-                    stats.push(radio_stats);
-                }
-                Ok(crate::nfc_actor::NfcActionResult::Statistics(stats.into_boxed_slice()))
+                let stats: Box<[netsim_model::NetsimRadioStats]> = self
+                    .active_chips
+                    .iter()
+                    .map(|(id, state)| {
+                        let mut radio_stats = netsim_model::NetsimRadioStats::default();
+                        radio_stats.id = id.0;
+                        radio_stats.name = format!("nfc-{}", id.0);
+                        radio_stats.kind = netsim_model::RadioKind::Nfc;
+                        radio_stats.tx_count = state.tx_count.load(Ordering::Relaxed);
+                        radio_stats.rx_count = state.rx_count.load(Ordering::Relaxed);
+                        radio_stats
+                    })
+                    .collect();
+                Ok(crate::nfc_actor::NfcActionResult::Statistics(stats))
             }
             NfcAction::CreateControlChannel { respond_to } => {
                 info!("NfcActor: Received CreateControlChannel action");
@@ -402,9 +418,9 @@ impl ActorService for NfcActor {
                             let _ = respond_to.send(Ok((grpc_io, id)));
                             Ok(crate::nfc_actor::NfcActionResult::Ok)
                         }
-                        Err(e) => {
-                            let err_msg = format!("Failed to add RF device to Casimir: {e}");
-                            error!("NfcActor: {}", err_msg);
+                        Err(error) => {
+                            let err_msg = format!("Failed to add RF device to Casimir: {error}");
+                            error!(%error, "NfcActor: Failed to add RF device to Casimir");
                             self.nfc_stats.incr_casimir_error();
                             let _ = respond_to.send(Err(NfcError::Internal(err_msg)));
                             Ok(crate::nfc_actor::NfcActionResult::Ok)

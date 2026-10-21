@@ -16,12 +16,15 @@ use actor_framework::{ActorService, DynContext};
 use tracing::{error, info, warn};
 
 use crate::{
-    ap_actor::{ApActor, ApId, ApReq, ApResponse, ApState, WIFI_STREAM_ID},
+    ap_actor::{ApActor, ApId, ApReq, ApResponse, ApState, DEFAULT_AP_ID, WIFI_STREAM_ID},
     error::ApError,
 };
 
 // 1024 microseconds per Time Unit (TU)
 const TU_INTERVAL_US: u128 = 1024;
+
+// Reason Code 3: deauthenticated because sending STA is leaving (or has left) IBSS or ESS.
+const DEAUTH_REASON_STA_LEAVING: u16 = 3;
 
 impl ActorService for ApActor {
     type Id = ApId;
@@ -59,6 +62,9 @@ impl ActorService for ApActor {
         }
 
         let state = ApState::new(id_val, params);
+        if id_val == DEFAULT_AP_ID {
+            self.default_ap_config = Some(state.config.clone());
+        }
         self.shared_keys.add_bssid(state.config.bssid);
         self.aps.insert(id_val, state);
 
@@ -118,14 +124,7 @@ impl ActorService for ApActor {
                 self.shared_keys.remove_station_bssid(&mac);
 
                 // Send Deauth Frame
-                if let Some(sink) = &self.sink {
-                    // Reason Code 3 (Deauthenticated because sending STA is leaving (or has left)
-                    // IBSS or ESS)
-                    let frame = self.manager.build_deauth_frame(ap_state, mac, 3);
-                    if let Err(e) = sink.send(bytes::Bytes::from(frame)) {
-                        error!("Failed to send Deauth frame: {}", e);
-                    }
-                }
+                send_deauth(self.sink.as_ref(), &self.manager, ap_state, mac);
             }
         }
 
@@ -224,17 +223,46 @@ impl ActorService for ApActor {
                     self.shared_keys.remove_station_bssid(&mac);
 
                     // Send Deauth Frame
-                    if let Some(sink) = &self.sink {
-                        let frame = self.manager.build_deauth_frame(ap_state, mac, 3);
-                        if let Err(e) = sink.send(bytes::Bytes::from(frame)) {
-                            error!("Failed to send Deauth frame: {}", e);
-                        }
-                    }
+                    send_deauth(self.sink.as_ref(), &self.manager, ap_state, mac);
                 } else {
                     warn!("ApActor: Requested disconnect for unknown MAC {} on AP {}", mac, id);
                 }
                 Ok(ApResponse::Ok)
             }
+            ApReq::Reset => {
+                self.handle_reset();
+                Ok(ApResponse::Ok)
+            }
+        }
+    }
+}
+
+impl ApActor {
+    fn handle_reset(&mut self) {
+        self.aps.retain(|id, _| *id == DEFAULT_AP_ID);
+        let base_config =
+            self.default_ap_config.clone().unwrap_or_else(|| ApState::default().config);
+        let default_bssid = base_config.bssid;
+        if let Some(default_ap) = self.aps.get_mut(&DEFAULT_AP_ID) {
+            default_ap.reset(base_config);
+        } else {
+            self.aps.insert(DEFAULT_AP_ID, ApState::new(DEFAULT_AP_ID, base_config));
+        }
+        self.shared_keys.reset(default_bssid);
+        self.next_ap_id = DEFAULT_AP_ID.0 + 1;
+    }
+}
+
+fn send_deauth(
+    sink: Option<&tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
+    manager: &crate::ieee802_11::Ieee80211Manager,
+    ap_state: &mut ApState,
+    mac: netsim_packets::MacAddr,
+) {
+    if let Some(sink) = sink {
+        let frame = manager.build_deauth_frame(ap_state, mac, DEAUTH_REASON_STA_LEAVING);
+        if let Err(error) = sink.send(bytes::Bytes::from(frame)) {
+            error!(%error, "Failed to send Deauth frame");
         }
     }
 }

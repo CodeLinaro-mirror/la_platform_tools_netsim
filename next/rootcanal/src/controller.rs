@@ -49,7 +49,7 @@ pub trait Callbacks: Send + Sync {
 }
 
 /// Trait used by the controller to call the Bluetooth manager.
-pub trait BtOps: Send + Sync {
+pub(crate) trait BtOps: Send + Sync {
     /// Controller received a LL packet from rootcanal that needs to be
     /// broadcasted
     fn broadcast_rootcanal_ll_packet(&self, send_id: Id, packet: &[u8], phy: Phy, tx_power: i32);
@@ -140,6 +140,7 @@ impl ControllerImpl {
         bt_ops: Box<dyn BtOps>,
         properties: Option<&[u8]>,
     ) -> Controller {
+        crate::rootcanal::init_rootcanal_logging();
         Arc::new_cyclic(|weak| {
             // Create the context for the C++ side, using a Weak pointer to avoid cycles.
             let context = Box::new(weak.clone());
@@ -434,8 +435,8 @@ extern "C" fn send_ll_trampoline(
     if let Some(controller) = context.upgrade() {
         let phy = match Phy::try_from(phy) {
             Ok(phy) => phy,
-            Err(err) => {
-                warn!("Unknown PHY {err}");
+            Err(error) => {
+                warn!(%error, "Unknown PHY");
                 return;
             }
         };
