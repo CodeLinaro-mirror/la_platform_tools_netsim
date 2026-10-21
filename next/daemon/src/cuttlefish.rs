@@ -38,7 +38,9 @@ struct CuttlefishConfig {
 /// Resolves the cellular network configuration for a Cuttlefish instance
 /// using the file path in the `CUTTLEFISH_CONFIG_FILE` environment variable,
 /// or falling back to `$HOME/.cuttlefish_config.json`.
-pub async fn resolve_cuttlefish_network_config(device_name: &str) -> Option<CellNetworkConfig> {
+pub(crate) async fn resolve_cuttlefish_network_config(
+    device_name: &str,
+) -> Option<CellNetworkConfig> {
     let config_path = env::var_os("CUTTLEFISH_CONFIG_FILE").map(PathBuf::from).or_else(|| {
         env::var_os("HOME")
             .map(|h| PathBuf::from(h).join(".cuttlefish_config.json"))
@@ -49,7 +51,7 @@ pub async fn resolve_cuttlefish_network_config(device_name: &str) -> Option<Cell
 
 /// Resolves the cellular network configuration from a specific
 /// `cuttlefish_config.json` path.
-pub async fn resolve_cuttlefish_network_config_from_file(
+async fn resolve_cuttlefish_network_config_from_file(
     config_path: &Path,
     device_name: &str,
 ) -> Option<CellNetworkConfig> {

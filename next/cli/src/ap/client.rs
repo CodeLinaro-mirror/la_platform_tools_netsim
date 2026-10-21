@@ -12,7 +12,7 @@ use super::{
 };
 use crate::error::Result;
 
-pub fn execute(
+pub(crate) fn execute(
     cmd: &ApCommand,
     rest_client: &NetsimRestClient,
     client: &AccessPointServiceClient,

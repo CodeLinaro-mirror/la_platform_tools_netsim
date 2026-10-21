@@ -59,12 +59,12 @@ impl Ipv4Header {
         self.header_checksum = U16::new(0);
         let bytes = self.as_bytes();
         let mut sum: u32 = 0;
-        for chunk in bytes.chunks(2) {
-            if chunk.len() == 2 {
-                sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
-            } else {
-                sum += (chunk[0] as u32) << 8;
-            }
+        let (chunks, remainder) = bytes.as_chunks::<2>();
+        for &chunk in chunks {
+            sum += u32::from(u16::from_be_bytes(chunk));
+        }
+        if let &[last] = remainder {
+            sum += (last as u32) << 8;
         }
         while (sum >> 16) != 0 {
             sum = (sum & 0xFFFF) + (sum >> 16);
@@ -128,10 +128,7 @@ impl Ipv6HopByHopHeader {
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, Ipv6HopByHopHeader>> {
         let (header, _) = Ref::<&[u8], Ipv6HopByHopHeader>::from_prefix(bytes).ok()?;
         let header_len = header.header_length();
-        if bytes.len() < header_len {
-            return None;
-        }
-        Some((header, &bytes[header_len..]))
+        Some((header, bytes.get(header_len..)?))
     }
 
     /// Returns the length of the Hop-by-Hop header in bytes.

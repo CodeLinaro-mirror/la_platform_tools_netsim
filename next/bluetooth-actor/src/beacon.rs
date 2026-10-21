@@ -48,7 +48,7 @@ fn send_hci_command<T: HciCommand + IntoBytes + Immutable + KnownLayout>(
 }
 
 /// Creates a new `BeaconChip`.
-pub fn create(
+pub(crate) fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &BeaconParams,
@@ -110,7 +110,12 @@ pub fn create(
     };
 
     let mut adv_data_payload = [0u8; 31];
-    adv_data_payload[..adv_data.len()].copy_from_slice(&adv_data);
+    let Some(dest) = adv_data_payload.get_mut(..adv_data.len()) else {
+        return Err(ChipError::InvalidArguments(Box::from(
+            "Advertising data exceeds maximum payload size of 31 bytes".to_string(),
+        )));
+    };
+    dest.copy_from_slice(&adv_data);
 
     send_hci_command(
         rootcanal,
@@ -132,7 +137,12 @@ pub fn create(
     };
 
     let mut scan_resp_payload = [0u8; 31];
-    scan_resp_payload[..scan_resp_data.len()].copy_from_slice(&scan_resp_data);
+    let Some(dest) = scan_resp_payload.get_mut(..scan_resp_data.len()) else {
+        return Err(ChipError::InvalidArguments(Box::from(
+            "Scan response data exceeds maximum payload size of 31 bytes".to_string(),
+        )));
+    };
+    dest.copy_from_slice(&scan_resp_data);
 
     send_hci_command(
         rootcanal,

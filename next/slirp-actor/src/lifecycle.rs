@@ -45,10 +45,8 @@ impl ActorLifecycle for SlirpActor {
     async fn on_stream_closed(&mut self, id: u32, _ctx: &mut DynContext<Self>) {
         info!("SlirpActor: Client {id} disconnected");
         self.mac_table.retain(|_, v| *v != id);
-        if let Some(client) = self.clients.remove(&id)
-            && let Some(notifier) = client.notifier
-        {
-            let _ = notifier.send(netsim_model::ChipId(id));
+        if let Some(client) = self.clients.remove(&id) {
+            client.notify_disconnected(id);
         }
     }
 
@@ -69,7 +67,7 @@ impl ActorLifecycle for SlirpActor {
         if !dest_mac.is_multicast() {
             if let Some(&client_id) = self.mac_table.get(&dest_mac) {
                 if let Some(client) = self.clients.get(&client_id) {
-                    let _ = client.sink.send(msg);
+                    client.send(msg);
                     return;
                 }
                 tracing::warn!("SlirpActor: Stale MAC mapping {dest_mac} -> {client_id}, flooding");
@@ -77,8 +75,8 @@ impl ActorLifecycle for SlirpActor {
                 tracing::warn!("SlirpActor: Unknown unicast MAC {dest_mac}, flooding");
             }
             for client in self.clients.values() {
-                if !client.isolated {
-                    let _ = client.sink.send(msg.clone());
+                if !client.is_isolated() {
+                    client.send(msg.clone());
                 }
             }
         } else {
@@ -102,9 +100,9 @@ impl ActorLifecycle for SlirpActor {
             };
 
             for client in self.clients.values() {
-                let should_deliver = client.isolated == is_cellular_resolution;
+                let should_deliver = client.is_isolated() == is_cellular_resolution;
                 if should_deliver {
-                    let _ = client.sink.send(msg.clone());
+                    client.send(msg.clone());
                 }
             }
         }

@@ -261,13 +261,15 @@ impl Slirp {
                     EthernetPacket::Vlan { .. } => 18,
                 };
 
-                if let Some(reassembled_ip) =
-                    self.reassembler.reassemble(&packet_buf[eth_header_len..])
-                {
+                let Some((eth_header, ip_payload)) = packet_buf.split_at_checked(eth_header_len)
+                else {
+                    return;
+                };
+                if let Some(reassembled_ip) = self.reassembler.reassemble(ip_payload) {
                     trace!("IP reassembly complete, reconstructing Ethernet frame");
                     let mut reassembled_eth =
                         Vec::with_capacity(eth_header_len + reassembled_ip.len());
-                    reassembled_eth.extend_from_slice(&packet_buf[..eth_header_len]);
+                    reassembled_eth.extend_from_slice(eth_header);
                     reassembled_eth.extend_from_slice(&reassembled_ip);
 
                     self.handle_packet(&reassembled_eth, responses);
@@ -281,7 +283,7 @@ impl Slirp {
             EthernetPacket::Vlan { frame, .. } => frame.dst_addr,
         };
 
-        let is_ipv6_multicast = dst_mac.bytes[0] == 0x33 && dst_mac.bytes[1] == 0x33;
+        let is_ipv6_multicast = dst_mac.bytes.starts_with(&[0x33, 0x33]);
         if dst_mac.is_multicast() && !dst_mac.is_broadcast() && !is_ipv6_multicast {
             trace!("Dropping multicast packet to {dst_mac}");
             return;
@@ -303,8 +305,12 @@ impl Slirp {
                             EthernetPacket::Untagged { .. } => 14,
                             EthernetPacket::Vlan { .. } => 18,
                         };
-                        let ip_packet_slice = &packet_buf
-                            [eth_header_len..eth_header_len + header.total_length.get() as usize];
+                        let total_len = header.total_length.get() as usize;
+                        let Some(ip_packet_slice) =
+                            packet_buf.get(eth_header_len..eth_header_len + total_len)
+                        else {
+                            return;
+                        };
                         self.handle_ipv4_packet(&packet, ip_packet_slice, responses)
                     }
                     IpPacket::V6(header, _) => {
@@ -312,8 +318,12 @@ impl Slirp {
                             EthernetPacket::Untagged { .. } => 14,
                             EthernetPacket::Vlan { .. } => 18,
                         };
-                        let ip_packet_slice = &packet_buf[eth_header_len
-                            ..eth_header_len + 40 + header.payload_length.get() as usize];
+                        let total_len = 40 + header.payload_length.get() as usize;
+                        let Some(ip_packet_slice) =
+                            packet_buf.get(eth_header_len..eth_header_len + total_len)
+                        else {
+                            return;
+                        };
                         self.handle_ipv6_packet(&packet, ip_packet_slice, responses)
                     }
                 },
@@ -501,24 +511,23 @@ impl Slirp {
         icmpv6_header.icmpv6_checksum = 0.into();
         icmpv6_header.rest = [0u8; 4];
 
-        icmpv6_payload_slice[..na_payload.len()].copy_from_slice(na_payload);
+        icmpv6_payload_slice.copy_from_slice(na_payload);
 
         // 4. Calculate ICMPv6 Checksum (uses pseudo-header)
-        let full_icmpv6_slice = &mut ipv6_payload[..total_icmpv6_len];
         let checksum = icmpv6_checksum(
-            full_icmpv6_slice,
+            ipv6_payload,
             self.config.host_ipv6,
             Ipv6Addr::from(original_ipv6_header.source_addr),
         );
-        let mut_icmpv6_header =
-            Icmpv6Header::mut_from_bytes(&mut full_icmpv6_slice[..icmpv6_header_len]).unwrap();
+        let (icmpv6_hdr_slice, _) = ipv6_payload.split_at_mut(icmpv6_header_len);
+        let mut_icmpv6_header = Icmpv6Header::mut_from_bytes(icmpv6_hdr_slice).unwrap();
         mut_icmpv6_header.icmpv6_checksum.set(checksum);
 
         // 5. Finalize IPv6 Header
         ipv6_builder.payload_len(total_icmpv6_len);
         ipv6_builder.build();
 
-        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer)));
+        responses.push(SlirpResponse::Packet(Bytes::from(buffer)));
     }
 
     fn send_router_advertisement(
@@ -588,8 +597,7 @@ impl Slirp {
         icmpv6_header.rest = [0u8; 4];
 
         // 4. Build RA Payload (RA Header + Options)
-        let mut prefix = [0u8; 16];
-        prefix[..8].copy_from_slice(&self.config.guest_ipv6.octets()[..8]);
+        let prefix = (u128::from(self.config.guest_ipv6) & (u128::MAX << 64)).to_be_bytes();
 
         let ra_builder = RouterAdvertisementBuilder::new(icmpv6_payload_slice).unwrap();
         ra_builder
@@ -607,17 +615,16 @@ impl Slirp {
             .unwrap();
 
         // 5. Calculate ICMPv6 Checksum
-        let full_icmpv6_slice = &mut ipv6_payload[..total_icmpv6_len];
-        let checksum = icmpv6_checksum(full_icmpv6_slice, self.config.host_ipv6, dest_ip);
-        let mut_icmpv6_header =
-            Icmpv6Header::mut_from_bytes(&mut full_icmpv6_slice[..icmpv6_header_len]).unwrap();
+        let checksum = icmpv6_checksum(ipv6_payload, self.config.host_ipv6, dest_ip);
+        let (icmpv6_hdr_slice, _) = ipv6_payload.split_at_mut(icmpv6_header_len);
+        let mut_icmpv6_header = Icmpv6Header::mut_from_bytes(icmpv6_hdr_slice).unwrap();
         mut_icmpv6_header.icmpv6_checksum.set(checksum);
 
         // 6. Finalize IPv6 Header
         ipv6_builder.payload_len(total_icmpv6_len);
         ipv6_builder.build();
 
-        responses.push(SlirpResponse::Packet(Bytes::copy_from_slice(&buffer)));
+        responses.push(SlirpResponse::Packet(Bytes::from(buffer)));
     }
 
     fn handle_udp_packet(
@@ -959,46 +966,26 @@ struct SlirpStateOwned {
 
 fn synthesize_offending_tcp_packet(guest_addr: SocketAddr, host_addr: SocketAddr) -> Vec<u8> {
     match (guest_addr, host_addr) {
-        (SocketAddr::V4(guest_v4), SocketAddr::V4(host_v4)) => {
-            let mut buf = vec![0u8; 28];
-            // IPv4 Header (20 bytes)
-            buf[0] = 0x45;
-            // Total Length: 28
-            buf[2] = 0;
-            buf[3] = 28;
-            // Protocol: 6 (TCP)
-            buf[9] = 6;
-            // Source IP (guest IP)
-            buf[12..16].copy_from_slice(&guest_v4.ip().octets());
-            // Dest IP (host IP)
-            buf[16..20].copy_from_slice(&host_v4.ip().octets());
-
-            // TCP Header (first 8 bytes)
-            buf[20..22].copy_from_slice(&guest_v4.port().to_be_bytes());
-            buf[22..24].copy_from_slice(&host_v4.port().to_be_bytes());
-            buf
-        }
-        (SocketAddr::V6(guest_v6), SocketAddr::V6(host_v6)) => {
-            let mut buf = vec![0u8; 48];
-            // IPv6 Header (40 bytes)
-            buf[0] = 0x60; // Version = 6
-            // Payload Length: 8
-            buf[4] = 0;
-            buf[5] = 8;
-            // Next Header: 6 (TCP)
-            buf[6] = 6;
-            // Hop Limit: 64
-            buf[7] = 64;
-            // Source IP (guest IP)
-            buf[8..24].copy_from_slice(&guest_v6.ip().octets());
-            // Dest IP (host IP)
-            buf[24..40].copy_from_slice(&host_v6.ip().octets());
-
-            // TCP Header (first 8 bytes)
-            buf[40..42].copy_from_slice(&guest_v6.port().to_be_bytes());
-            buf[42..44].copy_from_slice(&host_v6.port().to_be_bytes());
-            buf
-        }
+        (SocketAddr::V4(guest_v4), SocketAddr::V4(host_v4)) => [
+            // Version=4, IHL=5, DSCP/ECN=0, Total Length=28, ID=0, Flags/Frag=0, TTL=0, Proto=TCP(6), Checksum=0
+            &[0x45, 0, 0, 28, 0, 0, 0, 0, 0, 6, 0, 0][..],
+            &guest_v4.ip().octets(),
+            &host_v4.ip().octets(),
+            &guest_v4.port().to_be_bytes(),
+            &host_v4.port().to_be_bytes(),
+            &[0, 0, 0, 0], // Sequence Number = 0
+        ]
+        .concat(),
+        (SocketAddr::V6(guest_v6), SocketAddr::V6(host_v6)) => [
+            // Version=6, Payload Length=8, Next Header=TCP (6), Hop Limit=64
+            &[0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 6, 64][..],
+            &guest_v6.ip().octets(),
+            &host_v6.ip().octets(),
+            &guest_v6.port().to_be_bytes(),
+            &host_v6.port().to_be_bytes(),
+            &[0, 0, 0, 0], // Sequence Number = 0
+        ]
+        .concat(),
         _ => Vec::new(), // Mismatched families (should not happen)
     }
 }

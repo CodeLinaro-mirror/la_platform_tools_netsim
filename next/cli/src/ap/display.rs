@@ -5,7 +5,7 @@ use netsim_model::Ap;
 use netsim_proto::access_point;
 use netsim_rest_api::ListApResponse;
 
-pub fn print_list_ap_response(response: &ListApResponse, _verbose: bool) {
+pub(crate) fn print_list_ap_response(response: &ListApResponse, _verbose: bool) {
     if response.aps.is_empty() {
         println!("No available Access Points found.");
         return;
@@ -24,7 +24,7 @@ pub fn print_list_ap_response(response: &ListApResponse, _verbose: bool) {
     }
 }
 
-pub fn print_rest_ap(ap: &Ap) {
+fn print_rest_ap(ap: &Ap) {
     let cfg = &ap.config;
     let security = if cfg.enterprise_enabled {
         "WPA2/WPA3 Enterprise"
@@ -52,7 +52,7 @@ pub fn print_rest_ap(ap: &Ap) {
     println!();
 }
 
-pub fn print_ap(ap: &access_point::AccessPoint) {
+pub(crate) fn print_ap(ap: &access_point::AccessPoint) {
     let security = if ap.enterprise_enabled {
         "WPA2/WPA3 Enterprise"
     } else if ap.sae {

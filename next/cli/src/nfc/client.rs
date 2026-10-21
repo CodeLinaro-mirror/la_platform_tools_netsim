@@ -10,7 +10,7 @@ use netsim_proto::{
 use super::{args::NfcCommand, display};
 use crate::error::Result;
 
-pub fn execute(cmd: &NfcCommand, client: &NfcServiceClient, _verbose: bool) -> Result<()> {
+pub(crate) fn execute(cmd: &NfcCommand, client: &NfcServiceClient, _verbose: bool) -> Result<()> {
     match cmd {
         NfcCommand::List { chip_id, json } => {
             let mut req = GetStatusRequest::new();

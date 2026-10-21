@@ -17,22 +17,24 @@ use crate::{
     error::CellError,
 };
 
-fn lease_to_network_configs(lease: &slirp_actor::SlirpLease) -> Vec<CellNetworkConfig> {
-    let mut network_configs = vec![CellNetworkConfig {
-        ip_address: std::net::IpAddr::V4(lease.v4.ip_address),
-        prefixlen: lease.v4.prefixlen,
-        gateway: std::net::IpAddr::V4(lease.v4.gateway),
-        dns: std::net::IpAddr::V4(lease.v4.dns),
-    }];
-    if let Some(v6) = lease.v6 {
-        network_configs.push(CellNetworkConfig {
-            ip_address: std::net::IpAddr::V6(v6.ip_address),
-            prefixlen: v6.prefixlen,
-            gateway: std::net::IpAddr::V6(v6.gateway),
-            dns: std::net::IpAddr::V6(v6.dns),
-        });
+impl CellActor {
+    fn lease_to_network_configs(lease: &slirp_actor::SlirpLease) -> Vec<CellNetworkConfig> {
+        let mut network_configs = vec![CellNetworkConfig {
+            ip_address: std::net::IpAddr::V4(lease.v4.ip_address),
+            prefixlen: lease.v4.prefixlen,
+            gateway: std::net::IpAddr::V4(lease.v4.gateway),
+            dns: std::net::IpAddr::V4(lease.v4.dns),
+        }];
+        if let Some(v6) = lease.v6 {
+            network_configs.push(CellNetworkConfig {
+                ip_address: std::net::IpAddr::V6(v6.ip_address),
+                prefixlen: v6.prefixlen,
+                gateway: std::net::IpAddr::V6(v6.gateway),
+                dns: std::net::IpAddr::V6(v6.dns),
+            });
+        }
+        network_configs
     }
-    network_configs
 }
 
 impl ActorService for CellActor {
@@ -76,7 +78,7 @@ impl ActorService for CellActor {
         if quirks.dynamic_slirp_lease && network_configs.is_empty() {
             match self.slirp_client.allocate_lease(chip_id).await {
                 Ok(Some(lease)) => {
-                    network_configs.extend(lease_to_network_configs(&lease));
+                    network_configs.extend(Self::lease_to_network_configs(&lease));
                     slirp_allocated = true;
                 }
                 Ok(None) => {
@@ -252,34 +254,18 @@ impl ActorService for CellActor {
             return Err(CellError::Chip(ChipError::ChipNotFound(chip_id)));
         }
 
+        action.validate().map_err(CellError::Chip)?;
+
         let modem_action = match action {
             CellAction::IncomingCall { number } => {
-                if !is_valid_phone_number(&number) {
-                    return Err(CellError::Chip(ChipError::InvalidArguments(
-                        format!("Invalid phone number: {number}").into(),
-                    )));
-                }
                 ModemAction::IncomingCall { target_id: chip_id, number }
             }
             CellAction::UpdateCall => ModemAction::UpdatePhysicalChannelConfigs { id: chip_id },
             CellAction::EndCall => ModemAction::RemoteHangup { id: chip_id },
             CellAction::ReceiveSms { sender, text } => {
-                if !is_valid_sms_sender(&sender) {
-                    return Err(CellError::Chip(ChipError::InvalidArguments(
-                        format!("Invalid SMS sender: {sender}").into(),
-                    )));
-                }
                 ModemAction::IncomingSms { id: chip_id, sender, text }
             }
-            CellAction::ReceivePdu { pdu } => {
-                if !is_valid_hex_pdu(&pdu) {
-                    return Err(CellError::Chip(ChipError::InvalidArguments(
-                        format!("Invalid PDU format (must be even-length hex string): {pdu}")
-                            .into(),
-                    )));
-                }
-                ModemAction::IncomingPdu { id: chip_id, pdu }
-            }
+            CellAction::ReceivePdu { pdu } => ModemAction::IncomingPdu { id: chip_id, pdu },
             CellAction::SetSignalStrength { rssi, ber } => {
                 let rssi_u8 = u8::try_from(rssi).map_err(|e| {
                     CellError::Chip(ChipError::InvalidArguments(
@@ -355,29 +341,4 @@ impl ActorService for CellActor {
         }
         Ok(chips)
     }
-}
-
-fn is_valid_phone_number(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars().all(|c| {
-            c.is_ascii_digit()
-                || c == '+'
-                || c == '-'
-                || c == ' '
-                || c == '('
-                || c == ')'
-                || c == '*'
-                || c == '#'
-        })
-}
-
-fn is_valid_sms_sender(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars().all(|c| {
-            c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == ' ' || c == '(' || c == ')'
-        })
-}
-
-fn is_valid_hex_pdu(s: &str) -> bool {
-    !s.is_empty() && s.len().is_multiple_of(2) && s.chars().all(|c| c.is_ascii_hexdigit())
 }

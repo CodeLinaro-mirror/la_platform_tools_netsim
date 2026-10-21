@@ -14,7 +14,7 @@ use super::{
 };
 use crate::error::Result;
 
-pub fn execute(cmd: &BleCommand, client: &BleServiceClient, verbose: bool) -> Result<()> {
+pub(crate) fn execute(cmd: &BleCommand, client: &BleServiceClient, verbose: bool) -> Result<()> {
     match cmd {
         BleCommand::Scan(args) => {
             let mut req = ScanRequest::new();
@@ -170,7 +170,7 @@ fn write_pcap_packet(packet: &[u8]) {
     let dir = [0u8, 0, 0, 1]; // Received by host
 
     let mut h4_packet = Vec::new();
-    if packet.is_empty() || packet[0] != 0x04 {
+    if packet.first() != Some(&0x04) {
         h4_packet.push(0x04);
     }
     h4_packet.extend_from_slice(packet);

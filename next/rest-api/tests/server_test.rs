@@ -143,3 +143,24 @@ fn test_rest_server_implements_debug() {
     fn assert_debug<T: std::fmt::Debug>() {}
     assert_debug::<RestServer>();
 }
+
+#[tokio::test]
+async fn test_handle_request_openapi() {
+    let (device_tx, _) = tokio::sync::mpsc::channel(1);
+    let device_client =
+        DeviceClient::new(Box::new(actor_framework::ResourceClient::new(device_tx)));
+    let (ap_tx, _) = tokio::sync::mpsc::channel(1);
+    let ap_client = ApClient::new(actor_framework::ResourceClient::new(ap_tx));
+    let link_client = Arc::new(MockLinkClient);
+
+    let server = RestServer::new(device_client, link_client, ap_client, "0.3.92".to_string());
+
+    let response = server.handle_request(&Method::GET, netsim_rest_api::path::OPENAPI, &[]).await;
+    let status = response.status();
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body_str, netsim_rest_api::OPENAPI_JSON);
+    let doc: serde_json::Value = serde_json::from_str(body_str).unwrap();
+    assert_eq!(netsim_rest_api::openapi::validate(&doc), Vec::<String>::new());
+}

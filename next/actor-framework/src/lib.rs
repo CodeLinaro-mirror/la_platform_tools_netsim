@@ -543,4 +543,4 @@ pub use context::{Context, DynContext, TimerCallback, TimerKey};
 pub use error::FrameworkError;
 pub use lifecycle::ActorLifecycle;
 pub use message::{ResourceRequest, Response};
-pub use service::{ActorId, ActorService, BoxStream, BoxTypedStream, StreamMessage};
+pub use service::{ActorId, ActorService, BoxStream, BoxTypedStream};

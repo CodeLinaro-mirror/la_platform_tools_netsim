@@ -109,6 +109,6 @@ pub use crate::{
     chip_error::ChipError,
     ethernet::{Ethernet, EthernetCreate, EthernetUpdate},
     nfc::{Nfc, NfcCreate, NfcUpdate},
-    uwb::{Uwb, UwbCreate, UwbUpdate},
+    uwb::{Uwb, UwbCreate, UwbMode, UwbUpdate},
     wifi::{Wifi, WifiCreate, WifiUpdate},
 };

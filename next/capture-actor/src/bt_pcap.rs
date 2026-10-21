@@ -7,15 +7,15 @@
 
 use std::{io::Result, path::Path};
 
-use crate::writer::{CaptureWriter, DLT_BLUETOOTH_H4, PcapWriter};
+use crate::writer::{CaptureWriter, DataLinkType, PcapWriter};
 
 /// PCAP writer for Bluetooth H4 packets.
-pub struct BluetoothH4Writer;
+pub(crate) struct BluetoothH4Writer;
 
 impl BluetoothH4Writer {
     /// Creates a new Bluetooth H4 PCAP writer.
     #[allow(clippy::new_ret_no_self)]
-    pub async fn new<P: AsRef<Path>>(path: P) -> Result<Box<dyn CaptureWriter>> {
-        Ok(Box::new(PcapWriter::new(path, DLT_BLUETOOTH_H4).await?))
+    pub(crate) async fn new<P: AsRef<Path>>(path: P) -> Result<Box<dyn CaptureWriter>> {
+        Ok(Box::new(PcapWriter::new(path, DataLinkType::BluetoothH4).await?))
     }
 }

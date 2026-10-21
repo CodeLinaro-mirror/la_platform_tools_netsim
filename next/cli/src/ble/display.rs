@@ -13,7 +13,7 @@ use serde::Serialize;
 const H4_EVENT_PACKET_TYPE: u8 = 0x04;
 const SCAN_RSP_KEY_OFFSET: u16 = 0x0100;
 
-pub struct BleEvent {
+pub(crate) struct BleEvent {
     pub timestamp_str: String,
     pub addr_display: String,
     pub event_type_str: String,
@@ -24,13 +24,13 @@ pub struct BleEvent {
 }
 
 #[derive(Clone)]
-pub struct AdPayload {
+pub(crate) struct AdPayload {
     pub ad_type: u8,
     pub type_str: String,
     pub decoded_val: String,
 }
 
-pub fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleEvent> {
+pub(crate) fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleEvent> {
     let mut events = Vec::new();
     let now =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
@@ -43,12 +43,12 @@ pub fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleEvent> {
         String::new()
     };
 
-    let mut offset = 0;
-    if !packet.is_empty() && packet[0] == H4_EVENT_PACKET_TYPE {
-        offset += 1;
-    }
+    let payload = match packet.as_slice() {
+        [H4_EVENT_PACKET_TYPE, rest @ ..] => rest,
+        other => other,
+    };
 
-    let reports = match parse_hci_event(&packet[offset..]) {
+    let reports = match parse_hci_event(payload) {
         Some(HciEvent::LeMetaEvent(LeMetaEvent::LeAdvertisingReport(reports))) => reports,
         _ => return events,
     };
@@ -88,15 +88,19 @@ pub fn parse_scan_response(res: &ScanResponse, verbose: bool) -> Vec<BleEvent> {
 }
 
 fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayload> {
-    let mut i = 0;
+    let mut rest = data;
     let mut outputs = BTreeMap::new();
-    while i < data.len() {
-        let len = data[i] as usize;
-        if len == 0 || i + 1 + len > data.len() {
+    while let Some((&len_byte, after_len)) = rest.split_first() {
+        let len = len_byte as usize;
+        if len == 0 {
             break;
         }
-        let ad_type = data[i + 1];
-        let ad_data = &data[i + 2..i + 1 + len];
+        let Some((struct_bytes, next_rest)) = after_len.split_at_checked(len) else {
+            break;
+        };
+        let Some((&ad_type, ad_data)) = struct_bytes.split_first() else {
+            break;
+        };
 
         let type_str = GapDataType(ad_type).to_string();
 
@@ -105,8 +109,8 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 String::from_utf8_lossy(ad_data).to_string()
             }
             GapDataType::TX_POWER_LEVEL => {
-                if ad_data.len() == 1 {
-                    format!("{} dBm", ad_data[0] as i8)
+                if let [power] = ad_data {
+                    format!("{} dBm", *power as i8)
                 } else {
                     format_hex_data(ad_data)
                 }
@@ -115,8 +119,8 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 if ad_data.len().is_multiple_of(2) =>
             {
                 let mut uuids = Vec::new();
-                for chunk in ad_data.chunks(2) {
-                    uuids.push(format!("0x{:02x}{:02x}", chunk[1], chunk[0]));
+                for &[b0, b1] in ad_data.as_chunks::<2>().0 {
+                    uuids.push(format!("0x{:02x}{:02x}", b1, b0));
                 }
                 uuids.join(", ")
             }
@@ -124,11 +128,8 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 if ad_data.len().is_multiple_of(4) =>
             {
                 let mut uuids = Vec::new();
-                for chunk in ad_data.chunks(4) {
-                    uuids.push(format!(
-                        "0x{:02x}{:02x}{:02x}{:02x}",
-                        chunk[3], chunk[2], chunk[1], chunk[0]
-                    ));
+                for &[b0, b1, b2, b3] in ad_data.as_chunks::<4>().0 {
+                    uuids.push(format!("0x{:02x}{:02x}{:02x}{:02x}", b3, b2, b1, b0));
                 }
                 uuids.join(", ")
             }
@@ -136,25 +137,33 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
                 if ad_data.len().is_multiple_of(16) =>
             {
                 let mut uuids = Vec::new();
-                for chunk in ad_data.chunks(16) {
+                for chunk in ad_data.as_chunks::<16>().0 {
                     uuids.push(format_128bit_uuid(chunk));
                 }
                 uuids.join(", ")
             }
-            GapDataType::SERVICE_DATA_16BIT if ad_data.len() >= 2 => {
-                let uuid = format!("0x{:02x}{:02x}", ad_data[1], ad_data[0]);
-                format_uuid_service_data(uuid, &ad_data[2..])
+            GapDataType::SERVICE_DATA_16BIT => {
+                if let [b0, b1, rest_data @ ..] = ad_data {
+                    let uuid = format!("0x{:02x}{:02x}", b1, b0);
+                    format_uuid_service_data(uuid, rest_data)
+                } else {
+                    format_hex_data(ad_data)
+                }
             }
-            GapDataType::SERVICE_DATA_32BIT if ad_data.len() >= 4 => {
-                let uuid = format!(
-                    "0x{:02x}{:02x}{:02x}{:02x}",
-                    ad_data[3], ad_data[2], ad_data[1], ad_data[0]
-                );
-                format_uuid_service_data(uuid, &ad_data[4..])
+            GapDataType::SERVICE_DATA_32BIT => {
+                if let [b0, b1, b2, b3, rest_data @ ..] = ad_data {
+                    let uuid = format!("0x{:02x}{:02x}{:02x}{:02x}", b3, b2, b1, b0);
+                    format_uuid_service_data(uuid, rest_data)
+                } else {
+                    format_hex_data(ad_data)
+                }
             }
-            GapDataType::SERVICE_DATA_128BIT if ad_data.len() >= 16 => {
-                let uuid = format_128bit_uuid(&ad_data[..16]);
-                format_uuid_service_data(uuid, &ad_data[16..])
+            GapDataType::SERVICE_DATA_128BIT => {
+                if let Some((uuid_chunk, rest_data)) = ad_data.split_first_chunk::<16>() {
+                    format_uuid_service_data(format_128bit_uuid(uuid_chunk), rest_data)
+                } else {
+                    format_hex_data(ad_data)
+                }
             }
             _ => format_hex_data(ad_data),
         };
@@ -164,30 +173,16 @@ fn parse_ad_structures(data: &[u8], is_scan_rsp: bool) -> BTreeMap<u16, AdPayloa
 
         outputs.insert(map_key, AdPayload { ad_type, type_str, decoded_val });
 
-        i += 1 + len;
+        rest = next_rest;
     }
     outputs
 }
 
-fn format_128bit_uuid(uuid: &[u8]) -> String {
+fn format_128bit_uuid(uuid: &[u8; 16]) -> String {
+    let &[b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15] = uuid;
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        uuid[15],
-        uuid[14],
-        uuid[13],
-        uuid[12],
-        uuid[11],
-        uuid[10],
-        uuid[9],
-        uuid[8],
-        uuid[7],
-        uuid[6],
-        uuid[5],
-        uuid[4],
-        uuid[3],
-        uuid[2],
-        uuid[1],
-        uuid[0]
+        b15, b14, b13, b12, b11, b10, b9, b8, b7, b6, b5, b4, b3, b2, b1, b0
     )
 }
 
@@ -200,7 +195,7 @@ fn format_hex_data(data: &[u8]) -> String {
     data.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")
 }
 
-pub fn print_json_event(event: &BleEvent, verbose: bool) {
+pub(crate) fn print_json_event(event: &BleEvent, verbose: bool) {
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -246,7 +241,7 @@ pub fn print_json_event(event: &BleEvent, verbose: bool) {
     }
 }
 
-pub fn print_sniff_response(res: &SniffResponse, _verbose: bool) {
+pub(crate) fn print_sniff_response(res: &SniffResponse, _verbose: bool) {
     let duration = std::time::Duration::from_micros(res.timestamp as u64);
     let timestamp =
         TimeDisplay::new(duration.as_secs() as i64, duration.subsec_nanos()).utc_display_hms();

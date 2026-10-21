@@ -430,16 +430,13 @@ impl Medium {
             _ => return false,
         };
 
-        if payload.len() < offset {
+        let Some(ies) = payload.get(offset..) else {
             return false;
-        }
+        };
 
-        let ies = &payload[offset..];
         for ie in IeIterator::new(ies) {
             if ie.id == tags::VENDOR_SPECIFIC
-                && ie.body.len() >= 4
-                && ie.body[0..3] == p2p::OUI
-                && ie.body[3] == p2p::OUI_TYPE
+                && let Some((&p2p::OUI, &[p2p::OUI_TYPE, ..])) = ie.body.split_first_chunk::<3>()
             {
                 return true;
             }
@@ -457,35 +454,27 @@ impl Medium {
             _ => return false,
         };
 
-        if payload.len() < offset {
+        let Some(ies) = payload.get(offset..) else {
             return false;
-        }
+        };
 
-        let ies = &payload[offset..];
         for ie in IeIterator::new(ies) {
             if ie.id == tags::VENDOR_SPECIFIC
-                && ie.body.len() >= 4
-                && ie.body[0..3] == p2p::OUI
-                && ie.body[3] == p2p::OUI_TYPE
+                && let Some((&p2p::OUI, &[p2p::OUI_TYPE, ref rest @ ..])) =
+                    ie.body.split_first_chunk::<3>()
             {
-                let mut attr_bytes = &ie.body[4..];
-                while attr_bytes.len() >= 3 {
-                    let attr_id = attr_bytes[0];
-                    let attr_len = u16::from_le_bytes([attr_bytes[1], attr_bytes[2]]) as usize;
-                    if attr_bytes.len() < 3 + attr_len {
+                let mut attr_bytes = rest;
+                while let &[attr_id, len_l, len_h, ref remaining @ ..] = attr_bytes {
+                    let attr_len = u16::from_le_bytes([len_l, len_h]) as usize;
+                    let Some((attr_val, next)) = remaining.split_at_checked(attr_len) else {
                         break;
+                    };
+                    if attr_id == 2
+                        && attr_val.get(1).is_some_and(|&group_cap| group_cap & 0x01 != 0)
+                    {
+                        return true;
                     }
-                    let attr_val = &attr_bytes[3..3 + attr_len];
-                    #[allow(clippy::collapsible_if)]
-                    if attr_id == 2 {
-                        if attr_len >= 2 {
-                            let group_cap = attr_val[1];
-                            if group_cap & 0x01 != 0 {
-                                return true;
-                            }
-                        }
-                    }
-                    attr_bytes = &attr_bytes[3 + attr_len..];
+                    attr_bytes = next;
                 }
             }
         }

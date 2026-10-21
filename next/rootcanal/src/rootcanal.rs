@@ -306,12 +306,6 @@ impl Rootcanal {
     }
 }
 
-impl Default for Rootcanal {
-    fn default() -> Self {
-        panic!("Use `Rootcanal::new()` instead");
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{

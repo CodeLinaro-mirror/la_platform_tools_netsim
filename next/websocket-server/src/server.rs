@@ -152,14 +152,9 @@ async fn perform_handshake(
         return Err(ServerError::InvalidPath(base_path.to_string()));
     }
 
-    let mut queries = HashMap::new();
-    if let Some(query_string) = query_string_opt {
-        queries = query_string
-            .split('&')
-            .filter_map(|pair| pair.split_once('='))
-            .map(|(key, value)| (key.to_string(), value.to_string()))
-            .collect();
-    }
+    let queries = query_string_opt
+        .map(|query| form_urlencoded::parse(query.as_bytes()).into_owned().collect())
+        .unwrap_or_default();
 
     let response = handle_websocket_handshake(&req)?;
 
