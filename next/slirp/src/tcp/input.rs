@@ -118,10 +118,12 @@ impl TcpManager {
                     .and_then(|id| self.connections.get(&id).map(|c| (id, c)))
                 {
                     if conn.state == State::TimeWait {
-                        // Silently drop SYN packets to connections in TIME_WAIT.
+                        // Silently drop SYN packets to connections in
+                        // TIME_WAIT.
                         return;
                     } else {
-                        // Drop unexpected SYN for existing active connections to prevent
+                        // Drop unexpected SYN for existing active connections
+                        // to prevent
                         // duplicate connection allocation
                         crate::slirp_debug!(
                             crate::logging::Topic::Tcp,
@@ -285,7 +287,8 @@ impl TcpManager {
                                         acked_len -= front.len();
                                         conn.unacked.pop_front();
                                     } else {
-                                        // Partially acked segment, we don't support this yet.
+                                        // Partially acked segment, we don't
+                                        // support this yet.
                                         break;
                                     }
                                 } else {
@@ -302,7 +305,8 @@ impl TcpManager {
                         for segment in &conn.unacked {
                             let segment_end = current_seq.wrapping_add(segment.len() as u32);
                             let is_sacked = sack_blocks.iter().any(|(start, end)| {
-                                // Check for any overlap between the segment and a SACK block.
+                                // Check for any overlap between the segment and
+                                // a SACK block.
                                 current_seq < *end && segment_end > *start
                             });
                             if !is_sacked {
@@ -325,7 +329,8 @@ impl TcpManager {
                                 timers.cancel_by_event(&TimerEvent::TcpRetransmit(conn_id));
 
                                 if is_syn {
-                                    // Host-initiated connection: guest replied with SYN-ACK.
+                                    // Host-initiated connection: guest replied
+                                    // with SYN-ACK.
                                     // 1. Update recv.nxt to ack guest's SYN
                                     let guest_seq = tcp_header.sequence_num.get();
                                     conn.recv.nxt = guest_seq.wrapping_add(1);
@@ -347,7 +352,8 @@ impl TcpManager {
                                     // 3. Notify the host driver that the connection is established!
                                     responses.push(SlirpResponse::ConnectionEstablished(conn_id));
                                 } else {
-                                    // Guest-initiated connection: guest sent ACK. Handshake
+                                    // Guest-initiated connection: guest sent
+                                    // ACK. Handshake
                                     // complete.
                                     responses.push(SlirpResponse::ActivateFastPath {
                                         conn_id,

@@ -365,9 +365,16 @@ missing most of the features and complexity of the C++ `sup_service.cpp`.
 - [x] **Implement full Call Waiting handling (`AT+CCWA`):**
   - [x] Add the `CallWaitingInfo` struct and logic for setting and querying the
         call waiting status.
-- [ ] **Enhance Call Forwarding handling (`AT+CCFCU`):**
-  - [ ] Expand the `handle_call_forwarding` function to support multiple call
-        forwarding rules.
+- [x] **Enhance Call Forwarding handling (`AT+CCFC`, `AT+CCFCU`):**
+  - [x] Full compliance with 3GPP TS 27.007 §7.11 for AT+CCFC and §7.35 for AT+CCFCU.
+  - [x] Distinguish query responses (`+CCFC:` with 27.007 field order vs `+CCFCU:`).
+  - [x] `CallForwardTon` dual-encoding support (TS 24.008 TON 0..=7 vs address octet 128..=255), echoed verbatim for `+CCFCU` number destinations and rendered as an address octet for `+CCFC`; URI destinations render `<ton>` as 0.
+  - [x] §7.35 cross-field validation rejecting `<numbertype>=0` with a non-empty number and `<numbertype>=1` with a non-zero TON (`+CME ERROR: 50`).
+  - [x] `CallForwardNumberType` 3-variant enum (0=NoValidInfo, 1=Uri, 2=Number) with default Number.
+  - [x] Atomic registration validation requiring non-empty number for fresh registrations.
+  - [x] Update number, ton, and numbertype on Enable and Disable when a non-empty number is supplied.
+  - [x] Bounded `CallForwardTime` (1..=30) validation.
+  - [x] Slot-aligned `Option<T>` parsing in `modem-rs-derive`.
 - [ ] **Implement Supplementary Service Notifications (`AT+CSSN`):**
   - [ ] Add logic for handling supplementary service notifications.
 

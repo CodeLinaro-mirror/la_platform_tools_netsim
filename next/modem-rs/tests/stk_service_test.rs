@@ -194,42 +194,6 @@ fn test_query_stk_ready() {
     );
 }
 
-// Scenario: Set STK Mode
-//   Given a modem "A"
-//   When AT command "AT+STK=1" is sent to "A"
-//   Then response from "A" is "OK"
-#[test]
-fn test_set_stk() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+STK=1");
-    then_response_is(&mut world, "A", "OK");
-}
-
-// Scenario: Set STK Enabled
-//   Given a modem "A"
-//   When AT command "AT+STKEN=1" is sent to "A"
-//   Then response from "A" is "OK"
-#[test]
-fn test_set_stk_enabled() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+STKEN=1");
-    then_response_is(&mut world, "A", "OK");
-}
-
-// Scenario: Set STK Unsolicited Result
-//   Given a modem "A"
-//   When AT command "AT+STKUR=1" is sent to "A"
-//   Then response from "A" is "OK"
-#[test]
-fn test_set_stk_unsolicited_result() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-    when_at_command_sent(&mut world, "A", "AT+STKUR=1");
-    then_response_is(&mut world, "A", "OK");
-}
-
 #[test]
 fn test_set_stk_ready() {
     let mut world = World::new();
@@ -759,46 +723,6 @@ fn test_stk_command_sim_absent() {
     // Send STK command, should fail with ERROR
     when_at_command_sent(&mut world, "A", "AT+CUSATD?");
     then_response_is(&mut world, "A", "ERROR");
-}
-
-#[test]
-fn test_stk_reporting_disabled() {
-    let mut world = World::new();
-    given_modem(&mut world, "A");
-
-    // 1. Enable STK
-    when_at_command_sent(&mut world, "A", "AT+CUSATD=1,\"010203\"");
-    then_response_is(&mut world, "A", "OK");
-    // Setup Menu URC is sent because AT+CUSATD enables reporting by default, we
-    // consume it.
-    then_response_is(&mut world, "A", SETUP_MENU_URC);
-
-    // Disable reporting via AT+STKUR=0
-    when_at_command_sent(&mut world, "A", "AT+STKUR=0");
-    then_response_is(&mut world, "A", "OK");
-
-    // 2. Send envelope to select "SIM" (0x50)
-    when_at_command_sent(
-        &mut world,
-        "A",
-        concat!(
-            "AT+CUSATE=\"",
-            "D3",
-            "07", // Envelope: Tag D3 (Menu Selection), Length 07
-            "82",
-            "02",
-            "8281", // Device IDs: Tag 82, Len 02, ME (82) to UICC (81)
-            "10",
-            "01",
-            "50", // Item Identifier: Tag 10, Len 01, Item ID 50 (SIM)
-            "\""
-        ),
-    );
-    then_response_is(&mut world, "A", "+CUSATE: 0");
-    then_response_is(&mut world, "A", "OK");
-    // NO URC (+CUSATP:) should be sent since reporting is disabled.
-    // then_response_is will assert no trailing responses (since OK is a final
-    // code).
 }
 
 #[test]

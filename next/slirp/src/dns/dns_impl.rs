@@ -115,8 +115,8 @@ impl DnsProxy {
 
         // 1. Parse the question
         let Some((qname, qtype, _, flags)) = parse_dns_query(query_payload) else {
-            // FALLBACK: If we cannot parse it, just forward to the default/configured
-            // server!
+            // FALLBACK: If we cannot parse it, just forward to the
+            // default/configured server!
             debug!("DNS Proxy: Failed to parse query, falling back to direct forwarding");
             return DnsQueryResult::Forward(get_upstream_server(dns_servers));
         };
@@ -146,7 +146,8 @@ impl DnsProxy {
 
         // 3. Failover logic (reactive)
         if family_servers.is_empty() {
-            // No servers of the correct family configured, use hardcoded fallback
+            // No servers of the correct family configured, use hardcoded
+            // fallback
             return DnsQueryResult::Forward(get_upstream_server(dns_servers));
         }
 
@@ -330,7 +331,8 @@ fn synthesize_dns_reply(
 ) -> Vec<u8> {
     let mut reply = query_payload.to_vec();
 
-    // flags: Response (0x8000) | copied Opcode/RD | Recursion Available (0x0080)
+    // flags: Response (0x8000) | copied Opcode/RD | Recursion Available
+    // (0x0080)
     let reply_flags = 0x8000 | (query_flags & 0x7F00) | 0x0080;
     reply[2..4].copy_from_slice(&reply_flags.to_be_bytes());
     reply[6..8].copy_from_slice(&1u16.to_be_bytes()); // num_answers = 1
@@ -444,8 +446,8 @@ fn discover_host_dns_servers_windows() -> Vec<IpAddr> {
 
     // First call to determine buffer size needed.
     // SAFETY: `buf` is a valid, contiguous byte allocation of `buf_len` bytes.
-    // `GetAdaptersAddresses` writes up to `buf_len` bytes and updates `buf_len` on
-    // overflow.
+    // `GetAdaptersAddresses` writes up to `buf_len` bytes and updates `buf_len`
+    // on overflow.
     let mut ret = unsafe {
         GetAdaptersAddresses(
             AF_UNSPEC as u32,
@@ -458,8 +460,8 @@ fn discover_host_dns_servers_windows() -> Vec<IpAddr> {
 
     if ret == ERROR_BUFFER_OVERFLOW {
         buf.resize(buf_len as usize, 0);
-        // SAFETY: `buf` is resized to the exact capacity requested by the previous
-        // call.
+        // SAFETY: `buf` is resized to the exact capacity requested by the
+        // previous call.
         ret = unsafe {
             GetAdaptersAddresses(
                 AF_UNSPEC as u32,
@@ -478,35 +480,36 @@ fn discover_host_dns_servers_windows() -> Vec<IpAddr> {
 
     let mut adapter = buf.as_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>();
     while !adapter.is_null() {
-        // SAFETY: `ret == ERROR_SUCCESS` guarantees that `buf` contains a valid,
-        // properly aligned linked list of `IP_ADAPTER_ADDRESSES_LH` terminated
-        // by a null pointer. `adapter` is checked non-null before
-        // dereferencing.
+        // SAFETY: `ret == ERROR_SUCCESS` guarantees that `buf` contains a
+        // valid, properly aligned linked list of
+        // `IP_ADAPTER_ADDRESSES_LH` terminated by a null pointer.
+        // `adapter` is checked non-null before dereferencing.
         let (oper_status, mut dns_server, next_adapter) =
             unsafe { ((*adapter).OperStatus, (*adapter).FirstDnsServerAddress, (*adapter).Next) };
 
         if oper_status == IfOperStatusUp {
             while !dns_server.is_null() {
-                // SAFETY: `dns_server` points to a valid `IP_ADAPTER_DNS_SERVER_ADDRESS_XP`
-                // within the OS-populated adapter structure and is checked non-null.
+                // SAFETY: `dns_server` points to a valid
+                // `IP_ADAPTER_DNS_SERVER_ADDRESS_XP` within the
+                // OS-populated adapter structure and is checked non-null.
                 let (sockaddr, next_dns) =
                     unsafe { ((*dns_server).Address.lpSockaddr, (*dns_server).Next) };
 
                 if !sockaddr.is_null() {
-                    // SAFETY: `sockaddr` is checked non-null and points to a valid OS-initialized
-                    // `SOCKADDR`.
+                    // SAFETY: `sockaddr` is checked non-null and points to a
+                    // valid OS-initialized `SOCKADDR`.
                     let family = unsafe { (*sockaddr).sa_family as u32 };
 
                     let ip = if family == AF_INET as u32 {
                         let sin = sockaddr.cast::<SOCKADDR_IN>();
-                        // SAFETY: `family == AF_INET` guarantees `sockaddr` is a valid
-                        // `SOCKADDR_IN`.
+                        // SAFETY: `family == AF_INET` guarantees `sockaddr` is
+                        // a valid `SOCKADDR_IN`.
                         let ip_bytes = unsafe { (*sin).sin_addr.S_un.S_addr.to_ne_bytes() };
                         Some(IpAddr::V4(Ipv4Addr::from(ip_bytes)))
                     } else if family == AF_INET6 as u32 {
                         let sin6 = sockaddr.cast::<SOCKADDR_IN6>();
-                        // SAFETY: `family == AF_INET6` guarantees `sockaddr` is a valid
-                        // `SOCKADDR_IN6`.
+                        // SAFETY: `family == AF_INET6` guarantees `sockaddr` is
+                        // a valid `SOCKADDR_IN6`.
                         let ip_bytes = unsafe { (*sin6).sin6_addr.u.Byte };
                         Some(IpAddr::V6(Ipv6Addr::from(ip_bytes)))
                     } else {

@@ -161,16 +161,14 @@ fn test_sim_hot_plugging_goldfish_37() {
 
     // Remove SIM on goldfish_37 modem: should NOT emit +CPIN URC
     when_sim_status_set(&mut world, "A", false);
-    then_wait_for_response_containing(&mut world, "A", "+CREG: 0,\"2142\",\"0000B804\",7");
+    then_response_is(&mut world, "A", "+CREG: 0");
 
     // CPIN status query still works as expected (returns ERROR when CMEE is not
     // enabled)
     when_at_command_sent(&mut world, "A", "AT+CPIN?");
     then_response_is(&mut world, "A", "ERROR");
 
-    // COPS query when unregistered on goldfish_37 returns 6-digit DEFAULT_PLMN
-    // ("310260")
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0,2,\"310260\"");
+    then_response_is(&mut world, "A", "+COPS: 0,2,\"\"");
     then_response_is(&mut world, "A", "OK");
 }

@@ -437,7 +437,7 @@ def netsim_rust_library(
 
     # 2. The Testing Library with "testing" feature (always created)
     testing_deps = testing_deps + [
-        d + ":testing" if d.startswith("//next") else d
+        d.split(":")[0] + ":testing" if d.startswith("//next") else d
         for d in deps
     ]
     rust_library(

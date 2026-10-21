@@ -91,6 +91,32 @@ fn test_read_dynamic_param() {
     then_response_is(&mut world, "A", "OK");
 }
 
+#[test]
+fn test_read_dynamic_param_goldfish_37() {
+    let mut world = World::new();
+    world.given_goldfish_37_data_modem("A");
+
+    world.send_and_expect_ok(
+        "A",
+        &format!("AT+CGDCONT={TEST_PDP_CID},\"{TEST_PDP_TYPE}\",\"{TEST_APN}\""),
+    );
+    world.send_and_expect(
+        "A",
+        &format!("ATD{GPRS_DIAL_STRING_PREFIX}{TEST_PDP_CID}#"),
+        &["CONNECT"],
+    );
+    world.send_and_expect(
+        "A",
+        &format!("AT+CGCONTRDP={TEST_PDP_CID}"),
+        &[
+            &format!(
+                "+CGCONTRDP: {TEST_PDP_CID},{DEFAULT_BEARER_ID},\"{TEST_APN}\",{TEST_IP_ADDR},{TEST_GATEWAY},{TEST_DNS}"
+            ),
+            "OK",
+        ],
+    );
+}
+
 // Scenario: Query PDP Context
 //   Given a modem "A"
 //   When AT command "AT+CGDCONT?" is sent to "A"
@@ -159,12 +185,12 @@ fn test_enter_data_state() {
     );
     then_wait_for_response_containing(&mut world, "A", "OK");
 
-    // Omitted L2P defaults to PPP
-    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={TEST_PDP_CID}"));
-    then_response_is(&mut world, "A", "CONNECT");
-
     // Explicit valid L2P "PPP"
     when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"PPP\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "CONNECT");
+
+    // Omitted L2P defaults to PPP
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=,{TEST_PDP_CID}"));
     then_response_is(&mut world, "A", "CONNECT");
 
     // Explicit valid L2P "IP"
@@ -173,6 +199,10 @@ fn test_enter_data_state() {
 
     // Unsupported L2P returns error
     when_at_command_sent(&mut world, "A", &format!("AT+CGDATA=\"INVALID\",{TEST_PDP_CID}"));
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Bare CID without L2P slot is rejected
+    when_at_command_sent(&mut world, "A", &format!("AT+CGDATA={TEST_PDP_CID}"));
     then_response_is(&mut world, "A", "ERROR");
 }
 
@@ -504,7 +534,8 @@ fn test_data_commands_invalid_cid() {
     let mut world = World::new();
     given_modem(&mut world, "A");
 
-    // CID 2 does not exist (no contexts defined at all, or we only define CID 1)
+    // CID 2 does not exist (no contexts defined at all, or we only define CID
+    // 1)
     when_at_command_sent(
         &mut world,
         "A",
@@ -603,8 +634,8 @@ fn test_pdp_type_mismatch_fails() {
     when_at_command_sent(&mut world, "A", "AT+CGCONTRDP=1");
     then_response_is(&mut world, "A", "ERROR");
 
-    // Goldfish/Cuttlefish RIL sets CMEE=1 at init. Emit CME error to avoid 3s HAL
-    // timeout.
+    // Goldfish/Cuttlefish RIL sets CMEE=1 at init. Emit CME error to avoid 3s
+    // HAL timeout.
     world.send_and_expect_ok("A", "AT+CMEE=1");
 
     when_at_command_sent(&mut world, "A", "AT+CGPADDR=1");

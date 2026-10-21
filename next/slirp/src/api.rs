@@ -3,12 +3,14 @@
 
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    sync::Arc,
     time::Duration,
 };
 
 use bytes::Bytes;
 use netsim_packets::MacAddr;
 
+pub use crate::proxy::{ProxyConnect, ProxyManager};
 use crate::tcp;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -154,7 +156,7 @@ pub struct HostFwdRule {
     pub guest_addr: SocketAddr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     pub guest_mac: MacAddr,
     pub gateway_mac: MacAddr,
@@ -172,6 +174,37 @@ pub struct Config {
     pub hostfwd: Vec<HostFwdRule>,
     pub tftp_root: Option<std::path::PathBuf>,
     pub socks5_proxy: Option<SocketAddr>,
+    pub http_proxy: Option<String>,
+    pub proxy_manager: Option<Arc<dyn ProxyManager>>,
+    /// Opaque handle to the proxy manager's TX channel to avoid circular crate
+    /// dependencies.
+    pub proxy_tx: Option<Arc<dyn std::any::Any + Send + Sync>>,
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("guest_mac", &self.guest_mac)
+            .field("gateway_mac", &self.gateway_mac)
+            .field("guest_ipv4", &self.guest_ipv4)
+            .field("host_ipv4", &self.host_ipv4)
+            .field("guest_ipv6", &self.guest_ipv6)
+            .field("host_ipv6", &self.host_ipv6)
+            .field("boot_file", &self.boot_file)
+            .field("tftp_server_name", &self.tftp_server_name)
+            .field("domain_name", &self.domain_name)
+            .field("dns_search", &self.dns_search)
+            .field("client_hostname", &self.client_hostname)
+            .field("dns_servers", &self.dns_servers)
+            .field("guestfwd", &self.guestfwd)
+            .field("hostfwd", &self.hostfwd)
+            .field("tftp_root", &self.tftp_root)
+            .field("socks5_proxy", &self.socks5_proxy)
+            .field("http_proxy", &self.http_proxy)
+            .field("proxy_manager", &self.proxy_manager.is_some())
+            .field("proxy_tx", &self.proxy_tx.is_some())
+            .finish()
+    }
 }
 
 pub const DEFAULT_DNS_SERVER: IpAddr = IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8));
@@ -195,6 +228,9 @@ impl Default for Config {
             hostfwd: Vec::new(),
             tftp_root: None,
             socks5_proxy: None,
+            http_proxy: None,
+            proxy_manager: None,
+            proxy_tx: None,
         }
     }
 }

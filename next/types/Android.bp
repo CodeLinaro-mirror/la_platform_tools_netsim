@@ -59,3 +59,25 @@ rust_test_host {
         "libserde",
     ],
 }
+
+rust_test_host {
+    name: "libnetsim_next_types_integration_tests",
+    crate_name: "netsim_types_tests",
+    edition: "2024",
+    crate_root: "tests/display_test.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "tests/display_test.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libnetsim_next_types_testing",
+        "libserde",
+    ],
+}

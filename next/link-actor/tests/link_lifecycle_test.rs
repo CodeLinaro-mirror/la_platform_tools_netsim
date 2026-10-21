@@ -22,7 +22,8 @@ async fn test_chip_removal_deletes_links() {
     let world = World::new().await;
     world.given_default_chips().await;
     let link_id = world.when_create_link(ChipId(1), ChipId(2), -50).await.unwrap();
-    assert_eq!(world.client.list().await.unwrap().len(), 1);
+    let link_id_rev = world.when_create_link(ChipId(2), ChipId(1), -55).await.unwrap();
+    assert_eq!(world.client.list().await.unwrap().len(), 2);
 
     // When
     world.when_notify_chip_removed(ChipId(1)).await;
@@ -34,6 +35,8 @@ async fn test_chip_removal_deletes_links() {
     // Check that we cannot update the deleted link
     let update_result = world.when_update_link(link_id, -60).await;
     assert!(update_result.is_err(), "Should not be able to update deleted link");
+    let update_result_rev = world.when_update_link(link_id_rev, -60).await;
+    assert!(update_result_rev.is_err(), "Should not be able to update deleted link");
 }
 
 // Scenario: Cannot create link with removed chip
@@ -73,4 +76,20 @@ async fn test_chip_added_lifecycle() {
 
     // Then
     world.when_create_link(ChipId(99), ChipId(2), -50).await.unwrap();
+}
+
+// Scenario: Chip removal with no active links
+//
+//   Given a chip exists with no active links
+//   When the chip is removed
+//   Then the operation succeeds without errors
+#[tokio::test]
+async fn test_chip_removal_without_links() {
+    let world = World::new().await;
+    world.given_default_chips().await;
+    assert_eq!(world.client.list().await.unwrap().len(), 0);
+
+    world.when_notify_chip_removed(ChipId(1)).await;
+
+    assert_eq!(world.client.list().await.unwrap().len(), 0);
 }

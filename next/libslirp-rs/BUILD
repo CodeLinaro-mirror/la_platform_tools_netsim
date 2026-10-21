@@ -23,6 +23,7 @@ netsim_rust_library(
     }),
     test_deps = ["@etherparse"],
     deps = [
+        "//next/slirp",
         "@bytes",
         "@glib//glib",
         "@libslirp",

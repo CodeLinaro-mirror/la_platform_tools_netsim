@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 use crate::{
     apdu,
     constants::{SW_INCORRECT_PARAMS, SW_REFERENCED_DATA_NOT_FOUND, SW_WRONG_LENGTH, UiccFileId},
-    types::{PhoneNumber, Plmn},
+    types::{Parsable, PhoneNumber, Plmn},
 };
 
 fn deserialize_hex_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
@@ -25,9 +25,10 @@ where
 {
     let opt: Option<String> = Option::deserialize(deserializer)?;
     match opt {
-        Some(s) if !s.trim().is_empty() => {
-            s.parse::<PhoneNumber>().map(Some).map_err(serde::de::Error::custom)
-        }
+        Some(s) if !s.trim().is_empty() => match PhoneNumber::parse(s.trim().as_bytes()) {
+            Ok(([], phone)) => Ok(Some(phone)),
+            _ => Err(serde::de::Error::custom("invalid phone number")),
+        },
         _ => Ok(None),
     }
 }

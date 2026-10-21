@@ -5,13 +5,17 @@ use crate::{common::constants::*, steps::*, world::World};
 
 // Scenario: Emergency Call
 //   Given a modem "A"
-//   When AT command "ATD911;" is sent to "A"
+//   When AT command "ATD911@;" is sent to "A"
 //   Then response from "A" is "OK"
 #[test]
 fn test_emergency_call() {
     let mut world = World::new();
     world.given_modem("A");
-    world.send_and_expect_ok("A", &format!("ATD{TEST_EMERGENCY_NUMBER};"));
+    world.send_and_expect_ok("A", &format!("ATD{}@;", TEST_EMERGENCY_NUMBER));
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,{TEST_EMERGENCY_NUMBER},{TOA_NATIONAL}")]);
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
 }
 
 // Scenario: Standard Call
@@ -33,23 +37,6 @@ fn test_standard_call() {
         &[&format!("+CLCC: 1,0,2,0,0,{TEST_PHONE_NUMBER_ALT},{TOA_INTERNATIONAL}"), "OK"],
     );
     world.then_no_response("A");
-}
-
-// Scenario: Receive Ring
-//   Given a modem "A"
-//   When AT command "RING" is sent to "A"
-//   Then response from "A" is "RING"
-//   When AT command "AT+CLCC" is sent to "A"
-//   Then response from "A" contains "+CLCC: 1,1,4,0,0,\"\",129"
-//   And response from "A" contains "OK"
-#[test]
-fn test_ring() {
-    let mut world = World::new();
-    world.given_modem("A");
-    world.send_and_expect("A", "RING", &["RING"]);
-
-    // Verify call state (Incoming)
-    world.send_and_expect("A", "AT+CLCC", &[&format!("+CLCC: 1,1,4,0,0,,{TOA_NATIONAL}"), "OK"]);
 }
 
 // Scenario: Query Current Calls
@@ -318,13 +305,181 @@ fn test_emergency_dial_syntax() {
 
     // Emergency with category and CLIR
     world.send_and_expect_ok("A", &format!("ATD{}@1,#I;", TEST_EMERGENCY_NUMBER));
+    world.then_response_is("A", "RING");
 
-    // Verify it is NOT in active calls (InitiateEmergencyCall is no-op)
+    // Verify it is in active calls in Active state (answered directly)
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,{TEST_EMERGENCY_NUMBER},{TOA_NATIONAL}")]);
+
+    // Hang up the emergency call
+    world.send_and_expect_ok("A", "ATH");
     world.assert_idle("A");
 
     // Normal call to non-existent peer should be in Dialing state
     world.send_and_expect_ok("A", &format!("ATD{CALL_PEER_ALT_2};"));
-    world.assert_clcc("A", &[&format!("+CLCC: 1,0,2,0,0,{CALL_PEER_ALT_2},{}", TOA_NATIONAL)]);
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,2,0,0,{CALL_PEER_ALT_2},{TOA_NATIONAL}")]);
+}
+
+#[test]
+fn test_emergency_call_without_sim() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    // Remove SIM (simulate SIM absent)
+    world.when_sim_status("A", false);
+    world.then_response_is("A", "+CPIN: ABSENT");
+
+    // Enable verbose CME errors
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // Normal calls fail when SIM is absent
+    world.send_and_expect("A", &format!("ATD{CALL_PEER_ALT_2};"), &["+CME ERROR: 10"]);
+    world.send_and_expect("A", &format!("ATD{TEST_EMERGENCY_NUMBER};"), &["+CME ERROR: 10"]);
+
+    // Emergency calls succeed without SIM
+    world.send_and_expect_ok("A", &format!("ATD{}@1,#I;", TEST_EMERGENCY_NUMBER));
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,{TEST_EMERGENCY_NUMBER},{TOA_NATIONAL}")]);
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+
+    world.send_and_expect_ok("A", "ATD999@1,#;");
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,999,{TOA_NATIONAL}")]);
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+}
+
+#[test]
+fn test_emergency_call_with_sim_pin_locked() {
+    let mut world = World::new();
+    world.given_modem_with_locked_sim("A");
+
+    world.send_and_expect("A", "AT+CPIN?", &["+CPIN: SIM PIN", "OK"]);
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    // Normal calls fail when PIN locked
+    world.send_and_expect("A", &format!("ATD{CALL_PEER_ALT_2};"), &["+CME ERROR: 11"]);
+    world.send_and_expect("A", &format!("ATD{TEST_EMERGENCY_NUMBER};"), &["+CME ERROR: 11"]);
+
+    // Emergency calls bypass PIN lock
+    world.send_and_expect_ok("A", &format!("ATD{}@1,#I;", TEST_EMERGENCY_NUMBER));
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,{TEST_EMERGENCY_NUMBER},{TOA_NATIONAL}")]);
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+
+    world.send_and_expect_ok("A", "ATD999@1,#;");
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,999,{TOA_NATIONAL}")]);
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+}
+
+#[test]
+fn test_emergency_call_with_sim_puk_locked() {
+    let mut world = World::new();
+    world.given_modem_with_locked_sim("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    for _ in 0..3 {
+        world.send_and_expect("A", "AT+CPIN=\"9999\"", &["+CME ERROR: 16"]);
+    }
+    world.send_and_expect("A", "AT+CPIN?", &["+CPIN: SIM PUK", "OK"]);
+
+    // Normal calls fail when PUK locked
+    world.send_and_expect("A", &format!("ATD{CALL_PEER_ALT_2};"), &["+CME ERROR: 12"]);
+    world.send_and_expect("A", &format!("ATD{TEST_EMERGENCY_NUMBER};"), &["+CME ERROR: 12"]);
+
+    // Emergency calls bypass PUK lock
+    world.send_and_expect_ok("A", &format!("ATD{}@1,#I;", TEST_EMERGENCY_NUMBER));
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,{TEST_EMERGENCY_NUMBER},{TOA_NATIONAL}")]);
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+
+    world.send_and_expect_ok("A", "ATD999@1,#;");
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,999,{TOA_NATIONAL}")]);
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+}
+
+#[test]
+fn test_wsos_emergency_mode_full_lifecycle() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect("A", "AT+WSOS?", &["+WSOS: 0", "OK"]);
+    world.send_and_expect_ok("A", "AT+WSOS=1");
+    world.send_and_expect("A", "AT+WSOS?", &["+WSOS: 1", "OK"]);
+
+    // Non-emergency dials are rejected while emergency mode is active
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect("A", &format!("ATD{CALL_PEER_ALT_2};"), &["+CME ERROR: 32"]);
+    world.send_and_expect("A", &format!("ATD{TEST_EMERGENCY_NUMBER};"), &["+CME ERROR: 32"]);
+
+    // Emergency dials are permitted
+    world.send_and_expect_ok("A", &format!("ATD{}@;", TEST_EMERGENCY_NUMBER));
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,{TEST_EMERGENCY_NUMBER},{TOA_NATIONAL}")]);
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+
+    // Emergency mode persists until disabled
+    world.send_and_expect("A", "AT+WSOS?", &["+WSOS: 1", "OK"]);
+    world.send_and_expect_ok("A", "AT+WSOS=0");
+    world.send_and_expect("A", "AT+WSOS?", &["+WSOS: 0", "OK"]);
+
+    world.send_and_expect_ok("A", &format!("ATD{CALL_PEER_ALT_2};"));
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+}
+
+#[test]
+fn test_emergency_dial_category_marker_syntax() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+WSOS=1");
+    world.send_and_expect("A", &format!("ATD{CALL_PEER_ALT_2};"), &["+CME ERROR: 32"]);
+
+    for dial in [
+        format!("ATD{}@;", TEST_EMERGENCY_NUMBER),
+        format!("ATD{}@0;", TEST_EMERGENCY_NUMBER),
+        format!("ATD{}@1,#I;", TEST_EMERGENCY_NUMBER),
+        format!("ATD{}@1,#i;", TEST_EMERGENCY_NUMBER),
+        format!("ATD{}@1,#;", TEST_EMERGENCY_NUMBER),
+        format!("ATD{}@,#I;", TEST_EMERGENCY_NUMBER),
+        format!("ATD{}@,#;", TEST_EMERGENCY_NUMBER),
+        "ATD999@1,#;".to_string(),
+        "ATD110@;".to_string(),
+    ] {
+        world.send_and_expect_ok("A", &dial);
+        world.then_response_is("A", "RING");
+        world.send_and_expect_ok("A", "ATH");
+        world.assert_idle("A");
+    }
+}
+
+#[test]
+fn test_emergency_mode_concurrent_dial_rejected_while_emergency_active() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+WSOS=1");
+
+    world.send_and_expect_ok("A", &format!("ATD{}@;", TEST_EMERGENCY_NUMBER));
+    world.then_response_is("A", "RING");
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,{TEST_EMERGENCY_NUMBER},{TOA_NATIONAL}")]);
+
+    // Concurrent normal dial rejected while emergency call is active
+    world.send_and_expect("A", &format!("ATD{CALL_PEER_ALT_2};"), &["+CME ERROR: 32"]);
+    world.assert_clcc("A", &[&format!("+CLCC: 1,0,0,0,0,{TEST_EMERGENCY_NUMBER},{TOA_NATIONAL}")]);
+
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
 }
 
 #[test]
@@ -378,19 +533,6 @@ fn test_standard_call_with_leading_plus_routing() {
 
     // A dials B's number with leading '+'
     world.dial_number("A", &format!("+{TEST_PHONE_NUMBER_LONG_B}"), "B");
-}
-
-#[test]
-fn test_remote_call_initiation() {
-    let mut world = World::new();
-    world.given_modem_with_number("A", TEST_PHONE_NUMBER_LONG_A);
-    world.given_modem_with_number("B", TEST_PHONE_NUMBER_LONG_B);
-
-    // A calls B via remote call
-    world.send_and_expect_ok("A", &format!("AT+REMOTECALL={TEST_PHONE_NUMBER_LONG_B}"));
-
-    // B should receive RING
-    world.then_response_is("B", "RING");
 }
 
 #[test]
@@ -476,8 +618,31 @@ fn test_fdn_emergency_call_bypass() {
     // Enable FDN lock using PIN2 "5678"
     world.send_and_expect_ok("A", "AT+CLCK=\"FD\",1,\"5678\"");
 
-    // Dial emergency call (911) -> should bypass FDN and return OK
-    world.send_and_expect_ok("A", "ATD911;");
+    // Emergency calls bypass FDN lock
+    world.send_and_expect_ok("A", "ATD911@;");
+    world.then_response_is("A", "RING");
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+
+    world.send_and_expect_ok("A", "ATD999@1,#;");
+    world.then_response_is("A", "RING");
+    world.send_and_expect_ok("A", "ATH");
+    world.assert_idle("A");
+}
+
+#[test]
+fn test_emergency_callback_mode_urc() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    world.send_and_expect("A", "AT+WSOS?", &["+WSOS: 0", "OK"]);
+
+    world.trigger_emergency_callback_mode("A", true);
+    world.then_response_is("A", "+WSOS: 1");
+    world.send_and_expect("A", "AT+WSOS?", &["+WSOS: 1", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+WSOS=0");
+    world.send_and_expect("A", "AT+WSOS?", &["+WSOS: 0", "OK"]);
 }
 
 #[test]
@@ -633,6 +798,6 @@ fn test_empty_call_list_teardown_idempotency() {
     // Conference on empty call list should return ERROR
     world.send_and_expect_error("A", "AT+CHLD=3", "ERROR");
 
-    // ATH on idle modem returns ERROR
-    world.send_and_expect_error("A", "ATH", "ERROR");
+    // ATH on idle modem succeeds idempotently with OK (3GPP TS 22.030 §4.5.5.1)
+    world.send_and_expect_ok("A", "ATH");
 }

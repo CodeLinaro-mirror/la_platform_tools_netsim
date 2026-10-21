@@ -54,6 +54,7 @@ use crate::{
 };
 
 pub mod api;
+pub mod proxy;
 pub use api::*;
 pub use dns::discover_host_dns_servers;
 
@@ -349,6 +350,15 @@ impl Slirp {
             return;
         };
 
+        let guest_mac = match packet.ethernet {
+            EthernetPacket::Untagged { frame, .. } => frame.src_addr,
+            EthernetPacket::Vlan { frame, .. } => frame.src_addr,
+        };
+        let source_ip = Ipv4Addr::from(header.source_addr);
+        if !source_ip.is_unspecified() {
+            self.arp_table.add_entry(source_ip, guest_mac);
+        }
+
         let dest_ip = Ipv4Addr::from(header.dest_addr);
         let is_for_gateway = dest_ip == self.config.host_ipv4;
 
@@ -388,6 +398,14 @@ impl Slirp {
         let Some(NetworkPacket::Ip(IpPacket::V6(header, payload))) = &packet.network else {
             return;
         };
+        let guest_mac = match packet.ethernet {
+            EthernetPacket::Untagged { frame, .. } => frame.src_addr,
+            EthernetPacket::Vlan { frame, .. } => frame.src_addr,
+        };
+        let source_ip = Ipv6Addr::from(header.source_addr);
+        if !source_ip.is_unspecified() {
+            self.ndp_table.add_entry(source_ip, guest_mac);
+        }
         if header.next_header == IP_P_ICMPV6 {
             self.handle_icmpv6_packet(packet, header, payload, responses);
         } else if header.next_header == IP_P_TCP {
@@ -661,12 +679,17 @@ impl Slirp {
 
         // 1a. Handle TFTP
         if dest_port == 69 || self.tftp_manager.has_session_with_tid(dest_port) {
+            let guest_mac = match packet.ethernet {
+                EthernetPacket::Untagged { frame, .. } => frame.src_addr,
+                EthernetPacket::Vlan { frame, .. } => frame.src_addr,
+            };
             self.tftp_manager.handle_packet(
                 responses,
                 &self.config,
                 udp_payload,
                 src_addr,
                 dest_port,
+                guest_mac,
             );
             return;
         }
@@ -765,13 +788,22 @@ impl Slirp {
             SocketAddr::V6(_) => (40, 0x86DD),
         };
 
+        let dst_mac = match dst_addr {
+            SocketAddr::V4(dst_v4) => {
+                self.arp_table.lookup(dst_v4.ip()).unwrap_or(self.config.guest_mac)
+            }
+            SocketAddr::V6(dst_v6) => {
+                self.ndp_table.lookup(dst_v6.ip()).unwrap_or(self.config.guest_mac)
+            }
+        };
+
         let total_len = eth_header_len + ip_header_len + udp_header_len + payload.len();
         let mut buffer = vec![0u8; total_len];
 
         // 1. Fill Ethernet Header
         let (eth_slice, eth_payload) = buffer.split_at_mut(eth_header_len);
         let eth_frame = EthernetFrame::mut_from_bytes(eth_slice).unwrap();
-        eth_frame.dst_addr = self.config.guest_mac;
+        eth_frame.dst_addr = dst_mac;
         eth_frame.src_addr = self.config.gateway_mac;
         eth_frame.ethertype = ethertype.into();
 
@@ -858,8 +890,8 @@ impl Slirp {
 
         self.timer_manager.schedule(Duration::from_secs(600), TimerEvent::NdpRouterAdvertisement);
 
-        // For each TCP connection, if it has unacked data, schedule a retransmission
-        // timer!
+        // For each TCP connection, if it has unacked data, schedule a
+        // retransmission timer!
         for (&conn_id, conn) in &self.tcp_manager.connections {
             if !conn.unacked.is_empty() || conn.state == State::SynSent {
                 self.timer_manager

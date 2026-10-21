@@ -45,6 +45,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use slirp::{ProxyConnect, ProxyManager};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -82,19 +83,6 @@ enum SlirpCmd {
     Shutdown,
     ProxyConnect(SlirpProxyConnectFunc, usize, i32, i32),
     Notify,
-}
-
-/// HTTP Proxy callback trait
-pub trait ProxyManager: Send {
-    /// Attempts to establish a connection through the proxy.
-    fn try_connect(
-        &self,
-        sockaddr: SocketAddr,
-        connect_id: usize,
-        connect_func: Box<dyn ProxyConnect + Send>,
-    ) -> bool;
-    /// Removes a proxy connection.
-    fn remove(&self, connect_id: usize);
 }
 
 /// Trait to allow abstracting the mechanism of sending packets out of Slirp.
@@ -300,12 +288,6 @@ struct ConnectRequest {
     connect_id: usize,
     af: i32,
     start: Instant,
-}
-
-/// Trait for handling proxy connection results.
-pub trait ProxyConnect: Send {
-    /// Notifies libslirp about the result of a proxy connection attempt.
-    fn proxy_connect(&self, fd: i32, addr: SocketAddr);
 }
 
 impl ProxyConnect for ConnectRequest {
@@ -722,8 +704,8 @@ fn slirp_poll_thread(
             | ternary!(events & OS_POLL_OUT, SLIRP_POLL_OUT)
             | ternary!(events & OS_POLL_PRI, SLIRP_POLL_PRI)
     }
-    // Convert OS (output) "revents" to Slirp revents definitions which includes ERR
-    // and HUP
+    // Convert OS (output) "revents" to Slirp revents definitions which includes
+    // ERR and HUP
     fn to_slirp_revents(revents: i16) -> SlirpPollType {
         to_slirp_events(revents)
             | ternary!(revents & OS_POLL_ERR, SLIRP_POLL_ERR)
@@ -754,10 +736,10 @@ fn slirp_poll_thread(
 
         let mut poll_result = 0;
         // WSAPoll requires an array of one or more POLLFD structures.
-        // When nfds == 0, WSAPoll returns immediately with result -1, ignoring the
-        // timeout. (This is different from poll on Linux/macOS, which will wait
-        // for the timeout.) Therefore when nfds == 0 we will explicitly sleep
-        // for the timeout regardless of OS.
+        // When nfds == 0, WSAPoll returns immediately with result -1, ignoring
+        // the timeout. (This is different from poll on Linux/macOS,
+        // which will wait for the timeout.) Therefore when nfds == 0 we
+        // will explicitly sleep for the timeout regardless of OS.
         if os_poll_fds.is_empty() {
             // If there are no FDs to poll, sleep for the specified timeout.
             thread::sleep(Duration::from_millis(timeout as u64));
@@ -776,7 +758,8 @@ fn slirp_poll_thread(
             };
         }
         // POLLHUP and POLLERR are always allowed revents.
-        // if other events were not requested, then don't return them in the revents.
+        // if other events were not requested, then don't return them in the
+        // revents.
         let allowed_revents = OS_POLL_HUP | OS_POLL_ERR;
         let mut slirp_poll_fds: Vec<PollFd> = Vec::with_capacity(poll_fds.len());
         for &fd in &os_poll_fds {
@@ -859,11 +842,12 @@ unsafe extern "C" fn send_packet_cb(
 
 impl CallbackContext {
     fn send_packet(&self, buf: *const c_void, len: usize) -> libslirp_sys::slirp_ssize_t {
-        // Safety: The caller ensures that `buf` is contains `len` bytes of data.
+        // Safety: The caller ensures that `buf` is contains `len` bytes of
+        // data.
         let c_slice = unsafe { std::slice::from_raw_parts(buf.cast::<u8>(), len) };
-        // Bytes::from(slice: &'static [u8]) creates a Bytes object without copying the
-        // data. To own its data, copy &'static [u8] to Vec<u8> before
-        // converting to Bytes.
+        // Bytes::from(slice: &'static [u8]) creates a Bytes object without
+        // copying the data. To own its data, copy &'static [u8] to
+        // Vec<u8> before converting to Bytes.
         let bytes = Bytes::from(c_slice.to_vec());
         self.tx_bytes.send(bytes.clone());
         // When HTTP Proxy is enabled, it tracks DNS packets.
@@ -1332,8 +1316,8 @@ mod tests {
     #[test]
     fn test_slirp_poll_thread_exit() {
         let (_tx_cmds, _rx_cmds, tx_poll, handle) = launch_polling_thread();
-        // Drop the sender to end the polling thread and wait for the polling thread to
-        // exit
+        // Drop the sender to end the polling thread and wait for the polling
+        // thread to exit
         drop(tx_poll);
         handle.join().unwrap();
     }
@@ -1347,8 +1331,8 @@ mod tests {
         // Check that the poll result indicates 0 (fd not ready).
         poll_and_assert_result(&tx_poll, &rx_cmds, invalid_fd, SLIRP_POLL_IN, 0);
 
-        // Drop the sender to end the polling thread and wait for the polling thread to
-        // exit
+        // Drop the sender to end the polling thread and wait for the polling
+        // thread to exit
         drop(tx_poll);
         handle.join().unwrap();
     }
@@ -1380,8 +1364,8 @@ mod tests {
             expected_revents,
         );
 
-        // Drop the sender to end the polling thread and wait for the polling thread to
-        // exit
+        // Drop the sender to end the polling thread and wait for the polling
+        // thread to exit
         drop(tx_poll);
         handle.join().unwrap();
     }
@@ -1396,7 +1380,8 @@ mod tests {
         // Close the writer end of the pipe
         drop(writer);
 
-        // Check the expected poll result when writer is closed before data is written
+        // Check the expected poll result when writer is closed before data is
+        // written
         #[cfg(target_os = "linux")]
         let expected_revents = SLIRP_POLL_IN;
         #[cfg(target_os = "macos")]
@@ -1405,8 +1390,8 @@ mod tests {
         let expected_revents = SLIRP_POLL_HUP;
         poll_and_assert_result(&tx_poll, &rx_cmds, reader_fd, SLIRP_POLL_IN, expected_revents);
 
-        // Drop the sender to end the polling thread and wait for the polling thread to
-        // exit
+        // Drop the sender to end the polling thread and wait for the polling
+        // thread to exit
         drop(tx_poll);
         handle.join().unwrap();
     }
@@ -1430,7 +1415,8 @@ mod tests {
 
         // --- Test polling for no event after reading ---
 
-        // Check that the poll result contains no event since there is no more data
+        // Check that the poll result contains no event since there is no more
+        // data
         poll_and_assert_result(&tx_poll, &rx_cmds, reader_fd, SLIRP_POLL_IN, 0);
 
         // --- Test polling for POLLHUP event when writer is closed ---
@@ -1442,8 +1428,8 @@ mod tests {
         reader.shutdown(std::net::Shutdown::Write).unwrap();
 
         // Try to read from the socket to force an update of its state.
-        // A read on a closed socket should return 0, or WouldBlock if non-blocking.
-        // We don't need the result.
+        // A read on a closed socket should return 0, or WouldBlock if
+        // non-blocking. We don't need the result.
         let mut buf = [0; 1];
         let _ = reader.read(&mut buf);
 
@@ -1454,8 +1440,8 @@ mod tests {
         let expected_revents = SLIRP_POLL_HUP;
         poll_and_assert_result(&tx_poll, &rx_cmds, reader_fd, SLIRP_POLL_IN, expected_revents);
 
-        // Drop the sender to end the polling thread and wait for the polling thread to
-        // exit
+        // Drop the sender to end the polling thread and wait for the polling
+        // thread to exit
         drop(tx_poll);
         handle.join().unwrap();
     }

@@ -264,7 +264,8 @@ mod tests {
             ),
         ];
 
-        // TODO: Mock DNS server to to test hostname. e.g. "proxy.example.com:3000".
+        // TODO: Mock DNS server to to test hostname. e.g.
+        // "proxy.example.com:3000".
         for (input, expected) in data {
             let result = ProxyConfig::from_string(input);
             assert!(

@@ -440,7 +440,8 @@ mod tests {
         let result = to_socketaddr_storage(&dns);
         assert_eq!(result.len(), MAX_DNS_SERVERS);
         for entry in result {
-            // Assuming `sockaddr_storage::default()` initializes all fields to 0
+            // Assuming `sockaddr_storage::default()` initializes all fields to
+            // 0
             assert_eq!(entry.ss_family, 0);
         }
     }

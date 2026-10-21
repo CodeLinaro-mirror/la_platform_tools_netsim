@@ -4,7 +4,9 @@ use std::collections::hash_map::Entry;
 
 use actor_framework::{ActorService, DynContext};
 #[cfg(not(feature = "cuttlefish"))]
-use libslirp_rs::{LibSlirp, ProxyManager};
+use libslirp_rs::LibSlirp;
+#[cfg(not(feature = "cuttlefish"))]
+use slirp::ProxyManager;
 
 use crate::{
     error::SlirpError,
@@ -67,8 +69,10 @@ impl SlirpActor {
         if let Some(ref proxy) = self.http_proxy {
             let (tx, rx) = std::sync::mpsc::channel();
             config.http_proxy_on = true;
-            let manager = http_proxy::Manager::new(proxy, rx)
-                .map_err(|e| crate::error::SlirpError::Internal(e.to_string()))?;
+            let manager = http_proxy::Manager::new(proxy, rx).map_err(|e| {
+                tracing::error!("Failed to initialize HTTP proxy '{proxy}': {e}");
+                crate::error::SlirpError::Internal(e.to_string())
+            })?;
             proxy_manager = Some(Box::new(manager) as Box<dyn ProxyManager>);
             tx_proxy_bytes = Some(tx);
         }
@@ -76,7 +80,8 @@ impl SlirpActor {
         // Create internal downlink channel
         let (downlink_tx, downlink_rx) = tokio::sync::mpsc::unbounded_channel();
 
-        // Wrap tx in Box<dyn PacketSender>, effectively removing the bridge thread
+        // Wrap tx in Box<dyn PacketSender>, effectively removing the bridge
+        // thread
         let slirp = LibSlirp::new(config, Box::new(downlink_tx), proxy_manager, tx_proxy_bytes);
         self.backend_instance = Some(SlirpBackendInstance::CFfi(slirp));
 
@@ -98,8 +103,24 @@ impl SlirpActor {
         #[cfg(not(feature = "cuttlefish"))]
         let mut native_config = to_native_config(&self.config);
 
-        if self.http_proxy.is_some() {
-            tracing::warn!("Native Slirp backend does not support HTTP proxy yet");
+        if let Some(ref proxy) = self.http_proxy {
+            native_config.http_proxy = Some(proxy.clone());
+            #[cfg(feature = "http-proxy")]
+            {
+                let (tx, rx) = std::sync::mpsc::channel();
+                match http_proxy::Manager::new(proxy, rx) {
+                    Ok(manager) => {
+                        native_config.proxy_manager = Some(std::sync::Arc::new(manager));
+                        native_config.proxy_tx =
+                            Some(std::sync::Arc::new(std::sync::Mutex::new(tx)));
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to initialize HTTP Proxy Manager for Native backend: {e}"
+                        );
+                    }
+                }
+            }
         }
 
         let (downlink_tx, downlink_rx) = tokio::sync::mpsc::unbounded_channel::<bytes::Bytes>();
@@ -123,10 +144,12 @@ impl SlirpActor {
         ctx.spawn(
             task_id,
             Box::pin(async move {
-                // If `dns_servers` is empty or matches default configuration [8.8.8.8],
-                // automatically discover host DNS servers so guest queries are not
-                // routed to hardcoded public servers. Explicitly configured DNS server
-                // lists are preserved and never overridden.
+                // If `dns_servers` is empty or matches default configuration
+                // [8.8.8.8], automatically discover host DNS
+                // servers so guest queries are not
+                // routed to hardcoded public servers. Explicitly configured DNS
+                // server lists are preserved and never
+                // overridden.
                 if native_config.dns_servers.is_empty()
                     || native_config.dns_servers == [slirp::DEFAULT_DNS_SERVER]
                 {
@@ -208,7 +231,9 @@ impl ActorService for SlirpActor {
                 if let Some(instance) = &self.backend_instance {
                     instance.input(data);
                 } else {
-                    panic!("SlirpActor: SendPacket called before Register");
+                    return Err(SlirpError::Internal(
+                        "SlirpActor: SendPacket called without an active backend".to_string(),
+                    ));
                 }
             }
             // Register a new Layer-2 client port (WiFi or Ethernet/Cellular).
@@ -227,7 +252,8 @@ impl ActorService for SlirpActor {
                     e.insert(ClientInfo { sink: downlink_tx, notifier });
                     ctx.add_stream(client_id, stream);
 
-                    // Spawn isolated background forwarding task on SlirpActor's runtime context
+                    // Spawn isolated background forwarding task on SlirpActor's
+                    // runtime context
                     ctx.spawn(
                         client_id,
                         Box::pin(async move {
@@ -264,5 +290,155 @@ impl ActorService for SlirpActor {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use actor_framework::Context;
+    use tokio::sync::mpsc;
+
+    use super::*;
+
+    struct ServiceTestContext;
+
+    impl Context<SlirpActor> for ServiceTestContext {
+        fn set_interval(&mut self, _duration: Duration) {}
+        fn add_stream(&mut self, _id: u32, _stream: actor_framework::BoxStream) {}
+        fn remove_stream(&mut self, _id: u32) {}
+        fn add_typed_stream(
+            &mut self,
+            _id: usize,
+            _stream: actor_framework::BoxTypedStream<bytes::Bytes>,
+        ) {
+        }
+        fn remove_typed_stream(&mut self, _id: usize) {}
+        fn spawn(&mut self, _id: u32, task: futures::future::BoxFuture<'static, u32>) {
+            tokio::spawn(task);
+        }
+        fn abort(&mut self, _id: u32) {}
+        fn shutdown(&mut self) {}
+        fn run_later(
+            &mut self,
+            _duration: Duration,
+            _f: Box<dyn FnOnce(&mut SlirpActor, &mut dyn Context<SlirpActor>) + Send>,
+        ) -> actor_framework::TimerKey {
+            unimplemented!()
+        }
+        fn cancel_timer(&mut self, _key: actor_framework::TimerKey) {}
+    }
+
+    // Proxy support is implemented in the C-FFI backend (libslirp-rs).
+    // On cuttlefish builds, netsim uses the Native backend which does not
+    // support HTTP proxies.
+    #[tokio::test]
+    #[cfg(not(feature = "cuttlefish"))]
+    async fn test_invalid_http_proxy_returns_error() {
+        let mut actor = SlirpActor::new(
+            Default::default(),
+            Some("http://invalid-unresolvable-proxy.invalid:8080".to_string()),
+            None,
+        )
+        .await;
+        let mut ctx = ServiceTestContext;
+
+        let (tx_out, _rx_out) = mpsc::unbounded_channel::<bytes::Bytes>();
+        let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
+        let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
+        let sink: netsim_model::PacketSink =
+            Box::pin(futures::sink::unfold(tx_out, |tx, bytes| async move {
+                let _ = tx.send(bytes);
+                Ok(tx)
+            }));
+
+        let result = actor
+            .handle_action(
+                None,
+                SlirpReq::Register { client_id: 1, stream, sink, notifier: None },
+                &mut ctx,
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(actor.backend_instance.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_send_packet_before_register_returns_error() {
+        let mut actor = SlirpActor::new(Default::default(), None, None).await;
+        let mut ctx = ServiceTestContext;
+
+        let result = actor
+            .handle_action(
+                None,
+                SlirpReq::SendPacket(bytes::Bytes::from_static(b"unregistered_packet")),
+                &mut ctx,
+            )
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    #[cfg(not(feature = "cuttlefish"))]
+    async fn test_valid_http_proxy_registers_successfully() {
+        let mut actor =
+            SlirpActor::new(Default::default(), Some("http://127.0.0.1:8080".to_string()), None)
+                .await;
+        let mut ctx = ServiceTestContext;
+
+        let (tx_out, _rx_out) = mpsc::unbounded_channel::<bytes::Bytes>();
+        let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
+        let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
+        let sink: netsim_model::PacketSink =
+            Box::pin(futures::sink::unfold(tx_out, |tx, bytes| async move {
+                let _ = tx.send(bytes);
+                Ok(tx)
+            }));
+
+        let result = actor
+            .handle_action(
+                None,
+                SlirpReq::Register { client_id: 1, stream, sink, notifier: None },
+                &mut ctx,
+            )
+            .await;
+        assert!(result.is_ok());
+        assert!(actor.backend_instance.is_some());
+
+        // Also verify SendPacket succeeds when backend is active
+        let send_result = actor
+            .handle_action(
+                None,
+                SlirpReq::SendPacket(bytes::Bytes::from_static(b"test_packet")),
+                &mut ctx,
+            )
+            .await;
+        assert!(send_result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_none_http_proxy_registers_successfully() {
+        let mut actor = SlirpActor::new(Default::default(), None, None).await;
+        let mut ctx = ServiceTestContext;
+
+        let (tx_out, _rx_out) = mpsc::unbounded_channel::<bytes::Bytes>();
+        let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
+        let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
+        let sink: netsim_model::PacketSink =
+            Box::pin(futures::sink::unfold(tx_out, |tx, bytes| async move {
+                let _ = tx.send(bytes);
+                Ok(tx)
+            }));
+
+        let result = actor
+            .handle_action(
+                None,
+                SlirpReq::Register { client_id: 1, stream, sink, notifier: None },
+                &mut ctx,
+            )
+            .await;
+        assert!(result.is_ok());
+        assert!(actor.backend_instance.is_some());
     }
 }

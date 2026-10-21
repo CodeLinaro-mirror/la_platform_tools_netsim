@@ -13,7 +13,7 @@ netsim_rust_library(
     edition = "2024",
     enable_integration_test = False,
     deps = [
-        "//next/libslirp-rs",
+        "//next/slirp",
         "@base64",
         "@bytes",
         "@etherparse",
