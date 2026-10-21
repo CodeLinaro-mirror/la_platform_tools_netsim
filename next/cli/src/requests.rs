@@ -1,5 +1,16 @@
 // Copyright 2022 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 use common::util::time_display::TimeDisplay;
 use netsim_proto::{
     common::ChipKind,
@@ -124,6 +135,12 @@ impl Command {
                 Capture::Patch(_) => {
                     return Err(
                         "get_request not implemented for Capture Patch command. Use get_requests instead."
+                            .into(),
+                    );
+                }
+                Capture::Stream(_) => {
+                    return Err(
+                        "Capture::Stream uses WebSocket over the HTTP server and is handled in main.rs."
                             .into(),
                     );
                 }
@@ -532,7 +549,7 @@ mod tests {
             AdvertiseMode, BeaconBleAdvertiseData, BeaconBleScanResponseData, BeaconBleSettings,
             BeaconCreateBle, BeaconCreateUwb, BeaconPatchBle, Command, Devices, Interval, Link,
             LinkCreate, LinkPatch, ListCapture, Move, NetsimArgs, ParsableBytes, Radio, RadioType,
-            TxPower, TxPowerLevel,
+            StreamCapture, TxPower, TxPowerLevel,
         },
         error::Error,
     };
@@ -951,6 +968,42 @@ mod tests {
             Command::Capture(Capture::List(ListCapture { ..Default::default() })),
             GrpcRequest::ListCapture,
         )
+    }
+
+    #[test]
+    fn test_capture_stream_stdout() {
+        let cmd = NetsimArgs::parse_from("netsim-cli capture stream 1".split_whitespace()).command;
+        assert_eq!(
+            cmd,
+            Command::Capture(Capture::Stream(StreamCapture { chip_id: 1, output: None }))
+        );
+        assert!(cmd.get_request().is_err());
+    }
+
+    #[test]
+    fn test_capture_stream_output_file() {
+        let cmd =
+            NetsimArgs::parse_from("netsim-cli pcap stream 2 -o capture.pcap".split_whitespace())
+                .command;
+        assert_eq!(
+            cmd,
+            Command::Capture(Capture::Stream(StreamCapture {
+                chip_id: 2,
+                output: Some(std::path::PathBuf::from("capture.pcap")),
+            }))
+        );
+
+        let cmd_long = NetsimArgs::parse_from(
+            "netsim-cli capture stream 3 --output out.pcap".split_whitespace(),
+        )
+        .command;
+        assert_eq!(
+            cmd_long,
+            Command::Capture(Capture::Stream(StreamCapture {
+                chip_id: 3,
+                output: Some(std::path::PathBuf::from("out.pcap")),
+            }))
+        );
     }
 
     //TODO: Add capture patch and get tests

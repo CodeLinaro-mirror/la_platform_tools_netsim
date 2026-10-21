@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Cellular Modem 3GPP TS 27.010 PCAP Writer
 //!
@@ -81,7 +92,7 @@ impl ModemPcapWriter {
 
     /// Encapsulates an AT command or response into a standard 3GPP TS 27.010
     /// MUX frame.
-    pub(crate) fn frame_gsm0710(direction: Direction, payload: &[u8]) -> Vec<u8> {
+    fn frame_gsm0710(direction: Direction, payload: &[u8]) -> Vec<u8> {
         // In 3GPP TS 27.010 Section 5.2.1.2, C/R bit interpretation depends on role:
         // - Initiator (App) Command: C/R = 1
         // - Responder (Modem) Response: C/R = 1

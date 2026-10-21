@@ -1,5 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -128,7 +139,7 @@ fn test_parse_resolv_conf_standard() {
 # Dynamic resolv.conf file for glibc resolver
 nameserver 8.8.8.8
 nameserver 2001:4860:4860::8888
-search corp.google.com google.com
+search corp.example.com example.com
 options edns0 trust-ad
 "#;
     let servers = parse_resolv_conf_content(resolv_conf);
@@ -189,21 +200,21 @@ nameserver 8.8.8.8
 
 #[test]
 fn test_encode_dns_search_list() {
-    let domains = vec!["corp.google.com".to_string(), "google.com".to_string()];
+    let domains = vec!["corp.example.com".to_string(), "example.com".to_string()];
     let encoded = encode_dns_search_list(&domains);
 
     let mut expected = Vec::new();
-    // "corp.google.com" -> 4 "corp" 6 "google" 3 "com" 0
+    // "corp.example.com" -> 4 "corp" 7 "example" 3 "com" 0
     expected.push(4u8);
     expected.extend_from_slice(b"corp");
-    expected.push(6u8);
-    expected.extend_from_slice(b"google");
+    expected.push(7u8);
+    expected.extend_from_slice(b"example");
     expected.push(3u8);
     expected.extend_from_slice(b"com");
     expected.push(0u8);
-    // "google.com" -> 6 "google" 3 "com" 0
-    expected.push(6u8);
-    expected.extend_from_slice(b"google");
+    // "example.com" -> 7 "example" 3 "com" 0
+    expected.push(7u8);
+    expected.extend_from_slice(b"example");
     expected.push(3u8);
     expected.extend_from_slice(b"com");
     expected.push(0u8);

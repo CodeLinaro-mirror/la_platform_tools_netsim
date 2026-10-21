@@ -1,6 +1,20 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
+use std::time::Duration;
+
+use jiff::{Timestamp, tz::TimeZone};
 use modem_rs::PhoneNumber;
 use netsim_model::RegistrationStatus;
 
@@ -548,6 +562,9 @@ fn test_legacy_sms() {
 #[test]
 fn test_sms_status_report() {
     let mut world = World::new();
+    world.clock.set_zoned(
+        Timestamp::from_second(1_781_551_845).expect("valid timestamp").to_zoned(TimeZone::UTC),
+    );
     given_modem_with_number(&mut world, "A", TEST_PHONE_NUMBER_LONG_B);
     given_modem_with_number(&mut world, "B", TEST_PHONE_NUMBER_LONG_A);
 
@@ -571,7 +588,9 @@ fn test_sms_status_report() {
 
     // B should receive the CMT unsolicited response
     then_wait_for_response_containing(&mut world, "B", "+CMT: ,20");
-    then_wait_for_response_containing(&mut world, "B", "00240B915155255155");
+    then_wait_for_response_containing(&mut world, "B", "00240B915155255155F6000062605191035400");
+
+    world.clock.advance(Duration::from_secs(5));
 
     // B acknowledges delivery via AT+CNMA=1 per 3GPP TS 27.005
     when_at_command_sent(&mut world, "B", "AT+CNMA=1");
@@ -579,7 +598,7 @@ fn test_sms_status_report() {
 
     // A should receive the CDS unsolicited response (Status Report)
     then_wait_for_response_containing(&mut world, "A", "+CDS: 25");
-    then_response_contains(&mut world, "A", "0002010B915155255155F4");
+    then_response_contains(&mut world, "A", "0002010B915155255155F4626051910354006260519103050000");
 }
 
 #[test]
@@ -953,5 +972,78 @@ fn test_receive_sms_suppressed_when_unregistered_or_radio_off() {
     world.then_no_response("A");
 
     when_incoming_pdu_received(&mut world, "A", TEST_SMS_PDU);
+    world.then_no_response("A");
+}
+
+#[test]
+fn test_cell_broadcast_emits_cbm_urc() {
+    let mut world = World::new();
+    world.given_modem("A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
+
+    when_cell_broadcast_received(&mut world, "A", 0x1123, 0x1112, 0x01, "Hello");
+
+    let expected_pdu = concat!(
+        "112311120111",
+        "C8329BFD6E341A8D46A3D168341A8D46A3D168341A8D46A3D168341A8D46A3D1",
+        "68341A8D46A3D168341A8D46A3D168341A8D46A3D168341A8D46A3D168341A8D",
+        "46A3D168341A8D46A3D168341A8D46A3D100"
+    );
+    world.then_response_is("A", "+CBM: 88");
+    world.then_response_is("A", expected_pdu);
+}
+
+#[test]
+fn test_cell_broadcast_cscb_channel_and_dcs_filtering() {
+    let mut world = World::new();
+    world.given_modem("A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
+
+    // Accept only CMAS Presidential Alert (4370 / 0x1112) and range 4372-4375 with DCS 1
+    world.send_and_expect_ok("A", "AT+CSCB=0,\"4370,4372-4375\",\"1\"");
+
+    // Matching MID (0x1112 = 4370) and DCS (0x01) -> emitted
+    when_cell_broadcast_received(&mut world, "A", 0x1123, 0x1112, 0x01, "Hello");
+    world.then_response_is("A", "+CBM: 88");
+    world.then_response_contains("A", "112311120111C8329BFD6E");
+
+    // Non-matching MID (0x1113 = 4371) -> filtered out
+    when_cell_broadcast_received(&mut world, "A", 0x1123, 0x1113, 0x01, "Hello");
+    world.then_no_response("A");
+
+    // Non-matching DCS (0x00) -> filtered out
+    when_cell_broadcast_received(&mut world, "A", 0x1123, 0x1112, 0x00, "Hello");
+    world.then_no_response("A");
+
+    // Discard mode (mode=1) for channel 50 -> discards 50, accepts 4370
+    world.send_and_expect_ok("A", "AT+CSCB=1,\"50\",\"\"");
+    when_cell_broadcast_received(&mut world, "A", 0x1123, 50, 0x01, "Local Info");
+    world.then_no_response("A");
+
+    when_cell_broadcast_received(&mut world, "A", 0x1123, 0x1112, 0x01, "Hello");
+    world.then_response_is("A", "+CBM: 88");
+    world.then_response_contains("A", "112311120111C8329BFD6E");
+
+    // Omitted <mids> and <dcss> parameters per 3GPP TS 27.005 §3.3.4
+    world.send_and_expect_ok("A", "AT+CSCB=0");
+    world.send_and_expect("A", "AT+CSCB?", &["+CSCB: 0,\"\",\"\"", "OK"]);
+
+    world.send_and_expect_ok("A", "AT+CSCB=1");
+    world.send_and_expect("A", "AT+CSCB?", &["+CSCB: 1,\"\",\"\"", "OK"]);
+}
+
+#[test]
+fn test_cell_broadcast_suppressed_when_unregistered_or_radio_off() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    // Unregistered -> suppressed
+    when_cell_broadcast_received(&mut world, "A", 0x1123, 0x1112, 0x01, "Hello");
+    world.then_no_response("A");
+
+    // Registered but CFUN=0 -> suppressed
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
+    world.send_and_expect_ok("A", "AT+CFUN=0");
+    when_cell_broadcast_received(&mut world, "A", 0x1123, 0x1112, 0x01, "Hello");
     world.then_no_response("A");
 }

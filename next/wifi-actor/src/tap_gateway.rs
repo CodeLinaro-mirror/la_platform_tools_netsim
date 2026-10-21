@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::error::WifiError;
 type WifiResult<T> = Result<T, WifiError>;
@@ -72,7 +83,8 @@ impl TapInterface {
             return Err(WifiError::Internal(Box::from("Interface name too long")));
         }
         for (dest, &b) in if_req.ifr_name.iter_mut().zip(bytes) {
-            *dest = b as libc::c_char;
+            // Reinterpret the u8 byte bits as c_char for the FFI boundary.
+            *dest = libc::c_char::from_ne_bytes([b]);
         }
 
         // Set flags
@@ -90,7 +102,7 @@ impl TapInterface {
 
         // SAFETY: `fd` is a valid open file descriptor for /dev/net/tun.
         // `if_req` is a valid libc::ifreq struct on the stack.
-        unsafe { tunsetiff(fd.as_raw_fd(), &if_req) }
+        unsafe { tunsetiff(fd.as_raw_fd(), std::ptr::from_ref(&if_req)) }
             .map_err(|e| WifiError::Internal(Box::from(format!("Failed to TUNSETIFF: {}", e))))?;
 
         // Set non-blocking

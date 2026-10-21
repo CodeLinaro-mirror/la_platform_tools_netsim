@@ -1,12 +1,26 @@
 // Copyright 2022 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Command Line Interface for Netsim
+
+#![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod ap;
 mod args;
 mod ble;
 mod browser;
+mod capture_stream;
 mod cell_helper;
 mod display;
 mod error;
@@ -204,8 +218,14 @@ fn process_result(
         Err(e) => Err(format!("Grpc call error: {e}").into()),
     }
 }
-/// Runs `command` if it is served over the REST API; returns `None` otherwise.
-fn run_rest(command: &args::Command, rest: &NetsimRestClient, verbose: bool) -> Option<Result<()>> {
+/// Runs `command` if it is served over the REST/HTTP API; returns `None`
+/// otherwise.
+fn run_rest(
+    command: &args::Command,
+    rest: &NetsimRestClient,
+    http_server: &str,
+    verbose: bool,
+) -> Option<Result<()>> {
     let result = match command {
         args::Command::Version => rest
             .get_version()
@@ -213,6 +233,9 @@ fn run_rest(command: &args::Command, rest: &NetsimRestClient, verbose: bool) -> 
             .map(|resp| println!("Netsim version: {}", resp.version)),
         args::Command::Link(args::Link::List) => {
             rest.get_links().send_blocking().map(|resp| println!("{}", resp.display(verbose)))
+        }
+        args::Command::Capture(args::Capture::Stream(cmd)) => {
+            return Some(capture_stream::stream_capture(http_server, cmd));
         }
         _ => return None,
     };
@@ -236,11 +259,6 @@ fn main() -> ExitCode {
 fn run(args: NetsimArgs) -> Result<()> {
     let verbose = args.verbose;
     match &args.command {
-        args::Command::Gui => {
-            println!("Opening netsim web UI on default web browser");
-            browser::open("http://localhost:7681/");
-            return Ok(());
-        }
         args::Command::Artifact => {
             let artifact_dir = common::system::netsimd_temp_dir();
             println!("netsim artifact directory: {}", artifact_dir.display());
@@ -257,8 +275,8 @@ fn run(args: NetsimArgs) -> Result<()> {
 
     let instance_num = get_instance(args.instance);
     let http_server = get_http_server_address(instance_num).unwrap_or_default();
-    let rest_client = NetsimRestClient::from_addr(http_server);
-    if let Some(result) = run_rest(&args.command, &rest_client, verbose) {
+    let rest_client = NetsimRestClient::from_addr(http_server.clone());
+    if let Some(result) = run_rest(&args.command, &rest_client, &http_server, verbose) {
         return result;
     }
 

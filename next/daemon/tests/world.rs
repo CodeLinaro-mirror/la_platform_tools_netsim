@@ -1,6 +1,17 @@
 #![allow(clippy::field_reassign_with_default)]
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     path::PathBuf,
@@ -20,11 +31,15 @@ use netsim_proto::{
     common::ChipKind,
     frontend::{CreateDeviceRequest, DeleteChipRequest, DeleteDeviceRequest},
     frontend_grpc::FrontendServiceClient,
+    hci_packet::hcipacket::PacketType,
     model::{ChipCreate, DeviceCreate},
     nfc_service_grpc::NfcServiceClient,
+    packet_streamer::PacketRequest,
     packet_streamer_grpc::PacketStreamerClient,
     protobuf::{EnumOrUnknown, MessageField},
+    startup::{Chip as StartupChip, ChipInfo, DeviceInfo},
 };
+use tokio::time::timeout;
 
 // Share a single gRPC Environment across all server instances within the same
 // process (namely during parallel test execution) to prevent Abseil lock
@@ -69,24 +84,22 @@ impl World {
         Self::new_with_args(args).await
     }
 
-    pub async fn new_with_args(mut args: daemon::Args) -> Self {
+    pub async fn new_with_args(args: daemon::Args) -> Self {
+        let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
+        std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+        Self::new_with_args_in_dir(temp_dir, args).await
+    }
+
+    /// Given a running Netsim Daemon started in an existing discovery
+    /// directory, which lets scenarios pre-seed `netsim.ini` and its locks.
+    pub async fn new_with_args_in_dir(temp_dir: PathBuf, args: daemon::Args) -> Self {
         static LOG_INIT: std::sync::Once = std::sync::Once::new();
         LOG_INIT.call_once(common::util::netsim_logger::init_for_test);
 
-        if args.hci_port.is_none() {
-            args.hci_port = Some(0); // Let the OS assign a random available
-            // port
-        }
-        #[cfg(feature = "cuttlefish")]
-        if args.test_port.is_none() {
-            args.test_port = Some(0);
-        }
-        let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
-        std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
-
-        let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), args)
-            .await
-            .expect("Failed to create daemon");
+        let startup_mode =
+            NetsimDaemon::new_with_dirs(temp_dir.clone(), Self::with_test_ports(args))
+                .await
+                .expect("Failed to create daemon");
 
         let (daemon, ini_guard) = match startup_mode {
             StartUpMode::Owner(daemon, ini_guard) => (daemon, ini_guard),
@@ -127,6 +140,44 @@ impl World {
 
     pub fn get_temp_dir(&self) -> &std::path::Path {
         &self._temp_dir
+    }
+
+    /// Lets the OS assign random available ports unless a scenario set them.
+    fn with_test_ports(mut args: daemon::Args) -> daemon::Args {
+        if args.hci_port.is_none() {
+            args.hci_port = Some(0);
+        }
+        #[cfg(feature = "cuttlefish")]
+        if args.test_port.is_none() {
+            args.test_port = Some(0);
+        }
+        args
+    }
+
+    /// When another netsimd starts in this World's discovery directory
+    pub async fn when_start_daemon_in_same_dir(&mut self, args: daemon::Args) -> StartUpMode {
+        NetsimDaemon::new_with_dirs(self._temp_dir.clone(), Self::with_test_ports(args))
+            .await
+            .expect("Failed to start another daemon")
+    }
+
+    /// Then netsim.ini advertises `grpc_port` and netsim.ini.lock is still held
+    pub fn then_discovery_file_advertises_port(&self, grpc_port: u16) {
+        let ini_file = daemon::IniFile::new_for_dir(self._temp_dir.clone(), 1).unwrap();
+        match ini_file.try_acquire() {
+            Ok(daemon::IniFileAccess::Reader(config)) => assert_eq!(config.grpc_port, grpc_port),
+            other => panic!("Expected Reader({grpc_port}), got {other:?}"),
+        }
+    }
+
+    /// Then netsim.ini is gone and netsim.ini.lock can be acquired again
+    pub fn then_discovery_files_released(&self) {
+        assert!(!self._temp_dir.join("netsim.ini").exists(), "netsim.ini was not removed");
+        let ini_file = daemon::IniFile::new_for_dir(self._temp_dir.clone(), 1).unwrap();
+        assert!(
+            matches!(ini_file.try_acquire(), Ok(daemon::IniFileAccess::Writer(_))),
+            "netsim.ini.lock was not released"
+        );
     }
 
     /// When I request the version
@@ -255,16 +306,17 @@ impl World {
             .expect("RPC failed");
     }
 
-    /// Start the daemon in the background (World owns the logical flow, usually
-    /// we spawn daemon in a thread or task) Note: In these tests, we often
-    /// spawn the daemon task.
+    /// Start the daemon in the background, handing it the discovery lock so
+    /// that, as in `daemon::run`, `netsim.ini.lock` is released when
+    /// `run_daemon` returns.
     pub async fn when_spawn_daemon(&mut self) {
         if self.daemon_task.is_some() {
             panic!("Daemon already spawned");
         }
         if let Some(daemon) = self.daemon.take() {
+            let ini_guard = self._ini_guard.take().expect("Discovery lock already handed over");
             let task = tokio::spawn(async move {
-                let _ = daemon.run_daemon().await;
+                let _ = daemon.run_daemon(ini_guard).await;
             });
             self.daemon_task = Some(task);
         } else {
@@ -741,8 +793,6 @@ impl World {
     }
 
     pub async fn when_send_packet_initial_info(&mut self, chip_name: &str) {
-        let sender = self.packet_sender.as_mut().expect("No packet sender");
-        let mut initial_req = netsim_proto::packet_streamer::PacketRequest::new();
         let mut chip_info = netsim_proto::startup::ChipInfo::new();
         chip_info.name = chip_name.to_string();
 
@@ -751,12 +801,7 @@ impl World {
         chip.address = "11:22:33:44:55:66".to_string();
         chip_info.chip = netsim_proto::protobuf::MessageField::some(chip);
 
-        initial_req.set_initial_info(chip_info);
-
-        sender
-            .send((initial_req, grpcio::WriteFlags::default()))
-            .await
-            .expect("Failed to send InitialInfo");
+        self.send_initial_info(chip_info).await;
     }
 
     pub async fn when_send_hci_packet(
@@ -786,5 +831,40 @@ impl World {
     pub async fn then_packet_stream_receives(&mut self) {
         let receiver = self.packet_receiver.as_mut().expect("No packet receiver");
         let _ = receiver.next().await;
+    }
+
+    /// Sends InitialInfo for a Bluetooth chip with `loopback` set.
+    pub async fn when_send_loopback_initial_info(&mut self, device_name: &str) {
+        let mut chip = StartupChip::new();
+        chip.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
+        chip.loopback = true;
+        let mut device_info = DeviceInfo::new();
+        device_info.name = device_name.to_string();
+        let mut chip_info = ChipInfo::new();
+        chip_info.chip = MessageField::some(chip);
+        chip_info.device_info = MessageField::some(device_info);
+        self.send_initial_info(chip_info).await;
+    }
+
+    async fn send_initial_info(&mut self, chip_info: ChipInfo) {
+        let sender = self.packet_sender.as_mut().expect("No packet sender");
+        let mut initial_req = PacketRequest::new();
+        initial_req.set_initial_info(chip_info);
+        sender
+            .send((initial_req, grpcio::WriteFlags::default()))
+            .await
+            .expect("Failed to send InitialInfo");
+    }
+
+    pub async fn then_packet_stream_receives_hci(&mut self, packet_type: PacketType, data: &[u8]) {
+        let receiver = self.packet_receiver.as_mut().expect("No packet receiver");
+        let response = timeout(Duration::from_secs(5), receiver.next())
+            .await
+            .expect("Timed out waiting for a packet")
+            .expect("Stream ended")
+            .expect("Stream error");
+        let hci = response.hci_packet();
+        assert_eq!(hci.packet_type.enum_value_or_default(), packet_type);
+        assert_eq!(hci.packet, data);
     }
 }

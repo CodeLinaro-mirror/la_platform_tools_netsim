@@ -22,7 +22,6 @@ package {
 }
 
 // Added automatically by a large-scale-change
-// See: http://go/android-license-faq
 license {
     name: "tools_netsim_license",
     visibility: [":__subpackages__"],

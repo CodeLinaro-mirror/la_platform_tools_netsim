@@ -23,7 +23,7 @@ If you are developing on a gLinux machine (desktop or Cloudtop), you can use the
 
 #### One-time Setup (if not yet installed)
 
-To install and configure the Cuttlefish TAP pool on your host machine, please follow the canonical guide at **[go/cuttlefish-glinux](http://go/cuttlefish-glinux)** to install `cuttlefish-common`, add your user to the required groups, and reboot your host machine.
+To install and configure the Cuttlefish TAP pool on your host machine, please follow the canonical guide at **[Cuttlefish Get Started](https://source.android.com/docs/devices/cuttlefish/get-started)** to install `cuttlefish-common`, add your user to the required groups, and reboot your host machine.
 
 #### Verification and Activation
 
@@ -36,7 +36,7 @@ ip link show | grep cvd-etap
 ```
 *Expected Output:* You should see a list of interfaces like `cvd-etap-01` through `cvd-etap-10`.
 
-*(Note: If the interfaces are not visible or are DOWN, ensure you have completed the setup in [go/cuttlefish-glinux](http://go/cuttlefish-glinux) and rebooted your host machine.)*
+*(Note: If the interfaces are not visible or are DOWN, ensure you have completed the setup in [Cuttlefish Get Started](https://source.android.com/docs/devices/cuttlefish/get-started) and rebooted your host machine.)*
 
 `netsimd` will automatically use the sub-range `cvd-etap-06` to `cvd-etap-10` to avoid conflicts with active Cuttlefish instances.
 

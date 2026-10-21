@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::world::World;
 
@@ -94,7 +105,8 @@ fn assert_no_trailing_response(handler: &mut modem_rs::test_utils::MockModemHand
     for trailing in handler.get_buffer() {
         if is_unsolicited_response(trailing) {
             let s = String::from_utf8_lossy(trailing);
-            prev_was_sms_urc_header = s.starts_with("+CMT:") || s.starts_with("+CDS:");
+            prev_was_sms_urc_header =
+                s.starts_with("+CMT:") || s.starts_with("+CDS:") || s.starts_with("+CBM:");
             continue;
         }
         if prev_was_sms_urc_header {
@@ -123,6 +135,7 @@ pub(crate) fn is_unsolicited_response(response: &[u8]) -> bool {
     s.starts_with("+CMT:")
         || s.starts_with("+CMTI:")
         || s.starts_with("+CDS:")
+        || s.starts_with("+CBM:")
         || s.starts_with("+CUSATP:")
         || s.starts_with("RING")
         || s.starts_with("BUSY")

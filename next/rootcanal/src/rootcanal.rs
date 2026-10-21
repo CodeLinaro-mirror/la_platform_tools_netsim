@@ -1,5 +1,16 @@
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This module defines common Bluetooth data types, such as addresses.
 
@@ -125,7 +136,7 @@ extern "C" fn rootcanal_log_callback(
 ///
 /// This routes rootcanal logs through active tracing subscribers and test
 /// writers, preventing direct stdout/stderr pollution.
-pub(crate) fn init_rootcanal_logging() {
+fn init_rootcanal_logging() {
     static INIT: std::sync::Once = std::sync::Once::new();
     INIT.call_once(|| {
         // SAFETY: `ffi_set_log_callback` registers a static extern "C" function
@@ -249,7 +260,8 @@ impl Rootcanal {
     }
 
     /// Returns a vector of the current controller IDs.
-    pub fn get_controller_ids(&self) -> Vec<ControllerId> {
+    #[cfg(test)]
+    fn get_controller_ids(&self) -> Vec<ControllerId> {
         let mut keys: Vec<ControllerId> = self.controllers.lock().keys().copied().collect();
         keys.sort();
         keys

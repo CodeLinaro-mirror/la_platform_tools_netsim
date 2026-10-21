@@ -1,5 +1,16 @@
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //=============================================================================
 // src/transport/mod.rs - Transport abstraction layer
 //=============================================================================
@@ -101,7 +112,7 @@ impl CrossPlatformListener {
             {
                 let volume_socket = PathBuf::from("/shared/sockets/packetstream.sock");
                 if volume_socket.parent().is_some_and(|p| p.exists())
-                    && let Ok(listener) = unix::UnixSocketListener::bind(&volume_socket).await
+                    && let Ok(listener) = unix::UnixSocketListener::bind(&volume_socket)
                 {
                     return Ok(CrossPlatformListener::Unix(listener));
                 }
@@ -112,7 +123,7 @@ impl CrossPlatformListener {
             #[cfg(unix)]
             {
                 let host_socket = PathBuf::from("/tmp/packetstream-host.sock");
-                if let Ok(listener) = unix::UnixSocketListener::bind(&host_socket).await {
+                if let Ok(listener) = unix::UnixSocketListener::bind(&host_socket) {
                     return Ok(CrossPlatformListener::Unix(listener));
                 }
             }
@@ -122,12 +133,13 @@ impl CrossPlatformListener {
         Ok(CrossPlatformListener::Tcp(tokio::net::TcpListener::bind(addr).await?))
     }
 
+    #[cfg_attr(unix, allow(clippy::unused_async))]
     async fn bind_auto() -> Result<Self> {
         #[cfg(unix)]
         {
             let socket_path =
                 std::env::temp_dir().join(format!("packetstream_{}.sock", std::process::id()));
-            let listener = unix::UnixSocketListener::bind(&socket_path).await?;
+            let listener = unix::UnixSocketListener::bind(&socket_path)?;
             Ok(CrossPlatformListener::Unix(listener))
         }
 
@@ -136,7 +148,7 @@ impl CrossPlatformListener {
             let pipe_name = "packetstream";
             let fallback_addr: std::net::SocketAddr =
                 "localhost:0".parse().map_err(SocketError::from)?;
-            match windows::WindowsListener::bind_named_pipe(pipe_name).await {
+            match windows::WindowsListener::bind_named_pipe(pipe_name) {
                 Ok(listener) => Ok(CrossPlatformListener::Windows(listener)),
                 Err(err) => {
                     warn!("Failed to create named pipe, falling back to tcp: {err}");
@@ -158,7 +170,7 @@ impl CrossPlatformListener {
         match socket_type {
             #[cfg(unix)]
             SocketType::Unix(path) => {
-                let listener = unix::UnixSocketListener::bind(path).await?;
+                let listener = unix::UnixSocketListener::bind(path)?;
                 Ok(CrossPlatformListener::Unix(listener))
             }
             #[cfg(not(unix))]
@@ -169,7 +181,7 @@ impl CrossPlatformListener {
             }
             #[cfg(windows)]
             SocketType::NamedPipe(name) => {
-                let listener = windows::WindowsListener::bind_named_pipe(&name).await?;
+                let listener = windows::WindowsListener::bind_named_pipe(&name)?;
                 Ok(CrossPlatformListener::Windows(listener))
             }
             #[cfg(not(windows))]

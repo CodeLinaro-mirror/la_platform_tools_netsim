@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use netsim_model::{ChipClient, NetsimRadioStats};
 use netsim_proto::{protobuf::Message, stats::UwbApiStats};
@@ -16,16 +27,48 @@ async fn test_read_statistics() {
     let chip_id = 1;
     world.given_a_chip(chip_id).await;
 
+    // Drain initial DeviceStatusNtf(DeviceStateReady) emitted upon connect
+    world.then_status_notification_is_received(chip_id, uci::DeviceState::DeviceStateReady).await;
+
     // When: client reads statistics
     let stats = world.client.read_statistics().await.expect("Failed to read statistics");
 
-    // Then: stats contain the chip with zero counts
+    // Then: stats contain the chip with zero tx and 1 initial connect notification rx
     let mut expected_stat = NetsimRadioStats::default();
     expected_stat.name = format!("uwb_chip_{}", chip_id);
     expected_stat.id = chip_id;
     expected_stat.kind = netsim_model::RadioKind::Uwb;
+    expected_stat.rx_count = 1;
     let expected_stats = [expected_stat];
     assert_eq!(&*stats, &expected_stats[..]);
+}
+
+#[tokio::test]
+async fn test_packet_counters_increment() {
+    let mut world = World::new().await;
+    let chip_id = 1;
+    world.given_a_chip(chip_id).await;
+
+    // Drain initial DeviceStatusNtf(DeviceStateReady) emitted upon connect
+    world.then_status_notification_is_received(chip_id, uci::DeviceState::DeviceStateReady).await;
+
+    // After connect notification, tx_count is 0 and rx_count is 1
+    let stats = world.client.read_statistics().await.expect("Failed to read statistics");
+    assert_eq!(stats[0].tx_count, 0);
+    assert_eq!(stats[0].rx_count, 1);
+
+    // Send a reset command (1 TX packet from host)
+    let reset_cmd = uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
+    world.when_packet_is_sent(chip_id, &reset_cmd.encode_to_vec().unwrap()).await;
+
+    // Receive RSP and NTF (2 RX packets to host)
+    let _ = world.then_packet_is_received(chip_id).await;
+    let _ = world.then_packet_is_received(chip_id).await;
+
+    // Verify tx_count is 1 and rx_count is 3 (1 initial ready notification + 2 reset packets)
+    let stats = world.client.read_statistics().await.expect("Failed to read statistics");
+    assert_eq!(stats[0].tx_count, 1);
+    assert_eq!(stats[0].rx_count, 3);
 }
 
 #[tokio::test]

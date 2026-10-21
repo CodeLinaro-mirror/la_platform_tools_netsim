@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // src/time.rs
 
@@ -44,16 +55,15 @@ impl Clock for SystemClock {
 pub struct MockClock {
     base: Instant,
     offset_nanos: Arc<AtomicU64>,
-    zoned: Arc<RwLock<Option<Zoned>>>,
+    zoned: Arc<RwLock<(Zoned, u64)>>,
 }
 
 impl Default for MockClock {
     fn default() -> Self {
         Self {
-            // Start the mock clock at a fixed, known time.
             base: Instant::now(),
             offset_nanos: Arc::new(AtomicU64::new(0)),
-            zoned: Arc::new(RwLock::new(None)),
+            zoned: Arc::new(RwLock::new((Zoned::now(), 0))),
         }
     }
 }
@@ -64,7 +74,8 @@ impl MockClock {
     }
 
     pub fn set_zoned(&self, zoned: Zoned) {
-        *self.zoned.write() = Some(zoned);
+        let current_offset = self.offset_nanos.load(Ordering::Relaxed);
+        *self.zoned.write() = (zoned, current_offset);
     }
 }
 
@@ -74,7 +85,10 @@ impl Clock for MockClock {
     }
 
     fn now_zoned(&self) -> Zoned {
-        if let Some(ref z) = *self.zoned.read() { z.clone() } else { Zoned::now() }
+        let current_offset = self.offset_nanos.load(Ordering::Relaxed);
+        let (base, base_offset) = self.zoned.read().clone();
+        let delta = Duration::from_nanos(current_offset.saturating_sub(base_offset));
+        base.checked_add(delta).unwrap_or(base)
     }
 
     fn clone_box(&self) -> Arc<dyn Clock> {

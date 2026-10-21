@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::sync::{
     Arc,
@@ -33,33 +44,34 @@ use crate::{
 /// to allow shared access.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct InternalCaptureInfo {
-    pub info: CaptureInfo,
+    pub(crate) info: CaptureInfo,
     /// Flag to be updated when capture status changes.
     /// This is used by the stream wrappers to check if capture is enabled
     /// without locking the actor.
     #[serde(skip)]
-    pub enabled_flag: Arc<AtomicBool>,
+    enabled_flag: Arc<AtomicBool>,
     /// Used to determine whether further error logs while writing captures
     /// should be suppressed.
     #[serde(skip)]
-    pub has_warned_on_write: bool,
+    pub(crate) has_warned_on_write: bool,
     #[serde(skip)]
-    pub sender: Option<
+    sender: Option<
         mpsc::UnboundedSender<(std::time::SystemTime, capture_api::Direction, bytes::Bytes)>,
     >,
+}
+
+fn current_epoch_timestamp() -> (i64, i32) {
+    let d = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    (
+        i64::try_from(d.as_secs()).unwrap_or(i64::MAX),
+        i32::try_from(d.subsec_nanos()).expect("subsec_nanos is always < 1_000_000_000"),
+    )
 }
 
 impl InternalCaptureInfo {
     fn from_create_params(id: ChipId, params: CaptureCreate) -> Result<Self, CaptureError> {
         let enabled = params.enabled_flag.load(Ordering::SeqCst);
-        let (seconds, nanos) = if enabled {
-            let d = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default();
-            (d.as_secs() as i64, d.subsec_nanos() as i32)
-        } else {
-            (0, 0)
-        };
+        let (seconds, nanos) = if enabled { current_epoch_timestamp() } else { (0, 0) };
         Ok(Self {
             info: CaptureInfo {
                 chip_id: id,
@@ -100,7 +112,7 @@ impl CaptureActor {
         }
     }
 
-    pub(crate) async fn create_entity(
+    async fn create_entity(
         &mut self,
         entity: &mut InternalCaptureInfo,
         ctx: &mut DynContext<Self>,
@@ -117,7 +129,7 @@ impl CaptureActor {
         Ok(())
     }
 
-    pub(crate) async fn update_entity(
+    async fn update_entity(
         &mut self,
         entity: &mut InternalCaptureInfo,
         enabled: bool,
@@ -131,11 +143,7 @@ impl CaptureActor {
 
         if entity.info.enabled {
             if state_changed || (entity.info.seconds == 0 && entity.info.nanos == 0) {
-                let d = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default();
-                entity.info.seconds = d.as_secs() as i64;
-                entity.info.nanos = d.subsec_nanos() as i32;
+                (entity.info.seconds, entity.info.nanos) = current_epoch_timestamp();
             }
             // If enabling, create a writer if one does not exist.
             if !self.writers.contains_key(&entity.info.chip_id) {
@@ -153,7 +161,7 @@ impl CaptureActor {
         Ok(())
     }
 
-    pub(crate) async fn delete_entity(
+    async fn delete_entity(
         &mut self,
         entity: &InternalCaptureInfo,
         _ctx: &mut DynContext<Self>,
@@ -196,7 +204,7 @@ impl CaptureActor {
         Ok(writer)
     }
 
-    pub(crate) async fn list_entities(&self) -> Vec<CaptureInfo> {
+    fn list_entities(&self) -> Vec<CaptureInfo> {
         let mut infos = Vec::new();
         for e in self.entities.values() {
             let (records_written, bytes_written) =
@@ -361,6 +369,6 @@ impl ActorService for CaptureActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(self.list_entities().await)
+        Ok(self.list_entities())
     }
 }
