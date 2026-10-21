@@ -23,14 +23,6 @@ impl args::Command {
         verbose: bool,
     ) -> crate::error::Result<()> {
         match self {
-            Command::Version => {
-                let GrpcResponse::GetVersion(res) = response else {
-                    return Err(
-                        format!("Expected to print VersionResponse. Got: {response:?}").into()
-                    );
-                };
-                Self::print_version_response(res);
-            }
             Command::Radio(cmd) => {
                 if verbose {
                     println!(
@@ -201,13 +193,7 @@ impl args::Command {
                     }
                 }
                 Link::List => {
-                    let GrpcResponse::ListLink(res) = response else {
-                        return Err(format!(
-                            "Expected to print ListLinkResponse. Got: {response:?}"
-                        )
-                        .into());
-                    };
-                    println!("{}", Displayer::new(res, verbose));
+                    unimplemented!("Link::List uses the REST API and is handled in main.rs.")
                 }
                 Link::Patch(args) => {
                     if let Some(rssi) = args.rssi
@@ -274,10 +260,6 @@ impl args::Command {
             OnOffState::On => "on".to_string(),
             OnOffState::Off => "off".to_string(),
         }
-    }
-
-    fn print_version_response(response: &frontend::VersionResponse) {
-        println!("Netsim version: {}", response.version);
     }
 
     fn print_list_capture_response(

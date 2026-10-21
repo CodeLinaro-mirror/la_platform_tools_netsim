@@ -9,6 +9,7 @@ use std::{
 };
 
 use common::util::ini_file::{IniParserOptions, parse_ini};
+use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 // This struct matches the top-level configuration.
@@ -37,7 +38,7 @@ impl NetsimConfig {
     }
 }
 
-// Lists all AVD .ini files in the directory.
+// Lists all AVD .ini files or .avd directories in the directory.
 fn list_avd_ini_files(avd_root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     let mut ini_files = Vec::new();
     if !avd_root.exists() {
@@ -51,9 +52,29 @@ fn list_avd_ini_files(avd_root: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
             && extension == "ini"
         {
             ini_files.push(path);
+        } else if path.is_dir()
+            && (path.extension().and_then(|ext| ext.to_str()) == Some("avd")
+                || path.join("netsim.ini").exists())
+        {
+            ini_files.push(path);
         }
     }
     Ok(ini_files)
+}
+
+/// Validates that a Bluetooth MAC address consists of 6 two-digit hex octets
+/// separated by colons or hyphens (e.g. "00:11:22:33:44:55" or "00-11-22-33-44-55").
+pub fn is_valid_mac_address(addr: &str) -> bool {
+    let separator = if addr.contains(':') {
+        ':'
+    } else if addr.contains('-') {
+        '-'
+    } else {
+        return false;
+    };
+    let parts: Vec<&str> = addr.split(separator).collect();
+    parts.len() == 6
+        && parts.iter().all(|part| part.len() == 2 && part.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
 // Helper function to read the AVD .ini file and extract the 'path' value.
@@ -69,30 +90,16 @@ fn get_path_from_avd_ini(ini_content: &str) -> Result<PathBuf, String> {
     Err("Could not find the 'path=' key in the AVD .ini file.".to_string())
 }
 
-// Reads the AVD-specific .ini file and returns the AVD's data directory path.
-pub fn get_avd_data_path(avd_ini_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
-    if !avd_ini_path.exists() {
-        return Err(format!("AVD pointer file not found: {}", avd_ini_path.display()).into());
+// Reads the AVD-specific .ini file or directory and returns the AVD's data directory path.
+pub fn get_avd_data_path(avd_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
+    if !avd_path.exists() {
+        return Err(format!("AVD path not found: {}", avd_path.display()).into());
     }
-    let content = fs::read_to_string(avd_ini_path)?;
+    if avd_path.is_dir() {
+        return Ok(avd_path.to_path_buf());
+    }
+    let content = fs::read_to_string(avd_path)?;
     let avd_dir_path = get_path_from_avd_ini(&content)?;
-
-    // In next, we might be running in a sandbox or different env, but assuming fs
-    // access is allowed as per user request. Also, handle relative paths in AVD
-    // ini? Usually they are absolute or relative to ~/.android/avd/
-    // get_path_from_avd_ini returns PathBuf. If it is relative, it is relative to
-    // what? The emulator usually handles this. Here we assume it is usable as
-    // is or we might need to resolve it. For now we assume typical absolute
-    // paths or relative to CWD if any (unlikely for AVDs). Actually, AVD path
-    // in ini is usually absolute.
-
-    if !avd_dir_path.is_dir() {
-        // Warning: creating directories in user's home/AVD folder.
-        // Legacy code did this:
-        // fs::create_dir_all(&avd_dir_path)?;
-        // info!("Created missing AVD data directory: {}",
-        // avd_dir_path.display()); We will keep it but log.
-    }
     Ok(avd_dir_path)
 }
 
@@ -155,6 +162,7 @@ fn generate_next_mac(used_addresses: &HashSet<String>) -> Result<String, Box<dyn
         let b2 = (i >> 8) & 0xFF;
         let b3 = i & 0xFF;
         let mac = format!("BB:BB:BB:{:02X}:{:02X}:{:02X}", b1, b2, b3);
+        debug_assert!(is_valid_mac_address(&mac), "Generated MAC must be valid: {mac}");
         if !used_addresses.contains(&mac) {
             return Ok(mac);
         }
@@ -172,6 +180,7 @@ pub fn get_or_create_bluetooth_mac(avd_ini_path: &str) -> Result<String, Box<dyn
         Ok(config) => {
             if let Some(address) = config.bluetooth_address
                 && !address.is_empty()
+                && is_valid_mac_address(&address)
             {
                 return Ok(address);
             }
@@ -204,6 +213,9 @@ pub fn set_bluetooth_mac(avd_path: &str, address: &str) -> Result<(), Box<dyn Er
     let avd_ini_path = PathBuf::from(avd_path);
     let mut config = read_netsim_config_for_avd(&avd_ini_path).unwrap_or_default();
     if !address.is_empty() {
+        if !is_valid_mac_address(address) {
+            return Err(format!("Invalid Bluetooth MAC address: '{address}'").into());
+        }
         config.bluetooth_address = Some(address.to_string());
     } else {
         config.bluetooth_address = None;
@@ -213,29 +225,45 @@ pub fn set_bluetooth_mac(avd_path: &str, address: &str) -> Result<(), Box<dyn Er
     Ok(())
 }
 
-/// Resolves or persists the Bluetooth MAC address.
+static AVD_CONFIG_LOCK: Mutex<()> = Mutex::const_new(());
+
+/// Resolves or persists the Bluetooth MAC address asynchronously.
 ///
-/// Strategy:
-/// 1. If provided (from ChipInfo), persist it to `netsim.ini`.
-/// 2. If not provided, retrieve/create it from `netsim.ini` using the AVD path.
-///
-/// Returns the resolved address.
-pub fn resolve_bluetooth_mac(avd_path: &str, provided_address: &str) -> String {
-    if provided_address.is_empty() {
-        match get_or_create_bluetooth_mac(avd_path) {
-            Ok(addr) => {
-                info!("Assigned persistent MAC {} to AVD {}", addr, avd_path);
-                addr
+/// Serializes concurrent calls across async connection streams using an async
+/// mutex, and offloads blocking filesystem directory scans and writes
+/// to Tokio's blocking thread pool (`spawn_blocking`).
+pub async fn resolve_bluetooth_mac(avd_path: &str, provided_address: &str) -> String {
+    let guard = AVD_CONFIG_LOCK.lock().await;
+    let avd_path = avd_path.to_string();
+    let address = provided_address.to_string();
+    tokio::task::spawn_blocking(move || {
+        let _guard = guard;
+        if address.is_empty() {
+            match get_or_create_bluetooth_mac(&avd_path) {
+                Ok(addr) => {
+                    info!("Assigned persistent MAC {addr} to AVD {avd_path}");
+                    addr
+                }
+                Err(e) => {
+                    warn!("Failed to get/create MAC for {avd_path}: {e}");
+                    String::new()
+                }
             }
-            Err(e) => {
-                warn!("Failed to get/create MAC for {}: {}", avd_path, e);
-                String::new()
+        } else {
+            if !is_valid_mac_address(&address) {
+                warn!("Refusing to persist invalid MAC address '{address}' for AVD {avd_path}");
+                return String::new();
             }
+            if let Err(e) = set_bluetooth_mac(&avd_path, &address) {
+                warn!("Failed to persist MAC {address} for AVD {avd_path}: {e}");
+                return String::new();
+            }
+            address
         }
-    } else {
-        if let Err(e) = set_bluetooth_mac(avd_path, provided_address) {
-            warn!("Failed to persist MAC {} for AVD {}: {}", provided_address, avd_path, e);
-        }
-        provided_address.to_string()
-    }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        warn!("Failed to join spawn_blocking for resolve_bluetooth_mac: {e}");
+        String::new()
+    })
 }

@@ -100,6 +100,18 @@ impl Ipv6Header {
     pub fn header_length(&self) -> usize {
         40
     }
+
+    /// Creates a new Ipv6Header with default values for version, tc, fl, and hop_limit.
+    pub fn new(source_addr: [u8; 16], dest_addr: [u8; 16], next_header: u8) -> Self {
+        Self {
+            version_tc_fl: U32::new(0x6000_0000), // Version 6
+            payload_length: U16::new(0),
+            next_header,
+            hop_limit: 64,
+            source_addr,
+            dest_addr,
+        }
+    }
 }
 
 /// Represents the IPv6 Hop-by-Hop Options extension header.

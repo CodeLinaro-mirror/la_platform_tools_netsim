@@ -40,7 +40,7 @@ fn test_two_modem_end_to_end_scenario() {
     then_response_is(&mut world, "A", "OK");
 
     when_at_command_sent(&mut world, "A", "AT+COPS?");
-    then_response_is(&mut world, "A", "+COPS: 0");
+    then_response_is(&mut world, "A", "+COPS: 0,2,\"310260\"");
     then_response_is(&mut world, "A", "OK");
 
     // Make Call
@@ -60,8 +60,8 @@ fn test_two_modem_end_to_end_scenario() {
     when_at_command_sent(&mut world, "A", "ATH");
     then_response_is(&mut world, "A", "OK");
 
-    // B receives RING asynchronously
-    then_wait_for_response_containing(&mut world, "B", "RING");
+    // B receives hangup URC asynchronously
+    then_wait_for_response_containing(&mut world, "B", "NO CARRIER");
 
     // Verify Idle
     when_at_command_sent(&mut world, "A", "AT+CLCC");

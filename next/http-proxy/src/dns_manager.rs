@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, net::IpAddr};
 
-use etherparse::{PacketHeaders, PayloadSlice, TransportHeader};
+use netsim_packets::{Packet, TransportPacket, parse};
 use parking_lot::Mutex;
 use tracing::debug;
 
@@ -38,13 +38,12 @@ impl DnsManager {
     }
 
     /// Add potential DNS entries to the cache.
-    pub fn add_from_packet_headers(&self, headers: &PacketHeaders) {
+    pub fn add_from_packet(&self, packet: &Packet) {
         // Check if the packet contains a UDP header
         // with source port from DNS server
         // and DNS answers with A/AAAA records
-        if let Some(TransportHeader::Udp(udp_header)) = &headers.transport
-            && udp_header.source_port == Self::DNS_PORT
-            && let PayloadSlice::Udp(payload) = headers.payload
+        if let Some(TransportPacket::Udp(udp_header, payload)) = &packet.transport
+            && udp_header.source_port.get() == Self::DNS_PORT
         {
             // Add any A/AAAA domain names
             if let Ok(answers) = dns::parse_answers(payload) {
@@ -58,8 +57,8 @@ impl DnsManager {
 
     /// Adds potential DNS entries from an Ethernet slice.
     pub fn add_from_ethernet_slice(&self, packet: &[u8]) {
-        if let Ok(headers) = PacketHeaders::from_ethernet_slice(packet) {
-            self.add_from_packet_headers(&headers);
+        if let Some(parsed_packet) = parse(packet) {
+            self.add_from_packet(&parsed_packet);
         }
     }
 

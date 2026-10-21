@@ -86,6 +86,10 @@ pub struct Args {
     #[arg(long, alias = "grpc_uds_path")]
     pub grpc_uds_path: Option<String>,
 
+    /// HTTP port serving the /v1 API. Overrides env var NETSIM_HTTP_PORT
+    #[arg(long, alias = "http_port")]
+    pub http_port: Option<u16>,
+
     /// HCI port for the raw TCP socket. Overrides env var NETSIM_HCI_PORT
     #[arg(long, alias = "hci_port")]
     pub hci_port: Option<u16>,

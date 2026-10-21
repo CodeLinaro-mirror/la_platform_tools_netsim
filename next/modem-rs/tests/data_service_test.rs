@@ -1,12 +1,14 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+use netsim_model::RegistrationStatus;
+
 use crate::{common::constants::*, steps::*, world::World};
 
 #[test]
 fn test_set_and_query_quality_of_service() {
     let mut world = World::new();
-    world.given_modem("A");
+    given_data_modem(&mut world, "A");
 
     world.send_and_expect_ok(
         "A",
@@ -31,7 +33,7 @@ fn test_set_and_query_quality_of_service() {
 #[test]
 fn test_set_pdp_context_activate() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     when_at_command_sent(
         &mut world,
@@ -51,7 +53,7 @@ fn test_set_pdp_context_activate() {
 #[test]
 fn test_update_physical_channel_configs() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     when_physical_channel_configs_updated(&mut world, "A");
     then_response_is(&mut world, "A", &format!("+CGEV: NW PDN DEACT {TEST_PDP_CID}"));
@@ -124,7 +126,7 @@ fn test_read_dynamic_param_goldfish_37() {
 #[test]
 fn test_query_pdp_context() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     when_at_command_sent(&mut world, "A", "AT+CGDCONT?");
     then_response_is(&mut world, "A", "OK");
@@ -141,7 +143,7 @@ fn test_query_pdp_context() {
 #[test]
 fn test_set_ps_attach() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     when_at_command_sent(&mut world, "A", "AT+CGATT=1");
     then_response_is(&mut world, "A", "OK");
@@ -155,7 +157,7 @@ fn test_set_ps_attach() {
 #[test]
 fn test_set_pdp_context_modify() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     when_at_command_sent(
         &mut world,
@@ -176,7 +178,7 @@ fn test_set_pdp_context_modify() {
 #[test]
 fn test_enter_data_state() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     when_at_command_sent(
         &mut world,
@@ -213,7 +215,7 @@ fn test_enter_data_state() {
 #[test]
 fn test_set_packet_event_reporting() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     when_at_command_sent(&mut world, "A", "AT+CGEREP=1,1");
     then_response_is(&mut world, "A", "OK");
@@ -288,7 +290,7 @@ fn test_gprs_dialing_fallback() {
 #[test]
 fn test_dial_non_existent_context() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // Dial GPRS context 2 which is undefined -> should return ERROR
     when_at_command_sent(
@@ -444,7 +446,7 @@ fn test_goldfish_ril_compat_incorrect_cgact() {
 #[test]
 fn test_query_pdp_context_activate() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // 1. Define context 1 and 2
     when_at_command_sent(
@@ -480,7 +482,7 @@ fn test_query_pdp_context_activate() {
 #[test]
 fn test_ps_attach_detach() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // 1. Verify initially attached
     when_at_command_sent(&mut world, "A", "AT+CGATT?");
@@ -513,7 +515,7 @@ fn test_ps_attach_detach() {
 #[test]
 fn test_qos_queries_when_empty() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // No contexts defined, queries should return OK (no data lines)
     when_at_command_sent(&mut world, "A", "AT+CGEQMIN?");
@@ -532,7 +534,7 @@ fn test_qos_queries_when_empty() {
 #[test]
 fn test_data_commands_invalid_cid() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_data_modem(&mut world, "A");
 
     // CID 2 does not exist (no contexts defined at all, or we only define CID
     // 1)
@@ -684,4 +686,61 @@ fn test_ipv6_pdp_context_success() {
 
     when_at_command_sent(&mut world, "A", "AT+CGPADDR=2");
     then_response_is(&mut world, "A", "ERROR");
+}
+
+#[test]
+fn test_packet_data_gating_matrix() {
+    let mut world = World::new();
+    given_data_modem(&mut world, "A");
+
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.send_and_expect_ok("A", "AT+CGDCONT=1,\"IP\",\"test\"");
+
+    let (id, _) = world.get_modem("A");
+
+    // Radio Off (AT+CFUN=0)
+    world.send_and_expect_ok("A", "AT+CFUN=0");
+    world.send_and_expect_error("A", "ATD*99***1#", "+CME ERROR: 30");
+    world.send_and_expect_error("A", "AT+CGACT=1,1", "+CME ERROR: 30");
+    world.send_and_expect_error("A", "AT+CGDATA=\"PPP\",1", "+CME ERROR: 30");
+    // Context deactivation allowed even when radio is off
+    world.send_and_expect_ok("A", "AT+CGACT=0,1");
+
+    world.send_and_expect_ok("A", "AT+CFUN=1");
+
+    // Radio On + Data Unregistered (CGREG: 0)
+    world
+        .manager
+        .get_modem_mut(id)
+        .unwrap()
+        .set_data_registration(RegistrationStatus::NotRegistered);
+    world.send_and_expect_error("A", "ATD*99***1#", "+CME ERROR: 30");
+    world.send_and_expect_error("A", "AT+CGACT=1,1", "+CME ERROR: 30");
+    world.send_and_expect_error("A", "AT+CGDATA=\"PPP\",1", "+CME ERROR: 30");
+    world.send_and_expect_ok("A", "AT+CGACT=0,1");
+
+    // Radio On + Data Emergency Only (CGREG: 8)
+    world.manager.get_modem_mut(id).unwrap().set_data_registration(RegistrationStatus::Emergency);
+    world.send_and_expect_error("A", "ATD*99***1#", "+CME ERROR: 32");
+    world.send_and_expect_error("A", "AT+CGACT=1,1", "+CME ERROR: 32");
+    world.send_and_expect_error("A", "AT+CGDATA=\"PPP\",1", "+CME ERROR: 32");
+    world.send_and_expect_ok("A", "AT+CGACT=0,1");
+
+    // Radio On + Data Registered + PS Detached (AT+CGATT=0)
+    world
+        .manager
+        .get_modem_mut(id)
+        .unwrap()
+        .set_data_registration(RegistrationStatus::RegisteredHome);
+    world.send_and_expect_ok("A", "AT+CGATT=0");
+    world.send_and_expect_error("A", "ATD*99***1#", "+CME ERROR: 53");
+    world.send_and_expect_error("A", "AT+CGACT=1,1", "+CME ERROR: 53");
+    world.send_and_expect_error("A", "AT+CGDATA=\"PPP\",1", "+CME ERROR: 53");
+
+    // Radio On + Data Registered + PS Attached (AT+CGATT=1)
+    world.send_and_expect_ok("A", "AT+CGATT=1");
+    world.send_and_expect("A", "ATD*99***1#", &["CONNECT"]);
+    world.send_and_expect_ok("A", "AT+CGACT=0,1");
+    world.send_and_expect_ok("A", "AT+CGACT=1,1");
+    world.send_and_expect("A", "AT+CGDATA=\"PPP\",1", &["CONNECT"]);
 }

@@ -12,7 +12,7 @@ use super::args::{
 };
 use crate::{
     cell_helper::{CellClient, resolve_cell_id},
-    display::Displayer,
+    display::DisplayExt,
     error::{Error, Result},
 };
 
@@ -38,12 +38,12 @@ pub fn execute(cmd: GsmCommand, client: &impl CellClient, verbose: bool) -> Resu
             let mut req = GetCellRequest::new();
             req.id = id;
             let response = client.get(&req)?;
-            println!("{}", Displayer::new(&response, verbose));
+            println!("{}", response.display(verbose));
         }
         GsmCommand::List => {
             let req = ListCellsRequest::new();
             let response = client.list(&req)?;
-            println!("{}", Displayer::new(&response, verbose));
+            println!("{}", response.display(verbose));
         }
         GsmCommand::Call(args) => {
             let id = resolve_cell_id(args.id, client)?;

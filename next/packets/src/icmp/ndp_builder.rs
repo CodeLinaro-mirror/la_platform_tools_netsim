@@ -7,7 +7,7 @@ use zerocopy::{FromBytes, U16, U32};
 
 use super::ndp::{
     NeighborAdvertisement, NeighborSolicitation, PrefixInformationOption, RdnssOption,
-    RouterAdvertisement, RouterSolicitation, SourceLinkLayerAddressOption,
+    RouterAdvertisement, RouterSolicitation, SourceLinkLayerAddressOption, ndp_option,
 };
 
 /// A builder for creating NDP Neighbor Solicitation packets.
@@ -124,13 +124,13 @@ impl<'a> RouterAdvertisementBuilder<'a> {
 
         let (slla_slice, pio_and_rdnss) = rest.split_at_mut(8);
         let slla = SourceLinkLayerAddressOption::mut_from_bytes(slla_slice).ok()?;
-        slla.option_type = 1;
+        slla.option_type = ndp_option::SOURCE_LINK_LAYER_ADDR;
         slla.length = 1;
         slla.addr = gateway_mac;
 
         let (pio_slice, rdnss_slice) = pio_and_rdnss.split_at_mut(32);
         let pio = PrefixInformationOption::mut_from_bytes(pio_slice).ok()?;
-        pio.option_type = 3;
+        pio.option_type = ndp_option::PREFIX_INFORMATION;
         pio.length = 4;
         pio.prefix_length = prefix_len;
         pio.flags = 0b11000000; // On-link (L) and Autonomous (A)
@@ -141,7 +141,7 @@ impl<'a> RouterAdvertisementBuilder<'a> {
 
         if let Some(dns_addr) = dns_server {
             let rdnss = RdnssOption::mut_from_bytes(&mut rdnss_slice[..24]).ok()?;
-            rdnss.option_type = 25;
+            rdnss.option_type = ndp_option::RDNSS;
             rdnss.length = 3;
             rdnss.reserved = U16::new(0);
             // Note: RFC 8106 suggests RDNSS lifetime should be at least

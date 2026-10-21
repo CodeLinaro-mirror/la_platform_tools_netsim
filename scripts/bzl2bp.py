@@ -228,6 +228,7 @@ IGNORED_TARGETS = {
     "http-proxy",
 }
 ALLOWED_TESTING_TARGETS = {
+    "rest-api",
     "nfc-actor",
     "device-actor",
     "actor-framework",
@@ -284,7 +285,9 @@ def rust_test(*args, **kwargs):
 
   crate_root = kwargs.get("crate_root")
   if not crate_root:
-    for opt in ["tests/mod.rs", "tests/integration_tests.rs"]:
+    # Keep in sync with crate_root_opts in next/defs.bzl.
+    for opt in ["tests/mod.rs", "tests/integration_test.rs",
+                "tests/integration_tests.rs"]:
       if opt in srcs:
         crate_root = opt
         break
@@ -524,12 +527,18 @@ def netsim_rust_library(
     for lib in PLATFORM_RUSTLIBS[name]:
       if lib.startswith("libnetsim_next_") and not lib.endswith("_testing"):
         pkg_base = lib.replace("libnetsim_next_", "").replace("_", "-")
-        if pkg_base in ALLOWED_TESTING_TARGETS:
-          testing_rustlibs.append(lib + "_testing")
+        target_lib = lib + "_testing"
+        if target_lib in EXACT_DEP_MAPPING:
+          testing_rustlibs.append(EXACT_DEP_MAPPING[target_lib])
+        elif pkg_base in ALLOWED_TESTING_TARGETS:
+          testing_rustlibs.append(target_lib)
         else:
           testing_rustlibs.append(lib)
       else:
-        testing_rustlibs.append(lib)
+        if lib in EXACT_DEP_MAPPING:
+          testing_rustlibs.append(EXACT_DEP_MAPPING[lib])
+        else:
+          testing_rustlibs.append(lib)
   testing_rustlibs = sorted(list(set(testing_rustlibs)))
   testing_shared_libs = sorted(list(set(testing_shared_libs)))
   testing_static_libs = sorted(list(set(testing_static_libs)))

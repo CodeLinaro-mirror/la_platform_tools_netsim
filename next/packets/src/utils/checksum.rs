@@ -14,81 +14,63 @@ pub fn ipv4_checksum(data: &[u8]) -> u16 {
     fold_checksum(sum_slice(data))
 }
 
-fn checksum_v4_generic(
+/// Normalizes a computed UDP checksum per RFC 768.
+///
+/// In UDP, a checksum field of `0` indicates that no checksum was computed,
+/// so a calculated one's complement checksum of `0` is transmitted as all
+/// ones (`u16::MAX`, which is equivalent to `0` in one's complement arithmetic).
+#[inline]
+fn normalize_udp_checksum(cksum: u16) -> u16 {
+    if cksum == 0 { u16::MAX } else { cksum }
+}
+
+fn pseudo_header_checksum(
     packet: &[u8],
-    src_addr: Ipv4Addr,
-    dst_addr: Ipv4Addr,
+    src_octets: &[u8],
+    dst_octets: &[u8],
     protocol: u16,
 ) -> u16 {
-    let mut sum = 0u64;
-
-    // Pseudo-header
-    let src_bytes = src_addr.octets();
-    let dst_bytes = dst_addr.octets();
-    sum += u64::from(u16::from_be_bytes([src_bytes[0], src_bytes[1]]));
-    sum += u64::from(u16::from_be_bytes([src_bytes[2], src_bytes[3]]));
-    sum += u64::from(u16::from_be_bytes([dst_bytes[0], dst_bytes[1]]));
-    sum += u64::from(u16::from_be_bytes([dst_bytes[2], dst_bytes[3]]));
-    sum += u64::from(protocol);
-    sum += u64::from(packet.len() as u16);
-
-    sum += sum_slice(packet);
-
+    let sum = sum_slice(src_octets)
+        + sum_slice(dst_octets)
+        + u64::from(protocol)
+        + sum_slice(&(packet.len() as u32).to_be_bytes())
+        + sum_slice(packet);
     fold_checksum(sum)
 }
 
 /// Calculates the TCP checksum for IPv4.
 pub fn tcp_checksum(tcp_packet: &[u8], src_addr: Ipv4Addr, dst_addr: Ipv4Addr) -> u16 {
-    checksum_v4_generic(tcp_packet, src_addr, dst_addr, 6)
+    pseudo_header_checksum(tcp_packet, &src_addr.octets(), &dst_addr.octets(), 6)
 }
 
 /// Calculates the UDP checksum for IPv4.
 pub fn udp_checksum(udp_packet: &[u8], src_addr: Ipv4Addr, dst_addr: Ipv4Addr) -> u16 {
-    let cksum = checksum_v4_generic(udp_packet, src_addr, dst_addr, 17);
-    if cksum == 0 { 0xFFFF } else { cksum }
-}
-
-fn checksum_v6_generic(
-    packet: &[u8],
-    src_addr: Ipv6Addr,
-    dst_addr: Ipv6Addr,
-    protocol: u16,
-) -> u16 {
-    let mut sum = 0u64;
-
-    // Pseudo-header
-    let src_bytes = src_addr.octets();
-    for i in (0..16).step_by(2) {
-        sum += u64::from(u16::from_be_bytes([src_bytes[i], src_bytes[i + 1]]));
-    }
-    let dst_bytes = dst_addr.octets();
-    for i in (0..16).step_by(2) {
-        sum += u64::from(u16::from_be_bytes([dst_bytes[i], dst_bytes[i + 1]]));
-    }
-    let len = packet.len() as u64;
-    sum += len >> 16;
-    sum += len & 0xFFFF;
-    sum += u64::from(protocol);
-
-    sum += sum_slice(packet);
-
-    fold_checksum(sum)
+    normalize_udp_checksum(pseudo_header_checksum(
+        udp_packet,
+        &src_addr.octets(),
+        &dst_addr.octets(),
+        17,
+    ))
 }
 
 /// Calculates the TCP checksum for IPv6.
 pub fn tcp_checksum_v6(tcp_packet: &[u8], src_addr: Ipv6Addr, dst_addr: Ipv6Addr) -> u16 {
-    checksum_v6_generic(tcp_packet, src_addr, dst_addr, 6)
+    pseudo_header_checksum(tcp_packet, &src_addr.octets(), &dst_addr.octets(), 6)
 }
 
 /// Calculates the UDP checksum for IPv6.
 pub fn udp_checksum_v6(udp_packet: &[u8], src_addr: Ipv6Addr, dst_addr: Ipv6Addr) -> u16 {
-    let cksum = checksum_v6_generic(udp_packet, src_addr, dst_addr, 17);
-    if cksum == 0 { 0xFFFF } else { cksum }
+    normalize_udp_checksum(pseudo_header_checksum(
+        udp_packet,
+        &src_addr.octets(),
+        &dst_addr.octets(),
+        17,
+    ))
 }
 
 /// Calculates the ICMPv6 checksum using the IPv6 pseudo-header.
 pub fn icmpv6_checksum(icmpv6_packet: &[u8], src_addr: Ipv6Addr, dst_addr: Ipv6Addr) -> u16 {
-    checksum_v6_generic(icmpv6_packet, src_addr, dst_addr, 58)
+    pseudo_header_checksum(icmpv6_packet, &src_addr.octets(), &dst_addr.octets(), 58)
 }
 
 fn sum_slice(data: &[u8]) -> u64 {

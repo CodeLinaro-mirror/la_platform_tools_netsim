@@ -21,10 +21,10 @@ async fn test_list_devices_empty() {
     let world = World::new().await;
 
     // When I list devices
-    let response = world.client.list().await.unwrap();
+    let devices = world.client.list().await.unwrap();
 
     // Then the list is empty
-    assert!(response.devices.is_empty());
+    assert!(devices.is_empty());
 }
 
 // Scenario: List devices with created devices
@@ -46,13 +46,13 @@ async fn test_list_devices_populated() {
     }
 
     // And I list devices
-    let response = world.client.list().await.unwrap();
+    let devices = world.client.list().await.unwrap();
 
     // Then the list contains all created devices
-    assert_eq!(response.devices.len(), 3);
+    assert_eq!(devices.len(), 3);
 
     for id in created_ids {
-        assert!(response.devices.iter().any(|d| d.id == id.0));
+        assert!(devices.iter().any(|d| d.id == id.0));
     }
 }
 
@@ -71,11 +71,11 @@ async fn test_create_single_bluetooth_chip() {
     let _id = world.when_add_chip("test-guid-1", "bt-chip").await;
 
     // And I list devices
-    let response = world.client.list().await.unwrap();
+    let devices = world.client.list().await.unwrap();
 
     // Then the device has exactly one chip
-    assert_eq!(response.devices.len(), 1);
-    let device = &response.devices[0];
+    assert_eq!(devices.len(), 1);
+    let device = &devices[0];
     assert_eq!(device.chips.len(), 1);
 
     // Check that the chip kind is Bluetooth

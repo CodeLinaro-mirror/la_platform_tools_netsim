@@ -178,7 +178,8 @@ pub(crate) mod utils;
 
 // Facade
 pub use ethernet::{
-    ArpPacket, ArpPacketBuilder, EthernetFrame, EthernetPacket, MacAddr, frame::ether_type,
+    ArpPacket, ArpPacketBuilder, EthernetFrame, EthernetPacket, MacAddr,
+    frame::{arp_hardware, arp_op, ether_type},
 };
 // hci commands and types
 pub use hci::commands::{
@@ -198,10 +199,11 @@ pub use hci::{
 pub use icmp::{
     IcmpEcho, IcmpHeader, IcmpType, Icmpv4UnreachableCode as UnreachableCode,
     Icmpv4UnreachableCode, Icmpv6Echo, Icmpv6Header, Icmpv6ParameterProblemCode,
-    Icmpv6TimeExceededCode, Icmpv6Type, Icmpv6UnreachableCode, NeighborAdvertisement,
-    NeighborAdvertisementBuilder, NeighborSolicitation, NeighborSolicitationBuilder,
-    PrefixInformationOption, RdnssOption, RouterAdvertisement, RouterAdvertisementBuilder,
-    RouterSolicitation, RouterSolicitationBuilder, SourceLinkLayerAddressOption,
+    Icmpv6TimeExceededCode, Icmpv6Type, Icmpv6UnreachableCode, NDP_HOP_LIMIT,
+    NeighborAdvertisement, NeighborAdvertisementBuilder, NeighborSolicitation,
+    NeighborSolicitationBuilder, PrefixInformationOption, RdnssOption, RouterAdvertisement,
+    RouterAdvertisementBuilder, RouterSolicitation, RouterSolicitationBuilder,
+    SourceLinkLayerAddressOption, na_flags, ndp_option,
 };
 // ieee80211 constants
 pub use ieee80211::{
@@ -520,4 +522,7 @@ pub use transport::{
     udp::UdpHeader,
     udp_json::{JsonUdpHeader, to_json},
 };
-pub use utils::{test_utils, test_utils::PacketBuilder};
+pub use utils::{
+    test_utils,
+    test_utils::{PacketBuilder, build_arp_frame, build_icmpv6_ns_frame},
+};

@@ -6,7 +6,7 @@ use netsim_model::{CellNetworkConfig, ModemAction, Quirks};
 // ...
 use crate::modem_network_simulator::NetworkEvent;
 pub use crate::types::ModemError;
-use crate::types::{ModemId, ModemInfo, ModemSink, PhoneNumber};
+use crate::types::{ModemId, ModemInfo, ModemSink};
 
 pub trait ModemNetworkInterface: Send + Sync {
     fn add_modem(
@@ -65,17 +65,12 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
 
     fn get_modem_info(&self, chip_id: ModemId) -> Result<ModemInfo, ModemError> {
         if let Some(modem) = self.get_modem(chip_id) {
-            let signal = modem.network_service.signal_quality();
+            let signal = modem.signal_quality();
             let calls = modem
-                .call_service
-                .calls
+                .calls()
                 .iter()
                 .map(|c| netsim_model::Call {
-                    number: c
-                        .number
-                        .as_ref()
-                        .map(|n: &PhoneNumber| n.as_str().to_string())
-                        .unwrap_or_default(),
+                    number: c.number.as_ref().map(|n| n.as_str().to_string()).unwrap_or_default(),
                     state: match c.state {
                         crate::call_service::CallState::Active => netsim_model::CallState::Active,
                         crate::call_service::CallState::Held => netsim_model::CallState::Holding,
@@ -106,8 +101,8 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
                 quirks: modem.quirks,
                 rssi: signal.rssi as u32,
                 ber: signal.ber as u32,
-                voice_registration: modem.network_service.voice_registration(),
-                data_registration: modem.network_service.data_registration(),
+                voice_registration: modem.voice_registration(),
+                data_registration: modem.data_registration(),
                 network_configs: modem.network_configs().to_vec(),
             })
         } else {

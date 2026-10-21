@@ -58,7 +58,7 @@ impl ActorLifecycle for SlirpActor {
         msg: bytes::Bytes,
         _ctx: &mut DynContext<Self>,
     ) {
-        let Some((frame, _remainder)) = netsim_packets::EthernetFrame::parse(&msg) else {
+        let Some((frame, remainder)) = netsim_packets::EthernetFrame::parse(&msg) else {
             tracing::warn!("SlirpActor: Dropping runt downlink packet, len {}", msg.len());
             return;
         };
@@ -76,11 +76,37 @@ impl ActorLifecycle for SlirpActor {
             } else {
                 tracing::warn!("SlirpActor: Unknown unicast MAC {dest_mac}, flooding");
             }
-        }
+            for client in self.clients.values() {
+                if !client.isolated {
+                    let _ = client.sink.send(msg.clone());
+                }
+            }
+        } else {
+            // Flood broadcast/multicast packets according to client isolation policy
+            let is_cellular_resolution = if frame.ethertype.get() == netsim_packets::ether_type::ARP
+                && let Some(arp) = netsim_packets::ArpPacket::parse(remainder)
+            {
+                let ar_tip = std::net::Ipv4Addr::from(arp.target_protocol_addr);
+                self.static_ips.values().any(|&ip| ip == ar_tip)
+            } else if frame.ethertype.get() == netsim_packets::ether_type::IPV6
+                && let Some(packet) = netsim_packets::parse(&msg)
+                && let Some(netsim_packets::TransportPacket::Icmpv6(icmpv6_header, icmpv6_payload)) =
+                    packet.transport
+                && icmpv6_header.icmpv6_type
+                    == netsim_packets::Icmpv6Type::NeighborSolicitation as u8
+                && let Some(&target_bytes) = icmpv6_payload.first_chunk::<16>()
+            {
+                self.matches_static_ipv6(std::net::Ipv6Addr::from(target_bytes))
+            } else {
+                false
+            };
 
-        // Flood broadcast/multicast/unknown unicast packets
-        for client in self.clients.values() {
-            let _ = client.sink.send(msg.clone());
+            for client in self.clients.values() {
+                let should_deliver = client.isolated == is_cellular_resolution;
+                if should_deliver {
+                    let _ = client.sink.send(msg.clone());
+                }
+            }
         }
     }
 
@@ -178,7 +204,13 @@ mod tests {
         actor
             .handle_action(
                 None,
-                SlirpReq::Register { client_id: 1, stream: stream1, sink: sink1, notifier: None },
+                SlirpReq::Register {
+                    client_id: 1,
+                    stream: stream1,
+                    sink: sink1,
+                    notifier: None,
+                    isolated: false,
+                },
                 &mut ctx,
             )
             .await
@@ -199,7 +231,13 @@ mod tests {
         actor
             .handle_action(
                 None,
-                SlirpReq::Register { client_id: 2, stream: stream2, sink: sink2, notifier: None },
+                SlirpReq::Register {
+                    client_id: 2,
+                    stream: stream2,
+                    sink: sink2,
+                    notifier: None,
+                    isolated: false,
+                },
                 &mut ctx,
             )
             .await

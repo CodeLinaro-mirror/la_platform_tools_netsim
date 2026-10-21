@@ -1,6 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+#![deny(unreachable_pub)]
+
 mod error;
 mod lifecycle;
 mod link_actor;
@@ -73,7 +75,7 @@ pub use link_actor::LinkActor;
 //     4. *Result*: Subsequent `create` calls for this chip will pass
 //        validation.
 
-pub mod client;
+mod client;
 pub use client::LinkClient;
 
 /// Creates a new LinkActor and returns the runner and a client.

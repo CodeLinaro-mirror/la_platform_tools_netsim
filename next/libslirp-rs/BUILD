@@ -21,7 +21,7 @@ netsim_rust_library(
         "@platforms//os:linux": ["@libc"],
         "@platforms//os:macos": ["@libc"],
     }),
-    test_deps = ["@etherparse"],
+    test_deps = ["//next/packets"],
     deps = [
         "//next/slirp",
         "@bytes",

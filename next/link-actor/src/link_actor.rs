@@ -37,7 +37,7 @@ impl LinkActor {
         }
     }
 
-    pub async fn update_chip_links(&self, chip_id: ChipId) {
+    pub(crate) async fn update_chip_links(&self, chip_id: ChipId) {
         let Some(kind) = self.chip_kind_map.get(&chip_id) else {
             return;
         };

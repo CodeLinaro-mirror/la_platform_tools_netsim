@@ -173,6 +173,20 @@ pub mod ether_type {
     pub const EAPOL: u16 = 0x888E;
 }
 
+/// ARP operation codes (RFC 826).
+pub mod arp_op {
+    /// Asks which hardware address owns a protocol address.
+    pub const REQUEST: u16 = 1;
+    /// Answers a [`REQUEST`].
+    pub const REPLY: u16 = 2;
+}
+
+/// ARP hardware address space identifiers (RFC 826).
+pub mod arp_hardware {
+    /// 10Mb Ethernet, and by extension every Ethernet-like link.
+    pub const ETHERNET: u16 = 1;
+}
+
 /// Represents an Ethernet II frame header.
 ///
 /// This struct is designed for zero-copy parsing of raw packet data.

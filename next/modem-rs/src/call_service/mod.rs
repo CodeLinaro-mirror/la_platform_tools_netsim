@@ -5,11 +5,10 @@ use modem_rs_derive::CommandParser;
 use tracing::debug;
 
 use crate::{
-    data_service::DataService,
-    sim_service::SimService,
+    CardState, RadioAdmission,
     types::{
         CallHoldAction, CallHoldParam, ClirMode, CmeError, CommandAction, DialArgs, DtmfArgs,
-        ExecutionResult, ModemId, NumberPresentation, Parsable, PhoneNumber,
+        ExecutionResult, HangupReason, ModemId, NumberPresentation, Parsable, PhoneNumber,
     },
 };
 
@@ -68,6 +67,10 @@ impl CallState {
 
     fn is_inbound(self) -> bool {
         matches!(self, CallState::Incoming | CallState::Waiting)
+    }
+
+    pub fn release_reason(self) -> HangupReason {
+        if self.is_inbound() { HangupReason::Busy } else { HangupReason::Normal }
     }
 
     fn is_foreground(self) -> bool {
@@ -145,12 +148,46 @@ type CallResult = Result<Option<CallResponse>, ExecutionResult>;
 // Holds all state related to the call service.
 #[derive(Default)]
 pub struct CallService {
-    pub calls: Vec<CallStatus>,
+    calls: Vec<CallStatus>,
     mute: bool,
     emergency_mode: bool,
 }
 
 impl CallService {
+    pub(crate) fn calls(&self) -> &[CallStatus] {
+        &self.calls
+    }
+
+    pub(crate) fn has_calls(&self) -> bool {
+        !self.calls.is_empty()
+    }
+
+    pub(crate) fn clear_calls(&mut self) {
+        self.calls.clear();
+    }
+
+    pub(crate) fn has_outbound_to_peer(&self, peer_id: ModemId) -> bool {
+        self.calls.iter().any(|c| c.state.is_outbound() && c.peer_id == Some(peer_id))
+    }
+
+    pub(crate) fn set_outbound_peer_id(&mut self, peer_id: ModemId) -> bool {
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state.is_outbound()) {
+            call.peer_id = Some(peer_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn fail_outbound_call(&mut self) -> bool {
+        if let Some(pos) = self.calls.iter().position(|c| c.state.is_outbound()) {
+            self.calls.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
     fn has_call_in_state(&self, state: CallState) -> bool {
         self.calls.iter().any(|c| c.state == state)
     }
@@ -219,8 +256,10 @@ impl CallService {
         });
     }
 
-    pub fn receive_hangup_from_peer_id(&mut self, peer_id: ModemId) {
+    pub fn receive_hangup_from_peer_id(&mut self, peer_id: ModemId) -> bool {
+        let prev_len = self.calls.len();
         self.calls.retain(|c| c.peer_id != Some(peer_id));
+        self.calls.len() < prev_len
     }
 
     pub fn hangup_all(&mut self, id: ModemId) -> Vec<CommandAction> {
@@ -231,6 +270,7 @@ impl CallService {
                 call.peer_id.map(|peer_id| CommandAction::HangupCall {
                     initiator: id,
                     target_peer: peer_id,
+                    reason: call.state.release_reason(),
                 })
             })
             .collect();
@@ -243,7 +283,11 @@ impl CallService {
         self.calls.retain(|call| {
             if call.state.is_inbound() {
                 if let Some(peer_id) = call.peer_id {
-                    actions.push(CommandAction::HangupCall { initiator: id, target_peer: peer_id });
+                    actions.push(CommandAction::HangupCall {
+                        initiator: id,
+                        target_peer: peer_id,
+                        reason: HangupReason::NoAnswer,
+                    });
                 }
                 false
             } else {
@@ -294,7 +338,7 @@ impl CallService {
         }
     }
 
-    pub fn remote_answer(&mut self) -> bool {
+    pub(crate) fn remote_answer(&mut self) -> bool {
         if let Some(call) = self.calls.iter_mut().find(|c| c.state.is_outbound()) {
             call.state = CallState::Active;
             return true;
@@ -310,7 +354,7 @@ impl CallService {
         self.has_call_in_state(CallState::Alerting)
     }
 
-    pub fn has_outbound(&self) -> bool {
+    pub(crate) fn has_outbound(&self) -> bool {
         self.calls.iter().any(|c| c.state.is_outbound())
     }
 
@@ -363,18 +407,12 @@ impl CallService {
         &mut self,
         args: DialArgs,
         id: ModemId,
-        data_service: &mut DataService,
-        sim_service: &SimService,
-        clir_mode: ClirMode,
+        clir_default: ClirMode,
+        sim_service: &impl CardState,
+        radio_service: &impl RadioAdmission,
     ) -> ExecutionResult {
         debug!("[CallService] Dialing number: {}", args.number.as_str());
-        // GPRS dial commands (e.g. ATD*99#) are GPRS packet-data requests and are
-        // handled by DataService.
-        if args.number.is_gprs_dial() {
-            return data_service.handle_gprs_dial(args.number.as_str()).into();
-        }
-
-        let result = self.handle_voice_dial(id, args, sim_service, clir_mode);
+        let result = self.handle_voice_dial(id, args, clir_default, sim_service, radio_service);
         result.into()
     }
 
@@ -382,8 +420,9 @@ impl CallService {
         &mut self,
         id: ModemId,
         args: DialArgs,
-        sim_service: &SimService,
-        clir_mode: ClirMode,
+        clir_default: ClirMode,
+        sim_service: &impl CardState,
+        radio_service: &impl RadioAdmission,
     ) -> CallResult {
         let is_emergency = args.is_emergency;
 
@@ -391,14 +430,10 @@ impl CallService {
             return Err(ExecutionResult::cme_error(CmeError::NetworkNotAllowedEmergencyCallsOnly));
         }
 
-        if !is_emergency {
-            if let Some(err) = sim_service.gating_error() {
-                return Err(ExecutionResult::cme_error(err));
-            }
-            if !sim_service.is_fdn_allowed(&args.number) {
-                return Err(ExecutionResult::cme_error(CmeError::FixedDialNumberOnlyAllowed));
-            }
-        }
+        // Locked SIMs attach in Emergency-only registration (CME 32), so SIM gating runs
+        // first to report CME 10/11/12 (SIM absent/PIN/PUK) on non-emergency dials.
+        sim_service.validate_call(&args.number, is_emergency)?;
+        radio_service.can_originate_voice_call(is_emergency)?;
 
         debug!("[CallService] Calls before dial: {:?}", self.calls);
         if self.has_outbound() {
@@ -430,7 +465,7 @@ impl CallService {
         debug!("[CallService] Calls after dial: {:?}", self.calls);
 
         let call_clir =
-            if args.clir == ClirMode::SubscriptionDefault { clir_mode } else { args.clir };
+            if args.clir == ClirMode::SubscriptionDefault { clir_default } else { args.clir };
 
         actions.push(CommandAction::InitiateCall(DialArgs {
             number: args.number,
@@ -487,7 +522,11 @@ impl CallService {
 
             if should_drop {
                 if let Some(peer_id) = call.peer_id {
-                    actions.push(CommandAction::HangupCall { initiator: id, target_peer: peer_id });
+                    actions.push(CommandAction::HangupCall {
+                        initiator: id,
+                        target_peer: peer_id,
+                        reason: call.state.release_reason(),
+                    });
                 }
                 false
             } else {
@@ -533,6 +572,7 @@ impl CallService {
                             actions.push(CommandAction::HangupCall {
                                 initiator: id,
                                 target_peer: peer_id,
+                                reason: call.state.release_reason(),
                             });
                         }
                         false
@@ -551,6 +591,7 @@ impl CallService {
                         actions.push(CommandAction::HangupCall {
                             initiator: id,
                             target_peer: peer_id,
+                            reason: call.state.release_reason(),
                         });
                     }
                     self.remove_call(idx);
@@ -562,6 +603,7 @@ impl CallService {
                                 actions.push(CommandAction::HangupCall {
                                     initiator: id,
                                     target_peer: peer,
+                                    reason: c.state.release_reason(),
                                 });
                             }
                             false
@@ -718,17 +760,23 @@ impl CallService {
         Ok(Some(CallResponse::EmergencyMode(self.emergency_mode)))
     }
 
-    pub fn execute(
+    pub(crate) fn execute(
         &mut self,
         command: &CallCommand,
         id: ModemId,
-        data_service: &mut DataService,
-        sim_service: &SimService,
-        clir_mode: ClirMode,
+        clir_default: ClirMode,
+        sim_service: &impl CardState,
+        radio_service: &impl RadioAdmission,
     ) -> ExecutionResult {
         let res = match command {
             CallCommand::Dial(args) => {
-                return self.handle_dial(args.clone(), id, data_service, sim_service, clir_mode);
+                return self.handle_dial(
+                    args.clone(),
+                    id,
+                    clir_default,
+                    sim_service,
+                    radio_service,
+                );
             }
             CallCommand::Answer => self.handle_answer(id),
             CallCommand::Hangup => self.handle_hangup(id),
@@ -748,419 +796,4 @@ impl CallService {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{CallDirection, CallService, CallState};
-    use crate::types::{NumberPresentation, PhoneNumber};
-
-    #[test]
-    fn test_clcc_not_available() {
-        let mut service = CallService::default();
-        service.add_call(
-            CallState::Incoming,
-            CallDirection::Incoming,
-            Some(PhoneNumber::new_for_test("123456")),
-            NumberPresentation::NotAvailable,
-            None,
-        );
-
-        let calls_res = service.handle_query_current_calls().unwrap().unwrap();
-        let formatted = calls_res.to_string();
-
-        assert_eq!(formatted, "+CLCC: 1,1,4,0,0,,129\r\n");
-    }
-
-    #[test]
-    fn test_ath_idle_returns_ok() {
-        let mut service = CallService::default();
-        let id = 1;
-        let res = service.handle_hangup(id);
-        assert!(res.is_ok());
-        assert_eq!(res.unwrap(), None);
-    }
-
-    #[test]
-    fn test_ath_rejects_waiting_preserves_active() {
-        let mut service = CallService::default();
-        let id = 1;
-        let peer1 = 10;
-        let peer2 = 20;
-
-        // Call 1: Active
-        service.add_call(
-            CallState::Active,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("111")),
-            NumberPresentation::Allowed,
-            Some(peer1),
-        );
-        // Call 2: Waiting
-        service.add_call(
-            CallState::Waiting,
-            CallDirection::Incoming,
-            Some(PhoneNumber::new_for_test("222")),
-            NumberPresentation::Allowed,
-            Some(peer2),
-        );
-
-        let res = service.handle_hangup(id).unwrap().unwrap();
-        match res {
-            super::CallResponse::WithActions(actions) => {
-                assert_eq!(
-                    actions,
-                    vec![crate::types::CommandAction::HangupCall {
-                        initiator: id,
-                        target_peer: peer2,
-                    }]
-                );
-            }
-            other => panic!("Unexpected response: {other:?}"),
-        }
-
-        // Active call 1 must still be present and Active
-        assert_eq!(service.calls.len(), 1);
-        assert_eq!(service.calls[0].state, CallState::Active);
-        assert_eq!(service.calls[0].peer_id, Some(peer1));
-    }
-
-    #[test]
-    fn test_ath_drops_active_preserves_held() {
-        let mut service = CallService::default();
-        let id = 1;
-        let peer1 = 10;
-        let peer2 = 20;
-
-        // Call 1: Held
-        service.add_call(
-            CallState::Held,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("111")),
-            NumberPresentation::Allowed,
-            Some(peer1),
-        );
-        // Call 2: Active
-        service.add_call(
-            CallState::Active,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("222")),
-            NumberPresentation::Allowed,
-            Some(peer2),
-        );
-
-        let res = service.handle_hangup(id).unwrap().unwrap();
-        match res {
-            super::CallResponse::WithActions(actions) => {
-                assert_eq!(
-                    actions,
-                    vec![crate::types::CommandAction::HangupCall {
-                        initiator: id,
-                        target_peer: peer2,
-                    }]
-                );
-            }
-            other => panic!("Unexpected response: {other:?}"),
-        }
-
-        // Held call 1 must remain intact
-        assert_eq!(service.calls.len(), 1);
-        assert_eq!(service.calls[0].state, CallState::Held);
-        assert_eq!(service.calls[0].peer_id, Some(peer1));
-    }
-
-    #[test]
-    fn test_ata_auto_holds_active_call() {
-        let mut service = CallService::default();
-        let id = 1;
-        let peer1 = 10;
-        let peer2 = 20;
-
-        // Call 1: Active
-        service.add_call(
-            CallState::Active,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("111")),
-            NumberPresentation::Allowed,
-            Some(peer1),
-        );
-        // Call 2: Waiting
-        service.add_call(
-            CallState::Waiting,
-            CallDirection::Incoming,
-            Some(PhoneNumber::new_for_test("222")),
-            NumberPresentation::Allowed,
-            Some(peer2),
-        );
-
-        let res = service.handle_answer(id).unwrap().unwrap();
-        match res {
-            super::CallResponse::WithActions(actions) => {
-                assert_eq!(
-                    actions,
-                    vec![
-                        crate::types::CommandAction::HoldCall { holder: id, target: peer1 },
-                        crate::types::CommandAction::AnswerCall(id),
-                    ]
-                );
-            }
-            other => panic!("Unexpected response: {other:?}"),
-        }
-
-        assert_eq!(service.calls.len(), 2);
-        // Call 1 transitioned to Held
-        assert_eq!(service.calls[0].state, CallState::Held);
-        // Call 2 transitioned to Active
-        assert_eq!(service.calls[1].state, CallState::Active);
-    }
-
-    #[test]
-    fn test_chld_0_rejects_waiting_preserves_held() {
-        let mut service = CallService::default();
-        let id = 1;
-        let peer_held = 10;
-        let peer_wait = 20;
-        let peer_act = 30;
-
-        // Call 1: Held
-        service.add_call(
-            CallState::Held,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("111")),
-            NumberPresentation::Allowed,
-            Some(peer_held),
-        );
-        // Call 2: Waiting
-        service.add_call(
-            CallState::Waiting,
-            CallDirection::Incoming,
-            Some(PhoneNumber::new_for_test("222")),
-            NumberPresentation::Allowed,
-            Some(peer_wait),
-        );
-        // Call 3: Active
-        service.add_call(
-            CallState::Active,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("333")),
-            NumberPresentation::Allowed,
-            Some(peer_act),
-        );
-
-        let res = service
-            .handle_call_hold(
-                crate::types::CallHoldParam {
-                    op: crate::types::CallHoldAction::ReleaseHeld,
-                    call_id: None,
-                },
-                id,
-            )
-            .unwrap()
-            .unwrap();
-
-        match res {
-            super::CallResponse::WithActions(actions) => {
-                // Under 3GPP TS 27.007 § 7.13 / TS 22.030 § 4.5.5.1, CHLD=0
-                // sets UDUB on waiting call, rejecting ONLY the waiting call.
-                assert_eq!(actions.len(), 1);
-                assert_eq!(
-                    actions[0],
-                    crate::types::CommandAction::HangupCall {
-                        initiator: id,
-                        target_peer: peer_wait,
-                    }
-                );
-            }
-            other => panic!("Unexpected response: {other:?}"),
-        }
-
-        // Active call 3 and Held call 1 should remain intact
-        assert_eq!(service.calls.len(), 2);
-        assert_eq!(service.calls[0].state, CallState::Held);
-        assert_eq!(service.calls[0].peer_id, Some(peer_held));
-        assert_eq!(service.calls[1].state, CallState::Active);
-        assert_eq!(service.calls[1].peer_id, Some(peer_act));
-    }
-
-    #[test]
-    fn test_chld_0_releases_held_when_no_waiting() {
-        let mut service = CallService::default();
-        let id = 1;
-        let peer_held1 = 10;
-        let peer_held2 = 20;
-        let peer_act = 30;
-
-        service.add_call(
-            CallState::Held,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("111")),
-            NumberPresentation::Allowed,
-            Some(peer_held1),
-        );
-        service.add_call(
-            CallState::Held,
-            CallDirection::Incoming,
-            Some(PhoneNumber::new_for_test("222")),
-            NumberPresentation::Allowed,
-            Some(peer_held2),
-        );
-        service.add_call(
-            CallState::Active,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("333")),
-            NumberPresentation::Allowed,
-            Some(peer_act),
-        );
-
-        let res = service
-            .handle_call_hold(
-                crate::types::CallHoldParam {
-                    op: crate::types::CallHoldAction::ReleaseHeld,
-                    call_id: None,
-                },
-                id,
-            )
-            .unwrap()
-            .unwrap();
-
-        match res {
-            super::CallResponse::WithActions(actions) => {
-                assert_eq!(actions.len(), 2);
-                assert!(actions.contains(&crate::types::CommandAction::HangupCall {
-                    initiator: id,
-                    target_peer: peer_held1,
-                }));
-                assert!(actions.contains(&crate::types::CommandAction::HangupCall {
-                    initiator: id,
-                    target_peer: peer_held2,
-                }));
-            }
-            other => panic!("Unexpected response: {other:?}"),
-        }
-
-        assert_eq!(service.calls.len(), 1);
-        assert_eq!(service.calls[0].state, CallState::Active);
-        assert_eq!(service.calls[0].peer_id, Some(peer_act));
-    }
-
-    #[test]
-    fn test_ath_teardown_conference_drops_all_active_legs() {
-        let mut service = CallService::default();
-        let id = 1;
-        let peer1 = 10;
-        let peer2 = 20;
-        let peer_held = 30;
-
-        service.add_call(
-            CallState::Held,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("111")),
-            NumberPresentation::Allowed,
-            Some(peer_held),
-        );
-        service.add_call(
-            CallState::Active,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("222")),
-            NumberPresentation::Allowed,
-            Some(peer1),
-        );
-        service.calls[1].is_multi_party = true;
-        service.add_call(
-            CallState::Active,
-            CallDirection::Incoming,
-            Some(PhoneNumber::new_for_test("333")),
-            NumberPresentation::Allowed,
-            Some(peer2),
-        );
-        service.calls[2].is_multi_party = true;
-
-        let res = service.handle_hangup(id).unwrap().unwrap();
-        match res {
-            super::CallResponse::WithActions(actions) => {
-                assert_eq!(actions.len(), 2);
-                assert!(actions.contains(&crate::types::CommandAction::HangupCall {
-                    initiator: id,
-                    target_peer: peer1,
-                }));
-                assert!(actions.contains(&crate::types::CommandAction::HangupCall {
-                    initiator: id,
-                    target_peer: peer2,
-                }));
-            }
-            other => panic!("Unexpected response: {other:?}"),
-        }
-
-        // Both active conference legs dropped, held call remains
-        assert_eq!(service.calls.len(), 1);
-        assert_eq!(service.calls[0].state, CallState::Held);
-        assert_eq!(service.calls[0].peer_id, Some(peer_held));
-    }
-
-    #[test]
-    fn test_receive_hangup_drops_foreground_preserves_held() {
-        let mut service = CallService::default();
-        let peer1 = 10;
-        let peer2 = 20;
-
-        // Call 1: Held
-        service.add_call(
-            CallState::Held,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("111")),
-            NumberPresentation::Allowed,
-            Some(peer1),
-        );
-        // Call 2: Active
-        service.add_call(
-            CallState::Active,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("222")),
-            NumberPresentation::Allowed,
-            Some(peer2),
-        );
-
-        service.receive_hangup();
-
-        // Active call was dropped; Held call remains intact
-        assert_eq!(service.calls.len(), 1);
-        assert_eq!(service.calls[0].state, CallState::Held);
-        assert_eq!(service.calls[0].peer_id, Some(peer1));
-    }
-
-    #[test]
-    fn test_receive_hangup_drops_all_conference_legs() {
-        let mut service = CallService::default();
-        let peer_held = 10;
-        let peer1 = 20;
-        let peer2 = 30;
-
-        service.add_call(
-            CallState::Held,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("111")),
-            NumberPresentation::Allowed,
-            Some(peer_held),
-        );
-        service.add_call(
-            CallState::Active,
-            CallDirection::Outgoing,
-            Some(PhoneNumber::new_for_test("222")),
-            NumberPresentation::Allowed,
-            Some(peer1),
-        );
-        service.calls[1].is_multi_party = true;
-        service.add_call(
-            CallState::Active,
-            CallDirection::Incoming,
-            Some(PhoneNumber::new_for_test("333")),
-            NumberPresentation::Allowed,
-            Some(peer2),
-        );
-        service.calls[2].is_multi_party = true;
-
-        service.receive_hangup();
-
-        // Both active conference legs dropped; Held call remains intact
-        assert_eq!(service.calls.len(), 1);
-        assert_eq!(service.calls[0].state, CallState::Held);
-        assert_eq!(service.calls[0].peer_id, Some(peer_held));
-    }
-}
+mod tests;

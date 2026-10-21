@@ -21,7 +21,7 @@ pub(crate) struct UwbRangingEstimator {
 }
 
 impl UwbRangingEstimator {
-    pub fn new(shared_chips: Arc<RwLock<HashMap<Handle, UwbChipState>>>) -> Self {
+    pub(crate) fn new(shared_chips: Arc<RwLock<HashMap<Handle, UwbChipState>>>) -> Self {
         Self { shared_chips }
     }
 }

@@ -69,4 +69,10 @@ impl From<String> for Error {
     }
 }
 
+impl From<netsim_rest_api::RestError> for Error {
+    fn from(err: netsim_rest_api::RestError) -> Self {
+        Error::Message(err.to_string())
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;

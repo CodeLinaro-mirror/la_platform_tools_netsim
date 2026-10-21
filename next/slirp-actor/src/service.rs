@@ -241,7 +241,7 @@ impl ActorService for SlirpActor {
             // - EthernetActor: Registers individual L2 ports representing each emulated guest
             //   Ethernet or Cellular chip.
             // Both actors exchange pre-formatted L2 802.3 Ethernet frames with the switch.
-            SlirpReq::Register { client_id, stream, mut sink, notifier } => {
+            SlirpReq::Register { client_id, stream, mut sink, notifier, isolated } => {
                 if self.backend_instance.is_none() {
                     self.init_backend(ctx)?;
                 }
@@ -249,7 +249,7 @@ impl ActorService for SlirpActor {
                 if let Entry::Vacant(e) = self.clients.entry(client_id) {
                     tracing::info!("SlirpActor: Registering client {client_id}");
                     let (downlink_tx, mut downlink_rx) = tokio::sync::mpsc::unbounded_channel();
-                    e.insert(ClientInfo { sink: downlink_tx, notifier });
+                    e.insert(ClientInfo { sink: downlink_tx, notifier, isolated });
                     ctx.add_stream(client_id, stream);
 
                     // Spawn isolated background forwarding task on SlirpActor's
@@ -275,6 +275,13 @@ impl ActorService for SlirpActor {
                 self.clients.remove(&client_id);
                 self.mac_table.retain(|_, v| *v != client_id);
                 ctx.remove_stream(client_id);
+            }
+            SlirpReq::AllocateLease { chip_id, respond_to } => {
+                let lease = self.allocate_lease(chip_id);
+                let _ = respond_to.send(lease);
+            }
+            SlirpReq::ReleaseLease { chip_id } => {
+                self.release_lease(chip_id);
             }
             SlirpReq::SwitchBackend(new_backend) => {
                 if self.backend_type != new_backend {
@@ -356,7 +363,7 @@ mod tests {
         let result = actor
             .handle_action(
                 None,
-                SlirpReq::Register { client_id: 1, stream, sink, notifier: None },
+                SlirpReq::Register { client_id: 1, stream, sink, notifier: None, isolated: false },
                 &mut ctx,
             )
             .await;
@@ -399,7 +406,7 @@ mod tests {
         let result = actor
             .handle_action(
                 None,
-                SlirpReq::Register { client_id: 1, stream, sink, notifier: None },
+                SlirpReq::Register { client_id: 1, stream, sink, notifier: None, isolated: false },
                 &mut ctx,
             )
             .await;
@@ -434,7 +441,7 @@ mod tests {
         let result = actor
             .handle_action(
                 None,
-                SlirpReq::Register { client_id: 1, stream, sink, notifier: None },
+                SlirpReq::Register { client_id: 1, stream, sink, notifier: None, isolated: false },
                 &mut ctx,
             )
             .await;

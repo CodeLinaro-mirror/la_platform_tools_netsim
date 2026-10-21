@@ -4,9 +4,9 @@
 use modem_rs_derive::CommandParser;
 
 use crate::{
+    CardState,
     config::{Stk, StkMenuItem},
     parser::QuotedString,
-    sim_service::SimService,
     types::{ExecutionResult, HandledCommand, Parsable},
 };
 
@@ -386,12 +386,12 @@ impl StkService {
         Ok(StkExecutionResult { response: Some(StkResponse::UsatTerminalResponse(0)), urcs })
     }
 
-    pub fn execute<'a>(
+    pub(crate) fn execute<'a>(
         &mut self,
         command: &StkCommand<'a>,
-        sim_service: &mut SimService,
+        sim: &impl CardState,
     ) -> ExecutionResult {
-        if !sim_service.is_present() {
+        if !sim.is_present() {
             return ExecutionResult::error();
         }
         let res = match command {
@@ -696,5 +696,19 @@ mod tests {
 
         assert_eq!(u8::from(ProactiveCommandType::SelectItem), 0x24);
         assert_eq!(u8::from(ProactiveCommandType::DisplayText), 0x21);
+    }
+
+    #[test]
+    fn test_stk_service_sim_not_present_early_return() {
+        use crate::tests::test_utils::MockCardState;
+
+        let mut service = StkService::default();
+        let sim_absent = MockCardState { is_present: false, ..Default::default() };
+        let res = service.execute(&StkCommand::QueryStkReady, &sim_absent);
+        assert_eq!(res, ExecutionResult::error());
+
+        let sim_present = MockCardState::default();
+        let res = service.execute(&StkCommand::QueryStkReady, &sim_present);
+        assert!(matches!(res, ExecutionResult::Success(_)));
     }
 }

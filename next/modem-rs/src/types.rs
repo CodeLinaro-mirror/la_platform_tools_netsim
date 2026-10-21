@@ -795,13 +795,34 @@ impl<'a> Parsable<'a> for SmsAck {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HangupReason {
+    Normal,
+    Busy,
+    NoAnswer,
+}
+
+impl HangupReason {
+    pub fn as_urc_str(&self, goldfish_ril_37_or_earlier: bool) -> &'static str {
+        if goldfish_ril_37_or_earlier {
+            "RING\r\n"
+        } else {
+            match self {
+                HangupReason::Busy => "BUSY\r\n",
+                HangupReason::NoAnswer => "NO ANSWER\r\n",
+                HangupReason::Normal => "NO CARRIER\r\n",
+            }
+        }
+    }
+}
+
 // Actions that a command can request to be executed by the
 // CellularNetworkSimulator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandAction {
     InitiateCall(DialArgs),
     AnswerCall(ModemId),
-    HangupCall { initiator: ModemId, target_peer: ModemId },
+    HangupCall { initiator: ModemId, target_peer: ModemId, reason: HangupReason },
     HoldCall { holder: ModemId, target: ModemId },
     ResumeCall { resumer: ModemId, target: ModemId },
     ReceiveSms { to: Option<String>, pdu: Vec<u8>, status_report: Option<Vec<u8>> },
@@ -891,6 +912,7 @@ pub enum CmeError {
     NoNetworkService,
     /// 3GPP TS 27.007 Section 9.2.1: Network not allowed - emergency calls only
     NetworkNotAllowedEmergencyCallsOnly,
+    NetworkNotAttachedDueToMTFunctionalRestrictions,
     NoResources,
     IncorrectParameters,
     FixedDialNumberOnlyAllowed,
@@ -927,6 +949,7 @@ impl CmeError {
             Self::InvalidCharacters => 25,
             Self::NoNetworkService => 30,
             Self::NetworkNotAllowedEmergencyCallsOnly => 32,
+            Self::NetworkNotAttachedDueToMTFunctionalRestrictions => 53,
             Self::NoResources => 142,
             Self::IncorrectParameters => 50,
             Self::FixedDialNumberOnlyAllowed => 56,
@@ -957,6 +980,9 @@ impl CmeError {
             Self::NetworkNotAllowedEmergencyCallsOnly => {
                 "network not allowed - emergency calls only"
             }
+            Self::NetworkNotAttachedDueToMTFunctionalRestrictions => {
+                "network not attached due to MT functional restrictions"
+            }
             Self::NoResources => "no resources",
             Self::IncorrectParameters => "incorrect parameters",
             Self::FixedDialNumberOnlyAllowed => "fixed dialing number only allowed",
@@ -982,6 +1008,7 @@ pub enum CmsError {
     SimPinRequired,
     InvalidMemoryIndex,
     MemoryFull,
+    NoNetworkService,
 }
 
 impl fmt::Display for CmsError {
@@ -1001,6 +1028,7 @@ impl CmsError {
             Self::SimPinRequired => 311,
             Self::InvalidMemoryIndex => 321,
             Self::MemoryFull => 322,
+            Self::NoNetworkService => 331,
         }
     }
 
@@ -1012,6 +1040,7 @@ impl CmsError {
             Self::SimPinRequired => "SIM PIN required",
             Self::InvalidMemoryIndex => "invalid memory index",
             Self::MemoryFull => "memory full",
+            Self::NoNetworkService => "no network service",
         }
     }
 
@@ -3213,6 +3242,7 @@ mod tests {
             (CmsError::SimPinRequired, 311, "SIM PIN required"),
             (CmsError::InvalidMemoryIndex, 321, "invalid memory index"),
             (CmsError::MemoryFull, 322, "memory full"),
+            (CmsError::NoNetworkService, 331, "no network service"),
         ];
         for (err, code, verbose) in expected {
             assert_eq!(err.code(), code);
@@ -3368,5 +3398,16 @@ mod tests {
             assert_eq!(*tech as u8, mask);
         }
         assert_eq!(CtecTechnology::all_mask(), 0x7F);
+    }
+
+    #[test]
+    fn test_hangup_reason_as_urc_str() {
+        assert_eq!(HangupReason::Busy.as_urc_str(false), "BUSY\r\n");
+        assert_eq!(HangupReason::NoAnswer.as_urc_str(false), "NO ANSWER\r\n");
+        assert_eq!(HangupReason::Normal.as_urc_str(false), "NO CARRIER\r\n");
+
+        assert_eq!(HangupReason::Busy.as_urc_str(true), "RING\r\n");
+        assert_eq!(HangupReason::NoAnswer.as_urc_str(true), "RING\r\n");
+        assert_eq!(HangupReason::Normal.as_urc_str(true), "RING\r\n");
     }
 }

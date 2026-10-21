@@ -11,14 +11,14 @@ use modem_rs_derive::CommandParser;
 use tracing::{debug, info};
 
 use crate::{
-    apdu,
+    CardState, SmsStore, apdu,
     config::{FileSystem, OverwritePolicy, ProfileMetadata, SimFile, SimProfile},
     constants::*,
     types::{
         AdnRecord, ApduData, ApplicationId, CdmaRoamingPreference, CdmaSubscriptionSource,
-        CmeError, DEFAULT_BARRING_PASSWORD, DEFAULT_PIN, DEFAULT_PIN2, DEFAULT_PUK2,
+        CmeError, CmsError, DEFAULT_BARRING_PASSWORD, DEFAULT_PIN, DEFAULT_PIN2, DEFAULT_PUK2,
         ExecutionResult, Facility, FacilityLockMode, Parsable, PhoneNumber, PinString, PinType,
-        Plmn, QuotedString, SimSmsMessage,
+        Plmn, QuotedString, ServiceClass, SimSmsMessage,
     },
 };
 
@@ -59,6 +59,9 @@ pub enum SimCommand<'a> {
     TransmitLogicalChannel(u8, u8, ApduData<'a>),
     #[command(tag = "AT+CPWD=")]
     ChangePassword(Facility, QuotedString<'a>, QuotedString<'a>),
+    /// 3GPP TS 27.007 §7.4: Selects facility lock state or queries status.
+    #[command(tag = "AT+CLCK=")]
+    SetFacilityLock(Facility, FacilityLockMode, Option<QuotedString<'a>>, Option<ServiceClass>),
     /// 3GPP2 C.S0023: Set CDMA subscription source
     #[command(tag = "AT+CCSS=")]
     SetCdmaSubscriptionSource(CdmaSubscriptionSource),
@@ -639,14 +642,12 @@ impl SimService {
         self.provisioned
     }
 
-    /// Returns true if the SIM is in the Ready state.
-    pub(crate) fn is_ready(&self) -> bool {
-        self.state == SimState::Ready
-    }
-
     /// Returns the CME error corresponding to a non-ready SIM lifecycle state,
     /// or None if the SIM is ready for normal operation.
     pub(crate) fn gating_error(&self) -> Option<CmeError> {
+        if !self.provisioned {
+            return Some(CmeError::SimNotInserted);
+        }
         match self.state {
             SimState::Absent => Some(CmeError::SimNotInserted),
             SimState::PinRequired => Some(CmeError::SimPinRequired),
@@ -951,10 +952,6 @@ impl SimService {
         Some(format!("{}", SimResponse::PinStatus(status)))
     }
 
-    pub(crate) fn is_present(&self) -> bool {
-        self.provisioned && self.state != SimState::Absent
-    }
-
     pub(crate) fn set_present(&mut self, present: bool) -> bool {
         if present && !self.provisioned {
             return false;
@@ -1001,35 +998,6 @@ impl SimService {
             }
         }
         Some(slot)
-    }
-
-    pub(crate) fn store_sms(&mut self, message: SimSmsMessage) -> Option<u8> {
-        if !self.is_present() {
-            return None;
-        }
-        let index = self.allocate_sms_slot()?;
-        self.sms_messages.insert(index, message);
-        Some(index)
-    }
-
-    pub(crate) fn read_sms(&mut self, index: u8) -> Result<Option<SimSmsMessage>, CmeError> {
-        if !self.is_present() {
-            return Err(CmeError::SimNotInserted);
-        }
-        if let Some(msg) = self.sms_messages.get_mut(&index) {
-            let res = msg.clone();
-            msg.mark_read();
-            Ok(Some(res))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub(crate) fn delete_sms(&mut self, index: u8) -> bool {
-        if !self.is_present() {
-            return false;
-        }
-        self.sms_messages.remove(&index).is_some()
     }
 
     // --- Pure command handlers ---
@@ -1918,6 +1886,9 @@ impl SimService {
             SimCommand::ChangePassword(facility, old_password, new_password) => {
                 self.handle_change_password(*facility, *old_password, *new_password)
             }
+            SimCommand::SetFacilityLock(facility, mode, passwd, _) => {
+                self.handle_set_facility_lock(*facility, *mode, *passwd)
+            }
             SimCommand::QueryPinRetries(pin_type) => self.handle_query_pin_retries_cpinr(*pin_type),
             SimCommand::SetCdmaSubscriptionSource(source) => {
                 self.cdma_subscription_source = *source;
@@ -1968,6 +1939,70 @@ impl SimService {
             format_sim_payload_data(&hex_data, sw)
         } else {
             format_sim_payload_data(&hex_data, SW_SUCCESS)
+        }
+    }
+
+    fn check_sms_access(&self) -> Result<(), CmsError> {
+        if !self.is_present() {
+            Err(CmsError::SimNotInserted)
+        } else if !self.is_ready() {
+            Err(CmsError::SimPinRequired)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl CardState for SimService {
+    fn is_present(&self) -> bool {
+        self.provisioned && self.state != SimState::Absent
+    }
+
+    /// True when PIN/PUK authentication has succeeded and the card is
+    /// operational.
+    fn is_ready(&self) -> bool {
+        self.provisioned && self.state == SimState::Ready
+    }
+
+    fn validate_call(&self, number: &PhoneNumber, is_emergency: bool) -> Result<(), CmeError> {
+        if is_emergency {
+            return Ok(());
+        }
+        if let Some(err) = self.gating_error() {
+            return Err(err);
+        }
+        if !self.is_fdn_allowed(number) {
+            return Err(CmeError::FixedDialNumberOnlyAllowed);
+        }
+        Ok(())
+    }
+}
+
+impl SmsStore for SimService {
+    fn store_sms(&mut self, message: SimSmsMessage) -> Result<u8, CmsError> {
+        self.check_sms_access()?;
+        let index = self.allocate_sms_slot().ok_or(CmsError::MemoryFull)?;
+        self.sms_messages.insert(index, message);
+        Ok(index)
+    }
+
+    fn read_sms(&mut self, index: u8) -> Result<SimSmsMessage, CmsError> {
+        self.check_sms_access()?;
+        if let Some(msg) = self.sms_messages.get_mut(&index) {
+            let res = msg.clone();
+            msg.mark_read();
+            Ok(res)
+        } else {
+            Err(CmsError::InvalidMemoryIndex)
+        }
+    }
+
+    fn delete_sms(&mut self, index: u8) -> Result<(), CmsError> {
+        self.check_sms_access()?;
+        if self.sms_messages.remove(&index).is_some() {
+            Ok(())
+        } else {
+            Err(CmsError::InvalidMemoryIndex)
         }
     }
 }
@@ -2410,10 +2445,14 @@ mod tests {
         assert_eq!(meta.home_plmn.as_ref().map(Plmn::as_str), Some("310260"));
 
         // Store an SMS to verify it gets cleared on removal
-        service.store_sms(SimSmsMessage {
-            status: SmsMessageStatus::ReceivedUnread,
-            pdu: vec![1, 2, 3],
-        });
+        assert!(
+            service
+                .store_sms(SimSmsMessage {
+                    status: SmsMessageStatus::ReceivedUnread,
+                    pdu: vec![1, 2, 3],
+                })
+                .is_ok()
+        );
         assert_eq!(service.get_sms_count(), 1);
 
         // Test ejection (set_present(false)) vs removal (remove_sim)
@@ -2494,7 +2533,7 @@ mod tests {
         let dummy_pdu = vec![0x00, 0x01, 0x02, 0x03];
         let index = service
             .store_sms(SimSmsMessage { status: SmsMessageStatus::ReceivedUnread, pdu: dummy_pdu });
-        assert_eq!(index, Some(1));
+        assert_eq!(index, Ok(1));
         assert_eq!(service.get_sms_count(), 1);
 
         // Switching or reloading profile should clear stored SMS records
@@ -2515,20 +2554,20 @@ mod tests {
             || SimSmsMessage { status: SmsMessageStatus::ReceivedUnread, pdu: vec![0x00, 0x01] };
 
         // Store 3 messages: slots 1, 2, 3
-        assert_eq!(service.store_sms(make_msg()), Some(1));
-        assert_eq!(service.store_sms(make_msg()), Some(2));
-        assert_eq!(service.store_sms(make_msg()), Some(3));
+        assert_eq!(service.store_sms(make_msg()), Ok(1));
+        assert_eq!(service.store_sms(make_msg()), Ok(2));
+        assert_eq!(service.store_sms(make_msg()), Ok(3));
         assert_eq!(service.get_sms_count(), 3);
 
         // Delete slot 2
-        assert!(service.delete_sms(2));
+        assert!(service.delete_sms(2).is_ok());
         assert_eq!(service.get_sms_count(), 2);
 
         // Next store should reuse slot 2 (lowest available)
-        assert_eq!(service.store_sms(make_msg()), Some(2));
+        assert_eq!(service.store_sms(make_msg()), Ok(2));
 
         // Subsequent store should take slot 4
-        assert_eq!(service.store_sms(make_msg()), Some(4));
+        assert_eq!(service.store_sms(make_msg()), Ok(4));
         assert_eq!(service.get_sms_count(), 4);
     }
 

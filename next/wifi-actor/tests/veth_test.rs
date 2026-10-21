@@ -117,7 +117,6 @@ async fn test_udp_guest_to_host() {
     // 4. Send UDP packet from "Guest" (simulated via wrapping)
     use netsim_packets::utils::test_utils::PacketBuilder;
     let payload = b"Hello Host from Slirp!";
-    let payload_len = payload.len();
 
     // For Slirp, the Host is accessible via 10.0.2.2 (alias for Host Loopback)
     // Sending to 127.0.0.1 from Guest would just mean Guest Localhost.
@@ -128,9 +127,8 @@ async fn test_udp_guest_to_host() {
             [10, 0, 2, 15],
             host_ip,
             17, // UDP
-            8 + payload_len,
         )
-        .udp(12345, host_addr.port(), payload_len)
+        .udp(12345, host_addr.port())
         .payload(payload);
 
     // Wrap in Hwsim

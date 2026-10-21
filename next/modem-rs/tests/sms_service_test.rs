@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use modem_rs::PhoneNumber;
+use netsim_model::RegistrationStatus;
 
 use crate::{common::constants::*, steps::*, world::World};
 
@@ -16,6 +17,7 @@ use crate::{common::constants::*, steps::*, world::World};
 fn test_cmgs() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
 
     when_at_command_sent(&mut world, "A", &format!("AT+CMGS={TEST_SMS_TPDU_LEN}"));
     then_prompt_is(&mut world, "A", "> ");
@@ -405,6 +407,7 @@ fn test_send_sms_text_mode() {
 fn test_incoming_sms() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
 
     // 1. Text Mode
     when_at_command_sent(&mut world, "A", "AT+CMGF=1");
@@ -431,6 +434,7 @@ fn test_incoming_sms() {
 fn test_incoming_sms_pdu_mode_plain_text() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
 
     // Set PDU Mode
     when_at_command_sent(&mut world, "A", "AT+CMGF=0");
@@ -450,6 +454,7 @@ fn test_incoming_sms_pdu_mode_plain_text() {
 fn test_sms_send_abort() {
     let mut world = World::new();
     given_modem(&mut world, "A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
 
     // Set PDU Mode
     when_at_command_sent(&mut world, "A", "AT+CMGF=0");
@@ -510,9 +515,11 @@ fn test_legacy_sms() {
     // Set phone numbers
     if let Some(modem) = world.manager.get_modem_mut(id_a) {
         modem.set_phone_number(PhoneNumber::new_for_test("98765"));
+        modem.set_voice_registration(RegistrationStatus::RegisteredHome);
     }
     if let Some(modem) = world.manager.get_modem_mut(id_b) {
         modem.set_phone_number(PhoneNumber::new_for_test("12345"));
+        modem.set_voice_registration(RegistrationStatus::RegisteredHome);
     }
 
     // 1. Text Mode SMS Reception (B receives from A)
@@ -690,6 +697,7 @@ fn test_cms_errors() {
     ] {
         let mut world = World::new();
         world.given_modem("A");
+        when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
 
         world.send_and_expect_ok("A", &format!("AT+CMEE={cmee}"));
 
@@ -745,6 +753,16 @@ fn test_cms_sim_absent_error() {
     world.then_prompt("A");
     world.when_hex_bytes("A", TEST_SMS_PDU_WITH_CTRL_Z);
     world.then_response_is("A", "+CMS ERROR: 310");
+}
+
+#[test]
+fn test_cms_sim_locked_error() {
+    let mut world = World::new();
+    world.given_modem_with_locked_sim("A");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+    world.select_sim_storage("A");
+    world.send_and_expect_error("A", "AT+CMGR=1", "+CMS ERROR: 311");
+    world.send_and_expect_error("A", "AT+CMGD=1", "+CMS ERROR: 311");
 }
 
 #[test]
@@ -829,6 +847,7 @@ fn test_sms_slot_recycling() {
 fn test_sms_prompt_with_goldfish_quirk() {
     let mut world = World::new();
     world.given_goldfish_37_modem("A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
 
     world.when_at_command("A", "AT+CMGS=15");
     world.then_prompt_is("A", "> \r");
@@ -840,6 +859,7 @@ fn test_sms_prompt_with_goldfish_quirk() {
 fn test_cmgs_invalid_destination_error_follows_message_format() {
     let mut world = World::new();
     world.given_modem("A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
     world.send_and_expect_ok("A", "AT+CMEE=1");
 
     world.send_and_expect_ok("A", "AT+CMGF=1");
@@ -853,6 +873,7 @@ fn test_cmgs_invalid_destination_error_follows_message_format() {
 fn test_cmgs_syntax_mismatch_rejected() {
     let mut world = World::new();
     world.given_modem("A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
     world.send_and_expect_ok("A", "AT+CMEE=1");
 
     // In text mode, PDU syntax (AT+CMGS=<length>) is rejected with CMS 305.
@@ -872,6 +893,7 @@ fn test_cmgs_syntax_mismatch_rejected() {
 fn test_rejected_sms_does_not_consume_message_reference() {
     let mut world = World::new();
     world.given_modem("A");
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
     world.send_and_expect_ok("A", "AT+CMEE=1");
 
     world.when_at_command("A", &format!("AT+CMGS={TEST_SMS_TPDU_LEN}"));
@@ -885,4 +907,51 @@ fn test_rejected_sms_does_not_consume_message_reference() {
     world.then_prompt("A");
     world.when_hex_bytes("A", TEST_SMS_PDU_WITH_CTRL_Z);
     world.then_response_contains("A", "+CMGS: 1");
+}
+
+#[test]
+fn test_cmgs_fails_when_unregistered_or_radio_off() {
+    let mut world = World::new();
+    world.given_modem("A");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    world.send_and_expect_error("A", "AT+CMGS=15", "+CMS ERROR: 331");
+
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
+    world.send_and_expect_ok("A", "AT+CFUN=0");
+    world.send_and_expect_error("A", "AT+CMGS=15", "+CMS ERROR: 331");
+}
+
+#[test]
+fn test_cmgs_goldfish_37_quirk_admission_error() {
+    let mut world = World::new();
+    world.given_goldfish_37_modem("A");
+    world.send_and_expect_ok("A", "AT+CMEE=1");
+
+    world.when_at_command("A", "AT+CMGS=15");
+    world.then_prompt_is("A", "> \r");
+
+    world.when_hex_bytes("A", TEST_SMS_PDU_WITH_CTRL_Z);
+    world.then_response_is("A", "+CME ERROR: 30");
+}
+
+#[test]
+fn test_receive_sms_suppressed_when_unregistered_or_radio_off() {
+    let mut world = World::new();
+    world.given_modem("A");
+
+    when_incoming_sms_received(&mut world, "A", TEST_PHONE_NUMBER, TEST_SMS_TEXT);
+    world.then_no_response("A");
+
+    when_incoming_pdu_received(&mut world, "A", TEST_SMS_PDU);
+    world.then_no_response("A");
+
+    when_voice_registration_set(&mut world, "A", RegistrationStatus::RegisteredHome);
+    world.send_and_expect_ok("A", "AT+CFUN=0");
+
+    when_incoming_sms_received(&mut world, "A", TEST_PHONE_NUMBER, TEST_SMS_TEXT);
+    world.then_no_response("A");
+
+    when_incoming_pdu_received(&mut world, "A", TEST_SMS_PDU);
+    world.then_no_response("A");
 }

@@ -382,6 +382,7 @@ def netsim_rust_library(
         select_deps = [],
         testing_deps = [],
         test_deps = [],
+        proc_macro_test_deps = [],
         crate_features = [],
         # Feature Flags (Default to True for safety)
         enable_clippy = True,
@@ -411,6 +412,7 @@ def netsim_rust_library(
         select_deps: The part of deps that uses select()
         testing_deps: Dependencies for the "testing" feature.
         test_deps: Dependencies for the unit test and integration test targets.
+        proc_macro_test_deps: Proc-macro dependencies for the unit test and integration test targets.
         crate_features: the crate features
         enable_clippy: Whether to enable clippy checks.
         enable_rustfmt: Whether to enable rustfmt checks.
@@ -440,6 +442,10 @@ def netsim_rust_library(
         d.split(":")[0] + ":testing" if d.startswith("//next") else d
         for d in deps
     ]
+    test_deps = [
+        d.split(":")[0] + ":testing" if d.startswith("//next") else d
+        for d in test_deps
+    ]
     rust_library(
         name = "testing",
         srcs = srcs,
@@ -465,7 +471,7 @@ def netsim_rust_library(
             aliases = kwargs.get("aliases", {}),
             rustc_flags = test_flags,
             deps = testing_deps + select_deps + test_deps,
-            proc_macro_deps = kwargs.get("proc_macro_deps", []),
+            proc_macro_deps = kwargs.get("proc_macro_deps", []) + proc_macro_test_deps,
             edition = kwargs.get("edition", "2021"),
             env = kwargs.get("env", {}),
             rustc_env = kwargs.get("rustc_env", {}),
@@ -490,6 +496,7 @@ def netsim_rust_library(
         # Else it's likely a single-file setup.
         crate_root_opts = [
             "tests/mod.rs",
+            "tests/integration_test.rs",
             "tests/integration_tests.rs",
         ]
         crate_root = None
@@ -507,7 +514,7 @@ def netsim_rust_library(
             rustc_flags = test_flags,
             compile_data = kwargs.get("compile_data", []),
             deps = [":testing"] + testing_deps + select_deps + test_deps,
-            proc_macro_deps = kwargs.get("proc_macro_deps", []),
+            proc_macro_deps = kwargs.get("proc_macro_deps", []) + proc_macro_test_deps,
             edition = kwargs.get("edition", "2021"),
             env = kwargs.get("env", {}),
             rustc_env = kwargs.get("rustc_env", {}),

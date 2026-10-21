@@ -8,21 +8,17 @@ use netsim_model::Quirks;
 
 use crate::{
     parser::QuotedString,
-    sim_service::SimService,
     types::{
         CallForwardCondition, CallForwardDestination, CallForwardNumberType, CallForwardTime,
         CallForwardTon, CallForwardingMode, CallForwardingReason, CallWaitingMode,
         CallWaitingStatus, ClipProvisionStatus, ClirMode, ClirStatus, CmeError, ExecutionResult,
-        Facility, FacilityLockMode, Parsable, PhoneNumber, ServiceClass, TypeOfAddress, UssdMode,
-        UssdStatus,
+        Parsable, PhoneNumber, ServiceClass, TypeOfAddress, UssdMode, UssdStatus,
     },
 };
 
 /// Supplementary service AT commands.
 #[derive(Debug, PartialEq, Clone, CommandParser)]
 pub enum SupCommand<'a> {
-    #[command(tag = "AT+CLCK=")]
-    SetFacilityLock(Facility, FacilityLockMode, Option<QuotedString<'a>>, Option<ServiceClass>),
     #[command(tag = "AT+CCFC=")]
     CallForwarding {
         reason: CallForwardingReason,
@@ -81,7 +77,6 @@ pub struct CallForwardLine {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SupResponse {
-    FacilityLockStatus(u8),
     Clir { n: ClirMode, m: ClirStatus },
     Clip { activation: bool, provision: ClipProvisionStatus },
     CallWaiting(Vec<(CallWaitingStatus, u8)>),
@@ -93,7 +88,6 @@ pub enum SupResponse {
 impl std::fmt::Display for SupResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SupResponse::FacilityLockStatus(status) => write!(f, "+CLCK: {status}\r\n"),
             SupResponse::Clir { n, m } => write!(f, "+CLIR: {n},{m}\r\n"),
             SupResponse::Clip { activation, provision } => {
                 write!(f, "+CLIP: {},{provision}\r\n", *activation as u8)
@@ -490,15 +484,8 @@ impl SupService {
         }
     }
 
-    fn handle_command<'a>(
-        &mut self,
-        command: &SupCommand<'a>,
-        sim_service: &mut SimService,
-    ) -> SupResult {
+    fn handle_command<'a>(&mut self, command: &SupCommand<'a>) -> SupResult {
         let resp = match command {
-            SupCommand::SetFacilityLock(facility, mode, passwd, _) => {
-                return Err(sim_service.handle_set_facility_lock(*facility, *mode, *passwd).into());
-            }
             SupCommand::CallForwarding { .. } => {
                 let req = CallForwardRequest::from_command(command, self.quirks)?;
                 self.handle_call_forward(req)?.map(SupResponse::CallForwarding)
@@ -528,11 +515,7 @@ impl SupService {
         Ok(resp)
     }
 
-    pub fn execute<'a>(
-        &mut self,
-        command: &SupCommand<'a>,
-        sim_service: &mut SimService,
-    ) -> ExecutionResult {
-        self.handle_command(command, sim_service).into()
+    pub(crate) fn execute<'a>(&mut self, command: &SupCommand<'a>) -> ExecutionResult {
+        self.handle_command(command).into()
     }
 }

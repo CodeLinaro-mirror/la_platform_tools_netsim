@@ -16,7 +16,122 @@ rust_library_host {
     features: ["cuttlefish"],
     lints: "none",
     rustlibs: [
+        "libhttp_body_util",
+        "libhyper",
+        "libhyper_util",
+        "libnetsim_next_ap_actor",
+        "libnetsim_next_device_actor",
+        "libnetsim_next_link_api",
         "libnetsim_next_model",
         "libserde",
+        "libserde_json",
+        "libthiserror",
+        "libtokio",
+        "libtracing",
+    ],
+}
+
+rust_library_host {
+    name: "libnetsim_next_rest_api_testing",
+    crate_name: "netsim_rest_api",
+    edition: "2024",
+    stem: "libnetsim_rest_api_testing",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libhttp_body_util",
+        "libhyper",
+        "libhyper_util",
+        "libnetsim_next_ap_actor_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_link_api_testing",
+        "libnetsim_next_model_testing",
+        "libserde",
+        "libserde_json",
+        "libthiserror",
+        "libtokio",
+        "libtracing",
+    ],
+}
+
+rust_test_host {
+    name: "libnetsim_next_rest_api_tests",
+    crate_name: "netsim_rest_api",
+    edition: "2024",
+    crate_root: "src/lib.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libhttp_body_util",
+        "libhyper",
+        "libhyper_util",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_ap_actor_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_link_api_testing",
+        "libnetsim_next_model_testing",
+        "libserde",
+        "libserde_json",
+        "libthiserror",
+        "libtokio",
+        "libtracing",
+    ],
+    proc_macros: [
+        "libasync_trait",
+    ],
+}
+
+rust_test_host {
+    name: "libnetsim_next_rest_api_integration_tests",
+    crate_name: "netsim_rest_api_tests",
+    edition: "2024",
+    crate_root: "tests/mod.rs",
+    test_suites: [
+        "general_tests",
+    ],
+    srcs: [
+        "tests/client_test.rs",
+        "tests/mod.rs",
+        "tests/server_test.rs",
+    ],
+    features: [
+        "cuttlefish",
+        "testing",
+    ],
+    lints: "none",
+    rustlibs: [
+        "libhttp_body_util",
+        "libhyper",
+        "libhyper_util",
+        "libnetsim_next_actor_framework_testing",
+        "libnetsim_next_ap_actor_testing",
+        "libnetsim_next_device_actor_testing",
+        "libnetsim_next_link_api_testing",
+        "libnetsim_next_model_testing",
+        "libnetsim_next_rest_api_testing",
+        "libserde",
+        "libserde_json",
+        "libthiserror",
+        "libtokio",
+        "libtracing",
+    ],
+    proc_macros: [
+        "libasync_trait",
     ],
 }

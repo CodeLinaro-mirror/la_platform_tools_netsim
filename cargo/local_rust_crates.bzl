@@ -69,7 +69,6 @@ def _lrc_impl(module_ctx):
         "env_logger",
         "equivalent",
         "errno",
-        "etherparse",
         "fastrand",
         "flate2",
         "fnv",
