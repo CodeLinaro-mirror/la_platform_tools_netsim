@@ -44,9 +44,8 @@ use common::util::{
 use file_handler::FileHandler;
 use grpcio::{ChannelBuilder, EnvBuilder};
 use netsim_proto::{
-    access_point_grpc::AccessPointServiceClient, ble_service_grpc::BleServiceClient,
-    cell_grpc::CellServiceClient, frontend, frontend_grpc::FrontendServiceClient,
-    nfc_service_grpc::NfcServiceClient,
+    ble_service_grpc::BleServiceClient, cell_grpc::CellServiceClient, frontend,
+    frontend_grpc::FrontendServiceClient, nfc_service_grpc::NfcServiceClient,
 };
 use netsim_rest_api::{ListDeviceResponse, NetsimRestClient};
 use tracing::error;
@@ -166,8 +165,8 @@ fn perform_command(
                 Ok(Some(response))
             }
         };
-        if let Err(e) = process_result(command, result, cells.as_deref(), Some(req), verbose) {
-            error!("{e}");
+        if let Err(error) = process_result(command, result, cells.as_deref(), Some(req), verbose) {
+            error!(%error);
             process_error = true;
         };
     }
@@ -237,6 +236,9 @@ fn run_rest(
         args::Command::Capture(args::Capture::Stream(cmd)) => {
             return Some(capture_stream::stream_capture(http_server, cmd));
         }
+        args::Command::Ap(cmd) => {
+            return Some(crate::ap::client::execute(cmd, rest, verbose));
+        }
         _ => return None,
     };
     Some(result.map_err(Error::from))
@@ -248,8 +250,8 @@ fn main() -> ExitCode {
     netsim_logger::init("netsim", args.verbose);
     match run(args) {
         Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            error!("{e}");
+        Err(error) => {
+            error!(%error);
             ExitCode::FAILURE
         }
     }
@@ -288,12 +290,6 @@ fn run(args: NetsimArgs) -> Result<()> {
     let channel =
         ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build())).connect(&server);
     match args.command {
-        args::Command::Ap(cmd) => crate::ap::client::execute(
-            &cmd,
-            &rest_client,
-            &AccessPointServiceClient::new(channel),
-            verbose,
-        ),
         args::Command::Ble(cmd) => {
             crate::ble::client::execute(&cmd, &BleServiceClient::new(channel), verbose)
         }

@@ -14,7 +14,9 @@
 
 use std::collections::HashMap;
 
-use netsim_model::{ApCreate, ApUpdate as ModelApUpdate, DEFAULT_WIFI_SSID, Position, WifiMode};
+use netsim_model::{
+    Ap, ApCreate, ApUpdate as ModelApUpdate, DEFAULT_WIFI_SSID, Position, WifiMode,
+};
 use netsim_packets::MacAddr;
 use serde::{Deserialize, Serialize};
 
@@ -80,6 +82,8 @@ pub struct ApConfig {
 /// Base MAC address for simulated Wi-Fi Access Points (02:15:b2:00:00:00).
 pub const DEFAULT_AP_BSSID: MacAddr = MacAddr::new([0x02, 0x15, 0xb2, 0x00, 0x00, 0x00]);
 
+const ZERO_BSSID: MacAddr = MacAddr::new([0; 6]);
+
 /// Computes the unique BSSID for an AP based on its ID offset.
 const fn compute_ap_bssid(id: ApId) -> MacAddr {
     let offset_id = (id.0 as u16) + 1;
@@ -91,8 +95,12 @@ const fn compute_ap_bssid(id: ApId) -> MacAddr {
     MacAddr::new(bytes)
 }
 
+/// Reserved ID for the built-in default AP created at daemon startup; dynamic
+/// AP IDs start at 1.
+pub(crate) const DEFAULT_AP_ID: ApId = ApId(0);
+
 /// Precomputed BSSID for the Built-in Default AP (ID 0).
-pub const EXPECTED_DEFAULT_AP_BSSID: MacAddr = compute_ap_bssid(ApId(0));
+pub const EXPECTED_DEFAULT_AP_BSSID: MacAddr = compute_ap_bssid(DEFAULT_AP_ID);
 
 /// Returns the expected BSSID for the Built-in Default AP (ID 0).
 pub const fn expected_default_ap_bssid() -> MacAddr {
@@ -140,9 +148,14 @@ impl Default for ApConfig {
 
 impl From<ApConfig> for ApCreate {
     fn from(val: ApConfig) -> Self {
+        let bssid = if val.bssid == DEFAULT_AP_BSSID || val.bssid == ZERO_BSSID {
+            String::new()
+        } else {
+            val.bssid.to_string()
+        };
         Self {
             ssid: val.ssid,
-            bssid: val.bssid.to_string(),
+            bssid,
             channel: val.channel,
             hw_mode: val.hw_mode,
             wpa_passphrase: val.wpa_passphrase,
@@ -164,15 +177,30 @@ impl TryFrom<ApCreate> for ApConfig {
     type Error = String;
 
     fn try_from(val: ApCreate) -> Result<Self, Self::Error> {
+        let defaults = Self::default();
+        let bssid = if val.bssid.is_empty() {
+            defaults.bssid
+        } else {
+            let parsed: netsim_packets::MacAddr =
+                val.bssid.parse().map_err(|e| format!("invalid BSSID: {}", e))?;
+            if parsed == ZERO_BSSID {
+                return Err("invalid BSSID: all zeros not permitted".to_string());
+            }
+            parsed
+        };
         Ok(Self {
-            ssid: val.ssid,
-            bssid: val.bssid.parse().map_err(|e| format!("Invalid BSSID: {}", e))?,
-            channel: val.channel,
+            ssid: if val.ssid.is_empty() { defaults.ssid } else { val.ssid },
+            bssid,
+            channel: if val.channel == 0 { defaults.channel } else { val.channel },
             hw_mode: val.hw_mode,
             wpa_passphrase: val.wpa_passphrase,
-            beacon_interval: val.beacon_interval,
+            beacon_interval: if val.beacon_interval == 0 {
+                defaults.beacon_interval
+            } else {
+                val.beacon_interval
+            },
             country_code: val.country_code,
-            dtim_period: val.dtim_period,
+            dtim_period: if val.dtim_period == 0 { defaults.dtim_period } else { val.dtim_period },
             hidden_ssid: val.hidden_ssid,
             sae: val.sae,
             wmm_enabled: val.wmm_enabled,
@@ -221,6 +249,7 @@ pub enum ApReq {
     Disconnect {
         mac: MacAddr,
     },
+    Reset,
 }
 
 impl std::fmt::Debug for ApReq {
@@ -230,6 +259,7 @@ impl std::fmt::Debug for ApReq {
             ApReq::Disconnect { mac } => {
                 f.debug_struct("ApReq::Disconnect").field("mac", mac).finish()
             }
+            ApReq::Reset => write!(f, "ApReq::Reset"),
         }
     }
 }
@@ -250,6 +280,7 @@ pub struct ApActor {
     pub(crate) shared_keys: std::sync::Arc<shared::SharedKeyStore>,
     pub(crate) next_ap_id: u32,
     pub(crate) beacon_interval: Option<u16>, // In TUs (1024us)
+    pub(crate) default_ap_config: Option<ApConfig>,
 }
 
 #[derive(Clone, Debug)]
@@ -272,33 +303,49 @@ impl ApActor {
             aps: HashMap::new(),
             manager: Ieee80211Manager::new(),
             shared_keys,
-            next_ap_id: 1,
+            next_ap_id: DEFAULT_AP_ID.0 + 1,
             beacon_interval: None,
+            default_ap_config: None,
         }
     }
 }
 
-impl ApState {
-    pub(crate) fn new(id: ApId, mut config: ApConfig) -> Self {
-        if config.bssid.bytes == [0; 6] || config.bssid == DEFAULT_AP_BSSID {
-            config.bssid = compute_ap_bssid(id);
-        }
-
+impl Default for ApState {
+    fn default() -> Self {
         Self {
-            id,
-            config,
+            id: DEFAULT_AP_ID,
+            config: ApConfig { bssid: EXPECTED_DEFAULT_AP_BSSID, ..ApConfig::default() },
             wpa: None,
             sae_sessions: HashMap::new(),
             eap_sessions: HashMap::new(),
             associations: std::collections::HashSet::new(),
             delayed_frames: std::collections::VecDeque::new(),
             enabled: true,
+            tx_sequence: 0,
+        }
+    }
+}
+
+impl ApState {
+    pub(crate) fn new(id: ApId, mut config: ApConfig) -> Self {
+        if config.bssid == DEFAULT_AP_BSSID {
+            config.bssid = compute_ap_bssid(id);
+        }
+
+        Self {
+            id,
+            config,
             tx_sequence: (std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .subsec_micros()
                 % 4096) as u16,
+            ..Self::default()
         }
+    }
+
+    pub(crate) fn reset(&mut self, config: ApConfig) {
+        *self = Self { id: self.id, config, ..Self::default() };
     }
 
     pub(crate) fn clear_station_state(&mut self, sta_mac: &MacAddr) {
@@ -323,5 +370,99 @@ impl ApState {
         let sc = netsim_packets::SequenceControl::new(self.tx_sequence << 4);
         self.tx_sequence = (self.tx_sequence + 1) % 4096;
         sc
+    }
+}
+
+impl From<ApState> for Ap {
+    fn from(state: ApState) -> Self {
+        Self {
+            id: state.id.0,
+            config: state.config.into(),
+            associations: {
+                // `ApState::associations` is a `HashSet<MacAddr>`, so format each
+                // `MacAddr` and sort to keep the JSON array order stable across calls.
+                let mut associations: Vec<String> =
+                    state.associations.into_iter().map(|m| m.to_string()).collect();
+                associations.sort();
+                associations
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ap_state_reset() {
+        let initial_config = ApConfig {
+            ssid: "InitialSsid".to_string(),
+            bssid: expected_default_ap_bssid(),
+            channel: 6,
+            ..ApConfig::default()
+        };
+        let mut state = ApState::new(DEFAULT_AP_ID, initial_config.clone());
+
+        // Mutate fields
+        state.config.ssid = "MutatedSsid".to_string();
+        state.config.channel = 11;
+        state.enabled = false;
+        let sta_mac = MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x10]);
+        state.associations.insert(sta_mac);
+        state
+            .delayed_frames
+            .push_back((std::time::Instant::now(), bytes::Bytes::from_static(b"frame")));
+        let _ = state.next_seq_control();
+
+        assert_eq!(state.config.ssid, "MutatedSsid");
+        assert_eq!(state.config.channel, 11);
+        assert!(!state.enabled);
+        assert!(!state.associations.is_empty());
+        assert!(!state.delayed_frames.is_empty());
+
+        // Reset to initial config
+        state.reset(initial_config);
+
+        assert_eq!(state.config.ssid, "InitialSsid");
+        assert_eq!(state.config.channel, 6);
+        assert!(state.enabled);
+        assert!(state.wpa.is_none());
+        assert!(state.sae_sessions.is_empty());
+        assert!(state.eap_sessions.is_empty());
+        assert!(state.associations.is_empty());
+        assert!(state.delayed_frames.is_empty());
+        let sc = state.next_seq_control();
+        assert_eq!(sc.get(), 0);
+    }
+
+    #[test]
+    fn test_ap_from_state() {
+        let config = ApConfig {
+            bssid: MacAddr::new([0x02, 0x11, 0x22, 0x33, 0x44, 0x55]),
+            ..Default::default()
+        };
+        let mut state = ApState::new(ApId(42), config);
+        state.associations.insert(MacAddr::new([0x00, 0x11, 0x22, 0x33, 0x44, 0xbb]));
+        state.associations.insert(MacAddr::new([0x00, 0x11, 0x22, 0x33, 0x44, 0xaa]));
+
+        let ap = Ap::from(state);
+        assert_eq!(ap.id, 42);
+        assert_eq!(ap.config.bssid, "02:11:22:33:44:55");
+        assert_eq!(
+            ap.associations,
+            vec!["00:11:22:33:44:AA".to_string(), "00:11:22:33:44:BB".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_zero_bssid_validation() {
+        let create = ApCreate { bssid: "00:00:00:00:00:00".to_string(), ..Default::default() };
+        let err = ApConfig::try_from(create).unwrap_err();
+        assert!(err.contains("invalid BSSID: all zeros not permitted"));
+
+        let config = ApConfig { bssid: ZERO_BSSID, ..Default::default() };
+        let create: ApCreate = config.into();
+        assert_eq!(create.bssid, "");
     }
 }

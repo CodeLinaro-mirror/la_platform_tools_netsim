@@ -44,16 +44,6 @@ impl NfcMode {
     pub const fn as_u8(self) -> u8 {
         self as u8
     }
-
-    /// Returns true if the controller is in listen mode.
-    pub const fn is_listen(self) -> bool {
-        matches!(self, Self::Listen)
-    }
-
-    /// Returns true if the controller is in poll mode.
-    pub const fn is_poll(self) -> bool {
-        matches!(self, Self::Poll)
-    }
 }
 
 impl From<NfcMode> for u8 {
@@ -75,14 +65,32 @@ impl TryFrom<u8> for NfcMode {
     }
 }
 
-/// Backwards compatibility constants for `NFC_MODE_*`.
-pub const NFC_MODE_IDLE: u8 = NfcMode::Idle.as_u8();
-pub const NFC_MODE_POLL: u8 = NfcMode::Poll.as_u8();
-pub const NFC_MODE_LISTEN: u8 = NfcMode::Listen.as_u8();
+/// NCI Message Types (MT) encoded in bits 7-5 of Octet 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub(crate) enum NciMessageType {
+    Data = 0,
+    Command = 1,
+    Response = 2,
+    Notification = 3,
+}
+
+impl NciMessageType {
+    pub(crate) const fn from_header_byte(b0: u8) -> Option<Self> {
+        match b0 >> 5 {
+            0 => Some(Self::Data),
+            1 => Some(Self::Command),
+            2 => Some(Self::Response),
+            3 => Some(Self::Notification),
+            _ => None,
+        }
+    }
+}
 
 pub struct ChipState {
     pub id: ChipId,
     pub device_id: device_api::DeviceId,
+    pub(crate) chip: netsim_model::Chip,
     pub enabled: Arc<AtomicBool>,
     pub casimir_device_id: u16,
     pub nfc_writer: WriteHalf<DuplexStream>,
@@ -101,11 +109,6 @@ impl ChipState {
     /// Stores a new NFC operating mode.
     pub fn set_mode(&self, mode: NfcMode) {
         self.mode.store(mode.as_u8(), std::sync::atomic::Ordering::Relaxed);
-    }
-
-    /// Returns whether the controller is currently in listen mode.
-    pub fn is_listen(&self) -> bool {
-        self.mode() == NfcMode::Listen
     }
 }
 
@@ -149,23 +152,18 @@ impl NfcActor {
         info!("In-process Casimir scene started");
     }
 
-    /// Returns the number of currently active chips.
-    pub fn chip_count(&self) -> usize {
-        self.active_chips.len()
-    }
-
     /// Returns true if a chip with the given ID is active.
-    pub fn is_chip_active(&self, id: &ChipId) -> bool {
+    pub(crate) fn is_chip_active(&self, id: &ChipId) -> bool {
         self.active_chips.contains_key(id)
     }
 
     /// Returns a reference to the active [`ChipState`] for the given chip ID.
-    pub fn get_chip(&self, id: &ChipId) -> Option<&ChipState> {
+    pub(crate) fn get_chip(&self, id: &ChipId) -> Option<&ChipState> {
         self.active_chips.get(id)
     }
 
     /// Returns a mutable reference to the active [`ChipState`] for the given chip ID.
-    pub fn get_chip_mut(&mut self, id: &ChipId) -> Option<&mut ChipState> {
+    pub(crate) fn get_chip_mut(&mut self, id: &ChipId) -> Option<&mut ChipState> {
         self.active_chips.get_mut(id)
     }
 }
@@ -239,12 +237,24 @@ mod tests {
         assert_eq!(NfcMode::try_from(2), Ok(NfcMode::Listen));
         assert_eq!(NfcMode::try_from(3), Err(3));
 
-        assert!(NfcMode::Poll.is_poll());
-        assert!(!NfcMode::Poll.is_listen());
-        assert!(NfcMode::Listen.is_listen());
-        assert!(!NfcMode::Listen.is_poll());
-
         assert_eq!(NfcMode::default(), NfcMode::Idle);
+    }
+
+    #[test]
+    fn test_nci_message_type_from_header_byte() {
+        assert_eq!(NciMessageType::from_header_byte(0x00), Some(NciMessageType::Data));
+        assert_eq!(NciMessageType::from_header_byte(0x20), Some(NciMessageType::Command));
+        assert_eq!(NciMessageType::from_header_byte(0x40), Some(NciMessageType::Response));
+        assert_eq!(NciMessageType::from_header_byte(0x60), Some(NciMessageType::Notification));
+
+        assert_eq!(NciMessageType::from_header_byte(0x0F), Some(NciMessageType::Data));
+        assert_eq!(NciMessageType::from_header_byte(0x2F), Some(NciMessageType::Command));
+        assert_eq!(NciMessageType::from_header_byte(0x4F), Some(NciMessageType::Response));
+        assert_eq!(NciMessageType::from_header_byte(0x6F), Some(NciMessageType::Notification));
+
+        for mt in 4..=7 {
+            assert_eq!(NciMessageType::from_header_byte(mt << 5), None);
+        }
     }
 
     #[test]
@@ -254,6 +264,7 @@ mod tests {
         let state = ChipState {
             id: ChipId(42),
             device_id: device_api::DeviceId(1),
+            chip: Default::default(),
             enabled: Arc::new(AtomicBool::new(true)),
             casimir_device_id: 1,
             nfc_writer,
@@ -263,22 +274,18 @@ mod tests {
         };
 
         assert_eq!(state.mode(), NfcMode::Idle);
-        assert!(!state.is_listen());
 
         state.set_mode(NfcMode::Poll);
         assert_eq!(state.mode(), NfcMode::Poll);
-        assert!(!state.is_listen());
 
         state.set_mode(NfcMode::Listen);
         assert_eq!(state.mode(), NfcMode::Listen);
-        assert!(state.is_listen());
     }
 
     #[tokio::test]
     async fn test_nfc_actor_domain_helpers() {
         let (_runner, device_client) = device_actor::new();
         let mut actor = NfcActor::new(device_client, Arc::new(crate::stats::NfcStats::new()));
-        assert_eq!(actor.chip_count(), 0);
         assert!(!actor.is_chip_active(&ChipId(10)));
         assert!(actor.get_chip(&ChipId(10)).is_none());
         assert!(actor.get_chip_mut(&ChipId(10)).is_none());
