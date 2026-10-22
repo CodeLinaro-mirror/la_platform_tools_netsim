@@ -1,5 +1,16 @@
 // Copyright 2023-2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     collections::HashMap,
@@ -307,7 +318,8 @@ impl TokioHost {
         }
     }
 
-    pub fn connection_count(&self) -> usize {
+    #[cfg(test)]
+    fn connection_count(&self) -> usize {
         self.connections.lock().len()
     }
 }
@@ -846,5 +858,15 @@ mod tests {
 
         let conns = connections.lock();
         assert!(matches!(conns.get(&conn_id), Some(Connection::Tcp(_))));
+    }
+
+    #[tokio::test]
+    async fn test_connection_count() {
+        let (slirp_tx, _slirp_rx) = mpsc::channel(10);
+        let (_resp_tx, resp_rx) = mpsc::channel(10);
+        let (guest_tx, _guest_rx) = mpsc::channel(10);
+        let host = TokioHost::from_channels(slirp_tx, resp_rx, guest_tx, None, Config::default());
+
+        assert_eq!(host.connection_count(), 0);
     }
 }

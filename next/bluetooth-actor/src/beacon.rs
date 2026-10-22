@@ -1,5 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This module provides the functionality for creating and managing Bluetooth
 //! beacon chips.
@@ -101,12 +112,9 @@ pub(crate) fn create(
     )?;
 
     let adv_data = if let Some(adv_data) = &params.ble_beacon.adv_data {
-        construct_data(
-            adv_data,
-            &if adv_data.include_device_name { Some(device_name.to_string()) } else { None },
-        )
+        construct_data(adv_data, adv_data.include_device_name.then_some(device_name), true)
     } else {
-        construct_data(&netsim_model::AdvertiseData::default(), &None)
+        construct_data(&netsim_model::AdvertiseData::default(), None, true)
     };
 
     let mut adv_data_payload = [0u8; 31];
@@ -128,10 +136,7 @@ pub(crate) fn create(
 
     // LE Set Scan Response Data
     let scan_resp_data = if let Some(scan_resp) = &params.ble_beacon.scan_response {
-        construct_data(
-            scan_resp,
-            &if scan_resp.include_device_name { Some(device_name.to_string()) } else { None },
-        )
+        construct_data(scan_resp, scan_resp.include_device_name.then_some(device_name), false)
     } else {
         vec![]
     };

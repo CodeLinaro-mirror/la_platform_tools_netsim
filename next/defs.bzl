@@ -1,5 +1,16 @@
 # Copyright 2026 The Android Open Source Project
-# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """
 Netsim Rust build rules.
@@ -24,19 +35,26 @@ NETSIM_CLIPPY_FLAGS = [
     "-Dclippy::mutex_atomic",
     "-Dclippy::rc_mutex",
     "-Dclippy::significant_drop_in_scrutinee",
+    "-Dclippy::unused_async",
     # Performance
     "-Dclippy::large_stack_arrays",
     "-Dclippy::large_types_passed_by_value",
     # FFI / Safety
+    "-Dclippy::borrow_as_ptr",
+    "-Dclippy::cast_possible_wrap",
     "-Dclippy::cast_ptr_alignment",
     "-Dclippy::ptr_as_ptr",
     "-Dclippy::ptr_cast_constness",
+    "-Dclippy::ref_as_ptr",
     "-Dclippy::undocumented_unsafe_blocks",
     # Code Hygiene
     "-Dclippy::cloned_instead_of_copied",
     "-Dclippy::dbg_macro",
+    "-Dclippy::format_push_string",
     "-Dclippy::map_err_ignore",
     "-Dclippy::match_wild_err_arm",
+    "-Dclippy::print_stderr",
+    "-Dclippy::print_stdout",
     "-Dclippy::unwrap_in_result",
     "-Dclippy::unwrap_used",
     "-Dclippy::indexing_slicing",
@@ -290,6 +308,10 @@ def _netsim_clippy_test_impl(ctx):
             t_args.add("-Aclippy::unimplemented")
             t_args.add("-Aclippy::todo")
             t_args.add("-Aclippy::panic_in_result_fn")
+            t_args.add("-Aclippy::cast_possible_wrap")
+            t_args.add("-Aclippy::print_stdout")
+            t_args.add("-Aclippy::print_stderr")
+            t_args.add("-Aclippy::unused_async")
         else:
             t_args.add("--crate-type=rlib")
         t_args.add("--crate-name=%s" % info.name)
@@ -491,6 +513,7 @@ def netsim_rust_library(
             edition = kwargs.get("edition", "2021"),
             env = kwargs.get("env", {}),
             rustc_env = kwargs.get("rustc_env", {}),
+            stamp = kwargs.get("stamp", 0),
             compile_data = kwargs.get("compile_data", []),
             data = kwargs.get("data", []),
             tags = kwargs.get("tags", []),
@@ -534,6 +557,7 @@ def netsim_rust_library(
             edition = kwargs.get("edition", "2021"),
             env = kwargs.get("env", {}),
             rustc_env = kwargs.get("rustc_env", {}),
+            stamp = kwargs.get("stamp", 0),
             data = kwargs.get("data", []),
             tags = kwargs.get("tags", []),
             target_compatible_with = kwargs.get("target_compatible_with", []),

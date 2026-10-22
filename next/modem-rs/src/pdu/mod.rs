@@ -1,9 +1,20 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{fmt, iter::once};
 
-use chrono::{Datelike, Timelike, Utc};
+use jiff::{Zoned, tz::TimeZone};
 use nom::{
     Err as NomErr, IResult, bytes::complete::take, error::ErrorKind, number::complete::u8 as nom_u8,
 };
@@ -118,33 +129,22 @@ impl SubmitPdu {
         (self.pdu_type & SMS_SUBMIT_SRR_MASK) != 0
     }
 
-    /// Converts this SMS-SUBMIT PDU (outgoing) to an SMS-STATUS-REPORT PDU.
-    /// Returns the hex-encoded PDU string.
-    pub fn to_status_report_pdu_hex(&self, message_reference: u8) -> Result<String, EncodeError> {
-        let scts = get_current_timestamp_bcd();
-        let dt = scts.clone(); // Use same timestamp for discharge time
-
-        let bytes: Vec<u8> = once(PDU_SCA_DEFAULT) // 1. SCA
-            .chain(once(SMS_STATUS_REPORT_PDU_TYPE)) // 2. PDU-Type (SMS-STATUS-REPORT)
-            .chain(once(message_reference)) // 3. MR (assigned by modem)
-            .chain(self.address.iter().copied()) // 4. RA (Recipient Address)
-            .chain(scts) // 5. SCTS
-            .chain(dt) // 6. DT (Discharge Time)
-            .chain(once(SMS_STATUS_SUCCESS)) // 7. Status (0 = success)
-            .collect();
-
-        Ok(hex::encode_upper(bytes))
+    pub fn status_report(&self, message_reference: u8, scts_bcd: [u8; 7]) -> StatusReport {
+        StatusReport { message_reference, recipient_address: self.address.clone(), scts_bcd }
     }
 
     /// Converts this SMS-SUBMIT PDU (outgoing) to an SMS-DELIVER PDU
     /// (incoming). Returns the hex-encoded PDU string.
-    pub fn to_deliver_pdu_hex(&self, sender: Option<&str>) -> Result<String, EncodeError> {
+    pub fn to_deliver_pdu_hex(
+        &self,
+        sender: Option<&str>,
+        scts_bcd: [u8; 7],
+    ) -> Result<String, EncodeError> {
         let rx_pdu_type = if (self.pdu_type & SMS_SUBMIT_UDHI_MASK) != 0 {
             SMS_DELIVER_UDHI_PDU_TYPE
         } else {
             SMS_DELIVER_PDU_TYPE
         };
-        let scts = get_current_timestamp_bcd();
 
         let oa_bytes = match sender.filter(|s| !s.is_empty()) {
             Some(sender_num) => std::borrow::Cow::Owned(encode_address(sender_num)),
@@ -156,11 +156,33 @@ impl SubmitPdu {
             .chain(oa_bytes.iter().copied()) // 3. Address (OA)
             .chain(once(self.protocol_id)) // 4. Protocol ID
             .chain(once(self.data_code_scheme)) // 5. DCS
-            .chain(scts) // 6. SCTS
+            .chain(scts_bcd) // 6. SCTS
             .chain(self.user_data.iter().copied()) // 7. User Data
             .collect();
 
         Ok(hex::encode_upper(bytes))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusReport {
+    pub message_reference: u8,
+    pub recipient_address: Vec<u8>,
+    pub scts_bcd: [u8; 7],
+}
+
+impl StatusReport {
+    pub fn to_pdu_hex(&self, discharge_time: &Zoned) -> String {
+        let dt_bcd = encode_timestamp_bcd(discharge_time);
+        let bytes: Vec<u8> = once(PDU_SCA_DEFAULT) // 1. SCA
+            .chain(once(SMS_STATUS_REPORT_PDU_TYPE)) // 2. PDU-Type (SMS-STATUS-REPORT)
+            .chain(once(self.message_reference)) // 3. MR (assigned by modem)
+            .chain(self.recipient_address.iter().copied()) // 4. RA (Recipient Address)
+            .chain(self.scts_bcd) // 5. SCTS
+            .chain(dt_bcd) // 6. DT (Discharge Time)
+            .chain(once(SMS_STATUS_SUCCESS)) // 7. Status (0 = success)
+            .collect();
+        hex::encode_upper(bytes)
     }
 }
 
@@ -269,17 +291,21 @@ fn is_7bit_dcs(dcs: u8) -> bool {
     }
 }
 
-pub(crate) fn get_current_timestamp_bcd() -> Vec<u8> {
-    let dt = Utc::now();
-    vec![
-        bcd::to_bcd_byte((dt.year() % 100) as u8),
-        bcd::to_bcd_byte(dt.month() as u8),
-        bcd::to_bcd_byte(dt.day() as u8),
-        bcd::to_bcd_byte(dt.hour() as u8),
-        bcd::to_bcd_byte(dt.minute() as u8),
-        bcd::to_bcd_byte(dt.second() as u8),
+pub(crate) fn encode_timestamp_bcd(timestamp: &Zoned) -> [u8; 7] {
+    let utc = timestamp.with_time_zone(TimeZone::UTC);
+    [
+        bcd::to_bcd_byte((utc.year().rem_euclid(100)) as u8),
+        bcd::to_bcd_byte(utc.month() as u8),
+        bcd::to_bcd_byte(utc.day() as u8),
+        bcd::to_bcd_byte(utc.hour() as u8),
+        bcd::to_bcd_byte(utc.minute() as u8),
+        bcd::to_bcd_byte(utc.second() as u8),
         0, // Timezone: UTC (+00) -> BCD 00
     ]
+}
+
+pub(crate) fn get_current_timestamp_bcd() -> [u8; 7] {
+    encode_timestamp_bcd(&Zoned::now())
 }
 
 /// Encodes a phone number into the raw bytes format expected for PDU address
@@ -346,7 +372,7 @@ pub fn decode_hex_pdu(pdu: &[u8]) -> Result<Vec<u8>, crate::types::CmsError> {
 pub struct ProcessedSms {
     pub to: Option<String>,
     pub pdu: Vec<u8>,
-    pub status_report: Option<Vec<u8>>,
+    pub status_report: Option<StatusReport>,
 }
 
 /// Processes an outgoing SMS PDU (which might be hex-encoded or raw bytes).
@@ -356,6 +382,7 @@ pub fn process_outgoing_sms(
     pdu: &[u8],
     sender: Option<&str>,
     message_reference: u8,
+    scts: &Zoned,
 ) -> ProcessedSms {
     let decoded = try_decode_hex(pdu);
     let bytes_to_parse = decoded.as_deref().unwrap_or(pdu);
@@ -363,18 +390,13 @@ pub fn process_outgoing_sms(
     match SubmitPdu::parse(bytes_to_parse) {
         Ok(parsed_pdu) => {
             let to = parsed_pdu.phone_number();
+            let scts_bcd = encode_timestamp_bcd(scts);
             let status_report = if parsed_pdu.status_report_requested() {
-                match parsed_pdu.to_status_report_pdu_hex(message_reference) {
-                    Ok(hex_str) => Some(hex_str.into_bytes()),
-                    Err(e) => {
-                        warn!("Failed to encode status report: {:?}", e);
-                        None
-                    }
-                }
+                Some(parsed_pdu.status_report(message_reference, scts_bcd))
             } else {
                 None
             };
-            match parsed_pdu.to_deliver_pdu_hex(sender) {
+            match parsed_pdu.to_deliver_pdu_hex(sender, scts_bcd) {
                 Ok(rx_pdu_hex) => {
                     return ProcessedSms { to, pdu: rx_pdu_hex.into_bytes(), status_report };
                 }
@@ -480,7 +502,8 @@ mod tests {
     fn test_to_deliver_pdu_hex_fallback() {
         let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
         let pdu = SubmitPdu::parse_str(pdu_hex).unwrap();
-        let rx_pdu_hex = pdu.to_deliver_pdu_hex(None).unwrap();
+        let rx_pdu_hex =
+            pdu.to_deliver_pdu_hex(None, [0x26, 0x06, 0x15, 0x19, 0x30, 0x45, 0x00]).unwrap();
 
         let rx_bytes = hex::decode(rx_pdu_hex).unwrap();
 
@@ -496,8 +519,7 @@ mod tests {
         assert_eq!(rx_bytes[pos], pdu.data_code_scheme);
         pos += 1;
 
-        // SCTS (7 bytes) - we just check we have enough bytes and skip it
-        assert!(pos + 7 < rx_bytes.len());
+        assert_eq!(&rx_bytes[pos..pos + 7], &[0x26, 0x06, 0x15, 0x19, 0x30, 0x45, 0x00]);
         pos += 7;
 
         assert_eq!(rx_bytes[pos..], pdu.user_data[..]);
@@ -507,8 +529,9 @@ mod tests {
     fn test_to_deliver_pdu_hex_with_sender() {
         let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
         let pdu = SubmitPdu::parse_str(pdu_hex).unwrap();
-        // Pass sender "+12345"
-        let rx_pdu_hex = pdu.to_deliver_pdu_hex(Some("+12345")).unwrap();
+        let rx_pdu_hex = pdu
+            .to_deliver_pdu_hex(Some("+12345"), [0x26, 0x06, 0x15, 0x19, 0x30, 0x45, 0x00])
+            .unwrap();
         let rx_bytes = hex::decode(rx_pdu_hex).unwrap();
 
         assert_eq!(rx_bytes[0], 0x00); // SCA length
@@ -589,7 +612,10 @@ mod tests {
     fn test_process_outgoing_sms_happy_path() {
         // Valid SMS-SUBMIT PDU targeting "8618810189440"
         let pdu_hex = "0001000D91688118109844F0000017AFD7903AB55A9BBA69D639D4ADCBF99E3DCCAE9701";
-        let processed = super::process_outgoing_sms(pdu_hex.as_bytes(), Some("+12345"), 0);
+        let scts = jiff::Timestamp::from_second(1_781_551_845)
+            .expect("valid timestamp")
+            .to_zoned(TimeZone::UTC);
+        let processed = super::process_outgoing_sms(pdu_hex.as_bytes(), Some("+12345"), 0, &scts);
         assert_eq!(processed.to, Some("18810189440".to_string()));
         // The generated PDU should be SMS-DELIVER (starts with "0024...")
         assert!(processed.pdu.starts_with(b"0024"));
@@ -603,7 +629,10 @@ mod tests {
     #[test]
     fn test_process_outgoing_sms_fallback_invalid_pdu() {
         let raw_text = b"hello";
-        let processed = super::process_outgoing_sms(raw_text, None, 0);
+        let scts = jiff::Timestamp::from_second(1_781_551_845)
+            .expect("valid timestamp")
+            .to_zoned(TimeZone::UTC);
+        let processed = super::process_outgoing_sms(raw_text, None, 0, &scts);
         assert_eq!(processed.to, None);
         assert_eq!(processed.pdu, raw_text.to_vec());
     }

@@ -1,5 +1,16 @@
 // Copyright 2024 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Conversion between Rust and C configurations.
 use std::{
@@ -138,7 +149,7 @@ impl Default for SlirpConfig {
 /// referenced by `SlirpConfig`.
 pub(crate) struct SlirpConfigs {
     /// The "C" representation of the Slirp configuration.
-    pub c_slirp_config: libslirp_sys::SlirpConfig,
+    c_slirp_config: libslirp_sys::SlirpConfig,
 
     // fields that hold the managed storage for "C" struct.
     _c_bootfile: Option<CString>,
@@ -335,6 +346,11 @@ impl SlirpConfigs {
             _c_host_dns: c_host_dns,
         }
     }
+
+    /// Returns a reference to the C SlirpConfig.
+    pub(crate) fn c_slirp_config(&self) -> &libslirp_sys::SlirpConfig {
+        &self.c_slirp_config
+    }
 }
 
 #[cfg(test)]
@@ -390,13 +406,13 @@ mod tests {
         let c_configs = SlirpConfigs::new(&rust_config);
 
         // Check basic field conversions
-        assert_eq!(c_configs.c_slirp_config.version, rust_config.version);
-        assert_eq!(c_configs.c_slirp_config.restricted, rust_config.restricted);
-        assert_eq!(c_configs.c_slirp_config.in_enabled as i32, rust_config.in_enabled as i32);
+        assert_eq!(c_configs.c_slirp_config().version, rust_config.version);
+        assert_eq!(c_configs.c_slirp_config().restricted, rust_config.restricted);
+        assert_eq!(c_configs.c_slirp_config().in_enabled as i32, rust_config.in_enabled as i32);
 
         // Check string conversions and null pointers
-        assert_eq!(c_configs.c_slirp_config.vhostname, std::ptr::null());
-        assert_eq!(c_configs.c_slirp_config.tftp_server_name, std::ptr::null());
+        assert_eq!(c_configs.c_slirp_config().vhostname, std::ptr::null());
+        assert_eq!(c_configs.c_slirp_config().tftp_server_name, std::ptr::null());
     }
 
     /// Tests the `lookup_host_dns` function with different inputs.

@@ -1,5 +1,16 @@
 // Copyright 2025-2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use netsim_packets::{
     EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION, EapolHeader, EapolKeyFrame, MacAddr,
@@ -21,7 +32,7 @@ enum WpaState {
 }
 
 #[derive(Debug, Clone)]
-pub struct WpaAuthenticator {
+pub(crate) struct WpaAuthenticator {
     bssid: MacAddr,
     sta_addr: MacAddr,
     gtk: [u8; 16],
@@ -46,7 +57,7 @@ const MIC_LEN: usize = 16;
 const MIC_END: usize = MIC_OFFSET + MIC_LEN; // 97
 
 impl WpaAuthenticator {
-    pub fn new(
+    pub(crate) fn new(
         bssid: MacAddr,
         sta_addr: MacAddr,
         ssid: &[u8],
@@ -73,7 +84,7 @@ impl WpaAuthenticator {
         }
     }
 
-    pub fn initiate_handshake(&mut self) -> Result<Vec<u8>, ApError> {
+    pub(crate) fn initiate_handshake(&mut self) -> Result<Vec<u8>, ApError> {
         self.state = WpaState::PtKStart;
         self.replay_counter += 1;
 
@@ -94,7 +105,7 @@ impl WpaAuthenticator {
         )
     }
 
-    pub fn remove_session(&mut self, sta_addr: &MacAddr) {
+    pub(crate) fn remove_session(&mut self, sta_addr: &MacAddr) {
         if self.sta_addr == *sta_addr {
             self.state = WpaState::Idle;
             self.ptk.clear();
@@ -105,7 +116,7 @@ impl WpaAuthenticator {
 }
 
 #[derive(Debug, Clone)]
-pub enum WpaOutput {
+pub(crate) enum WpaOutput {
     Frame(Vec<u8>),
     InstallKey {
         key_index: u8,
@@ -117,7 +128,7 @@ pub enum WpaOutput {
 impl WpaAuthenticator {
     // ... new ... initiate_handshake ...
 
-    pub fn handle_eapol(&mut self, frame_data: &[u8]) -> Result<Vec<WpaOutput>, ApError> {
+    pub(crate) fn handle_eapol(&mut self, frame_data: &[u8]) -> Result<Vec<WpaOutput>, ApError> {
         // ...
         // Use zerocopy to parse header
         let (header, body) = match EapolHeader::read_from_prefix(frame_data) {

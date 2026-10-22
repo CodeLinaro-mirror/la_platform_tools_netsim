@@ -1,5 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use netsim_proto::{
     common::ChipKind,
@@ -88,6 +99,40 @@ async fn test_packet_streamer_lifecycle() {
 
     // 5. Verify we don't get an error immediately
     world.then_packet_stream_receives().await;
+}
+
+// Scenario: Loopback packet stream
+//   Given a running Netsim Daemon
+//   When I open a packet stream with a loopback Bluetooth chip
+//   And I send HCI packets
+//   Then each packet comes back unchanged, in order
+//   And no device is created
+#[tokio::test]
+async fn test_packet_streamer_loopback() {
+    let mut world = World::new().await;
+    world.when_spawn_daemon().await;
+
+    world.when_open_packet_stream().await;
+    world.when_send_loopback_initial_info("loopback-device").await;
+
+    let packets = [
+        (PacketType::COMMAND, vec![0x03, 0x0c, 0x00]),
+        (PacketType::ACL, vec![0xAB; 60_000]),
+        (PacketType::EVENT, vec![0x0e, 0x04]),
+    ];
+    for (packet_type, data) in &packets {
+        world.when_send_hci_packet(*packet_type, data.clone()).await;
+    }
+    for (packet_type, data) in &packets {
+        world.then_packet_stream_receives_hci(*packet_type, data).await;
+    }
+
+    let devices = world.when_list_devices().await;
+    assert!(
+        !devices.iter().any(|d| d.name == "loopback-device"),
+        "loopback must not create a device"
+    );
+    world.when_close_packet_stream().await;
 }
 
 // Scenario: Patch Device Resolution

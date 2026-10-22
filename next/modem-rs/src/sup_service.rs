@@ -1,7 +1,18 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
 use modem_rs_derive::CommandParser;
 use netsim_model::Quirks;
@@ -300,6 +311,35 @@ impl SupService {
 
     pub fn clir_mode(&self) -> ClirMode {
         self.clir_mode
+    }
+
+    fn active_forward_rule(
+        &self,
+        condition: CallForwardCondition,
+    ) -> Option<(PhoneNumber, &CallForwardRule)> {
+        let rule = self.call_forward_rules.get(&condition).filter(|r| r.enabled)?;
+        match &rule.destination {
+            Some(CallForwardDestination::Number { digits, .. }) => {
+                Some((PhoneNumber::try_from(digits.as_str()).ok()?, rule))
+            }
+            Some(CallForwardDestination::Uri(_)) | None => None,
+        }
+    }
+
+    pub(crate) fn active_forward_number(
+        &self,
+        condition: CallForwardCondition,
+    ) -> Option<PhoneNumber> {
+        self.active_forward_rule(condition).map(|(number, _)| number)
+    }
+
+    pub(crate) fn no_reply_timeout(&self) -> Option<Duration> {
+        self.active_forward_rule(CallForwardCondition::NoReply)
+            .map(|(_, rule)| Duration::from_secs(u64::from(rule.time.0)))
+    }
+
+    pub(crate) fn is_voice_call_waiting_enabled(&self) -> bool {
+        self.ccwa_status.get(&ServiceClass::VOICE).copied() == Some(CallWaitingStatus::Active)
     }
 
     // --- Pure command handlers ---

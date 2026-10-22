@@ -1,5 +1,16 @@
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
 
@@ -192,6 +203,80 @@ async fn test_chip_removal_propagates_patch() {
 
     // When
     world.when_notify_chip_removed(chip_removed).await;
+
+    // Then
+    // Verification happens on drop
+}
+
+// Scenario: Reset notifies downstream chip clients of cleared links
+//
+//   Given an active link exists
+//   When a reset action occurs
+//   Then downstream chip clients receive an update with an empty link list
+#[tokio::test]
+async fn test_reset_propagates_link_removal_to_chips() {
+    // Given
+    let mut shared_mock = MockChipClient::new();
+    let chip_sender = ChipId(1);
+    let chip_peer = ChipId(2);
+
+    configure_base_mock(&mut shared_mock);
+
+    // Expectation 1: Creation updates sender (Chip 1)
+    shared_mock
+        .expect_update()
+        .withf(move |id, patch| {
+            *id == ChipId(1)
+                && patch.links.is_some()
+                && patch.links.as_ref().unwrap().len() == 1
+                && patch.links.as_ref().unwrap().contains(&(ChipId(2), -50))
+        })
+        .times(1)
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
+
+    // Expectation 2: Creation updates peer (Chip 2)
+    shared_mock
+        .expect_update()
+        .withf(move |id, patch| {
+            *id == ChipId(2)
+                && patch.links.is_some()
+                && patch.links.as_ref().unwrap().len() == 1
+                && patch.links.as_ref().unwrap().contains(&(ChipId(1), -55))
+        })
+        .times(1)
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
+
+    // Expectation 3: Reset clears links on sender (Chip 1)
+    shared_mock
+        .expect_update()
+        .withf(move |id, patch| {
+            *id == ChipId(1) && patch.links.is_some() && patch.links.as_ref().unwrap().is_empty()
+        })
+        .times(1)
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
+
+    // Expectation 4: Reset clears links on peer (Chip 2)
+    shared_mock
+        .expect_update()
+        .withf(move |id, patch| {
+            *id == ChipId(2) && patch.links.is_some() && patch.links.as_ref().unwrap().is_empty()
+        })
+        .times(1)
+        .returning(|_, _| Ok(netsim_model::Chip::default()));
+
+    let mut clients = HashMap::new();
+    clients.insert(ChipKind::BLUETOOTH, Box::new(shared_mock) as Box<dyn ChipClient>);
+
+    let world = World::with_clients(clients).await;
+
+    world.when_notify_chip_added(chip_sender, ChipKind::BLUETOOTH).await;
+    world.when_notify_chip_added(chip_peer, ChipKind::BLUETOOTH).await;
+
+    world.when_create_link(chip_sender, chip_peer, -50).await.unwrap();
+    world.when_create_link(chip_peer, chip_sender, -55).await.unwrap();
+
+    // When
+    link_api::LinkClient::reset(&world.client).await.unwrap();
 
     // Then
     // Verification happens on drop

@@ -1,7 +1,18 @@
 // Copyright 2022 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use std::{fmt, iter, str::FromStr};
+use std::{fmt, iter, path::PathBuf, str::FromStr};
 
 use clap::{
     Args, Parser, Subcommand, ValueEnum,
@@ -47,8 +58,6 @@ pub(crate) enum Command {
     Devices(Devices),
     /// Reset Netsim device scene
     Reset,
-    /// Open netsim Web UI
-    Gui,
     /// Control the packet capture functionalities with commands: list, patch,
     /// get
     #[command(subcommand, visible_alias("pcap"))]
@@ -533,6 +542,8 @@ pub(crate) enum Capture {
     Patch(PatchCapture),
     /// Download the packet capture content
     Get(GetCapture),
+    /// Stream live packet capture content over WebSocket
+    Stream(StreamCapture),
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
@@ -567,6 +578,15 @@ pub(crate) struct GetCapture {
     pub filenames: Vec<String>,
     #[arg(skip)]
     pub current_file: String,
+}
+
+#[derive(Debug, Args, PartialEq, Default)]
+pub(crate) struct StreamCapture {
+    /// Capture chip ID to stream
+    pub(crate) chip_id: u32,
+    /// Optional file path to write the PCAP stream (defaults to stdout)
+    #[arg(short = 'o', long, value_name = "FILE")]
+    pub(crate) output: Option<PathBuf>,
 }
 
 impl From<&BeaconBleSettings> for AdvertiseSettingsProto {

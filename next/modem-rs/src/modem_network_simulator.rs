@@ -1,5 +1,16 @@
 // Copyright 2026 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{
     cmp::Reverse,
@@ -23,7 +34,7 @@ use crate::{
     profiles::get_builtin_profile,
     time::{Clock, SystemClock},
     types::{
-        ClirMode, CommandAction, HostEvent, ModemError, ModemId, ModemSink, NumberPresentation,
+        CommandAction, HangupReason, HostEvent, ModemError, ModemId, ModemSink, NumberPresentation,
         Parsable, PhoneNumber,
     },
 };
@@ -67,7 +78,7 @@ impl Ord for ScheduledEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PendingStatusReport {
     sender_id: ModemId,
-    report_response: Vec<u8>,
+    report: crate::pdu::StatusReport,
 }
 
 #[derive(Debug, Clone)]
@@ -159,6 +170,9 @@ impl IncomingSmsQueue {
         self.link_state.is_idle() && self.pending.is_empty()
     }
 }
+
+/// Maximum number of call diversions allowed for a single call (3GPP TS 24.082).
+const MAX_CALL_FORWARD_HOPS: usize = 5;
 
 /// Manages multiple modems and simulates network interactions.
 pub struct ModemNetworkSimulator {
@@ -515,7 +529,7 @@ impl ModemNetworkSimulator {
         match action {
             CommandAction::InitiateCall(args) => {
                 self.metrics.calls_initiated.fetch_add(1, AtomicOrdering::Relaxed);
-                effects.extend(self.initiate_call(id, &args.number, args.clir, args.is_emergency));
+                effects.extend(self.initiate_call(id, &args.number, args.is_emergency));
             }
             CommandAction::AnswerCall(answered_modem_id) => {
                 self.metrics.calls_answered.fetch_add(1, AtomicOrdering::Relaxed);
@@ -542,7 +556,11 @@ impl ModemNetworkSimulator {
             CommandAction::HangupCall { initiator, target_peer, reason } => {
                 self.metrics.calls_hung_up.fetch_add(1, AtomicOrdering::Relaxed);
 
-                if let Some(target) = self.modems.get_mut(&target_peer)
+                if let Some(forward_effects) =
+                    self.try_forward_hangup(initiator, target_peer, reason)
+                {
+                    effects.extend(forward_effects);
+                } else if let Some(target) = self.modems.get_mut(&target_peer)
                     && target.receive_hangup_from_peer_id(initiator)
                 {
                     let urc = reason.as_urc_str(target.quirks.goldfish_ril_37_or_earlier);
@@ -606,13 +624,8 @@ impl ModemNetworkSimulator {
                     response.extend_from_slice(b"\r\n");
                     response.extend_from_slice(&pdu);
                     response.extend_from_slice(b"\r\n");
-                    let status_report_pending = status_report.map(|report_pdu| {
-                        let report_tpdu_len = crate::pdu::calculate_tpdu_len(&report_pdu);
-                        let report_str = std::str::from_utf8(&report_pdu).unwrap_or_default();
-                        let report_response =
-                            format!("+CDS: {report_tpdu_len}\r\n{report_str}\r\n").into_bytes();
-                        PendingStatusReport { sender_id: id, report_response }
-                    });
+                    let status_report_pending =
+                        status_report.map(|report| PendingStatusReport { sender_id: id, report });
 
                     let queue = self.incoming_sms.entry(peer_id).or_default();
                     if let Some(deliver_response) = queue.enqueue(response, status_report_pending) {
@@ -626,9 +639,15 @@ impl ModemNetworkSimulator {
                     if let Some(ack_sms) = queue.acknowledge() {
                         if let Some(pending) = ack_sms.status_report {
                             if ack.is_success() {
+                                let report_pdu = pending.report.to_pdu_hex(&self.clock.now_zoned());
+                                let report_tpdu_len =
+                                    crate::pdu::calculate_tpdu_len(report_pdu.as_bytes());
+                                let report_response =
+                                    format!("+CDS: {report_tpdu_len}\r\n{report_pdu}\r\n")
+                                        .into_bytes();
                                 effects.push((
                                     pending.sender_id,
-                                    ModemEffect::Response(pending.report_response),
+                                    ModemEffect::Response(report_response),
                                 ));
                             } else {
                                 debug!(
@@ -764,12 +783,89 @@ impl ModemNetworkSimulator {
         self.apply_to_modem(id, |modem| modem.update_physical_channel_configs())
     }
 
+    fn try_forward_hangup(
+        &mut self,
+        initiator: ModemId,
+        caller_id: ModemId,
+        reason: HangupReason,
+    ) -> Option<Vec<(ModemId, ModemEffect)>> {
+        let fwd_num = self.modems.get(&initiator)?.forward_number_on_release(reason)?;
+        let caller = self.modems.get(&caller_id)?;
+        let outbound = caller
+            .calls()
+            .iter()
+            .find(|c| c.state.is_outbound() && c.peer_id == Some(initiator))?;
+        let caller_number = caller.phone_number();
+        let presentation = outbound.number_presentation;
+
+        self.route_call_to_number(
+            caller_id,
+            caller_number.as_ref(),
+            presentation,
+            &fwd_num,
+            vec![caller_id, initiator],
+        )
+    }
+
+    fn route_call_to_number(
+        &mut self,
+        caller_id: ModemId,
+        caller_number: Option<&PhoneNumber>,
+        presentation: NumberPresentation,
+        initial_target: &PhoneNumber,
+        mut visited: Vec<ModemId>,
+    ) -> Option<Vec<(ModemId, ModemEffect)>> {
+        let mut current_target = initial_target.clone();
+        loop {
+            let normalized_target = current_target.normalized();
+            if visited.len() > 1
+                && caller_number.is_some_and(|n| n.normalized() == normalized_target)
+            {
+                return None;
+            }
+            let target_id = self.find_peer_id(caller_id, |m| {
+                m.phone_number().as_ref().is_some_and(|n| n.normalized() == normalized_target)
+            });
+
+            let Some(tid) = target_id else {
+                if let Some(caller) = self.modems.get_mut(&caller_id) {
+                    caller.set_outbound_call_peer_id(None);
+                }
+                return Some(Vec::new());
+            };
+
+            if visited.contains(&tid) {
+                return None;
+            }
+
+            if let Some(next_number) = self.modems.get(&tid)?.incoming_call_forward_target() {
+                if visited.len() > MAX_CALL_FORWARD_HOPS {
+                    return None;
+                }
+                visited.push(tid);
+                current_target = next_number;
+                continue;
+            }
+
+            let callee_effects = self.modems.get_mut(&tid)?.trigger_incoming_call(
+                caller_number,
+                presentation,
+                Some(caller_id),
+            )?;
+
+            if let Some(caller) = self.modems.get_mut(&caller_id) {
+                caller.set_outbound_call_peer_id(Some(tid));
+            }
+
+            return Some(callee_effects.into_iter().map(|e| (tid, e)).collect());
+        }
+    }
+
     /// Initiates a call from one modem to another (Internal).
     fn initiate_call(
         &mut self,
         caller_id: ModemId,
         phone_number: &PhoneNumber,
-        clir: ClirMode,
         is_emergency: bool,
     ) -> Vec<(ModemId, ModemEffect)> {
         debug!(
@@ -801,49 +897,40 @@ impl ModemNetworkSimulator {
                 );
             }
         }
-        // Find target
-        let normalized_target = phone_number.normalized();
-        let target_id = self.find_peer_id(caller_id, |m| {
-            m.phone_number().as_ref().is_some_and(|n| n.normalized() == normalized_target)
-        });
-        debug!("[Network] target_id found for call: {:?}", target_id);
 
-        if let Some(tid) = target_id {
-            let caller_number = self.modems.get(&caller_id).and_then(|m| m.phone_number());
-            let number_presentation = match clir {
-                ClirMode::Invocation => NumberPresentation::Restricted,
-                _ => NumberPresentation::Allowed,
-            };
-
-            let ring_effects = self.modems.get_mut(&tid).and_then(|callee| {
-                callee.trigger_incoming_call(
-                    caller_number.as_ref(),
-                    number_presentation,
-                    Some(caller_id),
-                )
-            });
-
-            if let Some(ring_effects) = ring_effects {
-                if let Some(caller) = self.modems.get_mut(&caller_id)
-                    && caller.set_outbound_call_peer_id(tid)
-                {
-                    debug!(
-                        "[Network] Set peer_id of caller {} to {} for dialing call",
-                        caller_id, tid
-                    );
-                }
-                return ring_effects.into_iter().map(|e| (tid, e)).collect();
+        let (caller_number, presentation) = match self.modems.get(&caller_id) {
+            Some(caller) => {
+                let number = caller.phone_number();
+                let presentation = caller
+                    .calls()
+                    .iter()
+                    .find(|c| c.state.is_outbound())
+                    .map_or(NumberPresentation::Allowed, |c| c.number_presentation);
+                (number, presentation)
             }
+            None => (None, NumberPresentation::Allowed),
+        };
 
-            if let Some(caller) = self.modems.get_mut(&caller_id)
-                && caller.fail_outbound_call()
-            {
-                // Goldfish RIL uses RING to trigger callStateChanged -> AT+CLCC poll when an unroutable outbound call is cleared.
-                return vec![(caller_id, ModemEffect::Response(b"RING\r\n".to_vec()))];
+        match self.route_call_to_number(
+            caller_id,
+            caller_number.as_ref(),
+            presentation,
+            phone_number,
+            vec![caller_id],
+        ) {
+            Some(effects) => effects,
+            None => {
+                if let Some(caller) = self.modems.get_mut(&caller_id)
+                    && caller.fail_outbound_call()
+                {
+                    let urc =
+                        HangupReason::Normal.as_urc_str(caller.quirks.goldfish_ril_37_or_earlier);
+                    vec![(caller_id, ModemEffect::Response(urc.as_bytes().to_vec()))]
+                } else {
+                    Vec::new()
+                }
             }
         }
-
-        Vec::new()
     }
 
     /// Ticks the event loop.
@@ -1117,16 +1204,21 @@ mod tests {
         let queue = simulator.incoming_sms.entry(recipient_id).or_default();
         assert!(queue.is_empty());
 
+        let dummy_report = crate::pdu::StatusReport {
+            message_reference: 1,
+            recipient_address: vec![0x0B, 0x91, 0x51, 0x55, 0x25, 0x51, 0x55, 0xF4],
+            scts_bcd: [0x26, 0x06, 0x15, 0x19, 0x30, 0x45, 0x00],
+        };
         let immediate = queue.enqueue(
             b"+CMT: 1\r\n...".to_vec(),
-            Some(PendingStatusReport { sender_id, report_response: b"+CDS: 25\r\n...".to_vec() }),
+            Some(PendingStatusReport { sender_id, report: dummy_report.clone() }),
         );
         assert_eq!(immediate, Some(b"+CMT: 1\r\n...".to_vec()));
         assert!(!queue.is_empty());
 
         let queued = queue.enqueue(
             b"+CMT: 2\r\n...".to_vec(),
-            Some(PendingStatusReport { sender_id, report_response: b"+CDS: 25\r\n...".to_vec() }),
+            Some(PendingStatusReport { sender_id, report: dummy_report }),
         );
         assert_eq!(queued, None);
 

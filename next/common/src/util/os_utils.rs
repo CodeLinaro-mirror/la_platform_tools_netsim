@@ -1,6 +1,16 @@
 //  Copyright 2023 The Android Open Source Project
 //
-// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # os utility functions
 
@@ -11,6 +21,7 @@ use std::os::windows::io::AsRawHandle;
 use std::{
     env,
     ffi::{CString, NulError},
+    fmt::Write as _,
     path::PathBuf,
 };
 
@@ -107,7 +118,7 @@ where
     let mut instance_name = String::new();
     let instance = get_instance_with_env(get_env, instance_num);
     if instance > 1 {
-        instance_name.push_str(&format!("{instance}_"));
+        let _ = write!(instance_name, "{instance}_");
     }
     // Note: This does not differentiate multiple connectors to the same instance.
     if connector_instance.is_some() {

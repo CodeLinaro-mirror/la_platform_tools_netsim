@@ -1,5 +1,16 @@
 // Copyright 2025 The Android Open Source Project
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use netsim_model::{ChipId, ChipKind};
 
@@ -92,4 +103,30 @@ async fn test_chip_removal_without_links() {
     world.when_notify_chip_removed(ChipId(1)).await;
 
     assert_eq!(world.client.list().await.unwrap().len(), 0);
+}
+
+// Scenario: Reset restores initial state and restarts link ID allocation
+//
+//   Given links exist
+//   When a reset action occurs
+//   Then all links are cleared and subsequent links allocate starting from INITIAL_LINK_ID
+#[tokio::test]
+async fn test_reset_restores_initial_state_and_link_ids() {
+    // Given
+    let world = World::new().await;
+    world.given_default_chips().await;
+    let link_id = world.when_create_link(ChipId(1), ChipId(2), -50).await.unwrap();
+    assert_eq!(link_id, link_api::LinkId(1));
+    assert_eq!(world.client.list().await.unwrap().len(), 1);
+
+    // When reset is called
+    link_api::LinkClient::reset(&world.client).await.unwrap();
+
+    // Then links are cleared
+    let links = world.client.list().await.unwrap();
+    assert!(links.is_empty());
+
+    // And new links re-start ID allocation from INITIAL_LINK_ID (1)
+    let new_link_id = world.when_create_link(ChipId(1), ChipId(2), -60).await.unwrap();
+    assert_eq!(new_link_id, link_api::LinkId(1));
 }

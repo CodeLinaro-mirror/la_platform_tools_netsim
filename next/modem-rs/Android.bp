@@ -20,7 +20,6 @@ rust_library_host {
     lints: "none",
     rustlibs: [
         "libbytes",
-        "libchrono",
         "libhex",
         "libjiff",
         "libnetsim_next_model",
@@ -55,7 +54,6 @@ rust_library_host {
     lints: "none",
     rustlibs: [
         "libbytes",
-        "libchrono",
         "libhex",
         "libjiff",
         "libnetsim_next_model_testing",
@@ -97,7 +95,6 @@ rust_test_host {
     lints: "none",
     rustlibs: [
         "libbytes",
-        "libchrono",
         "libhex",
         "libjiff",
         "libnetsim_next_model_testing",
@@ -165,7 +162,6 @@ rust_test_host {
     lints: "none",
     rustlibs: [
         "libbytes",
-        "libchrono",
         "libhex",
         "libjiff",
         "libnetsim_next_model_testing",
