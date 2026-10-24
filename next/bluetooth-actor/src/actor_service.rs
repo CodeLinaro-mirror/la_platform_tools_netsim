@@ -423,8 +423,9 @@ mod tests {
     use actor_framework::ResourceClient;
     use device_actor::client::DeviceClient;
     use netsim_model::{
-        AdvertiseData, AdvertiseSettings, BeaconParams, BleBeacon, BluetoothUpdate, ChipClient,
-        ChipCreate, ChipUpdate, ChipVariantUpdate, DeviceId, TxPower,
+        AdvertiseData, AdvertiseSettings, AdvertiseSettingsUpdate, BeaconParams, BleBeacon,
+        BleBeaconUpdate, BluetoothUpdate, ChipClient, ChipCreate, ChipUpdate, ChipVariantUpdate,
+        DeviceId, TxPower,
     };
     use tokio::sync::mpsc;
 
@@ -475,11 +476,11 @@ mod tests {
 
         let update = ChipUpdate {
             variant: Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate {
-                ble_beacon: Some(BleBeacon {
+                ble_beacon: Some(BleBeaconUpdate {
                     address: "11:22:33:44:55:77".to_string(),
-                    settings: Some(AdvertiseSettings {
+                    settings: Some(AdvertiseSettingsUpdate {
                         tx_power: Some(TxPower::Dbm(1)),
-                        timeout: 50,
+                        timeout: Some(50),
                         ..Default::default()
                     }),
                     ..Default::default()
