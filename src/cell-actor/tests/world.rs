@@ -104,10 +104,15 @@ impl World {
 
     async fn read_cell(&self, id: u32) -> Cell {
         let chip = self.client.read(ChipId(id)).await.expect("read cell chip");
-        match chip.variant {
-            Some(ChipVariant::Cell(cell_chip)) => cell_chip,
-            other => panic!("expected Cell variant for chip {id}, got {other:?}"),
-        }
+        extract_cell(chip)
+    }
+
+    async fn perform_cell_action(&self, id: u32, action: CellAction) {
+        self.client.perform_action(ChipId(id), action).await.expect("perform cell action");
+    }
+
+    async fn try_perform_cell_action(&mut self, id: u32, action: CellAction) {
+        self.last_error = self.client.perform_action(ChipId(id), action).await.err();
     }
 
     async fn recv_guest_packet(&mut self, id: u32) -> Bytes {
@@ -149,13 +154,16 @@ impl World {
     }
 
     pub(crate) async fn given_voice_registered_home(&self, id: u32) {
-        self.client
-            .perform_action(
-                ChipId(id),
-                CellAction::SetVoiceRegistration { status: RegistrationStatus::RegisteredHome },
-            )
-            .await
-            .expect("set voice registration");
+        self.perform_cell_action(
+            id,
+            CellAction::SetVoiceRegistration { status: RegistrationStatus::RegisteredHome },
+        )
+        .await;
+    }
+
+    pub(crate) async fn when_guest_sends_packet(&mut self, id: u32, data: &[u8]) {
+        let guest = self.guests.get_mut(&ChipId(id)).expect("guest not found");
+        guest.stream_tx.send(Bytes::copy_from_slice(data)).await.expect("send guest packet");
     }
 
     pub(crate) async fn when_delete_chip(&self, id: u32) {
@@ -184,10 +192,7 @@ impl World {
     }
 
     pub(crate) async fn when_set_signal_strength(&self, id: u32, rssi: u32, ber: u32) {
-        self.client
-            .perform_action(ChipId(id), CellAction::SetSignalStrength { rssi, ber })
-            .await
-            .expect("set signal strength");
+        self.perform_cell_action(id, CellAction::SetSignalStrength { rssi, ber }).await;
     }
 
     pub(crate) async fn when_set_registrations(
@@ -196,54 +201,33 @@ impl World {
         voice: RegistrationStatus,
         data: RegistrationStatus,
     ) {
-        self.client
-            .perform_action(ChipId(id), CellAction::SetVoiceRegistration { status: voice })
-            .await
-            .expect("set voice registration");
-        self.client
-            .perform_action(ChipId(id), CellAction::SetDataRegistration { status: data })
-            .await
-            .expect("set data registration");
+        self.perform_cell_action(id, CellAction::SetVoiceRegistration { status: voice }).await;
+        self.perform_cell_action(id, CellAction::SetDataRegistration { status: data }).await;
     }
 
     pub(crate) async fn when_receive_pdu(&self, id: u32, pdu: &str) {
-        self.client
-            .perform_action(ChipId(id), CellAction::ReceivePdu { pdu: pdu.to_string() })
-            .await
-            .expect("receive pdu");
+        self.perform_cell_action(id, CellAction::ReceivePdu { pdu: pdu.to_string() }).await;
     }
 
     pub(crate) async fn when_try_receive_pdu(&mut self, id: u32, pdu: &str) {
-        let res = self
-            .client
-            .perform_action(ChipId(id), CellAction::ReceivePdu { pdu: pdu.to_string() })
-            .await;
-        self.last_error = res.err();
+        self.try_perform_cell_action(id, CellAction::ReceivePdu { pdu: pdu.to_string() }).await;
     }
 
     pub(crate) async fn when_receive_sms(&self, id: u32, sender: &str, text: &str) {
-        self.client
-            .perform_action(
-                ChipId(id),
-                CellAction::ReceiveSms { sender: sender.to_string(), text: text.to_string() },
-            )
-            .await
-            .expect("receive sms");
+        self.perform_cell_action(
+            id,
+            CellAction::ReceiveSms { sender: sender.to_string(), text: text.to_string() },
+        )
+        .await;
     }
 
     pub(crate) async fn when_incoming_call(&self, id: u32, number: &str) {
-        self.client
-            .perform_action(ChipId(id), CellAction::IncomingCall { number: number.to_string() })
-            .await
-            .expect("incoming call");
+        self.perform_cell_action(id, CellAction::IncomingCall { number: number.to_string() }).await;
     }
 
     pub(crate) async fn when_try_incoming_call(&mut self, id: u32, number: &str) {
-        let res = self
-            .client
-            .perform_action(ChipId(id), CellAction::IncomingCall { number: number.to_string() })
+        self.try_perform_cell_action(id, CellAction::IncomingCall { number: number.to_string() })
             .await;
-        self.last_error = res.err();
     }
 
     pub(crate) async fn when_set_chip_enabled(&self, id: u32, enabled: bool) {
@@ -328,12 +312,12 @@ impl World {
         chips.sort_by_key(|chip| chip.id);
         let actual: Vec<(u32, bool, String)> = chips
             .into_iter()
-            .map(|chip| match chip.variant {
-                Some(ChipVariant::Cell(cell)) => {
-                    assert_eq!(cell.radio.state, Some(chip.enabled));
-                    (chip.id, chip.enabled, cell.state)
-                }
-                other => panic!("expected Cell variant for chip {}, got {other:?}", chip.id),
+            .map(|chip| {
+                let id = chip.id;
+                let enabled = chip.enabled;
+                let cell = extract_cell(chip);
+                assert_eq!(cell.radio.state, Some(enabled));
+                (id, enabled, cell.state)
             })
             .collect();
         let expected_vec: Vec<(u32, bool, String)> = expected
@@ -410,6 +394,14 @@ impl World {
             .expect("allocate lease")
             .expect("lease returned");
         assert_eq!(lease.v4.ip_address, expected_v4);
+    }
+}
+
+fn extract_cell(chip: Chip) -> Cell {
+    let id = chip.id;
+    match chip.variant {
+        Some(ChipVariant::Cell(cell_chip)) => cell_chip,
+        other => panic!("expected Cell variant for chip {id}, got {other:?}"),
     }
 }
 
