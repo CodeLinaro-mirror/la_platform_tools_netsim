@@ -128,3 +128,82 @@ async fn test_guest_disconnect_removes_chip_and_notifies_device() {
     world.then_chip_count_is(0).await;
     world.then_chip_not_found(30).await;
 }
+
+// Scenario: Disabling a chip or its technology radio drops uplink and downlink frames until re-enabled
+#[tokio::test]
+async fn test_disabled_chip_or_radio_drops_uplink_and_downlink_until_reenabled() {
+    let mut world = World::new().await;
+    // Given two active Ethernet guest chips and one active cellular data guest chip
+    world.given_guest_chip(31, ChipKind::ETHERNET, GUEST_A_MAC, GUEST_A_IP).await;
+    world.given_guest_chip(32, ChipKind::ETHERNET, GUEST_B_MAC, GUEST_B_IP).await;
+    world
+        .given_guest_chip(
+            33,
+            ChipKind::CELLULAR_DATA,
+            [0x02, 0x15, 0xb2, 0x00, 0x00, 0x03],
+            [10, 0, 2, 17],
+        )
+        .await;
+
+    // When chip 31 is disabled via chip.enabled = false
+    world.when_update_chip(31, None, Some(false), None).await;
+    world.when_guest_sends_arp_request(31, GATEWAY_IP).await;
+    world.when_unlearned_host_arps_gateway().await;
+    // Then both uplink ARP requests and downlink flooded ARP replies are dropped for chip 31 while enabled chip 32 receives flooded frames
+    world.then_guest_receives_no_arp_reply(31, GATEWAY_IP).await;
+    world.then_guest_receives_flooded_arp_reply(32, GATEWAY_IP).await;
+
+    // When chip 31 is re-enabled and then disabled via radio.state = Some(false)
+    world.when_update_chip(31, None, Some(true), Some(false)).await;
+    world.when_guest_sends_arp_request(31, GATEWAY_IP).await;
+    world.when_unlearned_host_arps_gateway().await;
+    // Then uplink and downlink frames remain dropped for chip 31 while enabled chip 32 still receives frames
+    world.then_guest_receives_no_arp_reply(31, GATEWAY_IP).await;
+    world.then_guest_receives_flooded_arp_reply(32, GATEWAY_IP).await;
+    // And Slirp has not learned GUEST_A_MAC from the gated uplink frames, so a reply to GUEST_A_MAC floods to chip 32
+    world.when_slirp_receives_arp_from_mac(GUEST_A_MAC, GUEST_A_IP).await;
+    world.then_guest_receives_arp_reply_for_mac(32, GUEST_A_MAC, GATEWAY_IP).await;
+
+    // When both chip.enabled and radio.state are re-enabled on chip 31
+    world.when_update_chip(31, None, Some(true), Some(true)).await;
+    world.when_guest_sends_arp_request(31, GATEWAY_IP).await;
+    // Then ARP request and reply forwarding resumes on chip 31 and Slirp learns GUEST_A_MAC (no longer flooding to chip 32)
+    world.then_guest_receives_arp_reply(31, GATEWAY_IP).await;
+    world.then_guest_receives_no_arp_reply(32, GATEWAY_IP).await;
+
+    // When cellular data chip 33 has its radio state disabled and later re-enabled
+    world.when_update_chip(33, None, None, Some(false)).await;
+    world.when_guest_sends_arp_request(33, GATEWAY_IP).await;
+    // Then uplink ARP traffic is dropped while disabled and resumes once re-enabled
+    world.then_guest_receives_no_arp_reply(33, GATEWAY_IP).await;
+    world.when_update_chip(33, None, None, Some(true)).await;
+    world.when_guest_sends_arp_request(33, GATEWAY_IP).await;
+    world.then_guest_receives_arp_reply(33, GATEWAY_IP).await;
+}
+
+// Scenario: Resetting a disabled chip restores enabled state, clears disabled radio state, and restores packet forwarding
+#[tokio::test]
+async fn test_reset_disabled_chip_restores_enabled_radio_and_forwarding() {
+    let mut world = World::new().await;
+    // Given an active Ethernet guest chip and an active cellular data guest chip that are disabled
+    world.given_guest_chip(34, ChipKind::ETHERNET, GUEST_A_MAC, GUEST_A_IP).await;
+    world.given_guest_chip(35, ChipKind::CELLULAR_DATA, GUEST_B_MAC, GUEST_B_IP).await;
+    world.when_update_chip(34, Some("eth-disabled"), Some(false), Some(false)).await;
+    world.when_update_chip(35, Some("cell-disabled"), Some(false), Some(false)).await;
+    world.when_guest_sends_arp_request(34, GATEWAY_IP).await;
+    world.then_guest_receives_no_arp_reply(34, GATEWAY_IP).await;
+
+    // When both disabled chips are reset
+    world.when_reset_chip(34).await;
+    world.then_last_reset_chip_matches(34, ChipKind::ETHERNET, "eth-disabled", true);
+    world.then_chip_matches(34, ChipKind::ETHERNET, "eth-disabled", true, None).await;
+    world.when_reset_chip(35).await;
+    world.then_last_reset_chip_matches(35, ChipKind::CELLULAR_DATA, "cell-disabled", true);
+    world.then_chip_matches(35, ChipKind::CELLULAR_DATA, "cell-disabled", true, None).await;
+
+    // Then ARP request and reply forwarding works again for both chips
+    world.when_guest_sends_arp_request(34, GATEWAY_IP).await;
+    world.then_guest_receives_arp_reply(34, GATEWAY_IP).await;
+    world.when_guest_sends_arp_request(35, GATEWAY_IP).await;
+    world.then_guest_receives_arp_reply(35, GATEWAY_IP).await;
+}

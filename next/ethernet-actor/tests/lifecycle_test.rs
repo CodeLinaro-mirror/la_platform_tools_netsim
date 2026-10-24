@@ -117,6 +117,26 @@ async fn test_delete_removes_chip_and_notifies_device() {
     world.then_device_notified_chip_removed(16).await;
 }
 
+// Scenario: Listing chips returns all active Ethernet and cellular data chips and reflects deletions
+#[tokio::test]
+async fn test_list_returns_active_ethernet_and_cellular_data_chips_and_reflects_deletions() {
+    let mut world = World::new().await;
+    // Given an active Ethernet chip and an active cellular data chip
+    world.given_chip(18, ChipKind::ETHERNET).await;
+    world.given_chip(19, ChipKind::CELLULAR_DATA).await;
+
+    // When listing all chips via EthernetClient::list
+    world.when_list_chips().await;
+    // Then both active chip IDs are returned
+    world.then_listed_chip_ids_match(&[18, 19]);
+
+    // When one chip is deleted and chips are listed again
+    world.when_delete_chip(18).await;
+    world.when_list_chips().await;
+    // Then only the remaining active chip ID is returned
+    world.then_listed_chip_ids_match(&[19]);
+}
+
 // Scenario: Querying radio statistics, global statistics, and shutting down the actor succeed
 #[tokio::test]
 async fn test_statistics_reporting_and_shutdown() {
