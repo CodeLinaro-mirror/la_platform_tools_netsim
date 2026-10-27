@@ -27,13 +27,27 @@ components:
   schemas:
     Empty: &Empty
       type: object
+    RpcStatus: &RpcStatus
+      enum:
+        - INVALID_ARGUMENT
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+        - NOT_FOUND
+        - ALREADY_EXISTS
+        - OUT_OF_RANGE
+        - RESOURCE_EXHAUSTED
+        - UNIMPLEMENTED
+        - UNAVAILABLE
+        - DEADLINE_EXCEEDED
+        - FAILED_PRECONDITION
+        - INTERNAL
     ErrorStatus: &ErrorStatus
       properties:
         code: &int
           type: integer
         message: &str
           type: string
-        status: *str
+        status: *RpcStatus
     ErrorResponse: &ErrorResponse
       properties:
         error: *ErrorStatus

@@ -140,22 +140,23 @@ fn build_response<B: Into<Bytes>>(status: StatusCode, body: B) -> Response<Full<
 }
 
 /// Maps an HTTP [`StatusCode`] to its canonical AIP-193 (`google.rpc.Code`)
-/// status string.
-#[must_use]
-pub(crate) fn status_to_aip193(status: StatusCode) -> &'static str {
-    match status {
-        StatusCode::BAD_REQUEST => "INVALID_ARGUMENT",
-        StatusCode::UNAUTHORIZED => "UNAUTHENTICATED",
-        StatusCode::FORBIDDEN => "PERMISSION_DENIED",
-        StatusCode::NOT_FOUND => "NOT_FOUND",
-        StatusCode::CONFLICT => "ALREADY_EXISTS",
-        StatusCode::PAYLOAD_TOO_LARGE => "OUT_OF_RANGE",
-        StatusCode::TOO_MANY_REQUESTS => "RESOURCE_EXHAUSTED",
-        StatusCode::NOT_IMPLEMENTED => "UNIMPLEMENTED",
-        StatusCode::SERVICE_UNAVAILABLE => "UNAVAILABLE",
-        StatusCode::GATEWAY_TIMEOUT => "DEADLINE_EXCEEDED",
-        s if s.is_client_error() => "FAILED_PRECONDITION",
-        _ => "INTERNAL",
+/// [`RpcStatus`](crate::RpcStatus).
+impl From<StatusCode> for crate::RpcStatus {
+    fn from(status: StatusCode) -> Self {
+        match status {
+            StatusCode::BAD_REQUEST => Self::InvalidArgument,
+            StatusCode::UNAUTHORIZED => Self::Unauthenticated,
+            StatusCode::FORBIDDEN => Self::PermissionDenied,
+            StatusCode::NOT_FOUND => Self::NotFound,
+            StatusCode::CONFLICT => Self::AlreadyExists,
+            StatusCode::PAYLOAD_TOO_LARGE => Self::OutOfRange,
+            StatusCode::TOO_MANY_REQUESTS => Self::ResourceExhausted,
+            StatusCode::NOT_IMPLEMENTED => Self::Unimplemented,
+            StatusCode::SERVICE_UNAVAILABLE => Self::Unavailable,
+            StatusCode::GATEWAY_TIMEOUT => Self::DeadlineExceeded,
+            s if s.is_client_error() => Self::FailedPrecondition,
+            _ => Self::Internal,
+        }
     }
 }
 
@@ -167,7 +168,7 @@ pub fn error_response(status: StatusCode, message: &str) -> Response<Full<Bytes>
         error: crate::ErrorStatus {
             code: i64::from(status.as_u16()),
             message: message.to_string(),
-            status: status_to_aip193(status).to_string(),
+            status: crate::RpcStatus::from(status),
         },
     })
     .unwrap_or_else(|_| {

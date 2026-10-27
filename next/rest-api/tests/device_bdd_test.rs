@@ -16,7 +16,7 @@
 //! over an ephemeral in-process HTTP listener (`netsim_rest_api::server::run`).
 
 use netsim_model::{ChipVariant, Device, DeviceId, MODEM_STATE_IDLE, Position};
-use netsim_rest_api::ListDeviceResponse;
+use netsim_rest_api::{ListDeviceResponse, RpcStatus};
 
 use crate::world::World;
 
@@ -142,7 +142,7 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
     bad_json.assert_json_headers();
     let bad_json_err = bad_json.parse_error().error;
     assert_eq!(bad_json_err.code, 400);
-    assert_eq!(bad_json_err.status, "INVALID_ARGUMENT");
+    assert_eq!(bad_json_err.status, RpcStatus::InvalidArgument);
     assert!(
         bad_json_err.message.starts_with("Invalid JSON body:"),
         "Unexpected error body: {:?}",
@@ -156,7 +156,7 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
     empty_body.assert_json_headers();
     let empty_err = empty_body.parse_error().error;
     assert_eq!(empty_err.code, 400);
-    assert_eq!(empty_err.status, "INVALID_ARGUMENT");
+    assert_eq!(empty_err.status, RpcStatus::InvalidArgument);
     assert!(empty_err.message.starts_with("Invalid JSON body:"));
 
     // 3. Wrong field type in JSON body -> 400 Bad Request
@@ -172,7 +172,7 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
     wrong_type.assert_json_headers();
     let wrong_type_err = wrong_type.parse_error().error;
     assert_eq!(wrong_type_err.code, 400);
-    assert_eq!(wrong_type_err.status, "INVALID_ARGUMENT");
+    assert_eq!(wrong_type_err.status, RpcStatus::InvalidArgument);
     assert!(wrong_type_err.message.starts_with("Invalid JSON body:"));
 
     // 4. Oversized payload (> 1 MiB declared Content-Length) -> 413 Payload Too Large
@@ -190,7 +190,7 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
     oversized.assert_json_headers();
     let oversized_err = oversized.parse_error().error;
     assert_eq!(oversized_err.code, 413);
-    assert_eq!(oversized_err.status, "OUT_OF_RANGE");
+    assert_eq!(oversized_err.status, RpcStatus::OutOfRange);
     assert_eq!(oversized_err.message, "413 Payload Too Large");
 
     // 5. Unknown route -> 404 Not Found with AIP-193 ErrorResponse JSON
@@ -199,7 +199,7 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
     not_found.assert_json_headers();
     let not_found_err = not_found.parse_error().error;
     assert_eq!(not_found_err.code, 404);
-    assert_eq!(not_found_err.status, "NOT_FOUND");
+    assert_eq!(not_found_err.status, RpcStatus::NotFound);
     assert_eq!(not_found_err.message, "Not Found: GET /v1/devices/unknown/route");
 }
 
@@ -286,7 +286,7 @@ async fn test_bdd_patch_device_http_body_parsing_and_path_errors() {
         resp.assert_json_headers();
         let err = resp.parse_error().error;
         assert_eq!(err.code, 400);
-        assert_eq!(err.status, "INVALID_ARGUMENT");
+        assert_eq!(err.status, RpcStatus::InvalidArgument);
         assert!(
             err.message.starts_with("Invalid JSON body:"),
             "Case '{label}' unexpected error: {:?}",
@@ -302,7 +302,7 @@ async fn test_bdd_patch_device_http_body_parsing_and_path_errors() {
     bad_id.assert_json_headers();
     let bad_id_err = bad_id.parse_error().error;
     assert_eq!(bad_id_err.code, 400);
-    assert_eq!(bad_id_err.status, "INVALID_ARGUMENT");
+    assert_eq!(bad_id_err.status, RpcStatus::InvalidArgument);
     assert!(bad_id_err.message.starts_with("Invalid path parameter id:"));
 
     // Non-existent device ID -> 404 Not Found
@@ -312,7 +312,7 @@ async fn test_bdd_patch_device_http_body_parsing_and_path_errors() {
     missing_id.assert_json_headers();
     let missing_err = missing_id.parse_error().error;
     assert_eq!(missing_err.code, 404);
-    assert_eq!(missing_err.status, "NOT_FOUND");
+    assert_eq!(missing_err.status, RpcStatus::NotFound);
     assert!(!missing_err.message.is_empty());
 
     // Oversized PATCH body (> 1 MiB) -> 413 Payload Too Large
@@ -329,7 +329,7 @@ async fn test_bdd_patch_device_http_body_parsing_and_path_errors() {
     oversized.assert_json_headers();
     let oversized_err = oversized.parse_error().error;
     assert_eq!(oversized_err.code, 413);
-    assert_eq!(oversized_err.status, "OUT_OF_RANGE");
+    assert_eq!(oversized_err.status, RpcStatus::OutOfRange);
     assert_eq!(oversized_err.message, "413 Payload Too Large");
 }
 
@@ -363,7 +363,7 @@ async fn test_bdd_captures_list_patch_and_get_pcap_and_errors() {
     get_before.assert_json_headers();
     let get_before_err = get_before.parse_error().error;
     assert_eq!(get_before_err.code, 404);
-    assert_eq!(get_before_err.status, "NOT_FOUND");
+    assert_eq!(get_before_err.status, RpcStatus::NotFound);
     assert_eq!(get_before_err.message, "Capture 1000 has no PCAP yet");
 
     // 3. PATCH /v1/captures/1000 {"state":true} -> 200 OK and enables capture
@@ -408,7 +408,7 @@ async fn test_bdd_captures_list_patch_and_get_pcap_and_errors() {
     bad_json.assert_json_headers();
     let bad_json_err = bad_json.parse_error().error;
     assert_eq!(bad_json_err.code, 400);
-    assert_eq!(bad_json_err.status, "INVALID_ARGUMENT");
+    assert_eq!(bad_json_err.status, RpcStatus::InvalidArgument);
     assert!(bad_json_err.message.starts_with("Invalid JSON body:"));
 
     let wrong_type = world
@@ -423,7 +423,7 @@ async fn test_bdd_captures_list_patch_and_get_pcap_and_errors() {
     wrong_type.assert_json_headers();
     let wrong_type_err = wrong_type.parse_error().error;
     assert_eq!(wrong_type_err.code, 400);
-    assert_eq!(wrong_type_err.status, "INVALID_ARGUMENT");
+    assert_eq!(wrong_type_err.status, RpcStatus::InvalidArgument);
     assert!(wrong_type_err.message.starts_with("Invalid JSON body:"));
 
     let bad_id = world
@@ -438,7 +438,7 @@ async fn test_bdd_captures_list_patch_and_get_pcap_and_errors() {
     bad_id.assert_json_headers();
     let bad_id_err = bad_id.parse_error().error;
     assert_eq!(bad_id_err.code, 400);
-    assert_eq!(bad_id_err.status, "INVALID_ARGUMENT");
+    assert_eq!(bad_id_err.status, RpcStatus::InvalidArgument);
     assert!(bad_id_err.message.starts_with("Invalid path parameter id:"));
 
     let missing_patch = world

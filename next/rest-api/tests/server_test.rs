@@ -23,7 +23,7 @@ use link_api::{Link, LinkAction, LinkCreate, LinkError, LinkId, LinkUpdate};
 use netsim_model::{Ap, ChipError, ChipId, ChipKind, ClientError, DeviceId};
 use netsim_rest_api::{
     ApUpdate, CreateLinkRequest, Created, ErrorResponse, JsonResponse, NoContent, Op, RestServer,
-    VersionResponse, client_error_status, created_response, no_content_response,
+    RpcStatus, VersionResponse, client_error_status, created_response, no_content_response,
     openapi::{Route, find_route},
     parse_json_body, parse_path_param, path_id, path_param,
 };
@@ -245,7 +245,7 @@ async fn test_parse_json_body_malformed_and_wrong_shape() {
     let (status, err) = collect_error_response(http_err).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(err.error.code, 400);
-    assert_eq!(err.error.status, "INVALID_ARGUMENT");
+    assert_eq!(err.error.status, RpcStatus::InvalidArgument);
     assert!(err.error.message.contains("Invalid JSON body"));
 
     // Empty body -> 400 Bad Request
@@ -253,7 +253,7 @@ async fn test_parse_json_body_malformed_and_wrong_shape() {
         collect_error_response(parse_json_body::<CreateLinkRequest>(b"").unwrap_err()).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(err.error.code, 400);
-    assert_eq!(err.error.status, "INVALID_ARGUMENT");
+    assert_eq!(err.error.status, RpcStatus::InvalidArgument);
     assert!(err.error.message.contains("Invalid JSON body"));
 
     // Wrong field type -> 400 Bad Request
@@ -262,7 +262,7 @@ async fn test_parse_json_body_malformed_and_wrong_shape() {
         collect_error_response(parse_json_body::<CreateLinkRequest>(wrong_type).unwrap_err()).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(err.error.code, 400);
-    assert_eq!(err.error.status, "INVALID_ARGUMENT");
+    assert_eq!(err.error.status, RpcStatus::InvalidArgument);
     assert!(err.error.message.contains("Invalid JSON body"));
 
     // Missing required fields -> 400 Bad Request
@@ -272,7 +272,7 @@ async fn test_parse_json_body_malformed_and_wrong_shape() {
             .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(err.error.code, 400);
-    assert_eq!(err.error.status, "INVALID_ARGUMENT");
+    assert_eq!(err.error.status, RpcStatus::InvalidArgument);
     assert!(err.error.message.contains("Invalid JSON body"));
 }
 
@@ -304,7 +304,7 @@ async fn test_path_param_and_path_id_extraction() {
     let (status, err) = collect_error_response(path_id::<u32>(&bad_params).unwrap_err()).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(err.error.code, 400);
-    assert_eq!(err.error.status, "INVALID_ARGUMENT");
+    assert_eq!(err.error.status, RpcStatus::InvalidArgument);
     assert!(err.error.message.contains("Invalid path parameter id"));
 
     // Integer overflow {id} -> 400 Bad Request
@@ -317,7 +317,7 @@ async fn test_path_param_and_path_id_extraction() {
     let (status, err) = collect_error_response(path_param(&params, "missing").unwrap_err()).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(err.error.code, 400);
-    assert_eq!(err.error.status, "INVALID_ARGUMENT");
+    assert_eq!(err.error.status, RpcStatus::InvalidArgument);
     assert_eq!(err.error.message, "Missing path parameter: missing");
 }
 
@@ -337,7 +337,7 @@ async fn test_client_error_mapping_not_found() {
         let (status, body) = collect_error_response(err).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body.error.code, 404);
-        assert_eq!(body.error.status, "NOT_FOUND");
+        assert_eq!(body.error.status, RpcStatus::NotFound);
         assert!(!body.error.message.is_empty());
     }
 }
@@ -362,7 +362,7 @@ async fn test_client_error_mapping_bad_request() {
         let (status, body) = collect_error_response(err).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(body.error.code, 400);
-        assert_eq!(body.error.status, "INVALID_ARGUMENT");
+        assert_eq!(body.error.status, RpcStatus::InvalidArgument);
         assert!(!body.error.message.is_empty());
     }
 }
@@ -380,7 +380,7 @@ async fn test_client_error_mapping_conflict() {
         let (status, body) = collect_error_response(err).await;
         assert_eq!(status, StatusCode::CONFLICT);
         assert_eq!(body.error.code, 409);
-        assert_eq!(body.error.status, "ALREADY_EXISTS");
+        assert_eq!(body.error.status, RpcStatus::AlreadyExists);
         assert!(!body.error.message.is_empty());
     }
 }
@@ -404,8 +404,29 @@ async fn test_client_error_mapping_internal_server_error() {
         let (status, body) = collect_error_response(err).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(body.error.code, 500);
-        assert_eq!(body.error.status, "INTERNAL");
+        assert_eq!(body.error.status, RpcStatus::Internal);
         assert!(!body.error.message.is_empty());
+    }
+}
+
+#[test]
+fn test_rpc_status_from_status_code() {
+    let expected = [
+        (StatusCode::BAD_REQUEST, RpcStatus::InvalidArgument),
+        (StatusCode::UNAUTHORIZED, RpcStatus::Unauthenticated),
+        (StatusCode::FORBIDDEN, RpcStatus::PermissionDenied),
+        (StatusCode::NOT_FOUND, RpcStatus::NotFound),
+        (StatusCode::CONFLICT, RpcStatus::AlreadyExists),
+        (StatusCode::PAYLOAD_TOO_LARGE, RpcStatus::OutOfRange),
+        (StatusCode::TOO_MANY_REQUESTS, RpcStatus::ResourceExhausted),
+        (StatusCode::NOT_IMPLEMENTED, RpcStatus::Unimplemented),
+        (StatusCode::SERVICE_UNAVAILABLE, RpcStatus::Unavailable),
+        (StatusCode::GATEWAY_TIMEOUT, RpcStatus::DeadlineExceeded),
+        (StatusCode::UPGRADE_REQUIRED, RpcStatus::FailedPrecondition),
+        (StatusCode::INTERNAL_SERVER_ERROR, RpcStatus::Internal),
+    ];
+    for (http, rpc) in expected {
+        assert_eq!(RpcStatus::from(http), rpc);
     }
 }
 
@@ -415,7 +436,7 @@ async fn test_unmapped_client_error_is_failed_precondition() {
     let (status, body) = collect_error_response(err).await;
     assert_eq!(status, StatusCode::UPGRADE_REQUIRED);
     assert_eq!(body.error.code, 426);
-    assert_eq!(body.error.status, "FAILED_PRECONDITION");
+    assert_eq!(body.error.status, RpcStatus::FailedPrecondition);
 }
 
 #[tokio::test]
@@ -477,7 +498,7 @@ async fn test_write_status_responses_201_and_200_empty() {
     let (status, err) = collect_error_response(delete_missing).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(err.error.code, 404);
-    assert_eq!(err.error.status, "NOT_FOUND");
+    assert_eq!(err.error.status, RpcStatus::NotFound);
     assert!(err.error.message.contains("99"));
 }
 
