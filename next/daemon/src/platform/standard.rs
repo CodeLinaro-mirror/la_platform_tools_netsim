@@ -47,6 +47,22 @@ pub(crate) fn init_transport_listeners(_args: &Args, _streams: &mut Streams) -> 
     ready(())
 }
 
+/// No-op connector mode stub for standard (Goldfish / Bazel) platforms.
+///
+/// Connector/forwarder mode is Cuttlefish-only and is selected when
+/// `--connector_instance` is passed.
+///
+/// Returns:
+/// - `None`: Not running in connector mode; the caller should continue normal
+///   `NetsimDaemon` startup. Standard builds always return `None` without
+///   redirecting logs.
+/// - `Some(result)`: Connector mode ran to completion and the caller must
+///   return `result` immediately without starting the primary daemon (never
+///   returned on standard builds).
+pub(crate) fn run_connector_mode_if_requested(_args: &Args) -> Ready<Option<RunResult>> {
+    ready(None)
+}
+
 pub(crate) fn start_servers(
     _args: &Args,
     _instance_num: u16,
@@ -109,5 +125,11 @@ mod tests {
 
         assert!(listener_addresses.is_empty());
         assert!(ini_data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_standard_run_connector_mode_if_requested_returns_none() {
+        let args = Args { connector_instance: Some(1), logtostderr: true, ..Default::default() };
+        assert_eq!(run_connector_mode_if_requested(&args).await, None);
     }
 }

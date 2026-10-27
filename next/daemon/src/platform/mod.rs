@@ -22,10 +22,10 @@ mod standard;
 #[cfg(feature = "cuttlefish")]
 pub(crate) use cuttlefish::{
     PlatformTasks, default_test_beacons, init_transport_listeners, preflight_check,
-    should_start_tcp_listener, start_servers,
+    run_connector_mode_if_requested, should_start_tcp_listener, start_servers,
 };
 #[cfg(not(feature = "cuttlefish"))]
 pub(crate) use standard::{
     PlatformTasks, default_test_beacons, init_transport_listeners, preflight_check,
-    should_start_tcp_listener, start_servers,
+    run_connector_mode_if_requested, should_start_tcp_listener, start_servers,
 };
