@@ -30,7 +30,7 @@ SPDX_TAG = "-".join(("SPDX", "License", "Identifier"))
 SPDX_APACHE = f"{SPDX_TAG}: Apache-2.0"
 
 # Headers are normalized through the SPDX form, then expanded to the full
-# Apache 2.0 notice, which OSPO Cross (go/cross) requires for open source.
+# Apache 2.0 notice required for open source.
 APACHE_NOTICE = (
     "",
     'Licensed under the Apache License, Version 2.0 (the "License");',
@@ -198,11 +198,11 @@ def process_file(filepath):
   if not has_copyright and not any(SPDX_TAG in line for line in top_lines):
     basename = os.path.basename(filepath)
     ext = os.path.splitext(filepath)[1]
-    if ext in [".rs", ".java", ".ts", ".cc", ".h", ".kt", ".proto"]:
+    if ext in [".rs", ".java", ".cc", ".h", ".kt", ".proto"]:
       prefix = "//"
     elif ext in [".py", ".toml", ".sh", ".bzl", ".bazel", ".yaml", ".yml"]:
       prefix = "#"
-    elif basename.startswith("BUILD") or basename == "CMakeLists.txt":
+    elif basename.startswith("BUILD"):
       prefix = "#"
     else:
       prefix = "//"  # Default

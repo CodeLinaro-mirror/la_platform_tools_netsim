@@ -19,6 +19,7 @@ use std::{
     time::Duration,
 };
 
+use bytes::Bytes;
 use daemon::{NetsimDaemon, StartUpMode};
 use futures::{SinkExt, StreamExt};
 use grpcio::ChannelBuilder;
@@ -40,6 +41,7 @@ use netsim_proto::{
     startup::{Chip as StartupChip, ChipInfo, DeviceInfo},
 };
 use tokio::time::timeout;
+use websocket_server::ManualWebSocketClient;
 
 // Share a single gRPC Environment across all server instances within the same
 // process (namely during parallel test execution) to prevent Abseil lock
@@ -62,8 +64,9 @@ pub struct World {
 
     pub grpc_port: u16,
     pub http_port: u16,
+    ws_port: Option<u16>,
+    ws_client: Option<ManualWebSocketClient>,
     _temp_dir: PathBuf,
-    _ini_guard: Option<daemon::IniFileInitialized>,
 }
 
 impl Drop for World {
@@ -84,6 +87,15 @@ impl World {
         Self::new_with_args(args).await
     }
 
+    /// Starts a Netsim Daemon configured with an active WebSocket listener on port 0.
+    pub async fn new_with_websocket() -> Self {
+        let mut args = daemon::Args::default();
+        args.logtostderr = true;
+        args.no_shutdown = true;
+        args.ws_port = Some(0);
+        Self::new_with_args(args).await
+    }
+
     pub async fn new_with_args(args: daemon::Args) -> Self {
         let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
@@ -101,13 +113,14 @@ impl World {
                 .await
                 .expect("Failed to create daemon");
 
-        let (daemon, ini_guard) = match startup_mode {
-            StartUpMode::Owner(daemon, ini_guard) => (daemon, ini_guard),
+        let daemon = match startup_mode {
+            StartUpMode::Owner(daemon) => daemon,
             _ => panic!("Expected to start as Owner"),
         };
 
         let grpc_port = daemon.grpc_port().expect("NetsimDaemon has no gRPC port");
         let http_port = daemon.http_port().expect("NetsimDaemon has no HTTP port");
+        let ws_port = daemon.ws_port();
 
         // Allow some time for bindings
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -133,8 +146,9 @@ impl World {
             packet_receiver: None,
             grpc_port,
             http_port,
+            ws_port,
+            ws_client: None,
             _temp_dir: temp_dir,
-            _ini_guard: Some(ini_guard),
         }
     }
 
@@ -314,9 +328,8 @@ impl World {
             panic!("Daemon already spawned");
         }
         if let Some(daemon) = self.daemon.take() {
-            let ini_guard = self._ini_guard.take().expect("Discovery lock already handed over");
             let task = tokio::spawn(async move {
-                let _ = daemon.run_daemon(ini_guard).await;
+                let _ = daemon.run_daemon().await;
             });
             self.daemon_task = Some(task);
         } else {
@@ -804,6 +817,23 @@ impl World {
         self.send_initial_info(chip_info).await;
     }
 
+    pub async fn given_initial_info_sent_with_bt_properties(
+        &mut self,
+        chip_name: &str,
+        bt_properties: netsim_proto::configuration::Controller,
+    ) {
+        let mut chip_info = netsim_proto::startup::ChipInfo::new();
+        chip_info.name = chip_name.to_string();
+
+        let mut chip = netsim_proto::startup::Chip::new();
+        chip.kind = netsim_proto::protobuf::EnumOrUnknown::new(ChipKind::BLUETOOTH);
+        chip.address = "11:22:33:44:55:66".to_string();
+        chip.bt_properties = netsim_proto::protobuf::MessageField::some(bt_properties);
+        chip_info.chip = netsim_proto::protobuf::MessageField::some(chip);
+
+        self.send_initial_info(chip_info).await;
+    }
+
     pub async fn when_send_hci_packet(
         &mut self,
         packet_type: netsim_proto::hci_packet::hcipacket::PacketType,
@@ -866,5 +896,58 @@ impl World {
         let hci = response.hci_packet();
         assert_eq!(hci.packet_type.enum_value_or_default(), packet_type);
         assert_eq!(hci.packet, data);
+    }
+
+    pub async fn then_packet_stream_receives_hci_event(&mut self) -> Vec<u8> {
+        let receiver = self.packet_receiver.as_mut().expect("No packet receiver");
+        let response = timeout(Duration::from_secs(5), receiver.next())
+            .await
+            .expect("Timed out waiting for a packet")
+            .expect("Stream ended")
+            .expect("Stream error");
+        let hci = response.hci_packet();
+        assert_eq!(hci.packet_type.enum_value_or_default(), PacketType::EVENT);
+        hci.packet.clone()
+    }
+
+    pub async fn when_connect_websocket(&mut self, path: &str) {
+        let ws_port = self.ws_port.expect("NetsimDaemon has no WebSocket port");
+        let client = ManualWebSocketClient::connect("127.0.0.1", ws_port, path)
+            .await
+            .expect("Failed to connect WebSocket");
+        self.ws_client = Some(client);
+    }
+
+    fn ws_client(&mut self) -> &mut ManualWebSocketClient {
+        self.ws_client.as_mut().expect("No WebSocket client")
+    }
+
+    pub async fn when_send_websocket_text(&mut self, text: &str) {
+        self.ws_client().send_text(text).await;
+    }
+
+    pub async fn when_send_websocket_binary(&mut self, data: &[u8]) {
+        self.ws_client().send_binary(Bytes::copy_from_slice(data)).await;
+    }
+
+    async fn read_websocket_binary(&mut self) -> Bytes {
+        let client = self.ws_client();
+        timeout(Duration::from_secs(5), client.read_binary())
+            .await
+            .expect("Timed out waiting for WebSocket binary response")
+    }
+
+    pub async fn then_websocket_receives_binary(&mut self, expected: &[u8]) {
+        let resp = self.read_websocket_binary().await;
+        assert_eq!(resp.as_ref(), expected);
+    }
+
+    pub async fn then_websocket_receives_le_features_with_cis_cleared(&mut self) {
+        let feat_resp = self.read_websocket_binary().await;
+        // Command complete event length is 15 (0x04, 0x0e, 0x0c, 0x01, 0x03, 0x20, status, features[8])
+        assert_eq!(feat_resp.len(), 15);
+        assert_eq!(feat_resp[6], 0x00, "status should be SUCCESS");
+        // Byte 3 of features (packet index 10) bits 4-5 correspond to CIS.
+        assert_eq!(feat_resp[10] & 0x30, 0x00, "CIS feature bits should be cleared");
     }
 }

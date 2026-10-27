@@ -24,7 +24,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 NEXT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "next")
 
 SKIPPED_TEST_PACKAGES = {
-    "http-proxy",
     "libslirp-rs",
     "verify",
 }
@@ -47,6 +46,7 @@ EXACT_DEP_MAPPING = {
     "@base64": "libbase64_rust",
     "@log": "liblog_rust",
     "@rootcanal//:lib_rootcanal_ffi": "lib_rootcanal_ffi",
+    "@rootcanal//:rootcanal_rs": "librootcanal_rs",
     "@cxx.rs//:cxx": "libcxx",
     "@casimir//:casimir_lib": "libcasimir",
     "//next/testing": "libnetsim_next_netsim_testing_testing",
@@ -65,7 +65,6 @@ EXACT_DEP_MAPPING = {
 IGNORED_DEPS = {
     "libslirp-rs",
     "@libslirp",
-    "http-proxy",
     "@libglib",
     "@aes",
     "@ccm",
@@ -167,7 +166,7 @@ def netsim_cc_library_static(*args, **kwargs):
 
 
 def genrule(name=None, srcs=None, outs=None, cmd=None, tools=None, **kwargs):
-  if not name:
+  if not name or name in IGNORED_TARGETS:
     return
   soong_name = f"netsim_next_{name.replace('-', '_')}"
   soong_tools = []
@@ -258,7 +257,7 @@ PLATFORM_RUSTLIBS = {
 }
 IGNORED_TARGETS = {
     "libslirp-rs",
-    "http-proxy",
+    "cxx-bridge-header",
 }
 ALLOWED_TESTING_TARGETS = {
     "rest-api",
@@ -292,6 +291,7 @@ ALLOWED_TESTING_TARGETS = {
     "slirp",
     "slirp-actor",
     "slirp-host",
+    "http-proxy",
 }
 
 

@@ -93,6 +93,11 @@ impl ApClient {
         self.client.delete(ApId(id)).err_into::<ClientError>().await
     }
 
+    /// Resets all APs and restores the default AP to its initial state.
+    pub async fn reset(&self) -> Result<(), ClientError> {
+        self.client.perform_action(None, ApReq::Reset).err_into::<ClientError>().await.map(|_| ())
+    }
+
     /// Retrieves the state of an Access Point by ID.
     pub async fn get_ap(&self, id: u32) -> Result<Option<crate::ApState>, ClientError> {
         self.client.get(ApId(id)).err_into::<ClientError>().await
@@ -153,14 +158,14 @@ impl ApClient {
     /// Disconnects a device from an Access Point.
     pub async fn disconnect(&self, id: u32, mac_str: String) -> Result<(), ClientError> {
         let mac = mac_str.parse::<netsim_packets::MacAddr>().map_err(|e| {
-            ClientError::Chip(netsim_model::ChipError::Internal(
-                format!("Invalid MAC: {}", e).into(),
+            ClientError::Chip(netsim_model::ChipError::InvalidAddress(
+                format!("Invalid MAC {mac_str}: {e}").into(),
             ))
         })?;
         self.client
             .perform_action(Some(ApId(id)), ApReq::Disconnect { mac })
+            .err_into::<ClientError>()
             .await
             .map(|_| ())
-            .map_err(|e| ClientError::Chip(netsim_model::ChipError::Internal(e.to_string().into())))
     }
 }

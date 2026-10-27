@@ -77,7 +77,7 @@ def create_emulator_artifact_path():
 
 
 def fetch_build_chaining_artifacts(out_dir, presubmit):
-  """Fetch the Emulator prebuilts for build_bots (go/build_chaining)"""
+  """Fetch the Emulator prebuilts for build_bots"""
   try:
     out = Path(out_dir)
     prebuilt_path = out / "prebuilt_cached" / "artifacts"
@@ -479,7 +479,7 @@ def _resolve_crate_target(crate_name: str) -> str:
   clean_name = crate_name.replace("netsim-", "").replace("netsim_", "")
   if clean_name == "netsim":
     clean_name = "cli"
-  for base_dir in ["next", "rust", ""]:
+  for base_dir in ["next", ""]:
     for candidate in [clean_name, crate_name]:
       rel_path = f"{base_dir}/{candidate}" if base_dir else candidate
       pkg_dir = NETSIM_ROOT / rel_path
@@ -497,8 +497,6 @@ def get_bazel_targets(args):
   if getattr(args, "crate", None):
     return [_resolve_crate_target(c) for c in args.crate]
 
-  # Legacy //rust/... targets were superseded by //next/... and contain
-  # deprecated crates with external emulator dependencies.
   return [
       "//:all",
       "//next/...",

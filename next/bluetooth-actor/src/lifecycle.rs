@@ -20,15 +20,20 @@ use tracing::{error, info};
 
 use crate::{BluetoothEvent, bluetooth_actor::BluetoothActor};
 
+const ROOTCANAL_TICK_INTERVAL: Duration = Duration::from_millis(10);
+const INTERNAL_EVENT_STREAM_ID: usize = 0;
+
 impl ActorLifecycle for BluetoothActor {
     async fn on_start(&mut self, runtime: &mut DynContext<Self>) {
-        // Tick every 10ms to drive Rootcanal
-        runtime.set_interval(Duration::from_millis(10));
+        runtime.set_interval(ROOTCANAL_TICK_INTERVAL);
 
         // Register internal event stream
         let rx = self.event_rx.lock().take();
         if let Some(rx) = rx {
-            runtime.add_typed_stream(0, Box::pin(UnboundedReceiverStream::new(rx)));
+            runtime.add_typed_stream(
+                INTERNAL_EVENT_STREAM_ID,
+                Box::pin(UnboundedReceiverStream::new(rx)),
+            );
         }
     }
 
@@ -42,8 +47,8 @@ impl ActorLifecycle for BluetoothActor {
         message: bytes::Bytes,
         _ctx: &mut DynContext<Self>,
     ) {
-        if let Err(e) = self.rootcanal.receive_hci(id.0, message) {
-            error!("Receive HCI error for chip {id}: {e}");
+        if let Err(error) = self.rootcanal.receive_hci(id.0, message) {
+            error!(%error, "Receive HCI error for chip {id}");
         }
     }
 
@@ -51,8 +56,8 @@ impl ActorLifecycle for BluetoothActor {
         info!("Stream closed for chip {id}");
         // If the stream closes, we should also ensure the sink task is aborted.
         ctx.abort(id);
-        if let Err(e) = self.handle_delete(id, ctx).await {
-            error!("Failed to delete chip {id} after stream closed: {e}");
+        if let Err(error) = self.handle_delete(id, ctx).await {
+            error!(%error, "Failed to delete chip {id} after stream closed");
         }
     }
 
@@ -60,8 +65,8 @@ impl ActorLifecycle for BluetoothActor {
         info!("Sink task closed for chip {id}");
         // If the sink task closes, we should also ensure the stream is removed.
         ctx.remove_stream(id);
-        if let Err(e) = self.handle_delete(id, ctx).await {
-            error!("Failed to delete chip {id} after sink task closed: {e}");
+        if let Err(error) = self.handle_delete(id, ctx).await {
+            error!(%error, "Failed to delete chip {id} after sink task closed");
         }
     }
 

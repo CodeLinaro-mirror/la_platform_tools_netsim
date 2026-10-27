@@ -279,6 +279,7 @@ fn create_stream_and_sink(
             sim_type,
             sim_profile,
             loopback: false,
+            bt_properties: None,
         }),
         name: String::new(),
     };
@@ -330,8 +331,8 @@ impl TransportListener for DualFdListener {
         {
             match create_stream_and_sink(device, chip_kind, sim_type, sim_profile, in_fd, out_fd) {
                 Ok(res) => return Ok(res),
-                Err(e) => {
-                    tracing::warn!("Failed to create transport for static FD: {e}, skipping");
+                Err(error) => {
+                    tracing::warn!(%error, "Failed to create transport for static FD, skipping");
                 }
             }
         }
@@ -365,15 +366,16 @@ impl TransportListener for DualFdListener {
                         cloned_fd,
                     ) {
                         Ok(res) => return Ok(res),
-                        Err(e) => {
+                        Err(error) => {
                             tracing::warn!(
-                                "Failed to create transport for accepted connection: {e}, continuing"
+                                %error,
+                                "Failed to create transport for accepted connection, continuing"
                             );
                         }
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("accept4 failed: {e}, continuing");
+                Err(error) => {
+                    tracing::warn!(%error, "accept4 failed, continuing");
                 }
             }
         }
