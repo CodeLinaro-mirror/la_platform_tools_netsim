@@ -68,7 +68,7 @@ use crate::{
         FileIdentity, IniFile, IniFileAccess, IniFileInitialized, IniFileUninitialized,
         NetsimConfig,
     },
-    logger,
+    logger, platform,
     version::{get_version, strip_version_suffix},
 };
 
@@ -91,7 +91,7 @@ pub enum RunResult {
     InitializationError(String),
 }
 
-fn init_error<E: std::fmt::Display>(e: E) -> RunResult {
+pub(crate) fn init_error<E: std::fmt::Display>(e: E) -> RunResult {
     RunResult::InitializationError(e.to_string())
 }
 
@@ -458,9 +458,8 @@ pub struct NetsimDaemon {
     /// The WebSocket listener task, aborted when the daemon is dropped so the
     /// WebSocket port does not outlive it.
     ws_task: Option<tokio::task::JoinHandle<()>>,
-    /// The Rootcanal control listener task, aborted when the daemon is dropped.
-    #[cfg(feature = "cuttlefish")]
-    test_task: Option<tokio::task::JoinHandle<()>>,
+    /// Platform-specific tasks, aborted when the daemon is dropped.
+    platform_tasks: platform::PlatformTasks,
     /// The DeviceActor task handle.
     device_task: tokio::task::JoinHandle<()>,
     /// The CaptureActor task handle.
@@ -490,10 +489,7 @@ impl Drop for NetsimDaemon {
         if let Some(task) = &self.ws_task {
             task.abort();
         }
-        #[cfg(feature = "cuttlefish")]
-        if let Some(task) = &self.test_task {
-            task.abort();
-        }
+        self.platform_tasks.abort();
         self.device_task.abort();
         self.capture_task.abort();
     }
@@ -563,21 +559,7 @@ impl NetsimDaemon {
         // Log all args
         info!("{args:#?}");
 
-        // Resolve TAP configuration early to validate permissions/availability.
-        #[cfg(all(target_os = "linux", not(feature = "cuttlefish")))]
-        let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
-            if args.wifi.wifi_cvd_tap { Some("cvd-etap-%02d".to_string()) } else { None }
-        });
-
-        // Pre-check TAP permissions if configured.
-        // We do this BEFORE redirection so the user can see the error in the
-        // console.
-        #[cfg(all(target_os = "linux", not(feature = "cuttlefish")))]
-        if let Some(ref tap_config) = wifi_tap
-            && let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config)
-        {
-            return Err(RunResult::InitializationError(format!("TAP configuration failed: {}", e)));
-        }
+        platform::preflight_check(&args)?;
 
         info!(
             "Netsim Version: {}, OS: {}, Arch: {}",
@@ -687,10 +669,7 @@ impl NetsimDaemon {
         let mut listener_addresses = HashMap::new();
         let mut streams = Streams::new();
 
-        #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
-        if let Some(fd_startup_str) = &args.fd_startup_str {
-            Self::init_dualfd_listener(fd_startup_str, &mut streams).await;
-        }
+        platform::init_transport_listeners(&args, &mut streams).await;
 
         // Setup Link Server
         let (link_runner, link_client) = link_actor::new();
@@ -739,22 +718,7 @@ impl NetsimDaemon {
             // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d"
             // pattern for pooling. If --wifi-tap is set, it
             // overrides everything.
-            let wifi_tap = {
-                #[cfg(target_os = "linux")]
-                {
-                    args.wifi.wifi_tap.clone().or_else(|| {
-                        if args.wifi.wifi_cvd_tap {
-                            Some("cvd-etap-%02d".to_string())
-                        } else {
-                            None
-                        }
-                    })
-                }
-                #[cfg(not(target_os = "linux"))]
-                {
-                    None
-                }
-            };
+            let wifi_tap = args.wifi.resolved_tap();
 
             // TAP preflight check is now done in `new_with_dirs` before lock
             // acquisition.
@@ -859,37 +823,35 @@ impl NetsimDaemon {
             }
         }
 
-        // Rootcanal legacy control server
-        #[cfg(feature = "cuttlefish")]
-        let (actual_test_addr, test_task) = {
-            let mut addr = None;
-            let mut task = None;
-            let is_explicit_test = args.test_port.is_some();
-            let test_port = args.test_port.unwrap_or_else(|| 7500 + instance_num - 1);
-            if let Some(listener) = bind_tcp_loopback_with_ephemeral_fallback(
-                test_port,
-                is_explicit_test,
-                "Rootcanal control server",
-            )
-            .map_err(|error| {
-                init_error(format!(
-                    "Failed to bind requested Rootcanal control server port {test_port}: {error}"
-                ))
-            })? {
-                let local_addr = listener.local_addr().map_err(init_error)?;
-                addr = Some(local_addr);
-                // Spawn legacy Rootcanal control server for host-side test
-                // runners (like pts-bot/mmi2grpc).
-                task = Some(tokio::spawn(rootcanal_server::run(listener, device_client.clone())));
-            }
-            (addr, task)
-        };
+        // Write the current daemon's information to the INI file.
+        // Clients will use this to connect.
+        let mut ini_data = HashMap::from([
+            ("pid".to_string(), std::process::id().to_string()),
+            ("grpc.port".to_string(), actual_grpc_port.to_string()),
+            ("http.port".to_string(), actual_http_port.to_string()),
+        ]);
+        if let Some(port) = actual_hci_port {
+            ini_data.insert("hci.port".to_string(), port.to_string());
+        }
+        if let Some(ws_port) = actual_ws_port {
+            ini_data.insert("ws.port".to_string(), ws_port.to_string());
+        }
+        if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
+            ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
+        }
+
+        let platform_tasks = platform::start_servers(
+            &args,
+            instance_num,
+            &device_client,
+            &mut listener_addresses,
+            &mut ini_data,
+        )?;
 
         let mut actual_tcp_port = None;
         let resolved_tcp_port_opt =
             resolve_port_with_env(args.tcp_port, "NETSIM_TCP_PORT", |name| std::env::var(name));
-        let should_start_tcp =
-            if cfg!(feature = "cuttlefish") { true } else { resolved_tcp_port_opt.is_some() };
+        let should_start_tcp = platform::should_start_tcp_listener(resolved_tcp_port_opt);
 
         if should_start_tcp {
             let tcp_port = resolved_tcp_port_opt.unwrap_or(0);
@@ -907,29 +869,9 @@ impl NetsimDaemon {
                 actual_tcp_port = Some(socket_addr.port());
             }
         }
-        // Write the current daemon's information to the INI file.
-        // Clients will use this to connect.
-        let mut ini_data = HashMap::from([
-            ("pid".to_string(), std::process::id().to_string()),
-            ("grpc.port".to_string(), actual_grpc_port.to_string()),
-        ]);
-        if let Some(port) = actual_hci_port {
-            ini_data.insert("hci.port".to_string(), port.to_string());
-        }
-        #[cfg(feature = "cuttlefish")]
-        if let Some(addr) = actual_test_addr {
-            listener_addresses.insert("netsim_rootcanal".to_string(), StreamAddress::Tcp(addr));
-            ini_data.insert("test.port".to_string(), addr.port().to_string());
-        }
+
         if let Some(port) = actual_tcp_port {
             ini_data.insert("tcp.port".to_string(), port.to_string());
-        }
-        if let Some(ws_port) = actual_ws_port {
-            ini_data.insert("ws.port".to_string(), ws_port.to_string());
-        }
-        ini_data.insert("http.port".to_string(), actual_http_port.to_string());
-        if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
-            ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
 
         // Setup Bluetooth Server
@@ -1035,7 +977,7 @@ impl NetsimDaemon {
         let test_beacons = match (args.test_beacons, args.no_test_beacons) {
             (true, false) => true,
             (false, true) => false,
-            (false, false) => cfg!(feature = "cuttlefish"),
+            (false, false) => platform::default_test_beacons(),
             (true, true) => {
                 return Err(init_error(
                     "unexpected flag combination: cannot set both --test-beacons and --no-test-beacons",
@@ -1081,8 +1023,7 @@ impl NetsimDaemon {
             hci_task,
             ws_port: actual_ws_port,
             ws_task,
-            #[cfg(feature = "cuttlefish")]
-            test_task,
+            platform_tasks,
             device_task,
             capture_task,
             artifact_dir,
@@ -1120,7 +1061,6 @@ impl NetsimDaemon {
     }
 
     /// Gets the Rootcanal test port, if the server is running.
-    #[cfg(feature = "cuttlefish")]
     pub fn test_port(&self) -> Option<u16> {
         self.listener_addresses.get("netsim_rootcanal").and_then(|addr| match addr {
             StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
@@ -1187,30 +1127,6 @@ impl NetsimDaemon {
             None => {
                 // Should not happen as we have multiple tasks
                 true
-            }
-        }
-    }
-
-    #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
-    async fn init_dualfd_listener(fd_startup_str: &str, streams: &mut Streams) {
-        if fd_startup_str.is_empty() {
-            return;
-        }
-        match serde_json::from_str::<DualFdConfig>(fd_startup_str) {
-            Ok(config) => match DualFdListener::new(config).await {
-                Ok(listener) => {
-                    if let Err(error) = streams.add_listener("netsim_dualfd", Box::new(listener)) {
-                        error!(%error, "Failed to add DualFdListener");
-                    } else {
-                        info!("Added DualFdListener");
-                    }
-                }
-                Err(error) => {
-                    error!(%error, "Failed to create DualFdListener");
-                }
-            },
-            Err(error) => {
-                error!(%error, "Failed to parse fd_startup_str JSON");
             }
         }
     }
