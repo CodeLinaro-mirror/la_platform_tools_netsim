@@ -102,7 +102,7 @@ class InstallEmulatorManager:
     self.target = target
     self.local_emulator_dir = local_emulator_dir
     self.build_id = build_id
-    # For both Bazel and CMake, we use the distribution directory for local runs
+    # For Bazel, we use the distribution directory for local runs
     # to ensure all artifacts (netsim + emulator) are in one place.
     # OBJS_DIR is usually args.out_dir.
     self.local_netsim_dir = Path(self.out_dir) / "distribution" / "emulator"
@@ -152,7 +152,7 @@ class InstallEmulatorManager:
           )
       ):
         logging.info(
-            "Please run 'scripts/build_tools.py --task Compile' or"
+            "Please run 'scripts/build_tools.py --task Build' or"
             " 'scripts/build_tools.py --task CompileInstall' before running"
             " InstallEmulator"
         )

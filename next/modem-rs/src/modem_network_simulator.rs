@@ -235,6 +235,9 @@ impl ModemNetworkSimulator {
                 self.send_incoming_sms(id.0, &sender, &text)
             }
             ModemAction::IncomingPdu { id, pdu } => self.send_incoming_pdu(id.0, &pdu),
+            ModemAction::InjectCellBroadcast { id, serial_number, message_id, dcs, text } => {
+                self.send_cell_broadcast(id.0, serial_number, message_id, dcs, &text)
+            }
             ModemAction::UpdateNetworkTime { id } => self.update_network_time(id.0),
             ModemAction::UpdatePhysicalChannelConfigs { id } => {
                 self.update_physical_channel_configs(id.0)
@@ -458,8 +461,8 @@ impl ModemNetworkSimulator {
             match effect {
                 ModemEffect::Schedule { delay, event } => {
                     let msg = HostEvent::TimerRequest { chip_id: id, duration: delay };
-                    if let Err(e) = self.host_event_tx.send(msg) {
-                        error!("Failed to send timer request: {}", e);
+                    if let Err(error) = self.host_event_tx.send(msg) {
+                        error!(%error, "Failed to send timer request");
                     }
                     self.schedule_event(id, delay, event);
                 }
@@ -477,12 +480,12 @@ impl ModemNetworkSimulator {
                     }
                     debug!("Sending response to {}: {:?}", id, std::str::from_utf8(&packet));
                     if let Some(sink) = self.sinks.get_mut(&id)
-                        && let Err(e) = sink.send(Bytes::from(packet))
+                        && let Err(error) = sink.send(Bytes::from(packet))
                     {
-                        error!("Failed to send response to modem {}: {}", id, e);
+                        error!(%error, "Failed to send response to modem {}", id);
                         let event = HostEvent::SinkError(id);
-                        if let Err(e) = self.host_event_tx.send(event) {
-                            error!("Failed to send client sink error: {}", e);
+                        if let Err(error) = self.host_event_tx.send(event) {
+                            error!(%error, "Failed to send client sink error");
                         }
                         network_events.push(NetworkEvent::SinkError { id });
                     }
@@ -763,6 +766,23 @@ impl ModemNetworkSimulator {
 
     pub fn send_incoming_pdu(&mut self, id: ModemId, pdu: &str) -> Vec<NetworkEvent> {
         self.apply_to_modem(id, |modem| modem.trigger_incoming_pdu(pdu))
+    }
+
+    pub fn send_cell_broadcast(
+        &mut self,
+        id: ModemId,
+        serial_number: u16,
+        message_id: u16,
+        dcs: u8,
+        text: &str,
+    ) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| {
+            modem.trigger_incoming_cell_broadcast(serial_number, message_id, dcs, text)
+        })
+    }
+
+    pub fn send_cell_broadcast_pdu(&mut self, id: ModemId, pdu: &str) -> Vec<NetworkEvent> {
+        self.apply_to_modem(id, |modem| modem.trigger_incoming_cell_broadcast_pdu(pdu))
     }
 
     pub fn update_network_time(&mut self, id: ModemId) -> Vec<NetworkEvent> {
