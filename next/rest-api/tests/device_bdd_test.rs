@@ -79,9 +79,9 @@ async fn test_bdd_get_devices_http_body_parsing_pose_and_cell_state() {
 // Scenario: POST /v1/devices:reset accepts both {} JSON body and empty body and resets actors
 //   Given a running REST server with a dynamic Wi-Fi device and a dynamic AP
 //   When a client sends POST /v1/devices:reset with {} JSON body
-//   Then the server responds with 204 No Content and removes both the dynamic device and dynamic AP
+//   Then the server responds with 200 OK `{}` and removes both the dynamic device and dynamic AP
 //   When another dynamic Wi-Fi device and dynamic AP are created and reset with an empty body
-//   Then the server again responds with 204 No Content and resets both actors
+//   Then the server again responds with 200 OK `{}` and resets both actors
 #[tokio::test]
 async fn test_bdd_reset_devices_and_aps_empty_and_json_body() {
     let world = World::new().await;
@@ -99,9 +99,9 @@ async fn test_bdd_reset_devices_and_aps_empty_and_json_body() {
         .when_http_request("POST", "/v1/devices:reset", Some("application/json"), br#"{}"#)
         .await;
 
-    // Then the server returns 204 No Content with empty body and resets both actors
-    assert_eq!(reset_json_resp.status_code, 204);
-    reset_json_resp.assert_no_content_headers();
+    // Then the server returns 200 OK with `{}` body and resets both actors
+    assert_eq!(reset_json_resp.status_code, 200);
+    reset_json_resp.assert_empty_json_headers();
     assert!(world.rest_client.get_devices().send().await.unwrap().devices.is_empty());
     let aps_after_first = world.rest_client.get_aps().send().await.unwrap().aps;
     assert!(!aps_after_first.iter().any(|a| a.id == ap1));
@@ -115,8 +115,8 @@ async fn test_bdd_reset_devices_and_aps_empty_and_json_body() {
 
     // When a client sends POST /v1/devices:reset with an empty body (raw HTTP and NetsimRestClient)
     let reset_empty_resp = world.when_http_request("POST", "/v1/devices:reset", None, &[]).await;
-    assert_eq!(reset_empty_resp.status_code, 204);
-    reset_empty_resp.assert_no_content_headers();
+    assert_eq!(reset_empty_resp.status_code, 200);
+    reset_empty_resp.assert_empty_json_headers();
     assert!(world.rest_client.get_devices().send().await.unwrap().devices.is_empty());
     assert!(!world.rest_client.get_aps().send().await.unwrap().aps.iter().any(|a| a.id == ap2));
 
@@ -126,22 +126,25 @@ async fn test_bdd_reset_devices_and_aps_empty_and_json_body() {
 // Scenario: HTTP request body parsing rejects malformed JSON with 400 and oversized bodies with 413
 //   Given a running REST server
 //   When a client sends malformed JSON, empty body, or wrong field types to a JSON endpoint
-//   Then the server responds with 400 Bad Request and ErrorResponse {"error": "Invalid JSON body: ..."}
+//   Then the server responds with 400 Bad Request and AIP-193 ErrorResponse
 //   When a client sends a request body exceeding 1 MiB
-//   Then the server responds with 413 Payload Too Large and ErrorResponse {"error": "413 Payload Too Large"}
+//   Then the server responds with 413 Payload Too Large and AIP-193 ErrorResponse
 //   When a client requests an unknown route
-//   Then the server responds with 404 Not Found and ErrorResponse {"error": "Not Found: ..."}
+//   Then the server responds with 404 Not Found and AIP-193 ErrorResponse
 #[tokio::test]
 async fn test_bdd_http_body_parsing_errors_and_size_limits() {
     let world = World::new().await;
 
-    // 1. Malformed JSON syntax -> 400 Bad Request with ErrorResponse JSON
+    // 1. Malformed JSON syntax -> 400 Bad Request with AIP-193 ErrorResponse JSON
     let bad_json =
         world.when_http_request("POST", "/v1/aps", Some("application/json"), b"{bad json").await;
     assert_eq!(bad_json.status_code, 400);
     bad_json.assert_json_headers();
+    let bad_json_err = bad_json.parse_error().error;
+    assert_eq!(bad_json_err.code, 400);
+    assert_eq!(bad_json_err.status, "INVALID_ARGUMENT");
     assert!(
-        bad_json.parse_error().error.starts_with("Invalid JSON body:"),
+        bad_json_err.message.starts_with("Invalid JSON body:"),
         "Unexpected error body: {:?}",
         bad_json.body
     );
@@ -151,7 +154,10 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
         world.when_http_request("POST", "/v1/aps", Some("application/json"), b"").await;
     assert_eq!(empty_body.status_code, 400);
     empty_body.assert_json_headers();
-    assert!(empty_body.parse_error().error.starts_with("Invalid JSON body:"));
+    let empty_err = empty_body.parse_error().error;
+    assert_eq!(empty_err.code, 400);
+    assert_eq!(empty_err.status, "INVALID_ARGUMENT");
+    assert!(empty_err.message.starts_with("Invalid JSON body:"));
 
     // 3. Wrong field type in JSON body -> 400 Bad Request
     let wrong_type = world
@@ -164,7 +170,10 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
         .await;
     assert_eq!(wrong_type.status_code, 400);
     wrong_type.assert_json_headers();
-    assert!(wrong_type.parse_error().error.starts_with("Invalid JSON body:"));
+    let wrong_type_err = wrong_type.parse_error().error;
+    assert_eq!(wrong_type_err.code, 400);
+    assert_eq!(wrong_type_err.status, "INVALID_ARGUMENT");
+    assert!(wrong_type_err.message.starts_with("Invalid JSON body:"));
 
     // 4. Oversized payload (> 1 MiB declared Content-Length) -> 413 Payload Too Large
     let oversized_len = (1 << 20) + 1;
@@ -179,13 +188,19 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
         .await;
     assert_eq!(oversized.status_code, 413);
     oversized.assert_json_headers();
-    assert_eq!(oversized.parse_error().error, "413 Payload Too Large");
+    let oversized_err = oversized.parse_error().error;
+    assert_eq!(oversized_err.code, 413);
+    assert_eq!(oversized_err.status, "OUT_OF_RANGE");
+    assert_eq!(oversized_err.message, "413 Payload Too Large");
 
-    // 5. Unknown route -> 404 Not Found with ErrorResponse JSON
+    // 5. Unknown route -> 404 Not Found with AIP-193 ErrorResponse JSON
     let not_found = world.when_http_request("GET", "/v1/devices/unknown/route", None, &[]).await;
     assert_eq!(not_found.status_code, 404);
     not_found.assert_json_headers();
-    assert_eq!(not_found.parse_error().error, "Not Found: GET /v1/devices/unknown/route");
+    let not_found_err = not_found.parse_error().error;
+    assert_eq!(not_found_err.code, 404);
+    assert_eq!(not_found_err.status, "NOT_FOUND");
+    assert_eq!(not_found_err.message, "Not Found: GET /v1/devices/unknown/route");
 }
 
 // Scenario: PATCH /v1/devices/{id} applies partial pose and radio updates over HTTP
@@ -269,8 +284,11 @@ async fn test_bdd_patch_device_http_body_parsing_and_path_errors() {
             .await;
         assert_eq!(resp.status_code, 400, "Case '{label}' must return 400");
         resp.assert_json_headers();
+        let err = resp.parse_error().error;
+        assert_eq!(err.code, 400);
+        assert_eq!(err.status, "INVALID_ARGUMENT");
         assert!(
-            resp.parse_error().error.starts_with("Invalid JSON body:"),
+            err.message.starts_with("Invalid JSON body:"),
             "Case '{label}' unexpected error: {:?}",
             resp.body
         );
@@ -282,14 +300,20 @@ async fn test_bdd_patch_device_http_body_parsing_and_path_errors() {
         .await;
     assert_eq!(bad_id.status_code, 400);
     bad_id.assert_json_headers();
-    assert!(bad_id.parse_error().error.starts_with("Invalid path parameter id:"));
+    let bad_id_err = bad_id.parse_error().error;
+    assert_eq!(bad_id_err.code, 400);
+    assert_eq!(bad_id_err.status, "INVALID_ARGUMENT");
+    assert!(bad_id_err.message.starts_with("Invalid path parameter id:"));
 
     // Non-existent device ID -> 404 Not Found
     let missing_id =
         world.when_http_request("PATCH", "/v1/devices/999", Some("application/json"), b"{}").await;
     assert_eq!(missing_id.status_code, 404);
     missing_id.assert_json_headers();
-    assert!(!missing_id.parse_error().error.is_empty());
+    let missing_err = missing_id.parse_error().error;
+    assert_eq!(missing_err.code, 404);
+    assert_eq!(missing_err.status, "NOT_FOUND");
+    assert!(!missing_err.message.is_empty());
 
     // Oversized PATCH body (> 1 MiB) -> 413 Payload Too Large
     let oversized = world
@@ -303,7 +327,10 @@ async fn test_bdd_patch_device_http_body_parsing_and_path_errors() {
         .await;
     assert_eq!(oversized.status_code, 413);
     oversized.assert_json_headers();
-    assert_eq!(oversized.parse_error().error, "413 Payload Too Large");
+    let oversized_err = oversized.parse_error().error;
+    assert_eq!(oversized_err.code, 413);
+    assert_eq!(oversized_err.status, "OUT_OF_RANGE");
+    assert_eq!(oversized_err.message, "413 Payload Too Large");
 }
 
 // Scenario: GET /v1/captures, PATCH /v1/captures/{id}, and GET /v1/captures/{id} over HTTP
@@ -334,7 +361,10 @@ async fn test_bdd_captures_list_patch_and_get_pcap_and_errors() {
     let get_before = world.when_http_request("GET", "/v1/captures/1000", None, &[]).await;
     assert_eq!(get_before.status_code, 404);
     get_before.assert_json_headers();
-    assert_eq!(get_before.parse_error().error, "Capture 1000 has no PCAP yet");
+    let get_before_err = get_before.parse_error().error;
+    assert_eq!(get_before_err.code, 404);
+    assert_eq!(get_before_err.status, "NOT_FOUND");
+    assert_eq!(get_before_err.message, "Capture 1000 has no PCAP yet");
 
     // 3. PATCH /v1/captures/1000 {"state":true} -> 200 OK and enables capture
     let patch_resp = world
@@ -376,7 +406,10 @@ async fn test_bdd_captures_list_patch_and_get_pcap_and_errors() {
         .await;
     assert_eq!(bad_json.status_code, 400);
     bad_json.assert_json_headers();
-    assert!(bad_json.parse_error().error.starts_with("Invalid JSON body:"));
+    let bad_json_err = bad_json.parse_error().error;
+    assert_eq!(bad_json_err.code, 400);
+    assert_eq!(bad_json_err.status, "INVALID_ARGUMENT");
+    assert!(bad_json_err.message.starts_with("Invalid JSON body:"));
 
     let wrong_type = world
         .when_http_request(
@@ -388,7 +421,10 @@ async fn test_bdd_captures_list_patch_and_get_pcap_and_errors() {
         .await;
     assert_eq!(wrong_type.status_code, 400);
     wrong_type.assert_json_headers();
-    assert!(wrong_type.parse_error().error.starts_with("Invalid JSON body:"));
+    let wrong_type_err = wrong_type.parse_error().error;
+    assert_eq!(wrong_type_err.code, 400);
+    assert_eq!(wrong_type_err.status, "INVALID_ARGUMENT");
+    assert!(wrong_type_err.message.starts_with("Invalid JSON body:"));
 
     let bad_id = world
         .when_http_request(
@@ -400,7 +436,10 @@ async fn test_bdd_captures_list_patch_and_get_pcap_and_errors() {
         .await;
     assert_eq!(bad_id.status_code, 400);
     bad_id.assert_json_headers();
-    assert!(bad_id.parse_error().error.starts_with("Invalid path parameter id:"));
+    let bad_id_err = bad_id.parse_error().error;
+    assert_eq!(bad_id_err.code, 400);
+    assert_eq!(bad_id_err.status, "INVALID_ARGUMENT");
+    assert!(bad_id_err.message.starts_with("Invalid path parameter id:"));
 
     let missing_patch = world
         .when_http_request(

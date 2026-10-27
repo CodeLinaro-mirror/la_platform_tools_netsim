@@ -139,11 +139,41 @@ fn build_response<B: Into<Bytes>>(status: StatusCode, body: B) -> Response<Full<
     resp
 }
 
-/// Builds an HTTP JSON [`ErrorResponse`](crate::ErrorResponse) with the given
+/// Maps an HTTP [`StatusCode`] to its canonical AIP-193 (`google.rpc.Code`)
+/// status string.
+#[must_use]
+pub(crate) fn status_to_aip193(status: StatusCode) -> &'static str {
+    match status {
+        StatusCode::BAD_REQUEST => "INVALID_ARGUMENT",
+        StatusCode::UNAUTHORIZED => "UNAUTHENTICATED",
+        StatusCode::FORBIDDEN => "PERMISSION_DENIED",
+        StatusCode::NOT_FOUND => "NOT_FOUND",
+        StatusCode::CONFLICT => "ALREADY_EXISTS",
+        StatusCode::PAYLOAD_TOO_LARGE => "OUT_OF_RANGE",
+        StatusCode::TOO_MANY_REQUESTS => "RESOURCE_EXHAUSTED",
+        StatusCode::NOT_IMPLEMENTED => "UNIMPLEMENTED",
+        StatusCode::SERVICE_UNAVAILABLE => "UNAVAILABLE",
+        StatusCode::GATEWAY_TIMEOUT => "DEADLINE_EXCEEDED",
+        s if s.is_client_error() => "FAILED_PRECONDITION",
+        _ => "INTERNAL",
+    }
+}
+
+/// Builds an HTTP JSON [`ErrorResponse`](crate::ErrorResponse) following
+/// AIP-193 (`{"error":{"code":...,"message":...,"status":...}}`) with the given
 /// `status` and `message`.
 pub fn error_response(status: StatusCode, message: &str) -> Response<Full<Bytes>> {
-    let body = serde_json::to_string(&crate::ErrorResponse { error: message.to_string() })
-        .unwrap_or_else(|_| r#"{"error":"Internal Server Error"}"#.to_string());
+    let body = serde_json::to_string(&crate::ErrorResponse {
+        error: crate::ErrorStatus {
+            code: i64::from(status.as_u16()),
+            message: message.to_string(),
+            status: status_to_aip193(status).to_string(),
+        },
+    })
+    .unwrap_or_else(|_| {
+        r#"{"error":{"code":500,"message":"Internal Server Error","status":"INTERNAL"}}"#
+            .to_string()
+    });
     build_response(status, body)
 }
 
@@ -166,9 +196,10 @@ pub fn created_response<T: Serialize>(val: &T) -> Response<Full<Bytes>> {
     json_status_response(StatusCode::CREATED, val)
 }
 
-/// Builds an empty `204 No Content` response.
+/// Builds a `200 OK` response with an empty JSON object (`{}`) for void and
+/// delete operations.
 pub fn no_content_response() -> Response<Full<Bytes>> {
-    build_response(StatusCode::NO_CONTENT, Bytes::new())
+    build_response(StatusCode::OK, "{}")
 }
 
 /// Lightweight HTTP error carrying a [`StatusCode`] and error message before
@@ -345,8 +376,8 @@ pub fn client_error_status(err: &ClientError) -> StatusCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Created<T>(pub T);
 
-/// Marker for `DELETE` handlers that produces an empty `204 No Content`
-/// response.
+/// Marker for void and `DELETE` handlers that produces a `200 OK` response with
+/// an empty JSON object (`{}`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct NoContent;
 

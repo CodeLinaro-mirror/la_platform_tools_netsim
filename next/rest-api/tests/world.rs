@@ -92,21 +92,11 @@ impl RawHttpResponse {
         );
     }
 
-    /// Asserts `204 No Content` headers (`X-Content-Type-Options: nosniff`, no
-    /// `Content-Type`, and an empty body).
-    pub fn assert_no_content_headers(&self) {
-        assert!(
-            !self.headers.contains_key("content-type"),
-            "204 No Content must not include Content-Type: {:?}",
-            self.headers
-        );
-        assert_eq!(
-            self.headers.get("x-content-type-options").map(String::as_str),
-            Some("nosniff"),
-            "Expected X-Content-Type-Options: nosniff in headers: {:?}",
-            self.headers
-        );
-        assert!(self.body.is_empty(), "204 No Content body must be empty, got: {:?}", self.body);
+    /// Asserts void/delete `200 OK` headers (`Content-Type: application/json`,
+    /// `X-Content-Type-Options: nosniff`, and an empty JSON object `{}` body).
+    pub fn assert_empty_json_headers(&self) {
+        self.assert_json_headers();
+        assert_eq!(self.body, "{}", "Void response body must be {{}}, got: {:?}", self.body);
     }
 
     /// Deserializes the response body into `T`.
