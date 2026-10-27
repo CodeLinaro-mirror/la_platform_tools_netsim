@@ -22,7 +22,9 @@ pub use netsim_model::{
 pub use crate::ListDeviceResponse;
 use crate::{
     client::{NetsimRestClient, RestRequest},
-    server::{HttpError, JsonResponse, NoContent, RestServer, json_response},
+    server::{
+        HttpError, JsonResponse, NoContent, RestServer, json_response, parse_json_body, path_id,
+    },
 };
 
 impl From<Vec<Device>> for ListDeviceResponse {
@@ -51,6 +53,17 @@ impl RestServer {
         Ok(self.device_client.list().await?)
     }
 
+    pub(crate) async fn patch_device(
+        &self,
+        params: &[(&str, &str)],
+        body: &[u8],
+    ) -> Result<Device, HttpError> {
+        let id: DeviceId = path_id(params)?;
+        let mut req: DeviceUpdate = parse_json_body(body)?;
+        req.id = id.0;
+        Ok(self.device_client.update(id, req).await?)
+    }
+
     pub(crate) async fn reset_devices(&self) -> Result<NoContent, HttpError> {
         self.device_client.reset(None).await?;
         self.ap_client.reset().await?;
@@ -62,6 +75,11 @@ impl NetsimRestClient {
     /// `GET /v1/devices`
     pub fn get_devices(&self) -> RestRequest<'_, ListDeviceResponse> {
         self.get(crate::path::DEVICES)
+    }
+
+    /// `PATCH /v1/devices/{id}`
+    pub fn patch_device(&self, id: u32, patch: &DeviceUpdate) -> RestRequest<'_, Device> {
+        self.patch(format!("{}/{id}", crate::path::DEVICES)).json(patch)
     }
 
     /// `POST /v1/devices:reset`

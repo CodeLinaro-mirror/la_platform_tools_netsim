@@ -556,6 +556,7 @@ impl RestServer {
             Some((route, params)) => match route.op {
                 crate::Op::GetVersion => self.get_version().into(),
                 crate::Op::ListDevices => self.list_devices().await.into(),
+                crate::Op::PatchDevice => self.patch_device(&params, body).await.into(),
                 crate::Op::ResetDevices => self.reset_devices().await.into(),
                 crate::Op::ListLinks => self.link_client.list().await.into(),
                 crate::Op::ListAps => self.ap_client.list_aps().await.into(),

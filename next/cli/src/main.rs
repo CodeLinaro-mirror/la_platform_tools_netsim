@@ -97,7 +97,7 @@ fn perform_command(
         | args::Command::Link(_) => command.get_requests(&client),
         args::Command::Beacon(args::Beacon::Remove(cmd)) => {
             let response = rest_client.get_devices().send_blocking()?;
-            let id = find_id_for_remove(&response, cmd)?;
+            let id = find_device_id(&response, &cmd.device_name)?;
             Ok(vec![GrpcRequest::DeleteDevice(frontend::DeleteDeviceRequest {
                 id,
                 ..Default::default()
@@ -143,12 +143,12 @@ fn perform_command(
     Ok(())
 }
 
-fn find_id_for_remove(response: &ListDeviceResponse, cmd: &args::BeaconRemove) -> Result<u32> {
+fn find_device_id(response: &ListDeviceResponse, device_name: &str) -> Result<u32> {
     let device = response
         .devices
         .iter()
-        .find(|device| device.name == cmd.device_name)
-        .ok_or_else(|| format!("Device not found: {}", cmd.device_name))?;
+        .find(|device| device.name == device_name)
+        .ok_or_else(|| format!("Device not found: {device_name}"))?;
     Ok(device.id)
 }
 
@@ -164,6 +164,17 @@ fn continuous_perform_command(
         process_result(command, Ok(Some(response)), Some(grpc_request), verbose)
     })
 }
+fn patch_device_by_name(
+    rest: &NetsimRestClient,
+    device_name: &str,
+    patch: &netsim_model::DeviceUpdate,
+) -> Result<()> {
+    let devices = rest.get_devices().send_blocking()?;
+    let id = find_device_id(&devices, device_name)?;
+    rest.patch_device(id, patch).send_blocking()?;
+    Ok(())
+}
+
 /// Check and handle the gRPC call result
 fn process_result(
     command: &args::Command,
@@ -192,6 +203,34 @@ fn run_rest(
             .get_version()
             .send_blocking()
             .map(|resp| println!("Netsim version: {}", resp.version)),
+        args::Command::Radio(cmd) => {
+            return Some(
+                patch_device_by_name(rest, &cmd.name, &requests::radio_to_device_update(cmd)).map(
+                    |()| {
+                        if verbose {
+                            println!("Radio {} is {} for {}", cmd.radio_type, cmd.status, cmd.name);
+                        }
+                    },
+                ),
+            );
+        }
+        args::Command::Move(cmd) => {
+            return Some(
+                patch_device_by_name(rest, &cmd.name, &requests::move_to_device_update(cmd)).map(
+                    |()| {
+                        if verbose {
+                            println!(
+                                "Moved device:{} to x: {:.2}, y: {:.2}, z: {:.2}",
+                                cmd.name,
+                                cmd.x,
+                                cmd.y,
+                                cmd.z.unwrap_or_default()
+                            );
+                        }
+                    },
+                ),
+            );
+        }
         args::Command::Devices(cmd) => {
             return Some(repeat(cmd.continuous, || {
                 let resp = rest.get_devices().send_blocking()?;
@@ -307,23 +346,32 @@ mod tests {
     use netsim_model::Device;
     use netsim_rest_api::ListDeviceResponse;
 
-    use crate::{args::BeaconRemove, find_id_for_remove};
+    use crate::find_device_id;
 
     #[test]
     fn test_remove_device() {
         let device_name = String::from("a-device");
         let device_id = 42;
 
-        let cmd = &BeaconRemove { device_name: device_name.clone() };
-
         let response = ListDeviceResponse {
-            devices: vec![Device { id: device_id, name: device_name, ..Default::default() }],
+            devices: vec![Device {
+                id: device_id,
+                name: device_name.clone(),
+                ..Default::default()
+            }],
         };
 
-        let id = find_id_for_remove(&response, cmd);
+        let id = find_device_id(&response, &device_name);
         assert!(id.is_ok(), "{}", id.unwrap_err());
         let id = id.unwrap();
 
         assert_eq!(device_id, id);
+    }
+
+    #[test]
+    fn test_find_device_id_not_found() {
+        let response = ListDeviceResponse { devices: vec![] };
+        let err = find_device_id(&response, "missing").unwrap_err();
+        assert_eq!(err.to_string(), "Device not found: missing");
     }
 }

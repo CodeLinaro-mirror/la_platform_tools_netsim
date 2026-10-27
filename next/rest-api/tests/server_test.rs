@@ -561,7 +561,7 @@ async fn test_ap_rest_endpoints_lifecycle_and_error_cases() {
 }
 
 #[tokio::test]
-async fn test_handle_request_devices_and_reset() {
+async fn test_handle_request_devices_patch_and_reset() {
     let (chip_tx, mut chip_rx) = tokio::sync::mpsc::channel(8);
     tokio::spawn(async move {
         let mut stored_chip = netsim_model::Chip::default();
@@ -571,6 +571,10 @@ async fn test_handle_request_devices_and_reset() {
                     params.chip.id = id.0;
                     stored_chip = params.chip;
                     let _ = respond_to.send(Ok(()));
+                }
+                netsim_model::ChipRequest::Update { patch, respond_to, .. } => {
+                    patch.apply(&mut stored_chip);
+                    let _ = respond_to.send(Ok(stored_chip.clone()));
                 }
                 netsim_model::ChipRequest::Reset { respond_to, .. } => {
                     let _ = respond_to.send(Ok(stored_chip.clone()));
@@ -612,18 +616,73 @@ async fn test_handle_request_devices_and_reset() {
     let link_client = Arc::new(MockLinkClient);
 
     let server = RestServer::new(
-        device_client,
+        device_client.clone(),
         link_client,
         ap_client,
         capture_actor::new().1,
         "0.3.92".to_string(),
     );
 
+    // 1. GET /v1/devices starts empty
     let list_resp = server.handle_request(&Method::GET, "/v1/devices", &[]).await;
     assert_eq!(list_resp.status(), StatusCode::OK);
     let list_bytes = list_resp.into_body().collect().await.unwrap().to_bytes();
     assert_eq!(std::str::from_utf8(&list_bytes).unwrap(), r#"{"devices":[]}"#);
 
+    // 2. Create a device with a Wi-Fi chip via device_client
+    let created_id = device_client
+        .create_device(netsim_model::DeviceCreate {
+            device_config: netsim_model::DeviceConfig::new(
+                "test-phone",
+                true,
+                netsim_model::Pose::default(),
+                false,
+            ),
+            chip: netsim_model::DeviceChipCreate::new(
+                "wifi-chip",
+                "TestMfg",
+                "TestProduct",
+                netsim_model::ChipCreateVariant::Wifi(netsim_model::WifiCreate::default()),
+            ),
+        })
+        .await
+        .unwrap();
+    assert_eq!(created_id, DeviceId(1));
+
+    // 3. PATCH /v1/devices/1 - 200 OK (move pose + disable Wi-Fi radio)
+    let patch_body = br#"{"pose":{"position":{"x":10.0,"y":20.0,"z":5.0}},"chips":[{"variant":{"Wifi":{"state":false}}}]}"#;
+    let patch_resp = server.handle_request(&Method::PATCH, "/v1/devices/1", patch_body).await;
+    assert_eq!(patch_resp.status(), StatusCode::OK);
+    let patch_bytes = patch_resp.into_body().collect().await.unwrap().to_bytes();
+    let patched_device: netsim_model::Device = serde_json::from_slice(&patch_bytes).unwrap();
+    assert_eq!(patched_device.id, 1);
+    assert_eq!(patched_device.pose.position, netsim_model::Position { x: 10.0, y: 20.0, z: 5.0 });
+    assert_eq!(
+        patched_device.chips[0].variant,
+        Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi {
+            radio: netsim_model::Radio { state: Some(false), ..Default::default() }
+        }))
+    );
+
+    // 4. PATCH /v1/devices/99 - 404 Not Found
+    let missing_resp = server.handle_request(&Method::PATCH, "/v1/devices/99", patch_body).await;
+    assert_eq!(missing_resp.status(), StatusCode::NOT_FOUND);
+
+    // 5. PATCH /v1/devices/not-an-id - 400 Bad Request
+    let bad_id_resp =
+        server.handle_request(&Method::PATCH, "/v1/devices/not-an-id", patch_body).await;
+    assert_eq!(bad_id_resp.status(), StatusCode::BAD_REQUEST);
+
+    // 6. PATCH /v1/devices/1 with malformed JSON - 400 Bad Request
+    let bad_json_resp = server.handle_request(&Method::PATCH, "/v1/devices/1", b"{bad json").await;
+    assert_eq!(bad_json_resp.status(), StatusCode::BAD_REQUEST);
+
+    // 7. POST /v1/devices:reset - 204 No Content and removes dynamic device
     let reset_resp = server.handle_request(&Method::POST, "/v1/devices:reset", &[]).await;
     assert_eq!(reset_resp.status(), StatusCode::NO_CONTENT);
+
+    let after_reset = server.handle_request(&Method::GET, "/v1/devices", &[]).await;
+    assert_eq!(after_reset.status(), StatusCode::OK);
+    let after_bytes = after_reset.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(std::str::from_utf8(&after_bytes).unwrap(), r#"{"devices":[]}"#);
 }

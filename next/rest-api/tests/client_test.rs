@@ -228,3 +228,22 @@ fn test_reset_wire_format() {
     let request = server.join().expect("server");
     assert!(request.starts_with("POST /v1/devices:reset HTTP/1.1\r\n"), "{request}");
 }
+
+#[test]
+fn test_patch_device_wire_format_and_response() {
+    let canned_device = "HTTP/1.1 200 OK\r\n\r\n{\"id\":1,\"name\":\"dev-1\",\"visible\":true,\"pose\":{\"position\":{\"x\":1.5,\"y\":2.5,\"z\":3.5},\"orientation\":{\"yaw\":0.0,\"pitch\":0.0,\"roll\":0.0}},\"builtin\":false,\"chips\":[]}";
+    let (client, server) = serve_once(canned_device);
+    let patch_req = netsim_model::DeviceUpdate {
+        pose: netsim_model::PoseUpdate {
+            position: Some(netsim_model::Position { x: 1.5, y: 2.5, z: 3.5 }),
+            orientation: None,
+        },
+        ..Default::default()
+    };
+    let dev = client.patch_device(1, &patch_req).send_blocking().expect("patch_device");
+    assert_eq!(dev.id, 1);
+    assert_eq!(dev.pose.position, netsim_model::Position { x: 1.5, y: 2.5, z: 3.5 });
+    let request = server.join().expect("server");
+    assert!(request.starts_with("PATCH /v1/devices/1 HTTP/1.1\r\n"), "{request}");
+    assert!(request.contains(r#""position":{"x":1.5,"y":2.5,"z":3.5}"#), "{request}");
+}

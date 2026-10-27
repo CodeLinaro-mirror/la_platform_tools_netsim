@@ -15,7 +15,7 @@
 //! Tier 2 Actor BDD integration tests for `/v1/devices` and `/v1/devices:reset`
 //! over an ephemeral in-process HTTP listener (`netsim_rest_api::server::run`).
 
-use netsim_model::{ChipVariant, DeviceId, MODEM_STATE_IDLE, Position};
+use netsim_model::{ChipVariant, Device, DeviceId, MODEM_STATE_IDLE, Position};
 use netsim_rest_api::ListDeviceResponse;
 
 use crate::world::World;
@@ -186,4 +186,122 @@ async fn test_bdd_http_body_parsing_errors_and_size_limits() {
     assert_eq!(not_found.status_code, 404);
     not_found.assert_json_headers();
     assert_eq!(not_found.parse_error().error, "Not Found: GET /v1/devices/unknown/route");
+}
+
+// Scenario: PATCH /v1/devices/{id} applies partial pose and radio updates over HTTP
+//   Given a running REST server with a Bluetooth device at (0.0, 0.0, 0.0)
+//   When a client sends PATCH /v1/devices/1 with only pose.position
+//   Then the server responds with 200 OK and updates pose.position while preserving BLE/Classic radio state
+//   When a client sends PATCH /v1/devices/1 with only Bluetooth.low_energy.state = false
+//   Then the server responds with 200 OK and disables BLE while preserving Classic and pose.position
+#[tokio::test]
+async fn test_bdd_patch_device_partial_pose_and_radio_updates() {
+    let world = World::new().await;
+    let dev_id = world.given_bluetooth_device("pixel-bt", Position::default()).await;
+    assert_eq!(dev_id, DeviceId(1));
+
+    // When a client sends PATCH /v1/devices/1 with a partial pose update
+    let move_body = br#"{"pose":{"position":{"x":10.5,"y":-20.25,"z":3.0}}}"#;
+    let move_resp = world
+        .when_http_request("PATCH", "/v1/devices/1", Some("application/json"), move_body)
+        .await;
+
+    // Then the server responds with 200 OK, application/json headers, and updated pose
+    assert_eq!(move_resp.status_code, 200);
+    move_resp.assert_json_headers();
+    let moved_dev: Device = move_resp.parse_json();
+    assert_eq!(moved_dev.id, 1);
+    assert_eq!(moved_dev.pose.position, Position { x: 10.5, y: -20.25, z: 3.0 });
+    assert!(moved_dev.chips[0].is_le_enabled());
+    assert!(moved_dev.chips[0].is_classic_enabled());
+
+    // When a client sends PATCH /v1/devices/1 with a partial BLE radio update
+    let radio_body = br#"{"chips":[{"variant":{"Bluetooth":{"low_energy":{"state":false}}}}]}"#;
+    let radio_resp = world
+        .when_http_request("PATCH", "/v1/devices/1", Some("application/json"), radio_body)
+        .await;
+
+    // Then the server responds with 200 OK, BLE is disabled, and Classic + pose remain untouched
+    assert_eq!(radio_resp.status_code, 200);
+    radio_resp.assert_json_headers();
+    let radio_dev: Device = radio_resp.parse_json();
+    assert_eq!(radio_dev.id, 1);
+    assert_eq!(radio_dev.pose.position, Position { x: 10.5, y: -20.25, z: 3.0 });
+    assert!(!radio_dev.chips[0].is_le_enabled());
+    assert!(radio_dev.chips[0].is_classic_enabled());
+
+    // And GET /v1/devices via NetsimRestClient reflects both partial updates
+    let listed = world.rest_client.get_devices().send().await.unwrap();
+    assert_eq!(listed.devices.len(), 1);
+    assert_eq!(listed.devices[0].pose.position, Position { x: 10.5, y: -20.25, z: 3.0 });
+    assert!(!listed.devices[0].chips[0].is_le_enabled());
+    assert!(listed.devices[0].chips[0].is_classic_enabled());
+}
+
+// Scenario: PATCH /v1/devices/{id} validates HTTP request body parsing and path parameters
+//   Given a running REST server with a Wi-Fi device id = 1
+//   When a client sends malformed JSON, empty body, wrong field types, unknown chip variants, or invalid path IDs
+//   Then the server responds with 400 Bad Request and ErrorResponse JSON
+//   When a client patches a non-existent device ID
+//   Then the server responds with 404 Not Found and ErrorResponse JSON
+//   When a client sends an oversized body (> 1 MiB)
+//   Then the server responds with 413 Payload Too Large and ErrorResponse JSON
+#[tokio::test]
+async fn test_bdd_patch_device_http_body_parsing_and_path_errors() {
+    let world = World::new().await;
+    let dev_id = world.given_wifi_device("pixel-wifi", Position::default()).await;
+    assert_eq!(dev_id, DeviceId(1));
+
+    let bad_body_cases: &[(&str, &[u8])] = &[
+        ("malformed JSON", b"{bad json"),
+        ("empty body", b""),
+        ("wrong visible type", br#"{"visible":"not-a-bool"}"#),
+        (
+            "wrong position coordinate type",
+            br#"{"pose":{"position":{"x":"not-a-float","y":0.0,"z":0.0}}}"#,
+        ),
+        ("unknown chip variant", br#"{"chips":[{"variant":{"UnknownRadio":{"state":false}}}]}"#),
+    ];
+
+    for (label, payload) in bad_body_cases {
+        let resp = world
+            .when_http_request("PATCH", "/v1/devices/1", Some("application/json"), payload)
+            .await;
+        assert_eq!(resp.status_code, 400, "Case '{label}' must return 400");
+        resp.assert_json_headers();
+        assert!(
+            resp.parse_error().error.starts_with("Invalid JSON body:"),
+            "Case '{label}' unexpected error: {:?}",
+            resp.body
+        );
+    }
+
+    // Invalid path parameter {id} -> 400 Bad Request
+    let bad_id = world
+        .when_http_request("PATCH", "/v1/devices/not-an-id", Some("application/json"), b"{}")
+        .await;
+    assert_eq!(bad_id.status_code, 400);
+    bad_id.assert_json_headers();
+    assert!(bad_id.parse_error().error.starts_with("Invalid path parameter id:"));
+
+    // Non-existent device ID -> 404 Not Found
+    let missing_id =
+        world.when_http_request("PATCH", "/v1/devices/999", Some("application/json"), b"{}").await;
+    assert_eq!(missing_id.status_code, 404);
+    missing_id.assert_json_headers();
+    assert!(!missing_id.parse_error().error.is_empty());
+
+    // Oversized PATCH body (> 1 MiB) -> 413 Payload Too Large
+    let oversized = world
+        .when_http_request_with_content_length(
+            "PATCH",
+            "/v1/devices/1",
+            Some("application/json"),
+            (1 << 20) + 1,
+            b"",
+        )
+        .await;
+    assert_eq!(oversized.status_code, 413);
+    oversized.assert_json_headers();
+    assert_eq!(oversized.parse_error().error, "413 Payload Too Large");
 }

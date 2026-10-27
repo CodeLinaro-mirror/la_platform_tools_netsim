@@ -32,27 +32,6 @@ impl args::Command {
         verbose: bool,
     ) -> crate::error::Result<()> {
         match self {
-            Command::Radio(cmd) => {
-                if verbose {
-                    println!(
-                        "Radio {} is {} for {}",
-                        cmd.radio_type,
-                        cmd.status,
-                        cmd.name.to_owned()
-                    );
-                }
-            }
-            Command::Move(cmd) => {
-                if verbose {
-                    println!(
-                        "Moved device:{} to x: {:.2}, y: {:.2}, z: {:.2}",
-                        cmd.name,
-                        cmd.x,
-                        cmd.y,
-                        cmd.z.unwrap_or_default()
-                    )
-                }
-            }
             Command::Capture(Capture::List(cmd)) => {
                 let GrpcResponse::ListCapture(res) = response else {
                     return Err(format!(

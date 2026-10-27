@@ -31,9 +31,10 @@ use ap_actor::ApClient;
 use capture_actor::CaptureActor;
 use device_actor::{DeviceActor, DeviceClient};
 use netsim_model::{
-    ApCreate, CellCreate, Chip, ChipClient, ChipCreateVariant, ChipError, ChipId, ChipKind,
-    ChipRequest, ChipVariant, DeviceChipCreate, DeviceConfig, DeviceCreate, DeviceId,
-    FrontendStats, MODEM_STATE_IDLE, Orientation, Pose, Position, RadioChipClient, WifiCreate,
+    ApCreate, BluetoothCreate, BluetoothMode, CellCreate, Chip, ChipClient, ChipCreateVariant,
+    ChipError, ChipId, ChipKind, ChipRequest, ChipVariant, Controller, DeviceChipCreate,
+    DeviceConfig, DeviceCreate, DeviceId, DeviceParams, FrontendStats, MODEM_STATE_IDLE,
+    Orientation, Pose, Position, RadioChipClient, WifiCreate,
 };
 use netsim_rest_api::{ErrorResponse, NetsimRestClient};
 use serde::de::DeserializeOwned;
@@ -282,6 +283,31 @@ impl World {
             })
             .await
             .expect("Failed to create Wi-Fi device")
+    }
+
+    /// BDD Step: Given a dynamic Bluetooth device at `position`.
+    pub async fn given_bluetooth_device(&self, name: &str, position: Position) -> DeviceId {
+        self.device_client
+            .create_device(DeviceCreate {
+                device_config: DeviceConfig::new(
+                    name,
+                    true,
+                    Pose { position, orientation: Orientation::default() },
+                    false,
+                ),
+                chip: DeviceChipCreate::new(
+                    "bt-chip",
+                    "TestMfg",
+                    "TestProduct",
+                    ChipCreateVariant::Bluetooth(BluetoothCreate {
+                        address: "02:15:b2:00:00:01".to_string(),
+                        bt_properties: Controller::default(),
+                        mode: BluetoothMode::Device(DeviceParams::default()),
+                    }),
+                ),
+            })
+            .await
+            .expect("Failed to create Bluetooth device")
     }
 
     /// BDD Step: Given a dynamic Cellular device at `position`.
