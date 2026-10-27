@@ -51,7 +51,6 @@ use netsim_rest_api::{ListDeviceResponse, NetsimRestClient};
 use tracing::error;
 
 use crate::{
-    cell_helper::CellClient,
     display::DisplayExt,
     error::{Error, Result},
     grpc_client::{ClientResponseReader, GrpcRequest, GrpcResponse},
@@ -90,49 +89,29 @@ fn perform_command(
     command: &mut args::Command,
     rest_client: &NetsimRestClient,
     client: FrontendServiceClient,
-    cell_client: impl CellClient,
     verbose: bool,
 ) -> Result<()> {
-    let cell_client =
-        if matches!(command, args::Command::Devices(_)) { Some(cell_client) } else { None };
     // Get command's gRPC request(s)
     let requests = match command {
         args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_))
         | args::Command::Link(_) => command.get_requests(&client),
-        args::Command::Beacon(args::Beacon::Remove(_)) => {
-            Ok(vec![args::Command::Devices(args::Devices::default()).get_request()?])
+        args::Command::Beacon(args::Beacon::Remove(cmd)) => {
+            let response = rest_client.get_devices().send_blocking()?;
+            let id = find_id_for_remove(&response, cmd)?;
+            Ok(vec![GrpcRequest::DeleteDevice(frontend::DeleteDeviceRequest {
+                id,
+                ..Default::default()
+            })])
         }
         _ => Ok(vec![command.get_request()?]),
     }?;
     let mut process_error = false;
-    let is_continuous = match command {
-        args::Command::Devices(cmd) => cmd.continuous,
-        _ => false,
-    };
-    let cells = if is_continuous {
-        None
-    } else {
-        cell_client.as_ref().and_then(|cc| {
-            cc.list(&netsim_proto::cell::ListCellsRequest::new()).map(|res| res.cells).ok()
-        })
-    };
     // Process each request
     for (i, req) in requests.iter().enumerate() {
         let result = match command {
             // Continuous option sends the gRPC call every second
-            &mut args::Command::Devices(ref cmd) if cmd.continuous => {
-                continuous_perform_command(command, &client, cell_client.as_ref(), req, verbose)?;
-                error!("Continuous command unexpectedly terminated without error");
-                return Ok(());
-            }
             &mut args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
-                continuous_perform_command(
-                    command,
-                    &client,
-                    None::<&CellServiceClient>,
-                    req,
-                    verbose,
-                )?;
+                continuous_perform_command(command, &client, req, verbose)?;
                 error!("Continuous command unexpectedly terminated without error");
                 return Ok(());
             }
@@ -147,25 +126,13 @@ fn perform_command(
                 perform_streaming_request(&client, cmd, request, &filename)?;
                 Ok(None)
             }
-            &mut args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
-                let response = rest_client.get_devices().send_blocking()?;
-                let id = find_id_for_remove(&response, cmd)?;
-                let res = grpc_client::send_grpc(
-                    &client,
-                    &GrpcRequest::DeleteDevice(frontend::DeleteDeviceRequest {
-                        id,
-                        ..Default::default()
-                    }),
-                )?;
-                Ok(Some(res))
-            }
             // All other commands use a single gRPC call
             _ => {
                 let response = grpc_client::send_grpc(&client, req)?;
                 Ok(Some(response))
             }
         };
-        if let Err(error) = process_result(command, result, cells.as_deref(), Some(req), verbose) {
+        if let Err(error) = process_result(command, result, Some(req), verbose) {
             error!(%error);
             process_error = true;
         };
@@ -189,30 +156,25 @@ fn find_id_for_remove(response: &ListDeviceResponse, cmd: &args::BeaconRemove) -
 fn continuous_perform_command(
     command: &args::Command,
     client: &FrontendServiceClient,
-    cell_client: Option<&impl CellClient>,
     grpc_request: &GrpcRequest,
     verbose: bool,
 ) -> Result<()> {
     repeat(true, || {
         let response = grpc_client::send_grpc(client, grpc_request)?;
-        let cells = cell_client.and_then(|cc| {
-            cc.list(&netsim_proto::cell::ListCellsRequest::new()).map(|res| res.cells).ok()
-        });
-        process_result(command, Ok(Some(response)), cells.as_deref(), Some(grpc_request), verbose)
+        process_result(command, Ok(Some(response)), Some(grpc_request), verbose)
     })
 }
 /// Check and handle the gRPC call result
 fn process_result(
     command: &args::Command,
     result: Result<Option<GrpcResponse>>,
-    cells: Option<&[netsim_proto::cell::Cell]>,
     request: Option<&GrpcRequest>,
     verbose: bool,
 ) -> Result<()> {
     match result {
         Ok(grpc_response) => {
             let response = grpc_response.unwrap_or(GrpcResponse::Unknown);
-            command.print_response(&response, cells, request, verbose)
+            command.print_response(&response, request, verbose)
         }
         Err(e) => Err(format!("Grpc call error: {e}").into()),
     }
@@ -230,6 +192,24 @@ fn run_rest(
             .get_version()
             .send_blocking()
             .map(|resp| println!("Netsim version: {}", resp.version)),
+        args::Command::Devices(cmd) => {
+            return Some(repeat(cmd.continuous, || {
+                let resp = rest.get_devices().send_blocking()?;
+                if cmd.json {
+                    let json = serde_json::to_string(&resp)
+                        .map_err(|e| Error::from(format!("JSON mapping error: {e}")))?;
+                    println!("{json}");
+                } else {
+                    println!("{}", resp.display(verbose));
+                }
+                Ok(())
+            }));
+        }
+        args::Command::Reset => rest.reset().send_blocking().map(|()| {
+            if verbose {
+                println!("All devices have been reset.");
+            }
+        }),
         args::Command::Link(args::Link::List) => {
             rest.get_links().send_blocking().map(|resp| println!("{}", resp.display(verbose)))
         }
@@ -305,8 +285,7 @@ fn run(args: NetsimArgs) -> Result<()> {
         mut command => perform_command(
             &mut command,
             &rest_client,
-            FrontendServiceClient::new(channel.clone()),
-            CellServiceClient::new(channel),
+            FrontendServiceClient::new(channel),
             verbose,
         ),
     }

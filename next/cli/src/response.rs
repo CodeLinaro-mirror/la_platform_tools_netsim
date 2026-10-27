@@ -17,11 +17,10 @@ use std::cmp::max;
 use common::util::time_display::TimeDisplay;
 use netsim_proto::{common::ChipKind, frontend, model};
 use protobuf::MessageField;
-use protobuf_json_mapping::print_to_string;
 
 use crate::{
     args::{self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, OnOffState},
-    display::{Displayer, LinkChipIdDisplay},
+    display::LinkChipIdDisplay,
     grpc_client::{GrpcRequest, GrpcResponse},
 };
 
@@ -29,7 +28,6 @@ impl args::Command {
     pub(crate) fn print_response(
         &self,
         response: &GrpcResponse,
-        cells: Option<&[netsim_proto::cell::Cell]>,
         request: Option<&GrpcRequest>,
         verbose: bool,
     ) -> crate::error::Result<()> {
@@ -53,30 +51,6 @@ impl args::Command {
                         cmd.y,
                         cmd.z.unwrap_or_default()
                     )
-                }
-            }
-            Command::Devices(cmd) => {
-                let GrpcResponse::ListDevice(res) = response else {
-                    return Err(
-                        format!("Expected to print ListDeviceResponse. Got: {response:?}").into()
-                    );
-                };
-                if cmd.json {
-                    let json = print_to_string(res).map_err(|e| {
-                        crate::error::Error::from(format!("JSON mapping error: {e}"))
-                    })?;
-                    println!("{json}");
-                } else {
-                    let mut displayer = Displayer::new(res, verbose);
-                    if let Some(cells) = cells {
-                        displayer = displayer.with_cells(cells);
-                    }
-                    println!("{}", displayer);
-                }
-            }
-            Command::Reset => {
-                if verbose {
-                    println!("All devices have been reset.");
                 }
             }
             Command::Capture(Capture::List(cmd)) => {

@@ -220,3 +220,11 @@ fn test_disconnect_ap_wire_format() {
     assert!(request.starts_with("POST /v1/aps/7:disconnect HTTP/1.1\r\n"), "{request}");
     assert!(request.contains(r#""mac_address":"02:15:b2:00:01:00""#), "{request}");
 }
+
+#[test]
+fn test_reset_wire_format() {
+    let (client, server) = serve_once("HTTP/1.1 204 No Content\r\n\r\n");
+    client.reset().send_blocking().expect("reset");
+    let request = server.join().expect("server");
+    assert!(request.starts_with("POST /v1/devices:reset HTTP/1.1\r\n"), "{request}");
+}

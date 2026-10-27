@@ -313,6 +313,7 @@ fn test_netsim_openapi_spec() {
             "DeleteAp",
             "DisconnectAp",
             "ListDevices",
+            "ResetDevices",
             "ListLinks",
             "GetVersion"
         ]

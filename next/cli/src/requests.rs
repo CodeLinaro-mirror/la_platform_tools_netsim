@@ -126,8 +126,6 @@ impl Command {
                 result.device = Some(device).into();
                 GrpcRequest::PatchDevice(result)
             }
-            Command::Devices(_) => GrpcRequest::ListDevice,
-            Command::Reset => GrpcRequest::Reset,
 
             Command::Capture(cmd) => match cmd {
                 Capture::List(_) => GrpcRequest::ListCapture,
@@ -921,46 +919,42 @@ mod tests {
 
     #[test]
     fn test_devices() {
-        test_command(
-            "netsim-cli devices",
-            Command::Devices(Devices::default()),
-            GrpcRequest::ListDevice,
-        )
+        let cmd = NetsimArgs::parse_from("netsim-cli devices".split_whitespace()).command;
+        assert_eq!(cmd, Command::Devices(Devices::default()));
+        assert!(cmd.get_request().is_err());
     }
 
     #[test]
     fn test_devices_json_parsing() {
-        test_command(
-            "netsim-cli devices --json",
-            Command::Devices(Devices { continuous: false, json: true }),
-            GrpcRequest::ListDevice,
-        )
+        let cmd = NetsimArgs::parse_from("netsim-cli devices --json".split_whitespace()).command;
+        assert_eq!(cmd, Command::Devices(Devices { continuous: false, json: true }));
+        assert!(cmd.get_request().is_err());
     }
 
     #[test]
     fn test_devices_json_output_and_parsing() {
-        use protobuf_json_mapping::{parse_from_str, print_to_string};
+        let dev = netsim_model::Device {
+            id: 1,
+            name: "test_device".to_string(),
+            chips: vec![netsim_model::Chip {
+                id: 100,
+                kind: netsim_model::ChipKind::BLUETOOTH,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
 
-        let mut dev = DeviceProto::new();
-        dev.id = 1;
-        dev.name = "test_device".to_string();
+        let resp = netsim_rest_api::ListDeviceResponse { devices: vec![dev] };
 
-        let mut chip = ChipProto::new();
-        chip.id = 100;
-        chip.kind = ChipKind::BLUETOOTH.into();
-        dev.chips.push(chip);
-
-        let mut resp = ListDeviceResponse::new();
-        resp.devices.push(dev);
-
-        let json_str = print_to_string(&resp).unwrap();
+        let json_str = serde_json::to_string(&resp).unwrap();
 
         // Verify it contains expected data
         assert!(json_str.contains("test_device"));
         assert!(json_str.contains("100")); // Check for chip ID
 
         // Parse it back
-        let parsed_resp: ListDeviceResponse = parse_from_str(&json_str).unwrap();
+        let parsed_resp: netsim_rest_api::ListDeviceResponse =
+            serde_json::from_str(&json_str).unwrap();
 
         assert_eq!(parsed_resp.devices.len(), 1);
         assert_eq!(parsed_resp.devices[0].name, "test_device");
@@ -970,7 +964,9 @@ mod tests {
 
     #[test]
     fn test_reset() {
-        test_command("netsim-cli reset", Command::Reset, GrpcRequest::Reset)
+        let cmd = NetsimArgs::parse_from("netsim-cli reset".split_whitespace()).command;
+        assert_eq!(cmd, Command::Reset);
+        assert!(cmd.get_request().is_err());
     }
 
     #[test]

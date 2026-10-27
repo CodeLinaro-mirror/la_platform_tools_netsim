@@ -157,6 +157,14 @@ paths:
       responses:
         <<: *err_resp
         '200': *ListDeviceResponse
+  /v1/devices:reset:
+    post:
+      operationId: ResetDevices
+      tags: [DeviceService]
+      summary: Resets all simulated devices, links, and access points.
+      responses:
+        <<: *err_resp
+        '200': *Empty
   /v1/links:
     get:
       operationId: ListLinks
