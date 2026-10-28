@@ -24,7 +24,7 @@ use capture_actor::CaptureClient;
 use common::{
     system::netsimd_temp_dir,
     util::{
-        net::bind_tcp_loopback,
+        net::{bind_tcp_loopback, bind_tcp_loopback_with_ephemeral_fallback},
         os_utils::{
             get_discovery_directory, get_hci_port, get_instance, get_instance_name,
             redirect_std_stream,
@@ -301,6 +301,10 @@ async fn is_netsimd_alive(grpc_port: u16) -> bool {
         return false;
     }
     let addr = format!("localhost:{grpc_port}");
+    if !common::util::ini_file::is_server_reachable(&addr) {
+        debug!("is_netsimd_alive fast TCP probe failed for {addr}");
+        return false;
+    }
     let env = PROBE_ENV.get_or_init(|| Arc::new(grpcio::Environment::new(1))).clone();
     for attempt in 1..=LIVENESS_PROBE_ATTEMPTS {
         let channel = grpcio::ChannelBuilder::new(env.clone()).connect(&addr);
@@ -444,6 +448,19 @@ pub struct NetsimDaemon {
     /// The HTTP listener task, aborted when the daemon is dropped so the HTTP
     /// port does not outlive it.
     http_task: tokio::task::JoinHandle<()>,
+    /// The port the HCI socket server is listening on.
+    hci_port: Option<u16>,
+    /// The HCI listener task, aborted when the daemon is dropped so the HCI
+    /// port does not outlive it.
+    hci_task: Option<tokio::task::JoinHandle<()>>,
+    /// The port the WebSocket server is listening on.
+    ws_port: Option<u16>,
+    /// The WebSocket listener task, aborted when the daemon is dropped so the
+    /// WebSocket port does not outlive it.
+    ws_task: Option<tokio::task::JoinHandle<()>>,
+    /// The Rootcanal control listener task, aborted when the daemon is dropped.
+    #[cfg(feature = "cuttlefish")]
+    test_task: Option<tokio::task::JoinHandle<()>>,
     /// The DeviceActor task handle.
     device_task: tokio::task::JoinHandle<()>,
     /// The CaptureActor task handle.
@@ -467,6 +484,16 @@ impl Drop for NetsimDaemon {
         // releases the port, so restarting the daemon in the same process does
         // not fail with "Address already in use".
         self.http_task.abort();
+        if let Some(task) = &self.hci_task {
+            task.abort();
+        }
+        if let Some(task) = &self.ws_task {
+            task.abort();
+        }
+        #[cfg(feature = "cuttlefish")]
+        if let Some(task) = &self.test_task {
+            task.abort();
+        }
         self.device_task.abort();
         self.capture_task.abort();
     }
@@ -794,23 +821,24 @@ impl NetsimDaemon {
             resolve_port_with_env(args.hci_port, "NETSIM_HCI_PORT", |name| std::env::var(name))
                 .unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
         let mut actual_hci_port = None;
-        match bind_tcp_loopback(resolved_hci_port) {
-            Ok(listener) => {
-                actual_hci_port = Some(listener.local_addr().map_err(init_error)?.port());
-                tokio::spawn(hci_server::run(listener, device_client.clone()));
-            }
-            Err(error) => {
-                if is_explicit_hci {
-                    return Err(init_error(format!(
-                        "Failed to bind requested HCI socket server port {resolved_hci_port}: {error}"
-                    )));
-                }
-                warn!(%error, "Failed to start HCI socket server");
-            }
+        let mut hci_task = None;
+        if let Some(listener) = bind_tcp_loopback_with_ephemeral_fallback(
+            resolved_hci_port,
+            is_explicit_hci,
+            "HCI socket server",
+        )
+        .map_err(|error| {
+            init_error(format!(
+                "Failed to bind requested HCI socket server port {resolved_hci_port}: {error}"
+            ))
+        })? {
+            actual_hci_port = Some(listener.local_addr().map_err(init_error)?.port());
+            hci_task = Some(tokio::spawn(hci_server::run(listener, device_client.clone())));
         }
 
         // WebSocket server
         let mut actual_ws_port = None;
+        let mut ws_task = None;
         let resolved_ws_port_opt =
             resolve_port_with_env(args.ws_port, "NETSIM_WS_PORT", |name| std::env::var(name));
         let websocket_port = resolved_ws_port_opt.map(|p| p + instance_num - 1);
@@ -818,7 +846,10 @@ impl NetsimDaemon {
             match bind_tcp_loopback(ws_port) {
                 Ok(listener) => {
                     actual_ws_port = Some(listener.local_addr().map_err(init_error)?.port());
-                    tokio::spawn(websocket_server::server::run(listener, device_client.clone()));
+                    ws_task = Some(tokio::spawn(websocket_server::server::run(
+                        listener,
+                        device_client.clone(),
+                    )));
                 }
                 Err(e) => {
                     return Err(init_error(format!(
@@ -830,28 +861,28 @@ impl NetsimDaemon {
 
         // Rootcanal legacy control server
         #[cfg(feature = "cuttlefish")]
-        let actual_test_addr = {
+        let (actual_test_addr, test_task) = {
             let mut addr = None;
+            let mut task = None;
             let is_explicit_test = args.test_port.is_some();
             let test_port = args.test_port.unwrap_or_else(|| 7500 + instance_num - 1);
-            match bind_tcp_loopback(test_port) {
-                Ok(listener) => {
-                    let local_addr = listener.local_addr().map_err(init_error)?;
-                    addr = Some(local_addr);
-                    // Spawn legacy Rootcanal control server for host-side test
-                    // runners (like pts-bot/mmi2grpc).
-                    tokio::spawn(rootcanal_server::run(listener, device_client.clone()));
-                }
-                Err(error) => {
-                    if is_explicit_test {
-                        return Err(init_error(format!(
-                            "Failed to bind requested Rootcanal control server port {test_port}: {error}"
-                        )));
-                    }
-                    error!(%error, "Failed to bind Rootcanal control server");
-                }
+            if let Some(listener) = bind_tcp_loopback_with_ephemeral_fallback(
+                test_port,
+                is_explicit_test,
+                "Rootcanal control server",
+            )
+            .map_err(|error| {
+                init_error(format!(
+                    "Failed to bind requested Rootcanal control server port {test_port}: {error}"
+                ))
+            })? {
+                let local_addr = listener.local_addr().map_err(init_error)?;
+                addr = Some(local_addr);
+                // Spawn legacy Rootcanal control server for host-side test
+                // runners (like pts-bot/mmi2grpc).
+                task = Some(tokio::spawn(rootcanal_server::run(listener, device_client.clone())));
             }
-            addr
+            (addr, task)
         };
 
         let mut actual_tcp_port = None;
@@ -1046,6 +1077,12 @@ impl NetsimDaemon {
             _grpc_server: Some(grpc_server),
             http_port: Some(actual_http_port),
             http_task,
+            hci_port: actual_hci_port,
+            hci_task,
+            ws_port: actual_ws_port,
+            ws_task,
+            #[cfg(feature = "cuttlefish")]
+            test_task,
             device_task,
             capture_task,
             artifact_dir,
@@ -1070,6 +1107,16 @@ impl NetsimDaemon {
     /// Gets the HTTP /v1 API port, if the server is running.
     pub fn http_port(&self) -> Option<u16> {
         self.http_port
+    }
+
+    /// Gets the HCI socket server port, if the server is running.
+    pub fn hci_port(&self) -> Option<u16> {
+        self.hci_port
+    }
+
+    /// Gets the WebSocket server port, if the server is running.
+    pub fn ws_port(&self) -> Option<u16> {
+        self.ws_port
     }
 
     /// Gets the Rootcanal test port, if the server is running.
@@ -1762,9 +1809,20 @@ mod tests {
     async fn test_is_netsimd_alive_rejects_unresponsive_port() {
         assert!(!is_netsimd_alive(0).await);
 
+        // A closed port in the current network namespace (e.g. a port belonging
+        // to another container's isolated network namespace sharing /tmp) must
+        // be rejected by the 100 ms TCP reachability probe without waiting for
+        // the 2 x 400 ms gRPC channel deadlines.
+        let closed_listener = std::net::TcpListener::bind("localhost:0").unwrap();
+        let closed_port = closed_listener.local_addr().unwrap().port();
+        drop(closed_listener);
+        let closed_probe_start = std::time::Instant::now();
+        assert!(!is_netsimd_alive(closed_port).await);
+        assert!(closed_probe_start.elapsed() < Duration::from_millis(400));
+
         // A listener that never completes the HTTP/2 handshake models a
         // wedged netsimd that still holds its port open.
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let listener = std::net::TcpListener::bind("localhost:0").unwrap();
         let dead_port = listener.local_addr().unwrap().port();
 
         let probe_start = std::time::Instant::now();

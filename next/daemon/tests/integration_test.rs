@@ -296,6 +296,49 @@ async fn test_startup_evicts_stale_lock_of_unresponsive_owner() {
     world.then_discovery_file_advertises_port(world.grpc_port);
 }
 
+// Scenario: Start daemon when shared discovery directory advertises a port from
+// another container's isolated network namespace
+//   Given netsim.ini in a shared /tmp or TMPDIR advertises a gRPC port that is
+//     not listening in the current network namespace
+//   And the other container's netsimd still holds netsim.ini.lock
+//   When I start netsimd in the same discovery directory
+//   Then the 100 ms TCP liveness probe rejects the unreachable port
+//   And netsimd evicts the cross-namespace lock and starts as Owner on a reachable port
+#[tokio::test]
+async fn test_startup_evicts_cross_namespace_unreachable_port_and_starts_daemon() {
+    let temp_dir =
+        std::env::temp_dir().join(format!("netsim_cross_ns_lock_{}", rand::random::<u32>()));
+    std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+
+    let ephemeral_listener = std::net::TcpListener::bind("localhost:0").unwrap();
+    let unreachable_port = ephemeral_listener.local_addr().unwrap().port();
+    drop(ephemeral_listener);
+
+    let foreign_ini = daemon::IniFile::new_for_dir(temp_dir.clone(), 1).unwrap();
+    let Ok(daemon::IniFileAccess::Writer(foreign_writer)) = foreign_ini.try_acquire() else {
+        panic!("Foreign container owner should be Writer");
+    };
+    let mut foreign_data = HashMap::new();
+    foreign_data.insert("pid".to_string(), std::process::id().to_string());
+    foreign_data.insert("grpc.port".to_string(), unreachable_port.to_string());
+    let foreign_guard = foreign_writer.write(&foreign_data).unwrap();
+
+    let mut args = daemon::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+
+    let mut world = World::new_with_args_in_dir(temp_dir, args).await;
+    world.when_spawn_daemon().await;
+
+    assert!(world.grpc_port != 0);
+    assert!(!foreign_guard.still_owns_lock());
+    world.then_discovery_file_advertises_port(world.grpc_port);
+    assert!(common::util::ini_file::is_server_reachable(&format!("localhost:{}", world.grpc_port)));
+
+    drop(foreign_guard);
+    world.then_discovery_file_advertises_port(world.grpc_port);
+}
+
 // Scenario: Start daemon while a responsive owner holds netsim.ini.lock
 //   Given a running Netsim Daemon
 //   When I start another netsimd in the same discovery directory
@@ -400,4 +443,99 @@ async fn test_startup_retries_eviction_after_busy_init_lock() {
     assert!(!stale_guard.still_owns_lock());
     world.then_discovery_file_advertises_port(world.grpc_port);
     drop(stale_guard);
+}
+
+// Scenario: WebSocket with Laird BL654 preset applies buffer size (b/573454032, b/560823435)
+//   Given a running Netsim Daemon with WebSocket enabled and a connected BT WebSocket client
+//   When an initial Text JSON chip-config frame sets preset "laird_bl654" and HCI LE Read Buffer Size is queried
+//   Then the controller reports LAIRD_BL654 buffer size (512 bytes / 0x0200, 4 packets / 0x04)
+#[tokio::test]
+async fn test_websocket_bt_properties_laird_bl654_preset_buffer_size() {
+    let mut world = World::new_with_websocket().await;
+    world.when_spawn_daemon().await;
+    world.when_connect_websocket("/v1/websocket/bt?name=ws-laird").await;
+    world.when_send_websocket_text(r#"{"preset":"laird_bl654"}"#).await;
+
+    world.when_send_websocket_binary(&[0x01, 0x03, 0x0c, 0x00]).await;
+    world.then_websocket_receives_binary(&[0x04, 0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00]).await;
+
+    // LAIRD_BL654: 512 bytes (0x0200) and 4 packets (0x04)
+    world.when_send_websocket_binary(&[0x01, 0x02, 0x20, 0x00]).await;
+    world
+        .then_websocket_receives_binary(&[
+            0x04, 0x0e, 0x07, 0x01, 0x02, 0x20, 0x00, 0x00, 0x02, 0x04,
+        ])
+        .await;
+}
+
+// Scenario: WebSocket with default binary-only streaming config buffer size
+//   Given a running Netsim Daemon with WebSocket enabled and a connected BT WebSocket client
+//   When binary HCI commands are streamed directly without an initial Text config frame
+//   Then the controller reports DEFAULT buffer size (27 bytes / 0x001b, 20 packets / 0x14)
+#[tokio::test]
+async fn test_websocket_bt_properties_binary_only_default_buffer_size() {
+    let mut world = World::new_with_websocket().await;
+    world.when_spawn_daemon().await;
+    world.when_connect_websocket("/v1/websocket/bt?name=ws-default").await;
+
+    world.when_send_websocket_binary(&[0x01, 0x03, 0x0c, 0x00]).await;
+    world.then_websocket_receives_binary(&[0x04, 0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00]).await;
+
+    // DEFAULT: 27 bytes (0x001b) and 20 packets (0x14)
+    world.when_send_websocket_binary(&[0x01, 0x02, 0x20, 0x00]).await;
+    world
+        .then_websocket_receives_binary(&[
+            0x04, 0x0e, 0x07, 0x01, 0x02, 0x20, 0x00, 0x1b, 0x00, 0x14,
+        ])
+        .await;
+}
+
+// Scenario: WebSocket disabling CIS feature clears feature bits
+//   Given a running Netsim Daemon with WebSocket enabled and a connected BT WebSocket client
+//   When an initial Text JSON chip-config frame disables le_connected_isochronous_stream
+//   Then HCI LE Read Local Supported Features reports the CIS feature bits cleared
+#[tokio::test]
+async fn test_websocket_bt_properties_disable_cis_feature() {
+    let mut world = World::new_with_websocket().await;
+    world.when_spawn_daemon().await;
+    world.when_connect_websocket("/v1/websocket/bt?name=ws-cis").await;
+    world
+        .when_send_websocket_text(r#"{"features":{"le_connected_isochronous_stream":false}}"#)
+        .await;
+
+    world.when_send_websocket_binary(&[0x01, 0x03, 0x0c, 0x00]).await;
+    world.then_websocket_receives_binary(&[0x04, 0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00]).await;
+
+    world.when_send_websocket_binary(&[0x01, 0x03, 0x20, 0x00]).await;
+    world.then_websocket_receives_le_features_with_cis_cleared().await;
+}
+
+// Scenario: HCI and Rootcanal control servers fall back to ephemeral ports and
+// record them in netsim.ini when default ports are already in use
+//   Given the default hci_port (6402 + instance - 1) and test_port (7500 + instance - 1) are occupied
+//   When netsimd starts without explicit --hci-port or --test-port overrides
+//   Then netsimd falls back to OS-assigned ephemeral ports and writes hci.port (and test.port) to netsim.ini
+#[tokio::test]
+async fn test_daemon_hci_and_test_port_ephemeral_fallback_recorded_in_ini() {
+    let instance = 200 + (rand::random::<u16>() % 200);
+    let default_hci_port = common::util::os_utils::get_hci_port(0, instance - 1) as u16;
+    let _occupied_hci = common::util::net::bind_tcp_loopback(default_hci_port).unwrap();
+    #[cfg(feature = "cuttlefish")]
+    let default_test_port = 7500 + instance - 1;
+    #[cfg(feature = "cuttlefish")]
+    let _occupied_test = common::util::net::bind_tcp_loopback(default_test_port).unwrap();
+
+    let mut args = daemon::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.instance = Some(instance);
+
+    let world = World::new_with_args(args).await;
+
+    world.then_ini_records_ephemeral_hci_and_test_ports(
+        instance,
+        default_hci_port,
+        #[cfg(feature = "cuttlefish")]
+        default_test_port,
+    );
 }
