@@ -52,11 +52,16 @@ pub struct Args {
     ///     `http://<server>:<port>`
     ///     `http://<username>:<password>@<server>:<port>`
     ///     (the 'http://' prefix can be omitted)
-    /// Specify an empty string (`--http-proxy ""`) to disable an ambient
-    /// `http_proxy` environment variable.
-    #[arg(long, verbatim_doc_comment)]
+    /// Specify an empty string (`--http-proxy ""`) or `--no-http-proxy` to
+    /// disable an ambient `http_proxy` environment variable.
+    #[arg(long, verbatim_doc_comment, overrides_with("no_http_proxy"))]
     #[cfg_attr(not(feature = "cuttlefish"), arg(env = "http_proxy"))]
     pub http_proxy: Option<String>,
+
+    /// Disable HTTP/HTTPS proxy, ignoring any ambient `http_proxy`
+    /// environment variable.
+    #[arg(long, alias = "no_http_proxy", overrides_with("http_proxy"))]
+    pub no_http_proxy: bool,
 
     /// Disable netsimd from shutting down automatically.
     /// WARNING: This flag is for development purpose. netsimd will not shutdown
@@ -199,6 +204,28 @@ pub struct WifiConfig {
     pub wifi_cvd_tap: bool,
 }
 
+impl WifiConfig {
+    /// Resolves the effective Linux TAP interface name or pool pattern,
+    /// prioritizing `--wifi-tap` over `--wifi-cvd-tap`.
+    #[must_use]
+    pub(crate) fn resolved_tap(&self) -> Option<String> {
+        #[cfg(target_os = "linux")]
+        {
+            if let Some(tap) = &self.wifi_tap {
+                return Some(tap.clone());
+            }
+            if self.wifi_cvd_tap {
+                return Some("cvd-etap-%02d".to_string());
+            }
+            None
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum ClapWifiMode {
     A,
@@ -237,20 +264,50 @@ impl Args {
         if let Ok(env_str) = env::var("NETSIM_ARGS") {
             args.extend(env_str.split_whitespace().map(|s| s.to_string()));
         }
+        Self::parse_from_with_ambient_proxy(args)
+    }
+
+    /// Parses CLI arguments and validates any `http_proxy` value inherited from
+    /// the ambient `http_proxy` environment variable (as opposed to an explicit
+    /// `--http-proxy` CLI flag).
+    pub fn parse_from_with_ambient_proxy<I, T>(itr: I) -> Args
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        let args: Vec<std::ffi::OsString> = itr.into_iter().map(Into::into).collect();
+        let explicit_http_proxy = args.iter().any(|arg| {
+            let s = arg.to_string_lossy();
+            s == "--http-proxy" || s.starts_with("--http-proxy=")
+        });
         let mut parsed = Args::parse_from(args);
         parsed.sanitize();
+        if !explicit_http_proxy {
+            parsed.validate_ambient_http_proxy();
+        }
         parsed
     }
 
     /// Sanitizes parsed arguments, trimming whitespace and treating empty
-    /// strings (e.g. `--http-proxy ""`) as `None`.
+    /// strings (e.g. `--http-proxy ""`) or `--no-http-proxy` as `None`.
     pub fn sanitize(&mut self) {
+        if self.no_http_proxy {
+            self.http_proxy = None;
+            return;
+        }
         if let Some(proxy) = self.http_proxy.take() {
             let trimmed = proxy.trim();
             if !trimmed.is_empty() {
                 self.http_proxy = Some(trimmed.to_string());
             }
         }
+    }
+
+    /// Validates an ambient `http_proxy` configuration, clearing it if it
+    /// points to a loopback address (`127.0.0.0/8`, `localhost`, `[::1]`) that
+    /// is unreachable in the current network namespace.
+    pub fn validate_ambient_http_proxy(&mut self) {
+        self.http_proxy = slirp_actor::validate_ambient_http_proxy(self.http_proxy.take());
     }
 }
 
@@ -283,6 +340,59 @@ mod tests {
     }
 
     #[test]
+    fn test_no_http_proxy_flag_clears_proxy() {
+        let mut args = Args {
+            http_proxy: Some("http://127.0.0.1:8080".to_string()),
+            no_http_proxy: true,
+            ..Default::default()
+        };
+        args.sanitize();
+        assert_eq!(args.http_proxy, None);
+
+        let parsed = Args::parse_from_with_ambient_proxy(["netsimd", "--no-http-proxy"]);
+        assert!(parsed.no_http_proxy);
+        assert_eq!(parsed.http_proxy, None);
+    }
+
+    #[test]
+    fn test_unreachable_ambient_loopback_http_proxy_cleared() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let closed_port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let mut args = Args {
+            http_proxy: Some(format!("http://127.0.0.1:{closed_port}")),
+            ..Default::default()
+        };
+        args.sanitize();
+        args.validate_ambient_http_proxy();
+        assert_eq!(args.http_proxy, None);
+    }
+
+    #[test]
+    fn test_reachable_ambient_loopback_http_proxy_preserved() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let open_port = listener.local_addr().unwrap().port();
+        let proxy = format!("http://127.0.0.1:{open_port}");
+
+        let mut args = Args { http_proxy: Some(proxy.clone()), ..Default::default() };
+        args.sanitize();
+        args.validate_ambient_http_proxy();
+        assert_eq!(args.http_proxy, Some(proxy));
+    }
+
+    #[test]
+    fn test_explicit_loopback_http_proxy_flag_not_cleared_by_ambient_check() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let closed_port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let proxy = format!("http://127.0.0.1:{closed_port}");
+        let parsed = Args::parse_from_with_ambient_proxy(["netsimd", "--http-proxy", &proxy]);
+        assert_eq!(parsed.http_proxy, Some(proxy));
+    }
+
+    #[test]
     fn test_none_http_proxy_stays_none() {
         let mut args = Args { http_proxy: None, ..Default::default() };
         args.sanitize();
@@ -295,5 +405,28 @@ mod tests {
             Args::parse_from(["netsimd", "--http-proxy", "  http://proxy.example.com:8080  "]);
         args.sanitize();
         assert_eq!(args.http_proxy, Some("http://proxy.example.com:8080".to_string()));
+    }
+
+    #[test]
+    fn test_wifi_config_resolved_tap_precedence() {
+        let config_default = WifiConfig::default();
+        #[cfg(target_os = "linux")]
+        {
+            assert_eq!(config_default.resolved_tap(), None);
+
+            let config_cvd = WifiConfig { wifi_cvd_tap: true, ..Default::default() };
+            assert_eq!(config_cvd.resolved_tap(), Some("cvd-etap-%02d".to_string()));
+
+            let config_both = WifiConfig {
+                wifi_tap: Some("tap-custom".to_string()),
+                wifi_cvd_tap: true,
+                ..Default::default()
+            };
+            assert_eq!(config_both.resolved_tap(), Some("tap-custom".to_string()));
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            assert_eq!(config_default.resolved_tap(), None);
+        }
     }
 }
