@@ -97,7 +97,8 @@ pub use crate::initial_info::{
 pub use crate::link::{Link, LinkCreate, LinkId, LinkUpdate};
 // From stats.rs
 pub use crate::stats::{
-    FrontendStats, NetsimDeviceStats, NetsimFrontendStats, NetsimRadioStats, RadioKind, WifiStats,
+    FrontendStats, InvalidPacket, InvalidPacketReason, NetsimDeviceStats, NetsimFrontendStats,
+    NetsimRadioStats, RadioKind, WifiStats,
 };
 pub use crate::{
     ap::{Ap, ApCreate, ApUpdate, DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID, WifiMode},
@@ -122,7 +123,13 @@ pub use crate::{
     },
     chip_error::ChipError,
     ethernet::{Ethernet, EthernetCreate, EthernetUpdate},
-    nfc::{Nfc, NfcCreate, NfcUpdate},
+    nfc::{
+        DEFAULT_NFC_TAG_UID_PREFIX, MAX_T2T_NDEF_MESSAGE_BYTES, MAX_T2T_USER_MEMORY_BYTES,
+        MAX_T4AT_NDEF_FILE_CAPACITY, MAX_T4AT_NDEF_MESSAGE_BYTES, Nfc, NfcCreate, NfcTag,
+        NfcTagCreate, NfcTagError, NfcTagId, NfcTagProtocol, NfcTagUpdate, NfcUpdate,
+        decode_ndef_hex, decode_ndef_payload_text, encode_hex_lower, encode_ndef_text_record,
+        encode_ndef_uri_record, normalize_uid_hex,
+    },
     uwb::{Uwb, UwbCreate, UwbMode, UwbUpdate},
     wifi::{Wifi, WifiCreate, WifiUpdate},
 };
