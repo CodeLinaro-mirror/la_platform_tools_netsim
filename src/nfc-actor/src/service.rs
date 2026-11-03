@@ -128,6 +128,10 @@ impl ActorService for NfcActor {
         let nfc_stats_rf = self.nfc_stats.clone();
         let enabled = Arc::new(AtomicBool::new(true));
         let enabled_rf = enabled.clone();
+        let p2p_tx_count = Arc::new(AtomicU64::new(0));
+        let p2p_rx_count = Arc::new(AtomicU64::new(0));
+        let p2p_tx_count_rf = p2p_tx_count.clone();
+        let p2p_rx_count_rf = p2p_rx_count.clone();
         let casimir_device_id = scene_client
             .add_device(move |id, scene_rf_tx| {
                 casimir_to_device.lock().insert(id, device_id);
@@ -135,12 +139,14 @@ impl ActorService for NfcActor {
                 let mut device = casimir::Device::nci(id, casimir_rx, casimir_tx, egress_rf_tx);
                 let nfc_stats_rf_tx = nfc_stats_rf.clone();
                 let enabled_rf_tx = enabled_rf.clone();
+                let p2p_tx_count_egress = p2p_tx_count_rf.clone();
                 tokio::spawn(async move {
                     while let Some(packet) = egress_rf_rx.recv().await {
                         if !enabled_rf_tx.load(Ordering::Acquire) {
                             continue;
                         }
                         nfc_stats_rf_tx.incr_rf_taps_tx();
+                        p2p_tx_count_egress.fetch_add(1, Ordering::Relaxed);
                         if scene_rf_tx.send(packet).is_err() {
                             nfc_stats_rf_tx.incr_rf_error();
                             break;
@@ -151,6 +157,7 @@ impl ActorService for NfcActor {
                 let controller_ingress_rf_tx = std::mem::replace(&mut device.rf_tx, ingress_rf_tx);
                 let map_clone = casimir_to_device.clone();
                 let enabled_rf_rx = enabled_rf.clone();
+                let p2p_rx_count_ingress = p2p_rx_count_rf.clone();
                 tokio::spawn(async move {
                     while let Some(packet) = ingress_rf_rx.recv().await {
                         if !enabled_rf_rx.load(Ordering::Acquire) {
@@ -167,6 +174,7 @@ impl ActorService for NfcActor {
                         {
                             if packet.sender() != id {
                                 nfc_stats_rf.incr_rf_taps_rx();
+                                p2p_rx_count_ingress.fetch_add(1, Ordering::Relaxed);
                             }
                             if controller_ingress_rf_tx.send(packet).is_err() {
                                 nfc_stats_rf.incr_rf_error();
@@ -299,6 +307,8 @@ impl ActorService for NfcActor {
                 nfc_writer,
                 tx_count,
                 rx_count,
+                p2p_tx_count,
+                p2p_rx_count,
                 mode,
             },
         );
@@ -405,10 +415,12 @@ impl ActorService for NfcActor {
                     .map(|(id, state)| {
                         let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = id.0;
-                        radio_stats.name = format!("nfc-{}", id.0);
+                        radio_stats.name = state.chip.name.clone();
                         radio_stats.kind = netsim_model::RadioKind::Nfc;
                         radio_stats.tx_count = state.tx_count.load(Ordering::Relaxed);
                         radio_stats.rx_count = state.rx_count.load(Ordering::Relaxed);
+                        radio_stats.p2p_tx_count = state.p2p_tx_count.load(Ordering::Relaxed);
+                        radio_stats.p2p_rx_count = state.p2p_rx_count.load(Ordering::Relaxed);
                         radio_stats
                     })
                     .collect();
@@ -422,6 +434,8 @@ impl ActorService for NfcActor {
                 state.enabled.store(state.chip.enabled, Ordering::Release);
                 state.tx_count.store(0, Ordering::Relaxed);
                 state.rx_count.store(0, Ordering::Relaxed);
+                state.p2p_tx_count.store(0, Ordering::Relaxed);
+                state.p2p_rx_count.store(0, Ordering::Relaxed);
                 state.set_mode(NfcMode::Idle);
                 Ok(crate::nfc_actor::NfcActionResult::Chip(Box::new(state.chip.clone())))
             }
@@ -640,6 +654,8 @@ mod tests {
             nfc_writer,
             tx_count: Arc::new(AtomicU64::new(10)),
             rx_count: Arc::new(AtomicU64::new(20)),
+            p2p_tx_count: Arc::new(AtomicU64::new(5)),
+            p2p_rx_count: Arc::new(AtomicU64::new(7)),
             mode: Arc::new(AtomicU8::new(NfcMode::Poll.as_u8())),
         };
         actor.active_chips.insert(chip_id, state);
@@ -661,6 +677,8 @@ mod tests {
         assert!(chip_state.enabled.load(Ordering::Acquire));
         assert_eq!(chip_state.tx_count.load(Ordering::Relaxed), 0);
         assert_eq!(chip_state.rx_count.load(Ordering::Relaxed), 0);
+        assert_eq!(chip_state.p2p_tx_count.load(Ordering::Relaxed), 0);
+        assert_eq!(chip_state.p2p_rx_count.load(Ordering::Relaxed), 0);
         assert_eq!(chip_state.mode(), NfcMode::Idle);
     }
 

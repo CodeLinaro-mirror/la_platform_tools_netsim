@@ -97,6 +97,8 @@ pub struct ChipState {
     pub nfc_writer: WriteHalf<DuplexStream>,
     pub tx_count: Arc<AtomicU64>,
     pub rx_count: Arc<AtomicU64>,
+    pub(crate) p2p_tx_count: Arc<AtomicU64>,
+    pub(crate) p2p_rx_count: Arc<AtomicU64>,
     pub mode: Arc<AtomicU8>,
 }
 
@@ -276,6 +278,8 @@ mod tests {
             nfc_writer,
             tx_count: Arc::new(AtomicU64::new(0)),
             rx_count: Arc::new(AtomicU64::new(0)),
+            p2p_tx_count: Arc::new(AtomicU64::new(0)),
+            p2p_rx_count: Arc::new(AtomicU64::new(0)),
             mode: Arc::new(AtomicU8::new(NfcMode::Idle.as_u8())),
         };
 

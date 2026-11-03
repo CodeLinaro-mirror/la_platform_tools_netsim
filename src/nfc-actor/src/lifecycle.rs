@@ -215,6 +215,8 @@ mod tests {
                 nfc_writer,
                 tx_count: Arc::new(AtomicU64::new(0)),
                 rx_count: Arc::new(AtomicU64::new(0)),
+                p2p_tx_count: Arc::new(AtomicU64::new(0)),
+                p2p_rx_count: Arc::new(AtomicU64::new(0)),
                 mode: chip_mode.clone(),
             },
         );
@@ -339,6 +341,8 @@ mod tests {
                 nfc_writer,
                 tx_count: Arc::new(AtomicU64::new(0)),
                 rx_count: Arc::new(AtomicU64::new(0)),
+                p2p_tx_count: Arc::new(AtomicU64::new(0)),
+                p2p_rx_count: Arc::new(AtomicU64::new(0)),
                 mode: chip_mode.clone(),
             },
         );

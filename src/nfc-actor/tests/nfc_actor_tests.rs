@@ -705,6 +705,10 @@ const NCI_CORE_INIT_RX: u64 = 3;
 // Adds RfSetListenModeRoutingCommand -> RfSetListenModeRoutingResponse.
 const NCI_LISTEN_ROUTING_TX: u64 = NCI_CORE_INIT_TX + 1;
 const NCI_LISTEN_ROUTING_RX: u64 = NCI_CORE_INIT_RX + 1;
+// CoreResetCommand + CoreInitCommand + RfDiscoverCommand + RfDeactivateCommand >= 3 TX/RX.
+const MIN_POST_DISCOVERY_NCI_TX: u64 = 3;
+const MIN_POST_DISCOVERY_NCI_RX: u64 = 3;
+const MIN_P2P_RF_PACKETS: u64 = 1;
 
 /// Scenario: Disabling NFC chips gates NCI and RF traffic in both directions and
 /// re-enabling resumes NCI and RF forwarding.
@@ -786,6 +790,88 @@ async fn test_nfc_client_reset_restores_initial_chip_mode_and_clears_stats() {
     // Then traffic resumes on the re-enabled chip in Idle mode without counting listen-mode APDUs
     world.then_chip_tx_count_at_least(CHIP_1, 1).await;
     world.then_api_stat_count_is(nfc_actor::NfcApi::CardEmulationSendResponseApdu, 0);
+
+    world.shutdown().await;
+}
+
+/// Scenario: Peer-to-peer NFC interactions track p2p_tx_count and p2p_rx_count, reflect
+/// chip name in radio statistics, and resetting one chip restores initial name and counters
+/// while preserving peer chip stats.
+#[tokio::test]
+async fn test_nfc_client_p2p_stats_and_chip_name_preserved_and_reset() {
+    // Given two named NFC chips within physical proximity
+    let mut world = NfcClientWorld::new().await;
+    world
+        .given_named_chip_at(
+            CHIP_1,
+            DEVICE_1,
+            "custom-nfc-1",
+            ORIGIN_METERS,
+            ORIGIN_METERS,
+            ORIGIN_METERS,
+        )
+        .await;
+    world
+        .given_named_chip_at(
+            CHIP_2,
+            DEVICE_2,
+            "custom-nfc-2",
+            IN_RANGE_X_METERS,
+            ORIGIN_METERS,
+            ORIGIN_METERS,
+        )
+        .await;
+
+    // And both chips are NCI core initialized
+    world.given_nci_core_initialized(CHIP_1).await;
+    world.given_nci_core_initialized(CHIP_2).await;
+
+    // When both chips start RF discovery and exchange peer-to-peer traffic
+    world.when_nci_discovery_started(CHIP_1).await;
+    world.when_nci_discovery_started(CHIP_2).await;
+
+    // Then peer-to-peer packet exchanges are observed on both chips
+    world.then_p2p_traffic_exchanged(CHIP_1, CHIP_2).await;
+
+    // When RF discovery is stopped on both chips to halt periodic timers
+    world.when_nci_discovery_stopped(CHIP_1).await;
+    world.when_nci_discovery_stopped(CHIP_2).await;
+
+    // Then Chip 1 radio statistics reflect custom name and active traffic counts
+    world
+        .then_chip_radio_stats(
+            CHIP_1,
+            "custom-nfc-1",
+            MIN_POST_DISCOVERY_NCI_TX,
+            MIN_POST_DISCOVERY_NCI_RX,
+            MIN_P2P_RF_PACKETS,
+            MIN_P2P_RF_PACKETS,
+        )
+        .await;
+
+    // When Chip 1's name is mutated via update
+    world.when_chip_name_updated(CHIP_1, "renamed-nfc-1").await;
+
+    // Then radio statistics immediately reflect the updated chip name
+    world.then_radio_stats_name_is(CHIP_1, "renamed-nfc-1").await;
+
+    // When Chip 1 is reset via NfcClient::reset
+    world.when_chip_is_reset(CHIP_1).await;
+
+    // Then Chip 1 initial name is restored with all packet counters zeroed
+    world.then_chip_radio_stats_zeroed(CHIP_1, "custom-nfc-1").await;
+
+    // And Chip 2 radio statistics and counters are preserved
+    world
+        .then_chip_radio_stats(
+            CHIP_2,
+            "custom-nfc-2",
+            MIN_POST_DISCOVERY_NCI_TX,
+            MIN_POST_DISCOVERY_NCI_RX,
+            MIN_P2P_RF_PACKETS,
+            MIN_P2P_RF_PACKETS,
+        )
+        .await;
 
     world.shutdown().await;
 }

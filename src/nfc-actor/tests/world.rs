@@ -422,6 +422,20 @@ impl NfcClientWorld {
         self.create_chip(chip_id, Chip { device_id, ..Default::default() }).await;
     }
 
+    pub(crate) async fn given_named_chip_at(
+        &mut self,
+        chip_id: ChipId,
+        device_id: DeviceId,
+        name: &str,
+        x: f32,
+        y: f32,
+        z: f32,
+    ) {
+        self.mock_device_client.set_position(device_id, Position { x, y, z });
+        self.create_chip(chip_id, Chip { name: name.to_string(), device_id, ..Default::default() })
+            .await;
+    }
+
     pub(crate) async fn given_chip_with_metadata(
         &mut self,
         chip_id: ChipId,
@@ -653,5 +667,100 @@ impl NfcClientWorld {
         assert!(restored.is_nfc_enabled());
 
         self.then_chip_read_matches(chip_id, name, manufacturer, product_name, true).await;
+    }
+
+    pub(crate) async fn when_chip_name_updated(&mut self, chip_id: ChipId, name: &str) {
+        self.client
+            .update(chip_id, ChipUpdate { name: Some(name.to_string()), ..Default::default() })
+            .await
+            .expect("update chip name");
+    }
+
+    pub(crate) async fn then_p2p_traffic_exchanged(&self, chip_a: ChipId, chip_b: ChipId) {
+        tokio::time::timeout(PACKET_TIMEOUT, async {
+            loop {
+                let stats = self.client.read_statistics().await.expect("read NFC radio statistics");
+                let stats_a = stats.iter().find(|s| s.id == chip_a.0);
+                let stats_b = stats.iter().find(|s| s.id == chip_b.0);
+                let ready = match (stats_a, stats_b) {
+                    (Some(a), Some(b)) => {
+                        a.p2p_tx_count >= 1
+                            && a.p2p_rx_count >= 1
+                            && b.p2p_tx_count >= 1
+                            && b.p2p_rx_count >= 1
+                    }
+                    _ => false,
+                };
+                if ready {
+                    break;
+                }
+                tokio::time::sleep(POLL_INTERVAL).await;
+            }
+        })
+        .await
+        .expect("timed out waiting for p2p traffic between chips");
+    }
+
+    pub(crate) async fn then_chip_radio_stats(
+        &self,
+        chip_id: ChipId,
+        expected_name: &str,
+        min_tx: u64,
+        min_rx: u64,
+        min_p2p_tx: u64,
+        min_p2p_rx: u64,
+    ) {
+        let stats = self.radio_stats_for(chip_id).await;
+        assert_eq!(stats.name, expected_name, "unexpected radio stats name for chip {chip_id}");
+        assert!(
+            stats.tx_count >= min_tx,
+            "expected tx_count >= {min_tx} for chip {chip_id}, got {}",
+            stats.tx_count
+        );
+        assert!(
+            stats.rx_count >= min_rx,
+            "expected rx_count >= {min_rx} for chip {chip_id}, got {}",
+            stats.rx_count
+        );
+        assert!(
+            stats.p2p_tx_count >= min_p2p_tx,
+            "expected p2p_tx_count >= {min_p2p_tx} for chip {chip_id}, got {}",
+            stats.p2p_tx_count
+        );
+        assert!(
+            stats.p2p_rx_count >= min_p2p_rx,
+            "expected p2p_rx_count >= {min_p2p_rx} for chip {chip_id}, got {}",
+            stats.p2p_rx_count
+        );
+    }
+
+    pub(crate) async fn then_radio_stats_name_is(&self, chip_id: ChipId, expected_name: &str) {
+        let stats = self.radio_stats_for(chip_id).await;
+        assert_eq!(stats.name, expected_name);
+    }
+
+    pub(crate) async fn then_chip_radio_stats_zeroed(&self, chip_id: ChipId, expected_name: &str) {
+        let stats = self.radio_stats_for(chip_id).await;
+        assert_eq!(stats.name, expected_name, "unexpected radio stats name for chip {chip_id}");
+        assert_eq!(
+            stats.tx_count, 0,
+            "expected tx_count == 0 for chip {chip_id}, got {}",
+            stats.tx_count
+        );
+        assert_eq!(
+            stats.rx_count, 0,
+            "expected rx_count == 0 for chip {chip_id}, got {}",
+            stats.rx_count
+        );
+        assert_eq!(
+            stats.p2p_tx_count, 0,
+            "expected p2p_tx_count == 0 for chip {chip_id}, got {}",
+            stats.p2p_tx_count
+        );
+        assert_eq!(
+            stats.p2p_rx_count, 0,
+            "expected p2p_rx_count == 0 for chip {chip_id}, got {}",
+            stats.p2p_rx_count
+        );
     }
 }
