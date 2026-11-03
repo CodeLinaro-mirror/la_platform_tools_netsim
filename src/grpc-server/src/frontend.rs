@@ -266,22 +266,34 @@ impl FrontendClient {
         };
 
         let name_opt = req.device.name.as_deref();
-        client.patch(req.id, name_opt, update).await.map_err(|e| match e {
-            ClientError::Framework(ref framework)
-                if matches!(
-                    framework.downcast_ref::<DeviceError>(),
-                    Some(DeviceError::NotFound(_) | DeviceError::DeviceNotFound(_))
-                ) =>
-            {
-                RpcStatus::with_message(
+        client.patch(req.id, name_opt, update).await.map_err(|e| {
+            match DeviceError::downcast_from(&e) {
+                Some(
+                    DeviceError::NotFound(_)
+                    | DeviceError::DeviceNotFound(_)
+                    | DeviceError::ChipNotFound(_, _),
+                ) => RpcStatus::with_message(
                     RpcStatusCode::NOT_FOUND,
-                    format!("Device not found or patch failed: {}", e),
-                )
+                    format!("Device or chip not found: {e}"),
+                ),
+                Some(DeviceError::AlreadyExists(_)) => RpcStatus::with_message(
+                    RpcStatusCode::ALREADY_EXISTS,
+                    format!("Device already exists: {e}"),
+                ),
+                Some(
+                    DeviceError::InvalidInput(_)
+                    | DeviceError::AmbiguousMatch(_)
+                    | DeviceError::AmbiguousEmptyMatch { .. }
+                    | DeviceError::MismatchedChipKind { .. },
+                ) => RpcStatus::with_message(
+                    RpcStatusCode::INVALID_ARGUMENT,
+                    format!("Invalid patch argument: {e}"),
+                ),
+                _ => RpcStatus::with_message(
+                    RpcStatusCode::INTERNAL,
+                    format!("Failed to patch device: {e}"),
+                ),
             }
-            _ => RpcStatus::with_message(
-                RpcStatusCode::INTERNAL,
-                format!("Failed to patch device: {}", e),
-            ),
         })
     }
 
@@ -668,6 +680,7 @@ impl FrontendService for FrontendClient {
 mod tests {
     use actor_framework::MockActorClient;
     use device_actor::DeviceActor;
+    use device_api::DeviceId;
     use link_api::{Link, LinkId, MockLinkClient};
     use netsim_model::{ChipId, ChipKind};
     use protobuf::EnumOrUnknown;
@@ -684,6 +697,33 @@ mod tests {
 
         let res = FrontendClient::handle_delete_chip(client, req);
         assert_eq!(res.unwrap_err().code(), RpcStatusCode::UNIMPLEMENTED);
+    }
+
+    #[tokio::test]
+    async fn test_handle_patch_device_chip_not_found_returns_not_found() {
+        let mut mock_client = MockActorClient::<DeviceActor>::new();
+        mock_client.expect_update().withf(|id, _| *id == DeviceId(1)).returning(|_, _| {
+            Err(actor_framework::FrameworkError::ServiceError(
+                device_actor::DeviceError::ChipNotFound(
+                    "missing-chip".to_string(),
+                    "dev-1".to_string(),
+                ),
+            ))
+        });
+
+        let client = DeviceClient::new(Box::new(mock_client));
+        let mut req = netsim_proto::frontend::PatchDeviceRequest::new();
+        req.id = Some(1);
+        let mut chip_patch = netsim_proto::model::Chip::new();
+        chip_patch.name = "missing-chip".to_string();
+        let mut device_patch =
+            netsim_proto::frontend::patch_device_request::PatchDeviceFields::new();
+        device_patch.chips.push(chip_patch);
+        req.device = protobuf::MessageField::some(device_patch);
+
+        let res = FrontendClient::handle_patch_device(client, req).await;
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code(), RpcStatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
