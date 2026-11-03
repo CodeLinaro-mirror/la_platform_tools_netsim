@@ -1625,6 +1625,20 @@ impl World {
         Self::with_clients(chip_clients, mock_link_client).await
     }
 
+    /// BDD Constructor: Given a running Device Actor with a chip client configured to fail on update.
+    pub async fn given_with_failing_bluetooth_update_mock() -> Self {
+        let mut mock_chip_client = MockChipClient::new();
+        mock_chip_client.expect_create().returning(|_, _| Ok(()));
+        mock_chip_client
+            .expect_update()
+            .returning(|_, _| Err(netsim_model::ClientError::Send("transport error".to_string())));
+
+        let mut chip_clients = HashMap::new();
+        chip_clients.insert(ChipKind::BLUETOOTH, Box::new(mock_chip_client) as Box<dyn ChipClient>);
+        let mock_link_client = Self::create_default_link_client();
+        Self::with_clients(chip_clients, mock_link_client).await
+    }
+
     /// BDD Step: Given a created device.
     pub async fn given_device_created(&self, device_name: &str) -> DeviceId {
         self.when_create_device(device_name).await
@@ -1644,6 +1658,11 @@ impl World {
     pub async fn given_first_chip_id(&self, device_id: DeviceId) -> netsim_model::ChipId {
         let device = self.client.get(device_id).await.unwrap().unwrap();
         netsim_model::ChipId(device.chips[0].id)
+    }
+
+    /// BDD Step: Given recorded last modified timestamp.
+    pub async fn given_recorded_last_modified(&self) -> std::time::SystemTime {
+        self.client.get_last_modified().await.unwrap()
     }
 
     /// BDD Step: When I add a chip with the specified variant to an existing device.
@@ -1936,6 +1955,25 @@ impl World {
             ),
             "Expected AlreadyExists({expected_name}), got: {err:?}"
         );
+    }
+
+    /// BDD Step: Then the last error is ActorCommunicationError.
+    pub fn then_error_is_actor_communication(&self) {
+        let err_guard = self.last_error.lock().unwrap();
+        let err = err_guard.as_ref().expect("Expected error, but last_error was None");
+        assert!(
+            matches!(
+                DeviceError::downcast_from(err),
+                Some(DeviceError::ActorCommunicationError(_))
+            ),
+            "Expected ActorCommunicationError, got: {err:?}"
+        );
+    }
+
+    /// BDD Step: Then the device's last modified timestamp matches expected.
+    pub async fn then_last_modified_is(&self, expected: std::time::SystemTime) {
+        let ts = self.client.get_last_modified().await.unwrap();
+        assert_eq!(ts, expected);
     }
 
     /// BDD Step: Then a chip's manufacturer matches expected.

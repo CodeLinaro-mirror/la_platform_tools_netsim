@@ -149,6 +149,9 @@ impl FrontendClient {
             tracing::warn!(%error, "Failed to get radio stats");
         }
 
+        // Read the timestamp before listing so a concurrent mutation yields a
+        // stale (older) timestamp rather than one newer than the snapshot.
+        let last_modified = client.get_last_modified().await;
         let devices = client.list().await.map_err(|e| {
             RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,
@@ -158,6 +161,16 @@ impl FrontendClient {
         let mut proto_response = ListDeviceResponse::new();
         for device in devices {
             proto_response.devices.push(to_proto_device(device));
+        }
+        if let Ok(last_modified) = last_modified
+            && let Ok(duration) = last_modified.duration_since(std::time::UNIX_EPOCH)
+        {
+            proto_response.last_modified =
+                protobuf::MessageField::some(protobuf::well_known_types::timestamp::Timestamp {
+                    seconds: duration.as_secs().cast_signed(),
+                    nanos: duration.subsec_nanos().cast_signed(),
+                    ..Default::default()
+                });
         }
         Ok(proto_response)
     }
@@ -908,6 +921,32 @@ mod tests {
         let res = FrontendClient::handle_create_device(client, req).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), RpcStatusCode::INTERNAL);
+    }
+
+    #[tokio::test]
+    async fn test_handle_list_device_populates_last_modified() {
+        let mut mock_client = MockActorClient::<DeviceActor>::new();
+        mock_client
+            .expect_perform_action()
+            .withf(|id, action| id.is_none() && matches!(action, DeviceAction::GetRadioStats))
+            .returning(|_, _| Ok(DeviceActionResult::Statistics(vec![])));
+
+        mock_client.expect_list().returning(|| Ok(vec![]));
+
+        const FIXED_EPOCH_SECS: u64 = 1_700_000_000;
+        let expected_time =
+            std::time::UNIX_EPOCH + std::time::Duration::from_secs(FIXED_EPOCH_SECS);
+        mock_client
+            .expect_perform_action()
+            .withf(|id, action| id.is_none() && matches!(action, DeviceAction::GetLastModified))
+            .returning(move |_, _| Ok(DeviceActionResult::LastModified(expected_time)));
+
+        let client = DeviceClient::new(Box::new(mock_client));
+        let resp = FrontendClient::handle_list_device(client).await.unwrap();
+        assert!(resp.last_modified.is_some());
+        let ts = resp.last_modified.unwrap();
+        assert_eq!(ts.seconds, i64::try_from(FIXED_EPOCH_SECS).unwrap());
+        assert_eq!(ts.nanos, 0);
     }
 
     #[tokio::test]

@@ -490,6 +490,7 @@ impl DeviceActor {
         {
             self.guid_to_id.remove(guid);
         }
+        self.last_modified = std::time::SystemTime::now();
         self.stats.update_device_count(self.devices.len(), false);
         self.update_idle_state(ctx);
         self.save_stats_async().await;
@@ -540,6 +541,7 @@ impl DeviceActor {
             info!("DeviceActor: Device {} is empty, auto-deleting", device_id);
             self.handle_delete(device_id, ctx).await?;
         } else {
+            self.last_modified = std::time::SystemTime::now();
             // Save stats if we didn't delete the device (partial update)
             self.save_stats_async().await;
             info!("DeviceActor: Device {} is NOT empty after chip removal", device_id);
@@ -804,6 +806,7 @@ impl DeviceActor {
             self.next_device_id += 1;
         }
         self.devices.insert(id, entity);
+        self.last_modified = std::time::SystemTime::now();
         self.stats.update_device_count(self.devices.len(), true);
 
         if let Some(device_info) = &params.device_config.device_info {
@@ -843,6 +846,7 @@ impl DeviceActor {
                 params.packet_sink,
             )
             .await?;
+            self.last_modified = std::time::SystemTime::now();
 
             // Trigger immediate save
             self.save_stats_async().await;
@@ -1016,6 +1020,7 @@ impl DeviceActor {
         };
 
         self.save_stats_async().await;
+        self.last_modified = std::time::SystemTime::now();
 
         if !chip_reset_errors.is_empty() {
             Err(DeviceError::ResetErrors {
@@ -1258,6 +1263,8 @@ impl ActorService for DeviceActor {
             }
         }
 
+        self.last_modified = std::time::SystemTime::now();
+
         Ok(entity.device.clone())
     }
 
@@ -1280,6 +1287,9 @@ impl ActorService for DeviceActor {
             DeviceAction::GetRadioStats => {
                 let stats = self.collect_radio_stats_async().await;
                 Ok(DeviceActionResult::Statistics(stats))
+            }
+            DeviceAction::GetLastModified => {
+                Ok(DeviceActionResult::LastModified(self.last_modified))
             }
             DeviceAction::SaveStats => {
                 self.save_stats_async().await;
@@ -1351,6 +1361,7 @@ impl ActorService for DeviceActor {
                 .await;
                 match chip_id_res {
                     Ok(chip_id) => {
+                        self.last_modified = std::time::SystemTime::now();
                         self.save_stats_async().await;
                         Ok(DeviceActionResult::ChipId(chip_id))
                     }

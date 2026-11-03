@@ -94,6 +94,7 @@ use serde::{Deserialize, Serialize};
 pub enum DeviceAction {
     Reset,
     GetRadioStats,
+    GetLastModified,
     NotifyChipRemoved(DeviceId, ChipId),
     AddChip {
         chip_config: Box<DeviceChipCreate>,
@@ -127,6 +128,7 @@ impl fmt::Debug for DeviceAction {
         match self {
             DeviceAction::Reset => write!(f, "Reset"),
             DeviceAction::GetRadioStats => write!(f, "GetRadioStats"),
+            DeviceAction::GetLastModified => write!(f, "GetLastModified"),
             DeviceAction::NotifyChipRemoved(device_id, chip_id) => {
                 f.debug_tuple("NotifyChipRemoved").field(device_id).field(chip_id).finish()
             }
@@ -154,6 +156,7 @@ impl fmt::Debug for DeviceAction {
 pub enum DeviceActionResult {
     Success,
     Statistics(Vec<NetsimRadioStats>),
+    LastModified(std::time::SystemTime),
     ChipId(ChipId),
     /// Result of an `AddChipByGuid` operation.
     /// Returns both the `DeviceId` (found or created) and the `ChipId` (newly

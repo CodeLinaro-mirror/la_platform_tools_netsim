@@ -822,6 +822,24 @@ async fn test_patch_device_ignores_stale_chip_offset_pose() {
     world.then_chip_manufacturer_is(device_id, "bt-chip", MATCHED_MANUFACTURER).await;
 }
 
+// Scenario: Device last modified timestamp is not bumped when chip update fails
+#[tokio::test]
+async fn test_patch_device_timestamp_not_bumped_on_failure() {
+    // Given a device with a chip client configured to fail on update
+    let world = World::given_with_failing_bluetooth_update_mock().await;
+    let device_id = world.given_device_created("test-dev").await;
+    let initial_ts = world.given_recorded_last_modified().await;
+
+    // When an update fails
+    world.when_try_patch_bluetooth_chip(device_id, Some(true), None).await;
+
+    // Then the update fails with actor communication error
+    world.then_error_is_actor_communication();
+
+    // And the last modified timestamp is unchanged
+    world.then_last_modified_is(initial_ts).await;
+}
+
 // Scenario: Adding a chip with duplicate name and kind to a device is rejected
 #[tokio::test]
 async fn test_create_device_duplicate_chip_rejected() {

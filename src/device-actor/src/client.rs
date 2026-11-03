@@ -147,6 +147,19 @@ impl DeviceClient {
             })
     }
 
+    /// Fetches the timestamp when device or chip state was last modified.
+    pub async fn get_last_modified(&self) -> Result<std::time::SystemTime, ClientError> {
+        match self
+            .inner
+            .perform_action(None, DeviceAction::GetLastModified)
+            .err_into::<ClientError>()
+            .await?
+        {
+            DeviceActionResult::LastModified(ts) => Ok(ts),
+            _ => Err(ClientError::Recv("Unexpected action result".to_string())),
+        }
+    }
+
     /// Deletes a device (restricted to internal devices).
     pub async fn delete_device(&self, id: DeviceId) -> Result<(), ClientError> {
         debug!("Sending DeleteDevice request for device {}", id);
