@@ -1299,6 +1299,15 @@ impl ActorService for DeviceActor {
                 self.perform_device_deletion(id, ctx).await?;
                 Ok(DeviceActionResult::Success)
             }
+            DeviceAction::DeleteChip(chip_id) => {
+                let Some(device_id) = self.devices.iter().find_map(|(&dev_id, dev)| {
+                    dev.device.chips.iter().any(|c| c.id == chip_id.0).then_some(dev_id)
+                }) else {
+                    return Err(DeviceError::NotFound(format!("Chip not found: {chip_id}")));
+                };
+                self.perform_chip_removal(device_id, chip_id, ctx).await?;
+                Ok(DeviceActionResult::Success)
+            }
             DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {
                 let Some(id) = id else {
                     return Err(DeviceError::NotFound("AddChip requires a device ID".into()));

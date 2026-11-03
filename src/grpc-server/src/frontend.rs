@@ -299,11 +299,22 @@ impl FrontendClient {
 
     #[deprecated(note = "Use handle_delete_device instead")]
     #[allow(deprecated)]
-    fn handle_delete_chip(
-        _client: DeviceClient,
-        _req: netsim_proto::frontend::DeleteChipRequest,
+    async fn handle_delete_chip(
+        client: DeviceClient,
+        req: netsim_proto::frontend::DeleteChipRequest,
     ) -> Result<(), RpcStatus> {
-        Err(RpcStatus::new(RpcStatusCode::UNIMPLEMENTED))
+        client.delete_chip(ChipId(req.id)).await.map_err(|e| {
+            if let Some(DeviceError::NotFound(msg) | DeviceError::DeviceNotFound(msg)) =
+                DeviceError::downcast_from(&e)
+            {
+                RpcStatus::with_message(RpcStatusCode::NOT_FOUND, msg.clone())
+            } else {
+                RpcStatus::with_message(
+                    RpcStatusCode::INTERNAL,
+                    format!("Failed to delete chip: {e}"),
+                )
+            }
+        })
     }
 
     async fn handle_delete_device(
@@ -592,7 +603,7 @@ impl FrontendService for FrontendClient {
         self.frontend_stats.delete_chip.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let client = self.device_client.clone();
         ctx.spawn(async move {
-            let res = Self::handle_delete_chip(client, req).map(|_| Empty::new());
+            let res = Self::handle_delete_chip(client, req).await.map(|_| Empty::new());
             reply(sink, res).await;
         });
     }
@@ -680,23 +691,75 @@ impl FrontendService for FrontendClient {
 mod tests {
     use actor_framework::MockActorClient;
     use device_actor::DeviceActor;
-    use device_api::DeviceId;
+    use device_api::{DeviceAction, DeviceActionResult, DeviceId};
     use link_api::{Link, LinkId, MockLinkClient};
     use netsim_model::{ChipId, ChipKind};
     use protobuf::EnumOrUnknown;
 
     use super::*;
 
-    #[test]
     #[allow(deprecated)]
-    fn test_handle_delete_chip() {
-        let mock_client = MockActorClient::<DeviceActor>::new();
-        let client = DeviceClient::new(Box::new(mock_client));
-        let mut req = netsim_proto::frontend::DeleteChipRequest::new();
-        req.id = 3;
+    mod delete_chip_tests {
+        use super::*;
 
-        let res = FrontendClient::handle_delete_chip(client, req);
-        assert_eq!(res.unwrap_err().code(), RpcStatusCode::UNIMPLEMENTED);
+        #[tokio::test]
+        async fn test_handle_delete_chip() {
+            let mut mock_client = MockActorClient::<DeviceActor>::new();
+            mock_client
+                .expect_perform_action()
+                .withf(|id, action| {
+                    id.is_none() && matches!(action, DeviceAction::DeleteChip(ChipId(3)))
+                })
+                .returning(|_, _| Ok(DeviceActionResult::Success));
+            let client = DeviceClient::new(Box::new(mock_client));
+            let mut req = netsim_proto::frontend::DeleteChipRequest::new();
+            req.id = 3;
+
+            let res = FrontendClient::handle_delete_chip(client, req).await;
+            assert!(res.is_ok());
+        }
+
+        #[tokio::test]
+        async fn test_handle_delete_chip_not_found() {
+            let mut mock_client = MockActorClient::<DeviceActor>::new();
+            mock_client
+                .expect_perform_action()
+                .withf(|id, action| {
+                    id.is_none() && matches!(action, DeviceAction::DeleteChip(ChipId(99)))
+                })
+                .returning(|_, _| {
+                    Err(actor_framework::FrameworkError::ServiceError(
+                        device_actor::DeviceError::NotFound("Chip not found: 99".to_string()),
+                    ))
+                });
+            let client = DeviceClient::new(Box::new(mock_client));
+            let mut req = netsim_proto::frontend::DeleteChipRequest::new();
+            req.id = 99;
+
+            let res = FrontendClient::handle_delete_chip(client, req).await;
+            assert_eq!(res.unwrap_err().code(), RpcStatusCode::NOT_FOUND);
+        }
+
+        #[tokio::test]
+        async fn test_handle_delete_chip_device_not_found() {
+            let mut mock_client = MockActorClient::<DeviceActor>::new();
+            mock_client
+                .expect_perform_action()
+                .withf(|id, action| {
+                    id.is_none() && matches!(action, DeviceAction::DeleteChip(ChipId(99)))
+                })
+                .returning(|_, _| {
+                    Err(actor_framework::FrameworkError::ServiceError(
+                        device_actor::DeviceError::DeviceNotFound("99".to_string()),
+                    ))
+                });
+            let client = DeviceClient::new(Box::new(mock_client));
+            let mut req = netsim_proto::frontend::DeleteChipRequest::new();
+            req.id = 99;
+
+            let res = FrontendClient::handle_delete_chip(client, req).await;
+            assert_eq!(res.unwrap_err().code(), RpcStatusCode::NOT_FOUND);
+        }
     }
 
     #[tokio::test]

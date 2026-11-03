@@ -712,6 +712,17 @@ impl World {
         self.client.delete(id).await.unwrap();
     }
 
+    /// BDD Step: When I delete a chip by ID.
+    pub async fn when_delete_chip(&self, chip_id: netsim_model::ChipId) {
+        self.client.delete_chip(chip_id).await.unwrap();
+    }
+
+    /// BDD Step: When I try to delete a chip by ID.
+    pub async fn when_try_delete_chip(&self, chip_id: netsim_model::ChipId) {
+        let res = self.client.delete_chip(chip_id).await;
+        *self.last_error.lock().unwrap() = res.err();
+    }
+
     /// BDD Step: When I add two chips with the same device GUID concurrently
     pub async fn when_concurrently_add_chips(
         &self,
@@ -1394,6 +1405,61 @@ impl World {
             !devices.iter().any(|d| d.id == id.0),
             "Device {} should NOT exist in the list",
             id.0
+        );
+    }
+
+    /// BDD Step: Then fetching a specific device by ID returns None.
+    pub async fn then_device_get_is_none(&self, id: DeviceId) {
+        assert!(
+            self.client.get(id).await.unwrap().is_none(),
+            "Device {} should not be retrievable via get()",
+            id.0
+        );
+    }
+
+    /// BDD Step: Then the mock chip actor presence matches expected.
+    pub fn then_mock_chip_present(&self, chip_id: netsim_model::ChipId, expected: bool) {
+        let present = self.mock_chips.lock().unwrap().contains_key(&chip_id);
+        assert_eq!(
+            present, expected,
+            "Mock chip {chip_id} presence mismatch: expected {expected}, got {present}"
+        );
+    }
+
+    /// BDD Step: Then the device contains a chip matching ID, name, and kind.
+    pub async fn then_device_has_chip(
+        &self,
+        device_id: DeviceId,
+        chip_id: netsim_model::ChipId,
+        expected_name: &str,
+        expected_kind: netsim_model::ChipKind,
+    ) {
+        let device = self
+            .client
+            .get(device_id)
+            .await
+            .unwrap()
+            .unwrap_or_else(|| panic!("Device {} not found", device_id.0));
+        let chip = device
+            .chips
+            .iter()
+            .find(|c| c.id == chip_id.0)
+            .unwrap_or_else(|| panic!("Chip {chip_id} not found on device {}", device_id.0));
+        assert_eq!(chip.id, chip_id.0);
+        assert_eq!(chip.name, expected_name);
+        assert_eq!(chip.kind, expected_kind);
+    }
+
+    /// BDD Step: Then the last error is NotFound containing the expected substring.
+    pub fn then_error_is_not_found(&self, expected_substring: &str) {
+        let err_guard = self.last_error.lock().unwrap();
+        let err = err_guard.as_ref().expect("Expected error, but last_error was None");
+        assert!(
+            matches!(
+                DeviceError::downcast_from(err),
+                Some(DeviceError::NotFound(msg)) if msg.contains(expected_substring)
+            ),
+            "Expected NotFound containing '{expected_substring}', got: {err:?}"
         );
     }
 

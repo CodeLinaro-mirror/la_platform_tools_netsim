@@ -114,6 +114,8 @@ pub enum DeviceAction {
     },
     /// Deletes an internal device by ID.
     DeleteDevice(DeviceId),
+    /// Deletes a chip by ID, auto-deleting the parent device if no chips remain.
+    DeleteChip(ChipId),
     /// Triggers a persistence of the current statistics to disk.
     /// This is primarily used internally by the actor for periodic saves
     /// and lifecycle events, but can be invoked externally if needed.
@@ -140,6 +142,9 @@ impl fmt::Debug for DeviceAction {
             DeviceAction::SaveStats => write!(f, "SaveStats"),
             DeviceAction::DeleteDevice(device_id) => {
                 f.debug_tuple("DeleteDevice").field(device_id).finish()
+            }
+            DeviceAction::DeleteChip(chip_id) => {
+                f.debug_tuple("DeleteChip").field(chip_id).finish()
             }
         }
     }

@@ -161,6 +161,20 @@ impl DeviceClient {
         }
     }
 
+    /// Deletes a chip by ID, auto-deleting the parent device if no chips remain.
+    pub async fn delete_chip(&self, chip_id: netsim_model::ChipId) -> Result<(), ClientError> {
+        debug!("Sending DeleteChip request for chip {chip_id}");
+        match self
+            .inner
+            .perform_action(None, DeviceAction::DeleteChip(chip_id))
+            .err_into::<ClientError>()
+            .await?
+        {
+            DeviceActionResult::Success => Ok(()),
+            _other => Err(ClientError::Recv("Unexpected action result".to_string())),
+        }
+    }
+
     /// Adds a chip to an existing device by ID.
     pub async fn add_chip_to_device(
         &self,
