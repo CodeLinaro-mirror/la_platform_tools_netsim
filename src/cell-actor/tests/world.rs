@@ -27,9 +27,10 @@ use device_actor::{DeviceActor, DeviceClient, DeviceError};
 use device_api::{DeviceAction, DeviceActionResult};
 use futures::{StreamExt, channel::mpsc as fmpsc, sink::SinkExt};
 use netsim_model::{
-    Cell, CellNetworkConfig, CellUpdate, Chip, ChipClient, ChipCreate,
-    ChipError as NetsimChipError, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate, ClientError,
-    DeviceId, PacketSink, PacketStream, Quirks, RegistrationStatus,
+    Call, CallDirection, CallState, Cell, CellNetworkConfig, CellUpdate, Chip, ChipClient,
+    ChipCreate, ChipError as NetsimChipError, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate,
+    ClientError, DeviceId, PacketSink, PacketStream, Quirks, RadioTechnology, RadioUpdate,
+    RegistrationStatus,
 };
 use tokio::{sync::mpsc, task::JoinHandle, time::timeout};
 
@@ -148,7 +149,7 @@ impl World {
     ) {
         let chip_id = ChipId(id);
         let (stream, sink, stream_tx, sink_rx) = create_dummy_stream_sink();
-        let params = create_params(chip_id, stream, sink, quirks, configs);
+        let params = create_params(chip_id, Some(stream), Some(sink), quirks, configs);
         self.client.create(chip_id, params).await.expect("given_cell_chip create");
         self.guests.insert(chip_id, GuestChannel { stream_tx, sink_rx });
     }
@@ -195,6 +196,10 @@ impl World {
         self.perform_cell_action(id, CellAction::SetSignalStrength { rssi, ber }).await;
     }
 
+    pub(crate) async fn when_try_set_signal_strength(&mut self, id: u32, rssi: u32, ber: u32) {
+        self.try_perform_cell_action(id, CellAction::SetSignalStrength { rssi, ber }).await;
+    }
+
     pub(crate) async fn when_set_registrations(
         &self,
         id: u32,
@@ -221,6 +226,14 @@ impl World {
         .await;
     }
 
+    pub(crate) async fn when_try_receive_sms(&mut self, id: u32, sender: &str, text: &str) {
+        self.try_perform_cell_action(
+            id,
+            CellAction::ReceiveSms { sender: sender.to_string(), text: text.to_string() },
+        )
+        .await;
+    }
+
     pub(crate) async fn when_incoming_call(&self, id: u32, number: &str) {
         self.perform_cell_action(id, CellAction::IncomingCall { number: number.to_string() }).await;
     }
@@ -230,9 +243,80 @@ impl World {
             .await;
     }
 
+    pub(crate) async fn when_remote_answer(&self, id: u32) {
+        self.perform_cell_action(id, CellAction::RemoteAnswer).await;
+    }
+
+    pub(crate) async fn when_remote_hold(&self, id: u32, on_hold: bool) {
+        self.perform_cell_action(id, CellAction::RemoteHold { on_hold }).await;
+    }
+
+    pub(crate) async fn when_update_call(&self, id: u32) {
+        self.perform_cell_action(id, CellAction::UpdateCall).await;
+    }
+
+    pub(crate) async fn when_end_call(&self, id: u32) {
+        self.perform_cell_action(id, CellAction::EndCall).await;
+    }
+
+    pub(crate) async fn when_inject_cell_broadcast(
+        &self,
+        id: u32,
+        serial_number: u16,
+        message_id: u16,
+        dcs: u8,
+        text: &str,
+    ) {
+        self.perform_cell_action(
+            id,
+            CellAction::InjectCellBroadcast {
+                serial_number,
+                message_id,
+                dcs,
+                text: text.to_string(),
+            },
+        )
+        .await;
+    }
+
+    pub(crate) async fn when_set_operator(&self, id: u32, operator: &str) {
+        self.perform_cell_action(id, CellAction::SetOperator { operator: operator.to_string() })
+            .await;
+    }
+
+    pub(crate) async fn when_set_network_technology(&self, id: u32, tech: RadioTechnology) {
+        self.perform_cell_action(id, CellAction::SetNetworkTechnology { tech }).await;
+    }
+
+    pub(crate) async fn when_set_sim_status(&self, id: u32, present: bool) {
+        self.perform_cell_action(id, CellAction::SetSimStatus { present }).await;
+    }
+
     pub(crate) async fn when_set_chip_enabled(&self, id: u32, enabled: bool) {
         let update = ChipUpdate { enabled: Some(enabled), ..Default::default() };
         self.client.update(ChipId(id), update).await.expect("update chip enabled");
+    }
+
+    pub(crate) async fn when_set_cell_state(&self, id: u32, state: &str) {
+        let update = ChipUpdate {
+            variant: Some(ChipVariantUpdate::Cell(CellUpdate {
+                state: Some(state.to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        self.client.update(ChipId(id), update).await.expect("update cell state");
+    }
+
+    pub(crate) async fn when_set_cell_radio_state(&self, id: u32, enabled: bool) {
+        let update = ChipUpdate {
+            variant: Some(ChipVariantUpdate::Cell(CellUpdate {
+                radio: RadioUpdate { state: Some(enabled) },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        self.client.update(ChipId(id), update).await.expect("update cell radio state");
     }
 
     pub(crate) async fn when_update_network_configs(
@@ -250,10 +334,41 @@ impl World {
         self.client.update(ChipId(id), update).await.expect("update network configs");
     }
 
+    pub(crate) async fn when_try_create_chip(
+        &mut self,
+        id: u32,
+        with_stream: bool,
+        with_sink: bool,
+    ) {
+        let chip_id = ChipId(id);
+        let (stream, sink, _, _) = create_dummy_stream_sink();
+        let params = create_params(
+            chip_id,
+            with_stream.then_some(stream),
+            with_sink.then_some(sink),
+            Quirks::default(),
+            Vec::new(),
+        );
+        self.last_error = self.client.create(chip_id, params).await.err();
+    }
+
+    pub(crate) async fn when_try_action_on_chip(&mut self, id: u32, action: CellAction) {
+        self.try_perform_cell_action(id, action).await;
+    }
+
+    pub(crate) async fn when_try_update_chip_enabled(&mut self, id: u32, enabled: bool) {
+        let update = ChipUpdate { enabled: Some(enabled), ..Default::default() };
+        self.last_error = self.client.update(ChipId(id), update).await.err();
+    }
+
     pub(crate) fn then_last_error_contains(&self, substr: &str) {
         let err = self.last_error.as_ref().expect("expected error, got Ok");
         let msg = err.to_string();
         assert!(msg.contains(substr), "expected error containing '{substr}', got '{msg}'");
+    }
+
+    pub(crate) fn then_last_error_is_chip_not_found(&self, expected_id: u32) {
+        self.then_last_error_contains(&format!("Chip not found error: {expected_id}"));
     }
 
     pub(crate) async fn then_device_notified_chip_removed(&mut self, expected_id: u32) {
@@ -307,6 +422,16 @@ impl World {
         assert_eq!(self.read_cell(id).await.state, expected_state);
     }
 
+    pub(crate) async fn then_chip_count_is(&self, expected: usize) {
+        let count = self.client.read_count_for_testing().await.expect("read chip count");
+        assert_eq!(count, expected);
+    }
+
+    pub(crate) async fn then_reset_chip_returns_state(&self, id: u32, expected_state: &str) {
+        let chip = self.client.reset(ChipId(id)).await.expect("reset cell chip");
+        assert_eq!(extract_cell(chip).state, expected_state);
+    }
+
     pub(crate) async fn then_listed_cell_states_are(&self, expected: &[(u32, bool, &str)]) {
         let mut chips = self.client.list().await.expect("list cell chips");
         chips.sort_by_key(|chip| chip.id);
@@ -325,6 +450,28 @@ impl World {
             .map(|(id, enabled, state)| (*id, *enabled, (*state).to_string()))
             .collect();
         assert_eq!(actual, expected_vec);
+    }
+
+    pub(crate) async fn then_active_calls_are(&self, id: u32, expected: &[Call]) {
+        assert_eq!(self.read_cell(id).await.active_calls, expected);
+    }
+
+    pub(crate) async fn then_mt_call_state_is(&self, id: u32, number: &str, state: CallState) {
+        let expected = [Call {
+            number: number.to_string(),
+            state,
+            direction: CallDirection::MobileTerminated,
+        }];
+        self.then_active_calls_are(id, &expected).await;
+    }
+
+    pub(crate) async fn then_mo_call_state_is(&self, id: u32, number: &str, state: CallState) {
+        let expected = [Call {
+            number: number.to_string(),
+            state,
+            direction: CallDirection::MobileOriginated,
+        }];
+        self.then_active_calls_are(id, &expected).await;
     }
 
     pub(crate) async fn then_cell_sms_count_is(&self, id: u32, expected: u32) {
@@ -349,6 +496,44 @@ impl World {
     pub(crate) async fn then_guest_receives_exact_packet(&mut self, id: u32, expected: &str) {
         let packet = self.recv_guest_packet(id).await;
         assert_eq!(packet.as_ref(), expected.as_bytes());
+    }
+
+    pub(crate) async fn then_guest_receives_packet_starting_with(&mut self, id: u32, prefix: &str) {
+        let packet = self.recv_guest_packet(id).await;
+        let packet_str = std::str::from_utf8(&packet).expect("utf8 decode");
+        assert!(
+            packet_str.starts_with(prefix),
+            "packet '{packet_str}' does not start with '{prefix}'"
+        );
+    }
+
+    pub(crate) async fn then_guest_receives_cell_broadcast(
+        &mut self,
+        id: u32,
+        serial_number: u16,
+        message_id: u16,
+        dcs: u8,
+        text: &str,
+    ) {
+        const CBS_PDU_BYTE_LEN: usize = 88;
+        const CBS_SINGLE_PAGE_PARAM: u8 = 0x11; // Page 1 of 1 (3GPP TS 23.041)
+
+        let packet = self.recv_guest_packet(id).await;
+        let packet_str = std::str::from_utf8(&packet).expect("utf8 decode");
+        let cbm_prefix = format!("+CBM: {CBS_PDU_BYTE_LEN}\r\n");
+        let expected_header = format!(
+            "{cbm_prefix}{serial_number:04X}{message_id:04X}{dcs:02X}{CBS_SINGLE_PAGE_PARAM:02X}"
+        );
+        assert!(
+            packet_str.starts_with(&expected_header),
+            "CBS URC '{packet_str}' does not start with '{expected_header}'"
+        );
+        let hex_pdu = packet_str
+            .strip_prefix(&cbm_prefix)
+            .and_then(|rest| rest.strip_suffix("\r\n"))
+            .expect("valid +CBM framing");
+        let parsed = modem_rs::CbsPdu::parse(hex_pdu).expect("parse CBS hex PDU");
+        assert_eq!(parsed.decode_content().expect("decode CBS content"), text);
     }
 
     pub(crate) async fn then_guest_receives_lowercase_packet_framing(
@@ -418,8 +603,8 @@ fn create_dummy_stream_sink()
 
 fn create_params(
     chip_id: ChipId,
-    stream: PacketStream,
-    sink: PacketSink,
+    stream: Option<PacketStream>,
+    sink: Option<PacketSink>,
     quirks: Quirks,
     network_configs: Vec<CellNetworkConfig>,
 ) -> ChipCreate {
@@ -428,5 +613,5 @@ fn create_params(
     chip.device_id = DEVICE_ID;
     chip.variant = Some(ChipVariant::Cell(Cell { quirks, network_configs, ..Default::default() }));
 
-    ChipCreate { packet_stream: Some(stream), packet_sink: Some(sink), chip }
+    ChipCreate { packet_stream: stream, packet_sink: sink, chip }
 }
