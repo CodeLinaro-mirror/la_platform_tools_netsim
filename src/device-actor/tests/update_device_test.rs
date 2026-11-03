@@ -821,3 +821,138 @@ async fn test_patch_device_ignores_stale_chip_offset_pose() {
         .await;
     world.then_chip_manufacturer_is(device_id, "bt-chip", MATCHED_MANUFACTURER).await;
 }
+
+// Scenario: Adding a chip with duplicate name and kind to a device is rejected
+#[tokio::test]
+async fn test_create_device_duplicate_chip_rejected() {
+    // Given a device with chip "same-chip"
+    let world = World::new().await;
+    let device_id = world
+        .given_device_with_chip(
+            "test-dev",
+            "same-chip",
+            device_api::ChipCreateVariant::Beacon(Default::default()),
+        )
+        .await;
+
+    // When I add another chip with the same name and kind
+    world
+        .when_try_add_chip_variant(
+            device_id,
+            "same-chip",
+            device_api::ChipCreateVariant::Beacon(Default::default()),
+        )
+        .await;
+
+    // Then the operation fails with DuplicateChip
+    world.then_error_is_duplicate_chip("same-chip");
+}
+
+// Scenario: Creating a device with a name that already exists is rejected
+#[tokio::test]
+async fn test_create_device_name_already_exists_rejected() {
+    // Given an existing device named "existing-device"
+    let world = World::new().await;
+    world
+        .given_device_with_chip(
+            "existing-device",
+            "chip-1",
+            device_api::ChipCreateVariant::Beacon(Default::default()),
+        )
+        .await;
+
+    // When I attempt to create another device with the name "existing-device"
+    world
+        .when_try_create_device_with_chip(
+            "existing-device",
+            "chip-2",
+            device_api::ChipCreateVariant::Beacon(Default::default()),
+        )
+        .await;
+
+    // Then creation fails with AlreadyExists
+    world.then_error_is_already_exists("existing-device");
+}
+
+// Scenario: Empty chip names use the device name for the first chip and <KIND>-<id> afterward
+#[tokio::test]
+async fn test_auto_naming_uses_kind_and_id_after_first_chip() {
+    // Given a device "test-dev" with an unnamed Bluetooth chip
+    let world = World::new().await;
+    let device_id = world
+        .given_device_with_chip(
+            "test-dev",
+            "",
+            device_api::ChipCreateVariant::Beacon(Default::default()),
+        )
+        .await;
+
+    // When I add an unnamed WiFi chip and a second unnamed Bluetooth chip
+    let wifi_chip_id = world
+        .when_add_chip_variant(
+            device_id,
+            "",
+            device_api::ChipCreateVariant::Wifi(Default::default()),
+        )
+        .await
+        .unwrap();
+    let second_bt_chip_id = world
+        .when_add_chip_variant(
+            device_id,
+            "",
+            device_api::ChipCreateVariant::Beacon(Default::default()),
+        )
+        .await
+        .unwrap();
+
+    // Then the first chip uses the device name and subsequent chips use <KIND>-<id>
+    world.then_chip_count_is(device_id, 3).await;
+    world.then_first_chip_of_kind_name_is(device_id, ChipKind::BLUETOOTH, "test-dev").await;
+    world
+        .then_first_chip_of_kind_name_is(
+            device_id,
+            ChipKind::WIFI,
+            &format!("WIFI-{}", wifi_chip_id.0),
+        )
+        .await;
+    world
+        .then_chip_name_by_id_is(
+            device_id,
+            second_bt_chip_id,
+            &format!("BLUETOOTH-{}", second_bt_chip_id.0),
+        )
+        .await;
+    world
+        .then_chip_name_by_id_is(device_id, wifi_chip_id, &format!("WIFI-{}", wifi_chip_id.0))
+        .await;
+}
+
+// Scenario: Empty chip names on an unnamed device fall back to <KIND>-<id>
+#[tokio::test]
+async fn test_auto_naming_with_empty_device_name_uses_kind_and_id() {
+    // Given an unnamed device created with an unnamed WiFi chip
+    let world = World::new().await;
+    let device_id = world
+        .given_device_with_chip("", "", device_api::ChipCreateVariant::Wifi(Default::default()))
+        .await;
+    let first_chip_id = world.given_first_chip_id(device_id).await;
+
+    // When I add a second unnamed WiFi chip to the device
+    let second_chip_id = world
+        .when_add_chip_variant(
+            device_id,
+            "",
+            device_api::ChipCreateVariant::Wifi(Default::default()),
+        )
+        .await
+        .unwrap();
+
+    // Then both chips are named using <KIND>-<id>
+    world.then_chip_count_is(device_id, 2).await;
+    world
+        .then_chip_name_by_id_is(device_id, first_chip_id, &format!("WIFI-{}", first_chip_id.0))
+        .await;
+    world
+        .then_chip_name_by_id_is(device_id, second_chip_id, &format!("WIFI-{}", second_chip_id.0))
+        .await;
+}

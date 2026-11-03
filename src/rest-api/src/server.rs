@@ -310,6 +310,7 @@ fn device_error_status(err: &DeviceError) -> StatusCode {
         | DeviceError::ChipKindNotSupported(_)
         | DeviceError::AmbiguousMatch(_)
         | DeviceError::AmbiguousEmptyMatch { .. }
+        | DeviceError::DuplicateChip { .. }
         | DeviceError::MismatchedChipKind { .. } => StatusCode::BAD_REQUEST,
         DeviceError::ActorCommunicationError(inner) => client_error_status(inner),
         DeviceError::ResetErrors { .. } => StatusCode::INTERNAL_SERVER_ERROR,

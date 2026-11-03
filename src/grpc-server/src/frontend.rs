@@ -166,65 +166,81 @@ impl FrontendClient {
         client: DeviceClient,
         req: netsim_proto::frontend::CreateDeviceRequest,
     ) -> Result<netsim_proto::frontend::CreateDeviceResponse, RpcStatus> {
-        // We only support creating a device with a single chip (Beacon) for now.
-        if let Some(proto_chip_ref) = req.device.chips.first() {
-            let mut proto_chip = proto_chip_ref.clone();
-            // Fallback: Use device name if chip name is missing.
-            if proto_chip.name.is_empty() {
-                proto_chip.name = req.device.name.clone();
-            }
-            if let Some(chip_config) = crate::frontend_converter::from_proto_chip_create(proto_chip)
-            {
-                let device_config = device_api::DeviceConfig {
-                    name: req.device.name.clone(),
-                    visible: true, // Default to true as proto doesn't have this field
-                    pose: Pose {
-                        position: crate::frontend_converter::from_proto_position(
-                            req.device.position.clone().unwrap_or_default(),
-                        ),
-                        orientation: crate::frontend_converter::from_proto_orientation(
-                            req.device.orientation.clone().unwrap_or_default(),
-                        ),
-                    },
-                    builtin: false,
-                    device_info: None,
-                };
-
-                let device_create = device_api::DeviceCreate { device_config, chip: chip_config };
-
-                let id = client
-                    .create_device(device_create)
-                    .await
-                    .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?;
-                let device = client
-                    .get(id)
-                    .await
-                    .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?
-                    .ok_or_else(|| {
-                        RpcStatus::with_message(
-                            RpcStatusCode::INTERNAL,
-                            "Device not found after creation".into(),
-                        )
-                    })?;
-
-                Ok(netsim_proto::frontend::CreateDeviceResponse {
-                    device: protobuf::MessageField::some(
-                        crate::frontend_converter::to_proto_device(device),
-                    ),
-                    ..Default::default()
-                })
-            } else {
-                Err(RpcStatus::with_message(
-                    RpcStatusCode::INVALID_ARGUMENT,
-                    "Unsupported chip kind or invalid config".to_string(),
-                ))
-            }
-        } else {
-            Err(RpcStatus::with_message(
+        let mut chip_configs = Vec::with_capacity(req.device.chips.len());
+        for proto_chip in &req.device.chips {
+            let chip_config = crate::frontend_converter::from_proto_chip_create(proto_chip.clone())
+                .ok_or_else(|| {
+                    RpcStatus::with_message(
+                        RpcStatusCode::INVALID_ARGUMENT,
+                        "Unsupported chip kind or invalid config".to_string(),
+                    )
+                })?;
+            chip_configs.push(chip_config);
+        }
+        let mut chip_iter = chip_configs.into_iter();
+        let Some(first_chip) = chip_iter.next() else {
+            return Err(RpcStatus::with_message(
                 RpcStatusCode::INVALID_ARGUMENT,
                 "No chips provided".to_string(),
-            ))
+            ));
+        };
+        let device_config = device_api::DeviceConfig {
+            name: req.device.name.clone(),
+            visible: true, // Default to true as proto doesn't have this field
+            pose: Pose {
+                position: crate::frontend_converter::from_proto_position(
+                    req.device.position.clone().unwrap_or_default(),
+                ),
+                orientation: crate::frontend_converter::from_proto_orientation(
+                    req.device.orientation.clone().unwrap_or_default(),
+                ),
+            },
+            builtin: false,
+            device_info: None,
+        };
+        let id = client
+            .create_device(device_api::DeviceCreate { device_config, chip: first_chip })
+            .await
+            .map_err(|e| match DeviceError::downcast_from(&e) {
+                Some(DeviceError::AlreadyExists(_)) => {
+                    RpcStatus::with_message(RpcStatusCode::ALREADY_EXISTS, e.to_string())
+                }
+                Some(DeviceError::InvalidInput(_) | DeviceError::DuplicateChip { .. }) => {
+                    RpcStatus::with_message(RpcStatusCode::INVALID_ARGUMENT, e.to_string())
+                }
+                _ => RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()),
+            })?;
+        for extra_chip in chip_iter {
+            if let Err(e) = client.add_chip_to_device(id, extra_chip).await {
+                if let Err(error) = client.delete(id).await {
+                    tracing::warn!(%error, "Failed to roll back partially created device {id}");
+                }
+                let status_code = match DeviceError::downcast_from(&e) {
+                    Some(DeviceError::AlreadyExists(_)) => RpcStatusCode::ALREADY_EXISTS,
+                    Some(DeviceError::InvalidInput(_) | DeviceError::DuplicateChip { .. }) => {
+                        RpcStatusCode::INVALID_ARGUMENT
+                    }
+                    _ => RpcStatusCode::INTERNAL,
+                };
+                return Err(RpcStatus::with_message(status_code, e.to_string()));
+            }
         }
+        let device = client
+            .get(id)
+            .await
+            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?
+            .ok_or_else(|| {
+                RpcStatus::with_message(
+                    RpcStatusCode::INTERNAL,
+                    "Device not found after creation".into(),
+                )
+            })?;
+        Ok(netsim_proto::frontend::CreateDeviceResponse {
+            device: protobuf::MessageField::some(crate::frontend_converter::to_proto_device(
+                device,
+            )),
+            ..Default::default()
+        })
     }
 
     async fn handle_patch_device(
@@ -284,6 +300,7 @@ impl FrontendClient {
                     DeviceError::InvalidInput(_)
                     | DeviceError::AmbiguousMatch(_)
                     | DeviceError::AmbiguousEmptyMatch { .. }
+                    | DeviceError::DuplicateChip { .. }
                     | DeviceError::MismatchedChipKind { .. },
                 ) => RpcStatus::with_message(
                     RpcStatusCode::INVALID_ARGUMENT,
@@ -760,6 +777,137 @@ mod tests {
             let res = FrontendClient::handle_delete_chip(client, req).await;
             assert_eq!(res.unwrap_err().code(), RpcStatusCode::NOT_FOUND);
         }
+    }
+
+    #[tokio::test]
+    async fn test_handle_create_device_multi_chip() {
+        let mut mock_client = MockActorClient::<DeviceActor>::new();
+        let expected_id = DeviceId(100);
+
+        mock_client
+            .expect_create()
+            .withf(|params| {
+                params.device_config.name == "multi-device"
+                    && matches!(params.chip.chip, device_api::ChipCreateVariant::Bluetooth(_))
+            })
+            .returning(move |_| Ok(expected_id));
+
+        mock_client
+            .expect_perform_action()
+            .withf(move |id, action| {
+                *id == Some(expected_id)
+                    && matches!(
+                        action,
+                        DeviceAction::AddChip { chip_config, .. }
+                            if matches!(chip_config.chip, device_api::ChipCreateVariant::Uwb(_))
+                    )
+            })
+            .returning(|_, _| Ok(DeviceActionResult::ChipId(ChipId(102))));
+
+        mock_client.expect_get().withf(move |id| *id == expected_id).returning(move |_| {
+            Ok(Some(device_api::Device {
+                id: 100,
+                name: "multi-device".to_string(),
+                visible: true,
+                pose: Default::default(),
+                builtin: false,
+                device_info: None,
+                chips: vec![
+                    netsim_model::Chip {
+                        id: 101,
+                        kind: netsim_model::ChipKind::BLUETOOTH,
+                        name: "bt-chip".to_string(),
+                        manufacturer: "".to_string(),
+                        product_name: "".to_string(),
+                        pose: Default::default(),
+                        variant: Some(netsim_model::ChipVariant::Bluetooth(Default::default())),
+                        ..Default::default()
+                    },
+                    netsim_model::Chip {
+                        id: 102,
+                        kind: netsim_model::ChipKind::UWB,
+                        name: "uwb-chip".to_string(),
+                        manufacturer: "".to_string(),
+                        product_name: "".to_string(),
+                        pose: Default::default(),
+                        variant: Some(netsim_model::ChipVariant::Uwb(Default::default())),
+                        ..Default::default()
+                    },
+                ],
+            }))
+        });
+
+        let client = DeviceClient::new(Box::new(mock_client));
+        let mut req = netsim_proto::frontend::CreateDeviceRequest::new();
+        let mut device_proto = netsim_proto::model::DeviceCreate::new();
+        device_proto.name = "multi-device".to_string();
+
+        let mut chip_proto1 = netsim_proto::model::ChipCreate::new();
+        chip_proto1.name = "bt-chip".to_string();
+        chip_proto1.kind = EnumOrUnknown::new(netsim_proto::common::ChipKind::BLUETOOTH);
+        device_proto.chips.push(chip_proto1);
+
+        let mut chip_proto2 = netsim_proto::model::ChipCreate::new();
+        chip_proto2.name = "uwb-chip".to_string();
+        chip_proto2.kind = EnumOrUnknown::new(netsim_proto::common::ChipKind::UWB);
+        chip_proto2.address = "00:02".to_string();
+        device_proto.chips.push(chip_proto2);
+
+        req.device = protobuf::MessageField::some(device_proto);
+
+        let resp = FrontendClient::handle_create_device(client, req).await.unwrap();
+        assert_eq!(resp.device.name, "multi-device");
+        assert_eq!(resp.device.chips.len(), 2);
+        assert_eq!(
+            resp.device.chips[0].kind,
+            EnumOrUnknown::new(netsim_proto::common::ChipKind::BLUETOOTH)
+        );
+        assert_eq!(
+            resp.device.chips[1].kind,
+            EnumOrUnknown::new(netsim_proto::common::ChipKind::UWB)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_create_device_multi_chip_rollback() {
+        let mut mock_client = MockActorClient::<DeviceActor>::new();
+        let expected_id = DeviceId(100);
+
+        mock_client.expect_create().returning(move |_| Ok(expected_id));
+
+        mock_client.expect_perform_action().returning(|_, _| {
+            Err(actor_framework::FrameworkError::ServiceError(
+                device_actor::DeviceError::ChipKindNotSupported("UWB".to_string()),
+            ))
+        });
+
+        mock_client
+            .expect_delete()
+            .times(1)
+            .withf(move |id| *id == expected_id)
+            .returning(|_| Ok(()));
+
+        let client = DeviceClient::new(Box::new(mock_client));
+        let mut req = netsim_proto::frontend::CreateDeviceRequest::new();
+        let mut device_proto = netsim_proto::model::DeviceCreate::new();
+        device_proto.name = "fail-dev".to_string();
+
+        let mut chip_proto1 = netsim_proto::model::ChipCreate::new();
+        chip_proto1.name = "bt-chip".to_string();
+        chip_proto1.kind = EnumOrUnknown::new(netsim_proto::common::ChipKind::BLUETOOTH);
+        device_proto.chips.push(chip_proto1);
+
+        let mut chip_proto2 = netsim_proto::model::ChipCreate::new();
+        chip_proto2.name = "uwb-chip".to_string();
+        chip_proto2.kind = EnumOrUnknown::new(netsim_proto::common::ChipKind::UWB);
+        chip_proto2.address = "00:02".to_string();
+        device_proto.chips.push(chip_proto2);
+
+        req.device = protobuf::MessageField::some(device_proto);
+
+        let res = FrontendClient::handle_create_device(client, req).await;
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code(), RpcStatusCode::INTERNAL);
     }
 
     #[tokio::test]

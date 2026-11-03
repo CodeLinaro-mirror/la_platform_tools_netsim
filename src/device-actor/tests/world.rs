@@ -1662,6 +1662,37 @@ impl World {
         self.client.add_chip_to_device(device_id, extra_chip).await
     }
 
+    /// BDD Step: When I try to add a chip with the specified variant to an existing device.
+    pub async fn when_try_add_chip_variant(
+        &self,
+        device_id: DeviceId,
+        chip_name: &str,
+        chip_variant: device_api::ChipCreateVariant,
+    ) {
+        let res = self.when_add_chip_variant(device_id, chip_name, chip_variant).await;
+        *self.last_error.lock().unwrap() = res.err();
+    }
+
+    /// BDD Step: When I attempt to create a device with a named chip.
+    pub async fn when_try_create_device_with_chip(
+        &self,
+        device_name: &str,
+        chip_name: &str,
+        chip_variant: device_api::ChipCreateVariant,
+    ) {
+        let params = DeviceCreate {
+            device_config: DeviceConfig::new(device_name.to_string(), true, Pose::default(), false),
+            chip: DeviceChipCreate {
+                name: chip_name.to_string(),
+                manufacturer: "Netsim".to_string(),
+                product_name: "Netsim".to_string(),
+                chip: chip_variant,
+            },
+        };
+        let res = self.client.create_device(params).await;
+        *self.last_error.lock().unwrap() = res.err();
+    }
+
     /// BDD Step: When I patch chip metadata on device.
     pub async fn when_patch_chip_metadata(
         &self,
@@ -1881,6 +1912,32 @@ impl World {
         );
     }
 
+    /// BDD Step: Then the last error is DuplicateChip.
+    pub fn then_error_is_duplicate_chip(&self, expected_name: &str) {
+        let err_guard = self.last_error.lock().unwrap();
+        let err = err_guard.as_ref().expect("Expected error, but last_error was None");
+        assert!(
+            matches!(
+                DeviceError::downcast_from(err),
+                Some(DeviceError::DuplicateChip { name, .. }) if name == expected_name
+            ),
+            "Expected DuplicateChip({expected_name}), got: {err:?}"
+        );
+    }
+
+    /// BDD Step: Then the last error is AlreadyExists.
+    pub fn then_error_is_already_exists(&self, expected_name: &str) {
+        let err_guard = self.last_error.lock().unwrap();
+        let err = err_guard.as_ref().expect("Expected error, but last_error was None");
+        assert!(
+            matches!(
+                DeviceError::downcast_from(err),
+                Some(DeviceError::AlreadyExists(name)) if name == expected_name
+            ),
+            "Expected AlreadyExists({expected_name}), got: {err:?}"
+        );
+    }
+
     /// BDD Step: Then a chip's manufacturer matches expected.
     pub async fn then_chip_manufacturer_is(
         &self,
@@ -1923,5 +1980,29 @@ impl World {
         let device = self.client.get(device_id).await.unwrap().unwrap();
         let chip = device.chips.iter().find(|c| c.kind == kind).unwrap();
         assert_eq!(chip.manufacturer, expected_mfr);
+    }
+
+    /// BDD Step: Then the first chip of specified kind has the expected name.
+    pub async fn then_first_chip_of_kind_name_is(
+        &self,
+        device_id: DeviceId,
+        kind: ChipKind,
+        expected_name: &str,
+    ) {
+        let device = self.client.get(device_id).await.unwrap().unwrap();
+        let chip = device.chips.iter().find(|c| c.kind == kind).unwrap();
+        assert_eq!(chip.name, expected_name);
+    }
+
+    /// BDD Step: Then the chip with specified ID has the expected name.
+    pub async fn then_chip_name_by_id_is(
+        &self,
+        device_id: DeviceId,
+        chip_id: netsim_model::ChipId,
+        expected_name: &str,
+    ) {
+        let device = self.client.get(device_id).await.unwrap().unwrap();
+        let chip = device.chips.iter().find(|c| c.id == chip_id.0).unwrap();
+        assert_eq!(chip.name, expected_name);
     }
 }

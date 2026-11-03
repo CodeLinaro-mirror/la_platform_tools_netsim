@@ -657,14 +657,32 @@ impl DeviceActor {
 
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
         let chip_kind = chip.kind;
-        let mut chip_name =
-            if chip.name.is_empty() { entity.device.name.clone() } else { chip.name.clone() };
+        let chip_name = if chip.name.is_empty() {
+            if matches!(
+                chip.variant,
+                Some(netsim_model::ChipVariant::Bluetooth(ref bt))
+                    if matches!(bt.mode, netsim_model::BluetoothMode::Beacon(_))
+            ) && entity.device.name.is_empty()
+            {
+                format!("Beacon-{}", chip_id.0)
+            } else if !entity.device.name.is_empty()
+                && !entity.device.chips.iter().any(|c| c.name == entity.device.name)
+            {
+                entity.device.name.clone()
+            } else {
+                format!("{}-{}", chip_kind, chip_id.0)
+            }
+        } else {
+            chip.name.clone()
+        };
+
+        if entity.device.chips.iter().any(|c| c.kind == chip_kind && c.name == chip_name) {
+            return Err(DeviceError::DuplicateChip { kind: chip_kind, name: chip_name });
+        }
+
         if let Some(netsim_model::ChipVariant::Bluetooth(ref mut bt)) = chip.variant
             && let netsim_model::BluetoothMode::Beacon(ref mut beacon_params) = bt.mode
         {
-            if chip_name.is_empty() {
-                chip_name = format!("Beacon-{}", chip_id.0);
-            }
             if entity.device.name.is_empty() {
                 entity.device.name = chip_name.clone();
             }
@@ -704,10 +722,10 @@ impl DeviceActor {
             chip.product_name.clone()
         };
 
-        if !chip.name.is_empty() && chip.name != entity.device.name {
+        if !chip_name.is_empty() && chip_name != entity.device.name {
             info!(
                 "DeviceActor: AddChip {chip_id} (kind {chip_kind}, name \"{}\") to device {} ({})",
-                chip.name, entity.device.id, entity.device.name
+                chip_name, entity.device.id, entity.device.name
             );
         } else {
             info!(

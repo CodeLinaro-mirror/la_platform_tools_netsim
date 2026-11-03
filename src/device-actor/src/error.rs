@@ -38,6 +38,8 @@ pub enum DeviceError {
     AmbiguousMatch(String),
     #[error("No chip name is supplied but multiple chips of chip kind {kind:?} exist.")]
     AmbiguousEmptyMatch { kind: ChipKind },
+    #[error("Duplicate chip name '{name}' for kind {kind:?}")]
+    DuplicateChip { kind: ChipKind, name: String },
     #[error("Mismatched chip kind: expected {expected:?}, got {actual:?}")]
     MismatchedChipKind { expected: ChipKind, actual: ChipKind },
     #[error("Actor communication error: {0}")]
