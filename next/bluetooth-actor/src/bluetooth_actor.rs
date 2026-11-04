@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use device_actor::DeviceClient;
 use netsim_model::{Chip, ChipId};
@@ -63,12 +66,24 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
 
             let dist = src.pose.position.distance(&dst.pose.position);
 
+            let is_beacon = matches!(
+                src.variant.as_ref(),
+                Some(netsim_model::ChipVariant::Bluetooth(bt))
+                    if matches!(bt.mode, netsim_model::BluetoothMode::Beacon(_))
+            );
+
             // Check for link override
             let rssi = src
                 .links
                 .iter()
                 .find_map(|(id, rssi)| (*id == dst_id).then_some(*rssi as i32))
-                .unwrap_or_else(|| ranging::distance_to_rssi(tx_power as i8, dist) as i32);
+                .unwrap_or_else(|| {
+                    if is_beacon {
+                        ranging::beacon_distance_to_rssi(tx_power as i8, dist) as i32
+                    } else {
+                        ranging::distance_to_rssi(tx_power as i8, dist) as i32
+                    }
+                });
             Some(rssi)
         } else {
             // If one of the chips is missing, default to tx_power.
@@ -110,10 +125,15 @@ pub struct BluetoothActor {
     pub(crate) chips: ChipMap,
     /// A map of initial chip states for reset purposes.
     pub(crate) initial_chips: HashMap<ChipId, Chip>,
+    /// Active timeout task abort handles for BLE beacons.
+    pub(crate) beacon_timeouts: HashMap<ChipId, tokio::task::AbortHandle>,
     /// The client for interacting with the device actor.
     pub(crate) device_client: DeviceClient,
     /// Unbounded receiver for internal events, registered in on_start.
     pub(crate) event_rx: Mutex<Option<mpsc::UnboundedReceiver<BluetoothEvent>>>,
+    /// Shared with HciCallbacks so synchronous Rootcanal callbacks can record
+    /// invalid packets for GetStatistics.
+    pub(crate) invalid_packets: HashMap<ChipId, Arc<Mutex<VecDeque<netsim_model::InvalidPacket>>>>,
 }
 
 impl BluetoothActor {
@@ -121,6 +141,7 @@ impl BluetoothActor {
     pub fn new(device_client: DeviceClient, disable_address_reuse: bool) -> Self {
         let chips = Arc::new(RwLock::new(HashMap::new()));
         let initial_chips = HashMap::new();
+        let beacon_timeouts = HashMap::new();
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let rootcanal = Rootcanal::new(
             Box::new(RootcanalCallbacksImpl { chips: chips.clone() }),
@@ -138,8 +159,10 @@ impl BluetoothActor {
             rootcanal,
             chips,
             initial_chips,
+            beacon_timeouts,
             device_client,
             event_rx: Mutex::new(Some(event_rx)),
+            invalid_packets: HashMap::new(),
         }
     }
 }
@@ -218,5 +241,100 @@ mod tests {
 
         // Then the packet is blocked (returns None)
         assert!(rssi.is_none());
+    }
+
+    #[test]
+    fn test_on_send_ll_beacon_tx_power_preserves_zero_and_one() {
+        let chips = Arc::new(RwLock::new(HashMap::new()));
+        let callbacks = RootcanalCallbacksImpl { chips: chips.clone() };
+
+        let chip1_id = ChipId(1);
+        let chip2_id = ChipId(2);
+
+        let mut chip1 = Chip::default();
+        chip1.id = 1;
+        chip1.variant = Some(ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+            mode: netsim_model::BluetoothMode::Beacon(Box::new(netsim_model::BeaconParams {
+                ble_beacon: netsim_model::BleBeacon::default(),
+            })),
+            ..Default::default()
+        })));
+        // Position at (0, 0, 0)
+
+        let mut chip2 = Chip::default();
+        chip2.id = 2;
+        chip2.pose.position = netsim_model::Position { x: 1.0, y: 0.0, z: 0.0 };
+        // Position at (1, 0, 0) -> distance 1.0 m
+
+        chips.write().insert(chip1_id, chip1);
+        chips.write().insert(chip2_id, chip2);
+
+        // At 1.0 m, beacon distance calculation preserves tx_power without Nearby Share fallback.
+        let rssi_one = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 1);
+        assert_eq!(rssi_one, Some(1));
+
+        let rssi_zero = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
+        assert_eq!(rssi_zero, Some(0));
+    }
+
+    #[test]
+    fn test_on_send_ll_device_mode_uses_nearby_share_fallback() {
+        let chips = Arc::new(RwLock::new(HashMap::new()));
+        let callbacks = RootcanalCallbacksImpl { chips: chips.clone() };
+
+        let chip1_id = ChipId(1);
+        let chip2_id = ChipId(2);
+
+        let mut chip1 = Chip::default();
+        chip1.id = 1;
+        chip1.variant = Some(ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+            mode: netsim_model::BluetoothMode::Device(netsim_model::DeviceParams::default()),
+            ..Default::default()
+        })));
+
+        let mut chip2 = Chip::default();
+        chip2.id = 2;
+        chip2.pose.position = netsim_model::Position { x: 1.0, y: 0.0, z: 0.0 };
+
+        chips.write().insert(chip1_id, chip1);
+        chips.write().insert(chip2_id, chip2);
+
+        // For standard Device mode, tx_power 0 and 1 trigger Nearby Share fallback (-49 dBm at 1m).
+        // This verifies the is_beacon check distinguishes Beacon from Device mode.
+        let rssi_one = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 1);
+        assert_eq!(rssi_one, Some(-49));
+
+        let rssi_zero = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
+        assert_eq!(rssi_zero, Some(-49));
+    }
+
+    #[test]
+    fn test_on_send_ll_beacon_with_link_override() {
+        let chips = Arc::new(RwLock::new(HashMap::new()));
+        let callbacks = RootcanalCallbacksImpl { chips: chips.clone() };
+
+        let chip1_id = ChipId(1);
+        let chip2_id = ChipId(2);
+
+        let mut chip1 = Chip::default();
+        chip1.id = 1;
+        chip1.variant = Some(ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
+            mode: netsim_model::BluetoothMode::Beacon(Box::new(netsim_model::BeaconParams {
+                ble_beacon: netsim_model::BleBeacon::default(),
+            })),
+            ..Default::default()
+        })));
+        chip1.links.push((chip2_id, -55));
+
+        let mut chip2 = Chip::default();
+        chip2.id = 2;
+        chip2.pose.position = netsim_model::Position { x: 1.0, y: 0.0, z: 0.0 };
+
+        chips.write().insert(chip1_id, chip1);
+        chips.write().insert(chip2_id, chip2);
+
+        // Link override takes precedence over beacon distance calculation.
+        let rssi = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 10);
+        assert_eq!(rssi, Some(-55));
     }
 }

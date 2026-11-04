@@ -121,16 +121,16 @@ impl GatewayTrait for SlirpGateway {
             let bssids = shared_keys.bssids.read().clone();
             for bssid in bssids {
                 let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-                if let Ok(ieee80211) = netsim_packets::Ieee80211::from_ieee8023_qos(
+                if let Ok(bytes) = netsim_packets::Ieee80211::from_ieee8023_qos(
                     &packet,
                     bssid,
                     FrameDirection::FromAp,
                     true,
                     seq,
-                ) {
-                    if let Ok(bytes) = ieee80211.encode_to_vec() {
-                        let _ = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
-                    }
+                )
+                .and_then(|ieee80211| ieee80211.encode_to_vec())
+                {
+                    let _ = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
                 }
             }
             return;
@@ -174,29 +174,30 @@ impl GatewayTrait for SlirpGateway {
     }
 
     async fn on_start(&mut self, ctx: &mut DynContext<WifiActor>) {
-        if let Some(client) = self.client.as_ref() {
-            if let Some((uplink_rx, downlink_tx, downlink_rx)) = self.pending_channels.take() {
-                debug!("Registering Slirp channels in on_start");
-                // Register with SlirpActor
-                let stream =
-                    Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(uplink_rx));
-                let sink: netsim_model::PacketSink =
-                    Box::pin(futures::sink::unfold(downlink_tx, |tx, bytes| async move {
-                        let _ = tx.send(bytes);
-                        Ok(tx)
-                    }));
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let Some((uplink_rx, downlink_tx, downlink_rx)) = self.pending_channels.take() else {
+            return;
+        };
+        debug!("Registering Slirp channels in on_start");
+        // Register with SlirpActor
+        let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(uplink_rx));
+        let sink: netsim_model::PacketSink =
+            Box::pin(futures::sink::unfold(downlink_tx, |tx, bytes| async move {
+                let _ = tx.send(bytes);
+                Ok(tx)
+            }));
 
-                if let Err(error) = client.register(SLIRP_ID.0, stream, sink, None, false).await {
-                    warn!(%error, "Failed to register with SlirpActor");
-                }
-
-                // Add downlink stream to context
-                ctx.add_stream(
-                    SLIRP_ID,
-                    Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(downlink_rx)),
-                );
-            }
+        if let Err(error) = client.register(SLIRP_ID.0, stream, sink, None, false).await {
+            warn!(%error, "Failed to register with SlirpActor");
         }
+
+        // Add downlink stream to context
+        ctx.add_stream(
+            SLIRP_ID,
+            Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(downlink_rx)),
+        );
     }
 
     async fn on_chip_create(&mut self, _chip_id: ChipId, _ctx: &mut DynContext<WifiActor>) {
