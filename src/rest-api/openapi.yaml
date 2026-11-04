@@ -1,0 +1,463 @@
+# Copyright 2026 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+openapi: 3.1.0
+info:
+  title: Netsim REST API
+  version: 1.0.0
+components:
+  parameters:
+    Id: &Id
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    Empty: &Empty
+      type: object
+    RpcStatus: &RpcStatus
+      enum:
+        - INVALID_ARGUMENT
+        - UNAUTHENTICATED
+        - PERMISSION_DENIED
+        - NOT_FOUND
+        - ALREADY_EXISTS
+        - OUT_OF_RANGE
+        - RESOURCE_EXHAUSTED
+        - UNIMPLEMENTED
+        - UNAVAILABLE
+        - DEADLINE_EXCEEDED
+        - FAILED_PRECONDITION
+        - INTERNAL
+    ErrorStatus: &ErrorStatus
+      properties:
+        code: &int
+          type: integer
+        message: &str
+          type: string
+        status: *RpcStatus
+    ErrorResponse: &ErrorResponse
+      properties:
+        error: *ErrorStatus
+    VersionResponse: &VersionResponse
+      properties:
+        version: *str
+    ChipKind: &ChipKind
+      enum: [UNSPECIFIED, BLUETOOTH, WIFI, UWB, NFC, CELLULAR, CELLULAR_DATA, ETHERNET]
+    WifiMode: &WifiMode
+      enum: [a, b, g, n, ac, ax]
+    Position: &Position
+      properties:
+        x: &num
+          type: number
+        y: *num
+        z: *num
+    Orientation: &Orientation
+      properties:
+        yaw: *num
+        pitch: *num
+        roll: *num
+    Pose: &Pose
+      properties:
+        position: *Position
+        orientation: *Orientation
+    PoseUpdate: &PoseUpdate
+      required: []
+      properties:
+        position: *Position
+        orientation: *Orientation
+    DeviceInfo: &DeviceInfo
+      properties:
+        name: *str
+        kind: *str
+        version: *str
+        sdk_version: *str
+        build_id: *str
+        variant: *str
+        arch: *str
+        avd_path: *str
+    Chip: &Chip
+      properties:
+        id: *int
+        kind: *ChipKind
+        name: *str
+        manufacturer: *str
+        product_name: *str
+        pose: *Pose
+        device_id: *int
+        enabled: &bool
+          type: boolean
+    RadioUpdate: &RadioUpdate
+      required: []
+      properties:
+        state: *bool
+    AdvertiseSettings: &AdvertiseSettings
+      x-rust-type: netsim_model::AdvertiseSettings
+      required: []
+      properties:
+        scannable: *bool
+        timeout: *int
+    AdvertiseData: &AdvertiseData
+      x-rust-type: netsim_model::AdvertiseData
+      required: []
+      properties:
+        include_device_name: *bool
+        include_tx_power_level: *bool
+        manufacturer_data: [*int]
+    BleBeacon: &BleBeacon
+      x-rust-type: netsim_model::BleBeacon
+      required: []
+      properties:
+        address: *str
+        settings: *AdvertiseSettings
+        adv_data: *AdvertiseData
+        scan_response: *AdvertiseData
+    BluetoothUpdate: &BluetoothUpdate
+      x-rust-type: netsim_model::BluetoothUpdate
+      required: []
+      properties:
+        low_energy: *RadioUpdate
+        classic: *RadioUpdate
+        preset: *str
+        ble_beacon: *BleBeacon
+    CellUpdate: &CellUpdate
+      required: []
+      properties:
+        radio: *RadioUpdate
+        state: *str
+    ChipVariantUpdate: &ChipVariantUpdate
+      x-rust-type: netsim_model::ChipVariantUpdate
+      required: []
+      properties:
+        Bluetooth: *BluetoothUpdate
+        Wifi: *RadioUpdate
+        Uwb: *RadioUpdate
+        Cell: *CellUpdate
+        CellularData: *RadioUpdate
+        Ethernet: *RadioUpdate
+        Nfc: *RadioUpdate
+    ChipUpdate: &ChipUpdate
+      required: []
+      properties:
+        id: *int
+        enabled: *bool
+        variant: *ChipVariantUpdate
+    Device: &Device
+      x-rust-type: netsim_model::Device
+      required: [id, name, visible, pose, builtin, chips]
+      properties:
+        id: *int
+        name: *str
+        visible: *bool
+        pose: *Pose
+        builtin: *bool
+        chips: [*Chip]
+        device_info: *DeviceInfo
+    ChipCreateVariant: &ChipCreateVariant
+      x-rust-type: netsim_model::ChipCreateVariant
+      required: []
+      properties:
+        Beacon: *BleBeacon
+    DeviceConfig: &DeviceConfig
+      x-rust-type: netsim_model::DeviceConfig
+      required: []
+      properties:
+        name: *str
+        visible: *bool
+        pose: *Pose
+    DeviceChipCreate: &DeviceChipCreate
+      x-rust-type: netsim_model::DeviceChipCreate
+      required: []
+      properties:
+        name: *str
+        manufacturer: *str
+        product_name: *str
+        chip: *ChipCreateVariant
+    DeviceCreate: &DeviceCreate
+      x-rust-type: netsim_model::DeviceCreate
+      required: []
+      properties:
+        device_config: *DeviceConfig
+        chip: *DeviceChipCreate
+    DeviceUpdate: &DeviceUpdate
+      x-rust-type: netsim_model::DeviceUpdate
+      required: []
+      properties:
+        name: *str
+        visible: *bool
+        pose: *PoseUpdate
+        chips: [*ChipUpdate]
+    ListDeviceResponse: &ListDeviceResponse
+      properties:
+        devices: [*Device]
+    Link: &Link
+      x-rust-type: netsim_model::Link
+      properties:
+        id: *int
+        sender: *int
+        receiver: *int
+        kind: *ChipKind
+        rssi: *int
+    ListLinkResponse: &ListLinkResponse
+      properties:
+        links: [*Link]
+    ApCreate: &ApCreate
+      required: []
+      properties:
+        ssid: *str
+        bssid: *str
+        channel: *int
+        hw_mode: *WifiMode
+        wpa_passphrase: &opt_str
+          type: [string, 'null']
+        beacon_interval: *int
+        country_code: *opt_str
+        dtim_period: *int
+        hidden_ssid: *bool
+        sae: *bool
+        wmm_enabled: *bool
+        enterprise_enabled: *bool
+        mac_acl_mode: *int
+        mac_acl_list: &str_arr [*str]
+        ftm_responder_enabled: *bool
+    Ap: &Ap
+      x-rust-type: netsim_model::Ap
+      properties:
+        id: *int
+        config: *ApCreate
+        associations: *str_arr
+    ListApResponse: &ListApResponse
+      properties:
+        aps: [*Ap]
+    ApUpdate: &ApUpdate
+      x-rust-type: netsim_model::ApUpdate
+      properties:
+        ssid: *opt_str
+        channel: &opt_int
+          type: [integer, 'null']
+        force_disconnect: &opt_str_arr
+          type: [array, 'null']
+          items: *str
+    DisconnectApRequest: &DisconnectApRequest
+      properties:
+        mac_address: *str
+    CaptureInfo: &CaptureInfo
+      x-rust-type: capture_actor::CaptureInfo
+      properties:
+        chip_id: *int
+        chip_kind: *ChipKind
+        device_name: *str
+        enabled: *bool
+        records_written: *int
+        bytes_written: *int
+        seconds: *int
+        nanos: *int
+    ListCaptureResponse: &ListCaptureResponse
+      properties:
+        captures: [*CaptureInfo]
+    CaptureUpdate: &CaptureUpdate
+      properties:
+        state: *bool
+paths:
+  /v1/version:
+    get:
+      operationId: GetVersion
+      tags: [ConfigService]
+      summary: Returns the netsim daemon version.
+      responses: &err_resp
+        default: *ErrorResponse
+        '200': *VersionResponse
+  /v1/devices:
+    get:
+      operationId: ListDevices
+      tags: [DeviceService]
+      summary: Lists active simulated devices.
+      responses:
+        <<: *err_resp
+        '200': *ListDeviceResponse
+    post:
+      operationId: CreateDevice
+      tags: [DeviceService]
+      summary: Creates a simulated device (such as a BLE beacon).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+            example:
+              device_config:
+                name: beacon-1
+              chip:
+                name: beacon-chip-1
+                chip:
+                  Beacon:
+                    address: '00:11:22:33:44:55'
+      responses:
+        <<: *err_resp
+        '200': *Device
+  /v1/devices/{id}:
+    parameters: [*Id]
+    patch:
+      operationId: PatchDevice
+      tags: [DeviceService]
+      summary: Updates a simulated device's pose or radio state.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+            example:
+              pose:
+                position:
+                  x: 1.0
+                  y: 2.0
+                  z: 3.0
+      responses:
+        <<: *err_resp
+        '200': *Device
+    delete:
+      operationId: DeleteDevice
+      tags: [DeviceService]
+      summary: Deletes a simulated device.
+      responses:
+        <<: *err_resp
+        '200': *Empty
+  /v1/devices:reset:
+    post:
+      operationId: ResetDevices
+      tags: [DeviceService]
+      summary: Resets all simulated devices, links, and access points.
+      responses:
+        <<: *err_resp
+        '200': *Empty
+  /v1/links:
+    get:
+      operationId: ListLinks
+      tags: [LinkService]
+      summary: Lists active RF links between chips.
+      responses:
+        <<: *err_resp
+        '200': *ListLinkResponse
+  /v1/aps:
+    get:
+      operationId: ListAps
+      tags: [ApService]
+      summary: Lists active Wi-Fi access points.
+      responses:
+        <<: *err_resp
+        '200': *ListApResponse
+    post:
+      operationId: CreateAp
+      tags: [ApService]
+      summary: Creates a Wi-Fi access point.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApCreate'
+            example:
+              ssid: AndroidWifi
+              bssid: '02:15:b2:00:00:00'
+              channel: 6
+              hw_mode: g
+              beacon_interval: 200
+              dtim_period: 2
+              hidden_ssid: false
+              sae: false
+              wmm_enabled: true
+              enterprise_enabled: false
+              mac_acl_mode: 0
+              mac_acl_list: []
+              ftm_responder_enabled: true
+      responses:
+        <<: *err_resp
+        '200': *Ap
+  /v1/aps/{id}:
+    parameters: [*Id]
+    patch:
+      operationId: PatchAp
+      tags: [ApService]
+      summary: Updates a Wi-Fi access point.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApUpdate'
+            example:
+              ssid: GuestWifi
+              channel: 11
+      responses:
+        <<: *err_resp
+        '200': *Ap
+    delete:
+      operationId: DeleteAp
+      tags: [ApService]
+      summary: Deletes a Wi-Fi access point.
+      responses:
+        <<: *err_resp
+        '200': *Empty
+  /v1/aps/{id}:disconnect:
+    parameters: [*Id]
+    post:
+      operationId: DisconnectAp
+      tags: [ApService]
+      summary: Disconnects a station from a Wi-Fi access point.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisconnectApRequest'
+            example:
+              mac_address: '02:15:b2:00:01:00'
+      responses:
+        <<: *err_resp
+        '200': *Empty
+  /v1/captures:
+    get:
+      operationId: ListCaptures
+      tags: [CaptureService]
+      summary: Lists packet captures across simulated chips.
+      responses:
+        <<: *err_resp
+        '200': *ListCaptureResponse
+  /v1/captures/{id}:
+    parameters: [*Id]
+    get:
+      operationId: GetCapture
+      tags: [CaptureService]
+      summary: Downloads the packet capture PCAP file for a chip.
+      responses:
+        <<: *err_resp
+        '200':
+          description: A successful response with the PCAP file.
+          content:
+            application/vnd.tcpdump.pcap:
+              schema:
+                type: string
+                format: binary
+    patch:
+      operationId: PatchCapture
+      tags: [CaptureService]
+      summary: Enables or disables packet capture for a chip.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptureUpdate'
+            example:
+              state: true
+      responses:
+        <<: *err_resp
+        '200': *CaptureInfo
