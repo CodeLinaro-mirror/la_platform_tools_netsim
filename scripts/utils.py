@@ -41,6 +41,10 @@ TARGET_MAP = {
     "windows": "windows_msvc-x86_64",
     "windows_x64": "windows_msvc-x86_64",
     "windows_x86_64": "windows_msvc-x86_64",
+    "windows_arm64": "windows_msvc-aarch64",
+    "windows_aarch64": "windows_msvc-aarch64",
+    "win_arm64": "windows_msvc-aarch64",
+    "win_aarch64": "windows_msvc-aarch64",
     "linux": "linux-x86_64",
     "linux_x64": "linux-x86_64",
     "linux_x86_64": "linux-x86_64",
@@ -104,19 +108,36 @@ def get_netsim_binaries():
   """Returns a dictionary mapping netsim binary names to their Bazel output paths."""
   if platform.system().lower() in ["linux", "darwin"]:
     return {
-        "netsim": "next/cli/_stripped/netsim",
-        "netsimd": "next/daemon/_stripped/daemon",
+        "netsim": "src/cli/_stripped/netsim",
+        "netsimd": "src/daemon/_stripped/netsimd",
     }
   else:
     return {
-        "netsim": "next/cli/netsim",
-        "netsimd": "next/daemon/daemon",
+        "netsim": "src/cli/netsim",
+        "netsimd": "src/daemon/netsimd",
     }
 
 
 def platform_to_target_name(target):
   """Translates platform to target name"""
   return TARGET_MAP[target.lower().replace("-", "_")]
+
+
+def is_cross_compiling(args) -> bool:
+  """Returns True if targeting a platform different from the current host architecture."""
+  raw_target = getattr(args, "target", None)
+  target = raw_target.lower().replace("-", "_") if raw_target else ""
+  if target in [
+      "windows_arm64",
+      "windows_aarch64",
+      "win_arm64",
+      "win_aarch64",
+  ]:
+    return (
+        platform.system() != "Windows"
+        or platform.machine().lower() not in ["arm64", "aarch64"]
+    )
+  return False
 
 
 def is_presubmit(build_id):
@@ -414,9 +435,27 @@ def get_bazel_build_configs(args, env):
   configs = ["release"]
   if args.buildbot:
     configs.append("ci")
-  elif args.hermetic:
-    run_gcloud_auth(env)
-    configs.append("hermetic")
+  else:
+    in_tree = (AOSP_ROOT / "build" / "bazel" / "registry").exists()
+    if not in_tree:
+      configs.insert(0, "standalone")
+      if args.hermetic:
+        logging.warning(
+            "--hermetic is not supported in standalone checkouts; ignoring."
+        )
+    elif args.hermetic:
+      run_gcloud_auth(env)
+      configs.append("hermetic")
+
+  raw_target = getattr(args, "target", None)
+  target = raw_target.lower().replace("-", "_") if raw_target else ""
+  if target in [
+      "windows_arm64",
+      "windows_aarch64",
+      "win_arm64",
+      "win_aarch64",
+  ]:
+    configs.append("win_arm64")
 
   build_configs = [f"--config={c}" for c in configs]
   if platform.system().lower() == "windows":
@@ -479,14 +518,14 @@ def _resolve_crate_target(crate_name: str) -> str:
   clean_name = crate_name.replace("netsim-", "").replace("netsim_", "")
   if clean_name == "netsim":
     clean_name = "cli"
-  for base_dir in ["next", ""]:
+  for base_dir in ["src", ""]:
     for candidate in [clean_name, crate_name]:
       rel_path = f"{base_dir}/{candidate}" if base_dir else candidate
       pkg_dir = NETSIM_ROOT / rel_path
       if pkg_dir.is_dir():
         suffix = ":test" if _has_test_target(pkg_dir) else ":all"
         return f"//{rel_path}{suffix}"
-  return f"//next/{clean_name}:all"
+  return f"//src/{clean_name}:all"
 
 
 def get_bazel_targets(args):
@@ -499,5 +538,5 @@ def get_bazel_targets(args):
 
   return [
       "//:all",
-      "//next/...",
+      "//src/...",
   ]
