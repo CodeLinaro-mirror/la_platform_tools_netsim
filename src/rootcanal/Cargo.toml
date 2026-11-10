@@ -1,0 +1,48 @@
+# Copyright 2025 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[package]
+name = "rootcanal"
+version = "0.1.0"
+edition = "2024"
+autotests = false
+
+[[test]]
+name = "integration_test"
+path = "tests/mod.rs"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+bytes = "1.4.0"
+netsim-packets = { path = "../packets" }
+parking_lot = "0.12"
+rootcanal-rs = { git = "https://github.com/sameer/rootcanal.git", rev = "a73b911f2a87364078f305bfba8a41db044d7ba0", features = [
+  "ffi",
+] }
+thiserror = "1.0"
+tracing = "0.1"
+
+[dev-dependencies]
+pdl-runtime = "0.4.2"
+tokio = { version = "1.32.0", features = [
+  "macros",
+  "rt",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
+tracing-subscriber = "0.3"
