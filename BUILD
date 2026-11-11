@@ -52,28 +52,34 @@ genrule(
     cmd = "$(execpath @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
     visibility = [
-        "//next/packets:__pkg__",
+        "//src/packets:__pkg__",
     ],
 )
 
 alias(
     name = "netsim_stripped",
-    actual = "//next/cli:netsim_stripped",
+    actual = "//src/cli:netsim_stripped",
+)
+
+config_setting(
+    name = "standalone",
+    values = {"define": "standalone=true"},
+    visibility = ["//visibility:public"],
 )
 
 alias(
     name = "netsim",
-    actual = "//next/cli:netsim",
+    actual = "//src/cli:netsim",
 )
 
 alias(
     name = "netsimd_stripped",
-    actual = "//next/daemon:daemon_stripped",
+    actual = "//src/daemon:netsimd_stripped",
 )
 
 alias(
     name = "netsimd",
-    actual = "//next/daemon:daemon",
+    actual = "//src/daemon:netsimd",
 )
 
 py_test(
